@@ -49,6 +49,9 @@ const projectSchema = z.object({
   techStack: z.array(z.string()).optional(),
   figmaUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
   repoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+}).refine(data => !data.deadline || !data.startDate || new Date(data.deadline) >= new Date(data.startDate), {
+  message: "Deadline must be after start date",
+  path: ["deadline"]
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -97,8 +100,8 @@ export default function AdminProjects() {
       setIsDialogOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to create project");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to create project");
     }
   };
 
@@ -122,6 +125,14 @@ export default function AdminProjects() {
       default: return 'text-muted-foreground';
     }
   };
+
+  function getDeadlineStatus(deadline: string) {
+    const daysLeft = Math.ceil((new Date(deadline).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) return { label: "Overdue", color: "border-red-500", bg: "bg-red-500/5", text: "text-red-500" };
+    if (daysLeft <= 7) return { label: `${daysLeft}d left`, color: "border-red-400", bg: "bg-red-500/5", text: "text-red-400" };
+    if (daysLeft <= 30) return { label: `${daysLeft}d left`, color: "border-amber-400", bg: "bg-amber-500/5", text: "text-amber-400" };
+    return { label: `${daysLeft}d left`, color: "border-green-500", bg: "", text: "text-green-500" };
+  }
 
   return (
     <div className="space-y-6">
@@ -383,75 +394,81 @@ export default function AdminProjects() {
         </div>
       ) : (
         <div className={`grid gap-4 ${view === 'grid' ? 'md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
-          {data?.projects.map((project) => (
-            <Link key={project.id} href={`/admin/projects/${project.id}`}>
-              <Card className="bg-card hover:bg-card/80 transition-colors cursor-pointer border-border h-full flex flex-col">
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start mb-2">
-                    <Badge variant="secondary" className={getStatusColor(project.status)}>
-                      {project.status.replace('_', ' ').toUpperCase()}
-                    </Badge>
-                    <div className="flex items-center text-xs font-medium">
-                      <span className={`h-2 w-2 rounded-full mr-1.5 bg-current ${getPriorityColor(project.priority)}`}></span>
-                      <span className={getPriorityColor(project.priority)}>
-                        {project.priority.toUpperCase()}
-                      </span>
-                    </div>
-                  </div>
-                  <CardTitle className="text-xl line-clamp-1">{project.name}</CardTitle>
-                  <div className="text-sm text-muted-foreground line-clamp-1">{project.clientName}</div>
-                </CardHeader>
-                <CardContent className="pb-2 flex-1">
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center text-sm">
-                      <div className="flex items-center text-muted-foreground">
-                        <Calendar className="mr-1.5 h-3.5 w-3.5" />
-                        Deadline
-                      </div>
-                      <div className="font-medium">{new Date(project.deadline).toLocaleDateString()}</div>
-                    </div>
-                    
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground">Progress</span>
-                        <span className="font-medium">{project.completionPct}%</span>
-                      </div>
-                      <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-primary transition-all duration-500 ease-in-out" 
-                          style={{ width: `${project.completionPct}%` }}
-                        />
+          {data?.projects.map((project) => {
+            const deadlineStatus = getDeadlineStatus(project.deadline);
+            return (
+              <Link key={project.id} href={`/admin/projects/${project.id}`}>
+                <Card className={`bg-card hover:bg-muted/40 transition-colors cursor-pointer border-border h-full flex flex-col border-t-2 ${deadlineStatus.color}`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex justify-between items-start mb-2">
+                      <Badge variant="secondary" className={getStatusColor(project.status)}>
+                        {project.status.replace('_', ' ').toUpperCase()}
+                      </Badge>
+                      <div className="flex items-center text-xs font-medium">
+                        <span className={`h-2 w-2 rounded-full mr-1.5 bg-current ${getPriorityColor(project.priority)}`}></span>
+                        <span className={getPriorityColor(project.priority)}>
+                          {project.priority.toUpperCase()}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="pt-2 border-t border-border mt-auto">
-                  <div className="flex justify-between items-center w-full text-xs text-muted-foreground">
-                    <div className="flex -space-x-2">
-                      {/* Avatar stack mockup */}
-                      {[...Array(Math.min(project.memberCount, 3))].map((_, i) => (
-                        <div key={i} className="h-6 w-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[10px]">
-                          <Users className="h-3 w-3" />
+                    <CardTitle className="text-xl line-clamp-1">{project.name}</CardTitle>
+                    <div className="text-sm text-muted-foreground line-clamp-1">{project.clientName}</div>
+                  </CardHeader>
+                  <CardContent className="pb-2 flex-1">
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center text-sm">
+                        <div className="flex items-center text-muted-foreground">
+                          <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                          Deadline
                         </div>
-                      ))}
-                      {project.memberCount > 3 && (
-                        <div className="h-6 w-6 rounded-full bg-secondary border-2 border-card flex items-center justify-center text-[10px] font-medium text-secondary-foreground">
-                          +{project.memberCount - 3}
+                        <div className={`font-medium flex items-center gap-2 ${deadlineStatus.text}`}>
+                          {deadlineStatus.label}
+                          <span className="text-muted-foreground text-xs">({new Date(project.deadline).toLocaleDateString()})</span>
                         </div>
-                      )}
-                      {project.memberCount === 0 && <span>No team assigned</span>}
+                      </div>
+                      
+                      <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-muted-foreground">Progress</span>
+                          <span className="font-medium">{project.completionPct}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-primary transition-all duration-500 ease-in-out" 
+                            style={{ width: `${project.completionPct}%` }}
+                          />
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      {project.techStack.slice(0, 2).map(tech => (
-                        <span key={tech} className="mr-2 inline-block">{tech}</span>
-                      ))}
-                      {project.techStack.length > 2 && "..."}
+                  </CardContent>
+                  <CardFooter className="pt-2 border-t border-border mt-auto">
+                    <div className="flex justify-between items-center w-full text-xs text-muted-foreground">
+                      <div className="flex -space-x-2">
+                        {/* Avatar stack mockup */}
+                        {[...Array(Math.min(project.memberCount, 3))].map((_, i) => (
+                          <div key={i} className="h-6 w-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[10px]">
+                            <Users className="h-3 w-3" />
+                          </div>
+                        ))}
+                        {project.memberCount > 3 && (
+                          <div className="h-6 w-6 rounded-full bg-secondary border-2 border-card flex items-center justify-center text-[10px] font-medium text-secondary-foreground">
+                            +{project.memberCount - 3}
+                          </div>
+                        )}
+                        {project.memberCount === 0 && <span>No team assigned</span>}
+                      </div>
+                      <div className="flex gap-2">
+                        {project.techStack.slice(0, 2).map(tech => (
+                          <Badge key={tech} variant="outline" className="text-[10px] py-0 h-4">{tech}</Badge>
+                        ))}
+                        {project.techStack.length > 2 && <span className="text-[10px]">+{project.techStack.length - 2}</span>}
+                      </div>
                     </div>
-                  </div>
-                </CardFooter>
-              </Card>
-            </Link>
-          ))}
+                  </CardFooter>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>

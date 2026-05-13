@@ -73,8 +73,8 @@ export default function AdminEmployees() {
       setIsDialogOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to create employee");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to create employee");
     }
   };
 
@@ -220,7 +220,8 @@ export default function AdminEmployees() {
                 <TableHead>Role</TableHead>
                 <TableHead>ID</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Last Login</TableHead>
+                <TableHead>Last Login</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -231,18 +232,19 @@ export default function AdminEmployees() {
                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : data?.users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                     No employees found.
                   </TableCell>
                 </TableRow>
               ) : (
                 data?.users.map((user) => (
-                  <TableRow key={user.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableRow key={user.id} className="cursor-pointer hover:bg-muted/40 group">
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
@@ -258,9 +260,14 @@ export default function AdminEmployees() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-sm">{user.designation || "Developer"}</span>
-                        <span className="text-xs text-muted-foreground">{user.subType || "General"}</span>
+                      <div className="flex flex-col gap-1">
+                        <Badge 
+                          variant="secondary" 
+                          className={user.role === 'super_admin' ? 'bg-purple-500/10 text-purple-500 w-fit' : 'bg-blue-500/10 text-blue-500 w-fit'}
+                        >
+                          {user.role === 'super_admin' ? 'Admin' : 'Developer'}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground">{user.designation || "General"}</span>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground font-mono text-xs">{user.employeeId}</TableCell>
@@ -269,13 +276,16 @@ export default function AdminEmployees() {
                         {user.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-muted-foreground">
                       {user.lastLoginAt ? (
-                        <div className="flex items-center justify-end">
+                        <div className="flex items-center">
                           <Clock className="mr-1.5 h-3.5 w-3.5" />
                           {new Date(user.lastLoginAt).toLocaleDateString()}
                         </div>
                       ) : "Never"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100">Edit</Button>
                     </TableCell>
                   </TableRow>
                 ))

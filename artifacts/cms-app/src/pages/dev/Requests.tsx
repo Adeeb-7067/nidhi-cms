@@ -55,8 +55,9 @@ export default function DevRequests() {
       setOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to submit request");
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
+      toast.error(msg);
     }
   };
 

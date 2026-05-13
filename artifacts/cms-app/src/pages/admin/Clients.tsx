@@ -66,8 +66,8 @@ export default function AdminClients() {
       setIsDialogOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to add client");
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to add client");
     }
   };
 

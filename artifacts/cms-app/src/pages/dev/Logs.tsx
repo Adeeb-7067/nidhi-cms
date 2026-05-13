@@ -19,10 +19,12 @@ import { toast } from "sonner";
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
-  logDate: z.string().min(1, "Date is required"),
+  logDate: z.string()
+    .min(1, "Date is required")
+    .refine(date => new Date(date) <= new Date(), { message: "Log date cannot be in the future" }),
   taskTitle: z.string().min(1, "Title is required"),
   workCategories: z.array(z.string()).min(1, "Select at least one category"),
-  hoursSpent: z.coerce.number().min(0.5).max(16),
+  hoursSpent: z.coerce.number().min(0.5, "Minimum 0.5 hours").max(16, "Maximum 16 hours"),
   completionPct: z.number().min(0).max(100),
   taskDescription: z.string().optional(),
   blockers: z.string().optional(),
@@ -45,7 +47,11 @@ const WORK_CATEGORIES = [
 
 export default function DevLogs() {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, refetch } = useListMyLogs({ limit: 50 });
+  const currentDate = new Date();
+  const [month, setMonth] = useState(currentDate.getMonth() + 1);
+  const [year, setYear] = useState(currentDate.getFullYear());
+
+  const { data, isLoading, refetch } = useListMyLogs({ month, year, limit: 50 });
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createLog = useCreateLog();
 
@@ -76,8 +82,9 @@ export default function DevLogs() {
       setOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to submit log");
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
+      toast.error(msg);
     }
   };
 
@@ -88,209 +95,238 @@ export default function DevLogs() {
           <h1 className="text-3xl font-bold tracking-tight">Daily Logs</h1>
           <p className="text-muted-foreground">Track your time and progress</p>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Add Log Entry
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>Add Daily Log Entry</DialogTitle>
-            </DialogHeader>
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="projectId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+        <div className="flex items-center gap-2">
+          <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Month" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => (
+                <SelectItem key={i + 1} value={(i + 1).toString()}>
+                  {new Date(2000, i).toLocaleString('default', { month: 'long' })}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
+            <SelectTrigger className="w-[100px]">
+              <SelectValue placeholder="Year" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 3 }, (_, i) => {
+                const y = new Date().getFullYear() - 2 + i;
+                return (
+                  <SelectItem key={y} value={y.toString()}>
+                    {y}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-primary text-primary-foreground">
+                <Plus className="mr-2 h-4 w-4" /> Add Log Entry
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
+              <DialogHeader>
+                <DialogTitle>Add Daily Log Entry</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="projectId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Project</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select project" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {projectsData?.projects.map((project) => (
+                                <SelectItem key={project.id} value={project.id.toString()}>
+                                  {project.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="logDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Date</FormLabel>
                           <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select project" />
-                            </SelectTrigger>
+                            <Input type="date" {...field} />
                           </FormControl>
-                          <SelectContent>
-                            {projectsData?.projects.map((project) => (
-                              <SelectItem key={project.id} value={project.id.toString()}>
-                                {project.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
-                    name="logDate"
+                    name="taskTitle"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Date</FormLabel>
+                        <FormLabel>Task Title</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} />
+                          <Input placeholder="What did you work on?" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <FormField
-                  control={form.control}
-                  name="taskTitle"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Task Title</FormLabel>
-                      <FormControl>
-                        <Input placeholder="What did you work on?" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="workCategories"
-                  render={() => (
-                    <FormItem>
-                      <FormLabel>Categories</FormLabel>
-                      <div className="grid grid-cols-3 gap-2">
-                        {WORK_CATEGORIES.map((category) => (
-                          <FormField
-                            key={category.id}
-                            control={form.control}
-                            name="workCategories"
-                            render={({ field }) => {
-                              return (
-                                <FormItem
-                                  key={category.id}
-                                  className="flex flex-row items-start space-x-3 space-y-0"
-                                >
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(category.id)}
-                                      onCheckedChange={(checked) => {
-                                        return checked
-                                          ? field.onChange([...field.value, category.id])
-                                          : field.onChange(
-                                              field.value?.filter(
-                                                (value) => value !== category.id
-                                              )
-                                            );
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="text-xs font-normal cursor-pointer">
-                                    {category.label}
-                                  </FormLabel>
-                                </FormItem>
-                              );
-                            }}
-                          />
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
-                    name="hoursSpent"
-                    render={({ field }) => (
+                    name="workCategories"
+                    render={() => (
                       <FormItem>
-                        <FormLabel>Hours Spent</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.5" min="0.5" max="16" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="completionPct"
-                    render={({ field }) => (
-                      <FormItem>
-                        <div className="flex justify-between">
-                          <FormLabel>Completion</FormLabel>
-                          <span className="text-xs font-medium">{field.value}%</span>
+                        <FormLabel>Categories</FormLabel>
+                        <div className="grid grid-cols-3 gap-2">
+                          {WORK_CATEGORIES.map((category) => (
+                            <FormField
+                              key={category.id}
+                              control={form.control}
+                              name="workCategories"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem
+                                    key={category.id}
+                                    className="flex flex-row items-start space-x-3 space-y-0"
+                                  >
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(category.id)}
+                                        onCheckedChange={(checked) => {
+                                          return checked
+                                            ? field.onChange([...field.value, category.id])
+                                            : field.onChange(
+                                                field.value?.filter(
+                                                  (value) => value !== category.id
+                                                )
+                                              );
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="text-xs font-normal cursor-pointer">
+                                      {category.label}
+                                    </FormLabel>
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          ))}
                         </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="hoursSpent"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Hours Spent</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.5" min="0.5" max="16" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="completionPct"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex justify-between">
+                            <FormLabel>Completion</FormLabel>
+                            <span className="text-xs font-medium">{field.value}%</span>
+                          </div>
+                          <FormControl>
+                            <Slider
+                              min={0}
+                              max={100}
+                              step={5}
+                              value={[field.value]}
+                              onValueChange={(val) => field.onChange(val[0])}
+                              className="py-4"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="taskDescription"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description (Optional)</FormLabel>
                         <FormControl>
-                          <Slider
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={[field.value]}
-                            onValueChange={(val) => field.onChange(val[0])}
-                            className="py-4"
-                          />
+                          <Textarea placeholder="Details of the task..." {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                </div>
 
-                <FormField
-                  control={form.control}
-                  name="taskDescription"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Details of the task..." {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="blockers"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Blockers (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Any blockers or impediments?" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="blockers"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Blockers (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Any blockers or impediments?" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                  <FormField
+                    control={form.control}
+                    name="nextDayPlan"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Next Day Plan (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="Plan for tomorrow?" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                <FormField
-                  control={form.control}
-                  name="nextDayPlan"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Next Day Plan (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Plan for tomorrow?" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <DialogFooter className="pt-4">
-                  <Button type="submit" disabled={createLog.isPending}>
-                    {createLog.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Submit Log Entry
-                  </Button>
-                </DialogFooter>
-              </form>
-            </Form>
-          </DialogContent>
-        </Dialog>
+                  <DialogFooter className="pt-4">
+                    <Button type="submit" disabled={createLog.isPending}>
+                      {createLog.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Submit Log Entry
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="space-y-4">

@@ -10,8 +10,11 @@ export default function ClientApk() {
   const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 1 });
   const projectId = projectsData?.projects[0]?.id;
 
-  const { data: apks, isLoading: isApksLoading } = useGetApkReleases(projectId || 0, {
-    query: { queryKey: getGetApkReleasesQueryKey(projectId || 0), enabled: !!projectId }
+  const { data: apks, isLoading: isApksLoading } = useGetApkReleases(projectId!, {
+    query: { 
+      queryKey: getGetApkReleasesQueryKey(projectId!), 
+      enabled: !!projectId 
+    }
   });
 
   if (isProjectsLoading || isApksLoading) {
@@ -42,7 +45,11 @@ export default function ClientApk() {
           <CardContent className="flex flex-col items-center justify-center py-24 text-center">
             <Smartphone className="h-16 w-16 mb-4 text-muted-foreground/30" />
             <h3 className="text-xl font-medium mb-2">No releases yet</h3>
-            <p className="text-muted-foreground">App builds will appear here once they are ready for your review.</p>
+            <p className="text-muted-foreground">
+              {projectId 
+                ? "App builds will appear here once they are ready for your review."
+                : "No project found for your account. Please contact support."}
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -61,7 +68,10 @@ export default function ClientApk() {
                   </div>
                   <div>
                     <CardTitle className="text-xl">v{apk.version}</CardTitle>
-                    <CardDescription>Build {apk.buildNumber}</CardDescription>
+                    <CardDescription>
+                      Build {apk.buildNumber}
+                      {apk.platform && <span className="ml-2">• {apk.platform.toUpperCase()}</span>}
+                    </CardDescription>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 mt-2">
@@ -72,7 +82,7 @@ export default function ClientApk() {
               <CardContent className="pt-4 space-y-4">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Calendar className="mr-2 h-4 w-4" />
-                  Released on {new Date(apk.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                  Released on {apk.createdAt ? new Date(apk.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A'}
                 </div>
                 
                 {apk.changelog && (

@@ -88,8 +88,15 @@ export default function ClientPortal() {
           <div className="flex items-center gap-6 pt-2">
             <div className="flex items-center text-sm font-medium">
               <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-              Target Deadline: <span className="ml-2 text-foreground">{new Date(project.deadline).toLocaleDateString()}</span>
+              Target Deadline: <span className="ml-2 text-foreground">{project.deadline ? new Date(project.deadline).toLocaleDateString() : 'Not set'}</span>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-2 pt-2">
+            {project.techStack?.map((tech: string) => (
+              <Badge key={tech} variant="secondary" className="text-[10px] px-2 py-0">
+                {tech}
+              </Badge>
+            ))}
           </div>
         </div>
         
@@ -139,7 +146,7 @@ export default function ClientPortal() {
                   <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
                     <span>{latestRelease.platform.toUpperCase()}</span>
                     <span>•</span>
-                    <span>Released {formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true })}</span>
+                    <span>Released {latestRelease.createdAt ? formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true }) : 'N/A'}</span>
                   </div>
                   <a 
                     href={latestRelease.fileUrl} 
@@ -203,7 +210,7 @@ export default function ClientPortal() {
                       <div className="flex items-center justify-between mt-2">
                         <p className="text-xs text-muted-foreground">Milestone planned for completion.</p>
                         <time className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
-                          {new Date(milestone.plannedDate).toLocaleDateString()}
+                          {milestone.plannedDate ? new Date(milestone.plannedDate).toLocaleDateString() : 'N/A'}
                         </time>
                       </div>
                     </div>

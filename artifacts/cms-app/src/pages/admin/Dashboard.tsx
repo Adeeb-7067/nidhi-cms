@@ -44,23 +44,26 @@ export default function AdminDashboard() {
       sub: "across all clients",
       icon: <Briefcase className="h-4 w-4" />, 
       color: "border-l-blue-500",
-      iconColor: "text-blue-500"
+      iconColor: "text-blue-500",
+      bgColor: "bg-blue-500/10"
     },
     { 
       title: "Total Clients", 
       value: stats.totalClients, 
       sub: "managed partners",
       icon: <Building2 className="h-4 w-4" />, 
-      color: "border-l-green-500",
-      iconColor: "text-green-500"
+      color: "border-l-violet-500",
+      iconColor: "text-violet-500",
+      bgColor: "bg-violet-500/10"
     },
     { 
       title: "Team Online", 
       value: stats.teamMembersOnline, 
       sub: "currently active",
       icon: <Users className="h-4 w-4" />, 
-      color: "border-l-purple-500",
-      iconColor: "text-purple-500"
+      color: "border-l-green-500",
+      iconColor: "text-green-500",
+      bgColor: "bg-green-500/10"
     },
     { 
       title: "Overdue Projects", 
@@ -69,7 +72,9 @@ export default function AdminDashboard() {
       icon: <AlertCircle className="h-4 w-4" />, 
       color: "border-l-red-500",
       iconColor: "text-red-500",
-      isAlert: stats.overdueProjects > 0
+      bgColor: "bg-red-500/10",
+      isAlert: stats.overdueProjects > 0,
+      danger: true
     },
     { 
       title: "APKs Due Today", 
@@ -77,7 +82,8 @@ export default function AdminDashboard() {
       sub: "pending releases",
       icon: <Smartphone className="h-4 w-4" />, 
       color: "border-l-amber-500",
-      iconColor: "text-amber-500"
+      iconColor: "text-amber-500",
+      bgColor: "bg-amber-500/10"
     },
     { 
       title: "Open Bugs", 
@@ -86,15 +92,18 @@ export default function AdminDashboard() {
       icon: <Activity className="h-4 w-4" />, 
       color: "border-l-orange-500",
       iconColor: "text-orange-500",
-      isAlert: stats.openBugs > 0
+      bgColor: "bg-orange-500/10",
+      isAlert: stats.openBugs > 0,
+      danger: stats.openBugs > 0
     },
     { 
       title: "Open Requests", 
       value: stats.openRequests, 
       sub: "resource queue",
       icon: <Inbox className="h-4 w-4" />, 
-      color: "border-l-indigo-500",
-      iconColor: "text-indigo-500",
+      color: "border-l-sky-500",
+      iconColor: "text-sky-500",
+      bgColor: "bg-sky-500/10",
       isAlert: stats.openRequests > 0
     },
   ];
@@ -124,113 +133,114 @@ export default function AdminDashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {kpis.map((kpi, i) => (
-          <Card key={i} className={`bg-card border-l-4 ${kpi.color}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <Card key={i} className={`bg-card border-l-4 transition-colors hover:bg-muted/40 ${kpi.color} ${kpi.danger ? "bg-red-500/5" : ""}`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                 {kpi.title}
               </CardTitle>
-              <div className={kpi.iconColor}>{kpi.icon}</div>
+              <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${kpi.bgColor} ${kpi.iconColor}`}>
+                {kpi.icon}
+              </div>
             </CardHeader>
             <CardContent>
-              <div className={`text-2xl font-bold ${kpi.isAlert ? "text-destructive" : ""}`}>{kpi.value}</div>
-              <p className="text-[10px] text-muted-foreground mt-1">{kpi.sub}</p>
+              <div className={`text-3xl font-bold tracking-tight ${kpi.isAlert ? "text-destructive" : ""}`}>{kpi.value}</div>
+              <p className="text-xs text-muted-foreground mt-1">{kpi.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 bg-card border-border">
-          <CardHeader>
-            <CardTitle>Project Pipeline</CardTitle>
-            <CardDescription>Current status of all projects</CardDescription>
-          </CardHeader>
-          <CardContent className="pl-2">
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
-                    itemStyle={{ color: "hsl(var(--card-foreground))" }}
-                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                  />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+        <Card className="lg:col-span-4 bg-card border-border">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Recent Activity</CardTitle>
+              <CardDescription>Latest actions across the platform</CardDescription>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="col-span-3 bg-card border-border">
-          <CardHeader>
-            <CardTitle>Open Bugs by Severity</CardTitle>
-            <CardDescription>System-wide issue tracker</CardDescription>
+            <Activity className="h-4 w-4 text-muted-foreground opacity-40" />
           </CardHeader>
           <CardContent>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={bugData} layout="vertical" margin={{ left: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip 
-                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
-                  />
-                  <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
-                    {bugData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+            <div className="space-y-6">
+              {stats.recentActivity.map((activity, i) => (
+                <div key={i} className="flex items-center gap-4 group">
+                  <div className={`h-2 w-2 rounded-full ${activityColors[i % activityColors.length]}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm leading-none">
+                      <span className="font-bold">{activity.actorName}</span>
+                      <span className="text-muted-foreground mx-1.5">
+                        {activity.action}
+                      </span>
+                      <span className="font-semibold">{activity.entityName}</span>
+                    </p>
+                  </div>
+                  <div className="text-xs text-muted-foreground whitespace-nowrap">
+                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                  </div>
+                </div>
+              ))}
+              {stats.recentActivity.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Activity className="h-12 w-12 text-muted-foreground opacity-40 mb-4" />
+                  <p className="text-sm text-muted-foreground font-medium">No recent activity</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
-      </div>
 
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
-          <CardDescription>Latest actions across the platform</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            {stats.recentActivity.map((activity, i) => (
-              <div key={i} className="flex items-center gap-4">
-                <Avatar className="h-9 w-9 border border-border">
-                  <AvatarFallback className={`${activityColors[i % activityColors.length]} text-white text-xs`}>
-                    {activity.actorName.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 space-y-1">
-                  <p className="text-sm font-medium leading-none">
-                    <span className="font-bold">{activity.actorName}</span>
-                    <span className="text-muted-foreground mx-1.5 font-normal">
-                      {activity.action}
-                    </span>
-                    <span className="font-semibold">{activity.entityName}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                  </p>
-                </div>
-                {activity.action.includes('created') && (
-                  <Badge variant="outline" className="bg-green-500/5 text-green-500 border-green-500/20 text-[10px]">NEW</Badge>
-                )}
+        <div className="lg:col-span-3 space-y-4">
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Project Pipeline</CardTitle>
+              <CardDescription>Current status distribution</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={pipelineData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
+                      itemStyle={{ color: "hsl(var(--card-foreground))" }}
+                      cursor={{fill: 'hsl(var(--muted)/0.2)'}}
+                    />
+                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-            {stats.recentActivity.length === 0 && (
-              <div className="text-center text-muted-foreground py-8 border border-dashed rounded-lg">
-                No recent activity recorded
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Bug Severity</CardTitle>
+              <CardDescription>Open issues by priority</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={bugData} layout="vertical">
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                    <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
+                    <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} width={60} />
+                    <Tooltip 
+                      cursor={{fill: 'hsl(var(--muted)/0.2)'}}
+                      contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {bugData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

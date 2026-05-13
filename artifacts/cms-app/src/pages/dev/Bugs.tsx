@@ -17,6 +17,8 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 const bugSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
   title: z.string().min(1, "Title is required"),
@@ -35,7 +37,11 @@ type BugFormValues = z.infer<typeof bugSchema>;
 export default function DevBugs() {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const { data, isLoading, refetch } = useListBugs({ limit: 50 });
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { data, isLoading, refetch } = useListBugs({ 
+    status: statusFilter !== "all" ? statusFilter as any : undefined, 
+    limit: 50 
+  });
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createBug = useCreateBug();
 
@@ -67,8 +73,9 @@ export default function DevBugs() {
       setOpen(false);
       form.reset();
       refetch();
-    } catch (error) {
-      toast.error("Failed to report bug");
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
+      toast.error(msg);
     }
   };
 
@@ -315,6 +322,18 @@ export default function DevBugs() {
             </Form>
           </DialogContent>
         </Dialog>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
+          <TabsList className="bg-muted/50 p-1">
+            <TabsTrigger value="all" className="rounded-md">All</TabsTrigger>
+            <TabsTrigger value="open" className="rounded-md">Open</TabsTrigger>
+            <TabsTrigger value="in_progress" className="rounded-md">In Progress</TabsTrigger>
+            <TabsTrigger value="fixed" className="rounded-md">Fixed</TabsTrigger>
+            <TabsTrigger value="verified" className="rounded-md">Verified</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </div>
 
       <Card className="bg-card">

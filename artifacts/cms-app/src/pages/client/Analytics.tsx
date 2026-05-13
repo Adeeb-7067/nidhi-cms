@@ -15,8 +15,11 @@ export default function ClientAnalytics() {
   const { data: projectsData } = useListProjects({ limit: 1 });
   const projectId = projectsData?.projects[0]?.id;
 
-  const { data: analytics, isLoading } = useGetProjectAnalytics(projectId || 0, {
-    query: { queryKey: getGetProjectAnalyticsQueryKey(projectId || 0), enabled: !!projectId }
+  const { data: analytics, isLoading } = useGetProjectAnalytics(projectId!, {
+    query: { 
+      queryKey: getGetProjectAnalyticsQueryKey(projectId!), 
+      enabled: !!projectId 
+    }
   });
 
   if (isLoading || !projectId) {
@@ -56,7 +59,11 @@ export default function ClientAnalytics() {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analytics.completionOverTime}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tickFormatter={(val) => new Date(val).toLocaleDateString(undefined, {month: 'short', day: 'numeric'})} />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="hsl(var(--muted-foreground))" 
+                    tickFormatter={(val) => val ? new Date(val).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : ''} 
+                  />
                   <YAxis stroke="hsl(var(--muted-foreground))" />
                   <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
                   <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={true} activeDot={{ r: 6 }} />

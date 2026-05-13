@@ -16,6 +16,8 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+
 const apkReleaseSchema = z.object({
   version: z.string().min(1, "Version is required"),
   buildNumber: z.coerce.number().optional(),
@@ -35,10 +37,10 @@ export default function DevApk() {
 
   const { data: projectsData, isLoading: projectsLoading } = useListProjects({ limit: 50 });
   const { data: releasesData, isLoading: releasesLoading, refetch: refetchReleases } = useGetApkReleases(
-    selectedProjectId as number,
+    selectedProjectId!,
     {
       query: {
-        enabled: selectedProjectId !== null,
+        enabled: !!selectedProjectId,
         queryKey: ["getApkReleases", selectedProjectId],
       }
     }
@@ -71,8 +73,9 @@ export default function DevApk() {
       setOpen(false);
       form.reset();
       refetchReleases();
-    } catch (error) {
-      toast.error("Failed to upload release");
+    } catch (error: any) {
+      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
+      toast.error(msg);
     }
   };
 
@@ -101,12 +104,23 @@ export default function DevApk() {
           <h1 className="text-3xl font-bold tracking-tight">APK Releases</h1>
           <p className="text-muted-foreground">Upload and manage application builds</p>
         </div>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                <Button className="bg-primary text-primary-foreground" disabled={!selectedProjectId} onClick={() => setOpen(true)}>
+                  <Plus className="mr-2 h-4 w-4" /> Upload Release
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!selectedProjectId && (
+              <TooltipContent>
+                <p>Select a project first to upload a release</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground" disabled={!selectedProjectId}>
-              <Plus className="mr-2 h-4 w-4" /> Upload Release
-            </Button>
-          </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
             <DialogHeader>
               <DialogTitle>Upload New Release</DialogTitle>
@@ -267,22 +281,23 @@ export default function DevApk() {
         </Dialog>
       </div>
 
-      <div className="flex flex-wrap gap-2 pb-2 overflow-x-auto">
-        {projectsLoading ? (
-          [...Array(4)].map((_, i) => <Skeleton key={i} className="h-9 w-24 rounded-full" />)
-        ) : (
-          projectsData?.projects.map((project) => (
-            <Button
-              key={project.id}
-              variant={selectedProjectId === project.id ? "default" : "outline"}
-              size="sm"
-              onClick={() => setSelectedProjectId(project.id)}
-              className="rounded-full"
-            >
-              {project.name}
-            </Button>
-          ))
-        )}
+      <div className="space-y-4">
+        <label className="text-sm font-medium">Select a project to view its releases</label>
+        <Select 
+          value={selectedProjectId?.toString()} 
+          onValueChange={(v) => setSelectedProjectId(parseInt(v))}
+        >
+          <SelectTrigger className="w-full max-w-md">
+            <SelectValue placeholder="Select a project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projectsData?.projects.map((project) => (
+              <SelectItem key={project.id} value={project.id.toString()}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {!selectedProjectId ? (
