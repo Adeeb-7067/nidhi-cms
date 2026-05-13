@@ -82,8 +82,8 @@ export default function AdminEmployees() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
-          <p className="text-muted-foreground">Manage your agency team members</p>
+          <h1 className="text-3xl font-bold tracking-tight">Team</h1>
+          <p className="text-muted-foreground text-sm mt-1">Manage your agency's team members</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -200,6 +200,24 @@ export default function AdminEmployees() {
       </div>
 
       <Card className="bg-card">
+        {data && (
+          <div className="flex items-center gap-6 px-4 py-3 border-b border-border bg-muted/20">
+            <div className="text-center">
+              <div className="text-2xl font-bold">{data.total}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</div>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-500">{data.users.filter(u => u.status === 'active').length}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Active</div>
+            </div>
+            <div className="h-8 w-px bg-border" />
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-500">{data.users.filter(u => u.role === 'developer').length}</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Developers</div>
+            </div>
+          </div>
+        )}
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

@@ -139,7 +139,7 @@ export default function AdminProjects() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground">Manage and track all client projects</p>
+          <p className="text-muted-foreground text-sm mt-1">Manage and track all client projects</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -398,12 +398,22 @@ export default function AdminProjects() {
             const deadlineStatus = getDeadlineStatus(project.deadline);
             return (
               <Link key={project.id} href={`/admin/projects/${project.id}`}>
-                <Card className={`bg-card hover:bg-muted/40 transition-colors cursor-pointer border-border h-full flex flex-col border-t-2 ${deadlineStatus.color}`}>
+                <Card className={`bg-card hover:bg-muted/40 transition-colors cursor-pointer border-border h-full flex flex-col border-t-2 ${deadlineStatus.color} card-hover`}>
                   <CardHeader className="pb-2">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="secondary" className={getStatusColor(project.status)}>
                         {project.status.replace('_', ' ').toUpperCase()}
                       </Badge>
+                      {project.techStack && project.techStack.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {project.techStack.slice(0, 3).map(t => (
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{t}</span>
+                          ))}
+                          {project.techStack.length > 3 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">+{project.techStack.length - 3}</span>
+                          )}
+                        </div>
+                      )}
                       <div className="flex items-center text-xs font-medium">
                         <span className={`h-2 w-2 rounded-full mr-1.5 bg-current ${getPriorityColor(project.priority)}`}></span>
                         <span className={getPriorityColor(project.priority)}>
@@ -441,6 +451,21 @@ export default function AdminProjects() {
                       </div>
                     </div>
                   </CardContent>
+                  <div className="mt-4 px-5 pb-3">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs text-muted-foreground">Progress</span>
+                      <span className="text-xs font-semibold text-foreground">{project.completionPct ?? 0}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full progress-fill"
+                        style={{
+                          width: `${project.completionPct ?? 0}%`,
+                          background: (project.completionPct ?? 0) >= 80 ? '#22c55e' : (project.completionPct ?? 0) >= 40 ? 'hsl(var(--primary))' : '#f59e0b'
+                        }}
+                      />
+                    </div>
+                  </div>
                   <CardFooter className="pt-2 border-t border-border mt-auto">
                     <div className="flex justify-between items-center w-full text-xs text-muted-foreground">
                       <div className="flex -space-x-2">

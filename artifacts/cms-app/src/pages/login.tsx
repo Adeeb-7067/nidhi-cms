@@ -10,8 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Lock, Mail, User as UserIcon, Zap } from "lucide-react";
+import { Lock, Mail, User as UserIcon, Zap, CheckCircle, Shield, Users } from "lucide-react";
 
 const emailSchema = z.object({
   identifier: z.string().email("Invalid email address"),
@@ -55,125 +56,226 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-background">
-      {/* Brand Side */}
-      <div className="hidden md:flex flex-1 flex-col justify-center items-start p-12 lg:p-24 bg-sidebar border-r border-border">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="h-10 w-10 bg-primary rounded-lg flex items-center justify-center">
-            <Zap size={22} className="text-primary-foreground fill-primary-foreground" />
+      {/* LEFT SIDE (brand panel) */}
+      <div 
+        className="hidden md:flex flex-1 flex-col justify-between p-12 lg:p-20 relative overflow-hidden border-r border-border/50"
+        style={{ 
+          backgroundColor: "hsl(220 13% 7%)",
+          backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)", 
+          backgroundSize: "24px 24px" 
+        }}
+      >
+        {/* Radial Glows */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-80 h-80 bg-primary/20 blur-[100px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/4 w-64 h-64 bg-purple-600/15 blur-[80px] rounded-full pointer-events-none" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-4 mb-12">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+              <Zap size={26} className="text-white fill-white" />
+            </div>
+            <h1 className="text-3xl font-bold text-white tracking-tight">Nexus CMS</h1>
           </div>
-          <h1 className="text-3xl font-bold text-foreground tracking-tight">Nexus CMS</h1>
+
+          <div className="space-y-6">
+            <p className="text-xl text-muted-foreground max-w-xs leading-relaxed font-medium">
+              The command center for software agencies.
+            </p>
+
+            <div className="mt-8 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-green-400/10">
+                  <CheckCircle className="h-4 w-4 text-green-400" />
+                </div>
+                <span className="text-sm text-muted-foreground font-medium">Real-time project tracking</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-blue-400/10">
+                  <Shield className="h-4 w-4 text-blue-400" />
+                </div>
+                <span className="text-sm text-muted-foreground font-medium">Enterprise-grade security</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-purple-400/10">
+                  <Users className="h-4 w-4 text-purple-400" />
+                </div>
+                <span className="text-sm text-muted-foreground font-medium">Multi-role team management</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <p className="text-xl text-muted-foreground max-w-md leading-relaxed">
-          The precision-crafted operations hub for software agencies. Ship faster, track perfectly.
-        </p>
+
+        <div className="relative z-10 mt-auto">
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Trusted by 50+ software agencies</p>
+            <div className="flex items-center">
+              {[1, 2, 3, 4].map((i) => (
+                <div 
+                  key={i} 
+                  className={`h-6 w-6 rounded-full bg-muted border-2 border-background ${i !== 1 ? "-ml-2" : ""}`}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Login Side */}
-      <div className="flex-1 flex items-center justify-center p-6 bg-background">
-        <Card className="w-full max-w-md border-border/50 shadow-2xl bg-card">
-          <CardHeader className="space-y-2 pb-6">
-            <CardTitle className="text-2xl font-semibold tracking-tight text-card-foreground">Welcome back</CardTitle>
-            <CardDescription className="text-muted-foreground">Sign in to your account to continue</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "email" | "employee")} className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6 bg-muted">
-                <TabsTrigger value="email" className="data-[state=active]:bg-background data-[state=active]:text-foreground">Email</TabsTrigger>
-                <TabsTrigger value="employee" className="data-[state=active]:bg-background data-[state=active]:text-foreground">Employee ID</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="email">
-                <Form {...emailForm}>
-                  <form onSubmit={emailForm.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={emailForm.control}
-                      name="identifier"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Email</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input placeholder="name@agency.com" className="pl-9 bg-input/50" {...field} />
+      {/* RIGHT SIDE (login form) */}
+      <div className="flex-1 flex items-center justify-center p-6 bg-background/50">
+        <div className="w-full max-w-[400px]">
+          <Card 
+            className="bg-card border border-border/60 shadow-2xl rounded-2xl overflow-hidden"
+            style={{ boxShadow: "0 32px 80px -12px rgba(0,0,0,0.7)" }}
+          >
+            <CardHeader className="space-y-1.5 pt-8 pb-6 px-8">
+              <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
+              <CardDescription className="text-muted-foreground text-sm">
+                Sign in to your account to continue
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="px-8 pb-8">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "email" | "employee")} className="w-full">
+                <TabsList className="grid w-full grid-cols-2 mb-8 bg-muted/50 p-1 h-10 rounded-lg">
+                  <TabsTrigger 
+                    value="email" 
+                    className="rounded-md text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
+                    Email
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="employee" 
+                    className="rounded-md text-xs font-medium transition-all data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
+                    Employee ID
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="email" className="mt-0 outline-none">
+                  <Form {...emailForm}>
+                    <form onSubmit={emailForm.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={emailForm.control}
+                        name="identifier"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1.5">
+                            <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</FormLabel>
+                            <FormControl>
+                              <div className="relative group">
+                                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Input 
+                                  placeholder="name@agency.com" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  {...field} 
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[11px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={emailForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Password</FormLabel>
+                              <a href="#" className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
                             </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={emailForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex justify-between items-center">
-                            <FormLabel>Password</FormLabel>
-                            <a href="#" className="text-xs text-primary hover:underline">Forgot password?</a>
-                          </div>
-                          <FormControl>
-                            <div className="relative">
-                              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input type="password" placeholder="••••••••" className="pl-9 bg-input/50" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full mt-2" disabled={loginMutation.isPending}>
-                      {loginMutation.isPending ? "Signing in..." : "Sign in"}
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
+                            <FormControl>
+                              <div className="relative group">
+                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Input 
+                                  type="password" 
+                                  placeholder="••••••••" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  {...field} 
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[11px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full h-10 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
 
-              <TabsContent value="employee">
-                <Form {...employeeForm}>
-                  <form onSubmit={employeeForm.handleSubmit(onSubmit)} className="space-y-4">
-                    <FormField
-                      control={employeeForm.control}
-                      name="identifier"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Employee ID</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input placeholder="e.g. DE001" className="pl-9 bg-input/50" {...field} />
+                <TabsContent value="employee" className="mt-0 outline-none">
+                  <Form {...employeeForm}>
+                    <form onSubmit={employeeForm.handleSubmit(onSubmit)} className="space-y-4">
+                      <FormField
+                        control={employeeForm.control}
+                        name="identifier"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1.5">
+                            <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Employee ID</FormLabel>
+                            <FormControl>
+                              <div className="relative group">
+                                <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Input 
+                                  placeholder="e.g. DE001" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  {...field} 
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[11px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={employeeForm.control}
+                        name="password"
+                        render={({ field }) => (
+                          <FormItem className="space-y-1.5">
+                            <div className="flex justify-between items-center">
+                              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Password</FormLabel>
+                              <a href="#" className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
                             </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={employeeForm.control}
-                      name="password"
-                      render={({ field }) => (
-                        <FormItem>
-                          <div className="flex justify-between items-center">
-                            <FormLabel>Password</FormLabel>
-                            <a href="#" className="text-xs text-primary hover:underline">Forgot password?</a>
-                          </div>
-                          <FormControl>
-                            <div className="relative">
-                              <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input type="password" placeholder="••••••••" className="pl-9 bg-input/50" {...field} />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="w-full mt-2" disabled={loginMutation.isPending}>
-                      {loginMutation.isPending ? "Signing in..." : "Sign in"}
-                    </Button>
-                  </form>
-                </Form>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
+                            <FormControl>
+                              <div className="relative group">
+                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Input 
+                                  type="password" 
+                                  placeholder="••••••••" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  {...field} 
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage className="text-[11px]" />
+                          </FormItem>
+                        )}
+                      />
+                      <Button 
+                        type="submit" 
+                        className="w-full h-10 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
+                        disabled={loginMutation.isPending}
+                      >
+                        {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                      </Button>
+                    </form>
+                  </Form>
+                </TabsContent>
+              </Tabs>
+
+              <div className="mt-8">
+                <Separator className="bg-border/40" />
+                <p className="text-[10px] text-muted-foreground text-center mt-6">
+                  © 2025 Nexus CMS. All rights reserved.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
