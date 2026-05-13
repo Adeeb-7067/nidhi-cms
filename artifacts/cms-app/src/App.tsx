@@ -1,3 +1,4 @@
+import React from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -33,60 +34,95 @@ import ClientApk from "@/pages/client/Apk";
 
 const queryClient = new QueryClient();
 
+function AdminPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute allowedRoles={["super_admin"]}>
+      <AppLayout>
+        <Component />
+      </AppLayout>
+    </ProtectedRoute>
+  );
+}
+
+function DevPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute allowedRoles={["developer"]}>
+      <AppLayout>
+        <Component />
+      </AppLayout>
+    </ProtectedRoute>
+  );
+}
+
+function ClientPage({ component: Component }: { component: React.ComponentType }) {
+  return (
+    <ProtectedRoute allowedRoles={["client"]}>
+      <AppLayout>
+        <Component />
+      </AppLayout>
+    </ProtectedRoute>
+  );
+}
+
 function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-      <Route path="/">
-        <Redirect to="/login" />
-      </Route>
-      
+
       {/* Super Admin Routes */}
-      <Route path="/admin*">
-        <ProtectedRoute allowedRoles={["super_admin"]}>
-          <AppLayout>
-            <Switch>
-              <Route path="/admin" component={AdminDashboard} />
-              <Route path="/admin/projects" component={AdminProjects} />
-              <Route path="/admin/projects/:id" component={AdminProjectDetail} />
-              <Route path="/admin/employees" component={AdminEmployees} />
-              <Route path="/admin/clients" component={AdminClients} />
-              <Route path="/admin/analytics" component={AdminAnalytics} />
-              <Route path="/admin/requests" component={AdminRequests} />
-              <Route component={NotFound} />
-            </Switch>
-          </AppLayout>
-        </ProtectedRoute>
+      <Route path="/admin">
+        <AdminPage component={AdminDashboard} />
+      </Route>
+      <Route path="/admin/projects/:id">
+        <AdminPage component={AdminProjectDetail} />
+      </Route>
+      <Route path="/admin/projects">
+        <AdminPage component={AdminProjects} />
+      </Route>
+      <Route path="/admin/employees">
+        <AdminPage component={AdminEmployees} />
+      </Route>
+      <Route path="/admin/clients">
+        <AdminPage component={AdminClients} />
+      </Route>
+      <Route path="/admin/analytics">
+        <AdminPage component={AdminAnalytics} />
+      </Route>
+      <Route path="/admin/requests">
+        <AdminPage component={AdminRequests} />
       </Route>
 
       {/* Developer Routes */}
-      <Route path="/dev*">
-        <ProtectedRoute allowedRoles={["developer"]}>
-          <AppLayout>
-            <Switch>
-              <Route path="/dev" component={DevWorkspace} />
-              <Route path="/dev/logs" component={DevLogs} />
-              <Route path="/dev/bugs" component={DevBugs} />
-              <Route path="/dev/apk" component={DevApk} />
-              <Route path="/dev/reports" component={DevReports} />
-              <Route component={NotFound} />
-            </Switch>
-          </AppLayout>
-        </ProtectedRoute>
+      <Route path="/dev">
+        <DevPage component={DevWorkspace} />
+      </Route>
+      <Route path="/dev/logs">
+        <DevPage component={DevLogs} />
+      </Route>
+      <Route path="/dev/bugs">
+        <DevPage component={DevBugs} />
+      </Route>
+      <Route path="/dev/apk">
+        <DevPage component={DevApk} />
+      </Route>
+      <Route path="/dev/reports">
+        <DevPage component={DevReports} />
       </Route>
 
       {/* Client Routes */}
-      <Route path="/client*">
-        <ProtectedRoute allowedRoles={["client"]}>
-          <AppLayout>
-            <Switch>
-              <Route path="/client" component={ClientPortal} />
-              <Route path="/client/analytics" component={ClientAnalytics} />
-              <Route path="/client/apk" component={ClientApk} />
-              <Route component={NotFound} />
-            </Switch>
-          </AppLayout>
-        </ProtectedRoute>
+      <Route path="/client">
+        <ClientPage component={ClientPortal} />
+      </Route>
+      <Route path="/client/analytics">
+        <ClientPage component={ClientAnalytics} />
+      </Route>
+      <Route path="/client/apk">
+        <ClientPage component={ClientApk} />
+      </Route>
+
+      {/* Root redirect */}
+      <Route path="/">
+        <Redirect to="/login" />
       </Route>
 
       <Route component={NotFound} />
