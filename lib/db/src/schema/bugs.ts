@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -28,7 +28,12 @@ export const bugsTable = pgTable("bugs", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   resolvedAt: timestamp("resolved_at"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("bugs_project_id_idx").on(table.projectId),
+  index("bugs_reporter_id_idx").on(table.reporterId),
+  index("bugs_status_idx").on(table.status),
+  index("bugs_created_at_idx").on(table.createdAt),
+]);
 
 export const insertBugSchema = createInsertSchema(bugsTable).omit({ id: true, createdAt: true, updatedAt: true, resolvedAt: true });
 export type InsertBug = z.infer<typeof insertBugSchema>;

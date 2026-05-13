@@ -6,21 +6,22 @@ import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
 
-async function formatBug(bug: typeof bugsTable.$inferSelect) {
-  const [reporter] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, bug.reporterId));
-  const [project] = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, bug.projectId));
-  let assigneeName: string | null = null;
-  if (bug.assigneeId) {
-    const [assignee] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, bug.assigneeId));
-    assigneeName = assignee?.name ?? null;
-  }
+type BugRow = {
+  bug: typeof bugsTable.$inferSelect;
+  projectName: string;
+  reporterName: string;
+  assigneeName: string | null;
+};
+
+function formatBugRow(row: BugRow) {
+  const { bug, projectName, reporterName, assigneeName } = row;
   return {
     id: bug.id,
     bugNumber: bug.bugNumber,
     projectId: bug.projectId,
-    projectName: project?.name ?? "Unknown",
+    projectName,
     reporterId: bug.reporterId,
-    reporterName: reporter?.name ?? "Unknown",
+    reporterName,
     assigneeId: bug.assigneeId,
     assigneeName,
     title: bug.title,
@@ -36,6 +37,35 @@ async function formatBug(bug: typeof bugsTable.$inferSelect) {
     createdAt: bug.createdAt.toISOString(),
     resolvedAt: bug.resolvedAt?.toISOString() ?? null,
   };
+}
+
+const reporterAlias = db.$with("reporter").as(
+  db.select({ id: usersTable.id, name: usersTable.name }).from(usersTable)
+);
+
+async function fetchBugById(id: number) {
+  const assigneeTable = usersTable;
+  const rows = await db
+    .select({
+      bug: bugsTable,
+      projectName: projectsTable.name,
+      reporterName: sql<string>`reporter.name`,
+      assigneeName: sql<string | null>`assignee.name`,
+    })
+    .from(bugsTable)
+    .innerJoin(projectsTable, eq(projectsTable.id, bugsTable.projectId))
+    .innerJoin(
+      sql`users reporter`,
+      sql`reporter.id = ${bugsTable.reporterId}`
+    )
+    .leftJoin(
+      sql`users assignee`,
+      sql`assignee.id = ${bugsTable.assigneeId}`
+    )
+    .where(eq(bugsTable.id, id))
+    .limit(1);
+
+  return rows[0] ?? null;
 }
 
 async function nextBugNumber(): Promise<string> {
@@ -54,13 +84,36 @@ router.get("/bugs", requireAuth, async (req, res) => {
   if (status) conditions.push(eq(bugsTable.status, status as "open" | "in_progress" | "fixed" | "verified" | "wont_fix" | "duplicate"));
   if (severity) conditions.push(eq(bugsTable.severity, severity as "critical" | "high" | "medium" | "low"));
 
-  const [bugs, countResult] = await Promise.all([
-    db.select().from(bugsTable).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(bugsTable.createdAt)).limit(parseInt(limit)).offset(offset),
-    db.select({ count: sql<number>`count(*)` }).from(bugsTable).where(conditions.length ? and(...conditions) : undefined),
+  const whereClause = conditions.length ? and(...conditions) : undefined;
+
+  const [rows, countResult] = await Promise.all([
+    db
+      .select({
+        bug: bugsTable,
+        projectName: projectsTable.name,
+        reporterName: sql<string>`reporter.name`,
+        assigneeName: sql<string | null>`assignee.name`,
+      })
+      .from(bugsTable)
+      .innerJoin(projectsTable, eq(projectsTable.id, bugsTable.projectId))
+      .innerJoin(sql`users reporter`, sql`reporter.id = ${bugsTable.reporterId}`)
+      .leftJoin(sql`users assignee`, sql`assignee.id = ${bugsTable.assigneeId}`)
+      .where(whereClause)
+      .orderBy(desc(bugsTable.createdAt))
+      .limit(parseInt(limit))
+      .offset(offset),
+    db
+      .select({ count: sql<number>`count(*)` })
+      .from(bugsTable)
+      .where(whereClause),
   ]);
 
-  const formatted = await Promise.all(bugs.map(formatBug));
-  res.json({ bugs: formatted, total: Number(countResult[0].count), page: parseInt(page), limit: parseInt(limit) });
+  res.json({
+    bugs: rows.map(formatBugRow),
+    total: Number(countResult[0].count),
+    page: parseInt(page),
+    limit: parseInt(limit),
+  });
 });
 
 // POST /api/bugs
@@ -71,39 +124,78 @@ router.post("/bugs", requireAuth, async (req, res) => {
     return;
   }
   const bugNumber = await nextBugNumber();
-  const [bug] = await db
+  const [inserted] = await db
     .insert(bugsTable)
-    .values({ bugNumber, projectId, reporterId: req.user!.id, title, description: description ?? null, stepsToReproduce: stepsToReproduce ?? null, expectedBehavior: expectedBehavior ?? null, actualBehavior: actualBehavior ?? null, severity, priority, platform, buildVersion: buildVersion ?? null, assigneeId: assigneeId ?? null })
+    .values({
+      bugNumber,
+      projectId,
+      reporterId: req.user!.id,
+      title,
+      description: description ?? null,
+      stepsToReproduce: stepsToReproduce ?? null,
+      expectedBehavior: expectedBehavior ?? null,
+      actualBehavior: actualBehavior ?? null,
+      severity,
+      priority,
+      platform,
+      buildVersion: buildVersion ?? null,
+      assigneeId: assigneeId ?? null,
+    })
     .returning();
-  res.status(201).json(await formatBug(bug));
+
+  const row = await fetchBugById(inserted.id);
+  if (!row) {
+    res.status(500).json({ error: "Failed to retrieve created bug" });
+    return;
+  }
+  res.status(201).json(formatBugRow(row));
 });
 
 // GET /api/bugs/:id
 router.get("/bugs/:id", requireAuth, async (req, res) => {
-  const bug = await db.query.bugsTable.findFirst({ where: eq(bugsTable.id, parseInt(req.params['id'] as string)) });
-  if (!bug) {
+  const row = await fetchBugById(parseInt(req.params["id"] as string));
+  if (!row) {
     res.status(404).json({ error: "Bug not found" });
     return;
   }
-  res.json(await formatBug(bug));
+  res.json(formatBugRow(row));
 });
 
 // PATCH /api/bugs/:id
 router.patch("/bugs/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
+  const id = parseInt(req.params["id"] as string);
   const { title, description, stepsToReproduce, expectedBehavior, actualBehavior, severity, priority, status, buildVersion, platform, assigneeId } = req.body;
-  
-  const setObj: Record<string, unknown> = { title, description, stepsToReproduce, expectedBehavior, actualBehavior, severity, priority, status, buildVersion, platform, assigneeId, updatedAt: new Date() };
+
+  const setObj: Record<string, unknown> = {
+    title,
+    description,
+    stepsToReproduce,
+    expectedBehavior,
+    actualBehavior,
+    severity,
+    priority,
+    status,
+    buildVersion,
+    platform,
+    assigneeId,
+    updatedAt: new Date(),
+  };
   if (status === "fixed" || status === "wont_fix" || status === "duplicate") {
     setObj.resolvedAt = new Date();
   }
 
-  const [bug] = await db.update(bugsTable).set(setObj).where(eq(bugsTable.id, id)).returning();
-  if (!bug) {
+  const [updated] = await db.update(bugsTable).set(setObj).where(eq(bugsTable.id, id)).returning();
+  if (!updated) {
     res.status(404).json({ error: "Bug not found" });
     return;
   }
-  res.json(await formatBug(bug));
+
+  const row = await fetchBugById(updated.id);
+  if (!row) {
+    res.status(500).json({ error: "Failed to retrieve updated bug" });
+    return;
+  }
+  res.json(formatBugRow(row));
 });
 
 export default router;

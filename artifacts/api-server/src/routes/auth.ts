@@ -1,4 +1,5 @@
 import { Router } from "express";
+import rateLimit from "express-rate-limit";
 import { db } from "../lib/db";
 import { usersTable, sessionsTable, passwordResetTokensTable, credentialHistoryTable } from "@workspace/db/schema";
 import { eq, and, gt } from "drizzle-orm";
@@ -9,15 +10,39 @@ import crypto from "crypto";
 
 const router = Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many login attempts. Please try again in 15 minutes." },
+  skipSuccessfulRequests: true,
+});
+
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many password reset requests. Please try again in 1 hour." },
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many refresh attempts. Please try again shortly." },
+});
+
 // POST /api/auth/login
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", loginLimiter, async (req, res) => {
   const { identifier, password } = req.body as { identifier: string; password: string };
   if (!identifier || !password) {
     res.status(400).json({ error: "identifier and password required" });
     return;
   }
 
-  // Try email first, then employee ID
   let user = await db.query.usersTable.findFirst({
     where: eq(usersTable.email, identifier.toLowerCase()),
   });
@@ -71,13 +96,15 @@ router.post("/auth/login", async (req, res) => {
 
 // POST /api/auth/logout
 router.post("/auth/logout", requireAuth, async (req, res) => {
-  const authHeader = req.headers.authorization ?? "";
-  // Optionally revoke refresh token by clearing session
+  const { refreshToken } = req.body as { refreshToken?: string };
+  if (refreshToken) {
+    await db.delete(sessionsTable).where(eq(sessionsTable.refreshToken, refreshToken));
+  }
   res.json({ success: true });
 });
 
 // POST /api/auth/refresh
-router.post("/auth/refresh", async (req, res) => {
+router.post("/auth/refresh", refreshLimiter, async (req, res) => {
   const { refreshToken } = req.body as { refreshToken: string };
   if (!refreshToken) {
     res.status(400).json({ error: "refreshToken required" });
@@ -133,13 +160,12 @@ router.post("/auth/refresh", async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
-router.post("/auth/forgot-password", async (req, res) => {
+router.post("/auth/forgot-password", forgotPasswordLimiter, async (req, res) => {
   const { email } = req.body as { email: string };
   if (!email) {
     res.status(400).json({ error: "email required" });
     return;
   }
-  // Always respond 200 to avoid user enumeration
   const user = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email.toLowerCase()) });
   if (user) {
     const token = crypto.randomBytes(32).toString("hex");
@@ -148,8 +174,7 @@ router.post("/auth/forgot-password", async (req, res) => {
       token,
       expiresAt: new Date(Date.now() + 60 * 60 * 1000),
     });
-    // In production: send email with reset link
-    req.log.info({ userId: user.id, token }, "Password reset token generated");
+    req.log.info({ userId: user.id }, "Password reset token generated");
   }
   res.json({ message: "If an account exists, a reset link has been sent." });
 });

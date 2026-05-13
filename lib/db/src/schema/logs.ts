@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, numeric, date } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, numeric, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -18,7 +18,11 @@ export const dailyLogsTable = pgTable("daily_logs", {
   nextDayPlan: text("next_day_plan"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("logs_developer_id_idx").on(table.developerId),
+  index("logs_project_id_idx").on(table.projectId),
+  index("logs_log_date_idx").on(table.logDate),
+]);
 
 export const insertDailyLogSchema = createInsertSchema(dailyLogsTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertDailyLog = z.infer<typeof insertDailyLogSchema>;

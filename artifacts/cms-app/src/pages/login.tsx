@@ -11,7 +11,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Lock, Mail, User as UserIcon } from "lucide-react";
+import { Lock, Mail, User as UserIcon, Zap } from "lucide-react";
 
 const emailSchema = z.object({
   identifier: z.string().email("Invalid email address"),
@@ -58,8 +58,8 @@ export default function Login() {
       {/* Brand Side */}
       <div className="hidden md:flex flex-1 flex-col justify-center items-start p-12 lg:p-24 bg-sidebar border-r border-border">
         <div className="mb-8 flex items-center gap-3">
-          <div className="h-10 w-10 bg-primary rounded flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-xl">X</span>
+          <div className="h-10 w-10 bg-primary rounded-lg flex items-center justify-center">
+            <Zap size={22} className="text-primary-foreground fill-primary-foreground" />
           </div>
           <h1 className="text-3xl font-bold text-foreground tracking-tight">Nexus CMS</h1>
         </div>

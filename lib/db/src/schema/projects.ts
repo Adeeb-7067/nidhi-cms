@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -27,7 +27,10 @@ export const projectsTable = pgTable("projects", {
   completionOverride: integer("completion_override"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("projects_client_id_idx").on(table.clientId),
+  index("projects_status_idx").on(table.status),
+]);
 
 export const projectMembersTable = pgTable("project_members", {
   id: serial("id").primaryKey(),
@@ -36,7 +39,10 @@ export const projectMembersTable = pgTable("project_members", {
   subType: text("sub_type"),
   completionPct: integer("completion_pct").notNull().default(0),
   joinedAt: timestamp("joined_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("project_members_project_id_idx").on(table.projectId),
+  index("project_members_user_id_idx").on(table.userId),
+]);
 
 export const apkSchedulesTable = pgTable("apk_schedules", {
   id: serial("id").primaryKey(),

@@ -1,21 +1,44 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { AlertCircle } from "lucide-react";
+import React from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { Zap, Home, ArrowLeft } from "lucide-react";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md mx-4">
-        <CardContent className="pt-6">
-          <div className="flex mb-4 gap-2">
-            <AlertCircle className="h-8 w-8 text-red-500" />
-            <h1 className="text-2xl font-bold text-gray-900">404 Page Not Found</h1>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-background text-foreground p-6">
+      <div className="relative mb-8">
+        <div className="text-[12rem] font-bold text-muted/20 select-none">404</div>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="h-20 w-20 bg-primary rounded-2xl flex items-center justify-center shadow-2xl shadow-primary/20">
+            <Zap size={44} className="text-primary-foreground fill-primary-foreground" />
           </div>
+        </div>
+      </div>
 
-          <p className="mt-4 text-sm text-gray-600">
-            Did you forget to add the page to the router?
-          </p>
-        </CardContent>
-      </Card>
+      <div className="text-center space-y-2 mb-8 relative">
+        <h1 className="text-3xl font-bold tracking-tight">Page not found</h1>
+        <p className="text-muted-foreground max-w-sm mx-auto">
+          The page you are looking for doesn't exist or has been moved. 
+          Check the URL or return to the dashboard.
+        </p>
+      </div>
+
+      <div className="flex gap-4">
+        <Link href="/login">
+          <Button variant="default" className="gap-2 h-11 px-8">
+            <Home size={18} />
+            Back to Login
+          </Button>
+        </Link>
+        <Button 
+          variant="outline" 
+          onClick={() => window.history.back()} 
+          className="gap-2 h-11 px-8"
+        >
+          <ArrowLeft size={18} />
+          Go Back
+        </Button>
+      </div>
     </div>
   );
 }

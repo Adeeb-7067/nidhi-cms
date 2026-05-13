@@ -1,4 +1,4 @@
-import { pgTable, serial, text, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, boolean, pgEnum, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -44,7 +44,10 @@ export const sessionsTable = pgTable("sessions", {
   ipAddress: text("ip_address"),
   deviceInfo: text("device_info"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("sessions_user_id_idx").on(table.userId),
+  index("sessions_expires_at_idx").on(table.expiresAt),
+]);
 
 export const passwordResetTokensTable = pgTable("password_reset_tokens", {
   id: serial("id").primaryKey(),

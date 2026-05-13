@@ -7,33 +7,44 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayout } from "@/components/layout/AppLayout";
 
-// Pages
-import Login from "@/pages/login";
-import NotFound from "@/pages/not-found";
-
+// Lazy Pages
+const Login = React.lazy(() => import("@/pages/login"));
+const NotFound = React.lazy(() => import("@/pages/not-found"));
 // Admin
-import AdminDashboard from "@/pages/admin/Dashboard";
-import AdminProjects from "@/pages/admin/Projects";
-import AdminProjectDetail from "@/pages/admin/ProjectDetail";
-import AdminEmployees from "@/pages/admin/Employees";
-import AdminClients from "@/pages/admin/Clients";
-import AdminAnalytics from "@/pages/admin/Analytics";
-import AdminRequests from "@/pages/admin/Requests";
-
+const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
+const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
+const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
+const AdminEmployees = React.lazy(() => import("@/pages/admin/Employees"));
+const AdminClients = React.lazy(() => import("@/pages/admin/Clients"));
+const AdminAnalytics = React.lazy(() => import("@/pages/admin/Analytics"));
+const AdminRequests = React.lazy(() => import("@/pages/admin/Requests"));
 // Dev
-import DevWorkspace from "@/pages/dev/Workspace";
-import DevLogs from "@/pages/dev/Logs";
-import DevBugs from "@/pages/dev/Bugs";
-import DevApk from "@/pages/dev/Apk";
-import DevReports from "@/pages/dev/Reports";
-import DevRequests from "@/pages/dev/Requests";
-
+const DevWorkspace = React.lazy(() => import("@/pages/dev/Workspace"));
+const DevLogs = React.lazy(() => import("@/pages/dev/Logs"));
+const DevBugs = React.lazy(() => import("@/pages/dev/Bugs"));
+const DevApk = React.lazy(() => import("@/pages/dev/Apk"));
+const DevReports = React.lazy(() => import("@/pages/dev/Reports"));
+const DevRequests = React.lazy(() => import("@/pages/dev/Requests"));
 // Client
-import ClientPortal from "@/pages/client/Portal";
-import ClientAnalytics from "@/pages/client/Analytics";
-import ClientApk from "@/pages/client/Apk";
+const ClientPortal = React.lazy(() => import("@/pages/client/Portal"));
+const ClientAnalytics = React.lazy(() => import("@/pages/client/Analytics"));
+const ClientApk = React.lazy(() => import("@/pages/client/Apk"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30 * 1000,
+      retry: (failureCount, error: any) => {
+        if (error?.response?.status >= 400 && error?.response?.status < 500) return false;
+        return failureCount < 2;
+      },
+      refetchOnWindowFocus: false,
+    },
+    mutations: {
+      retry: false,
+    },
+  },
+});
 
 function AdminPage({ component: Component }: { component: React.ComponentType }) {
   return (
@@ -67,70 +78,72 @@ function ClientPage({ component: Component }: { component: React.ComponentType }
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/login" component={Login} />
+    <React.Suspense fallback={<div className="h-screen w-screen flex items-center justify-center bg-background"><div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" /></div>}>
+      <Switch>
+        <Route path="/login" component={Login} />
 
-      {/* Super Admin Routes */}
-      <Route path="/admin">
-        <AdminPage component={AdminDashboard} />
-      </Route>
-      <Route path="/admin/projects/:id">
-        <AdminPage component={AdminProjectDetail} />
-      </Route>
-      <Route path="/admin/projects">
-        <AdminPage component={AdminProjects} />
-      </Route>
-      <Route path="/admin/employees">
-        <AdminPage component={AdminEmployees} />
-      </Route>
-      <Route path="/admin/clients">
-        <AdminPage component={AdminClients} />
-      </Route>
-      <Route path="/admin/analytics">
-        <AdminPage component={AdminAnalytics} />
-      </Route>
-      <Route path="/admin/requests">
-        <AdminPage component={AdminRequests} />
-      </Route>
+        {/* Super Admin Routes */}
+        <Route path="/admin">
+          <AdminPage component={AdminDashboard} />
+        </Route>
+        <Route path="/admin/projects/:id">
+          <AdminPage component={AdminProjectDetail} />
+        </Route>
+        <Route path="/admin/projects">
+          <AdminPage component={AdminProjects} />
+        </Route>
+        <Route path="/admin/employees">
+          <AdminPage component={AdminEmployees} />
+        </Route>
+        <Route path="/admin/clients">
+          <AdminPage component={AdminClients} />
+        </Route>
+        <Route path="/admin/analytics">
+          <AdminPage component={AdminAnalytics} />
+        </Route>
+        <Route path="/admin/requests">
+          <AdminPage component={AdminRequests} />
+        </Route>
 
-      {/* Developer Routes */}
-      <Route path="/dev">
-        <DevPage component={DevWorkspace} />
-      </Route>
-      <Route path="/dev/logs">
-        <DevPage component={DevLogs} />
-      </Route>
-      <Route path="/dev/bugs">
-        <DevPage component={DevBugs} />
-      </Route>
-      <Route path="/dev/apk">
-        <DevPage component={DevApk} />
-      </Route>
-      <Route path="/dev/reports">
-        <DevPage component={DevReports} />
-      </Route>
-      <Route path="/dev/requests">
-        <DevPage component={DevRequests} />
-      </Route>
+        {/* Developer Routes */}
+        <Route path="/dev">
+          <DevPage component={DevWorkspace} />
+        </Route>
+        <Route path="/dev/logs">
+          <DevPage component={DevLogs} />
+        </Route>
+        <Route path="/dev/bugs">
+          <DevPage component={DevBugs} />
+        </Route>
+        <Route path="/dev/apk">
+          <DevPage component={DevApk} />
+        </Route>
+        <Route path="/dev/reports">
+          <DevPage component={DevReports} />
+        </Route>
+        <Route path="/dev/requests">
+          <DevPage component={DevRequests} />
+        </Route>
 
-      {/* Client Routes */}
-      <Route path="/client">
-        <ClientPage component={ClientPortal} />
-      </Route>
-      <Route path="/client/analytics">
-        <ClientPage component={ClientAnalytics} />
-      </Route>
-      <Route path="/client/apk">
-        <ClientPage component={ClientApk} />
-      </Route>
+        {/* Client Routes */}
+        <Route path="/client">
+          <ClientPage component={ClientPortal} />
+        </Route>
+        <Route path="/client/analytics">
+          <ClientPage component={ClientAnalytics} />
+        </Route>
+        <Route path="/client/apk">
+          <ClientPage component={ClientApk} />
+        </Route>
 
-      {/* Root redirect */}
-      <Route path="/">
-        <Redirect to="/login" />
-      </Route>
+        {/* Root redirect */}
+        <Route path="/">
+          <Redirect to="/login" />
+        </Route>
 
-      <Route component={NotFound} />
-    </Switch>
+        <Route component={NotFound} />
+      </Switch>
+    </React.Suspense>
   );
 }
 
