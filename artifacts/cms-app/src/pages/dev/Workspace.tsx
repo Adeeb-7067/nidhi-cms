@@ -38,7 +38,7 @@ export default function DevWorkspace() {
           </Link>
         </Button>
         <Button variant="outline" className="h-24 flex flex-col items-center justify-center gap-2 bg-card hover:bg-muted" asChild>
-          <Link href="/dev/reports">
+          <Link href="/dev/requests">
             <FileText className="h-6 w-6 text-amber-500" />
             <span>Request Resource</span>
           </Link>

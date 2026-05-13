@@ -1,15 +1,76 @@
 import React, { useState } from "react";
-import { useListBugs } from "@workspace/api-client-react";
+import { useListBugs, useCreateBug, useListProjects } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Bug as BugIcon, Search, Filter } from "lucide-react";
+import { Plus, Bug as BugIcon, Search, Filter, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+
+const bugSchema = z.object({
+  projectId: z.string().min(1, "Project is required"),
+  title: z.string().min(1, "Title is required"),
+  severity: z.enum(["critical", "high", "medium", "low"]),
+  priority: z.enum(["p1", "p2", "p3", "p4"]),
+  platform: z.enum(["android", "ios", "web", "api", "all"]),
+  description: z.string().optional(),
+  stepsToReproduce: z.string().optional(),
+  expectedBehavior: z.string().optional(),
+  actualBehavior: z.string().optional(),
+  buildVersion: z.string().optional(),
+});
+
+type BugFormValues = z.infer<typeof bugSchema>;
 
 export default function DevBugs() {
-  const { data, isLoading } = useListBugs({ limit: 50 });
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const { data, isLoading, refetch } = useListBugs({ limit: 50 });
+  const { data: projectsData } = useListProjects({ limit: 50 });
+  const createBug = useCreateBug();
+
+  const form = useForm<BugFormValues>({
+    resolver: zodResolver(bugSchema),
+    defaultValues: {
+      projectId: "",
+      title: "",
+      severity: "medium",
+      priority: "p3",
+      platform: "all",
+      description: "",
+      stepsToReproduce: "",
+      expectedBehavior: "",
+      actualBehavior: "",
+      buildVersion: "",
+    },
+  });
+
+  const onSubmit = async (values: BugFormValues) => {
+    try {
+      await createBug.mutateAsync({
+        data: {
+          ...values,
+          projectId: parseInt(values.projectId),
+        },
+      });
+      toast.success("Bug reported!");
+      setOpen(false);
+      form.reset();
+      refetch();
+    } catch (error) {
+      toast.error("Failed to report bug");
+    }
+  };
 
   const getSeverityColor = (severity: string) => {
     switch(severity) {
@@ -32,6 +93,12 @@ export default function DevBugs() {
     }
   };
 
+  const filteredBugs = data?.bugs.filter(bug => 
+    bug.title.toLowerCase().includes(search.toLowerCase()) || 
+    bug.bugNumber.toLowerCase().includes(search.toLowerCase()) ||
+    bug.projectName.toLowerCase().includes(search.toLowerCase())
+  ) || [];
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -39,16 +106,228 @@ export default function DevBugs() {
           <h1 className="text-3xl font-bold tracking-tight">Bug Tracker</h1>
           <p className="text-muted-foreground">Report and track project issues</p>
         </div>
-        <Button className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Report Bug
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" /> Report Bug
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[700px] bg-card border-border overflow-y-auto max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle>Report a New Bug</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="projectId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select project" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {projectsData?.projects.map((project) => (
+                              <SelectItem key={project.id} value={project.id.toString()}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="title"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bug Title</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Short descriptive title" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="severity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Severity</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select severity" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="critical">Critical</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="priority"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Priority</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select priority" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="p1">P1 (Immediate)</SelectItem>
+                            <SelectItem value="p2">P2 (High)</SelectItem>
+                            <SelectItem value="p3">P3 (Normal)</SelectItem>
+                            <SelectItem value="p4">P4 (Low)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="platform"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Platform</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select platform" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="android">Android</SelectItem>
+                            <SelectItem value="ios">iOS</SelectItem>
+                            <SelectItem value="web">Web</SelectItem>
+                            <SelectItem value="api">API</SelectItem>
+                            <SelectItem value="all">All</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="buildVersion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Build Version (Optional)</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g. 1.0.4 (42)" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Overall description of the issue..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="stepsToReproduce"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Steps to Reproduce (Optional)</FormLabel>
+                        <FormControl>
+                          <Textarea placeholder="1. Open app\n2. Click..." className="min-h-[100px]" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="expectedBehavior"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Expected Behavior (Optional)</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="What should happen?" className="min-h-[60px]" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="actualBehavior"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Actual Behavior (Optional)</FormLabel>
+                          <FormControl>
+                            <Textarea placeholder="What actually happens?" className="min-h-[60px]" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <DialogFooter className="pt-4">
+                  <Button type="submit" disabled={createBug.isPending}>
+                    {createBug.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Report Bug
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="bg-card">
         <div className="p-4 border-b border-border flex flex-wrap gap-4 items-center justify-between">
           <div className="relative w-full max-w-sm">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input type="search" placeholder="Search bugs..." className="pl-9" />
+            <Input 
+              type="search" 
+              placeholder="Search bugs..." 
+              className="pl-9" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
           <Button variant="outline" size="sm">
             <Filter className="mr-2 h-4 w-4" /> Filter
@@ -78,7 +357,7 @@ export default function DevBugs() {
                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                   </TableRow>
                 ))
-              ) : data?.bugs.length === 0 ? (
+              ) : filteredBugs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
                     <div className="flex flex-col items-center justify-center">
@@ -88,13 +367,13 @@ export default function DevBugs() {
                   </TableCell>
                 </TableRow>
               ) : (
-                data?.bugs.map((bug) => (
+                filteredBugs.map((bug) => (
                   <TableRow key={bug.id} className="cursor-pointer hover:bg-muted/50">
                     <TableCell className="font-mono text-xs text-muted-foreground">{bug.bugNumber}</TableCell>
                     <TableCell className="font-medium">{bug.title}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{bug.projectName}</TableCell>
                     <TableCell>
-                      <Badge className={`border-0 ${getSeverityColor(bug.severity)} hover:${getSeverityColor(bug.severity)}`}>
+                      <Badge className={cn("border-0", getSeverityColor(bug.severity))}>
                         {bug.severity.toUpperCase()}
                       </Badge>
                     </TableCell>

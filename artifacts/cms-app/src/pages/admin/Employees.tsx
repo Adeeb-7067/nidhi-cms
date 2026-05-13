@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useListUsers } from "@workspace/api-client-react";
+import { useListUsers, useCreateUser } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,75 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+
+const employeeSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(["developer", "super_admin"]),
+  designation: z.string().optional(),
+  subType: z.string().optional(),
+});
+
+type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 export default function AdminEmployees() {
   const [search, setSearch] = useState("");
-  const { data, isLoading } = useListUsers({ role: "developer", search, limit: 50 });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { data, isLoading, refetch } = useListUsers({ role: "developer", search, limit: 50 });
+  const createUser = useCreateUser();
+
+  const form = useForm<EmployeeFormValues>({
+    resolver: zodResolver(employeeSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      role: "developer",
+      designation: "",
+      subType: "",
+    },
+  });
+
+  const onSubmit = async (values: EmployeeFormValues) => {
+    try {
+      const result = await createUser.mutateAsync({ data: values });
+      toast.success(`Employee created! ID: ${result.employeeId}`);
+      setIsDialogOpen(false);
+      form.reset();
+      refetch();
+    } catch (error) {
+      toast.error("Failed to create employee");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -20,9 +85,118 @@ export default function AdminEmployees() {
           <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
           <p className="text-muted-foreground">Manage your agency team members</p>
         </div>
-        <Button className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Add Employee
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" /> Add Employee
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>Add Employee</DialogTitle>
+              <DialogDescription>
+                Create a new team member account.
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="john@example.com" type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <Input placeholder="********" type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="developer">Developer</SelectItem>
+                          <SelectItem value="super_admin">Super Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="designation"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Designation</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Senior Developer" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="subType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Team/Specialty</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Mobile" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <DialogFooter className="pt-4">
+                  <Button type="submit" disabled={createUser.isPending}>
+                    {createUser.isPending ? "Creating..." : "Create Employee"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="bg-card">

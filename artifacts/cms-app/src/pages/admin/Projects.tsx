@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useListProjects } from "@workspace/api-client-react";
+import { useListProjects, useListClients, useCreateProject } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -7,11 +7,100 @@ import { Button } from "@/components/ui/button";
 import { Search, Plus, Calendar, Clock, LayoutGrid, List as ListIcon, Briefcase, Users } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+
+const projectSchema = z.object({
+  name: z.string().min(1, "Project name is required"),
+  clientId: z.string().min(1, "Client is required"),
+  priority: z.enum(["low", "medium", "high", "critical"]),
+  startDate: z.string().min(1, "Start date is required"),
+  deadline: z.string().min(1, "Deadline is required"),
+  description: z.string().optional(),
+  techStack: z.array(z.string()).optional(),
+  figmaUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+  repoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
+});
+
+type ProjectFormValues = z.infer<typeof projectSchema>;
+
+const TECH_OPTIONS = [
+  "React Native", "Flutter", "iOS Native", "Android Native", 
+  "React", "Next.js", "Vue", "Angular", 
+  "Node.js", "Django", "Laravel", 
+  "PostgreSQL", "MongoDB", "Firebase", 
+  "AWS", "Docker"
+];
 
 export default function AdminProjects() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
-  const { data, isLoading } = useListProjects({ search, limit: 50 });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { data, isLoading, refetch } = useListProjects({ search, limit: 50 });
+  const { data: clientsData } = useListClients({ limit: 100 });
+  const createProject = useCreateProject();
+
+  const form = useForm<ProjectFormValues>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: {
+      name: "",
+      clientId: "",
+      priority: "medium",
+      startDate: new Date().toISOString().split('T')[0],
+      deadline: "",
+      description: "",
+      techStack: [],
+      figmaUrl: "",
+      repoUrl: "",
+    },
+  });
+
+  const onSubmit = async (values: ProjectFormValues) => {
+    try {
+      await createProject.mutateAsync({ 
+        data: {
+          ...values,
+          clientId: parseInt(values.clientId),
+          techStack: values.techStack || []
+        } 
+      });
+      toast.success("Project created");
+      setIsDialogOpen(false);
+      form.reset();
+      refetch();
+    } catch (error) {
+      toast.error("Failed to create project");
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch(status) {
@@ -41,9 +130,212 @@ export default function AdminProjects() {
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground">Manage and track all client projects</p>
         </div>
-        <Button className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> New Project
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" /> New Project
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px] bg-card border-border max-h-[90vh] overflow-hidden flex flex-col">
+            <DialogHeader>
+              <DialogTitle>New Project</DialogTitle>
+              <DialogDescription>
+                Create a new project for a client.
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="flex-1 pr-4 -mr-4">
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+                  <FormField
+                    control={form.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project Name</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Mobile App Redesign" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="clientId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Client</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select client" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {clientsData?.clients.map((client) => (
+                                <SelectItem key={client.id} value={client.id.toString()}>
+                                  {client.companyName}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="priority"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Priority</FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select priority" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="critical">Critical</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="startDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start Date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="deadline"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Deadline</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Brief project overview..." 
+                            className="min-h-[100px]"
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="techStack"
+                    render={() => (
+                      <FormItem>
+                        <FormLabel>Tech Stack</FormLabel>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border border-border rounded-md p-3">
+                          {TECH_OPTIONS.map((tech) => (
+                            <FormField
+                              key={tech}
+                              control={form.control}
+                              name="techStack"
+                              render={({ field }) => {
+                                return (
+                                  <FormItem
+                                    key={tech}
+                                    className="flex flex-row items-start space-x-2 space-y-0"
+                                  >
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={field.value?.includes(tech)}
+                                        onCheckedChange={(checked) => {
+                                          return checked
+                                            ? field.onChange([...(field.value || []), tech])
+                                            : field.onChange(
+                                                field.value?.filter(
+                                                  (value) => value !== tech
+                                                )
+                                              )
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="text-xs font-normal cursor-pointer">
+                                      {tech}
+                                    </FormLabel>
+                                  </FormItem>
+                                )
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="figmaUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Figma URL</FormLabel>
+                          <FormControl>
+                            <Input placeholder="https://figma.com/..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="repoUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Repository URL</FormLabel>
+                          <FormControl>
+                            <Input placeholder="https://github.com/..." {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <DialogFooter className="pt-4">
+                    <Button type="submit" disabled={createProject.isPending}>
+                      {createProject.isPending ? "Creating..." : "Create Project"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="flex items-center justify-between">

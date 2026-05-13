@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useListClients } from "@workspace/api-client-react";
+import { useListClients, useCreateClient } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,10 +8,68 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+
+const clientSchema = z.object({
+  companyName: z.string().min(1, "Company name is required"),
+  contactPerson: z.string().min(1, "Contact person is required"),
+  email: z.string().email("Invalid email address"),
+  phone: z.string().optional(),
+  businessId: z.string().optional(),
+  industry: z.string().optional(),
+});
+
+type ClientFormValues = z.infer<typeof clientSchema>;
 
 export default function AdminClients() {
   const [search, setSearch] = useState("");
-  const { data, isLoading } = useListClients({ search, limit: 50 });
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const { data, isLoading, refetch } = useListClients({ search, limit: 50 });
+  const createClient = useCreateClient();
+
+  const form = useForm<ClientFormValues>({
+    resolver: zodResolver(clientSchema),
+    defaultValues: {
+      companyName: "",
+      contactPerson: "",
+      email: "",
+      phone: "",
+      businessId: "",
+      industry: "",
+    },
+  });
+
+  const onSubmit = async (values: ClientFormValues) => {
+    try {
+      await createClient.mutateAsync({ data: values });
+      toast.success("Client added successfully");
+      setIsDialogOpen(false);
+      form.reset();
+      refetch();
+    } catch (error) {
+      toast.error("Failed to add client");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -20,9 +78,110 @@ export default function AdminClients() {
           <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
           <p className="text-muted-foreground">Manage your client relationships</p>
         </div>
-        <Button className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Add Client
-        </Button>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" /> Add Client
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[425px] bg-card border-border">
+            <DialogHeader>
+              <DialogTitle>Add Client</DialogTitle>
+              <DialogDescription>
+                Register a new client company.
+              </DialogDescription>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="companyName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Acme Corp" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="contactPerson"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact Person</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Smith" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="john@acme.com" type="email" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="phone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Phone</FormLabel>
+                      <FormControl>
+                        <Input placeholder="+1 (555) 000-0000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="businessId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Business ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder="TAX-12345" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="industry"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Industry</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Technology" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <DialogFooter className="pt-4">
+                  <Button type="submit" disabled={createClient.isPending}>
+                    {createClient.isPending ? "Adding..." : "Add Client"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <Card className="bg-card">

@@ -14,6 +14,8 @@ import {
 } from "recharts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { formatDistanceToNow } from "date-fns";
 
 export default function AdminDashboard() {
   const { data: stats, isLoading } = useGetDashboardStats();
@@ -22,8 +24,8 @@ export default function AdminDashboard() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold tracking-tight">Command Center</h1>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
           <Skeleton className="col-span-4 h-[400px]" />
@@ -36,13 +38,65 @@ export default function AdminDashboard() {
   if (!stats) return null;
 
   const kpis = [
-    { title: "Active Projects", value: stats.activeProjects, icon: <Briefcase className="h-4 w-4 text-muted-foreground" /> },
-    { title: "Total Clients", value: stats.totalClients, icon: <Building2 className="h-4 w-4 text-muted-foreground" /> },
-    { title: "Team Online", value: stats.teamMembersOnline, icon: <Users className="h-4 w-4 text-muted-foreground" /> },
-    { title: "Overdue Projects", value: stats.overdueProjects, icon: <AlertCircle className="h-4 w-4 text-destructive" /> },
-    { title: "APKs Due Today", value: stats.apksDueToday, icon: <Smartphone className="h-4 w-4 text-amber-500" /> },
-    { title: "Open Bugs", value: stats.openBugs, icon: <Activity className="h-4 w-4 text-destructive" /> },
-    { title: "Open Requests", value: stats.openRequests, icon: <Inbox className="h-4 w-4 text-primary" /> },
+    { 
+      title: "Active Projects", 
+      value: stats.activeProjects, 
+      sub: "across all clients",
+      icon: <Briefcase className="h-4 w-4" />, 
+      color: "border-l-blue-500",
+      iconColor: "text-blue-500"
+    },
+    { 
+      title: "Total Clients", 
+      value: stats.totalClients, 
+      sub: "managed partners",
+      icon: <Building2 className="h-4 w-4" />, 
+      color: "border-l-green-500",
+      iconColor: "text-green-500"
+    },
+    { 
+      title: "Team Online", 
+      value: stats.teamMembersOnline, 
+      sub: "currently active",
+      icon: <Users className="h-4 w-4" />, 
+      color: "border-l-purple-500",
+      iconColor: "text-purple-500"
+    },
+    { 
+      title: "Overdue Projects", 
+      value: stats.overdueProjects, 
+      sub: "needs attention",
+      icon: <AlertCircle className="h-4 w-4" />, 
+      color: "border-l-red-500",
+      iconColor: "text-red-500",
+      isAlert: stats.overdueProjects > 0
+    },
+    { 
+      title: "APKs Due Today", 
+      value: stats.apksDueToday, 
+      sub: "pending releases",
+      icon: <Smartphone className="h-4 w-4" />, 
+      color: "border-l-amber-500",
+      iconColor: "text-amber-500"
+    },
+    { 
+      title: "Open Bugs", 
+      value: stats.openBugs, 
+      sub: "unresolved issues",
+      icon: <Activity className="h-4 w-4" />, 
+      color: "border-l-orange-500",
+      iconColor: "text-orange-500",
+      isAlert: stats.openBugs > 0
+    },
+    { 
+      title: "Open Requests", 
+      value: stats.openRequests, 
+      sub: "resource queue",
+      icon: <Inbox className="h-4 w-4" />, 
+      color: "border-l-indigo-500",
+      iconColor: "text-indigo-500",
+      isAlert: stats.openRequests > 0
+    },
   ];
 
   const pipelineData = [
@@ -60,6 +114,8 @@ export default function AdminDashboard() {
     { name: "Low", value: stats.bugSeverityBreakdown.low, color: "#22c55e" },
   ];
 
+  const activityColors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-amber-500", "bg-pink-500", "bg-indigo-500"];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -68,22 +124,23 @@ export default function AdminDashboard() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         {kpis.map((kpi, i) => (
-          <Card key={i} className="bg-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+          <Card key={i} className={`bg-card border-l-4 ${kpi.color}`}>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
+              <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                 {kpi.title}
               </CardTitle>
-              {kpi.icon}
+              <div className={kpi.iconColor}>{kpi.icon}</div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{kpi.value}</div>
+              <div className={`text-2xl font-bold ${kpi.isAlert ? "text-destructive" : ""}`}>{kpi.value}</div>
+              <p className="text-[10px] text-muted-foreground mt-1">{kpi.sub}</p>
             </CardContent>
           </Card>
         ))}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="col-span-4 bg-card">
+        <Card className="col-span-4 bg-card border-border">
           <CardHeader>
             <CardTitle>Project Pipeline</CardTitle>
             <CardDescription>Current status of all projects</CardDescription>
@@ -96,8 +153,9 @@ export default function AdminDashboard() {
                   <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}`} />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", color: "hsl(var(--card-foreground))" }}
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
                     itemStyle={{ color: "hsl(var(--card-foreground))" }}
+                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
                   />
                   <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
                 </BarChart>
@@ -106,7 +164,7 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-3 bg-card">
+        <Card className="col-span-3 bg-card border-border">
           <CardHeader>
             <CardTitle>Open Bugs by Severity</CardTitle>
             <CardDescription>System-wide issue tracker</CardDescription>
@@ -119,8 +177,8 @@ export default function AdminDashboard() {
                   <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                   <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                   <Tooltip 
-                    cursor={{fill: 'transparent'}}
-                    contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", color: "hsl(var(--card-foreground))" }}
+                    cursor={{fill: 'hsl(var(--muted)/0.2)'}}
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", color: "hsl(var(--card-foreground))", borderRadius: "8px" }}
                   />
                   <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
                     {bugData.map((entry, index) => (
@@ -134,27 +192,41 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
-      <Card className="bg-card">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Latest actions across the platform</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-8">
+          <div className="space-y-6">
             {stats.recentActivity.map((activity, i) => (
-              <div key={i} className="flex items-center">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium leading-none">{activity.actorName}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {activity.action} {activity.entityName}
+              <div key={i} className="flex items-center gap-4">
+                <Avatar className="h-9 w-9 border border-border">
+                  <AvatarFallback className={`${activityColors[i % activityColors.length]} text-white text-xs`}>
+                    {activity.actorName.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    <span className="font-bold">{activity.actorName}</span>
+                    <span className="text-muted-foreground mx-1.5 font-normal">
+                      {activity.action}
+                    </span>
+                    <span className="font-semibold">{activity.entityName}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
                   </p>
                 </div>
-                <div className="ml-auto font-medium text-xs text-muted-foreground">
-                  {new Date(activity.timestamp).toLocaleDateString()}
-                </div>
+                {activity.action.includes('created') && (
+                  <Badge variant="outline" className="bg-green-500/5 text-green-500 border-green-500/20 text-[10px]">NEW</Badge>
+                )}
               </div>
             ))}
             {stats.recentActivity.length === 0 && (
-              <div className="text-center text-muted-foreground py-4">No recent activity</div>
+              <div className="text-center text-muted-foreground py-8 border border-dashed rounded-lg">
+                No recent activity recorded
+              </div>
             )}
           </div>
         </CardContent>

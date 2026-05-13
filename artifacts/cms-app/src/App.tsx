@@ -26,6 +26,7 @@ import DevLogs from "@/pages/dev/Logs";
 import DevBugs from "@/pages/dev/Bugs";
 import DevApk from "@/pages/dev/Apk";
 import DevReports from "@/pages/dev/Reports";
+import DevRequests from "@/pages/dev/Requests";
 
 // Client
 import ClientPortal from "@/pages/client/Portal";
@@ -107,6 +108,9 @@ function Router() {
       </Route>
       <Route path="/dev/reports">
         <DevPage component={DevReports} />
+      </Route>
+      <Route path="/dev/requests">
+        <DevPage component={DevRequests} />
       </Route>
 
       {/* Client Routes */}

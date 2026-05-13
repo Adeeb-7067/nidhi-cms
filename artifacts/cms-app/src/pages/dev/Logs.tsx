@@ -1,13 +1,85 @@
-import React from "react";
-import { useListMyLogs } from "@workspace/api-client-react";
+import React, { useState } from "react";
+import { useListMyLogs, useCreateLog, useListProjects } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar } from "lucide-react";
+import { Plus, Clock, Calendar, Loader2, Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { toast } from "sonner";
+
+const logSchema = z.object({
+  projectId: z.string().min(1, "Project is required"),
+  logDate: z.string().min(1, "Date is required"),
+  taskTitle: z.string().min(1, "Title is required"),
+  workCategories: z.array(z.string()).min(1, "Select at least one category"),
+  hoursSpent: z.coerce.number().min(0.5).max(16),
+  completionPct: z.number().min(0).max(100),
+  taskDescription: z.string().optional(),
+  blockers: z.string().optional(),
+  nextDayPlan: z.string().optional(),
+});
+
+type LogFormValues = z.infer<typeof logSchema>;
+
+const WORK_CATEGORIES = [
+  { id: "development", label: "Development" },
+  { id: "design", label: "Design" },
+  { id: "testing", label: "Testing" },
+  { id: "bug_fixing", label: "Bug Fixing" },
+  { id: "code_review", label: "Code Review" },
+  { id: "deployment", label: "Deployment" },
+  { id: "documentation", label: "Documentation" },
+  { id: "meeting", label: "Meeting" },
+  { id: "research", label: "Research" },
+];
 
 export default function DevLogs() {
-  const { data, isLoading } = useListMyLogs({ limit: 50 });
+  const [open, setOpen] = useState(false);
+  const { data, isLoading, refetch } = useListMyLogs({ limit: 50 });
+  const { data: projectsData } = useListProjects({ limit: 50 });
+  const createLog = useCreateLog();
+
+  const form = useForm<LogFormValues>({
+    resolver: zodResolver(logSchema),
+    defaultValues: {
+      projectId: "",
+      logDate: new Date().toISOString().split('T')[0],
+      taskTitle: "",
+      workCategories: [],
+      hoursSpent: 1,
+      completionPct: 0,
+      taskDescription: "",
+      blockers: "",
+      nextDayPlan: "",
+    },
+  });
+
+  const onSubmit = async (values: LogFormValues) => {
+    try {
+      await createLog.mutateAsync({
+        data: {
+          ...values,
+          projectId: parseInt(values.projectId),
+        },
+      });
+      toast.success("Log entry submitted!");
+      setOpen(false);
+      form.reset();
+      refetch();
+    } catch (error) {
+      toast.error("Failed to submit log");
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -16,9 +88,209 @@ export default function DevLogs() {
           <h1 className="text-3xl font-bold tracking-tight">Daily Logs</h1>
           <p className="text-muted-foreground">Track your time and progress</p>
         </div>
-        <Button className="bg-primary text-primary-foreground">
-          <Plus className="mr-2 h-4 w-4" /> Add Log Entry
-        </Button>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-primary text-primary-foreground">
+              <Plus className="mr-2 h-4 w-4" /> Add Log Entry
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
+            <DialogHeader>
+              <DialogTitle>Add Daily Log Entry</DialogTitle>
+            </DialogHeader>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="projectId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select project" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {projectsData?.projects.map((project) => (
+                              <SelectItem key={project.id} value={project.id.toString()}>
+                                {project.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="logDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="taskTitle"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Task Title</FormLabel>
+                      <FormControl>
+                        <Input placeholder="What did you work on?" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="workCategories"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel>Categories</FormLabel>
+                      <div className="grid grid-cols-3 gap-2">
+                        {WORK_CATEGORIES.map((category) => (
+                          <FormField
+                            key={category.id}
+                            control={form.control}
+                            name="workCategories"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={category.id}
+                                  className="flex flex-row items-start space-x-3 space-y-0"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(category.id)}
+                                      onCheckedChange={(checked) => {
+                                        return checked
+                                          ? field.onChange([...field.value, category.id])
+                                          : field.onChange(
+                                              field.value?.filter(
+                                                (value) => value !== category.id
+                                              )
+                                            );
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="text-xs font-normal cursor-pointer">
+                                    {category.label}
+                                  </FormLabel>
+                                </FormItem>
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="hoursSpent"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Hours Spent</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.5" min="0.5" max="16" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="completionPct"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex justify-between">
+                          <FormLabel>Completion</FormLabel>
+                          <span className="text-xs font-medium">{field.value}%</span>
+                        </div>
+                        <FormControl>
+                          <Slider
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={[field.value]}
+                            onValueChange={(val) => field.onChange(val[0])}
+                            className="py-4"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="taskDescription"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Details of the task..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="blockers"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Blockers (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Any blockers or impediments?" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="nextDayPlan"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Next Day Plan (Optional)</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Plan for tomorrow?" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <DialogFooter className="pt-4">
+                  <Button type="submit" disabled={createLog.isPending}>
+                    {createLog.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Submit Log Entry
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="space-y-4">

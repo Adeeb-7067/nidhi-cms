@@ -1,15 +1,38 @@
 import React from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { useListProjects } from "@workspace/api-client-react";
+import { useListProjects, useGetApkReleases, useGetProjectMilestones } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from "recharts";
-import { Smartphone, CheckCircle, Clock } from "lucide-react";
+import { Smartphone, CheckCircle, Clock, Download, ExternalLink } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 
 export default function ClientPortal() {
   const { user } = useAuth();
   const { data, isLoading } = useListProjects({ limit: 1 }); // Assuming client sees their active project
+
+  const project = data?.projects[0];
+
+  const { data: releases, isLoading: isLoadingReleases } = useGetApkReleases(
+    project?.id as number,
+    { 
+      query: { 
+        enabled: !!project?.id,
+        queryKey: ["getApkReleases", project?.id],
+      } 
+    }
+  );
+
+  const { data: milestones, isLoading: isLoadingMilestones } = useGetProjectMilestones(
+    project?.id as number,
+    { 
+      query: { 
+        enabled: !!project?.id,
+        queryKey: ["getProjectMilestones", project?.id],
+      } 
+    }
+  );
 
   if (isLoading) {
     return (
@@ -23,8 +46,6 @@ export default function ClientPortal() {
       </div>
     );
   }
-
-  const project = data?.projects[0];
 
   if (!project) {
     return (
@@ -43,6 +64,8 @@ export default function ClientPortal() {
   const completionData = [
     { name: "Progress", value: project.completionPct, fill: "hsl(var(--primary))" }
   ];
+
+  const latestRelease = releases && releases.length > 0 ? releases[0] : null;
 
   return (
     <div className="space-y-6">
@@ -99,21 +122,47 @@ export default function ClientPortal() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="border border-border rounded-lg p-6 text-center bg-muted/20">
-              <h3 className="text-2xl font-bold mb-1">v1.0.4-beta</h3>
-              <p className="text-sm text-muted-foreground mb-4">Released on {new Date().toLocaleDateString()}</p>
-              <button className="bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 rounded-md font-medium w-full transition-colors">
-                Download APK
-              </button>
-            </div>
-            <div className="text-sm">
-              <h4 className="font-semibold mb-2">What's new:</h4>
-              <ul className="space-y-1 text-muted-foreground list-disc list-inside pl-4">
-                <li>Fixed authentication flow on iOS 16</li>
-                <li>Improved performance of dashboard charts</li>
-                <li>Updated branding assets</li>
-              </ul>
-            </div>
+            {isLoadingReleases ? (
+              <div className="space-y-4">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-20 w-full" />
+              </div>
+            ) : latestRelease ? (
+              <>
+                <div className="border border-border rounded-lg p-6 text-center bg-muted/20">
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <h3 className="text-2xl font-bold">{latestRelease.version}</h3>
+                    <Badge variant="secondary" className="capitalize">
+                      {latestRelease.releaseType}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
+                    <span>{latestRelease.platform.toUpperCase()}</span>
+                    <span>•</span>
+                    <span>Released {formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true })}</span>
+                  </div>
+                  <a 
+                    href={latestRelease.fileUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 rounded-md font-medium w-full transition-colors"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download APK
+                  </a>
+                </div>
+                {latestRelease.changelog && (
+                  <div className="text-sm">
+                    <h4 className="font-semibold mb-2">What's new:</h4>
+                    <p className="text-muted-foreground whitespace-pre-wrap">{latestRelease.changelog}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground">
+                No releases yet
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -121,27 +170,51 @@ export default function ClientPortal() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <CheckCircle className="mr-2 h-5 w-5 text-green-500" />
-              Recent Activity
+              Project Milestones
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
-              {/* Mockup activity timeline */}
-              {[1, 2, 3].map((item, i) => (
-                <div key={item} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                  <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-primary text-primary-foreground shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10">
-                    <span className="text-xs font-bold">{i+1}</span>
-                  </div>
-                  <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-lg border border-border bg-card shadow-sm">
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-semibold text-sm">Feature Completed</h4>
-                      <time className="text-xs text-muted-foreground">{i+1} days ago</time>
+            {isLoadingMilestones ? (
+              <div className="space-y-4">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : milestones && milestones.length > 0 ? (
+              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+                {milestones.map((milestone, i) => (
+                  <div key={milestone.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-card shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 ${
+                      milestone.status === 'completed' ? 'bg-green-500 text-white' : 
+                      milestone.status === 'delayed' ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'
+                    }`}>
+                      {milestone.status === 'completed' ? <CheckCircle className="h-5 w-5" /> : <span className="text-xs font-bold">{i+1}</span>}
                     </div>
-                    <p className="text-xs text-muted-foreground">Backend API integration finalized.</p>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-lg border border-border bg-card shadow-sm">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className="font-semibold text-sm">{milestone.title}</h4>
+                        <Badge variant={
+                          milestone.status === 'completed' ? 'outline' : 
+                          milestone.status === 'delayed' ? 'destructive' : 'secondary'
+                        } className="text-[10px] h-5">
+                          {milestone.status.toUpperCase()}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-muted-foreground">Milestone planned for completion.</p>
+                        <time className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
+                          {new Date(milestone.plannedDate).toLocaleDateString()}
+                        </time>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground">
+                No milestones scheduled
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
