@@ -98,6 +98,29 @@ export const GetMeResponse = zod.object({
 });
 
 /**
+ * @summary Update own profile (name, designation, avatarUrl)
+ */
+export const UpdateMyProfileBody = zod.object({
+  name: zod.string().optional(),
+  designation: zod.string().optional(),
+  avatarUrl: zod.string().optional(),
+});
+
+export const UpdateMyProfileResponse = zod.object({
+  id: zod.number(),
+  employeeId: zod.string().nullish(),
+  name: zod.string(),
+  email: zod.string(),
+  role: zod.enum(["super_admin", "developer", "client"]),
+  subType: zod.string().nullish(),
+  designation: zod.string().nullish(),
+  avatarUrl: zod.string().nullish(),
+  status: zod.enum(["active", "inactive", "suspended"]),
+  lastLoginAt: zod.string().nullish(),
+  createdAt: zod.string(),
+});
+
+/**
  * @summary List all users (admin only)
  */
 export const ListUsersQueryParams = zod.object({
@@ -1429,6 +1452,112 @@ export const DownloadReportParams = zod.object({
 export const DownloadReportResponse = zod.object({
   url: zod.string(),
   expiresAt: zod.string(),
+});
+
+/**
+ * @summary Global search across projects, clients, employees, and bugs
+ */
+export const globalSearchQueryLimitDefault = 5;
+
+export const GlobalSearchQueryParams = zod.object({
+  q: zod.coerce.string(),
+  limit: zod.coerce.number().default(globalSearchQueryLimitDefault),
+});
+
+export const GlobalSearchResponse = zod.object({
+  projects: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      clientId: zod.number(),
+      clientName: zod.string(),
+      pmId: zod.number().nullish(),
+      pmName: zod.string().nullish(),
+      description: zod.string().nullish(),
+      status: zod.enum([
+        "scoping",
+        "in_progress",
+        "on_hold",
+        "uat",
+        "completed",
+      ]),
+      priority: zod.enum(["low", "medium", "high", "critical"]),
+      startDate: zod.string(),
+      deadline: zod.string(),
+      techStack: zod.array(zod.string()),
+      figmaUrl: zod.string().nullish(),
+      repoUrl: zod.string().nullish(),
+      stagingUrl: zod.string().nullish(),
+      productionUrl: zod.string().nullish(),
+      completionPct: zod.number(),
+      completionOverride: zod.number().nullish(),
+      memberCount: zod.number(),
+      createdAt: zod.string(),
+    }),
+  ),
+  clients: zod.array(
+    zod.object({
+      id: zod.number(),
+      companyName: zod.string(),
+      contactPerson: zod.string(),
+      email: zod.string(),
+      phone: zod.string().nullish(),
+      address: zod.string().nullish(),
+      businessId: zod.string().nullish(),
+      logoUrl: zod.string().nullish(),
+      status: zod.enum(["active", "inactive", "on_hold"]),
+      portalLogin: zod.boolean(),
+      clientSince: zod.string(),
+      userId: zod.number().nullish(),
+      activeProjectCount: zod.number(),
+    }),
+  ),
+  employees: zod.array(
+    zod.object({
+      id: zod.number(),
+      employeeId: zod.string().nullish(),
+      name: zod.string(),
+      email: zod.string(),
+      role: zod.enum(["super_admin", "developer", "client"]),
+      subType: zod.string().nullish(),
+      designation: zod.string().nullish(),
+      avatarUrl: zod.string().nullish(),
+      status: zod.enum(["active", "inactive", "suspended"]),
+      lastLoginAt: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+  bugs: zod.array(
+    zod.object({
+      id: zod.number(),
+      bugNumber: zod.string(),
+      projectId: zod.number(),
+      projectName: zod.string(),
+      reporterId: zod.number(),
+      reporterName: zod.string(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      title: zod.string(),
+      description: zod.string().nullish(),
+      stepsToReproduce: zod.string().nullish(),
+      expectedBehavior: zod.string().nullish(),
+      actualBehavior: zod.string().nullish(),
+      severity: zod.enum(["critical", "high", "medium", "low"]),
+      priority: zod.enum(["p1", "p2", "p3", "p4"]),
+      status: zod.enum([
+        "open",
+        "in_progress",
+        "fixed",
+        "verified",
+        "wont_fix",
+        "duplicate",
+      ]),
+      buildVersion: zod.string().nullish(),
+      platform: zod.enum(["android", "ios", "web", "api", "all"]),
+      createdAt: zod.string(),
+      resolvedAt: zod.string().nullish(),
+    }),
+  ),
 });
 
 /**

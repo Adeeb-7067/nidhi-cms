@@ -1,9 +1,10 @@
-import React, { useState } from "react";
-import { useListClients, useCreateClient } from "@workspace/api-client-react";
+import React, { useState, useEffect } from "react";
+import { useListClients, useCreateClient, useUpdateClient, getListClientsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Mail, Building, Briefcase } from "lucide-react";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { Search, Plus, Mail, Building, Briefcase, Trash2, Edit } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -25,10 +26,29 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { Client } from "@workspace/api-client-react";
 
 const clientSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -37,15 +57,26 @@ const clientSchema = z.object({
   phone: z.string().optional(),
   businessId: z.string().optional(),
   industry: z.string().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
 
 export default function AdminClients() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { data, isLoading, refetch } = useListClients({ search, limit: 50 });
-  const createClient = useCreateClient();
+  const [editClient, setEditClient] = useState<Client | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { setPage(1); }, [search]);
+
+  const PAGE_SIZE = 10;
+  const { data, isLoading } = useListClients({ search, page, limit: PAGE_SIZE });
+  const createClientMutation = useCreateClient();
+  const updateClientMutation = useUpdateClient();
+  const deleteClientMutation = useDeleteClient();
 
   const form = useForm<ClientFormValues>({
     resolver: zodResolver(clientSchema),
@@ -56,18 +87,61 @@ export default function AdminClients() {
       phone: "",
       businessId: "",
       industry: "",
+      status: "active",
     },
   });
 
+  useEffect(() => {
+    if (editClient) {
+      form.reset({
+        companyName: editClient.companyName,
+        contactPerson: editClient.contactPerson,
+        email: editClient.email,
+        phone: editClient.phone || "",
+        businessId: editClient.businessId || "",
+        industry: editClient.industry || "",
+        status: editClient.status as any,
+      });
+    } else {
+      form.reset({
+        companyName: "",
+        contactPerson: "",
+        email: "",
+        phone: "",
+        businessId: "",
+        industry: "",
+        status: "active",
+      });
+    }
+  }, [editClient, form]);
+
   const onSubmit = async (values: ClientFormValues) => {
     try {
-      await createClient.mutateAsync({ data: values });
-      toast.success("Client added successfully");
-      setIsDialogOpen(false);
+      if (editClient) {
+        await updateClientMutation.mutateAsync({ id: editClient.id, data: values as any });
+        toast.success("Client updated successfully");
+        setEditClient(null);
+      } else {
+        await createClientMutation.mutateAsync({ data: values as any });
+        toast.success("Client added successfully");
+        setIsDialogOpen(false);
+      }
       form.reset();
-      refetch();
+      queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || "Failed to add client");
+      toast.error(error?.response?.data?.message || error?.message || "Failed to save client");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteClientMutation.mutateAsync({ id: deleteId });
+      toast.success("Client deleted successfully");
+      setDeleteId(null);
+      queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to delete client");
     }
   };
 
@@ -78,7 +152,14 @@ export default function AdminClients() {
           <h1 className="text-xl font-semibold tracking-tight">Clients</h1>
           <p className="text-muted-foreground text-xs mt-0.5">Manage your client relationships</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen || !!editClient} onOpenChange={(open) => {
+          if (!open) {
+            setIsDialogOpen(false);
+            setEditClient(null);
+          } else {
+            setIsDialogOpen(true);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-primary text-primary-foreground">
               <Plus className="mr-2 h-4 w-4" /> Add Client
@@ -86,9 +167,9 @@ export default function AdminClients() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px] bg-card border-border">
             <DialogHeader>
-              <DialogTitle>Add Client</DialogTitle>
+              <DialogTitle>{editClient ? "Edit Client" : "Add Client"}</DialogTitle>
               <DialogDescription>
-                Register a new client company.
+                {editClient ? "Update client company details." : "Register a new client company."}
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
@@ -173,15 +254,54 @@ export default function AdminClients() {
                     )}
                   />
                 </div>
+                {editClient && (
+                  <FormField
+                    control={form.control}
+                    name="status"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="active">Active</SelectItem>
+                            <SelectItem value="inactive">Inactive</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
                 <DialogFooter className="pt-4">
-                  <Button type="submit" disabled={createClient.isPending}>
-                    {createClient.isPending ? "Adding..." : "Add Client"}
+                  <Button type="submit" disabled={createClientMutation.isPending || updateClientMutation.isPending}>
+                    {(createClientMutation.isPending || updateClientMutation.isPending) ? (editClient ? "Updating..." : "Adding...") : (editClient ? "Update Client" : "Add Client")}
                   </Button>
                 </DialogFooter>
               </form>
             </Form>
           </DialogContent>
         </Dialog>
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent className="bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the client company and all associated data.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white">
+                {deleteClientMutation.isPending ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <Card className="bg-card">
@@ -278,9 +398,14 @@ export default function AdminClients() {
                       {new Date(client.clientSince).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className={`${client.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
-                        {client.status.replace('_', ' ').toUpperCase()}
-                      </Badge>
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditClient(client); }}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(client.id); }}>
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -289,6 +414,12 @@ export default function AdminClients() {
           </Table>
         </CardContent>
       </Card>
+      <DataPagination
+        page={page}
+        total={data?.total ?? 0}
+        limit={PAGE_SIZE}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

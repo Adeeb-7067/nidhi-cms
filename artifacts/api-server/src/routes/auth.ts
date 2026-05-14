@@ -228,4 +228,34 @@ router.get("/auth/me", requireAuth, async (req, res) => {
   });
 });
 
+// PATCH /api/auth/me — update own profile
+router.patch("/auth/me", requireAuth, async (req, res) => {
+  const { name, designation, avatarUrl } = req.body as { name?: string; designation?: string; avatarUrl?: string };
+  const { eq } = await import("drizzle-orm");
+  const [updated] = await db
+    .update(usersTable)
+    .set({
+      ...(name && { name }),
+      ...(designation !== undefined && { designation }),
+      ...(avatarUrl !== undefined && { avatarUrl }),
+      updatedAt: new Date(),
+    })
+    .where(eq(usersTable.id, req.user!.id))
+    .returning();
+  if (!updated) { res.status(404).json({ error: "User not found" }); return; }
+  res.json({
+    id: updated.id,
+    employeeId: updated.employeeId,
+    name: updated.name,
+    email: updated.email,
+    role: updated.role,
+    subType: updated.subType,
+    designation: updated.designation,
+    avatarUrl: updated.avatarUrl,
+    status: updated.status,
+    lastLoginAt: updated.lastLoginAt?.toISOString() ?? null,
+    createdAt: updated.createdAt.toISOString(),
+  });
+});
+
 export default router;

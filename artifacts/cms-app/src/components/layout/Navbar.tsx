@@ -1,10 +1,10 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Bell, Search, Sun, Moon } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useListNotifications } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 import { useTheme } from "@/contexts/ThemeContext";
+import { CommandPalette } from "@/components/CommandPalette";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -27,6 +27,18 @@ export function Navbar() {
   const unreadCount = notificationsData?.unreadCount || 0;
   const [location] = useLocation();
   const { theme, toggleTheme } = useTheme();
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, []);
 
   const getBreadcrumbs = () => {
     const parts = location.split("/").filter(Boolean);
@@ -92,19 +104,19 @@ export function Navbar() {
       </div>
 
       <div className="flex items-center w-full max-w-xs mx-4">
-        <div className="relative w-full group">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input
-            type="search"
-            placeholder="Search..."
-            className="w-full bg-muted/30 pl-8 pr-10 border-border hover:bg-muted/50 focus-visible:ring-1 h-8 text-xs transition-colors"
-          />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/40 pointer-events-none select-none">
-            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans text-[9px]">⌘</kbd>
-            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans text-[9px]">K</kbd>
+        <button
+          onClick={() => setPaletteOpen(true)}
+          className="w-full flex items-center gap-2 bg-muted/30 hover:bg-muted/50 border border-border rounded-md h-8 px-2.5 text-xs text-muted-foreground transition-colors group"
+        >
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60 group-hover:text-muted-foreground transition-colors" />
+          <span className="flex-1 text-left text-muted-foreground/60">Search...</span>
+          <div className="hidden sm:flex items-center gap-0.5 text-[9px] font-medium text-muted-foreground/40 pointer-events-none select-none shrink-0">
+            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans">⌘</kbd>
+            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans">K</kbd>
           </div>
-        </div>
+        </button>
       </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       
       <div className="flex items-center gap-1.5">
         <div className="hidden lg:block text-xs text-muted-foreground mr-1">

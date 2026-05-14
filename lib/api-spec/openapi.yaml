@@ -143,6 +143,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateMyProfile
+      tags: [auth]
+      summary: Update own profile (name, designation, avatarUrl)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMyProfileInput"
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
 
   # ── USERS / EMPLOYEES ─────────────────────────────────────────────────────
   /users:
@@ -1288,6 +1305,30 @@ paths:
               schema:
                 $ref: "#/components/schemas/DownloadUrl"
 
+  /search:
+    get:
+      operationId: globalSearch
+      tags: [users]
+      summary: Global search across projects, clients, employees, and bugs
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResult"
+
   # ── SETTINGS ──────────────────────────────────────────────────────────────
   /settings:
     get:
@@ -1440,6 +1481,16 @@ components:
           type: string
           enum: [active, inactive, suspended]
 
+    UpdateMyProfileInput:
+      type: object
+      properties:
+        name:
+          type: string
+        designation:
+          type: string
+        avatarUrl:
+          type: string
+
     UserListResult:
       type: object
       properties:
@@ -1454,6 +1505,27 @@ components:
         limit:
           type: integer
       required: [users, total, page, limit]
+
+    SearchResult:
+      type: object
+      required: [projects, clients, employees, bugs]
+      properties:
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        employees:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        bugs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bug"
 
     PasswordResetInput:
       type: object

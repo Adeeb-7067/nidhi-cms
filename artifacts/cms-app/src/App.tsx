@@ -13,6 +13,7 @@ const Login = React.lazy(() => import("@/pages/login"));
 const NotFound = React.lazy(() => import("@/pages/not-found"));
 // Admin
 const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
+const AdminSettings = React.lazy(() => import("@/pages/admin/Settings"));
 const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
 const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
 const AdminEmployees = React.lazy(() => import("@/pages/admin/Employees"));
@@ -30,6 +31,7 @@ const DevRequests = React.lazy(() => import("@/pages/dev/Requests"));
 const ClientPortal = React.lazy(() => import("@/pages/client/Portal"));
 const ClientAnalytics = React.lazy(() => import("@/pages/client/Analytics"));
 const ClientApk = React.lazy(() => import("@/pages/client/Apk"));
+const ProfilePage = React.lazy(() => import("@/pages/profile/ProfilePage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +107,9 @@ function Router() {
         <Route path="/admin/requests">
           <AdminPage component={AdminRequests} />
         </Route>
+        <Route path="/admin/settings">
+          <AdminPage component={AdminSettings} />
+        </Route>
 
         {/* Developer Routes */}
         <Route path="/dev">
@@ -135,6 +140,14 @@ function Router() {
         </Route>
         <Route path="/client/apk">
           <ClientPage component={ClientApk} />
+        </Route>
+
+        <Route path="/profile">
+          <ProtectedRoute allowedRoles={["super_admin", "developer", "client"]}>
+            <AppLayout>
+              <ProfilePage />
+            </AppLayout>
+          </ProtectedRoute>
         </Route>
 
         {/* Root redirect */}

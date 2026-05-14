@@ -105,112 +105,14 @@ export interface UserUpdate {
   status?: UserUpdateStatus;
 }
 
+export interface UpdateMyProfileInput {
+  name?: string;
+  designation?: string;
+  avatarUrl?: string;
+}
+
 export interface UserListResult {
   users: User[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-export interface PasswordResetInput {
-  newPassword: string;
-}
-
-export interface ChangePasswordInput {
-  currentPassword: string;
-  newPassword: string;
-}
-
-export type CredentialHistoryStatus =
-  (typeof CredentialHistoryStatus)[keyof typeof CredentialHistoryStatus];
-
-export const CredentialHistoryStatus = {
-  active: "active",
-  expired: "expired",
-} as const;
-
-export interface CredentialHistory {
-  id: number;
-  entryNumber: number;
-  setBy: string;
-  setAt: string;
-  /** @nullable */
-  replacedAt?: string | null;
-  status: CredentialHistoryStatus;
-  trigger: string;
-}
-
-export type ClientStatus = (typeof ClientStatus)[keyof typeof ClientStatus];
-
-export const ClientStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
-} as const;
-
-export interface Client {
-  id: number;
-  companyName: string;
-  contactPerson: string;
-  email: string;
-  /** @nullable */
-  phone?: string | null;
-  /** @nullable */
-  address?: string | null;
-  /** @nullable */
-  businessId?: string | null;
-  /** @nullable */
-  logoUrl?: string | null;
-  status: ClientStatus;
-  portalLogin: boolean;
-  clientSince: string;
-  /** @nullable */
-  userId?: number | null;
-  activeProjectCount: number;
-}
-
-export type ClientInputStatus =
-  (typeof ClientInputStatus)[keyof typeof ClientInputStatus];
-
-export const ClientInputStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
-} as const;
-
-export interface ClientInput {
-  companyName: string;
-  contactPerson: string;
-  email: string;
-  phone?: string;
-  address?: string;
-  businessId?: string;
-  logoUrl?: string;
-  status?: ClientInputStatus;
-}
-
-export type ClientUpdateStatus =
-  (typeof ClientUpdateStatus)[keyof typeof ClientUpdateStatus];
-
-export const ClientUpdateStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
-} as const;
-
-export interface ClientUpdate {
-  companyName?: string;
-  contactPerson?: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  businessId?: string;
-  logoUrl?: string;
-  status?: ClientUpdateStatus;
-}
-
-export interface ClientListResult {
-  clients: Client[];
   total: number;
   page: number;
   limit: number;
@@ -265,6 +167,187 @@ export interface Project {
   completionOverride?: number | null;
   memberCount: number;
   createdAt: string;
+}
+
+export type ClientStatus = (typeof ClientStatus)[keyof typeof ClientStatus];
+
+export const ClientStatus = {
+  active: "active",
+  inactive: "inactive",
+  on_hold: "on_hold",
+} as const;
+
+export interface Client {
+  id: number;
+  companyName: string;
+  contactPerson: string;
+  email: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  businessId?: string | null;
+  /** @nullable */
+  logoUrl?: string | null;
+  status: ClientStatus;
+  portalLogin: boolean;
+  clientSince: string;
+  /** @nullable */
+  userId?: number | null;
+  activeProjectCount: number;
+}
+
+export type BugSeverity = (typeof BugSeverity)[keyof typeof BugSeverity];
+
+export const BugSeverity = {
+  critical: "critical",
+  high: "high",
+  medium: "medium",
+  low: "low",
+} as const;
+
+export type BugPriority = (typeof BugPriority)[keyof typeof BugPriority];
+
+export const BugPriority = {
+  p1: "p1",
+  p2: "p2",
+  p3: "p3",
+  p4: "p4",
+} as const;
+
+export type BugStatus = (typeof BugStatus)[keyof typeof BugStatus];
+
+export const BugStatus = {
+  open: "open",
+  in_progress: "in_progress",
+  fixed: "fixed",
+  verified: "verified",
+  wont_fix: "wont_fix",
+  duplicate: "duplicate",
+} as const;
+
+export type BugPlatform = (typeof BugPlatform)[keyof typeof BugPlatform];
+
+export const BugPlatform = {
+  android: "android",
+  ios: "ios",
+  web: "web",
+  api: "api",
+  all: "all",
+} as const;
+
+export interface Bug {
+  id: number;
+  bugNumber: string;
+  projectId: number;
+  projectName: string;
+  reporterId: number;
+  reporterName: string;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  stepsToReproduce?: string | null;
+  /** @nullable */
+  expectedBehavior?: string | null;
+  /** @nullable */
+  actualBehavior?: string | null;
+  severity: BugSeverity;
+  priority: BugPriority;
+  status: BugStatus;
+  /** @nullable */
+  buildVersion?: string | null;
+  platform: BugPlatform;
+  createdAt: string;
+  /** @nullable */
+  resolvedAt?: string | null;
+}
+
+export interface SearchResult {
+  projects: Project[];
+  clients: Client[];
+  employees: User[];
+  bugs: Bug[];
+}
+
+export interface PasswordResetInput {
+  newPassword: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  newPassword: string;
+}
+
+export type CredentialHistoryStatus =
+  (typeof CredentialHistoryStatus)[keyof typeof CredentialHistoryStatus];
+
+export const CredentialHistoryStatus = {
+  active: "active",
+  expired: "expired",
+} as const;
+
+export interface CredentialHistory {
+  id: number;
+  entryNumber: number;
+  setBy: string;
+  setAt: string;
+  /** @nullable */
+  replacedAt?: string | null;
+  status: CredentialHistoryStatus;
+  trigger: string;
+}
+
+export type ClientInputStatus =
+  (typeof ClientInputStatus)[keyof typeof ClientInputStatus];
+
+export const ClientInputStatus = {
+  active: "active",
+  inactive: "inactive",
+  on_hold: "on_hold",
+} as const;
+
+export interface ClientInput {
+  companyName: string;
+  contactPerson: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  businessId?: string;
+  logoUrl?: string;
+  status?: ClientInputStatus;
+}
+
+export type ClientUpdateStatus =
+  (typeof ClientUpdateStatus)[keyof typeof ClientUpdateStatus];
+
+export const ClientUpdateStatus = {
+  active: "active",
+  inactive: "inactive",
+  on_hold: "on_hold",
+} as const;
+
+export interface ClientUpdate {
+  companyName?: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  businessId?: string;
+  logoUrl?: string;
+  status?: ClientUpdateStatus;
+}
+
+export interface ClientListResult {
+  clients: Client[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export type ProjectInputStatus =
@@ -486,76 +569,6 @@ export interface LogListResult {
   total: number;
   page: number;
   limit: number;
-}
-
-export type BugSeverity = (typeof BugSeverity)[keyof typeof BugSeverity];
-
-export const BugSeverity = {
-  critical: "critical",
-  high: "high",
-  medium: "medium",
-  low: "low",
-} as const;
-
-export type BugPriority = (typeof BugPriority)[keyof typeof BugPriority];
-
-export const BugPriority = {
-  p1: "p1",
-  p2: "p2",
-  p3: "p3",
-  p4: "p4",
-} as const;
-
-export type BugStatus = (typeof BugStatus)[keyof typeof BugStatus];
-
-export const BugStatus = {
-  open: "open",
-  in_progress: "in_progress",
-  fixed: "fixed",
-  verified: "verified",
-  wont_fix: "wont_fix",
-  duplicate: "duplicate",
-} as const;
-
-export type BugPlatform = (typeof BugPlatform)[keyof typeof BugPlatform];
-
-export const BugPlatform = {
-  android: "android",
-  ios: "ios",
-  web: "web",
-  api: "api",
-  all: "all",
-} as const;
-
-export interface Bug {
-  id: number;
-  bugNumber: string;
-  projectId: number;
-  projectName: string;
-  reporterId: number;
-  reporterName: string;
-  /** @nullable */
-  assigneeId?: number | null;
-  /** @nullable */
-  assigneeName?: string | null;
-  title: string;
-  /** @nullable */
-  description?: string | null;
-  /** @nullable */
-  stepsToReproduce?: string | null;
-  /** @nullable */
-  expectedBehavior?: string | null;
-  /** @nullable */
-  actualBehavior?: string | null;
-  severity: BugSeverity;
-  priority: BugPriority;
-  status: BugStatus;
-  /** @nullable */
-  buildVersion?: string | null;
-  platform: BugPlatform;
-  createdAt: string;
-  /** @nullable */
-  resolvedAt?: string | null;
 }
 
 export type BugInputSeverity =
@@ -1174,4 +1187,9 @@ export type GetTeamAnalyticsParams = {
 
 export type GetBugAnalyticsParams = {
   projectId?: number;
+};
+
+export type GlobalSearchParams = {
+  q: string;
+  limit?: number;
 };

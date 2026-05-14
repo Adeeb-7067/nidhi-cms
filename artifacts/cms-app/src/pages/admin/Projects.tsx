@@ -1,10 +1,11 @@
-import React, { useState } from "react";
-import { useListProjects, useListClients, useCreateProject } from "@workspace/api-client-react";
+import React, { useState, useEffect } from "react";
+import { useListProjects, useListClients, useCreateProject, useUpdateProject, useDeleteProject, getListProjectsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Calendar, Clock, LayoutGrid, List as ListIcon, Briefcase, Users } from "lucide-react";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { Search, Plus, Calendar, Clock, LayoutGrid, List as ListIcon, Briefcase, Users, Edit, Trash2, MoreVertical, Filter, X } from "lucide-react";
 import { Link } from "wouter";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -31,6 +32,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,11 +55,14 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { Project } from "@workspace/api-client-react";
 
 const projectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
   clientId: z.string().min(1, "Client is required"),
   priority: z.enum(["low", "medium", "high", "critical"]),
+  status: z.enum(["scoping", "in_progress", "on_hold", "uat", "completed"]).optional(),
   startDate: z.string().min(1, "Start date is required"),
   deadline: z.string().min(1, "Deadline is required"),
   description: z.string().optional(),
@@ -65,12 +85,30 @@ const TECH_OPTIONS = [
 ];
 
 export default function AdminProjects() {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const { data, isLoading, refetch } = useListProjects({ search, limit: 50 });
+  const [editProject, setEditProject] = useState<Project | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [priorityFilter, setPriorityFilter] = useState<string>("");
+
+  useEffect(() => { setPage(1); }, [search, statusFilter, priorityFilter]);
+
+  const PAGE_SIZE = 12;
+  const { data, isLoading } = useListProjects({
+    search,
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(priorityFilter ? { priority: priorityFilter } : {}),
+    page,
+    limit: PAGE_SIZE,
+  });
   const { data: clientsData } = useListClients({ limit: 100 });
-  const createProject = useCreateProject();
+  const createProjectMutation = useCreateProject();
+  const updateProjectMutation = useUpdateProject();
+  const deleteProjectMutation = useDeleteProject();
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -78,6 +116,7 @@ export default function AdminProjects() {
       name: "",
       clientId: "",
       priority: "medium",
+      status: "scoping",
       startDate: new Date().toISOString().split('T')[0],
       deadline: "",
       description: "",
@@ -87,21 +126,76 @@ export default function AdminProjects() {
     },
   });
 
+  useEffect(() => {
+    if (editProject) {
+      form.reset({
+        name: editProject.name,
+        clientId: editProject.clientId.toString(),
+        priority: editProject.priority as any,
+        status: editProject.status as any,
+        startDate: editProject.startDate.split('T')[0],
+        deadline: editProject.deadline.split('T')[0],
+        description: editProject.description || "",
+        techStack: editProject.techStack || [],
+        figmaUrl: editProject.figmaUrl || "",
+        repoUrl: editProject.repoUrl || "",
+      });
+    } else {
+      form.reset({
+        name: "",
+        clientId: "",
+        priority: "medium",
+        status: "scoping",
+        startDate: new Date().toISOString().split('T')[0],
+        deadline: "",
+        description: "",
+        techStack: [],
+        figmaUrl: "",
+        repoUrl: "",
+      });
+    }
+  }, [editProject, form]);
+
   const onSubmit = async (values: ProjectFormValues) => {
     try {
-      await createProject.mutateAsync({ 
-        data: {
-          ...values,
-          clientId: parseInt(values.clientId),
-          techStack: values.techStack || []
-        } 
-      });
-      toast.success("Project created");
-      setIsDialogOpen(false);
+      if (editProject) {
+        await updateProjectMutation.mutateAsync({ 
+          id: editProject.id,
+          data: {
+            ...values,
+            clientId: parseInt(values.clientId),
+            techStack: values.techStack || []
+          } as any
+        });
+        toast.success("Project updated");
+        setEditProject(null);
+      } else {
+        await createProjectMutation.mutateAsync({ 
+          data: {
+            ...values,
+            clientId: parseInt(values.clientId),
+            techStack: values.techStack || []
+          } as any
+        });
+        toast.success("Project created");
+        setIsDialogOpen(false);
+      }
       form.reset();
-      refetch();
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || "Failed to create project");
+      toast.error(error?.response?.data?.message || error?.message || "Failed to save project");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deleteProjectMutation.mutateAsync({ id: deleteId });
+      toast.success("Project deleted");
+      setDeleteId(null);
+      queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || error?.message || "Failed to delete project");
     }
   };
 
@@ -141,7 +235,14 @@ export default function AdminProjects() {
           <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
           <p className="text-muted-foreground text-xs mt-0.5">Manage and track all client projects</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen || !!editProject} onOpenChange={(open) => {
+          if (!open) {
+            setIsDialogOpen(false);
+            setEditProject(null);
+          } else {
+            setIsDialogOpen(true);
+          }
+        }}>
           <DialogTrigger asChild>
             <Button className="bg-primary text-primary-foreground">
               <Plus className="mr-2 h-4 w-4" /> New Project
@@ -149,9 +250,9 @@ export default function AdminProjects() {
           </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-card border-border max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
-              <DialogTitle>New Project</DialogTitle>
+              <DialogTitle>{editProject ? "Edit Project" : "New Project"}</DialogTitle>
               <DialogDescription>
-                Create a new project for a client.
+                {editProject ? "Update project details." : "Create a new project for a client."}
               </DialogDescription>
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4">
@@ -177,7 +278,7 @@ export default function AdminProjects() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Client</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select client" />
@@ -201,7 +302,7 @@ export default function AdminProjects() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Priority</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger>
                                 <SelectValue placeholder="Select priority" />
@@ -219,6 +320,32 @@ export default function AdminProjects() {
                       )}
                     />
                   </div>
+                  {editProject && (
+                    <FormField
+                      control={form.control}
+                      name="status"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Status</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select status" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="scoping">Scoping</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="on_hold">On Hold</SelectItem>
+                              <SelectItem value="uat">UAT</SelectItem>
+                              <SelectItem value="completed">Completed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -337,9 +464,9 @@ export default function AdminProjects() {
                       )}
                     />
                   </div>
-                  <DialogFooter className="pt-4">
-                    <Button type="submit" disabled={createProject.isPending}>
-                      {createProject.isPending ? "Creating..." : "Create Project"}
+                  <DialogFooter className="pt-4 pb-12">
+                    <Button type="submit" disabled={createProjectMutation.isPending || updateProjectMutation.isPending}>
+                      {(createProjectMutation.isPending || updateProjectMutation.isPending) ? (editProject ? "Updating..." : "Creating...") : (editProject ? "Update Project" : "Create Project")}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -347,36 +474,76 @@ export default function AdminProjects() {
             </ScrollArea>
           </DialogContent>
         </Dialog>
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent className="bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete the project.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white">
+                {deleteProjectMutation.isPending ? "Deleting..." : "Delete"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
-      <div className="flex items-center justify-between">
-        <div className="relative w-full max-w-sm">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        <div className="relative flex-1 min-w-0 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input 
-            type="search" 
-            placeholder="Search projects..." 
+          <Input
+            type="search"
+            placeholder="Search projects..."
             className="pl-9 bg-card border-border"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex items-center border border-border rounded-md bg-card p-0.5">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={`h-8 px-2 ${view === 'grid' ? 'bg-muted' : ''}`}
-            onClick={() => setView('grid')}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className={`h-8 px-2 ${view === 'list' ? 'bg-muted' : ''}`}
-            onClick={() => setView('list')}
-          >
-            <ListIcon className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v === "__all__" ? "" : v); }}>
+            <SelectTrigger className="h-9 w-36 text-xs bg-card border-border">
+              <Filter className="h-3 w-3 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Statuses</SelectItem>
+              <SelectItem value="planning">Planning</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="review">Review</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="on_hold">On Hold</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={priorityFilter} onValueChange={(v) => { setPriorityFilter(v === "__all__" ? "" : v); }}>
+            <SelectTrigger className="h-9 w-36 text-xs bg-card border-border">
+              <Filter className="h-3 w-3 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="All Priorities" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All Priorities</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="high">High</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+            </SelectContent>
+          </Select>
+          {(statusFilter || priorityFilter) && (
+            <Button variant="ghost" size="sm" className="h-9 px-2 text-xs text-muted-foreground" onClick={() => { setStatusFilter(""); setPriorityFilter(""); }}>
+              <X className="h-3.5 w-3.5 mr-1" /> Clear
+            </Button>
+          )}
+          <div className="flex items-center border border-border rounded-md bg-card p-0.5">
+            <Button variant="ghost" size="sm" className={`h-7 px-2 ${view === 'grid' ? 'bg-muted' : ''}`} onClick={() => setView('grid')}>
+              <LayoutGrid className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="sm" className={`h-7 px-2 ${view === 'list' ? 'bg-muted' : ''}`} onClick={() => setView('list')}>
+              <ListIcon className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -399,13 +566,32 @@ export default function AdminProjects() {
             return (
               <Link key={project.id} href={`/admin/projects/${project.id}`}>
                 <Card className={`bg-card hover:bg-muted/40 transition-colors cursor-pointer border-border h-full flex flex-col border-t-2 ${deadlineStatus.color} card-hover`}>
-                  <CardHeader className="pb-2 pt-3 px-4">
+                  <CardHeader className="pb-2 pt-3 px-4 relative">
                     <div className="flex justify-between items-start mb-2">
                       <Badge variant="secondary" className={`${getStatusColor(project.status)} text-[10px]`}>
                         {project.status.replace('_', ' ').toUpperCase()}
                       </Badge>
+                      <div className="flex items-center gap-1">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                            <Button variant="ghost" size="icon" className="h-6 w-6">
+                              <MoreVertical className="h-3 w-3" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditProject(project); }}>
+                              <Edit className="mr-2 h-3 w-3" /> Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-500" onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}>
+                              <Trash2 className="mr-2 h-3 w-3" /> Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center mb-1">
                       {project.techStack && project.techStack.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-2">
+                        <div className="flex flex-wrap gap-1">
                           {project.techStack.slice(0, 3).map(t => (
                             <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">{t}</span>
                           ))}
@@ -414,7 +600,7 @@ export default function AdminProjects() {
                           )}
                         </div>
                       )}
-                      <div className="flex items-center text-[10px] font-medium">
+                      <div className="flex items-center text-[10px] font-medium ml-auto">
                         <span className={`h-2 w-2 rounded-full mr-1.5 bg-current ${getPriorityColor(project.priority)}`}></span>
                         <span className={getPriorityColor(project.priority)}>
                           {project.priority.toUpperCase()}
@@ -496,6 +682,12 @@ export default function AdminProjects() {
           })}
         </div>
       )}
+      <DataPagination
+        page={page}
+        total={data?.total ?? 0}
+        limit={PAGE_SIZE}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

@@ -14,11 +14,13 @@ import {
   FileText,
   Clock,
   Zap,
+  Settings,
   Command
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useListRequests, useListBugs, getListRequestsQueryKey, getListBugsQueryKey } from "@workspace/api-client-react";
 
 interface NavSection {
@@ -92,6 +94,7 @@ export function Sidebar() {
         { title: "Projects", href: "/admin/projects", icon: Briefcase, role: ["super_admin"] },
         { title: "Employees", href: "/admin/employees", icon: Users, role: ["super_admin"] },
         { title: "Clients", href: "/admin/clients", icon: Building2, role: ["super_admin"] },
+        { title: "Settings", href: "/admin/settings", icon: Settings, role: ["super_admin"] },
       ]
     },
     {
@@ -161,23 +164,34 @@ export function Sidebar() {
       </div>
       
       <div className="p-3 border-t border-border">
-        <div className="flex items-center gap-3 mb-4 px-2">
-          <Avatar className="h-7 w-7 border border-border">
-            <AvatarImage src={user.avatarUrl || undefined} />
-            <AvatarFallback className="bg-primary/20 text-primary">{user.name.charAt(0)}</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col truncate min-w-0">
-            <span className="text-xs font-medium truncate">{user.name}</span>
-            <div className="flex items-center">
-              <span className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider",
-                user.role === "super_admin" ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted text-muted-foreground border border-border/50"
-              )}>
-                {user.role.replace("_", " ")}
-              </span>
-            </div>
+        <Link href="/profile">
+          <div className="flex items-center gap-3 mb-4 px-2 cursor-pointer group">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-3 overflow-hidden">
+                  <Avatar className="h-7 w-7 border border-border transition-colors group-hover:border-primary">
+                    <AvatarImage src={user.avatarUrl || undefined} />
+                    <AvatarFallback className="bg-primary/20 text-primary">{user.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col truncate min-w-0">
+                    <span className="text-xs font-medium truncate group-hover:text-primary transition-colors">{user.name}</span>
+                    <div className="flex items-center">
+                      <span className={cn(
+                        "text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider",
+                        user.role === "super_admin" ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted text-muted-foreground border border-border/50"
+                      )}>
+                        {user.role.replace("_", " ")}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="text-[10px]">
+                View Profile
+              </TooltipContent>
+            </Tooltip>
           </div>
-        </div>
+        </Link>
         <Button 
           variant="ghost" 
           size="sm" 

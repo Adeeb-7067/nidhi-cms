@@ -45,6 +45,7 @@ import type {
   ForgotPasswordInput,
   GetBugAnalyticsParams,
   GetTeamAnalyticsParams,
+  GlobalSearchParams,
   HealthStatus,
   ListBugsParams,
   ListClientsParams,
@@ -77,7 +78,9 @@ import type {
   ResourceRequest,
   ResourceRequestInput,
   ResourceRequestUpdate,
+  SearchResult,
   TeamAnalytics,
+  UpdateMyProfileInput,
   User,
   UserInput,
   UserListResult,
@@ -653,6 +656,92 @@ export function useGetMe<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary Update own profile (name, designation, avatarUrl)
+ */
+export const getUpdateMyProfileUrl = () => {
+  return `/api/auth/me`;
+};
+
+export const updateMyProfile = async (
+  updateMyProfileInput: UpdateMyProfileInput,
+  options?: RequestInit,
+): Promise<User> => {
+  return customFetch<User>(getUpdateMyProfileUrl(), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateMyProfileInput),
+  });
+};
+
+export const getUpdateMyProfileMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyProfile>>,
+    TError,
+    { data: BodyType<UpdateMyProfileInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof updateMyProfile>>,
+  TError,
+  { data: BodyType<UpdateMyProfileInput> },
+  TContext
+> => {
+  const mutationKey = ["updateMyProfile"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof updateMyProfile>>,
+    { data: BodyType<UpdateMyProfileInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return updateMyProfile(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type UpdateMyProfileMutationResult = NonNullable<
+  Awaited<ReturnType<typeof updateMyProfile>>
+>;
+export type UpdateMyProfileMutationBody = BodyType<UpdateMyProfileInput>;
+export type UpdateMyProfileMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Update own profile (name, designation, avatarUrl)
+ */
+export const useUpdateMyProfile = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof updateMyProfile>>,
+    TError,
+    { data: BodyType<UpdateMyProfileInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof updateMyProfile>>,
+  TError,
+  { data: BodyType<UpdateMyProfileInput> },
+  TContext
+> => {
+  return useMutation(getUpdateMyProfileMutationOptions(options));
+};
 
 /**
  * @summary List all users (admin only)
@@ -5333,6 +5422,100 @@ export function useDownloadReport<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getDownloadReportQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Global search across projects, clients, employees, and bugs
+ */
+export const getGlobalSearchUrl = (params: GlobalSearchParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/search?${stringifiedParams}`
+    : `/api/search`;
+};
+
+export const globalSearch = async (
+  params: GlobalSearchParams,
+  options?: RequestInit,
+): Promise<SearchResult> => {
+  return customFetch<SearchResult>(getGlobalSearchUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGlobalSearchQueryKey = (params?: GlobalSearchParams) => {
+  return [`/api/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getGlobalSearchQueryOptions = <
+  TData = Awaited<ReturnType<typeof globalSearch>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GlobalSearchParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof globalSearch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGlobalSearchQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof globalSearch>>> = ({
+    signal,
+  }) => globalSearch(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof globalSearch>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GlobalSearchQueryResult = NonNullable<
+  Awaited<ReturnType<typeof globalSearch>>
+>;
+export type GlobalSearchQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Global search across projects, clients, employees, and bugs
+ */
+
+export function useGlobalSearch<
+  TData = Awaited<ReturnType<typeof globalSearch>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GlobalSearchParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof globalSearch>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGlobalSearchQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;
