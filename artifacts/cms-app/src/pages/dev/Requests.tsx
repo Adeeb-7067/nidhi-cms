@@ -64,35 +64,35 @@ export default function DevRequests() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "pending":
-        return <Badge variant="outline" className="text-blue-500 border-blue-500/50 bg-blue-500/10">PENDING</Badge>;
+        return <Badge variant="outline" className="text-blue-500 border-blue-500/50 bg-blue-500/10 text-[10px]">PENDING</Badge>;
       case "approved":
-        return <Badge variant="outline" className="text-green-500 border-green-500/50 bg-green-500/10">APPROVED</Badge>;
+        return <Badge variant="outline" className="text-green-500 border-green-500/50 bg-green-500/10 text-[10px]">APPROVED</Badge>;
       case "rejected":
-        return <Badge variant="outline" className="text-red-500 border-red-500/50 bg-red-500/10">REJECTED</Badge>;
+        return <Badge variant="outline" className="text-red-500 border-red-500/50 bg-red-500/10 text-[10px]">REJECTED</Badge>;
       default:
-        return <Badge variant="outline">{status.toUpperCase()}</Badge>;
+        return <Badge variant="outline" className="text-[10px]">{status.toUpperCase()}</Badge>;
     }
   };
 
   const getUrgencyBadge = (urgency: string) => {
     switch (urgency) {
       case "high":
-        return <Badge variant="outline" className="text-red-500 border-red-500/50 bg-red-500/10">HIGH</Badge>;
+        return <Badge variant="outline" className="text-red-500 border-red-500/50 bg-red-500/10 text-[10px]">HIGH</Badge>;
       case "medium":
-        return <Badge variant="outline" className="text-amber-500 border-amber-500/50 bg-amber-500/10">MEDIUM</Badge>;
+        return <Badge variant="outline" className="text-amber-500 border-amber-500/50 bg-amber-500/10 text-[10px]">MEDIUM</Badge>;
       case "low":
-        return <Badge variant="outline" className="text-green-500 border-green-500/50 bg-green-500/10">LOW</Badge>;
+        return <Badge variant="outline" className="text-green-500 border-green-500/50 bg-green-500/10 text-[10px]">LOW</Badge>;
       default:
-        return <Badge variant="outline">{urgency.toUpperCase()}</Badge>;
+        return <Badge variant="outline" className="text-[10px]">{urgency.toUpperCase()}</Badge>;
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Resource Requests</h1>
-          <p className="text-muted-foreground">Request tools, hardware, or access</p>
+          <h1 className="text-xl font-semibold tracking-tight">Resource Requests</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Request tools, hardware, or access</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -226,29 +226,29 @@ export default function DevRequests() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Type</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Urgency</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Date</TableHead>
+                <TableHead className="text-xs">Type</TableHead>
+                <TableHead className="text-xs">Title</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
+                <TableHead className="text-xs">Urgency</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-right text-xs">Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : data?.requests.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
                     <div className="flex flex-col items-center justify-center">
                       <Inbox className="h-8 w-8 mb-2 opacity-50" />
                       <p>No resource requests found.</p>
@@ -257,13 +257,13 @@ export default function DevRequests() {
                 </TableRow>
               ) : (
                 data?.requests.map((request) => (
-                  <TableRow key={request.id}>
+                  <TableRow key={request.id} className="text-xs">
                     <TableCell className="capitalize">{request.type.replace('_', ' ')}</TableCell>
                     <TableCell className="font-medium">{request.title}</TableCell>
                     <TableCell className="text-muted-foreground">{request.projectName}</TableCell>
                     <TableCell>{getUrgencyBadge(request.urgency)}</TableCell>
                     <TableCell>{getStatusBadge(request.status)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground text-sm">
+                    <TableCell className="text-right text-muted-foreground">
                       {new Date(request.createdAt).toLocaleDateString()}
                     </TableCell>
                   </TableRow>

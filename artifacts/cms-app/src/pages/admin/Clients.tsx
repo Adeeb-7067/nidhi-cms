@@ -72,11 +72,11 @@ export default function AdminClients() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your client relationships</p>
+          <h1 className="text-xl font-semibold tracking-tight">Clients</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">Manage your client relationships</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -186,30 +186,30 @@ export default function AdminClients() {
 
       <Card className="bg-card">
         {data && (
-          <div className="flex items-center gap-6 px-4 py-3 border-b border-border bg-muted/20">
+          <div className="flex items-center gap-4 px-4 py-3 border-b border-border bg-muted/20">
             <div className="text-center">
-              <div className="text-2xl font-bold">{data.total}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</div>
+              <div className="text-xl font-bold">{data.total}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Total</div>
             </div>
             <div className="h-8 w-px bg-border" />
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-500">{data.clients.filter(c => c.status === 'active').length}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Active</div>
+              <div className="text-xl font-bold text-green-500">{data.clients.filter(c => c.status === 'active').length}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Active</div>
             </div>
             <div className="h-8 w-px bg-border" />
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-500">{data.clients.reduce((acc, c) => acc + (c.activeProjectCount || 0), 0)}</div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Active Projects</div>
+              <div className="text-xl font-bold text-blue-500">{data.clients.reduce((acc, c) => acc + (c.activeProjectCount || 0), 0)}</div>
+              <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Active Projects</div>
             </div>
           </div>
         )}
-        <div className="p-4 border-b border-border flex items-center justify-between">
+        <div className="p-3 border-b border-border flex items-center justify-between">
           <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-2 h-3 w-3 text-muted-foreground" />
             <Input 
               type="search" 
               placeholder="Search clients..." 
-              className="pl-9"
+              className="pl-8 h-7 text-xs"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -219,11 +219,11 @@ export default function AdminClients() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Contact Person</TableHead>
-                <TableHead>Active Projects</TableHead>
-                <TableHead>Client Since</TableHead>
-                <TableHead className="text-right">Status</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Company</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Contact Person</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Active Projects</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Client Since</TableHead>
+                <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -239,46 +239,46 @@ export default function AdminClients() {
                 ))
               ) : data?.clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={5} className="h-24 text-center text-muted-foreground text-xs">
                     No clients found.
                   </TableCell>
                 </TableRow>
               ) : (
                 data?.clients.map((client) => (
-                  <TableRow key={client.id} className="cursor-pointer hover:bg-muted/50 card-hover">
+                  <TableRow key={client.id} className="cursor-pointer hover:bg-muted/50 card-hover text-xs">
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9 rounded-md">
+                        <Avatar className="h-8 w-8 rounded-md">
                           <AvatarImage src={client.logoUrl || undefined} />
-                          <AvatarFallback className="bg-secondary/20 text-secondary rounded-md">
-                            <Building className="h-4 w-4" />
+                          <AvatarFallback className="bg-secondary/20 text-secondary rounded-md text-[10px]">
+                            <Building className="h-3 w-3" />
                           </AvatarFallback>
                         </Avatar>
                         <div>
                           <p className="font-medium text-foreground">{client.companyName}</p>
-                          <p className="text-xs text-muted-foreground">{client.businessId || 'No ID'}</p>
+                          <p className="text-[10px] text-muted-foreground">{client.businessId || 'No ID'}</p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium text-sm">{client.contactPerson}</span>
-                        <span className="text-xs text-muted-foreground flex items-center mt-0.5">
-                          <Mail className="h-3 w-3 mr-1" /> {client.email}
+                        <span className="font-medium text-xs">{client.contactPerson}</span>
+                        <span className="text-[10px] text-muted-foreground flex items-center mt-0.5">
+                          <Mail className="h-2.5 w-2.5 mr-1" /> {client.email}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center text-sm">
-                        <Briefcase className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <div className="flex items-center text-xs">
+                        <Briefcase className="mr-2 h-3 w-3 text-muted-foreground" />
                         {client.activeProjectCount}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-xs text-muted-foreground">
                       {new Date(client.clientSince).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Badge variant="outline" className={client.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''}>
+                      <Badge variant="outline" className={`${client.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
                         {client.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </TableCell>

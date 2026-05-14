@@ -107,11 +107,11 @@ export default function DevBugs() {
   ) || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Bug Tracker</h1>
-          <p className="text-muted-foreground">Report and track project issues</p>
+          <h1 className="text-xl font-semibold tracking-tight">Bug Tracker</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Report and track project issues</p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -356,29 +356,29 @@ export default function DevBugs() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[100px]">ID</TableHead>
-                <TableHead>Title</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Severity</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Assignee</TableHead>
+                <TableHead className="w-[100px] text-xs">ID</TableHead>
+                <TableHead className="text-xs">Title</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
+                <TableHead className="text-xs">Severity</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Assignee</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                   </TableRow>
                 ))
               ) : filteredBugs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
                     <div className="flex flex-col items-center justify-center">
                       <BugIcon className="h-8 w-8 mb-2 opacity-50" />
                       <p>No bugs found.</p>
@@ -387,21 +387,21 @@ export default function DevBugs() {
                 </TableRow>
               ) : (
                 filteredBugs.map((bug) => (
-                  <TableRow key={bug.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell className="font-mono text-xs text-muted-foreground">{bug.bugNumber}</TableCell>
-                    <TableCell className="font-medium">{bug.title}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{bug.projectName}</TableCell>
+                  <TableRow key={bug.id} className="cursor-pointer hover:bg-muted/50 text-xs">
+                    <TableCell className="font-mono text-[10px] text-muted-foreground">{bug.bugNumber}</TableCell>
+                    <TableCell className="font-medium text-xs">{bug.title}</TableCell>
+                    <TableCell className="text-muted-foreground text-xs">{bug.projectName}</TableCell>
                     <TableCell>
-                      <Badge className={cn("border-0", getSeverityColor(bug.severity))}>
+                      <Badge className={cn("border-0 text-[10px]", getSeverityColor(bug.severity))}>
                         {bug.severity.toUpperCase()}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={getStatusColor(bug.status)}>
+                      <Badge variant="outline" className={cn("text-[10px]", getStatusColor(bug.status))}>
                         {bug.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell className="text-xs">
                       {bug.assigneeName || <span className="text-muted-foreground italic">Unassigned</span>}
                     </TableCell>
                   </TableRow>

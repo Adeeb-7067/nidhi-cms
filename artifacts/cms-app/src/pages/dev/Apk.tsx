@@ -98,11 +98,11 @@ export default function DevApk() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">APK Releases</h1>
-          <p className="text-muted-foreground">Upload and manage application builds</p>
+          <h1 className="text-xl font-semibold tracking-tight">APK Releases</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Upload and manage application builds</p>
         </div>
         <TooltipProvider>
           <Tooltip>
@@ -282,17 +282,17 @@ export default function DevApk() {
       </div>
 
       <div className="space-y-4">
-        <label className="text-sm font-medium">Select a project to view its releases</label>
+        <label className="text-xs font-medium">Select a project to view its releases</label>
         <Select 
           value={selectedProjectId?.toString()} 
           onValueChange={(v) => setSelectedProjectId(parseInt(v))}
         >
-          <SelectTrigger className="w-full max-w-md">
+          <SelectTrigger className="w-full max-w-md h-9 text-xs">
             <SelectValue placeholder="Select a project" />
           </SelectTrigger>
           <SelectContent>
             {projectsData?.projects.map((project) => (
-              <SelectItem key={project.id} value={project.id.toString()}>
+              <SelectItem key={project.id} value={project.id.toString()} className="text-xs">
                 {project.name}
               </SelectItem>
             ))}
@@ -304,8 +304,8 @@ export default function DevApk() {
         <Card className="bg-card">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
             <Smartphone className="h-16 w-16 mb-4 opacity-20" />
-            <h3 className="text-xl font-medium text-foreground mb-2">Select a project</h3>
-            <p className="text-sm max-w-md">Please select a project from the list above to view its APK releases or upload a new build.</p>
+            <h3 className="text-lg font-medium text-foreground mb-2">Select a project</h3>
+            <p className="text-xs max-w-md">Please select a project from the list above to view its APK releases or upload a new build.</p>
           </CardContent>
         </Card>
       ) : releasesLoading ? (
@@ -316,46 +316,46 @@ export default function DevApk() {
         <Card className="bg-card">
           <CardContent className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
             <Info className="h-16 w-16 mb-4 opacity-20" />
-            <h3 className="text-xl font-medium text-foreground mb-2">No releases found</h3>
-            <p className="text-sm max-w-md">There are no releases for this project yet. Use the "Upload Release" button to add one.</p>
+            <h3 className="text-lg font-medium text-foreground mb-2">No releases found</h3>
+            <p className="text-xs max-w-md">There are no releases for this project yet. Use the "Upload Release" button to add one.</p>
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {releasesData.map((release) => (
             <Card key={release.id} className="bg-card hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-2 p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline" className={cn(getReleaseTypeColor(release.releaseType))}>
+                  <Badge variant="outline" className={cn("text-[10px]", getReleaseTypeColor(release.releaseType))}>
                     {release.releaseType.toUpperCase()}
                   </Badge>
-                  <Badge variant="outline" className={cn(getAudienceColor(release.audience))}>
+                  <Badge variant="outline" className={cn("text-[10px]", getAudienceColor(release.audience))}>
                     {release.audience.replace('_', ' ').toUpperCase()}
                   </Badge>
                 </div>
-                <CardTitle className="text-xl flex items-center gap-2">
+                <CardTitle className="text-lg flex items-center gap-2">
                   v{release.version}
-                  {release.buildNumber && <span className="text-sm font-normal text-muted-foreground">({release.buildNumber})</span>}
+                  {release.buildNumber && <span className="text-xs font-normal text-muted-foreground">({release.buildNumber})</span>}
                 </CardTitle>
-                <CardDescription className="flex items-center gap-2">
-                  <Badge variant="secondary" className="capitalize">{release.platform}</Badge>
+                <CardDescription className="flex items-center gap-2 text-xs">
+                  <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0"> {release.platform}</Badge>
                   <span>•</span>
                   <span>{new Date(release.createdAt).toLocaleDateString()}</span>
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 p-4">
                 {release.changelog && (
-                  <div className="text-sm text-muted-foreground line-clamp-3 bg-muted/30 p-2 rounded">
+                  <div className="text-xs text-muted-foreground line-clamp-3 bg-muted/30 p-2 rounded">
                     {release.changelog}
                   </div>
                 )}
                 <div className="flex items-center justify-between pt-2">
-                  <div className="text-xs text-muted-foreground">
+                  <div className="text-[10px] text-muted-foreground">
                     By {release.uploaderName}
                   </div>
-                  <Button size="sm" asChild>
+                  <Button size="sm" className="h-8 text-xs" asChild>
                     <a href={release.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Download className="mr-2 h-4 w-4" /> Download
+                      <Download className="mr-2 h-3.5 w-3.5" /> Download
                     </a>
                   </Button>
                 </div>

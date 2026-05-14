@@ -96,51 +96,51 @@ export default function AdminProjectDetail() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center gap-4">
         <Link href="/admin/projects">
-          <Button variant="outline" size="icon" className="h-8 w-8">
-            <ArrowLeft className="h-4 w-4" />
+          <Button variant="outline" size="icon" className="h-7 w-7">
+            <ArrowLeft className="h-3.5 w-3.5" />
           </Button>
         </Link>
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{project.name}</h1>
-          <p className="text-muted-foreground">{project.clientName} • Deadline: {new Date(project.deadline).toLocaleDateString()}</p>
+          <h1 className="text-xl font-semibold tracking-tight">{project.name}</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">{project.clientName} • Deadline: {new Date(project.deadline).toLocaleDateString()}</p>
         </div>
         <div className="ml-auto flex gap-2">
-          <Badge variant="secondary" className="bg-primary/10 text-primary">{project.status.replace('_', ' ').toUpperCase()}</Badge>
-          <Badge variant="outline">{project.priority.toUpperCase()}</Badge>
+          <Badge variant="secondary" className="bg-primary/10 text-primary text-[10px] px-1.5 py-0 h-4">{project.status.replace('_', ' ').toUpperCase()}</Badge>
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{project.priority.toUpperCase()}</Badge>
         </div>
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="apk">APK</TabsTrigger>
-          <TabsTrigger value="bugs">Bugs</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-          <TabsTrigger value="comments">Comments</TabsTrigger>
-          <TabsTrigger value="requests">Requests</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 h-8">
+          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="team" className="text-xs">Team</TabsTrigger>
+          <TabsTrigger value="analytics" className="text-xs">Analytics</TabsTrigger>
+          <TabsTrigger value="apk" className="text-xs">APK</TabsTrigger>
+          <TabsTrigger value="bugs" className="text-xs">Bugs</TabsTrigger>
+          <TabsTrigger value="logs" className="text-xs">Logs</TabsTrigger>
+          <TabsTrigger value="comments" className="text-xs">Comments</TabsTrigger>
+          <TabsTrigger value="requests" className="text-xs">Requests</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="overview" className="mt-6 space-y-6">
-          <div className="grid gap-6 md:grid-cols-3">
+        <TabsContent value="overview" className="mt-4 space-y-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <Card className="md:col-span-2 bg-card">
-              <CardHeader>
-                <CardTitle>Project Details</CardTitle>
+              <CardHeader className="p-3 pb-0">
+                <CardTitle className="text-sm">Project Details</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-3 space-y-3">
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Description</h4>
-                  <p className="text-sm">{project.description || "No description provided."}</p>
+                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</h4>
+                  <p className="text-xs">{project.description || "No description provided."}</p>
                 </div>
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Tech Stack</h4>
-                  <div className="flex flex-wrap gap-2">
+                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Tech Stack</h4>
+                  <div className="flex flex-wrap gap-1.5">
                     {project.techStack?.map(tech => (
-                      <Badge key={tech} variant="secondary">{tech}</Badge>
+                      <Badge key={tech} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{tech}</Badge>
                     ))}
                   </div>
                 </div>
@@ -148,28 +148,28 @@ export default function AdminProjectDetail() {
             </Card>
 
             <Card className="bg-card">
-              <CardHeader>
-                <CardTitle>Links</CardTitle>
+              <CardHeader className="p-3 pb-0">
+                <CardTitle className="text-sm">Links</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-3 space-y-2">
                 {project.repoUrl && (
-                  <a href={project.repoUrl} target="_blank" rel="noreferrer" className="flex items-center text-sm text-blue-500 hover:underline">
-                    <Github className="mr-2 h-4 w-4" /> Repository
+                  <a href={project.repoUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-500 hover:underline">
+                    <Github className="mr-2 h-3.5 w-3.5" /> Repository
                   </a>
                 )}
                 {project.figmaUrl && (
-                  <a href={project.figmaUrl} target="_blank" rel="noreferrer" className="flex items-center text-sm text-pink-500 hover:underline">
-                    <Layout className="mr-2 h-4 w-4" /> Figma Design
+                  <a href={project.figmaUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-pink-500 hover:underline">
+                    <Layout className="mr-2 h-3.5 w-3.5" /> Figma Design
                   </a>
                 )}
                 {project.stagingUrl && (
-                  <a href={project.stagingUrl} target="_blank" rel="noreferrer" className="flex items-center text-sm text-amber-500 hover:underline">
-                    <Globe className="mr-2 h-4 w-4" /> Staging Environment
+                  <a href={project.stagingUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-amber-500 hover:underline">
+                    <Globe className="mr-2 h-3.5 w-3.5" /> Staging Environment
                   </a>
                 )}
                 {project.productionUrl && (
-                  <a href={project.productionUrl} target="_blank" rel="noreferrer" className="flex items-center text-sm text-green-500 hover:underline">
-                    <Globe className="mr-2 h-4 w-4" /> Production URL
+                  <a href={project.productionUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-green-500 hover:underline">
+                    <Globe className="mr-2 h-3.5 w-3.5" /> Production URL
                   </a>
                 )}
               </CardContent>
@@ -177,101 +177,101 @@ export default function AdminProjectDetail() {
           </div>
         </TabsContent>
 
-        <TabsContent value="team" className="mt-6">
+        <TabsContent value="team" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
+            <CardHeader className="p-3">
               <div className="flex items-center justify-between">
-                <CardTitle>Project Team</CardTitle>
-                <Button size="sm">Add Member</Button>
+                <CardTitle className="text-sm">Project Team</CardTitle>
+                <Button size="sm" className="h-7 text-xs">Add Member</Button>
               </div>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="p-3 pt-0">
+              <div className="space-y-2">
                 {members?.map(member => (
-                  <div key={member.userId} className="flex items-center justify-between p-4 border border-border rounded-lg bg-background/50">
-                    <div className="flex items-center gap-4">
-                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                  <div key={member.userId} className="flex items-center justify-between p-3 border border-border rounded-lg bg-background/50">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                         {member.name.charAt(0)}
                       </div>
                       <div>
-                        <p className="font-medium">{member.name}</p>
-                        <p className="text-sm text-muted-foreground">{member.designation} • {member.subType}</p>
+                        <p className="text-xs font-medium">{member.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{member.designation} • {member.subType}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-medium">{member.completionPct}% completed</p>
-                      <p className="text-xs text-muted-foreground">Last log: {member.lastLogDate ? new Date(member.lastLogDate).toLocaleDateString() : 'Never'}</p>
+                      <p className="text-xs font-medium">{member.completionPct}% completed</p>
+                      <p className="text-[10px] text-muted-foreground">Last log: {member.lastLogDate ? new Date(member.lastLogDate).toLocaleDateString() : 'Never'}</p>
                     </div>
                   </div>
                 ))}
                 {(!members || members.length === 0) && (
-                  <div className="text-center py-8 text-muted-foreground">No team members assigned to this project.</div>
+                  <div className="text-center py-6 text-muted-foreground text-xs">No team members assigned to this project.</div>
                 )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="mt-6">
+        <TabsContent value="analytics" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>Completion Over Time</CardTitle>
-              <CardDescription>Track project progress against deadlines</CardDescription>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">Completion Over Time</CardTitle>
+              <CardDescription className="text-xs">Track project progress against deadlines</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="h-[400px]">
+            <CardContent className="p-3 pt-0">
+              <div className="h-[280px]">
                 {analytics?.completionOverTime && analytics.completionOverTime.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={analytics.completionOverTime}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" tickFormatter={(val) => new Date(val).toLocaleDateString()} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" />
-                      <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
+                      <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={10} tickFormatter={(val) => new Date(val).toLocaleDateString()} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} />
+                      <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
                       <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="flex h-full items-center justify-center text-muted-foreground">No analytics data available</div>
+                  <div className="flex h-full items-center justify-center text-muted-foreground text-xs">No analytics data available</div>
                 )}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="apk" className="mt-6">
+        <TabsContent value="apk" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>APK Releases</CardTitle>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">APK Releases</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Version</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Platform</TableHead>
-                    <TableHead>Uploaded By</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Version</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Type</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Platform</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Uploaded By</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
+                    <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {apks?.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground h-24">No APK releases yet</TableCell>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground h-20 text-xs">No APK releases yet</TableCell>
                     </TableRow>
                   ) : (
                     apks?.map((apk) => (
-                      <TableRow key={apk.id}>
+                      <TableRow key={apk.id} className="text-xs">
                         <TableCell className="font-medium">v{apk.version} ({apk.buildNumber})</TableCell>
                         <TableCell>
-                          <Badge variant="outline">{apk.releaseType}</Badge>
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{apk.releaseType}</Badge>
                         </TableCell>
                         <TableCell className="capitalize">{apk.platform}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{apk.uploaderName}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{new Date(apk.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-muted-foreground">{apk.uploaderName}</TableCell>
+                        <TableCell className="text-muted-foreground">{new Date(apk.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="ghost"><Download className="h-4 w-4 mr-2" /> Download</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs"><Download className="h-3 w-3 mr-1.5" /> Download</Button>
                         </TableCell>
                       </TableRow>
                     ))
@@ -282,43 +282,43 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="bugs" className="mt-6">
+        <TabsContent value="bugs" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>Project Bugs</CardTitle>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">Project Bugs</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Severity</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Reporter</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">ID</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Title</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Severity</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Reporter</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {bugs?.bugs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-24">No bugs reported</TableCell>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground h-20 text-xs">No bugs reported</TableCell>
                     </TableRow>
                   ) : (
                     bugs?.bugs.map((bug) => (
-                      <TableRow key={bug.id}>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{bug.bugNumber}</TableCell>
+                      <TableRow key={bug.id} className="text-xs">
+                        <TableCell className="font-mono text-[10px] text-muted-foreground">{bug.bugNumber}</TableCell>
                         <TableCell className="font-medium">{bug.title}</TableCell>
                         <TableCell>
-                          <Badge className={getSeverityColor(bug.severity)}>
+                          <Badge className={`${getSeverityColor(bug.severity)} text-[10px] px-1.5 py-0 h-4`}>
                             {bug.severity.toUpperCase()}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={getBugStatusColor(bug.status)}>
+                          <Badge variant="outline" className={`${getBugStatusColor(bug.status)} text-[10px] px-1.5 py-0 h-4`}>
                             {bug.status.replace('_', ' ').toUpperCase()}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{bug.reporterName}</TableCell>
+                        <TableCell className="text-muted-foreground">{bug.reporterName}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -328,32 +328,32 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="logs" className="mt-6">
+        <TabsContent value="logs" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>Developer Logs</CardTitle>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">Developer Logs</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="p-3 pt-0">
+              <div className="space-y-3">
                 {logs?.logs.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">No logs available for this project</div>
+                  <div className="text-center text-muted-foreground py-6 text-xs">No logs available for this project</div>
                 ) : (
                   logs?.logs.map(log => (
-                    <div key={log.id} className="border border-border rounded-lg p-4 bg-background/50">
-                      <div className="flex justify-between items-start mb-2">
+                    <div key={log.id} className="border border-border rounded-lg p-3 bg-background/50">
+                      <div className="flex justify-between items-start mb-1.5">
                         <div>
-                          <h4 className="font-medium">{log.taskTitle}</h4>
-                          <p className="text-sm text-muted-foreground">By {log.developerName} on {new Date(log.logDate).toLocaleDateString()}</p>
+                          <h4 className="text-xs font-medium">{log.taskTitle}</h4>
+                          <p className="text-[10px] text-muted-foreground">By {log.developerName} on {new Date(log.logDate).toLocaleDateString()}</p>
                         </div>
                         <div className="text-right">
-                          <span className="font-bold text-lg">{log.hoursSpent}h</span>
-                          <p className="text-xs text-green-500 font-medium">{log.completionPct}% complete</p>
+                          <span className="font-bold text-sm">{log.hoursSpent}h</span>
+                          <p className="text-[10px] text-green-500 font-medium">{log.completionPct}% complete</p>
                         </div>
                       </div>
-                      {log.taskDescription && <p className="text-sm mt-2 text-foreground/80">{log.taskDescription}</p>}
-                      <div className="flex gap-2 mt-3">
+                      {log.taskDescription && <p className="text-xs mt-1 text-foreground/80">{log.taskDescription}</p>}
+                      <div className="flex gap-1.5 mt-2">
                         {log.workCategories.map((cat: string) => (
-                          <Badge key={cat} variant="secondary" className="text-xs">{cat}</Badge>
+                          <Badge key={cat} variant="secondary" className="text-[9px] px-1.5 py-0 h-3.5">{cat}</Badge>
                         ))}
                       </div>
                     </div>
@@ -364,27 +364,27 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="comments" className="mt-6">
+        <TabsContent value="comments" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>Project Comments</CardTitle>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">Project Comments</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+            <CardContent className="p-3 pt-0">
+              <div className="space-y-3">
                 {comments?.comments.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">No comments yet</div>
+                  <div className="text-center text-muted-foreground py-6 text-xs">No comments yet</div>
                 ) : (
                   comments?.comments.map(comment => (
-                    <div key={comment.id} className="flex gap-4 border-b border-border pb-4 last:border-0">
-                      <div className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0">
+                    <div key={comment.id} className="flex gap-3 border-b border-border pb-3 last:border-0">
+                      <div className="h-7 w-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold shrink-0 text-xs">
                         {comment.authorName.charAt(0)}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-sm">{comment.authorName}</span>
-                          <span className="text-xs text-muted-foreground">{new Date(comment.createdAt).toLocaleString()}</span>
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="font-medium text-xs">{comment.authorName}</span>
+                          <span className="text-[10px] text-muted-foreground">{new Date(comment.createdAt).toLocaleString()}</span>
                         </div>
-                        <p className="text-sm text-foreground/90">{comment.content}</p>
+                        <p className="text-xs text-foreground/90">{comment.content}</p>
                       </div>
                     </div>
                   ))
@@ -394,43 +394,43 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="requests" className="mt-6">
+        <TabsContent value="requests" className="mt-4">
           <Card className="bg-card">
-            <CardHeader>
-              <CardTitle>Resource Requests</CardTitle>
+            <CardHeader className="p-3">
+              <CardTitle className="text-sm">Resource Requests</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Requester</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Type</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Title</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Requester</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {requests?.requests.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-24">No requests found</TableCell>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground h-20 text-xs">No requests found</TableCell>
                     </TableRow>
                   ) : (
                     requests?.requests.map((req) => (
-                      <TableRow key={req.id}>
-                        <TableCell className="capitalize text-sm">{req.type.replace('_', ' ')}</TableCell>
+                      <TableRow key={req.id} className="text-xs">
+                        <TableCell className="capitalize">{req.type.replace('_', ' ')}</TableCell>
                         <TableCell className="font-medium">{req.title}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{req.developerName}</TableCell>
+                        <TableCell className="text-muted-foreground">{req.developerName}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={
+                          <Badge variant="outline" className={`${
                             req.status === 'pending' ? 'text-blue-500 border-blue-500/20 bg-blue-500/10' : 
                             req.status === 'approved' ? 'text-green-500 border-green-500/20 bg-green-500/10' : 
                             'text-red-500 border-red-500/20 bg-red-500/10'
-                          }>
+                          } text-[10px] px-1.5 py-0 h-4`}>
                             {req.status.toUpperCase()}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{new Date(req.createdAt).toLocaleDateString()}</TableCell>
+                        <TableCell className="text-muted-foreground">{new Date(req.createdAt).toLocaleDateString()}</TableCell>
                       </TableRow>
                     ))
                   )}

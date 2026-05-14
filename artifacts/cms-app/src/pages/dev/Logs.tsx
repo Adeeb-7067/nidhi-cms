@@ -89,11 +89,11 @@ export default function DevLogs() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Daily Logs</h1>
-          <p className="text-muted-foreground">Track your time and progress</p>
+          <h1 className="text-xl font-semibold tracking-tight">Daily Logs</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Track your time and progress</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
@@ -343,46 +343,46 @@ export default function DevLogs() {
         ) : (
           data?.logs.map(log => (
             <Card key={log.id} className="bg-card hover:bg-muted/30 transition-colors">
-              <CardContent className="p-6">
+              <CardContent className="p-4">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="h-4 w-4" />
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <Calendar className="h-3.5 w-3.5" />
                       {new Date(log.logDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
                       <span className="mx-2">•</span>
                       <span className="font-medium text-primary">{log.projectName}</span>
                     </div>
                     <h3 className="text-lg font-semibold">{log.taskTitle}</h3>
-                    {log.taskDescription && <p className="text-sm text-muted-foreground max-w-3xl">{log.taskDescription}</p>}
+                    {log.taskDescription && <p className="text-xs text-muted-foreground max-w-3xl">{log.taskDescription}</p>}
                     <div className="flex flex-wrap gap-2 pt-2">
                       {log.workCategories.map(cat => (
-                        <Badge key={cat} variant="secondary">{cat.replace('_', ' ')}</Badge>
+                        <Badge key={cat} variant="secondary" className="text-[10px]">{cat.replace('_', ' ')}</Badge>
                       ))}
                     </div>
                   </div>
                   <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-4 md:gap-2 border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6 shrink-0">
                     <div className="text-center md:text-right">
-                      <div className="text-2xl font-bold text-foreground">{log.hoursSpent}<span className="text-base font-normal text-muted-foreground">h</span></div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Logged</div>
+                      <div className="text-xl font-bold text-foreground">{log.hoursSpent}<span className="text-xs font-normal text-muted-foreground">h</span></div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Logged</div>
                     </div>
                     <div className="text-center md:text-right">
-                      <div className="text-xl font-bold text-green-500">{log.completionPct}%</div>
-                      <div className="text-xs text-muted-foreground uppercase tracking-wider">Complete</div>
+                      <div className="text-lg font-bold text-green-500">{log.completionPct}%</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Complete</div>
                     </div>
                   </div>
                 </div>
                 {(log.blockers || log.nextDayPlan) && (
                   <div className="mt-4 pt-4 border-t border-border grid sm:grid-cols-2 gap-4">
                     {log.blockers && (
-                      <div className="bg-destructive/5 rounded-md p-3 border border-destructive/20">
-                        <h4 className="text-xs font-semibold text-destructive uppercase tracking-wider mb-1">Blockers</h4>
-                        <p className="text-sm">{log.blockers}</p>
+                      <div className="bg-destructive/5 rounded-md p-2 border border-destructive/20">
+                        <h4 className="text-[10px] font-semibold text-destructive uppercase tracking-wider mb-1">Blockers</h4>
+                        <p className="text-xs">{log.blockers}</p>
                       </div>
                     )}
                     {log.nextDayPlan && (
-                      <div className="bg-primary/5 rounded-md p-3 border border-primary/20">
-                        <h4 className="text-xs font-semibold text-primary uppercase tracking-wider mb-1">Next Day Plan</h4>
-                        <p className="text-sm">{log.nextDayPlan}</p>
+                      <div className="bg-primary/5 rounded-md p-2 border border-primary/20">
+                        <h4 className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-1">Next Day Plan</h4>
+                        <p className="text-xs">{log.nextDayPlan}</p>
                       </div>
                     )}
                   </div>

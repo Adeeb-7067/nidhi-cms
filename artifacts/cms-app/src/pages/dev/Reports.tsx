@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 export default function DevReports() {
   const { data: reportsData, isLoading: reportsLoading, refetch } = useListReports();
@@ -58,11 +59,11 @@ export default function DevReports() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-          <p className="text-muted-foreground">Generate project and time reports</p>
+          <h1 className="text-xl font-semibold tracking-tight">Reports</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Generate project and time reports</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
@@ -147,61 +148,61 @@ export default function DevReports() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Report Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Period</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Generated At</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead className="text-xs">Report Name</TableHead>
+                <TableHead className="text-xs">Type</TableHead>
+                <TableHead className="text-xs">Period</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Generated At</TableHead>
+                <TableHead className="text-right text-xs">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {reportsLoading ? (
                 [...Array(4)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-6 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : reportsData?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
                     <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     No reports generated yet.
                   </TableCell>
                 </TableRow>
               ) : (
                 reportsData?.map((report) => (
-                  <TableRow key={report.id}>
+                  <TableRow key={report.id} className="text-xs">
                     <TableCell className="font-medium flex items-center">
-                      <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <FileText className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
                       {report.type.replace(/_/g, ' ')}
                     </TableCell>
-                    <TableCell className="capitalize text-muted-foreground text-sm">{report.type.replace('_', ' ')}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="capitalize text-muted-foreground">{report.type.replace('_', ' ')}</TableCell>
+                    <TableCell className="text-muted-foreground">
                       {report.month}/{report.year}
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={getStatusColor(report.status)}>
+                      <Badge variant="outline" className={cn("text-[10px]", getStatusColor(report.status))}>
                         {report.status.toUpperCase()}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{new Date(report.createdAt).toLocaleString()}</TableCell>
+                    <TableCell className="text-muted-foreground">{new Date(report.createdAt).toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       {report.status === 'ready' && report.fileUrl && (
-                        <Button size="sm" variant="ghost" asChild>
+                        <Button size="sm" variant="ghost" className="h-8 text-xs" asChild>
                           <a href={report.fileUrl} download>
-                            <Download className="h-4 w-4 mr-2" /> Download
+                            <Download className="h-3.5 w-3.5 mr-2" /> Download
                           </a>
                         </Button>
                       )}
                       {report.status === 'generating' && (
-                        <Button size="sm" variant="ghost" disabled>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processing
+                        <Button size="sm" variant="ghost" className="h-8 text-xs" disabled>
+                          <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Processing
                         </Button>
                       )}
                     </TableCell>

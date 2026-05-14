@@ -135,11 +135,11 @@ export default function AdminProjects() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage and track all client projects</p>
+          <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">Manage and track all client projects</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
@@ -156,7 +156,7 @@ export default function AdminProjects() {
             </DialogHeader>
             <ScrollArea className="flex-1 pr-4 -mr-4">
               <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-2">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3 py-2">
                   <FormField
                     control={form.control}
                     name="name"
@@ -399,9 +399,9 @@ export default function AdminProjects() {
             return (
               <Link key={project.id} href={`/admin/projects/${project.id}`}>
                 <Card className={`bg-card hover:bg-muted/40 transition-colors cursor-pointer border-border h-full flex flex-col border-t-2 ${deadlineStatus.color} card-hover`}>
-                  <CardHeader className="pb-2">
+                  <CardHeader className="pb-2 pt-3 px-4">
                     <div className="flex justify-between items-start mb-2">
-                      <Badge variant="secondary" className={getStatusColor(project.status)}>
+                      <Badge variant="secondary" className={`${getStatusColor(project.status)} text-[10px]`}>
                         {project.status.replace('_', ' ').toUpperCase()}
                       </Badge>
                       {project.techStack && project.techStack.length > 0 && (
@@ -414,35 +414,35 @@ export default function AdminProjects() {
                           )}
                         </div>
                       )}
-                      <div className="flex items-center text-xs font-medium">
+                      <div className="flex items-center text-[10px] font-medium">
                         <span className={`h-2 w-2 rounded-full mr-1.5 bg-current ${getPriorityColor(project.priority)}`}></span>
                         <span className={getPriorityColor(project.priority)}>
                           {project.priority.toUpperCase()}
                         </span>
                       </div>
                     </div>
-                    <CardTitle className="text-xl line-clamp-1">{project.name}</CardTitle>
-                    <div className="text-sm text-muted-foreground line-clamp-1">{project.clientName}</div>
+                    <CardTitle className="text-sm font-semibold line-clamp-1">{project.name}</CardTitle>
+                    <div className="text-xs text-muted-foreground line-clamp-1">{project.clientName}</div>
                   </CardHeader>
-                  <CardContent className="pb-2 flex-1">
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-center text-sm">
+                  <CardContent className="p-4 pb-2 flex-1">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-xs">
                         <div className="flex items-center text-muted-foreground">
-                          <Calendar className="mr-1.5 h-3.5 w-3.5" />
+                          <Calendar className="mr-1.5 h-3 w-3" />
                           Deadline
                         </div>
                         <div className={`font-medium flex items-center gap-2 ${deadlineStatus.text}`}>
                           {deadlineStatus.label}
-                          <span className="text-muted-foreground text-xs">({new Date(project.deadline).toLocaleDateString()})</span>
+                          <span className="text-muted-foreground text-[10px]">({new Date(project.deadline).toLocaleDateString()})</span>
                         </div>
                       </div>
                       
                       <div className="space-y-1.5">
-                        <div className="flex justify-between text-xs">
+                        <div className="flex justify-between text-[10px]">
                           <span className="text-muted-foreground">Progress</span>
                           <span className="font-medium">{project.completionPct}%</span>
                         </div>
-                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                        <div className="h-1.5 w-full bg-secondary rounded-full overflow-hidden">
                           <div 
                             className="h-full bg-primary transition-all duration-500 ease-in-out" 
                             style={{ width: `${project.completionPct}%` }}
@@ -451,12 +451,12 @@ export default function AdminProjects() {
                       </div>
                     </div>
                   </CardContent>
-                  <div className="mt-4 px-5 pb-3">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="text-xs text-muted-foreground">Progress</span>
-                      <span className="text-xs font-semibold text-foreground">{project.completionPct ?? 0}%</span>
+                  <div className="mt-2 px-4 pb-2">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] text-muted-foreground">Progress</span>
+                      <span className="text-[10px] font-semibold text-foreground">{project.completionPct ?? 0}%</span>
                     </div>
-                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                    <div className="h-1 bg-muted rounded-full overflow-hidden">
                       <div
                         className="h-full rounded-full progress-fill"
                         style={{
@@ -466,27 +466,27 @@ export default function AdminProjects() {
                       />
                     </div>
                   </div>
-                  <CardFooter className="pt-2 border-t border-border mt-auto">
-                    <div className="flex justify-between items-center w-full text-xs text-muted-foreground">
-                      <div className="flex -space-x-2">
+                  <CardFooter className="py-2 px-4 border-t border-border mt-auto">
+                    <div className="flex justify-between items-center w-full text-[10px] text-muted-foreground">
+                      <div className="flex -space-x-1.5">
                         {/* Avatar stack mockup */}
                         {[...Array(Math.min(project.memberCount, 3))].map((_, i) => (
-                          <div key={i} className="h-6 w-6 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[10px]">
-                            <Users className="h-3 w-3" />
+                          <div key={i} className="h-5 w-5 rounded-full bg-muted border-2 border-card flex items-center justify-center text-[9px]">
+                            <Users className="h-2.5 w-2.5" />
                           </div>
                         ))}
                         {project.memberCount > 3 && (
-                          <div className="h-6 w-6 rounded-full bg-secondary border-2 border-card flex items-center justify-center text-[10px] font-medium text-secondary-foreground">
+                          <div className="h-5 w-5 rounded-full bg-secondary border-2 border-card flex items-center justify-center text-[8px] font-medium text-secondary-foreground">
                             +{project.memberCount - 3}
                           </div>
                         )}
                         {project.memberCount === 0 && <span>No team assigned</span>}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-1.5">
                         {project.techStack.slice(0, 2).map(tech => (
-                          <Badge key={tech} variant="outline" className="text-[10px] py-0 h-4">{tech}</Badge>
+                          <Badge key={tech} variant="outline" className="text-[9px] py-0 h-3.5 px-1">{tech}</Badge>
                         ))}
-                        {project.techStack.length > 2 && <span className="text-[10px]">+{project.techStack.length - 2}</span>}
+                        {project.techStack.length > 2 && <span className="text-[9px]">+{project.techStack.length - 2}</span>}
                       </div>
                     </div>
                   </CardFooter>

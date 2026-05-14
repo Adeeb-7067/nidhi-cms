@@ -36,10 +36,10 @@ export default function ClientPortal() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Client Portal</h1>
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold tracking-tight">Client Portal</h1>
         <Skeleton className="h-[200px] w-full" />
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-[300px] w-full" />
           <Skeleton className="h-[300px] w-full" />
         </div>
@@ -49,12 +49,12 @@ export default function ClientPortal() {
 
   if (!project) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Welcome, {user?.name}</h1>
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold tracking-tight">Welcome, {user?.name}</h1>
         <Card className="bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center">
-            <h3 className="text-xl font-medium mb-2">No active projects</h3>
-            <p className="text-muted-foreground">We are currently setting up your workspace. Check back soon.</p>
+          <CardContent className="flex flex-col items-center justify-center py-24 text-center p-4">
+            <h3 className="text-lg font-medium mb-2">No active projects</h3>
+            <p className="text-xs text-muted-foreground">We are currently setting up your workspace. Check back soon.</p>
           </CardContent>
         </Card>
       </div>
@@ -68,30 +68,30 @@ export default function ClientPortal() {
   const latestRelease = releases && releases.length > 0 ? releases[0] : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome, {user?.name}</h1>
-          <p className="text-muted-foreground">Here is the status of your project</p>
+          <h1 className="text-xl font-semibold tracking-tight">Welcome, {user?.name}</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Here is the status of your project</p>
         </div>
       </div>
 
-      <div className="bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl p-8 border border-border flex flex-col md:flex-row items-center justify-between gap-8">
-        <div className="flex-1 space-y-4">
-          <Badge variant="outline" className="bg-background/50 backdrop-blur-sm px-3 py-1 text-sm border-primary/50 text-primary">
+      <div className="bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl p-6 border border-border flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="flex-1 space-y-3">
+          <Badge variant="outline" className="bg-background/50 backdrop-blur-sm px-2 py-0.5 text-xs border-primary/50 text-primary">
             {project.status.replace('_', ' ').toUpperCase()}
           </Badge>
-          <h2 className="text-4xl font-extrabold tracking-tight text-foreground">{project.name}</h2>
-          <p className="text-lg text-muted-foreground max-w-xl leading-relaxed">
+          <h2 className="text-2xl font-bold tracking-tight text-foreground">{project.name}</h2>
+          <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
             {project.description || "Development is proceeding according to schedule."}
           </p>
-          <div className="flex items-center gap-6 pt-2">
-            <div className="flex items-center text-sm font-medium">
-              <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-6 pt-1">
+            <div className="flex items-center text-xs font-medium">
+              <Clock className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
               Target Deadline: <span className="ml-2 text-foreground">{project.deadline ? new Date(project.deadline).toLocaleDateString() : 'Not set'}</span>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 pt-2">
+          <div className="flex flex-wrap gap-2 pt-1">
             {project.techStack?.map((tech: string) => (
               <Badge key={tech} variant="secondary" className="text-[10px] px-2 py-0">
                 {tech}
@@ -100,7 +100,7 @@ export default function ClientPortal() {
           </div>
         </div>
         
-        <div className="h-48 w-48 shrink-0 relative flex items-center justify-center">
+        <div className="h-32 w-32 shrink-0 relative flex items-center justify-center">
           <ResponsiveContainer width="100%" height="100%">
             <RadialBarChart 
               innerRadius="80%" 
@@ -114,21 +114,21 @@ export default function ClientPortal() {
             </RadialBarChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-3xl font-bold">{project.completionPct}%</span>
-            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Complete</span>
+            <span className="text-xl font-bold">{project.completionPct}%</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold">Complete</span>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Smartphone className="mr-2 h-5 w-5 text-primary" />
+          <CardHeader className="pb-2 p-4">
+            <CardTitle className="flex items-center text-sm font-semibold">
+              <Smartphone className="mr-2 h-4 w-4 text-primary" />
               Latest Release
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 p-4">
             {isLoadingReleases ? (
               <div className="space-y-4">
                 <Skeleton className="h-24 w-full" />
@@ -136,14 +136,14 @@ export default function ClientPortal() {
               </div>
             ) : latestRelease ? (
               <>
-                <div className="border border-border rounded-lg p-6 text-center bg-muted/20">
+                <div className="border border-border rounded-lg p-4 text-center bg-muted/20">
                   <div className="flex items-center justify-center gap-2 mb-1">
-                    <h3 className="text-2xl font-bold">{latestRelease.version}</h3>
-                    <Badge variant="secondary" className="capitalize">
+                    <h3 className="text-xl font-bold">{latestRelease.version}</h3>
+                    <Badge variant="secondary" className="capitalize text-[10px]">
                       {latestRelease.releaseType}
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mb-4">
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4">
                     <span>{latestRelease.platform.toUpperCase()}</span>
                     <span>•</span>
                     <span>Released {latestRelease.createdAt ? formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true }) : 'N/A'}</span>
@@ -152,21 +152,21 @@ export default function ClientPortal() {
                     href={latestRelease.fileUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 rounded-md font-medium w-full transition-colors"
+                    className="inline-flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2 rounded-md font-medium w-full text-xs transition-colors"
                   >
                     <Download className="mr-2 h-4 w-4" />
                     Download APK
                   </a>
                 </div>
                 {latestRelease.changelog && (
-                  <div className="text-sm">
+                  <div className="text-xs">
                     <h4 className="font-semibold mb-2">What's new:</h4>
                     <p className="text-muted-foreground whitespace-pre-wrap">{latestRelease.changelog}</p>
                   </div>
                 )}
               </>
             ) : (
-              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground">
+              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground text-xs">
                 No releases yet
               </div>
             )}
@@ -174,13 +174,13 @@ export default function ClientPortal() {
         </Card>
 
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <CheckCircle className="mr-2 h-5 w-5 text-green-500" />
+          <CardHeader className="pb-2 p-4">
+            <CardTitle className="flex items-center text-sm font-semibold">
+              <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
               Project Milestones
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             {isLoadingMilestones ? (
               <div className="space-y-4">
                 <Skeleton className="h-16 w-full" />
@@ -188,27 +188,27 @@ export default function ClientPortal() {
                 <Skeleton className="h-16 w-full" />
               </div>
             ) : milestones && milestones.length > 0 ? (
-              <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
+              <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-border before:to-transparent">
                 {milestones.map((milestone, i) => (
                   <div key={milestone.id} className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                    <div className={`flex items-center justify-center w-10 h-10 rounded-full border-4 border-card shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 ${
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full border-4 border-card shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 ${
                       milestone.status === 'completed' ? 'bg-green-500 text-white' : 
                       milestone.status === 'delayed' ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'
                     }`}>
-                      {milestone.status === 'completed' ? <CheckCircle className="h-5 w-5" /> : <span className="text-xs font-bold">{i+1}</span>}
+                      {milestone.status === 'completed' ? <CheckCircle className="h-4 w-4" /> : <span className="text-[10px] font-bold">{i+1}</span>}
                     </div>
-                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-lg border border-border bg-card shadow-sm">
+                    <div className="w-[calc(100%-3rem)] md:w-[calc(50%-2rem)] p-3 rounded-lg border border-border bg-card shadow-sm">
                       <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-semibold text-sm">{milestone.title}</h4>
+                        <h4 className="font-semibold text-xs">{milestone.title}</h4>
                         <Badge variant={
                           milestone.status === 'completed' ? 'outline' : 
                           milestone.status === 'delayed' ? 'destructive' : 'secondary'
-                        } className="text-[10px] h-5">
+                        } className="text-[10px] h-4 px-1.5">
                           {milestone.status.toUpperCase()}
                         </Badge>
                       </div>
                       <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-muted-foreground">Milestone planned for completion.</p>
+                        <p className="text-[10px] text-muted-foreground">Milestone planned for completion.</p>
                         <time className="text-[10px] text-muted-foreground whitespace-nowrap ml-2">
                           {milestone.plannedDate ? new Date(milestone.plannedDate).toLocaleDateString() : 'N/A'}
                         </time>
@@ -218,7 +218,7 @@ export default function ClientPortal() {
                 ))}
               </div>
             ) : (
-              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground">
+              <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground text-xs">
                 No milestones scheduled
               </div>
             )}

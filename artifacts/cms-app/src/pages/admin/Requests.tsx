@@ -39,22 +39,22 @@ export default function AdminRequests() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Resource Requests</h1>
-          <p className="text-muted-foreground">Approve or reject developer resource requests</p>
+          <h1 className="text-xl font-semibold tracking-tight">Resource Requests</h1>
+          <p className="text-muted-foreground text-xs mt-0.5">Approve or reject developer resource requests</p>
         </div>
       </div>
 
       <Card className="bg-card">
-        <div className="p-4 border-b border-border">
+        <div className="p-3 border-b border-border">
           <Tabs value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? undefined : v as any)}>
-            <TabsList>
-              <TabsTrigger value="pending">Pending</TabsTrigger>
-              <TabsTrigger value="approved">Approved</TabsTrigger>
-              <TabsTrigger value="rejected">Rejected</TabsTrigger>
-              <TabsTrigger value="all">All Requests</TabsTrigger>
+            <TabsList className="h-8">
+              <TabsTrigger value="pending" className="text-xs">Pending</TabsTrigger>
+              <TabsTrigger value="approved" className="text-xs">Approved</TabsTrigger>
+              <TabsTrigger value="rejected" className="text-xs">Rejected</TabsTrigger>
+              <TabsTrigger value="all" className="text-xs">All Requests</TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -62,12 +62,12 @@ export default function AdminRequests() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Developer</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Request</TableHead>
-                <TableHead>Urgency</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Developer</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Project</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Request</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Urgency</TableHead>
+                <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
+                <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -84,32 +84,32 @@ export default function AdminRequests() {
                 ))
               ) : data?.requests.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
                     No requests found for this status.
                   </TableCell>
                 </TableRow>
               ) : (
                 data?.requests.map((request) => (
-                  <TableRow key={request.id}>
+                  <TableRow key={request.id} className="text-xs">
                     <TableCell className="font-medium">{request.developerName}</TableCell>
                     <TableCell className="text-muted-foreground">{request.projectName}</TableCell>
                     <TableCell>
                       <div className="flex flex-col max-w-[300px]">
-                        <span className="font-medium text-sm truncate">{request.title}</span>
-                        <span className="text-xs text-muted-foreground truncate">{request.type.replace('_', ' ').toUpperCase()}</span>
+                        <span className="font-medium text-xs truncate">{request.title}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{request.type.replace('_', ' ').toUpperCase()}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={getUrgencyColor(request.urgency)}>
+                      <Badge variant="outline" className={`${getUrgencyColor(request.urgency)} text-[10px] px-1.5 py-0 h-4`}>
                         {request.urgency.toUpperCase()}
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline" className={
+                      <Badge variant="outline" className={`${
                         request.status === 'pending' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 
                         request.status === 'approved' ? 'bg-green-500/10 text-green-500 border-green-500/20' : 
                         'bg-red-500/10 text-red-500 border-red-500/20'
-                      }>
+                      } text-[10px] px-1.5 py-0 h-4`}>
                         {request.status.toUpperCase()}
                       </Badge>
                     </TableCell>
@@ -119,25 +119,25 @@ export default function AdminRequests() {
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border-green-500/20"
+                            className="h-7 text-xs bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border-green-500/20"
                             onClick={() => handleUpdateStatus(request.id, "approved")}
                             disabled={updateMutation.isPending}
                           >
-                            <Check className="h-4 w-4 mr-1" /> Approve
+                            <Check className="h-3 w-3 mr-1" /> Approve
                           </Button>
                           <Button 
                             size="sm" 
                             variant="outline" 
-                            className="bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border-red-500/20"
+                            className="h-7 text-xs bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border-red-500/20"
                             onClick={() => handleUpdateStatus(request.id, "rejected")}
                             disabled={updateMutation.isPending}
                           >
-                            <X className="h-4 w-4 mr-1" /> Reject
+                            <X className="h-3 w-3 mr-1" /> Reject
                           </Button>
                         </div>
                       ) : (
-                        <Button size="sm" variant="ghost">
-                          <MessageSquare className="h-4 w-4 mr-1" /> Details
+                        <Button size="sm" variant="ghost" className="h-7 text-xs">
+                          <MessageSquare className="h-3 w-3 mr-1" /> Details
                         </Button>
                       )}
                     </TableCell>

@@ -24,8 +24,8 @@ export default function ClientAnalytics() {
 
   if (isLoading || !projectId) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-3xl font-bold tracking-tight">Project Analytics</h1>
+      <div className="space-y-4">
+        <h1 className="text-xl font-semibold tracking-tight">Project Analytics</h1>
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-[400px] w-full" />
           <Skeleton className="h-[400px] w-full" />
@@ -40,21 +40,21 @@ export default function ClientAnalytics() {
   const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Project Analytics</h1>
-          <p className="text-muted-foreground">Deep dive into project metrics</p>
+          <h1 className="text-xl font-semibold tracking-tight">Project Analytics</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">Deep dive into project metrics</p>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle>Progress Over Time</CardTitle>
-            <CardDescription>Track project completion percentage</CardDescription>
+          <CardHeader className="pb-2 p-4">
+            <CardTitle className="text-sm font-semibold">Progress Over Time</CardTitle>
+            <CardDescription className="text-xs">Track project completion percentage</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={analytics.completionOverTime}>
@@ -62,11 +62,12 @@ export default function ClientAnalytics() {
                   <XAxis 
                     dataKey="date" 
                     stroke="hsl(var(--muted-foreground))" 
+                    tick={{fontSize: 10}}
                     tickFormatter={(val) => val ? new Date(val).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}) : ''} 
                   />
-                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                  <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
-                  <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={3} dot={true} activeDot={{ r: 6 }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{fontSize: 10}} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
+                  <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} dot={true} activeDot={{ r: 4 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -74,11 +75,11 @@ export default function ClientAnalytics() {
         </Card>
 
         <Card className="bg-card">
-          <CardHeader>
-            <CardTitle>Work Category Distribution</CardTitle>
-            <CardDescription>How development time is allocated</CardDescription>
+          <CardHeader className="pb-2 p-4">
+            <CardTitle className="text-sm font-semibold">Work Category Distribution</CardTitle>
+            <CardDescription className="text-xs">How development time is allocated</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -86,8 +87,8 @@ export default function ClientAnalytics() {
                     data={analytics.workCategoryBreakdown}
                     cx="50%"
                     cy="50%"
-                    innerRadius={70}
-                    outerRadius={100}
+                    innerRadius={60}
+                    outerRadius={80}
                     paddingAngle={2}
                     dataKey="value"
                   >
@@ -95,8 +96,8 @@ export default function ClientAnalytics() {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
-                  <Legend verticalAlign="bottom" height={36} />
+                  <RechartsTooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
+                  <Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize: '10px'}} />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -104,19 +105,19 @@ export default function ClientAnalytics() {
         </Card>
 
         <Card className="bg-card md:col-span-2">
-          <CardHeader>
-            <CardTitle>Team Contribution (Hours)</CardTitle>
-            <CardDescription>Hours logged per team member</CardDescription>
+          <CardHeader className="pb-2 p-4">
+            <CardTitle className="text-sm font-semibold">Team Contribution (Hours)</CardTitle>
+            <CardDescription className="text-xs">Hours logged per team member</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4">
             <div className="h-[350px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={analytics.developerContributions} layout="vertical" margin={{ left: 40 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" />
-                  <YAxis dataKey="developerName" type="category" stroke="hsl(var(--muted-foreground))" />
-                  <RechartsTooltip cursor={{fill: 'hsl(var(--muted))'}} contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} />
-                  <Bar dataKey="hours" fill="hsl(var(--secondary))" radius={[0, 4, 4, 0]} barSize={24} />
+                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" tick={{fontSize: 10}} />
+                  <YAxis dataKey="developerName" type="category" stroke="hsl(var(--muted-foreground))" tick={{fontSize: 10}} />
+                  <RechartsTooltip cursor={{fill: 'hsl(var(--muted))'}} contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
+                  <Bar dataKey="hours" fill="hsl(var(--secondary))" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

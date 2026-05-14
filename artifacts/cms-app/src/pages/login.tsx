@@ -58,7 +58,7 @@ export default function Login() {
     <div className="min-h-screen w-full flex flex-col md:flex-row bg-background">
       {/* LEFT SIDE (brand panel) */}
       <div 
-        className="hidden md:flex flex-1 flex-col justify-between p-12 lg:p-20 relative overflow-hidden border-r border-border/50"
+        className="hidden md:flex flex-1 flex-col justify-between p-8 lg:p-10 relative overflow-hidden border-r border-border/50"
         style={{ 
           backgroundColor: "hsl(220 13% 7%)",
           backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)", 
@@ -71,35 +71,35 @@ export default function Login() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-4 mb-12">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-              <Zap size={26} className="text-white fill-white" />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
+              <Zap size={22} className="text-white fill-white" />
             </div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Nexus CMS</h1>
+            <h1 className="text-lg font-semibold text-white tracking-tight">Nexus CMS</h1>
           </div>
 
           <div className="space-y-6">
-            <p className="text-xl text-muted-foreground max-w-xs leading-relaxed font-medium">
+            <p className="text-base text-muted-foreground max-w-xs leading-relaxed font-medium">
               The command center for software agencies.
             </p>
 
             <div className="mt-8 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-green-400/10">
-                  <CheckCircle className="h-4 w-4 text-green-400" />
+                <div className="h-5 w-5 rounded-md flex items-center justify-center bg-green-400/10">
+                  <CheckCircle className="h-3 w-3 text-green-400" />
                 </div>
-                <span className="text-sm text-muted-foreground font-medium">Real-time project tracking</span>
+                <span className="text-xs text-muted-foreground font-medium">Real-time project tracking</span>
               </div>
               <div className="flex items-center gap-3">
-                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-blue-400/10">
-                  <Shield className="h-4 w-4 text-blue-400" />
+                <div className="h-5 w-5 rounded-md flex items-center justify-center bg-blue-400/10">
+                  <Shield className="h-3 w-3 text-blue-400" />
                 </div>
-                <span className="text-sm text-muted-foreground font-medium">Enterprise-grade security</span>
+                <span className="text-xs text-muted-foreground font-medium">Enterprise-grade security</span>
               </div>
               <div className="flex items-center gap-3">
-                <div className="h-6 w-6 rounded-md flex items-center justify-center bg-purple-400/10">
-                  <Users className="h-4 w-4 text-purple-400" />
+                <div className="h-5 w-5 rounded-md flex items-center justify-center bg-purple-400/10">
+                  <Users className="h-3 w-3 text-purple-400" />
                 </div>
-                <span className="text-sm text-muted-foreground font-medium">Multi-role team management</span>
+                <span className="text-xs text-muted-foreground font-medium">Multi-role team management</span>
               </div>
             </div>
           </div>
@@ -107,7 +107,7 @@ export default function Login() {
 
         <div className="relative z-10 mt-auto">
           <div className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Trusted by 50+ software agencies</p>
+            <p className="text-[9px] text-muted-foreground font-medium uppercase tracking-wider">Trusted by 50+ software agencies</p>
             <div className="flex items-center">
               {[1, 2, 3, 4].map((i) => (
                 <div 
@@ -122,14 +122,14 @@ export default function Login() {
 
       {/* RIGHT SIDE (login form) */}
       <div className="flex-1 flex items-center justify-center p-6 bg-background/50">
-        <div className="w-full max-w-[400px]">
+        <div className="w-full max-w-sm">
           <Card 
             className="bg-card border border-border/60 shadow-2xl rounded-2xl overflow-hidden"
             style={{ boxShadow: "0 32px 80px -12px rgba(0,0,0,0.7)" }}
           >
             <CardHeader className="space-y-1.5 pt-8 pb-6 px-8">
-              <CardTitle className="text-2xl font-bold tracking-tight">Welcome back</CardTitle>
-              <CardDescription className="text-muted-foreground text-sm">
+              <CardTitle className="text-lg font-semibold tracking-tight">Welcome back</CardTitle>
+              <CardDescription className="text-muted-foreground text-xs">
                 Sign in to your account to continue
               </CardDescription>
             </CardHeader>
@@ -158,13 +158,13 @@ export default function Login() {
                         name="identifier"
                         render={({ field }) => (
                           <FormItem className="space-y-1.5">
-                            <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Email</FormLabel>
+                            <FormLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Email</FormLabel>
                             <FormControl>
                               <div className="relative group">
-                                <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Mail className="absolute left-3 top-2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                 <Input 
                                   placeholder="name@agency.com" 
-                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-8" 
                                   {...field} 
                                 />
                               </div>
@@ -179,16 +179,16 @@ export default function Login() {
                         render={({ field }) => (
                           <FormItem className="space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Password</FormLabel>
-                              <a href="#" className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
+                              <FormLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Password</FormLabel>
+                              <a href="#" className="text-[10px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
                             </div>
                             <FormControl>
                               <div className="relative group">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Lock className="absolute left-3 top-2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                 <Input 
                                   type="password" 
                                   placeholder="••••••••" 
-                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-8" 
                                   {...field} 
                                 />
                               </div>
@@ -199,7 +199,7 @@ export default function Login() {
                       />
                       <Button 
                         type="submit" 
-                        className="w-full h-10 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
+                        className="w-full h-9 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
                         disabled={loginMutation.isPending}
                       >
                         {loginMutation.isPending ? "Signing in..." : "Sign in"}
@@ -216,13 +216,13 @@ export default function Login() {
                         name="identifier"
                         render={({ field }) => (
                           <FormItem className="space-y-1.5">
-                            <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Employee ID</FormLabel>
+                            <FormLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Employee ID</FormLabel>
                             <FormControl>
                               <div className="relative group">
-                                <UserIcon className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <UserIcon className="absolute left-3 top-2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                 <Input 
                                   placeholder="e.g. DE001" 
-                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-8" 
                                   {...field} 
                                 />
                               </div>
@@ -237,16 +237,16 @@ export default function Login() {
                         render={({ field }) => (
                           <FormItem className="space-y-1.5">
                             <div className="flex justify-between items-center">
-                              <FormLabel className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Password</FormLabel>
-                              <a href="#" className="text-[11px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
+                              <FormLabel className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Password</FormLabel>
+                              <a href="#" className="text-[10px] text-primary hover:text-primary/80 font-medium transition-colors">Forgot password?</a>
                             </div>
                             <FormControl>
                               <div className="relative group">
-                                <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
+                                <Lock className="absolute left-3 top-2 h-4 w-4 text-muted-foreground transition-colors group-focus-within:text-primary" />
                                 <Input 
                                   type="password" 
                                   placeholder="••••••••" 
-                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-10" 
+                                  className="pl-9 bg-muted/30 border-border/50 focus-visible:ring-primary/20 transition-all h-8" 
                                   {...field} 
                                 />
                               </div>
@@ -257,7 +257,7 @@ export default function Login() {
                       />
                       <Button 
                         type="submit" 
-                        className="w-full h-10 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
+                        className="w-full h-9 mt-2 font-semibold bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all" 
                         disabled={loginMutation.isPending}
                       >
                         {loginMutation.isPending ? "Signing in..." : "Sign in"}

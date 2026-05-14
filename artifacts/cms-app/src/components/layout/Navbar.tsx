@@ -1,9 +1,10 @@
 import React from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, Sun, Moon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useListNotifications } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
+import { useTheme } from "@/contexts/ThemeContext";
 import { 
   DropdownMenu, 
   DropdownMenuContent, 
@@ -25,6 +26,7 @@ export function Navbar() {
   const { data: notificationsData } = useListNotifications({ unreadOnly: true, limit: 5 });
   const unreadCount = notificationsData?.unreadCount || 0;
   const [location] = useLocation();
+  const { theme, toggleTheme } = useTheme();
 
   const getBreadcrumbs = () => {
     const parts = location.split("/").filter(Boolean);
@@ -33,7 +35,6 @@ export function Navbar() {
     const breadcrumbs = [];
     let currentPath = "";
 
-    // Map common paths to readable names
     const pathMap: Record<string, string> = {
       admin: "Admin",
       dev: "Developer",
@@ -54,17 +55,10 @@ export function Navbar() {
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       currentPath += `/${part}`;
-      
-      // Try to get a readable label, otherwise use the part itself (capitalized)
       let label = pathMap[part] || part.charAt(0).toUpperCase() + part.slice(1);
-      
-      // Special case for project IDs or other IDs in the URL
       if (!isNaN(Number(part)) || part.length > 20) {
-        // If it's the last part and looks like an ID, maybe call it "Details" or similar
-        // but for now let's just use "Detail"
         label = "Detail";
       }
-
       breadcrumbs.push({ label, href: currentPath });
     }
 
@@ -75,7 +69,7 @@ export function Navbar() {
   const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
   return (
-    <header className="h-14 border-b border-border bg-background flex items-center justify-between px-6 sticky top-0 z-10">
+    <header className="h-12 border-b border-border bg-background/95 backdrop-blur-sm flex items-center justify-between px-5 sticky top-0 z-10">
       <div className="flex items-center gap-4 flex-1">
         <Breadcrumb className="hidden md:flex">
           <BreadcrumbList>
@@ -83,9 +77,9 @@ export function Navbar() {
               <React.Fragment key={crumb.href}>
                 <BreadcrumbItem>
                   {index === breadcrumbs.length - 1 ? (
-                    <BreadcrumbPage className="font-bold">{crumb.label}</BreadcrumbPage>
+                    <BreadcrumbPage className="font-semibold text-xs">{crumb.label}</BreadcrumbPage>
                   ) : (
-                    <BreadcrumbLink href={crumb.href} className="text-muted-foreground hover:text-foreground">
+                    <BreadcrumbLink href={crumb.href} className="text-muted-foreground hover:text-foreground text-xs">
                       {crumb.label}
                     </BreadcrumbLink>
                   )}
@@ -97,59 +91,73 @@ export function Navbar() {
         </Breadcrumb>
       </div>
 
-      <div className="flex items-center w-full max-w-sm mx-4">
+      <div className="flex items-center w-full max-w-xs mx-4">
         <div className="relative w-full group">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
-          <Input 
-            type="search" 
-            placeholder="Search..." 
-            className="w-full bg-muted/30 pl-9 pr-12 border-border hover:bg-muted/50 focus-visible:ring-1 h-9 text-sm transition-colors"
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+          <Input
+            type="search"
+            placeholder="Search..."
+            className="w-full bg-muted/30 pl-8 pr-10 border-border hover:bg-muted/50 focus-visible:ring-1 h-8 text-xs transition-colors"
           />
-          <div className="absolute right-2 top-2 hidden sm:flex items-center gap-1 text-[10px] font-medium text-muted-foreground/50 pointer-events-none select-none">
-            <kbd className="h-5 min-w-[20px] items-center justify-center rounded border bg-muted px-1.5 font-sans">⌘</kbd>
-            <kbd className="h-5 min-w-[20px] items-center justify-center rounded border bg-muted px-1.5 font-sans">K</kbd>
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] font-medium text-muted-foreground/40 pointer-events-none select-none">
+            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans text-[9px]">⌘</kbd>
+            <kbd className="h-4 min-w-[16px] flex items-center justify-center rounded border bg-muted px-1 font-sans text-[9px]">K</kbd>
           </div>
         </div>
       </div>
       
-      <div className="flex items-center gap-4">
-        <div className="hidden lg:block text-sm text-muted-foreground">
+      <div className="flex items-center gap-1.5">
+        <div className="hidden lg:block text-xs text-muted-foreground mr-1">
           {today}
         </div>
-        
-        <div className="h-4 w-px bg-border hidden lg:block" />
+
+        <div className="h-4 w-px bg-border hidden lg:block mx-1" />
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-8 w-8 rounded-full"
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {theme === "dark" ? (
+            <Sun size={14} className="text-muted-foreground" />
+          ) : (
+            <Moon size={14} className="text-muted-foreground" />
+          )}
+        </Button>
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full">
-              <Bell size={18} className="text-muted-foreground" />
+            <Button variant="ghost" size="icon" className="relative h-8 w-8 rounded-full">
+              <Bell size={14} className="text-muted-foreground" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1.5 h-2 w-2 rounded-full bg-destructive" />
+                <span className="absolute top-1 right-1.5 h-1.5 w-1.5 rounded-full bg-destructive" />
               )}
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="w-72">
+            <DropdownMenuLabel className="text-xs font-semibold">Notifications</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notificationsData?.notifications && notificationsData.notifications.length > 0 ? (
-              <div className="max-h-[300px] overflow-y-auto">
+              <div className="max-h-[280px] overflow-y-auto">
                 {notificationsData.notifications.map(notification => (
                   <DropdownMenuItem key={notification.id} className="flex flex-col items-start p-3 cursor-pointer">
-                    <span className="text-sm font-medium">{notification.title}</span>
-                    <span className="text-xs text-muted-foreground line-clamp-2 mt-1">{notification.body}</span>
-                    <span className="text-[10px] text-muted-foreground mt-2 opacity-70">
+                    <span className="text-xs font-medium">{notification.title}</span>
+                    <span className="text-[11px] text-muted-foreground line-clamp-2 mt-0.5">{notification.body}</span>
+                    <span className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
                       {new Date(notification.createdAt).toLocaleDateString()}
                     </span>
                   </DropdownMenuItem>
                 ))}
               </div>
             ) : (
-              <div className="p-4 text-center text-sm text-muted-foreground">
+              <div className="p-4 text-center text-xs text-muted-foreground">
                 No new notifications
               </div>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="justify-center text-primary cursor-pointer">
+            <DropdownMenuItem className="justify-center text-primary cursor-pointer text-xs">
               View all
             </DropdownMenuItem>
           </DropdownMenuContent>
