@@ -14,9 +14,8 @@ node_modules
 # Environment & secrets — never commit (any package or depth)
 .env
 .env.*
+.env.example
 .envrc
-!.env.example
-!**/.env.example
 
 # Keys and credential files
 *.pem
