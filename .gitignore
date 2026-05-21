@@ -63,8 +63,11 @@ Thumbs.db
 .cache/
 .local/
 
-# Graphify — keep graph.json/HTML/report committed for the team,
-# but exclude local-only metadata.
+# Graphify — repo root graph only; per-app copies are local noise
+frontend/graphify-out/
+backend/graphify-out/
 graphify-out/manifest.json
 graphify-out/cost.json
 graphify-out/cache/
+# Added by code-review-graph
+.code-review-graph/

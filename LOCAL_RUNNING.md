@@ -1,94 +1,108 @@
 # How to Run CMS Locally
 
-This guide covers how to get the backend and frontend running locally on your development machine using MongoDB.
+Frontend and backend are **separate npm projects** so you can deploy them on different domains.
 
-## 1. Set up Environment Configuration
+| App | Folder | Port |
+|-----|--------|------|
+| API | [`backend/`](backend/) | 8080 |
+| UI | [`frontend/`](frontend/) | 5173 |
 
-We've created a template `.env.example` file in the project root.
+## 1. Install dependencies
 
-1. Create a new file named **`.env`** in this directory (`d:\Content-Management-Hub`).
-2. Copy the content from `.env.example` into `.env` and customize it with your MongoDB credentials:
+```powershell
+cd backend
+npm install
 
-```bash
+cd ..\frontend
+npm install
+```
+
+## 2. Environment files
+
+### Backend — `backend/.env`
+
+Copy `backend/.env.example` → `backend/.env`:
+
+```env
 DATABASE_URL=mongodb://127.0.0.1:27017/nexus_cms
 SESSION_SECRET=your-random-jwt-secret-key
+PORT=8080
+ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-> [!IMPORTANT]
-> Ensure that you have a MongoDB database server running (locally or in the cloud, e.g., MongoDB Atlas) and paste its connection string into `DATABASE_URL`.
+`ALLOWED_ORIGINS` must list your **frontend** URL(s). Required when UI and API are on different hosts (local or production).
 
-### File uploads (DigitalOcean Spaces / Linode Object Storage)
+Optional: Firebase admin, object storage — see `backend/.env.example`.
 
-When these variables are set in `.env`, all uploads (images, documents, APKs, inventory files) go to your S3-compatible bucket instead of the local `uploads/` folder:
+### Frontend — `frontend/.env`
 
-```bash
-LINODE_OBJECT_BUCKET=your-bucket-name
-LINODE_OBJECT_STORAGE_REGION=sgp1
-LINODE_OBJECT_STORAGE_ENDPOINT=https://sgp1.digitaloceanspaces.com
-LINODE_OBJECT_STORAGE_ACCESS_KEY_ID=your-access-key
-LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY=your-secret-key
-BUCKET_FOLDER_PATH=ClientManagement-CMS/
+Copy `frontend/.env.example` → `frontend/.env`:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080
+VITE_APP_NAME=CMS
+VITE_APP_SHORT_NAME=CMS
+VITE_APP_LOGO=/logo.png
 ```
 
-Files are stored under `BUCKET_FOLDER_PATH` and returned as public HTTPS URLs. Ensure the bucket (or folder) allows **public read** for assets, or set `OBJECT_STORAGE_PUBLIC_URL` if you use a CDN.
+For production builds on another domain:
 
-Restart the API server after changing these values. On startup you should see `objectStorage: your-bucket-name` in the logs.
+```env
+VITE_API_BASE_URL=https://api.yourdomain.com
+```
 
-### App branding (CMS)
+Restart Vite after changing frontend env vars.
 
-1. Logo file: `artifacts/cms-app/public/logo.png` (served at `/logo.png`).
-2. Copy `artifacts/cms-app/.env.example` to `artifacts/cms-app/.env` and set:
-   - `VITE_APP_NAME=CMS`
-   - `VITE_APP_SHORT_NAME=CMS`
-   - `VITE_APP_LOGO=/logo.png`
-3. Restart the Vite dev server after changing frontend env vars.
-
-## 2. Initialize and Seed the Database
-
-Once your `.env` has a valid `DATABASE_URL`, you can immediately seed the database with initial development credentials:
+## 3. Seed the database
 
 ```powershell
-# Seed initial agency, user, and demonstration data
-npx pnpm --filter @workspace/scripts run seed
-
-# (Optional) Seed even more extensive metrics, projects, and logs for analysis testing
-npx pnpm --filter @workspace/scripts run seed-more
+cd backend
+npm run seed
+# optional: npm run seed-more
 ```
 
-## 3. Start the Applications
+## 4. Start dev servers
 
-Start both servers in separate terminal windows:
+**Terminal A — API**
 
-### Terminal A: Start Backend Server (Runs on port 8080)
 ```powershell
-npx pnpm --filter @workspace/api-server run dev
+cd backend
+npm run dev
 ```
 
-### Terminal B: Start Frontend Client (Runs on port 5173)
+**Terminal B — UI**
+
 ```powershell
-npx pnpm --filter @workspace/cms-app run dev
+cd frontend
+npm run dev
 ```
 
-Once started, open your browser to **http://localhost:5173**.
+Open **http://localhost:5173**. With `VITE_API_BASE_URL` set, API calls go to **http://localhost:8080**.
 
-> [!NOTE]
-> The frontend Vite server is pre-configured to automatically proxy `/api` requests to the backend on `http://localhost:8080`.
+## 5. Production build
 
-## Notifications & alert sound
+```powershell
+cd backend
+npm run build
+npm run start
 
-- **In-app (Socket.IO):** Works without Firebase — new messages and notifications appear instantly while the app is open.
-- **Repeating alert sound:** Plays every ~2 seconds when you have unread notifications until you mark them read (bell menu → Mark all read, or open **Notifications**).
-- **Firebase push (optional):** For mobile/desktop push when the browser tab is closed, add to root `.env`:
-  - `FIREBASE_PROJECT_ID`
-  - `FIREBASE_CLIENT_EMAIL`
-  - `FIREBASE_PRIVATE_KEY` (from Firebase service account; use `\n` for newlines)
-- Frontend keys are in `artifacts/cms-app/.env` (`VITE_FIREBASE_*` + `VITE_FIREBASE_VAPID_KEY`).
+cd ..\frontend
+npm run build
+```
 
----
+- API output: `backend/dist/index.mjs`
+- UI static files: `frontend/dist/public/`
 
-## Seed Credentials
+## Two-domain deployment checklist
 
-After running the seed command, you can log in with the following default users:
+1. Deploy **backend** → `api.yourdomain.com`, set `ALLOWED_ORIGINS=https://app.yourdomain.com`.
+2. Set `VITE_API_BASE_URL=https://api.yourdomain.com` in `frontend/.env`, then `npm run build`.
+3. Deploy **frontend** static files → `app.yourdomain.com`.
+4. Proxy WebSockets: `/socket.io` → API server.
+
+See [DEPLOYMENT_PLESK.md](DEPLOYMENT_PLESK.md) and per-app READMEs.
+
+## Seed credentials
 
 | Role | Email | Employee ID | Password |
 |------|-------|-------------|----------|
@@ -97,4 +111,3 @@ After running the seed command, you can log in with the following default users:
 | **Developer (Bob)** | bob@agency.com | `BO002` | `Dev@123` |
 | **Tester (David)** | david@agency.com | — | `Dev@123` |
 | **Client** | client@example.com | — | `Client@123` |
-  

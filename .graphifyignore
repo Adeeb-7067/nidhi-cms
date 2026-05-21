@@ -1,12 +1,6 @@
 # =============================================================================
-# .graphifyignore — tuned for the Content-Management-Hub monorepo
-# Goal: keep token usage MINIMAL by excluding everything that is
-#   - auto-generated (orval, codegen, build output)
-#   - vendored / dependency code (node_modules)
-#   - non-source artifacts (lockfiles, uploads, transcripts, terminals)
-#   - binary / media files
-# Code in artifacts/* and lib/* (excl. generated/) is processed locally via
-# tree-sitter and consumes NO LLM tokens. Only docs/PDFs/images do.
+# .graphifyignore — Content-Management-Hub (frontend/ + backend/)
+# Excludes generated code, dependencies, build output, and local caches.
 # =============================================================================
 
 # ---- Dependencies & package manager ----------------------------------------
@@ -16,7 +10,7 @@ node_modules/
 .pnp.*
 .yarn/
 
-# ---- Lockfiles & manifests that aren't useful for graphs -------------------
+# ---- Lockfiles -------------------------------------------------------------
 pnpm-lock.yaml
 package-lock.json
 yarn.lock
@@ -42,17 +36,14 @@ out/
 **/coverage/
 **/*.tsbuildinfo
 
-# ---- Auto-generated API client code (HUGE token sink) ----------------------
-# These are 147+ files of generated zod/orval types — completely redundant
-# with the source-of-truth openapi.yaml which IS indexed.
-lib/api-zod/src/generated/
-lib/api-client-react/src/generated/
+# ---- Auto-generated API types (use openapi.yaml as source of truth) --------
+backend/src/api-zod/generated/
+frontend/src/api/generated/
 **/generated/
 
 # ---- Local runtime data / uploads ------------------------------------------
 uploads/
 **/uploads/
-artifacts/api-server/uploads/
 
 # ---- Cursor / agent / IDE workspace data -----------------------------------
 .cursor/
@@ -60,11 +51,11 @@ agent-transcripts/
 terminals/
 .vscode/
 .idea/
+.code-review-graph/
 
-# ---- Environment & secrets (never want these in a graph anyway) ------------
+# ---- Environment & secrets -------------------------------------------------
 .env
 .env.*
-!.env.example
 **/.env
 **/.env.*
 
@@ -83,13 +74,11 @@ terminals/
 **/*.min.js
 **/*.min.css
 
-# ---- Test snapshots & fixtures (usually noise) -----------------------------
+# ---- Test snapshots --------------------------------------------------------
 **/__snapshots__/
 **/*.snap
-**/fixtures/**/*.json
 
-# ---- Binary / media (saves heavy LLM transcription tokens) -----------------
-# Remove these lines if you actually want videos/images analyzed.
+# ---- Binary / media ----------------------------------------------------------
 *.mp4
 *.mov
 *.mp3
@@ -104,8 +93,6 @@ terminals/
 *.dll
 *.so
 *.dylib
-
-# Images — keep PNGs/JPGs OFF by default to save tokens. Uncomment to include.
 *.png
 *.jpg
 *.jpeg
@@ -113,17 +100,15 @@ terminals/
 *.webp
 *.svg
 *.ico
-
-# PDFs — comment this out if you want PDF docs indexed (uses LLM tokens).
 *.pdf
 
-# ---- Generated docs / reports ----------------------------------------------
+# ---- Graphify local-only metadata ------------------------------------------
 graphify-out/manifest.json
 graphify-out/cost.json
 graphify-out/cache/
-
-# ---- DB / sandbox test files -----------------------------------------------
-lib/db/src/test.cjs
+**/graphify-out/manifest.json
+**/graphify-out/cost.json
+**/graphify-out/cache/
 
 # ---- Misc ------------------------------------------------------------------
 .DS_Store

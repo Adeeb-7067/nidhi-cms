@@ -1,6 +1,6 @@
 # Deploy Nexus CMS on Plesk (Linux)
 
-This guide assumes **one domain** for the app (e.g. `cms.yourdomain.com`): static React files at the web root, API and WebSockets proxied to Node.js on port `8080`.
+This guide covers **same-domain** deploy (static UI + proxied `/api`) and **split-domain** deploy (UI on `app.example.com`, API on `api.example.com`).
 
 ## What you need on the server
 
@@ -8,7 +8,7 @@ This guide assumes **one domain** for the app (e.g. `cms.yourdomain.com`): stati
 |-------------|--------|
 | **Plesk** with **Node.js** extension | Node **20+** (uses `--env-file`) |
 | **MongoDB** | Use [MongoDB Atlas](https://www.mongodb.com/atlas) (recommended). Plesk does not install MongoDB by default. |
-| **pnpm** | Install on server, or build locally and upload `dist` folders only |
+| **npm** | Install on server, or build locally and upload `dist` folders only |
 | **Chromium** (optional) | Only if you use server-side PDF reports (`puppeteer`) |
 
 ---
@@ -34,23 +34,22 @@ Upload the project (without `node_modules`) into e.g. `/var/www/vhosts/yourdomai
 ```bash
 cd /var/www/vhosts/yourdomain.com/cms-repo
 
-# Install pnpm if missing
-npm install -g pnpm
-
-pnpm install
-pnpm run build
+cd backend && npm install && npm run build
+cd ../frontend && npm install && npm run build
 ```
 
 Outputs:
 
-- API: `artifacts/api-server/dist/index.mjs`
-- Frontend: `artifacts/cms-app/dist/public/` (contains `index.html`, `assets/`)
+- API: `backend/dist/index.mjs`
+- Frontend: `frontend/dist/public/` (contains `index.html`, `assets/`)
 
 ---
 
-## 3. Production `.env` (repo root)
+## 3. Production env
 
-Create `/var/www/vhosts/yourdomain.com/cms-repo/.env` (Plesk → **Websites & Domains** → your site → **Environment Variables** can mirror these):
+### Backend — `backend/.env`
+
+Create `cms-repo/backend/.env` (Plesk Node.js **Environment Variables** can mirror these):
 
 ```bash
 NODE_ENV=production
@@ -75,23 +74,31 @@ FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 ```
 
-**Frontend build:** If API is on the **same domain** (proxy below), you do **not** need `VITE_API_BASE_URL`. If API is on another subdomain, set before `pnpm run build`:
+### Frontend — `frontend/.env` (before `npm run build`)
+
+**Same domain** (nginx proxies `/api` to Node): you may omit `VITE_API_BASE_URL` (browser uses relative `/api`).
+
+**Split domain** (recommended for separate hosts):
 
 ```bash
-# artifacts/cms-app/.env.production
 VITE_API_BASE_URL=https://api.yourdomain.com
-VITE_API_URL=https://api.yourdomain.com
 ```
 
-Then run `pnpm --filter @workspace/cms-app run build` again.
+Then:
+
+```bash
+cd frontend && npm run build
+```
+
+Set backend `ALLOWED_ORIGINS` to your UI origin, e.g. `https://cms.yourdomain.com` or `https://app.yourdomain.com`.
 
 ---
 
 ## 4. Seed database (once, SSH)
 
 ```bash
-cd /var/www/vhosts/yourdomain.com/cms-repo
-npx pnpm --filter @workspace/scripts run seed
+cd /var/www/vhosts/yourdomain.com/cms-repo/backend
+npm run seed
 ```
 
 Log in and change default passwords from [LOCAL_RUNNING.md](./LOCAL_RUNNING.md).
@@ -103,7 +110,7 @@ Log in and change default passwords from [LOCAL_RUNNING.md](./LOCAL_RUNNING.md).
 1. **Websites & Domains** → your domain → **Node.js**.
 2. Enable Node.js.
 3. Set:
-   - **Application root:** `cms-repo/artifacts/api-server` (path relative to subscription home, adjust to your upload path)
+   - **Application root:** `cms-repo/backend` (path relative to subscription home, adjust to your upload path)
    - **Application startup file:** `dist/index.mjs`
    - **Application mode:** `production`
 4. **Document root** stays the **frontend** folder (step 6), not the API folder.
@@ -112,10 +119,10 @@ Log in and change default passwords from [LOCAL_RUNNING.md](./LOCAL_RUNNING.md).
 **Start command** (if Plesk asks for a custom script):
 
 ```bash
-node --env-file=../../.env --enable-source-maps ./dist/index.mjs
+node --env-file=.env --enable-source-maps ./dist/index.mjs
 ```
 
-Working directory must be `artifacts/api-server` so `../../.env` points at the repo root.
+Working directory: `backend/` (`.env` lives in that folder).
 
 6. Note the **port** Plesk assigns (often `3000`). If it is not `8080`, either set `PORT` in `.env` to match, or use that port in nginx proxy below.
 
@@ -128,7 +135,7 @@ Working directory must be `artifacts/api-server` so `../../.env` points at the r
 Point the domain **document root** to the built frontend:
 
 ```
-/var/www/vhosts/yourdomain.com/cms-repo/artifacts/cms-app/dist/public
+/var/www/vhosts/yourdomain.com/cms-repo/frontend/dist/public
 ```
 
 Or copy `dist/public/*` into `httpdocs/` if you prefer the default Plesk layout.
@@ -224,21 +231,25 @@ Puppeteer already uses `--no-sandbox` in code for Linux servers.
 | **WebSocket fails** | Confirm nginx `socket.io` block; SSL terminates at Plesk — use `wss` via same host |
 | **Blank page after refresh** | Add `try_files ... /index.html` |
 | **DB connection failed** | Atlas IP allowlist: add server public IP (or `0.0.0.0/0` for testing only) |
-| **ENOENT on start** | Run `pnpm run build` on server; check startup path `dist/index.mjs` |
+| **ENOENT on start** | Run `npm run build` in `backend/`; check startup path `dist/index.mjs` |
 
 ---
 
 ## Updating a release
 
 ```bash
-cd /var/www/vhosts/yourdomain.com/cms-repo
+cd /var/www/vhosts/yourdomain.com/cms-repo/backend
 git pull
-pnpm install
-pnpm run build
+npm install
+npm run build
 # Restart Node.js app in Plesk
+
+cd ../frontend
+npm install
+npm run build
 ```
 
-If you only changed the frontend, rebuilding `cms-app` and refreshing the document root is enough.
+If you only changed the frontend, rebuild `frontend/` and refresh the document root.
 
 ---
 

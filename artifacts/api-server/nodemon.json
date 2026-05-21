@@ -1,7 +1,0 @@
-{
-  "watch": ["src", "../../lib/db/src"],
-  "ext": "ts,json",
-  "ignore": ["dist", "node_modules"],
-  "exec": "node ./build.mjs && node --env-file=../../.env --enable-source-maps ./dist/index.mjs",
-  "delay": 800
-}
