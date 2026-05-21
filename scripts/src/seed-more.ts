@@ -1,14 +1,16 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import mongoose from "mongoose";
 import * as schema from "@workspace/db/schema";
 import bcrypt from "bcryptjs";
-import { eq } from "drizzle-orm";
-
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const db = drizzle(pool, { schema });
 
 async function main() {
+  console.log("Connecting to database...");
+  if (!process.env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is not defined");
+  }
+  await mongoose.connect(process.env.DATABASE_URL);
   console.log("Seeding additional data...");
+
+  const { getNextSequence } = schema;
 
   // ── Extra Developers ───────────────────────────────────────────────────────
   const extraDevs = [
@@ -18,28 +20,26 @@ async function main() {
     { name: "Iris Chen",   email: "iris@agency.com",   designation: "Data Analyst",          subType: "Analytics" },
   ];
 
-  const counterRow = await db.query.employeeCounterTable.findFirst();
-  let counter = counterRow?.counter ?? 5;
-
   const devHash = await bcrypt.hash("Dev@123", 12);
-  const devMap: Record<string, number> = {};
 
   for (const dev of extraDevs) {
-    const existing = await db.query.usersTable.findFirst({ where: (t, { eq }) => eq(t.email, dev.email) });
+    const existing = await schema.usersTable.findOne({ email: dev.email });
     if (!existing) {
-      counter++;
+      const devCounter = await getNextSequence("employee_id_counter");
       const prefix = dev.name.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2).padEnd(2, "X");
-      const employeeId = `${prefix}${String(counter).padStart(3, "0")}`;
-      const [u] = await db.insert(schema.usersTable).values({ ...dev, passwordHash: devHash, role: "developer", employeeId, status: "active" }).returning();
-      devMap[dev.email] = u.id;
+      const employeeId = `${prefix}${String(devCounter).padStart(3, "0")}`;
+      
+      const userId = await getNextSequence("users");
+      await schema.usersTable.create({
+        id: userId,
+        ...dev,
+        passwordHash: devHash,
+        role: "developer",
+        employeeId,
+        status: "active"
+      });
       console.log(`Created dev: ${dev.email} (${employeeId})`);
-    } else {
-      devMap[dev.email] = existing.id;
     }
-  }
-
-  if (counterRow) {
-    await db.update(schema.employeeCounterTable).set({ counter }).where(eq(schema.employeeCounterTable.id, counterRow.id));
   }
 
   // ── Extra Client Users + Companies ─────────────────────────────────────────
@@ -55,17 +55,37 @@ async function main() {
 
   for (const cd of newClientDefs) {
     let userId: number;
-    const existingUser = await db.query.usersTable.findFirst({ where: (t, { eq }) => eq(t.email, cd.userEmail) });
+    const existingUser = await schema.usersTable.findOne({ email: cd.userEmail });
     if (!existingUser) {
-      const [u] = await db.insert(schema.usersTable).values({ name: cd.userName, email: cd.userEmail, passwordHash: clientHash, role: "client", status: "active", designation: "CEO" }).returning();
+      const nextUserId = await getNextSequence("users");
+      const u = await schema.usersTable.create({
+        id: nextUserId,
+        name: cd.userName,
+        email: cd.userEmail,
+        passwordHash: clientHash,
+        role: "client",
+        status: "active",
+        designation: "CEO"
+      });
       userId = u.id;
     } else {
       userId = existingUser.id;
     }
 
-    const existingCompany = await db.query.clientsTable.findFirst({ where: (t, { eq }) => eq(t.email, cd.companyEmail) });
+    const existingCompany = await schema.clientsTable.findOne({ email: cd.companyEmail });
     if (!existingCompany) {
-      const [c] = await db.insert(schema.clientsTable).values({ companyName: cd.company, contactPerson: cd.contactPerson, email: cd.companyEmail, phone: cd.phone, address: cd.address, status: "active", portalLogin: true, userId }).returning();
+      const nextClientId = await getNextSequence("clients");
+      const c = await schema.clientsTable.create({
+        id: nextClientId,
+        companyName: cd.company,
+        contactPerson: cd.contactPerson,
+        email: cd.companyEmail,
+        phone: cd.phone,
+        address: cd.address,
+        status: "active",
+        portalLogin: true,
+        userId
+      });
       clientIdMap[cd.company] = c.id;
       console.log(`Created client: ${cd.company}`);
     } else {
@@ -74,27 +94,16 @@ async function main() {
   }
 
   // Get existing client (Acme Corp)
-  const acme = await db.query.clientsTable.findFirst({ where: (t, { eq }) => eq(t.email, "contact@acmecorp.com") });
+  const acme = await schema.clientsTable.findOne({ email: "contact@acmecorp.com" });
   if (acme) clientIdMap["Acme Corp"] = acme.id;
 
-  // Get existing users
-  const getUser = async (email: string) => {
-    const u = await db.query.usersTable.findFirst({ where: (t, { eq }) => eq(t.email, email) });
-    return u;
-  };
+  const admin = await schema.usersTable.findOne({ email: "admin@agency.com" });
+  const eva = await schema.usersTable.findOne({ email: "eva@agency.com" });
 
-  const admin   = await getUser("admin@agency.com");
-  const alice   = await getUser("alice@agency.com");
-  const bob     = await getUser("bob@agency.com");
-  const carol   = await getUser("carol@agency.com");
-  const david   = await getUser("david@agency.com");
-  const eva     = await getUser("eva@agency.com");
-  const frank   = await getUser("frank@agency.com");
-  const grace   = await getUser("grace@agency.com");
-  const henry   = await getUser("henry@agency.com");
-  const iris    = await getUser("iris@agency.com");
-
-  if (!admin) { console.error("Admin user not found – run seed.ts first"); process.exit(1); }
+  if (!admin) {
+    console.error("Admin user not found – run seed.ts first");
+    process.exit(1);
+  }
 
   // ── Additional Projects ────────────────────────────────────────────────────
   const projectDefs = [
@@ -217,17 +226,17 @@ async function main() {
     },
   ];
 
-  const projectIds: number[] = [];
-
   for (const pd of projectDefs) {
     const clientId = clientIdMap[pd.clientKey];
-    if (!clientId) { console.warn(`Skipping project ${pd.name}: client not found`); continue; }
+    if (!clientId) continue;
 
-    const existing = await db.query.projectsTable.findFirst({ where: (t, { eq }) => eq(t.name, pd.name) });
+    const existing = await schema.projectsTable.findOne({ name: pd.name });
     let projectId: number;
 
     if (!existing) {
-      const [proj] = await db.insert(schema.projectsTable).values({
+      const nextProjId = await getNextSequence("projects");
+      const proj = await schema.projectsTable.create({
+        id: nextProjId,
         name: pd.name,
         clientId,
         pmId: eva?.id ?? null,
@@ -238,27 +247,31 @@ async function main() {
         deadline: new Date(pd.deadline),
         techStack: pd.techStack,
         completionOverride: pd.completion,
-      }).returning();
+      });
       projectId = proj.id;
       console.log(`Created project: ${pd.name}`);
 
       for (const m of pd.members) {
-        const memberUser = await getUser(m.email);
+        const memberUser = await schema.usersTable.findOne({ email: m.email });
         if (memberUser) {
-          await db.insert(schema.projectMembersTable).values({ projectId, userId: memberUser.id, subType: m.sub, completionPct: m.pct });
+          const nextMemId = await getNextSequence("project_members");
+          await schema.projectMembersTable.create({
+            id: nextMemId,
+            projectId,
+            userId: memberUser.id,
+            subType: m.sub,
+            completionPct: m.pct
+          });
         }
       }
-    } else {
-      projectId = existing.id;
     }
-    projectIds.push(projectId);
   }
 
   // Get ALL projects for logs/bugs/apk seeding
-  const allProjects = await db.query.projectsTable.findMany();
+  const allProjects = await schema.projectsTable.find();
   const activeProjects = allProjects.filter(p => ["in_progress", "uat"].includes(p.status));
 
-  // ── Daily Logs (comprehensive) ─────────────────────────────────────────────
+  // ── Daily Logs ─────────────────────────────────────────────────────────────
   const logDates = [
     "2025-04-01","2025-04-02","2025-04-03","2025-04-07","2025-04-08","2025-04-09","2025-04-10","2025-04-11",
     "2025-04-14","2025-04-15","2025-04-16","2025-04-17","2025-04-22","2025-04-23","2025-04-24","2025-04-25",
@@ -268,57 +281,57 @@ async function main() {
 
   const logTemplates = [
     { dev: "alice@agency.com", cats: ["Frontend","UI/UX"],    tasks: [
-      { title: "Homepage hero section redesign", desc: "Implemented pixel-perfect hero with animated gradient background and CTA buttons.", hours: "7.5", pct: 62 },
-      { title: "Component library setup",        desc: "Set up Storybook with all shared UI components documented and tested.", hours: "8", pct: 65 },
-      { title: "Dashboard chart integration",    desc: "Integrated Recharts for live KPI charts with drill-down capability.", hours: "6.5", pct: 68 },
-      { title: "Mobile responsiveness fixes",    desc: "Fixed 14 layout issues across breakpoints identified in QA review.", hours: "7", pct: 70 },
-      { title: "Authentication UI flow",         desc: "Built complete login, register, forgot-password, and MFA screens.", hours: "8", pct: 73 },
-      { title: "Search & filter components",     desc: "Built reusable filter panel with multi-select, date range, and sort controls.", hours: "7.5", pct: 76 },
+      { title: "Homepage hero section redesign", desc: "Implemented pixel-perfect hero with animated gradient background and CTA buttons.", hours: 7.5, pct: 62 },
+      { title: "Component library setup",        desc: "Set up Storybook with all shared UI components documented and tested.", hours: 8, pct: 65 },
+      { title: "Dashboard chart integration",    desc: "Integrated Recharts for live KPI charts with drill-down capability.", hours: 6.5, pct: 68 },
+      { title: "Mobile responsiveness fixes",    desc: "Fixed 14 layout issues across breakpoints identified in QA review.", hours: 7, pct: 70 },
+      { title: "Authentication UI flow",         desc: "Built complete login, register, forgot-password, and MFA screens.", hours: 8, pct: 73 },
+      { title: "Search & filter components",     desc: "Built reusable filter panel with multi-select, date range, and sort controls.", hours: 7.5, pct: 76 },
     ]},
     { dev: "bob@agency.com", cats: ["Backend","API"], tasks: [
-      { title: "REST API architecture setup",        desc: "Implemented Express with Zod validation, error middleware, and OpenAPI docs.", hours: "8", pct: 52 },
-      { title: "Database schema design",             desc: "Designed normalized schema with proper indexing for all core entities.", hours: "7", pct: 55 },
-      { title: "Authentication service",             desc: "Built JWT-based auth with refresh tokens, rate limiting, and session management.", hours: "8", pct: 58 },
-      { title: "File upload service",                desc: "Implemented S3-backed file upload with virus scanning and CDN integration.", hours: "6.5", pct: 60 },
-      { title: "Payment gateway integration",        desc: "Integrated Stripe for subscriptions, one-time payments, and refund handling.", hours: "8", pct: 63 },
-      { title: "Email notification service",         desc: "Built transactional email service with templates and delivery tracking.", hours: "7", pct: 65 },
+      { title: "REST API architecture setup",        desc: "Implemented Express with Zod validation, error middleware, and OpenAPI docs.", hours: 8, pct: 52 },
+      { title: "Database schema design",             desc: "Designed normalized schema with proper indexing for all core entities.", hours: 7, pct: 55 },
+      { title: "Authentication service",             desc: "Built JWT-based auth with refresh tokens, rate limiting, and session management.", hours: 8, pct: 58 },
+      { title: "File upload service",                desc: "Implemented S3-backed file upload with virus scanning and CDN integration.", hours: 6.5, pct: 60 },
+      { title: "Payment gateway integration",        desc: "Integrated Stripe for subscriptions, one-time payments, and refund handling.", hours: 8, pct: 63 },
+      { title: "Email notification service",         desc: "Built transactional email service with templates and delivery tracking.", hours: 7, pct: 65 },
     ]},
     { dev: "carol@agency.com", cats: ["Mobile","iOS"], tasks: [
-      { title: "React Native project bootstrap",     desc: "Set up Expo project with navigation, state management, and CI/CD pipeline.", hours: "8", pct: 38 },
-      { title: "Push notification integration",      desc: "Implemented Firebase push notifications with deep linking support.", hours: "7.5", pct: 42 },
-      { title: "Offline mode implementation",        desc: "Built offline-first architecture using Redux Persist and background sync.", hours: "8", pct: 46 },
-      { title: "Camera & media picker",              desc: "Integrated device camera, gallery picker, and image compression.", hours: "6", pct: 48 },
-      { title: "Biometric authentication",           desc: "Implemented Face ID/fingerprint auth with secure keychain storage.", hours: "7", pct: 52 },
-      { title: "App store submission prep",          desc: "Prepared screenshots, app description, privacy policy, and compliance docs.", hours: "5", pct: 54 },
+      { title: "React Native project bootstrap",     desc: "Set up Expo project with navigation, state management, and CI/CD pipeline.", hours: 8, pct: 38 },
+      { title: "Push notification integration",      desc: "Implemented Firebase push notifications with deep linking support.", hours: 7.5, pct: 42 },
+      { title: "Offline mode implementation",        desc: "Built offline-first architecture using Redux Persist and background sync.", hours: 8, pct: 46 },
+      { title: "Camera & media picker",              desc: "Integrated device camera, gallery picker, and image compression.", hours: 6, pct: 48 },
+      { title: "Biometric authentication",           desc: "Implemented Face ID/fingerprint auth with secure keychain storage.", hours: 7, pct: 52 },
+      { title: "App store submission prep",          desc: "Prepared screenshots, app description, privacy policy, and compliance docs.", hours: 5, pct: 54 },
     ]},
     { dev: "frank@agency.com", cats: ["Fullstack","API"], tasks: [
-      { title: "GraphQL API implementation",         desc: "Built GraphQL schema with DataLoader for N+1 query prevention.", hours: "8", pct: 58 },
-      { title: "Real-time features with WebSockets", desc: "Implemented collaborative editing and live notifications via Socket.IO.", hours: "7.5", pct: 62 },
-      { title: "Role-based access control",          desc: "Implemented RBAC with hierarchical permissions and audit logging.", hours: "8", pct: 65 },
-      { title: "Data export functionality",          desc: "Built CSV/Excel/PDF export pipeline with background job processing.", hours: "7", pct: 68 },
-      { title: "Third-party OAuth integration",      desc: "Integrated Google, Microsoft, and LinkedIn SSO with profile sync.", hours: "6.5", pct: 70 },
+      { title: "GraphQL API implementation",         desc: "Built GraphQL schema with DataLoader for N+1 query prevention.", hours: 8, pct: 58 },
+      { title: "Real-time features with WebSockets", desc: "Implemented collaborative editing and live notifications via Socket.IO.", hours: 7.5, pct: 62 },
+      { title: "Role-based access control",          desc: "Implemented RBAC with hierarchical permissions and audit logging.", hours: 8, pct: 65 },
+      { title: "Data export functionality",          desc: "Built CSV/Excel/PDF export pipeline with background job processing.", hours: 7, pct: 68 },
+      { title: "Third-party OAuth integration",      desc: "Integrated Google, Microsoft, and LinkedIn SSO with profile sync.", hours: 6.5, pct: 70 },
     ]},
     { dev: "henry@agency.com", cats: ["DevOps","Infrastructure"], tasks: [
-      { title: "Docker containerization",            desc: "Dockerized all services with multi-stage builds and optimized layer caching.", hours: "7", pct: 30 },
-      { title: "Kubernetes cluster setup",           desc: "Configured EKS cluster with auto-scaling, health checks, and PodDisruptionBudgets.", hours: "8", pct: 33 },
-      { title: "CI/CD pipeline setup",               desc: "Built GitHub Actions workflows for test, build, and deploy with environment promotion.", hours: "7.5", pct: 36 },
-      { title: "Monitoring & alerting setup",        desc: "Configured Prometheus/Grafana dashboards and PagerDuty alert routing.", hours: "8", pct: 38 },
-      { title: "Database backup automation",         desc: "Set up automated daily backups with 30-day retention and restore testing.", hours: "6", pct: 40 },
+      { title: "Docker containerization",            desc: "Dockerized all services with multi-stage builds and optimized layer caching.", hours: 7, pct: 30 },
+      { title: "Kubernetes cluster setup",           desc: "Configured EKS cluster with auto-scaling, health checks, and PodDisruptionBudgets.", hours: 8, pct: 33 },
+      { title: "CI/CD pipeline setup",               desc: "Built GitHub Actions workflows for test, build, and deploy with environment promotion.", hours: 7.5, pct: 36 },
+      { title: "Monitoring & alerting setup",        desc: "Configured Prometheus/Grafana dashboards and PagerDuty alert routing.", hours: 8, pct: 38 },
+      { title: "Database backup automation",         desc: "Set up automated daily backups with 30-day retention and restore testing.", hours: 6, pct: 40 },
     ]},
     { dev: "iris@agency.com", cats: ["Analytics","Data"], tasks: [
-      { title: "Data warehouse design",              desc: "Designed star schema in BigQuery with ETL pipelines from transactional DB.", hours: "8", pct: 42 },
-      { title: "Executive dashboard metrics",        desc: "Defined and implemented 20 KPIs with drill-down capability.", hours: "7", pct: 46 },
-      { title: "Cohort analysis reports",            desc: "Built user retention and cohort analysis reports with LTV projections.", hours: "8", pct: 50 },
-      { title: "ML model for churn prediction",      desc: "Trained and deployed XGBoost model for 30-day churn prediction with 87% accuracy.", hours: "8", pct: 54 },
+      { title: "Data warehouse design",              desc: "Designed star schema in BigQuery with ETL pipelines from transactional DB.", hours: 8, pct: 42 },
+      { title: "Executive dashboard metrics",        desc: "Defined and implemented 20 KPIs with drill-down capability.", hours: 7, pct: 46 },
+      { title: "Cohort analysis reports",            desc: "Built user retention and cohort analysis reports with LTV projections.", hours: 8, pct: 50 },
+      { title: "ML model for churn prediction",      desc: "Trained and deployed XGBoost model for 30-day churn prediction with 87% accuracy.", hours: 8, pct: 54 },
     ]},
   ];
 
   let logCount = 0;
-  const existingLogCheck = await db.query.dailyLogsTable.findFirst({ where: (t, { eq }) => eq(t.taskTitle, "Homepage hero section redesign") });
+  const existingLogCheck = await schema.dailyLogsTable.findOne({ taskTitle: "Homepage hero section redesign" });
 
   if (!existingLogCheck) {
     for (const lt of logTemplates) {
-      const devUser = await getUser(lt.dev);
+      const devUser = await schema.usersTable.findOne({ email: lt.dev });
       if (!devUser) continue;
 
       const taskPool = lt.tasks;
@@ -327,7 +340,10 @@ async function main() {
       for (let i = 0; i < Math.min(logDates.length, 20); i++) {
         const task = taskPool[i % taskPool.length];
         const proj = projectPool[i % projectPool.length];
-        await db.insert(schema.dailyLogsTable).values({
+        
+        const nextLogId = await getNextSequence("daily_logs");
+        await schema.dailyLogsTable.create({
+          id: nextLogId,
           developerId: devUser.id,
           projectId: proj.id,
           logDate: logDates[i % logDates.length],
@@ -343,11 +359,9 @@ async function main() {
       }
     }
     console.log(`Created ${logCount} daily logs`);
-  } else {
-    console.log("Daily logs already exist — skipping");
   }
 
-  // ── Bugs (comprehensive) ───────────────────────────────────────────────────
+  // ── Bugs ────────────────────────────────────────────────────────────
   const bugTemplates = [
     { title: "Login page flickers on mobile Safari",           severity: "high"     as const, priority: "p1" as const, platform: "ios"     as const, status: "open"       as const, desc: "Login form briefly goes blank on iOS 17 before rendering. Happens on page load and back navigation." },
     { title: "Pagination resets to page 1 on sort",            severity: "medium"   as const, priority: "p2" as const, platform: "web"     as const, status: "in_progress" as const, desc: "When user sorts any column while on page 3+, pagination resets to page 1 unexpectedly." },
@@ -371,35 +385,42 @@ async function main() {
     { title: "Multi-select filter ignores OR logic",           severity: "medium"   as const, priority: "p3" as const, platform: "web"     as const, status: "open"       as const, desc: "Selecting Status=Open AND Status=In Progress should use OR logic but returns empty result set." },
   ];
 
-  let bugNumber = 4;
-  const existingBugCheck = await db.query.bugsTable.findFirst({ where: (t, { eq }) => eq(t.title, "Login page flickers on mobile Safari") });
+  const david = await schema.usersTable.findOne({ email: "david@agency.com" });
+  const alice = await schema.usersTable.findOne({ email: "alice@agency.com" });
+  const bob = await schema.usersTable.findOne({ email: "bob@agency.com" });
+  const carol = await schema.usersTable.findOne({ email: "carol@agency.com" });
+
+  const existingBugCheck = await schema.bugsTable.findOne({ title: "Login page flickers on mobile Safari" });
 
   if (!existingBugCheck && david) {
+    let bugIdx = 0;
     for (const bt of bugTemplates) {
-      const proj = allProjects[bugNumber % allProjects.length];
-      await db.insert(schema.bugsTable).values({
-        bugNumber: `BUG-${String(bugNumber).padStart(4, "0")}`,
+      const proj = allProjects[bugIdx % allProjects.length];
+      const nextBugId = await getNextSequence("bugs");
+      const bugCounter = await getNextSequence("bugs_count");
+      
+      await schema.bugsTable.create({
+        id: nextBugId,
+        bugNumber: `BUG-${String(bugCounter).padStart(4, "0")}`,
         projectId: proj.id,
         reporterId: david.id,
-        assigneeId: bugNumber % 3 === 0 ? alice?.id : bugNumber % 3 === 1 ? bob?.id : carol?.id,
+        assigneeId: bugIdx % 3 === 0 ? alice?.id : bugIdx % 3 === 1 ? bob?.id : carol?.id,
         title: bt.title,
         description: bt.desc,
         severity: bt.severity,
         priority: bt.priority,
         status: bt.status,
         platform: bt.platform,
-        buildVersion: `2.${Math.floor(bugNumber / 5)}.${bugNumber % 10}`,
+        buildVersion: `2.${Math.floor(bugIdx / 5)}.${bugIdx % 10}`,
       });
-      bugNumber++;
+      bugIdx++;
     }
     console.log(`Created ${bugTemplates.length} bugs`);
-  } else {
-    console.log("Extra bugs already exist — skipping");
   }
 
   // ── APK Releases ───────────────────────────────────────────────────────────
-  const mobileProjects = allProjects.filter(p => p.techStack.some(t => ["React Native","Flutter","iOS Native","Android Native"].includes(t)));
-  const existingApk = await db.query.apkReleasesTable.findFirst({ where: (t, { eq }) => eq(t.version, "1.0.0-alpha") });
+  const mobileProjects = allProjects.filter(p => p.techStack.some((t: any) => ["React Native","Flutter","iOS Native","Android Native"].includes(t)));
+  const existingApk = await schema.apkReleasesTable.findOne({ version: "1.0.0-alpha" });
 
   if (!existingApk && carol && mobileProjects.length > 0) {
     const apkData = [
@@ -412,7 +433,9 @@ async function main() {
 
     for (const apk of apkData) {
       const proj = mobileProjects[apk.proj];
-      await db.insert(schema.apkReleasesTable).values({
+      const nextApkId = await getNextSequence("apk_releases");
+      await schema.apkReleasesTable.create({
+        id: nextApkId,
         projectId: proj.id,
         uploaderId: carol.id,
         version: apk.version,
@@ -429,7 +452,10 @@ async function main() {
   }
 
   // ── Resource Requests ──────────────────────────────────────────────────────
-  const existingReq = await db.query.resourceRequestsTable.findFirst({ where: (t, { eq }) => eq(t.title, "Figma Enterprise License") });
+  const existingReq = await schema.resourceRequestsTable.findOne({ title: "Figma Enterprise License" });
+  const frank = await schema.usersTable.findOne({ email: "frank@agency.com" });
+  const iris = await schema.usersTable.findOne({ email: "iris@agency.com" });
+  const henry = await schema.usersTable.findOne({ email: "henry@agency.com" });
 
   if (!existingReq && allProjects.length > 0) {
     const requests = [
@@ -443,53 +469,57 @@ async function main() {
       { dev: alice,   type: "other"            as const, title: "Conference: React Summit 2025",     urgency: "low"   as const, status: "approved"  as const, desc: "React Summit Amsterdam May 15-16. Valuable for upskilling on React 19, Server Components, and Suspense.", note: "Approved. Book flights and hotel in Notion." },
     ];
 
-    for (const req of requests) {
-      if (!req.dev) continue;
-      const proj = allProjects[requests.indexOf(req) % allProjects.length];
-      await db.insert(schema.resourceRequestsTable).values({
-        developerId: req.dev.id,
+    let reqIdx = 0;
+    for (const r of requests) {
+      if (!r.dev) continue;
+      const proj = allProjects[reqIdx % allProjects.length];
+      const nextReqId = await getNextSequence("resource_requests");
+      await schema.resourceRequestsTable.create({
+        id: nextReqId,
+        developerId: r.dev.id,
         projectId: proj.id,
-        type: req.type,
-        title: req.title,
-        description: req.desc,
-        urgency: req.urgency,
-        status: req.status,
-        adminNote: req.note,
+        type: r.type,
+        title: r.title,
+        description: r.desc,
+        urgency: r.urgency,
+        status: r.status,
+        adminNote: r.note,
       });
+      reqIdx++;
     }
     console.log("Created resource requests");
   }
 
   // ── Milestones ─────────────────────────────────────────────────────────────
-  const existingMilestone = await db.query.milestonesTable.findFirst({ where: (t, { eq }) => eq(t.title, "Discovery & Architecture") });
+  const existingMilestone = await schema.milestonesTable.findOne({ title: "Discovery & Architecture" });
 
   if (!existingMilestone) {
-    const milestonesByProject: { projectName: string; milestones: { title: string; planned: string; actual?: string; status: "pending"|"completed"|"delayed" }[] }[] = [
+    const milestonesByProject = [
       { projectName: "CRM Dashboard", milestones: [
-        { title: "Discovery & Architecture", planned: "2025-02-28", actual: "2025-02-28", status: "completed" },
-        { title: "UI Prototype Approval",    planned: "2025-03-31", actual: "2025-04-05", status: "completed" },
-        { title: "Core API Development",     planned: "2025-05-31", status: "pending" },
-        { title: "Integration & Testing",    planned: "2025-07-31", status: "pending" },
-        { title: "Production Launch",        planned: "2025-09-30", status: "pending" },
+        { title: "Discovery & Architecture", planned: "2025-02-28", actual: "2025-02-28", status: "completed" as const },
+        { title: "UI Prototype Approval",    planned: "2025-03-31", actual: "2025-04-05", status: "completed" as const },
+        { title: "Core API Development",     planned: "2025-05-31", status: "pending" as const },
+        { title: "Integration & Testing",    planned: "2025-07-31", status: "pending" as const },
+        { title: "Production Launch",        planned: "2025-09-30", status: "pending" as const },
       ]},
       { projectName: "Patient Portal", milestones: [
-        { title: "HIPAA Gap Analysis",    planned: "2025-01-31", actual: "2025-01-31", status: "completed" },
-        { title: "Core Module Delivery",  planned: "2025-04-30", actual: "2025-05-10", status: "delayed" },
-        { title: "Interoperability UAT",  planned: "2025-07-31", status: "pending" },
-        { title: "Go-Live",               planned: "2025-10-15", status: "pending" },
+        { title: "HIPAA Gap Analysis",    planned: "2025-01-31", actual: "2025-01-31", status: "completed" as const },
+        { title: "Core Module Delivery",  planned: "2025-04-30", actual: "2025-05-10", status: "delayed" as const },
+        { title: "Interoperability UAT",  planned: "2025-07-31", status: "pending" as const },
+        { title: "Go-Live",               planned: "2025-10-15", status: "pending" as const },
       ]},
       { projectName: "Learning Management System", milestones: [
-        { title: "Platform Foundation",    planned: "2024-11-30", actual: "2024-11-30", status: "completed" },
-        { title: "Course Builder Launch",  planned: "2025-01-31", actual: "2025-01-28", status: "completed" },
-        { title: "Video Hosting & CDN",    planned: "2025-03-31", actual: "2025-03-31", status: "completed" },
-        { title: "Public Beta",            planned: "2025-05-31", actual: "2025-05-31", status: "completed" },
-        { title: "Production Launch",      planned: "2025-06-30", status: "pending" },
+        { title: "Platform Foundation",    planned: "2024-11-30", actual: "2024-11-30", status: "completed" as const },
+        { title: "Course Builder Launch",  planned: "2025-01-31", actual: "2025-01-28", status: "completed" as const },
+        { title: "Video Hosting & CDN",    planned: "2025-03-31", actual: "2025-03-31", status: "completed" as const },
+        { title: "Public Beta",            planned: "2025-05-31", actual: "2025-05-31", status: "completed" as const },
+        { title: "Production Launch",      planned: "2025-06-30", status: "pending" as const },
       ]},
       { projectName: "Supply Chain Tracker", milestones: [
-        { title: "Requirements Sign-off",  planned: "2025-03-31", actual: "2025-04-02", status: "completed" },
-        { title: "GPS Tracking MVP",       planned: "2025-06-30", status: "pending" },
-        { title: "Supplier Portal Launch", planned: "2025-09-30", status: "pending" },
-        { title: "Full Deployment",        planned: "2025-11-30", status: "pending" },
+        { title: "Requirements Sign-off",  planned: "2025-03-31", actual: "2025-04-02", status: "completed" as const },
+        { title: "GPS Tracking MVP",       planned: "2025-06-30", status: "pending" as const },
+        { title: "Supplier Portal Launch", planned: "2025-09-30", status: "pending" as const },
+        { title: "Full Deployment",        planned: "2025-11-30", status: "pending" as const },
       ]},
     ];
 
@@ -497,7 +527,9 @@ async function main() {
       const proj = allProjects.find(p => p.name === mp.projectName);
       if (!proj) continue;
       for (const m of mp.milestones) {
-        await db.insert(schema.milestonesTable).values({
+        const nextMsId = await getNextSequence("milestones");
+        await schema.milestonesTable.create({
+          id: nextMsId,
           projectId: proj.id,
           title: m.title,
           plannedDate: new Date(m.planned),
@@ -510,7 +542,7 @@ async function main() {
   }
 
   // ── Notifications ──────────────────────────────────────────────────────────
-  const existingNotif = await db.query.notificationsTable.findFirst({ where: (t, { eq }) => eq(t.title, "New bug assigned to you") });
+  const existingNotif = await schema.notificationsTable.findOne({ title: "New bug assigned to you" });
 
   if (!existingNotif && alice && bob && carol) {
     const notifs = [
@@ -527,13 +559,18 @@ async function main() {
     ];
 
     for (const n of notifs) {
-      await db.insert(schema.notificationsTable).values({ ...n, isRead: false });
+      const nextNotifId = await getNextSequence("notifications");
+      await schema.notificationsTable.create({
+        id: nextNotifId,
+        ...n,
+        isRead: false
+      });
     }
     console.log("Created notifications");
   }
 
   console.log("\n✅ Additional seed data complete!");
-  await pool.end();
+  await mongoose.disconnect();
 }
 
 main().catch(err => { console.error(err); process.exit(1); });

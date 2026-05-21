@@ -1,12 +1,18 @@
-import React, { useState, useEffect } from "react";
-import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser, getListUsersQueryKey, useGetTeamAnalytics } from "@workspace/api-client-react";
+﻿import React, { useState, useEffect, useMemo } from "react";
+import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser, getListUsersQueryKey, useGetTeamAnalytics, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap } from "lucide-react";
+import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { getAccessToken } from "@/lib/auth-storage";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -16,7 +22,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -52,24 +57,48 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { listQueryOptions } from "@/lib/list-query-options";
 import { useQueryClient } from "@tanstack/react-query";
 import { User } from "@workspace/api-client-react";
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
-const employeeSchema = z.object({
+const employeeSchema = z
+  .object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal("")),
+  password: z.string().optional().or(z.literal("")),
   role: z.enum(["developer", "super_admin"]),
   status: z.enum(["active", "inactive"]).optional(),
   designation: z.string().optional(),
   subType: z.string().optional(),
-});
+  department: z.string().min(1, "Department is required"),
+  phoneNumber: z.string().optional(),
+  joiningDate: z.string().optional(),
+  linkedinUrl: z.string().optional(),
+})
+  .superRefine((data, ctx) => {
+    const pwd = data.password?.trim() ?? "";
+    if (pwd.length > 0 && pwd.length < 8) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Password must be at least 8 characters",
+        path: ["password"],
+      });
+    }
+  });
 
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
+function canViewAsEmployee(user: User): boolean {
+  return user.status === "active" && (user.role === "developer" || user.role === "tester");
+}
+
 export default function AdminEmployees() {
+  const { impersonate, isImpersonating } = useAuth();
+  const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
+  const [previewEmployeeId, setPreviewEmployeeId] = useState("");
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("list");
@@ -81,11 +110,81 @@ export default function AdminEmployees() {
   useEffect(() => { setPage(1); }, [search]);
 
   const PAGE_SIZE = 10;
-  const { data, isLoading } = useListUsers({ role: "developer", search, page, limit: PAGE_SIZE });
+  const { data, isLoading } = useListUsers(
+    { role: "developer", search, page, limit: PAGE_SIZE },
+    {
+      query: listQueryOptions({
+        queryKey: getListUsersQueryKey({ role: "developer", search, page, limit: PAGE_SIZE }),
+      }),
+    },
+  );
+  const { data: statsData, isLoading: statsLoading } = useListUsers(
+    { limit: 500 },
+    { query: listQueryOptions({ queryKey: getListUsersQueryKey({ limit: 500 }), staleTime: 120_000 }) },
+  );
   const { data: teamAnalytics, isLoading: isLoadingAnalytics } = useGetTeamAnalytics();
+
+  const teamStats = useMemo(() => {
+    const users = (statsData?.users ?? []).filter(
+      (u) => u.role === "developer" || u.role === "tester",
+    );
+    const active = users.filter((u) => u.status === "active").length;
+    const inactive = users.filter((u) => u.status !== "active").length;
+    const devs = teamAnalytics?.developers ?? [];
+    const avgUtilization =
+      devs.length > 0
+        ? Math.round(devs.reduce((sum, d) => sum + (d.utilisationPct ?? 0), 0) / devs.length)
+        : 0;
+    return {
+      total: statsData?.total ?? users.length,
+      active,
+      inactive,
+      avgUtilization,
+    };
+  }, [statsData, teamAnalytics]);
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
+
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
+  const [revealTimer, setRevealTimer] = useState<Record<number, NodeJS.Timeout>>({});
+
+  const { data: credentials, isLoading: isLoadingCredentials } = useGetUserCredentials(selectedUser?.id || 0, {
+    query: { enabled: !!selectedUser, queryKey: getGetUserCredentialsQueryKey(selectedUser?.id || 0) }
+  });
+
+  const revealMutation = useRevealCredential();
+
+  const handleReveal = async (credId: number) => {
+    if (!selectedUser) return;
+    if (revealedPasswords[credId]) {
+      setRevealedPasswords(prev => {
+        const next = { ...prev };
+        delete next[credId];
+        return next;
+      });
+      if (revealTimer[credId]) {
+        clearTimeout(revealTimer[credId]);
+      }
+      return;
+    }
+
+    try {
+      const res = await revealMutation.mutateAsync({ id: selectedUser.id, credId });
+      setRevealedPasswords(prev => ({ ...prev, [credId]: res.password }));
+      const timer = setTimeout(() => {
+        setRevealedPasswords(prev => {
+          const next = { ...prev };
+          delete next[credId];
+          return next;
+        });
+      }, 10000);
+      setRevealTimer(prev => ({ ...prev, [credId]: timer }));
+    } catch (err) {
+      toast.error("Could not decrypt password history");
+    }
+  };
 
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeSchema),
@@ -97,6 +196,10 @@ export default function AdminEmployees() {
       status: "active",
       designation: "",
       subType: "",
+      department: "Engineering",
+      phoneNumber: "",
+      joiningDate: new Date().toISOString().split("T")[0],
+      linkedinUrl: "",
     },
   });
 
@@ -110,6 +213,10 @@ export default function AdminEmployees() {
         status: editUser.status as any,
         designation: editUser.designation || "",
         subType: editUser.subType || "",
+        department: (editUser as any).department || "Engineering",
+        phoneNumber: (editUser as any).phoneNumber || "",
+        joiningDate: (editUser as any).joiningDate ? new Date((editUser as any).joiningDate).toISOString().split("T")[0] : "",
+        linkedinUrl: (editUser as any).linkedinUrl || "",
       });
     } else {
       form.reset({
@@ -120,9 +227,44 @@ export default function AdminEmployees() {
         status: "active",
         designation: "",
         subType: "",
+        department: "Engineering",
+        phoneNumber: "",
+        joiningDate: new Date().toISOString().split("T")[0],
+        linkedinUrl: "",
       });
     }
   }, [editUser, form]);
+
+  const watchedName = form.watch("name");
+
+  useEffect(() => {
+    if (editUser) {
+      setPreviewEmployeeId(editUser.employeeId ?? "");
+      return;
+    }
+    const name = watchedName?.trim();
+    if (!name) {
+      setPreviewEmployeeId("");
+      return;
+    }
+    const apiBase = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ?? "";
+    const token = getAccessToken();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `${apiBase}/api/users/preview-employee-id?name=${encodeURIComponent(name)}`,
+          { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+        );
+        if (res.ok) {
+          const body = (await res.json()) as { employeeId?: string };
+          setPreviewEmployeeId(body.employeeId ?? "");
+        }
+      } catch {
+        setPreviewEmployeeId("");
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [watchedName, editUser]);
 
   const onSubmit = async (values: EmployeeFormValues) => {
     try {
@@ -135,18 +277,20 @@ export default function AdminEmployees() {
         toast.success("Employee updated!");
         setEditUser(null);
       } else {
-        if (!values.password) {
-          toast.error("Password is required for new employees");
+        if (!values.password?.trim()) {
+          form.setError("password", { message: "Login password is required for new employees" });
           return;
         }
-        const result = await createUserMutation.mutateAsync({ data: values as any });
+        const result = await createUserMutation.mutateAsync({
+          data: { ...values, password: values.password.trim() } as any,
+        });
         toast.success(`Employee created! ID: ${result.employeeId}`);
         setIsDialogOpen(false);
       }
       form.reset();
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || "Failed to save employee");
+      toastApiError(error, "Failed to save employee");
     }
   };
 
@@ -158,9 +302,169 @@ export default function AdminEmployees() {
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
     } catch (error: any) {
-      toast.error(error?.response?.data?.message || error?.message || "Failed to delete employee");
+      toastApiError(error, "Failed to delete employee");
     }
   };
+
+  const handleViewAs = async (employee: User, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!canViewAsEmployee(employee)) return;
+    if (isImpersonating) {
+      toast.error("Exit the current view-as session first.");
+      return;
+    }
+    setImpersonatingId(employee.id);
+    try {
+      await impersonate(employee.id);
+      toast.success(`Viewing as ${employee.name}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Failed to view as employee";
+      toast.error(message);
+    } finally {
+      setImpersonatingId(null);
+    }
+  };
+
+  const columns: Column<User>[] = [
+    {
+      id: "name",
+      header: "Employee",
+      accessorKey: "name",
+      cell: (user) => (
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedUser(user)}>
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={user.avatarUrl || undefined} />
+            <AvatarFallback className="bg-primary/20 text-primary text-[10px]">{user.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="text-xs font-medium">{user.name}</p>
+            <p className="text-[10px] text-muted-foreground flex items-center mt-0.5">
+              <Mail className="h-2.5 w-2.5 mr-1" /> {user.email}
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: "role",
+      header: "Role",
+      accessorKey: "role",
+      cell: (user) => (
+        <div className="flex flex-col gap-1">
+          <Badge 
+            variant="secondary" 
+            className={`${user.role === 'super_admin' ? 'bg-purple-500/10 text-purple-500 w-fit' : 'bg-blue-500/10 text-blue-500 w-fit'} text-[10px]`}
+          >
+            {user.role === 'super_admin' ? 'Admin' : 'Developer'}
+          </Badge>
+          <span className="text-[9px] text-muted-foreground">{user.designation || "General"}</span>
+        </div>
+      )
+    },
+    {
+      id: "employeeId",
+      header: "ID",
+      accessorKey: "employeeId",
+      cell: (user) => <span className="text-muted-foreground font-mono text-[10px]">{user.employeeId}</span>
+    },
+    {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      cell: (user) => (
+        <Badge variant="outline" className={`${user.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
+          {user.status}
+        </Badge>
+      )
+    },
+    {
+      id: "lastLoginAt",
+      header: "Last Login",
+      accessorKey: "lastLoginAt",
+      cell: (user) => (
+        <span className="text-xs text-muted-foreground">
+          {user.lastLoginAt ? (
+            <div className="flex items-center">
+              <Clock className="mr-1.5 h-3 w-3" />
+              {new Date(user.lastLoginAt).toLocaleDateString()}
+            </div>
+          ) : "Never"}
+        </span>
+      )
+    },
+    {
+      id: "department",
+      header: "Department",
+      detailOnly: true,
+      accessorKey: "department",
+    },
+    {
+      id: "phoneNumber",
+      header: "Phone",
+      detailOnly: true,
+      detailCell: (user) => user.phoneNumber || "�",
+    },
+    {
+      id: "joiningDate",
+      header: "Joining date",
+      detailOnly: true,
+      detailCell: (user) =>
+        user.joiningDate ? new Date(user.joiningDate).toLocaleDateString() : "�",
+    },
+    {
+      id: "linkedin",
+      header: "LinkedIn",
+      detailOnly: true,
+      detailCell: (user) =>
+        user.linkedinUrl ? (
+          <a href={user.linkedinUrl} className="text-primary hover:underline break-all" target="_blank" rel="noreferrer">
+            {user.linkedinUrl}
+          </a>
+        ) : (
+          "�"
+        ),
+    },
+    {
+      id: "subType",
+      header: "Sub-type",
+      detailOnly: true,
+      detailCell: (user) => user.subType || "�",
+    },
+    {
+      id: "createdAt",
+      header: "Joined system",
+      detailOnly: true,
+      detailCell: (user) => new Date(user.createdAt).toLocaleString(),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      hideInDetail: true,
+      cell: (user) => (
+        <div className="flex justify-end gap-2 transition-opacity">
+          {canViewAsEmployee(user) && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[10px] font-semibold text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+              title="View as this employee"
+              disabled={impersonatingId === user.id || isImpersonating}
+              onClick={(e) => void handleViewAs(user, e)}
+            >
+              <LogIn className="h-3 w-3 mr-1" />
+              View as
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditUser(user); }}>
+            <Edit className="h-3 w-3" />
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      )
+    }
+  ];
 
   return (
     <div className="space-y-4">
@@ -176,20 +480,43 @@ export default function AdminEmployees() {
               <TabsTrigger value="analytics" className="rounded-md px-3 h-8 text-xs">Analytics</TabsTrigger>
             </TabsList>
           </Tabs>
-          <Dialog open={isDialogOpen || !!editUser} onOpenChange={(open) => {
-            if (!open) {
-              setIsDialogOpen(false);
+          <Dialog
+            open={isDialogOpen || !!editUser}
+            onOpenChange={(open) => {
+              if (!open) {
+                setIsDialogOpen(false);
+                setEditUser(null);
+                setPreviewEmployeeId("");
+              } else {
+                setIsDialogOpen(true);
+              }
+            }}
+          >
+          <Button
+            type="button"
+            className="bg-primary text-primary-foreground"
+            onClick={() => {
               setEditUser(null);
-            } else {
+              setPreviewEmployeeId("");
+              form.reset({
+                name: "",
+                email: "",
+                password: "",
+                role: "developer",
+                status: "active",
+                designation: "",
+                subType: "",
+                department: "Engineering",
+                phoneNumber: "",
+                joiningDate: new Date().toISOString().split("T")[0],
+                linkedinUrl: "",
+              });
               setIsDialogOpen(true);
-            }
-          }}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Add Employee
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] bg-card border-border">
+            }}
+          >
+            <Plus className="mr-2 h-4 w-4" /> Add Employee
+          </Button>
+          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto bg-card border-border">
             <DialogHeader>
               <DialogTitle>{editUser ? "Edit Employee" : "Add Employee"}</DialogTitle>
               <DialogDescription>
@@ -211,6 +538,23 @@ export default function AdminEmployees() {
                     </FormItem>
                   )}
                 />
+                <div className="space-y-2">
+                  <Label>Employee ID</Label>
+                  <Input
+                    readOnly
+                    value={
+                      editUser
+                        ? editUser.employeeId ?? "-"
+                        : previewEmployeeId || "Enter name to preview ID"
+                    }
+                    className="bg-muted/50 font-mono text-sm"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {editUser
+                      ? "Assigned employee identifier"
+                      : "Auto-generated when you save (preview updates as you type)"}
+                  </p>
+                </div>
                 <FormField
                   control={form.control}
                   name="email"
@@ -229,10 +573,20 @@ export default function AdminEmployees() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{editUser ? "New Password (Optional)" : "Password"}</FormLabel>
+                      <FormLabel>{editUser ? "New login password (optional)" : "Login password"}</FormLabel>
                       <FormControl>
-                        <Input placeholder="********" type="password" {...field} />
+                        <Input
+                          placeholder="Min. 8 characters"
+                          type="password"
+                          autoComplete="new-password"
+                          {...field}
+                        />
                       </FormControl>
+                      <p className="text-[10px] text-muted-foreground">
+                        {editUser
+                          ? "Leave blank to keep the current password"
+                          : "Set the password the employee will use to sign in"}
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -311,6 +665,74 @@ export default function AdminEmployees() {
                     )}
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="department"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Department</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select department" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Engineering">Engineering</SelectItem>
+                            <SelectItem value="Design">Design</SelectItem>
+                            <SelectItem value="QA">QA</SelectItem>
+                            <SelectItem value="Product">Product</SelectItem>
+                            <SelectItem value="Operations">Operations</SelectItem>
+                            <SelectItem value="HR">HR</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="joiningDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Joining Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="phoneNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Phone Number</FormLabel>
+                        <FormControl>
+                          <Input placeholder="+1 555-0100" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="linkedinUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>LinkedIn Profile</FormLabel>
+                        <FormControl>
+                          <Input placeholder="https://linkedin.com/in/..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
                 <DialogFooter className="pt-4">
                   <Button type="submit" disabled={createUserMutation.isPending || updateUserMutation.isPending}>
                     {(createUserMutation.isPending || updateUserMutation.isPending) ? (editUser ? "Saving..." : "Creating...") : (editUser ? "Update Employee" : "Create Employee")}
@@ -339,126 +761,64 @@ export default function AdminEmployees() {
       </div>
     </div>
 
+      {statsLoading ? (
+        <PageKpiSkeleton />
+      ) : (
+        <PageKpiRow>
+          <StatCard
+            title="Team members"
+            value={teamStats.total}
+            hint="Developers & QA"
+            icon={UsersIcon}
+            accent="violet"
+            delay={0}
+          />
+          <StatCard
+            title="Active"
+            value={teamStats.active}
+            hint="Can sign in"
+            icon={Zap}
+            accent="green"
+            delay={1}
+          />
+          <StatCard
+            title="Inactive"
+            value={teamStats.inactive}
+            hint="Deactivated accounts"
+            icon={Clock}
+            accent="amber"
+            alert={teamStats.inactive > 0}
+            delay={2}
+          />
+          <StatCard
+            title="Avg utilization"
+            value={`${teamStats.avgUtilization}%`}
+            hint="This month (logged hours)"
+            icon={BarChart3}
+            accent="blue"
+            delay={3}
+          />
+        </PageKpiRow>
+      )}
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsContent value="list" className="space-y-4 m-0">
           <Card className="bg-card">
-            {data && (
-              <div className="flex items-center gap-4 px-4 py-3 border-b border-border bg-muted/20">
-                <div className="text-center">
-                  <div className="text-xl font-bold">{data.total}</div>
-                  <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Total</div>
+            <CardContent className="p-4">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
                 </div>
-                <div className="h-8 w-px bg-border" />
-                <div className="text-center">
-                  <div className="text-xl font-bold text-green-500">{data.users.filter(u => u.status === 'active').length}</div>
-                  <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Active</div>
-                </div>
-                <div className="h-8 w-px bg-border" />
-                <div className="text-center">
-                  <div className="text-xl font-bold text-blue-500">{data.users.filter(u => u.role === 'developer').length}</div>
-                  <div className="text-[9px] text-muted-foreground uppercase tracking-wider">Developers</div>
-                </div>
-              </div>
-            )}
-            <div className="p-3 border-b border-border flex items-center justify-between">
-              <div className="relative w-full max-w-sm">
-                <Search className="absolute left-2.5 top-2 h-3 w-3 text-muted-foreground" />
-                <Input 
-                  type="search" 
-                  placeholder="Search employees..." 
-                  className="pl-8 h-7 text-xs"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+              ) : (
+                <AdvancedTable 
+                  data={data?.users || []} 
+                  columns={columns} 
+                  searchKey="name" 
+                  searchPlaceholder="Filter employees..." 
+                  filename="EmployeesExport"
+                  viewStorageKey="employees"
                 />
-              </div>
-            </div>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Employee</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Role</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">ID</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Last Login</TableHead>
-                    <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {isLoading ? (
-                    [...Array(5)].map((_, i) => (
-                      <TableRow key={i}>
-                        <TableCell><Skeleton className="h-10 w-48" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                        <TableCell><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
-                      </TableRow>
-                    ))
-                  ) : data?.users.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground text-xs">
-                        No employees found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    data?.users.map((user) => (
-                      <TableRow key={user.id} className="cursor-pointer hover:bg-muted/40 group">
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-8 w-8">
-                              <AvatarImage src={user.avatarUrl || undefined} />
-                              <AvatarFallback className="bg-primary/20 text-primary text-[10px]">{user.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="text-xs font-medium">{user.name}</p>
-                              <p className="text-[10px] text-muted-foreground flex items-center mt-0.5">
-                                <Mail className="h-2.5 w-2.5 mr-1" /> {user.email}
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <div className="flex flex-col gap-1">
-                            <Badge 
-                              variant="secondary" 
-                              className={`${user.role === 'super_admin' ? 'bg-purple-500/10 text-purple-500 w-fit' : 'bg-blue-500/10 text-blue-500 w-fit'} text-[10px]`}
-                            >
-                              {user.role === 'super_admin' ? 'Admin' : 'Developer'}
-                            </Badge>
-                            <span className="text-[9px] text-muted-foreground">{user.designation || "General"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground font-mono text-[10px]">{user.employeeId}</TableCell>
-                        <TableCell className="text-xs">
-                          <Badge variant="outline" className={`${user.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {user.lastLoginAt ? (
-                            <div className="flex items-center">
-                              <Clock className="mr-1.5 h-3 w-3" />
-                              {new Date(user.lastLoginAt).toLocaleDateString()}
-                            </div>
-                          ) : "Never"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditUser(user); }}>
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              )}
             </CardContent>
           </Card>
           <DataPagination
@@ -470,58 +830,58 @@ export default function AdminEmployees() {
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6 m-0">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
             <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-                <CardTitle className="text-xs font-medium">Top Performer</CardTitle>
-                <Award className="h-3.5 w-3.5 text-yellow-500" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
+                <CardTitle className="text-[10px] font-medium">Top Performer</CardTitle>
+                <Award className="h-3 w-3 text-yellow-500" />
               </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <div className="text-xl font-bold">
+              <CardContent className="px-3 pb-2.5 pt-1">
+                <div className="text-lg font-bold">
                   {teamAnalytics?.developers?.[0]?.name || "N/A"}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[9px] text-muted-foreground">
                   Most active developer
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-                <CardTitle className="text-xs font-medium">Avg Completion</CardTitle>
-                <Zap className="h-3.5 w-3.5 text-blue-500" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
+                <CardTitle className="text-[10px] font-medium">Avg Completion</CardTitle>
+                <Zap className="h-3 w-3 text-blue-500" />
               </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <div className="text-xl font-bold">
+              <CardContent className="px-3 pb-2.5 pt-1">
+                <div className="text-lg font-bold">
                   {teamAnalytics?.developers?.length ? 
                     Math.round(teamAnalytics.developers.reduce((acc, d) => acc + (d.utilisationPct || 0), 0) / teamAnalytics.developers.length) : 0}%
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[9px] text-muted-foreground">
                   Team project health
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-                <CardTitle className="text-xs font-medium">Active Team</CardTitle>
-                <UsersIcon className="h-3.5 w-3.5 text-purple-500" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
+                <CardTitle className="text-[10px] font-medium">Active Team</CardTitle>
+                <UsersIcon className="h-3 w-3 text-purple-500" />
               </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <div className="text-xl font-bold">{data?.total || 0}</div>
-                <p className="text-[10px] text-muted-foreground">
+              <CardContent className="px-3 pb-2.5 pt-1">
+                <div className="text-lg font-bold">{data?.total || 0}</div>
+                <p className="text-[9px] text-muted-foreground">
                   Total developers
                 </p>
               </CardContent>
             </Card>
             <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-                <CardTitle className="text-xs font-medium">Total Workload</CardTitle>
-                <BarChart3 className="h-3.5 w-3.5 text-green-500" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
+                <CardTitle className="text-[10px] font-medium">Total Workload</CardTitle>
+                <BarChart3 className="h-3 w-3 text-green-500" />
               </CardHeader>
-              <CardContent className="p-4 pt-0">
-                <div className="text-xl font-bold">
+              <CardContent className="px-3 pb-2.5 pt-1">
+                <div className="text-lg font-bold">
                   {teamAnalytics?.developers?.reduce((acc, d) => acc + (d.activeProjects || 0), 0) || 0}
                 </div>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[9px] text-muted-foreground">
                   Active project assignments
                 </p>
               </CardContent>
@@ -617,6 +977,154 @@ export default function AdminEmployees() {
           </div>
         </TabsContent>
       </Tabs>
+      <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
+        <SheetContent className="w-[400px] sm:w-[540px] sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="space-y-3">
+            <div className="flex items-center gap-4">
+              <Avatar className="h-12 w-12 border-2 border-primary/10">
+                <AvatarImage src={selectedUser?.avatarUrl || undefined} />
+                <AvatarFallback className="text-lg bg-primary/10 text-primary font-bold">{selectedUser?.name?.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <SheetTitle className="text-base font-bold tracking-tight">{selectedUser?.name}</SheetTitle>
+                <SheetDescription className="text-xs font-mono text-muted-foreground">{selectedUser?.employeeId || "No Employee ID"}</SheetDescription>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Badge variant="outline" className="text-[10px] py-0.5 bg-primary/5 font-medium capitalize">{selectedUser?.role?.replace('_', ' ')}</Badge>
+              <Badge variant="outline" className={`text-[10px] py-0.5 border-green-500/20 bg-green-500/10 text-green-600 font-medium capitalize ${selectedUser?.status !== 'active' ? 'opacity-50' : ''}`}>{selectedUser?.status}</Badge>
+              {selectedUser && canViewAsEmployee(selectedUser) && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="ml-auto h-7 text-[10px] border-amber-500/40 text-amber-700 hover:bg-amber-500/10"
+                  disabled={impersonatingId === selectedUser.id || isImpersonating}
+                  onClick={() => void handleViewAs(selectedUser)}
+                >
+                  <LogIn className="mr-1.5 h-3 w-3" />
+                  {impersonatingId === selectedUser.id ? "Opening�" : "View as employee"}
+                </Button>
+              )}
+            </div>
+          </SheetHeader>
+
+          <Tabs defaultValue="overview" className="mt-6">
+            <TabsList className="grid w-full grid-cols-2 h-8">
+              <TabsTrigger value="overview" className="text-[10px] py-1">Overview</TabsTrigger>
+              <TabsTrigger value="credentials" className="text-[10px] py-1 flex items-center"><Key className="h-3 w-3 mr-1.5" /> Credential Vault</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-4 pt-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Department</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Building className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {(selectedUser as any)?.department || "Engineering"}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Designation</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Award className="h-3.5 w-3.5 text-primary shrink-0" /> {selectedUser?.designation || "Developer"}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {(selectedUser as any)?.phoneNumber || "Not shared"}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Joined Date</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Calendar className="h-3.5 w-3.5 text-rose-500 shrink-0" /> {(selectedUser as any)?.joiningDate ? new Date((selectedUser as any).joiningDate).toLocaleDateString() : "Not recorded"}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Email Address</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all"><Mail className="h-3.5 w-3.5 text-sky-500 shrink-0" /> {selectedUser?.email}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Specialty/Type</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Briefcase className="h-3.5 w-3.5 text-amber-500 shrink-0" /> {selectedUser?.subType || "Standard Fulltime"}</p>
+                </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Last Session Activity</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Clock className="h-3.5 w-3.5 text-purple-500 shrink-0" /> {selectedUser?.lastLoginAt ? new Date(selectedUser.lastLoginAt).toLocaleDateString() : "Never logged"}</p>
+                </div>
+              </div>
+
+              {(selectedUser as any)?.linkedinUrl && (
+                <a 
+                  href={(selectedUser as any).linkedinUrl} 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="block group bg-blue-500/5 border border-blue-500/10 hover:border-blue-500/30 transition-all rounded-lg p-3 mt-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-500/10 p-2 rounded-md text-blue-600 group-hover:scale-105 transition-transform"><Linkedin className="h-4 w-4" /></div>
+                      <div>
+                        <p className="text-xs font-bold text-foreground group-hover:text-blue-600 transition-colors">LinkedIn Professional Profile</p>
+                        <p className="text-[9px] text-muted-foreground">Click to view corporate synced career network</p>
+                      </div>
+                    </div>
+                    <ExternalLink className="h-3.5 w-3.5 text-blue-500 opacity-50 group-hover:opacity-100 transition-opacity" />
+                  </div>
+                </a>
+              )}
+            </TabsContent>
+            
+            <TabsContent value="credentials" className="pt-3">
+              <div className="rounded-md border bg-card shadow-sm overflow-hidden">
+                <div className="bg-primary/5 px-3 py-2 border-b border-border/60 flex items-center gap-2">
+                  <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                  <p className="text-[10px] font-medium text-primary">Audit-Tracked Access History</p>
+                </div>
+                <div className="p-0">
+                  <Table>
+                    <TableHeader className="bg-muted/20">
+                      <TableRow className="hover:bg-transparent text-[9px] font-semibold text-muted-foreground">
+                        <TableHead className="h-7 py-1 pl-3 text-center w-[50px]">Ver.</TableHead>
+                        <TableHead className="h-7 py-1">Created By</TableHead>
+                        <TableHead className="h-7 py-1">Date Set</TableHead>
+                        <TableHead className="h-7 py-1 pr-3 text-right w-[120px]">Password</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {isLoadingCredentials ? (
+                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">Loading vault history...</TableCell></TableRow>
+                      ) : credentials?.length === 0 ? (
+                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No historical logs recorded.</TableCell></TableRow>
+                      ) : (
+                        credentials?.map((cred: any) => (
+                          <TableRow key={cred.id} className="text-[10px] group/row hover:bg-muted/20 border-border/30">
+                            <TableCell className="py-1 pl-3 text-center font-mono text-muted-foreground bg-muted/10 font-medium">#{cred.entryNumber}</TableCell>
+                            <TableCell className="py-1 font-medium">{cred.setBy}</TableCell>
+                            <TableCell className="py-1 text-muted-foreground">{new Date(cred.setAt).toLocaleDateString()}</TableCell>
+                            <TableCell className="py-1 pr-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <span className={`font-mono select-all px-1.5 py-0.5 rounded ${revealedPasswords[cred.id] ? 'text-primary bg-primary/10 font-semibold text-[10px]' : 'text-muted-foreground/60 tracking-widest text-[8px]'}`}>
+                                  {revealedPasswords[cred.id] || '��������'}
+                                </span>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className="h-6 w-6 opacity-60 group-hover/row:opacity-100 hover:text-primary hover:bg-primary/10 transition-all"
+                                  onClick={(e) => { e.stopPropagation(); handleReveal(cred.id); }}
+                                  disabled={revealMutation.isPending}
+                                >
+                                  {revealedPasswords[cred.id] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              <p className="text-[9px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
+                <span>??</span> Decrypted passwords remain visible for 10 seconds. Each decryption generates an immutable access trace log in the security backend.
+              </p>
+            </TabsContent>
+          </Tabs>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

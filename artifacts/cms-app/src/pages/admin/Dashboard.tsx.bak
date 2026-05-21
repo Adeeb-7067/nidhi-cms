@@ -1,0 +1,455 @@
+import React from "react";
+import { Link } from "wouter";
+import { useGetDashboardStats, useGetCompanyAnalytics } from "@workspace/api-client-react";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Briefcase,
+  Users,
+  Building2,
+  AlertCircle,
+  Smartphone,
+  Inbox,
+  Activity,
+  Ticket,
+  BarChart3,
+  CheckCircle2,
+  Database,
+  Radio,
+  Cloud,
+} from "lucide-react";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+} from "recharts";
+import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  DashboardHero,
+  ExecutiveStatCard,
+  PanelCard,
+  OverviewTile,
+  ActivityFeedItem,
+  SystemHealthRow,
+  DashboardSkeleton,
+  chartTooltipStyle,
+} from "@/components/dashboard/dashboard-kit";
+import { motion } from "framer-motion";
+
+const PIPELINE_COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#94a3b8", "#22c55e"];
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+export default function AdminDashboard() {
+  const { user } = useAuth();
+  const { data: stats, isLoading } = useGetDashboardStats();
+  const { data: companyAnalytics } = useGetCompanyAnalytics();
+
+  if (isLoading) return <DashboardSkeleton />;
+  if (!stats) return null;
+
+  const dashboardData = stats as typeof stats & {
+    openTickets?: number;
+    trends?: { projects?: { month: string; count: number }[]; bugs?: { month: string; count: number }[] };
+    milestonesStatus?: { status: string; count: number }[];
+  };
+
+  const pipelineData = [
+    { name: "Scoping", value: stats.projectPipeline.scoping },
+    { name: "In Progress", value: stats.projectPipeline.inProgress },
+    { name: "UAT", value: stats.projectPipeline.uat },
+    { name: "On Hold", value: stats.projectPipeline.onHold },
+    { name: "Done", value: stats.projectPipeline.completed },
+  ].filter((d) => d.value > 0);
+
+  const pipelineTotal = pipelineData.reduce((s, d) => s + d.value, 0);
+
+  const bugData = [
+    { name: "Critical", value: stats.bugSeverityBreakdown.critical, color: "#ef4444" },
+    { name: "High", value: stats.bugSeverityBreakdown.high, color: "#f97316" },
+    { name: "Medium", value: stats.bugSeverityBreakdown.medium, color: "#f59e0b" },
+    { name: "Low", value: stats.bugSeverityBreakdown.low, color: "#22c55e" },
+  ].filter((d) => d.value > 0);
+
+  const projectTrends = dashboardData.trends?.projects ?? [];
+  const openTickets = dashboardData.openTickets ?? 0;
+  const attentionCount =
+    stats.overdueProjects + stats.openBugs + stats.openRequests + openTickets;
+
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+
+  return (
+    <motion.div
+      className="space-y-6 pb-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
+      <DashboardHero
+        title={`${getGreeting()}, ${user?.name?.split(" ")[0] ?? "Admin"}`}
+        subtitle={
+          attentionCount > 0
+            ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention · ${today}`
+            : `Agency overview · ${today}`
+        }
+        badge="Super Admin Dashboard"
+        actions={
+          <>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/projects">
+                <Briefcase className="h-4 w-4 mr-2" />
+                Projects
+              </Link>
+            </Button>
+            <Button size="sm" asChild>
+              <Link href="/admin/analytics">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Analytics
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      {/* Primary KPIs */}
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <ExecutiveStatCard
+          title="Active Projects"
+          value={stats.activeProjects}
+          hint="In delivery"
+          icon={Briefcase}
+          href="/admin/projects"
+          accent="blue"
+          delay={0}
+          trend={
+            stats.overdueProjects > 0
+              ? { label: `${stats.overdueProjects} overdue`, positive: false }
+              : { label: "On track", positive: true }
+          }
+        />
+        <ExecutiveStatCard
+          title="Companies"
+          value={stats.totalClients}
+          hint="Active partners"
+          icon={Building2}
+          href="/admin/clients"
+          accent="violet"
+          delay={1}
+        />
+        <ExecutiveStatCard
+          title="Open Bugs"
+          value={stats.openBugs}
+          hint="Unresolved"
+          icon={Activity}
+          href="/dev/bugs"
+          accent="amber"
+          alert={stats.openBugs > 0}
+          delay={2}
+        />
+        <ExecutiveStatCard
+          title="Pending Requests"
+          value={stats.openRequests}
+          hint="Resource queue"
+          icon={Inbox}
+          href="/admin/requests"
+          accent="sky"
+          alert={stats.openRequests > 0}
+          delay={3}
+        />
+      </div>
+
+      {/* Secondary KPIs */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <ExecutiveStatCard
+          title="Team Online"
+          value={stats.teamMembersOnline}
+          hint="Active today"
+          icon={Users}
+          href="/admin/employees"
+          accent="green"
+          delay={4}
+        />
+        <ExecutiveStatCard
+          title="Open Tickets"
+          value={openTickets}
+          hint="Support"
+          icon={Ticket}
+          href="/admin/tickets"
+          accent="pink"
+          alert={openTickets > 0}
+          delay={5}
+        />
+        <ExecutiveStatCard
+          title="APKs Due"
+          value={stats.apksDueToday}
+          hint="Today"
+          icon={Smartphone}
+          href="/dev/apk"
+          accent="amber"
+          delay={6}
+        />
+        <ExecutiveStatCard
+          title="Overdue"
+          value={stats.overdueProjects}
+          hint="Projects"
+          icon={AlertCircle}
+          href="/admin/projects"
+          accent="red"
+          alert={stats.overdueProjects > 0}
+          delay={7}
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        {/* Company / portfolio table */}
+        <motion.div
+          className="lg:col-span-8"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <PanelCard
+            title="Portfolio performance"
+            description="Companies and delivery health"
+            viewAllHref="/admin/clients"
+          >
+            {(companyAnalytics?.companies?.length ?? 0) > 0 ? (
+              <motion.div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-border/60 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <th className="pb-3 pl-1 font-semibold">Company</th>
+                      <th className="pb-3 font-semibold">Active</th>
+                      <th className="pb-3 font-semibold">Total</th>
+                      <th className="pb-3 font-semibold">Tickets</th>
+                      <th className="pb-3 pr-1 font-semibold">Delayed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {companyAnalytics!.companies!.slice(0, 8).map((c) => (
+                      <tr
+                        key={c.companyId}
+                        className="border-b border-border/30 last:border-0 hover:bg-muted/30 transition-colors"
+                      >
+                        <td className="py-3 pl-1">
+                          <Link href="/admin/clients" className="font-medium hover:text-primary">
+                            {c.companyName}
+                          </Link>
+                        </td>
+                        <td className="py-3 tabular-nums">{c.activeProjects}</td>
+                        <td className="py-3 tabular-nums text-muted-foreground">{c.totalProjects}</td>
+                        <td className="py-3 tabular-nums">{c.openTickets}</td>
+                        <td className="py-3 pr-1 tabular-nums">
+                          <span className={c.delayedProjects > 0 ? "text-destructive font-semibold" : ""}>
+                            {c.delayedProjects}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </motion.div>
+            ) : (
+              <p className="text-sm text-muted-foreground py-8 text-center">No company data yet</p>
+            )}
+          </PanelCard>
+        </motion.div>
+
+        {/* Pipeline donut + bug bars */}
+        <motion.div
+          className="lg:col-span-4 space-y-6"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <PanelCard title="Project pipeline" description="Status mix">
+            <div className="h-[200px] relative">
+              {pipelineTotal > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pipelineData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={52}
+                        outerRadius={72}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {pipelineData.map((_, i) => (
+                          <Cell key={i} fill={PIPELINE_COLORS[i % PIPELINE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={chartTooltipStyle} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                    <span className="text-2xl font-bold tabular-nums">{pipelineTotal}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Projects</span>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground flex items-center justify-center h-full">No pipeline data</p>
+              )}
+            </motion.div>
+            <motion.div className="mt-3 space-y-1.5">
+              {pipelineData.map((d, i) => (
+                <motion.div key={d.name} className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{ background: PIPELINE_COLORS[i % PIPELINE_COLORS.length] }}
+                    />
+                    {d.name}
+                  </span>
+                  <span className="font-semibold tabular-nums">{d.value}</span>
+                </motion.div>
+              ))}
+            </motion.div>
+          </PanelCard>
+
+          <PanelCard title="Bug severity" description="Open issues">
+            <motion.div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={bugData} layout="vertical" margin={{ top: 0, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={56} fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Bar dataKey="value" radius={[0, 6, 6, 0]}>
+                    {bugData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </motion.div>
+          </PanelCard>
+        </motion.div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-12">
+        <motion.div
+          className="lg:col-span-5"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
+        >
+          <PanelCard title="Project growth" description="New projects · 6 months">
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={projectTrends} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="adminProjectGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={chartTooltipStyle} />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2}
+                    fill="url(#adminProjectGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </motion.div>
+          </PanelCard>
+        </motion.div>
+
+        <motion.div
+          className="lg:col-span-4"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.28 }}
+        >
+          <PanelCard
+            title="Recent activity"
+            description="Latest platform events"
+            badge={stats.recentActivity.length}
+            viewAllHref="/admin/discussions"
+          >
+            <div className="max-h-[220px] overflow-y-auto dialog-scroll pr-1 space-y-0.5">
+              {stats.recentActivity.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-8 text-center">No recent activity</p>
+              ) : (
+                stats.recentActivity.slice(0, 8).map((activity, i) => (
+                  <ActivityFeedItem
+                    key={activity.id ?? i}
+                    title={
+                      <>
+                        <span className="font-medium">{activity.actorName}</span>
+                        <span className="text-muted-foreground"> {activity.action} </span>
+                        <span className="font-medium">{activity.entityName}</span>
+                      </>
+                    }
+                    time={formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                  />
+                ))
+              )}
+            </motion.div>
+          </PanelCard>
+        </motion.div>
+
+        <motion.div
+          className="lg:col-span-3"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <PanelCard title="System health" description="Core services">
+            <SystemHealthRow label="API Server" status="Operational" detail="Connected" />
+            <SystemHealthRow label="Database" status="Operational" detail="MongoDB" />
+            <SystemHealthRow label="Realtime" status="Operational" detail="Socket.IO" />
+            <SystemHealthRow label="File storage" status="Operational" detail="Uploads ready" />
+            <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-3 py-2">
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+              <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">All systems operational</p>
+            </motion.div>
+          </PanelCard>
+        </motion.div>
+      </div>
+
+      {/* System overview grid */}
+      <section>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">
+          System overview
+        </p>
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+          <OverviewTile label="Projects" value={stats.activeProjects} sublabel="Active" icon={Briefcase} href="/admin/projects" />
+          <OverviewTile label="Companies" value={stats.totalClients} sublabel="Partners" icon={Building2} href="/admin/clients" />
+          <OverviewTile label="Team" value={stats.teamMembersOnline} sublabel="Online" icon={Users} href="/admin/employees" />
+          <OverviewTile label="Bugs" value={stats.openBugs} sublabel="Open" icon={Activity} href="/dev/bugs" />
+          <OverviewTile label="Requests" value={stats.openRequests} sublabel="Pending" icon={Inbox} href="/admin/requests" />
+          <OverviewTile label="Tickets" value={openTickets} sublabel="Open" icon={Ticket} href="/admin/tickets" />
+        </motion.div>
+      </section>
+    </motion.div>
+  );
+}

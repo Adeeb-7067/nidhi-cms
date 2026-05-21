@@ -1,101 +1,128 @@
 import { Router } from "express";
-import { db } from "../lib/db";
-import { usersTable, credentialHistoryTable } from "@workspace/db/schema";
-import { eq, like, or, and, ne, sql, desc } from "drizzle-orm";
+import {
+  usersTable,
+  credentialHistoryTable,
+  auditLogsTable,
+  getNextSequence,
+} from "@workspace/db/schema";
 import { requireAuth, requireRole } from "../middlewares/auth";
-import { hashPassword, encryptPasswordForHistory } from "../lib/password";
-import { generateEmployeeId } from "../lib/employeeId";
+import {
+  hashPassword,
+  encryptPasswordForHistory,
+  decryptPasswordFromHistory,
+} from "../lib/password";
+import { generateEmployeeId, previewEmployeeId } from "../lib/employeeId";
+import { validateStoredFileUrl } from "../lib/file-storage";
+import { formatUser } from "../lib/user-format";
+import { paginateModel, toIso } from "../lib/mongo-list";
+import {
+  badRequest,
+  conflict,
+  notFound,
+  parseIdParam,
+  parsePagination,
+  optionalString,
+} from "../lib/route-errors";
 
 const router = Router();
 
-function formatUser(user: typeof usersTable.$inferSelect) {
-  return {
-    id: user.id,
-    employeeId: user.employeeId,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    subType: user.subType,
-    designation: user.designation,
-    avatarUrl: user.avatarUrl,
-    status: user.status,
-    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    createdAt: user.createdAt.toISOString(),
-  };
-}
+const USER_LIST_PROJECTION = {
+  id: 1,
+  employeeId: 1,
+  name: 1,
+  email: 1,
+  role: 1,
+  subType: 1,
+  designation: 1,
+  avatarUrl: 1,
+  status: 1,
+  lastLoginAt: 1,
+  createdAt: 1,
+} as const;
 
 // GET /api/users
 router.get("/users", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const { role, subType, search, page = "1", limit = "20" } = req.query as Record<string, string>;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { role, subType, search } = req.query as Record<string, string>;
+  const pagination = parsePagination(req.query as Record<string, unknown>);
 
-  const conditions = [];
-  if (role) conditions.push(eq(usersTable.role, role as "super_admin" | "developer" | "client"));
-  if (subType) conditions.push(eq(usersTable.subType, subType));
-  if (search) conditions.push(or(like(usersTable.name, `%${search}%`), like(usersTable.email, `%${search}%`)));
+  const query: Record<string, unknown> = {};
+  if (role) query.role = role;
+  if (subType) query.subType = subType;
+  if (search?.trim()) {
+    query.$or = [
+      { name: { $regex: search.trim(), $options: "i" } },
+      { email: { $regex: search.trim(), $options: "i" } },
+    ];
+  }
 
-  const [users, countResult] = await Promise.all([
-    db
-      .select()
-      .from(usersTable)
-      .where(conditions.length ? and(...conditions) : undefined)
-      .orderBy(desc(usersTable.createdAt))
-      .limit(parseInt(limit))
-      .offset(offset),
-    db
-      .select({ count: sql<number>`count(*)` })
-      .from(usersTable)
-      .where(conditions.length ? and(...conditions) : undefined),
-  ]);
+  const { items, total, page, limit } = await paginateModel(
+    usersTable,
+    query,
+    pagination,
+    { projection: USER_LIST_PROJECTION },
+  );
 
   res.json({
-    users: users.map(formatUser),
-    total: Number(countResult[0].count),
-    page: parseInt(page),
-    limit: parseInt(limit),
+    users: items.map((u) => formatUser(u as unknown as Parameters<typeof formatUser>[0])),
+    total,
+    page,
+    limit,
   });
+});
+
+// GET /api/users/preview-employee-id
+router.get("/users/preview-employee-id", requireAuth, requireRole("super_admin"), async (req, res) => {
+  const name = String(req.query.name ?? "");
+  const employeeId = await previewEmployeeId(name);
+  res.json({ employeeId });
 });
 
 // POST /api/users
 router.post("/users", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const { name, email, password, role, subType, designation, avatarUrl } = req.body as {
-    name: string;
-    email: string;
-    password: string;
-    role: "super_admin" | "developer" | "client";
-    subType?: string;
-    designation?: string;
-    avatarUrl?: string;
-  };
+  const body = req.body as Record<string, unknown>;
+  const name = optionalString(body.name);
+  const email = optionalString(body.email);
+  const password = optionalString(body.password);
+  const role = optionalString(body.role) as "super_admin" | "developer" | "client" | undefined;
+  const avatarUrl = optionalString(body.avatarUrl);
 
-  if (!name || !email || !password || !role) {
-    res.status(400).json({ error: "name, email, password, role required" });
-    return;
+  if (!name) badRequest("Name is required.", "name");
+  if (!email) badRequest("Email is required.", "email");
+  if (!password || password.length < 8) {
+    badRequest("Password is required (at least 8 characters).", "password");
   }
+  if (!role) badRequest("Role is required.", "role");
 
-  const existing = await db.query.usersTable.findFirst({ where: eq(usersTable.email, email.toLowerCase()) });
-  if (existing) {
-    res.status(409).json({ error: "Email already exists" });
-    return;
-  }
+  validateStoredFileUrl(avatarUrl, "avatarUrl");
+
+  const existing = await usersTable.findOne({ email: email.toLowerCase() }).lean();
+  if (existing) conflict("This email is already registered.", "email");
 
   const passwordHash = await hashPassword(password);
   const employeeId = role === "developer" ? await generateEmployeeId(name) : null;
 
-  const [user] = await db
-    .insert(usersTable)
-    .values({ name, email: email.toLowerCase(), passwordHash, role, subType: subType ?? null, designation: designation ?? null, avatarUrl: avatarUrl ?? null, employeeId })
-    .returning();
+  const userId = await getNextSequence("users");
+  const user = await usersTable.create({
+    id: userId,
+    name,
+    email: email.toLowerCase(),
+    passwordHash,
+    role,
+    subType: optionalString(body.subType) ?? null,
+    designation: optionalString(body.designation) ?? null,
+    avatarUrl: avatarUrl ?? null,
+    department: optionalString(body.department) || "Engineering",
+    phoneNumber: optionalString(body.phoneNumber) ?? null,
+    joiningDate: body.joiningDate ? new Date(String(body.joiningDate)) : null,
+    linkedinUrl: optionalString(body.linkedinUrl) ?? null,
+    employeeId,
+  });
 
-  // Save to credential history
-  const credCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(credentialHistoryTable)
-    .where(eq(credentialHistoryTable.userId, user.id));
-
-  await db.insert(credentialHistoryTable).values({
+  const credId = await getNextSequence("credential_history");
+  await credentialHistoryTable.create({
+    id: credId,
     userId: user.id,
-    entryNumber: Number(credCount[0].count) + 1,
+    entryNumber: 1,
     setByUserId: req.user!.id,
     setByLabel: req.user!.name,
     passwordEncrypted: encryptPasswordForHistory(password),
@@ -103,102 +130,100 @@ router.post("/users", requireAuth, requireRole("super_admin"), async (req, res) 
     status: "active",
   });
 
-  res.status(201).json(formatUser(user));
+  res.status(201).json(formatUser(user as unknown as Parameters<typeof formatUser>[0]));
 });
 
-// GET /api/users/me/password
+// PATCH /api/users/me/password
 router.patch("/users/me/password", requireAuth, async (req, res) => {
-  const { currentPassword, newPassword } = req.body as { currentPassword: string; newPassword: string };
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, req.user!.id) });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
+  const currentPassword = optionalString((req.body as { currentPassword?: string }).currentPassword);
+  const newPassword = optionalString((req.body as { newPassword?: string }).newPassword);
+  if (!currentPassword) badRequest("Current password is required.", "currentPassword");
+  if (!newPassword || newPassword.length < 8) {
+    badRequest("New password must be at least 8 characters.", "newPassword");
   }
+
+  const user = await usersTable.findOne({ id: req.user!.id });
+  if (!user) notFound("User");
+
   const { verifyPassword } = await import("../lib/password");
   const valid = await verifyPassword(currentPassword, user.passwordHash);
-  if (!valid) {
-    res.status(400).json({ error: "Current password incorrect" });
-    return;
-  }
-  const hash = await hashPassword(newPassword);
-  await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, user.id));
+  if (!valid) badRequest("Current password is incorrect.", "currentPassword");
+
+  await usersTable.updateOne({ id: user.id }, { $set: { passwordHash: await hashPassword(newPassword) } });
   res.json({ message: "Password changed" });
 });
 
 // GET /api/users/:id
 router.get("/users/:id", requireAuth, async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
-  const user = await db.query.usersTable.findFirst({ where: eq(usersTable.id, id) });
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  res.json(formatUser(user));
+  const id = parseIdParam(req.params.id, "user id");
+  const user = await usersTable.findOne({ id }).lean();
+  if (!user) notFound("User");
+  res.json(formatUser(user as unknown as Parameters<typeof formatUser>[0]));
 });
 
 // PATCH /api/users/:id
 router.patch("/users/:id", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
-  const { name, email, subType, designation, avatarUrl, status } = req.body as {
-    name?: string;
-    email?: string;
-    subType?: string;
-    designation?: string;
-    avatarUrl?: string;
-    status?: "active" | "inactive" | "suspended";
-  };
+  const id = parseIdParam(req.params.id, "user id");
+  const body = req.body as Record<string, unknown>;
+  const avatarUrl = body.avatarUrl !== undefined ? optionalString(body.avatarUrl) : undefined;
+  validateStoredFileUrl(avatarUrl, "avatarUrl");
 
-  const [user] = await db
-    .update(usersTable)
-    .set({ name, email, subType, designation, avatarUrl, status, updatedAt: new Date() })
-    .where(eq(usersTable.id, id))
-    .returning();
+  const user = await usersTable.findOneAndUpdate(
+    { id },
+    {
+      $set: {
+        ...(body.name !== undefined && { name: optionalString(body.name) }),
+        ...(body.email !== undefined && { email: optionalString(body.email)?.toLowerCase() }),
+        ...(body.subType !== undefined && { subType: optionalString(body.subType) ?? null }),
+        ...(body.designation !== undefined && { designation: optionalString(body.designation) ?? null }),
+        ...(body.avatarUrl !== undefined && { avatarUrl: avatarUrl ?? null }),
+        ...(body.status !== undefined && { status: body.status }),
+        ...(body.department !== undefined && { department: optionalString(body.department) }),
+        ...(body.phoneNumber !== undefined && { phoneNumber: optionalString(body.phoneNumber) ?? null }),
+        ...(body.joiningDate !== undefined && {
+          joiningDate: body.joiningDate ? new Date(String(body.joiningDate)) : null,
+        }),
+        ...(body.linkedinUrl !== undefined && { linkedinUrl: optionalString(body.linkedinUrl) ?? null }),
+      },
+    },
+    { new: true },
+  );
 
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
-  res.json(formatUser(user));
+  if (!user) notFound("User");
+  res.json(formatUser(user as unknown as Parameters<typeof formatUser>[0]));
 });
 
 // DELETE /api/users/:id
 router.delete("/users/:id", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
-  await db.update(usersTable).set({ status: "inactive" }).where(eq(usersTable.id, id));
+  const id = parseIdParam(req.params.id, "user id");
+  const result = await usersTable.updateOne({ id }, { $set: { status: "inactive" } });
+  if (result.matchedCount === 0) notFound("User");
   res.json({ message: "User deactivated" });
 });
 
 // PATCH /api/users/:id/password
 router.patch("/users/:id/password", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
-  const { newPassword } = req.body as { newPassword: string };
-  if (!newPassword) {
-    res.status(400).json({ error: "newPassword required" });
-    return;
+  const id = parseIdParam(req.params.id, "user id");
+  const newPassword = optionalString((req.body as { newPassword?: string }).newPassword);
+  if (!newPassword || newPassword.length < 8) {
+    badRequest("New password must be at least 8 characters.", "newPassword");
   }
 
   const hash = await hashPassword(newPassword);
-  const [user] = await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, id)).returning();
-  if (!user) {
-    res.status(404).json({ error: "User not found" });
-    return;
-  }
+  const user = await usersTable.findOneAndUpdate({ id }, { $set: { passwordHash: hash } }, { new: true });
+  if (!user) notFound("User");
 
-  // Save to credential history
-  const credCount = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(credentialHistoryTable)
-    .where(eq(credentialHistoryTable.userId, id));
+  await credentialHistoryTable.updateMany(
+    { userId: id, status: "active" },
+    { $set: { status: "expired", replacedAt: new Date() } },
+  );
 
-  // Expire previous active records
-  await db
-    .update(credentialHistoryTable)
-    .set({ status: "expired", replacedAt: new Date() })
-    .where(and(eq(credentialHistoryTable.userId, id), eq(credentialHistoryTable.status, "active")));
-
-  await db.insert(credentialHistoryTable).values({
+  const credCount = await credentialHistoryTable.countDocuments({ userId: id });
+  const credId = await getNextSequence("credential_history");
+  await credentialHistoryTable.create({
+    id: credId,
     userId: id,
-    entryNumber: Number(credCount[0].count) + 1,
+    entryNumber: credCount + 1,
     setByUserId: req.user!.id,
     setByLabel: req.user!.name,
     passwordEncrypted: encryptPasswordForHistory(newPassword),
@@ -211,24 +236,48 @@ router.patch("/users/:id/password", requireAuth, requireRole("super_admin"), asy
 
 // GET /api/users/:id/credentials
 router.get("/users/:id/credentials", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const id = parseInt(req.params['id'] as string);
-  const records = await db
-    .select()
-    .from(credentialHistoryTable)
-    .where(eq(credentialHistoryTable.userId, id))
-    .orderBy(desc(credentialHistoryTable.createdAt));
+  const id = parseIdParam(req.params.id, "user id");
+  const records = await credentialHistoryTable
+    .find({ userId: id }, { id: 1, entryNumber: 1, setByLabel: 1, createdAt: 1, replacedAt: 1, status: 1, trigger: 1 })
+    .sort({ createdAt: -1 })
+    .lean();
 
   res.json(
     records.map((r) => ({
       id: r.id,
       entryNumber: r.entryNumber,
       setBy: r.setByLabel,
-      setAt: r.createdAt.toISOString(),
-      replacedAt: r.replacedAt?.toISOString() ?? null,
+      setAt: toIso(r.createdAt) ?? new Date().toISOString(),
+      replacedAt: toIso(r.replacedAt),
       status: r.status,
       trigger: r.trigger,
     })),
   );
+});
+
+// POST /api/users/:id/credentials/:credId/reveal
+router.post("/users/:id/credentials/:credId/reveal", requireAuth, requireRole("super_admin"), async (req, res) => {
+  const id = parseIdParam(req.params.id, "user id");
+  const credId = parseIdParam(req.params.credId, "credential id");
+
+  const credential = await credentialHistoryTable.findOne({ id: credId, userId: id });
+  if (!credential) notFound("Credential record");
+
+  const plainPassword = decryptPasswordFromHistory(credential.passwordEncrypted);
+
+  const auditId = await getNextSequence("audit_logs");
+  await auditLogsTable.create({
+    id: auditId,
+    actorId: req.user!.id,
+    action: "reveal_credential",
+    entityType: "user",
+    entityId: id,
+    newVal: `Credential entry #${credential.entryNumber} revealed by Admin ${req.user!.name}`,
+    ipAddress: req.ip || req.socket.remoteAddress || null,
+    createdAt: new Date(),
+  });
+
+  res.json({ password: plainPassword });
 });
 
 export default router;

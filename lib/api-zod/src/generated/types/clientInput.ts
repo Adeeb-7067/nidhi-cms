@@ -13,7 +13,10 @@ export interface ClientInput {
   email: string;
   phone?: string;
   address?: string;
-  businessId?: string;
+  gstNumber?: string;
   logoUrl?: string;
+  industry?: string;
+  website?: string;
+  tier?: string;
   status?: ClientInputStatus;
 }

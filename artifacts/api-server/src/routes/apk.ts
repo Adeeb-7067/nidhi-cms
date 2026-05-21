@@ -1,13 +1,12 @@
 import { Router } from "express";
-import { db } from "../lib/db";
-import { apkReleasesTable, usersTable } from "@workspace/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { apkReleasesTable, usersTable, getNextSequence } from "@workspace/db/schema";
 import { requireAuth } from "../middlewares/auth";
+import { validateStoredFileUrl } from "../lib/file-storage";
 
 const router = Router();
 
-async function formatRelease(release: typeof apkReleasesTable.$inferSelect) {
-  const [uploader] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, release.uploaderId));
+async function formatRelease(release: any) {
+  const uploader = await usersTable.findOne({ id: release.uploaderId });
   return {
     id: release.id,
     projectId: release.projectId,
@@ -15,7 +14,7 @@ async function formatRelease(release: typeof apkReleasesTable.$inferSelect) {
     uploaderName: uploader?.name ?? "Unknown",
     version: release.version,
     buildNumber: release.buildNumber,
-    releaseType: release.releaseType,
+    releaseType: release.releaseType, 
     changelog: release.changelog,
     platform: release.platform,
     minOsVersion: release.minOsVersion,
@@ -26,8 +25,7 @@ async function formatRelease(release: typeof apkReleasesTable.$inferSelect) {
   };
 }
 
-// POST /api/projects/:id/apk-releases (handled in projects.ts)
-// POST /api/projects/:id/apk-releases — separate mount
+// POST /api/projects/:id/apk-releases
 router.post("/projects/:id/apk-releases", requireAuth, async (req, res) => {
   const projectId = parseInt(req.params['id'] as string);
   const { version, buildNumber, releaseType, changelog, platform, minOsVersion, fileUrl, audience, apkScheduleId } = req.body;
@@ -35,16 +33,36 @@ router.post("/projects/:id/apk-releases", requireAuth, async (req, res) => {
     res.status(400).json({ error: "version, releaseType, platform, fileUrl, audience required" });
     return;
   }
-  const [release] = await db
-    .insert(apkReleasesTable)
-    .values({ projectId, uploaderId: req.user!.id, version, buildNumber: buildNumber ?? 1, releaseType, changelog: changelog ?? null, platform, minOsVersion: minOsVersion ?? null, fileUrl, audience, apkScheduleId: apkScheduleId ?? null })
-    .returning();
+
+  try {
+    validateStoredFileUrl(fileUrl, "fileUrl");
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Invalid fileUrl" });
+    return;
+  }
+  
+  const nextId = await getNextSequence("apk_releases");
+  const release = await apkReleasesTable.create({
+    id: nextId,
+    projectId,
+    uploaderId: req.user!.id,
+    version,
+    buildNumber: buildNumber ?? 1,
+    releaseType,
+    changelog: changelog ?? null,
+    platform,
+    minOsVersion: minOsVersion ?? null,
+    fileUrl,
+    audience,
+    apkScheduleId: apkScheduleId ?? null
+  });
+  
   res.status(201).json(await formatRelease(release));
 });
 
 // GET /api/apk-releases/:id
 router.get("/apk-releases/:id", requireAuth, async (req, res) => {
-  const release = await db.query.apkReleasesTable.findFirst({ where: eq(apkReleasesTable.id, parseInt(req.params['id'] as string)) });
+  const release = await apkReleasesTable.findOne({ id: parseInt(req.params['id'] as string) });
   if (!release) {
     res.status(404).json({ error: "APK release not found" });
     return;

@@ -22,6 +22,8 @@ tags:
     description: Daily work logs
   - name: bugs
     description: Bug tracking
+  - name: tasks
+    description: Work tasks and assignments
   - name: apk
     description: APK management
   - name: comments
@@ -36,6 +38,8 @@ tags:
     description: Report generation
   - name: settings
     description: System settings
+  - name: tickets
+    description: Support tickets
 
 paths:
   /healthz:
@@ -130,6 +134,102 @@ paths:
       responses:
         "200":
           description: Password reset successful
+
+  # ── TICKETS ───────────────────────────────────────────────────────────────
+  /tickets:
+    get:
+      operationId: listTickets
+      tags: [tickets]
+      summary: List support tickets
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: projectId
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of tickets
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TicketListResult"
+    post:
+      operationId: createTicket
+      tags: [tickets]
+      summary: Create a new ticket
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketInput"
+      responses:
+        "201":
+          description: Ticket created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+  /tickets/{id}:
+    patch:
+      operationId: updateTicket
+      tags: [tickets]
+      summary: Update ticket
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TicketUpdate"
+      responses:
+        "200":
+          description: Updated ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ticket"
+
+  /auth/fcm-token:
+    post:
+      operationId: updateFcmToken
+      tags: [auth]
+      summary: Update the current user's FCM token for push notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FcmTokenInput"
+      responses:
+        "200":
+          description: Token updated successfully
 
   /auth/me:
     get:
@@ -310,6 +410,30 @@ paths:
                 items:
                   $ref: "#/components/schemas/CredentialHistory"
 
+  /users/{id}/credentials/{credId}/reveal:
+    post:
+      operationId: revealCredential
+      tags: [users]
+      summary: Reveal decrypted password from credential history (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: credId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Decrypted password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CredentialRevealResult"
+
   /users/me/password:
     patch:
       operationId: changeMyPassword
@@ -373,6 +497,95 @@ paths:
               schema:
                 $ref: "#/components/schemas/Client"
 
+  # ── COMPANIES (same backing store as clients) ─────────────────────────────
+  /companies:
+    get:
+      operationId: listCompanies
+      tags: [companies]
+      summary: List all companies
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of companies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyListResult"
+
+  /companies/{id}:
+    get:
+      operationId: getCompany
+      tags: [companies]
+      summary: Get company by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Company"
+
+  /companies/{id}/projects:
+    get:
+      operationId: listCompanyProjects
+      tags: [companies]
+      summary: List projects for a company
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Company projects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+                  total:
+                    type: integer
+
+  /analytics/companies:
+    get:
+      operationId: getCompanyAnalytics
+      tags: [analytics]
+      summary: Company-level dashboard cards
+      responses:
+        "200":
+          description: Company analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyAnalyticsResult"
+
   /clients/{id}:
     get:
       operationId: getClient
@@ -430,10 +643,24 @@ paths:
           in: query
           schema:
             type: integer
+        - name: companyId
+          in: query
+          schema:
+            type: integer
         - name: search
           in: query
           schema:
             type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [development, maintenance]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
         - name: page
           in: query
           schema:
@@ -650,6 +877,27 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Milestone"
+
+  /projects/{id}/history:
+    get:
+      operationId: getProjectHistory
+      tags: [projects]
+      summary: Get audit history for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
     post:
       operationId: createMilestone
       tags: [projects]
@@ -698,12 +946,17 @@ paths:
     get:
       operationId: listMyLogs
       tags: [logs]
-      summary: List own logs
+      summary: List daily logs (own logs for dev/QA; all team logs for super admin)
       parameters:
         - name: projectId
           in: query
           schema:
             type: integer
+        - name: developerId
+          in: query
+          schema:
+            type: integer
+          description: Filter by employee (super admin only)
         - name: month
           in: query
           schema:
@@ -833,6 +1086,15 @@ paths:
           in: query
           schema:
             type: integer
+        - name: assigneeId
+          in: query
+          schema:
+            type: integer
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [all, mine, unassigned]
       responses:
         "200":
           description: Bug list
@@ -899,6 +1161,156 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Bug"
+
+  /bugs/{id}/assign:
+    patch:
+      operationId: assignBug
+      tags: [bugs]
+      summary: Assign bug to a developer (QA or super admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigneeId:
+                  type: ["integer", "null"]
+      responses:
+        "200":
+          description: Bug assigned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bug"
+
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List work tasks (role-filtered)
+      parameters:
+        - name: projectId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: assigneeId
+          in: query
+          schema:
+            type: integer
+        - name: scope
+          in: query
+          schema:
+            type: string
+            enum: [all, mine, unassigned, created]
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskListResult"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create and assign a task (super admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkTask"
+
+  /tasks/{id}:
+    get:
+      operationId: getTask
+      tags: [tasks]
+      summary: Get task by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Task detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkTask"
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update task
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkTask"
+
+  /projects/{id}/assignable-members:
+    get:
+      operationId: listAssignableMembers
+      tags: [tasks]
+      summary: List project members eligible for assignment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: for
+          in: query
+          schema:
+            type: string
+            enum: [bug, task]
+      responses:
+        "200":
+          description: Assignable members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssignableMemberList"
 
   # ── APK ───────────────────────────────────────────────────────────────────
   /projects/{id}/apk-releases:
@@ -1403,6 +1815,13 @@ components:
           type: string
       required: [token, newPassword]
 
+    FcmTokenInput:
+      type: object
+      properties:
+        token:
+          type: string
+      required: [token]
+
     AuthResult:
       type: object
       properties:
@@ -1428,12 +1847,20 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, client]
+          enum: [super_admin, developer, tester, client]
         subType:
           type: ["string", "null"]
         designation:
           type: ["string", "null"]
         avatarUrl:
+          type: ["string", "null"]
+        department:
+          type: string
+        phoneNumber:
+          type: ["string", "null"]
+        joiningDate:
+          type: ["string", "null"]
+        linkedinUrl:
           type: ["string", "null"]
         status:
           type: string
@@ -1455,12 +1882,20 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, client]
+          enum: [super_admin, developer, tester, client]
         subType:
           type: string
         designation:
           type: string
         avatarUrl:
+          type: string
+        department:
+          type: string
+        phoneNumber:
+          type: string
+        joiningDate:
+          type: string
+        linkedinUrl:
           type: string
       required: [name, email, password, role]
 
@@ -1476,6 +1911,14 @@ components:
         designation:
           type: string
         avatarUrl:
+          type: string
+        department:
+          type: string
+        phoneNumber:
+          type: string
+        joiningDate:
+          type: string
+        linkedinUrl:
           type: string
         status:
           type: string
@@ -1563,6 +2006,78 @@ components:
           type: string
       required: [id, entryNumber, setBy, setAt, status, trigger]
 
+    # ── COMPANY SCHEMAS (aliases Clients collection) ─────────────────────────
+    Company:
+      allOf:
+        - $ref: "#/components/schemas/Client"
+        - type: object
+          properties:
+            companyId:
+              type: integer
+            companyCode:
+              type: ["string", "null"]
+            totalProjects:
+              type: integer
+            openTickets:
+              type: integer
+
+    CompanyListResult:
+      type: object
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Company"
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/Client"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [companies, total, page, limit]
+
+    CompanyAnalyticsCard:
+      type: object
+      properties:
+        companyId:
+          type: integer
+        companyName:
+          type: string
+        clientId:
+          type: integer
+        totalProjects:
+          type: integer
+        activeProjects:
+          type: integer
+        completedProjects:
+          type: integer
+        delayedProjects:
+          type: integer
+        openTickets:
+          type: integer
+        pendingRequests:
+          type: integer
+        developerCount:
+          type: integer
+      required:
+        - companyId
+        - companyName
+        - totalProjects
+        - activeProjects
+
+    CompanyAnalyticsResult:
+      type: object
+      properties:
+        companies:
+          type: array
+          items:
+            $ref: "#/components/schemas/CompanyAnalyticsCard"
+      required: [companies]
+
     # ── CLIENT SCHEMAS ───────────────────────────────────────────────────────
     Client:
       type: object
@@ -1579,10 +2094,16 @@ components:
           type: ["string", "null"]
         address:
           type: ["string", "null"]
-        businessId:
+        gstNumber:
           type: ["string", "null"]
         logoUrl:
           type: ["string", "null"]
+        industry:
+          type: ["string", "null"]
+        website:
+          type: ["string", "null"]
+        tier:
+          type: string
         status:
           type: string
           enum: [active, inactive, on_hold]
@@ -1605,18 +2126,32 @@ components:
           type: string
         email:
           type: string
+          description: Company contact email
+        portalEmail:
+          type: string
+          description: Portal login email (Gmail). Defaults to company email if omitted.
+        password:
+          type: string
+          minLength: 8
+          description: Initial portal login password (required when creating a company)
         phone:
           type: string
         address:
           type: string
-        businessId:
+        gstNumber:
           type: string
         logoUrl:
+          type: string
+        industry:
+          type: string
+        website:
+          type: string
+        tier:
           type: string
         status:
           type: string
           enum: [active, inactive, on_hold]
-      required: [companyName, contactPerson, email]
+      required: [companyName, contactPerson, email, password]
 
     ClientUpdate:
       type: object
@@ -1627,13 +2162,25 @@ components:
           type: string
         email:
           type: string
+        portalEmail:
+          type: string
+        password:
+          type: string
+          minLength: 8
+          description: Reset portal login password
         phone:
           type: string
         address:
           type: string
-        businessId:
+        gstNumber:
           type: string
         logoUrl:
+          type: string
+        industry:
+          type: string
+        website:
+          type: string
+        tier:
           type: string
         status:
           type: string
@@ -1662,6 +2209,10 @@ components:
           type: integer
         name:
           type: string
+        companyId:
+          type: integer
+        companyName:
+          type: string
         clientId:
           type: integer
         clientName:
@@ -1674,10 +2225,13 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [scoping, in_progress, on_hold, uat, completed]
+          enum: [scoping, in_progress, on_hold, uat, completed, maintenance]
         priority:
           type: string
           enum: [low, medium, high, critical]
+        type:
+          type: string
+          enum: [development, maintenance]
         startDate:
           type: string
         deadline:
@@ -1693,6 +2247,12 @@ components:
         stagingUrl:
           type: ["string", "null"]
         productionUrl:
+          type: ["string", "null"]
+        adminUrl:
+          type: ["string", "null"]
+        websiteUrl:
+          type: ["string", "null"]
+        postmanJson:
           type: ["string", "null"]
         completionPct:
           type: integer
@@ -1702,13 +2262,15 @@ components:
           type: integer
         createdAt:
           type: string
-      required: [id, name, clientId, clientName, status, priority, startDate, deadline, techStack, completionPct, memberCount, createdAt]
+      required: [id, name, companyId, companyName, clientId, clientName, status, priority, type, startDate, deadline, techStack, completionPct, memberCount, createdAt]
 
     ProjectInput:
       type: object
       properties:
         name:
           type: string
+        companyId:
+          type: integer
         clientId:
           type: integer
         pmId:
@@ -1717,10 +2279,13 @@ components:
           type: string
         status:
           type: string
-          enum: [scoping, in_progress, on_hold, uat, completed]
+          enum: [scoping, in_progress, on_hold, uat, completed, maintenance]
         priority:
           type: string
           enum: [low, medium, high, critical]
+        type:
+          type: string
+          enum: [development, maintenance]
         startDate:
           type: string
         deadline:
@@ -1736,6 +2301,12 @@ components:
         stagingUrl:
           type: string
         productionUrl:
+          type: string
+        adminUrl:
+          type: string
+        websiteUrl:
+          type: string
+        postmanJson:
           type: string
       required: [name, clientId, priority, startDate, deadline]
 
@@ -1750,10 +2321,13 @@ components:
           type: string
         status:
           type: string
-          enum: [scoping, in_progress, on_hold, uat, completed]
+          enum: [scoping, in_progress, on_hold, uat, completed, maintenance]
         priority:
           type: string
           enum: [low, medium, high, critical]
+        type:
+          type: string
+          enum: [development, maintenance]
         startDate:
           type: string
         deadline:
@@ -1769,6 +2343,12 @@ components:
         stagingUrl:
           type: string
         productionUrl:
+          type: string
+        adminUrl:
+          type: string
+        websiteUrl:
+          type: string
+        postmanJson:
           type: string
         completionOverride:
           type: integer
@@ -2002,6 +2582,8 @@ components:
           type: ["integer", "null"]
         assigneeName:
           type: ["string", "null"]
+        assigneeRole:
+          type: ["string", "null"]
         title:
           type: string
         description:
@@ -2029,6 +2611,8 @@ components:
         createdAt:
           type: string
         resolvedAt:
+          type: ["string", "null"]
+        attachmentUrl:
           type: ["string", "null"]
       required: [id, bugNumber, projectId, projectName, reporterId, reporterName, title, severity, priority, status, platform, createdAt]
 
@@ -2060,6 +2644,8 @@ components:
           enum: [android, ios, web, api, all]
         assigneeId:
           type: integer
+        attachmentUrl:
+          type: string
       required: [projectId, title, severity, priority, platform]
 
     BugUpdate:
@@ -2091,6 +2677,148 @@ components:
           enum: [android, ios, web, api, all]
         assigneeId:
           type: integer
+        attachmentUrl:
+          type: string
+
+    WorkTask:
+      type: object
+      properties:
+        id:
+          type: integer
+        taskNumber:
+          type: string
+        projectId:
+          type: integer
+        projectName:
+          type: string
+        createdById:
+          type: integer
+        createdByName:
+          type: string
+        assigneeId:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        assigneeRole:
+          type: ["string", "null"]
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+          enum: [backlog, todo, in_progress, in_review, done, blocked]
+        priority:
+          type: string
+          enum: [urgent, high, normal, low]
+        type:
+          type: string
+          enum: [task, feature, bug_fix, qa, chore]
+        dueDate:
+          type: ["string", "null"]
+        labels:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        completedAt:
+          type: ["string", "null"]
+      required: [id, taskNumber, projectId, projectName, createdById, createdByName, title, status, priority, type, labels, createdAt, updatedAt]
+
+    TaskInput:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        assigneeId:
+          type: integer
+        status:
+          type: string
+          enum: [backlog, todo, in_progress, in_review, done, blocked]
+        priority:
+          type: string
+          enum: [urgent, high, normal, low]
+        type:
+          type: string
+          enum: [task, feature, bug_fix, qa, chore]
+        dueDate:
+          type: string
+        labels:
+          type: array
+          items:
+            type: string
+      required: [projectId, title]
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        assigneeId:
+          type: ["integer", "null"]
+        status:
+          type: string
+          enum: [backlog, todo, in_progress, in_review, done, blocked]
+        priority:
+          type: string
+          enum: [urgent, high, normal, low]
+        type:
+          type: string
+          enum: [task, feature, bug_fix, qa, chore]
+        dueDate:
+          type: string
+        labels:
+          type: array
+          items:
+            type: string
+
+    TaskListResult:
+      type: object
+      properties:
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkTask"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [tasks, total, page, limit]
+
+    AssignableMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+        employeeId:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+      required: [id, name, role]
+
+    AssignableMemberList:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/AssignableMember"
+      required: [members]
 
     BugListResult:
       type: object
@@ -2408,7 +3136,9 @@ components:
           type: integer
         completed:
           type: integer
-      required: [scoping, inProgress, uat, onHold, completed]
+        maintenance:
+          type: integer
+      required: [scoping, inProgress, uat, onHold, completed, maintenance]
 
     BugSeverityBreakdown:
       type: object
@@ -2629,3 +3359,120 @@ components:
           type: string
         sealUrl:
           type: string
+
+    CredentialRevealResult:
+      type: object
+      properties:
+        password:
+          type: string
+      required: [password]
+
+    # ── TICKET SCHEMAS ───────────────────────────────────────────────────────
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: ["integer", "null"]
+        projectName:
+          type: ["string", "null"]
+        creatorId:
+          type: integer
+        creatorName:
+          type: string
+        assignedTo:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, resolved, closed]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        attachments:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required: [id, creatorId, title, description, status, priority, createdAt, updatedAt]
+
+    TicketInput:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        assignedTo:
+          type: integer
+      required: [title, description]
+
+    TicketUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [open, pending, resolved, closed]
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+        assignedTo:
+          type: integer
+
+    TicketListResult:
+      type: object
+      properties:
+        tickets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ticket"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+      required: [tickets, total, page, limit]
+
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: integer
+        actorId:
+          type: ["integer", "null"]
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: ["integer", "null"]
+        oldVal:
+          type: object
+        newVal:
+          type: object
+        ipAddress:
+          type: ["string", "null"]
+        metadata:
+          type: object
+        createdAt:
+          type: string
+      required: [id, action, entityType, createdAt]

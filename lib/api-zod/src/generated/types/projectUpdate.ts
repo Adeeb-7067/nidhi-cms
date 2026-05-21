@@ -7,6 +7,7 @@
  */
 import type { ProjectUpdatePriority } from "./projectUpdatePriority";
 import type { ProjectUpdateStatus } from "./projectUpdateStatus";
+import type { ProjectUpdateType } from "./projectUpdateType";
 
 export interface ProjectUpdate {
   name?: string;
@@ -14,6 +15,7 @@ export interface ProjectUpdate {
   description?: string;
   status?: ProjectUpdateStatus;
   priority?: ProjectUpdatePriority;
+  type?: ProjectUpdateType;
   startDate?: string;
   deadline?: string;
   techStack?: string[];
@@ -21,5 +23,8 @@ export interface ProjectUpdate {
   repoUrl?: string;
   stagingUrl?: string;
   productionUrl?: string;
+  adminUrl?: string;
+  websiteUrl?: string;
+  postmanJson?: string;
   completionOverride?: number;
 }

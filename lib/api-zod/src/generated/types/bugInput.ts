@@ -21,4 +21,5 @@ export interface BugInput {
   buildVersion?: string;
   platform: BugInputPlatform;
   assigneeId?: number;
+  attachmentUrl?: string;
 }

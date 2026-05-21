@@ -1,22 +1,34 @@
-import { pgTable, serial, text, timestamp, integer, boolean, pgEnum } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
+import mongoose, { Schema } from "mongoose";
 
-export const threadTypeEnum = pgEnum("thread_type", ["project", "log", "bug", "apk", "request"]);
+export const threadTypes = ["project", "log", "bug", "apk", "request"] as const;
+export type ThreadType = typeof threadTypes[number];
 
-export const commentsTable = pgTable("comments", {
-  id: serial("id").primaryKey(),
-  authorId: integer("author_id").notNull().references(() => usersTable.id),
-  threadType: threadTypeEnum("thread_type").notNull(),
-  threadId: integer("thread_id").notNull(),
-  content: text("content").notNull(),
-  parentId: integer("parent_id"),
-  isEdited: boolean("is_edited").notNull().default(false),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+const commentSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  authorId: { type: Number, ref: "Users", required: true, index: true },
+  companyId: { type: Number, ref: "Clients", index: true },
+  projectId: { type: Number, ref: "Projects", index: true },
+  threadType: { type: String, enum: threadTypes, required: true, index: true },
+  threadId: { type: Number, required: true, index: true },
+  content: { type: String, required: true },
+  parentId: { type: Number, ref: "Comments" },
+  isEdited: { type: Boolean, default: false, required: true },
+}, { timestamps: true });
 
-export const insertCommentSchema = createInsertSchema(commentsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertComment = z.infer<typeof insertCommentSchema>;
-export type Comment = typeof commentsTable.$inferSelect;
+export const Comments = mongoose.models.Comments || mongoose.model("Comments", commentSchema);
+
+export interface Comment {
+  id: number;
+  authorId: number;
+  companyId: number | null;
+  projectId: number | null;
+  threadType: ThreadType;
+  threadId: number;
+  content: string;
+  parentId: number | null;
+  isEdited: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const commentsTable = Comments;

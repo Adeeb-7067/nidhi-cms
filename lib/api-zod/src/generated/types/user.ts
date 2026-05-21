@@ -21,6 +21,13 @@ export interface User {
   designation?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  department?: string;
+  /** @nullable */
+  phoneNumber?: string | null;
+  /** @nullable */
+  joiningDate?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
   status: UserStatus;
   /** @nullable */
   lastLoginAt?: string | null;

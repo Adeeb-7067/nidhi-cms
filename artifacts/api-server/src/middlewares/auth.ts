@@ -1,8 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { verifyAccessToken, type JwtPayload } from "../lib/jwt";
-import { db } from "../lib/db";
 import { usersTable } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import { HttpError } from "../lib/http-error";
 
 declare global {
   namespace Express {
@@ -17,44 +16,69 @@ declare global {
   }
 }
 
-export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
+function extractBearerToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
+  if (authHeader?.startsWith("Bearer ")) {
+    return authHeader.slice(7).trim();
   }
-  const token = authHeader.slice(7);
-  let payload: JwtPayload;
+  const alt = req.headers["x-access-token"];
+  if (typeof alt === "string" && alt.trim()) {
+    return alt.trim();
+  }
+  return null;
+}
+
+export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    payload = verifyAccessToken(token);
-  } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
-    return;
+    const token = extractBearerToken(req);
+    if (!token) {
+      throw new HttpError(401, "Please sign in. Your session token is missing.", {
+        code: "UNAUTHORIZED",
+      });
+    }
+    let payload: JwtPayload;
+    try {
+      payload = verifyAccessToken(token);
+    } catch {
+      throw new HttpError(401, "Your session has expired. Please sign in again.", {
+        code: "TOKEN_INVALID",
+      });
+    }
+
+    const user = await usersTable.findOne(
+      { id: payload.userId },
+      { id: 1, role: 1, name: 1, email: 1, status: 1 },
+    );
+
+    if (!user || user.status !== "active") {
+      throw new HttpError(
+        401,
+        "Your account is inactive or no longer exists. Contact your administrator.",
+        { code: "USER_INACTIVE" },
+      );
+    }
+
+    req.user = { id: user.id, role: user.role, name: user.name, email: user.email };
+    next();
+  } catch (err) {
+    next(err);
   }
-
-  const [user] = await db
-    .select({ id: usersTable.id, role: usersTable.role, name: usersTable.name, email: usersTable.email, status: usersTable.status })
-    .from(usersTable)
-    .where(eq(usersTable.id, payload.userId))
-    .limit(1);
-
-  if (!user || user.status !== "active") {
-    res.status(401).json({ error: "User not found or inactive" });
-    return;
-  }
-
-  req.user = { id: user.id, role: user.role, name: user.name, email: user.email };
-  next();
 }
 
 export function requireRole(...roles: string[]) {
   return (req: Request, res: Response, next: NextFunction): void => {
     if (!req.user) {
-      res.status(401).json({ error: "Unauthorized" });
+      next(new HttpError(401, "Please sign in to continue.", { code: "UNAUTHORIZED" }));
       return;
     }
     if (!roles.includes(req.user.role)) {
-      res.status(403).json({ error: "Forbidden" });
+      next(
+        new HttpError(
+          403,
+          `This action requires one of these roles: ${roles.join(", ")}.`,
+          { code: "FORBIDDEN" },
+        ),
+      );
       return;
     }
     next();

@@ -1,20 +1,30 @@
-import { pgTable, serial, text, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
+import mongoose, { Schema } from "mongoose";
 
-export const auditLogsTable = pgTable("audit_logs", {
-  id: serial("id").primaryKey(),
-  actorId: integer("actor_id").references(() => usersTable.id),
-  action: text("action").notNull(),
-  entityType: text("entity_type").notNull(),
-  entityId: integer("entity_id"),
-  oldVal: jsonb("old_val"),
-  newVal: jsonb("new_val"),
-  ipAddress: text("ip_address"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+const auditLogSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  actorId: { type: Number, ref: "Users" },
+  action: { type: String, required: true },
+  entityType: { type: String, required: true },
+  entityId: { type: Number },
+  oldVal: { type: Schema.Types.Mixed },
+  newVal: { type: Schema.Types.Mixed },
+  ipAddress: { type: String },
+  metadata: { type: Schema.Types.Mixed },
+  createdAt: { type: Date, default: Date.now },
 });
 
-export const insertAuditLogSchema = createInsertSchema(auditLogsTable).omit({ id: true, createdAt: true });
-export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
-export type AuditLog = typeof auditLogsTable.$inferSelect;
+export const AuditLogs = mongoose.models.AuditLogs || mongoose.model("AuditLogs", auditLogSchema);
+
+export interface AuditLog {
+  id: number;
+  actorId: number | null;
+  action: string;
+  entityType: string;
+  entityId: number | null;
+  oldVal: any;
+  newVal: any;
+  ipAddress: string | null;
+  createdAt: Date;
+}
+
+export const auditLogsTable = AuditLogs;

@@ -30,10 +30,14 @@ export const LoginResponse = zod.object({
     employeeId: zod.string().nullish(),
     name: zod.string(),
     email: zod.string(),
-    role: zod.enum(["super_admin", "developer", "client"]),
+    role: zod.enum(["super_admin", "developer", "tester", "client"]),
     subType: zod.string().nullish(),
     designation: zod.string().nullish(),
     avatarUrl: zod.string().nullish(),
+    department: zod.string().optional(),
+    phoneNumber: zod.string().nullish(),
+    joiningDate: zod.string().nullish(),
+    linkedinUrl: zod.string().nullish(),
     status: zod.enum(["active", "inactive", "suspended"]),
     lastLoginAt: zod.string().nullish(),
     createdAt: zod.string(),
@@ -55,10 +59,14 @@ export const RefreshTokenResponse = zod.object({
     employeeId: zod.string().nullish(),
     name: zod.string(),
     email: zod.string(),
-    role: zod.enum(["super_admin", "developer", "client"]),
+    role: zod.enum(["super_admin", "developer", "tester", "client"]),
     subType: zod.string().nullish(),
     designation: zod.string().nullish(),
     avatarUrl: zod.string().nullish(),
+    department: zod.string().optional(),
+    phoneNumber: zod.string().nullish(),
+    joiningDate: zod.string().nullish(),
+    linkedinUrl: zod.string().nullish(),
     status: zod.enum(["active", "inactive", "suspended"]),
     lastLoginAt: zod.string().nullish(),
     createdAt: zod.string(),
@@ -81,6 +89,92 @@ export const ResetPasswordBody = zod.object({
 });
 
 /**
+ * @summary List support tickets
+ */
+export const ListTicketsQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+  priority: zod.coerce.string().optional(),
+  projectId: zod.coerce.number().optional(),
+  search: zod.coerce.string().optional(),
+  page: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const ListTicketsResponse = zod.object({
+  tickets: zod.array(
+    zod.object({
+      id: zod.number(),
+      projectId: zod.number().nullish(),
+      projectName: zod.string().nullish(),
+      creatorId: zod.number(),
+      creatorName: zod.string().optional(),
+      assignedTo: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      title: zod.string(),
+      description: zod.string(),
+      status: zod.enum(["open", "pending", "resolved", "closed"]),
+      priority: zod.enum(["low", "medium", "high", "urgent"]),
+      attachments: zod.array(zod.string()).optional(),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+/**
+ * @summary Create a new ticket
+ */
+export const CreateTicketBody = zod.object({
+  projectId: zod.number().optional(),
+  title: zod.string(),
+  description: zod.string(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  assignedTo: zod.number().optional(),
+});
+
+/**
+ * @summary Update ticket
+ */
+export const UpdateTicketParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTicketBody = zod.object({
+  title: zod.string().optional(),
+  description: zod.string().optional(),
+  status: zod.enum(["open", "pending", "resolved", "closed"]).optional(),
+  priority: zod.enum(["low", "medium", "high", "urgent"]).optional(),
+  assignedTo: zod.number().optional(),
+});
+
+export const UpdateTicketResponse = zod.object({
+  id: zod.number(),
+  projectId: zod.number().nullish(),
+  projectName: zod.string().nullish(),
+  creatorId: zod.number(),
+  creatorName: zod.string().optional(),
+  assignedTo: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string(),
+  status: zod.enum(["open", "pending", "resolved", "closed"]),
+  priority: zod.enum(["low", "medium", "high", "urgent"]),
+  attachments: zod.array(zod.string()).optional(),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+});
+
+/**
+ * @summary Update the current user's FCM token for push notifications
+ */
+export const UpdateFcmTokenBody = zod.object({
+  token: zod.string(),
+});
+
+/**
  * @summary Get current authenticated user
  */
 export const GetMeResponse = zod.object({
@@ -88,10 +182,14 @@ export const GetMeResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().nullish(),
+  joiningDate: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
   status: zod.enum(["active", "inactive", "suspended"]),
   lastLoginAt: zod.string().nullish(),
   createdAt: zod.string(),
@@ -111,10 +209,14 @@ export const UpdateMyProfileResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().nullish(),
+  joiningDate: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
   status: zod.enum(["active", "inactive", "suspended"]),
   lastLoginAt: zod.string().nullish(),
   createdAt: zod.string(),
@@ -138,10 +240,14 @@ export const ListUsersResponse = zod.object({
       employeeId: zod.string().nullish(),
       name: zod.string(),
       email: zod.string(),
-      role: zod.enum(["super_admin", "developer", "client"]),
+      role: zod.enum(["super_admin", "developer", "tester", "client"]),
       subType: zod.string().nullish(),
       designation: zod.string().nullish(),
       avatarUrl: zod.string().nullish(),
+      department: zod.string().optional(),
+      phoneNumber: zod.string().nullish(),
+      joiningDate: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
       status: zod.enum(["active", "inactive", "suspended"]),
       lastLoginAt: zod.string().nullish(),
       createdAt: zod.string(),
@@ -159,10 +265,14 @@ export const CreateUserBody = zod.object({
   name: zod.string(),
   email: zod.string(),
   password: zod.string(),
-  role: zod.enum(["super_admin", "developer", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "client"]),
   subType: zod.string().optional(),
   designation: zod.string().optional(),
   avatarUrl: zod.string().optional(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().optional(),
+  joiningDate: zod.string().optional(),
+  linkedinUrl: zod.string().optional(),
 });
 
 /**
@@ -177,10 +287,14 @@ export const GetUserResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().nullish(),
+  joiningDate: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
   status: zod.enum(["active", "inactive", "suspended"]),
   lastLoginAt: zod.string().nullish(),
   createdAt: zod.string(),
@@ -199,6 +313,10 @@ export const UpdateUserBody = zod.object({
   subType: zod.string().optional(),
   designation: zod.string().optional(),
   avatarUrl: zod.string().optional(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().optional(),
+  joiningDate: zod.string().optional(),
+  linkedinUrl: zod.string().optional(),
   status: zod.enum(["active", "inactive", "suspended"]).optional(),
 });
 
@@ -207,10 +325,14 @@ export const UpdateUserResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
+  department: zod.string().optional(),
+  phoneNumber: zod.string().nullish(),
+  joiningDate: zod.string().nullish(),
+  linkedinUrl: zod.string().nullish(),
   status: zod.enum(["active", "inactive", "suspended"]),
   lastLoginAt: zod.string().nullish(),
   createdAt: zod.string(),
@@ -255,6 +377,18 @@ export const GetUserCredentialsResponse = zod.array(
 );
 
 /**
+ * @summary Reveal decrypted password from credential history (admin only)
+ */
+export const RevealCredentialParams = zod.object({
+  id: zod.coerce.number(),
+  credId: zod.coerce.number(),
+});
+
+export const RevealCredentialResponse = zod.object({
+  password: zod.string(),
+});
+
+/**
  * @summary Change own password
  */
 export const ChangeMyPasswordBody = zod.object({
@@ -281,8 +415,11 @@ export const ListClientsResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       address: zod.string().nullish(),
-      businessId: zod.string().nullish(),
+      gstNumber: zod.string().nullish(),
       logoUrl: zod.string().nullish(),
+      industry: zod.string().nullish(),
+      website: zod.string().nullish(),
+      tier: zod.string().optional(),
       status: zod.enum(["active", "inactive", "on_hold"]),
       portalLogin: zod.boolean(),
       clientSince: zod.string(),
@@ -304,9 +441,184 @@ export const CreateClientBody = zod.object({
   email: zod.string(),
   phone: zod.string().optional(),
   address: zod.string().optional(),
-  businessId: zod.string().optional(),
+  gstNumber: zod.string().optional(),
   logoUrl: zod.string().optional(),
+  industry: zod.string().optional(),
+  website: zod.string().optional(),
+  tier: zod.string().optional(),
   status: zod.enum(["active", "inactive", "on_hold"]).optional(),
+});
+
+/**
+ * @summary List all companies
+ */
+export const ListCompaniesQueryParams = zod.object({
+  status: zod.coerce.string().optional(),
+  search: zod.coerce.string().optional(),
+  page: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const ListCompaniesResponse = zod.object({
+  companies: zod.array(
+    zod
+      .object({
+        id: zod.number(),
+        companyName: zod.string(),
+        contactPerson: zod.string(),
+        email: zod.string(),
+        phone: zod.string().nullish(),
+        address: zod.string().nullish(),
+        gstNumber: zod.string().nullish(),
+        logoUrl: zod.string().nullish(),
+        industry: zod.string().nullish(),
+        website: zod.string().nullish(),
+        tier: zod.string().optional(),
+        status: zod.enum(["active", "inactive", "on_hold"]),
+        portalLogin: zod.boolean(),
+        clientSince: zod.string(),
+        userId: zod.number().nullish(),
+        activeProjectCount: zod.number(),
+      })
+      .and(
+        zod.object({
+          companyId: zod.number().optional(),
+          companyCode: zod.string().nullish(),
+          totalProjects: zod.number().optional(),
+          openTickets: zod.number().optional(),
+        }),
+      ),
+  ),
+  clients: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        companyName: zod.string(),
+        contactPerson: zod.string(),
+        email: zod.string(),
+        phone: zod.string().nullish(),
+        address: zod.string().nullish(),
+        gstNumber: zod.string().nullish(),
+        logoUrl: zod.string().nullish(),
+        industry: zod.string().nullish(),
+        website: zod.string().nullish(),
+        tier: zod.string().optional(),
+        status: zod.enum(["active", "inactive", "on_hold"]),
+        portalLogin: zod.boolean(),
+        clientSince: zod.string(),
+        userId: zod.number().nullish(),
+        activeProjectCount: zod.number(),
+      }),
+    )
+    .optional(),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+/**
+ * @summary Get company by ID
+ */
+export const GetCompanyParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetCompanyResponse = zod
+  .object({
+    id: zod.number(),
+    companyName: zod.string(),
+    contactPerson: zod.string(),
+    email: zod.string(),
+    phone: zod.string().nullish(),
+    address: zod.string().nullish(),
+    gstNumber: zod.string().nullish(),
+    logoUrl: zod.string().nullish(),
+    industry: zod.string().nullish(),
+    website: zod.string().nullish(),
+    tier: zod.string().optional(),
+    status: zod.enum(["active", "inactive", "on_hold"]),
+    portalLogin: zod.boolean(),
+    clientSince: zod.string(),
+    userId: zod.number().nullish(),
+    activeProjectCount: zod.number(),
+  })
+  .and(
+    zod.object({
+      companyId: zod.number().optional(),
+      companyCode: zod.string().nullish(),
+      totalProjects: zod.number().optional(),
+      openTickets: zod.number().optional(),
+    }),
+  );
+
+/**
+ * @summary List projects for a company
+ */
+export const ListCompanyProjectsParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListCompanyProjectsResponse = zod.object({
+  projects: zod
+    .array(
+      zod.object({
+        id: zod.number(),
+        name: zod.string(),
+        companyId: zod.number(),
+        companyName: zod.string(),
+        clientId: zod.number(),
+        clientName: zod.string(),
+        pmId: zod.number().nullish(),
+        pmName: zod.string().nullish(),
+        description: zod.string().nullish(),
+        status: zod.enum([
+          "scoping",
+          "in_progress",
+          "on_hold",
+          "uat",
+          "completed",
+          "maintenance",
+        ]),
+        priority: zod.enum(["low", "medium", "high", "critical"]),
+        type: zod.enum(["development", "maintenance"]),
+        startDate: zod.string(),
+        deadline: zod.string(),
+        techStack: zod.array(zod.string()),
+        figmaUrl: zod.string().nullish(),
+        repoUrl: zod.string().nullish(),
+        stagingUrl: zod.string().nullish(),
+        productionUrl: zod.string().nullish(),
+        adminUrl: zod.string().nullish(),
+        websiteUrl: zod.string().nullish(),
+        postmanJson: zod.string().nullish(),
+        completionPct: zod.number(),
+        completionOverride: zod.number().nullish(),
+        memberCount: zod.number(),
+        createdAt: zod.string(),
+      }),
+    )
+    .optional(),
+  total: zod.number().optional(),
+});
+
+/**
+ * @summary Company-level dashboard cards
+ */
+export const GetCompanyAnalyticsResponse = zod.object({
+  companies: zod.array(
+    zod.object({
+      companyId: zod.number(),
+      companyName: zod.string(),
+      clientId: zod.number().optional(),
+      totalProjects: zod.number(),
+      activeProjects: zod.number(),
+      completedProjects: zod.number().optional(),
+      delayedProjects: zod.number().optional(),
+      openTickets: zod.number().optional(),
+      pendingRequests: zod.number().optional(),
+      developerCount: zod.number().optional(),
+    }),
+  ),
 });
 
 /**
@@ -323,8 +635,11 @@ export const GetClientResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   address: zod.string().nullish(),
-  businessId: zod.string().nullish(),
+  gstNumber: zod.string().nullish(),
   logoUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  website: zod.string().nullish(),
+  tier: zod.string().optional(),
   status: zod.enum(["active", "inactive", "on_hold"]),
   portalLogin: zod.boolean(),
   clientSince: zod.string(),
@@ -345,8 +660,11 @@ export const UpdateClientBody = zod.object({
   email: zod.string().optional(),
   phone: zod.string().optional(),
   address: zod.string().optional(),
-  businessId: zod.string().optional(),
+  gstNumber: zod.string().optional(),
   logoUrl: zod.string().optional(),
+  industry: zod.string().optional(),
+  website: zod.string().optional(),
+  tier: zod.string().optional(),
   status: zod.enum(["active", "inactive", "on_hold"]).optional(),
 });
 
@@ -357,8 +675,11 @@ export const UpdateClientResponse = zod.object({
   email: zod.string(),
   phone: zod.string().nullish(),
   address: zod.string().nullish(),
-  businessId: zod.string().nullish(),
+  gstNumber: zod.string().nullish(),
   logoUrl: zod.string().nullish(),
+  industry: zod.string().nullish(),
+  website: zod.string().nullish(),
+  tier: zod.string().optional(),
   status: zod.enum(["active", "inactive", "on_hold"]),
   portalLogin: zod.boolean(),
   clientSince: zod.string(),
@@ -372,7 +693,10 @@ export const UpdateClientResponse = zod.object({
 export const ListProjectsQueryParams = zod.object({
   status: zod.coerce.string().optional(),
   clientId: zod.coerce.number().optional(),
+  companyId: zod.coerce.number().optional(),
   search: zod.coerce.string().optional(),
+  type: zod.enum(["development", "maintenance"]).optional(),
+  priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional(),
 });
@@ -382,6 +706,8 @@ export const ListProjectsResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      companyId: zod.number(),
+      companyName: zod.string(),
       clientId: zod.number(),
       clientName: zod.string(),
       pmId: zod.number().nullish(),
@@ -393,8 +719,10 @@ export const ListProjectsResponse = zod.object({
         "on_hold",
         "uat",
         "completed",
+        "maintenance",
       ]),
       priority: zod.enum(["low", "medium", "high", "critical"]),
+      type: zod.enum(["development", "maintenance"]),
       startDate: zod.string(),
       deadline: zod.string(),
       techStack: zod.array(zod.string()),
@@ -402,6 +730,9 @@ export const ListProjectsResponse = zod.object({
       repoUrl: zod.string().nullish(),
       stagingUrl: zod.string().nullish(),
       productionUrl: zod.string().nullish(),
+      adminUrl: zod.string().nullish(),
+      websiteUrl: zod.string().nullish(),
+      postmanJson: zod.string().nullish(),
       completionPct: zod.number(),
       completionOverride: zod.number().nullish(),
       memberCount: zod.number(),
@@ -418,13 +749,22 @@ export const ListProjectsResponse = zod.object({
  */
 export const CreateProjectBody = zod.object({
   name: zod.string(),
+  companyId: zod.number().optional(),
   clientId: zod.number(),
   pmId: zod.number().optional(),
   description: zod.string().optional(),
   status: zod
-    .enum(["scoping", "in_progress", "on_hold", "uat", "completed"])
+    .enum([
+      "scoping",
+      "in_progress",
+      "on_hold",
+      "uat",
+      "completed",
+      "maintenance",
+    ])
     .optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]),
+  type: zod.enum(["development", "maintenance"]).optional(),
   startDate: zod.string(),
   deadline: zod.string(),
   techStack: zod.array(zod.string()).optional(),
@@ -432,6 +772,9 @@ export const CreateProjectBody = zod.object({
   repoUrl: zod.string().optional(),
   stagingUrl: zod.string().optional(),
   productionUrl: zod.string().optional(),
+  adminUrl: zod.string().optional(),
+  websiteUrl: zod.string().optional(),
+  postmanJson: zod.string().optional(),
 });
 
 /**
@@ -444,13 +787,23 @@ export const GetProjectParams = zod.object({
 export const GetProjectResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  companyId: zod.number(),
+  companyName: zod.string(),
   clientId: zod.number(),
   clientName: zod.string(),
   pmId: zod.number().nullish(),
   pmName: zod.string().nullish(),
   description: zod.string().nullish(),
-  status: zod.enum(["scoping", "in_progress", "on_hold", "uat", "completed"]),
+  status: zod.enum([
+    "scoping",
+    "in_progress",
+    "on_hold",
+    "uat",
+    "completed",
+    "maintenance",
+  ]),
   priority: zod.enum(["low", "medium", "high", "critical"]),
+  type: zod.enum(["development", "maintenance"]),
   startDate: zod.string(),
   deadline: zod.string(),
   techStack: zod.array(zod.string()),
@@ -458,6 +811,9 @@ export const GetProjectResponse = zod.object({
   repoUrl: zod.string().nullish(),
   stagingUrl: zod.string().nullish(),
   productionUrl: zod.string().nullish(),
+  adminUrl: zod.string().nullish(),
+  websiteUrl: zod.string().nullish(),
+  postmanJson: zod.string().nullish(),
   completionPct: zod.number(),
   completionOverride: zod.number().nullish(),
   memberCount: zod.number(),
@@ -476,9 +832,17 @@ export const UpdateProjectBody = zod.object({
   pmId: zod.number().optional(),
   description: zod.string().optional(),
   status: zod
-    .enum(["scoping", "in_progress", "on_hold", "uat", "completed"])
+    .enum([
+      "scoping",
+      "in_progress",
+      "on_hold",
+      "uat",
+      "completed",
+      "maintenance",
+    ])
     .optional(),
   priority: zod.enum(["low", "medium", "high", "critical"]).optional(),
+  type: zod.enum(["development", "maintenance"]).optional(),
   startDate: zod.string().optional(),
   deadline: zod.string().optional(),
   techStack: zod.array(zod.string()).optional(),
@@ -486,19 +850,32 @@ export const UpdateProjectBody = zod.object({
   repoUrl: zod.string().optional(),
   stagingUrl: zod.string().optional(),
   productionUrl: zod.string().optional(),
+  adminUrl: zod.string().optional(),
+  websiteUrl: zod.string().optional(),
+  postmanJson: zod.string().optional(),
   completionOverride: zod.number().optional(),
 });
 
 export const UpdateProjectResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  companyId: zod.number(),
+  companyName: zod.string(),
   clientId: zod.number(),
   clientName: zod.string(),
   pmId: zod.number().nullish(),
   pmName: zod.string().nullish(),
   description: zod.string().nullish(),
-  status: zod.enum(["scoping", "in_progress", "on_hold", "uat", "completed"]),
+  status: zod.enum([
+    "scoping",
+    "in_progress",
+    "on_hold",
+    "uat",
+    "completed",
+    "maintenance",
+  ]),
   priority: zod.enum(["low", "medium", "high", "critical"]),
+  type: zod.enum(["development", "maintenance"]),
   startDate: zod.string(),
   deadline: zod.string(),
   techStack: zod.array(zod.string()),
@@ -506,6 +883,9 @@ export const UpdateProjectResponse = zod.object({
   repoUrl: zod.string().nullish(),
   stagingUrl: zod.string().nullish(),
   productionUrl: zod.string().nullish(),
+  adminUrl: zod.string().nullish(),
+  websiteUrl: zod.string().nullish(),
+  postmanJson: zod.string().nullish(),
   completionPct: zod.number(),
   completionOverride: zod.number().nullish(),
   memberCount: zod.number(),
@@ -612,6 +992,29 @@ export const GetProjectMilestonesResponse = zod.array(
 );
 
 /**
+ * @summary Get audit history for a project
+ */
+export const GetProjectHistoryParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetProjectHistoryResponseItem = zod.object({
+  id: zod.number(),
+  actorId: zod.number().nullish(),
+  action: zod.string(),
+  entityType: zod.string(),
+  entityId: zod.number().nullish(),
+  oldVal: zod.object({}).passthrough().optional(),
+  newVal: zod.object({}).passthrough().optional(),
+  ipAddress: zod.string().nullish(),
+  metadata: zod.object({}).passthrough().optional(),
+  createdAt: zod.string(),
+});
+export const GetProjectHistoryResponse = zod.array(
+  GetProjectHistoryResponseItem,
+);
+
+/**
  * @summary Create a milestone
  */
 export const CreateMilestoneParams = zod.object({
@@ -658,10 +1061,14 @@ export const GetProjectLogsResponse = zod.object({
 });
 
 /**
- * @summary List own logs
+ * @summary List daily logs (own logs for dev/QA; all team logs for super admin)
  */
 export const ListMyLogsQueryParams = zod.object({
   projectId: zod.coerce.number().optional(),
+  developerId: zod.coerce
+    .number()
+    .optional()
+    .describe("Filter by employee (super admin only)"),
   month: zod.coerce.number().optional(),
   year: zod.coerce.number().optional(),
   page: zod.coerce.number().optional(),
@@ -789,6 +1196,7 @@ export const GetProjectBugsResponse = zod.object({
       reporterName: zod.string(),
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
+      assigneeRole: zod.string().nullish(),
       title: zod.string(),
       description: zod.string().nullish(),
       stepsToReproduce: zod.string().nullish(),
@@ -808,6 +1216,7 @@ export const GetProjectBugsResponse = zod.object({
       platform: zod.enum(["android", "ios", "web", "api", "all"]),
       createdAt: zod.string(),
       resolvedAt: zod.string().nullish(),
+      attachmentUrl: zod.string().nullish(),
     }),
   ),
   total: zod.number(),
@@ -824,6 +1233,8 @@ export const ListBugsQueryParams = zod.object({
   severity: zod.coerce.string().optional(),
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional(),
+  assigneeId: zod.coerce.number().optional(),
+  scope: zod.enum(["all", "mine", "unassigned"]).optional(),
 });
 
 export const ListBugsResponse = zod.object({
@@ -837,6 +1248,7 @@ export const ListBugsResponse = zod.object({
       reporterName: zod.string(),
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
+      assigneeRole: zod.string().nullish(),
       title: zod.string(),
       description: zod.string().nullish(),
       stepsToReproduce: zod.string().nullish(),
@@ -856,6 +1268,7 @@ export const ListBugsResponse = zod.object({
       platform: zod.enum(["android", "ios", "web", "api", "all"]),
       createdAt: zod.string(),
       resolvedAt: zod.string().nullish(),
+      attachmentUrl: zod.string().nullish(),
     }),
   ),
   total: zod.number(),
@@ -878,6 +1291,7 @@ export const CreateBugBody = zod.object({
   buildVersion: zod.string().optional(),
   platform: zod.enum(["android", "ios", "web", "api", "all"]),
   assigneeId: zod.number().optional(),
+  attachmentUrl: zod.string().optional(),
 });
 
 /**
@@ -896,6 +1310,7 @@ export const GetBugResponse = zod.object({
   reporterName: zod.string(),
   assigneeId: zod.number().nullish(),
   assigneeName: zod.string().nullish(),
+  assigneeRole: zod.string().nullish(),
   title: zod.string(),
   description: zod.string().nullish(),
   stepsToReproduce: zod.string().nullish(),
@@ -915,6 +1330,7 @@ export const GetBugResponse = zod.object({
   platform: zod.enum(["android", "ios", "web", "api", "all"]),
   createdAt: zod.string(),
   resolvedAt: zod.string().nullish(),
+  attachmentUrl: zod.string().nullish(),
 });
 
 /**
@@ -938,6 +1354,7 @@ export const UpdateBugBody = zod.object({
   buildVersion: zod.string().optional(),
   platform: zod.enum(["android", "ios", "web", "api", "all"]).optional(),
   assigneeId: zod.number().optional(),
+  attachmentUrl: zod.string().optional(),
 });
 
 export const UpdateBugResponse = zod.object({
@@ -949,6 +1366,7 @@ export const UpdateBugResponse = zod.object({
   reporterName: zod.string(),
   assigneeId: zod.number().nullish(),
   assigneeName: zod.string().nullish(),
+  assigneeRole: zod.string().nullish(),
   title: zod.string(),
   description: zod.string().nullish(),
   stepsToReproduce: zod.string().nullish(),
@@ -968,6 +1386,223 @@ export const UpdateBugResponse = zod.object({
   platform: zod.enum(["android", "ios", "web", "api", "all"]),
   createdAt: zod.string(),
   resolvedAt: zod.string().nullish(),
+  attachmentUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary Assign bug to a developer (QA or super admin)
+ */
+export const AssignBugParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const AssignBugBody = zod.object({
+  assigneeId: zod.number().nullish(),
+});
+
+export const AssignBugResponse = zod.object({
+  id: zod.number(),
+  bugNumber: zod.string(),
+  projectId: zod.number(),
+  projectName: zod.string(),
+  reporterId: zod.number(),
+  reporterName: zod.string(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  assigneeRole: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  stepsToReproduce: zod.string().nullish(),
+  expectedBehavior: zod.string().nullish(),
+  actualBehavior: zod.string().nullish(),
+  severity: zod.enum(["critical", "high", "medium", "low"]),
+  priority: zod.enum(["p1", "p2", "p3", "p4"]),
+  status: zod.enum([
+    "open",
+    "in_progress",
+    "fixed",
+    "verified",
+    "wont_fix",
+    "duplicate",
+  ]),
+  buildVersion: zod.string().nullish(),
+  platform: zod.enum(["android", "ios", "web", "api", "all"]),
+  createdAt: zod.string(),
+  resolvedAt: zod.string().nullish(),
+  attachmentUrl: zod.string().nullish(),
+});
+
+/**
+ * @summary List work tasks (role-filtered)
+ */
+export const ListTasksQueryParams = zod.object({
+  projectId: zod.coerce.number().optional(),
+  status: zod.coerce.string().optional(),
+  assigneeId: zod.coerce.number().optional(),
+  scope: zod.enum(["all", "mine", "unassigned", "created"]).optional(),
+  page: zod.coerce.number().optional(),
+  limit: zod.coerce.number().optional(),
+});
+
+export const ListTasksResponse = zod.object({
+  tasks: zod.array(
+    zod.object({
+      id: zod.number(),
+      taskNumber: zod.string(),
+      projectId: zod.number(),
+      projectName: zod.string(),
+      createdById: zod.number(),
+      createdByName: zod.string(),
+      assigneeId: zod.number().nullish(),
+      assigneeName: zod.string().nullish(),
+      assigneeRole: zod.string().nullish(),
+      title: zod.string(),
+      description: zod.string().nullish(),
+      status: zod.enum([
+        "backlog",
+        "todo",
+        "in_progress",
+        "in_review",
+        "done",
+        "blocked",
+      ]),
+      priority: zod.enum(["urgent", "high", "normal", "low"]),
+      type: zod.enum(["task", "feature", "bug_fix", "qa", "chore"]),
+      dueDate: zod.string().nullish(),
+      labels: zod.array(zod.string()),
+      createdAt: zod.string(),
+      updatedAt: zod.string(),
+      completedAt: zod.string().nullish(),
+    }),
+  ),
+  total: zod.number(),
+  page: zod.number(),
+  limit: zod.number(),
+});
+
+/**
+ * @summary Create and assign a task (super admin)
+ */
+export const CreateTaskBody = zod.object({
+  projectId: zod.number(),
+  title: zod.string(),
+  description: zod.string().optional(),
+  assigneeId: zod.number().optional(),
+  status: zod
+    .enum(["backlog", "todo", "in_progress", "in_review", "done", "blocked"])
+    .optional(),
+  priority: zod.enum(["urgent", "high", "normal", "low"]).optional(),
+  type: zod.enum(["task", "feature", "bug_fix", "qa", "chore"]).optional(),
+  dueDate: zod.string().optional(),
+  labels: zod.array(zod.string()).optional(),
+});
+
+/**
+ * @summary Get task by ID
+ */
+export const GetTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const GetTaskResponse = zod.object({
+  id: zod.number(),
+  taskNumber: zod.string(),
+  projectId: zod.number(),
+  projectName: zod.string(),
+  createdById: zod.number(),
+  createdByName: zod.string(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  assigneeRole: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum([
+    "backlog",
+    "todo",
+    "in_progress",
+    "in_review",
+    "done",
+    "blocked",
+  ]),
+  priority: zod.enum(["urgent", "high", "normal", "low"]),
+  type: zod.enum(["task", "feature", "bug_fix", "qa", "chore"]),
+  dueDate: zod.string().nullish(),
+  labels: zod.array(zod.string()),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  completedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Update task
+ */
+export const UpdateTaskParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const UpdateTaskBody = zod.object({
+  title: zod.string().optional(),
+  description: zod.string().optional(),
+  assigneeId: zod.number().nullish(),
+  status: zod
+    .enum(["backlog", "todo", "in_progress", "in_review", "done", "blocked"])
+    .optional(),
+  priority: zod.enum(["urgent", "high", "normal", "low"]).optional(),
+  type: zod.enum(["task", "feature", "bug_fix", "qa", "chore"]).optional(),
+  dueDate: zod.string().optional(),
+  labels: zod.array(zod.string()).optional(),
+});
+
+export const UpdateTaskResponse = zod.object({
+  id: zod.number(),
+  taskNumber: zod.string(),
+  projectId: zod.number(),
+  projectName: zod.string(),
+  createdById: zod.number(),
+  createdByName: zod.string(),
+  assigneeId: zod.number().nullish(),
+  assigneeName: zod.string().nullish(),
+  assigneeRole: zod.string().nullish(),
+  title: zod.string(),
+  description: zod.string().nullish(),
+  status: zod.enum([
+    "backlog",
+    "todo",
+    "in_progress",
+    "in_review",
+    "done",
+    "blocked",
+  ]),
+  priority: zod.enum(["urgent", "high", "normal", "low"]),
+  type: zod.enum(["task", "feature", "bug_fix", "qa", "chore"]),
+  dueDate: zod.string().nullish(),
+  labels: zod.array(zod.string()),
+  createdAt: zod.string(),
+  updatedAt: zod.string(),
+  completedAt: zod.string().nullish(),
+});
+
+/**
+ * @summary List project members eligible for assignment
+ */
+export const ListAssignableMembersParams = zod.object({
+  id: zod.coerce.number(),
+});
+
+export const ListAssignableMembersQueryParams = zod.object({
+  for: zod.enum(["bug", "task"]).optional(),
+});
+
+export const ListAssignableMembersResponse = zod.object({
+  members: zod.array(
+    zod.object({
+      id: zod.number(),
+      name: zod.string(),
+      role: zod.string(),
+      employeeId: zod.string().nullish(),
+      avatarUrl: zod.string().nullish(),
+    }),
+  ),
 });
 
 /**
@@ -1290,6 +1925,7 @@ export const GetDashboardStatsResponse = zod.object({
     uat: zod.number(),
     onHold: zod.number(),
     completed: zod.number(),
+    maintenance: zod.number(),
   }),
   bugSeverityBreakdown: zod.object({
     critical: zod.number(),
@@ -1469,6 +2105,8 @@ export const GlobalSearchResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      companyId: zod.number(),
+      companyName: zod.string(),
       clientId: zod.number(),
       clientName: zod.string(),
       pmId: zod.number().nullish(),
@@ -1480,8 +2118,10 @@ export const GlobalSearchResponse = zod.object({
         "on_hold",
         "uat",
         "completed",
+        "maintenance",
       ]),
       priority: zod.enum(["low", "medium", "high", "critical"]),
+      type: zod.enum(["development", "maintenance"]),
       startDate: zod.string(),
       deadline: zod.string(),
       techStack: zod.array(zod.string()),
@@ -1489,6 +2129,9 @@ export const GlobalSearchResponse = zod.object({
       repoUrl: zod.string().nullish(),
       stagingUrl: zod.string().nullish(),
       productionUrl: zod.string().nullish(),
+      adminUrl: zod.string().nullish(),
+      websiteUrl: zod.string().nullish(),
+      postmanJson: zod.string().nullish(),
       completionPct: zod.number(),
       completionOverride: zod.number().nullish(),
       memberCount: zod.number(),
@@ -1503,8 +2146,11 @@ export const GlobalSearchResponse = zod.object({
       email: zod.string(),
       phone: zod.string().nullish(),
       address: zod.string().nullish(),
-      businessId: zod.string().nullish(),
+      gstNumber: zod.string().nullish(),
       logoUrl: zod.string().nullish(),
+      industry: zod.string().nullish(),
+      website: zod.string().nullish(),
+      tier: zod.string().optional(),
       status: zod.enum(["active", "inactive", "on_hold"]),
       portalLogin: zod.boolean(),
       clientSince: zod.string(),
@@ -1518,10 +2164,14 @@ export const GlobalSearchResponse = zod.object({
       employeeId: zod.string().nullish(),
       name: zod.string(),
       email: zod.string(),
-      role: zod.enum(["super_admin", "developer", "client"]),
+      role: zod.enum(["super_admin", "developer", "tester", "client"]),
       subType: zod.string().nullish(),
       designation: zod.string().nullish(),
       avatarUrl: zod.string().nullish(),
+      department: zod.string().optional(),
+      phoneNumber: zod.string().nullish(),
+      joiningDate: zod.string().nullish(),
+      linkedinUrl: zod.string().nullish(),
       status: zod.enum(["active", "inactive", "suspended"]),
       lastLoginAt: zod.string().nullish(),
       createdAt: zod.string(),
@@ -1537,6 +2187,7 @@ export const GlobalSearchResponse = zod.object({
       reporterName: zod.string(),
       assigneeId: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
+      assigneeRole: zod.string().nullish(),
       title: zod.string(),
       description: zod.string().nullish(),
       stepsToReproduce: zod.string().nullish(),
@@ -1556,6 +2207,7 @@ export const GlobalSearchResponse = zod.object({
       platform: zod.enum(["android", "ios", "web", "api", "all"]),
       createdAt: zod.string(),
       resolvedAt: zod.string().nullish(),
+      attachmentUrl: zod.string().nullish(),
     }),
   ),
 });

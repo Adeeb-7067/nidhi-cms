@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useListProjects, useGetProjectAnalytics, getGetProjectAnalyticsQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KpiSimpleCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
@@ -47,6 +48,13 @@ export default function ClientAnalytics() {
           <p className="text-xs text-muted-foreground mt-0.5">Deep dive into project metrics</p>
         </div>
       </div>
+
+      <PageKpiRow>
+        <KpiSimpleCard label="Completion" value={`${analytics.averageCompletionPct}%`} />
+        <KpiSimpleCard label="Hours logged" value={analytics.totalHoursLogged} />
+        <KpiSimpleCard label="Contributors" value={analytics.developerContributions?.length ?? 0} />
+        <KpiSimpleCard label="Work categories" value={analytics.workCategoryBreakdown?.length ?? 0} />
+      </PageKpiRow>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="bg-card">

@@ -4,21 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "hello": "tsx ./src/hello.ts",
-    "seed": "tsx ./src/seed.ts",
-    "seed-more": "tsx ./src/seed-more.ts",
+    "seed": "tsx --env-file=../.env ./src/seed.ts",
+    "seed-more": "tsx --env-file=../.env ./src/seed-more.ts",
+    "migrate-company": "tsx --env-file=../.env ./src/migrate-company-hierarchy.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "bcryptjs": "^2.4.3",
-    "drizzle-orm": "catalog:",
-    "pg": "^8.20.0"
+    "mongoose": "catalog:"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "catalog:",
-    "@types/pg": "^8.18.0",
     "tsx": "catalog:"
   }
 }

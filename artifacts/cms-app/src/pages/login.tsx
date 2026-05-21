@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,7 +13,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Lock, Mail, User as UserIcon, Zap, CheckCircle, Shield, Users } from "lucide-react";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { Lock, Mail, User as UserIcon, CheckCircle, Shield, Users } from "lucide-react";
+import { AppLogo } from "@/components/brand/AppLogo";
+import { BRAND } from "@/lib/brand";
 
 const emailSchema = z.object({
   identifier: z.string().email("Invalid email address"),
@@ -28,9 +32,19 @@ type EmailFormValues = z.infer<typeof emailSchema>;
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user, accessToken, isInitializing, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
   const loginMutation = useLogin();
   const [activeTab, setActiveTab] = useState<"email" | "employee">("email");
+
+  useEffect(() => {
+    if (isInitializing || isLoading) return;
+    if (accessToken && user) {
+      if (user.role === "super_admin") setLocation("/admin");
+      else if (user.role === "developer" || user.role === "tester") setLocation("/dev");
+      else if (user.role === "client") setLocation("/client");
+    }
+  }, [isInitializing, isLoading, accessToken, user, setLocation]);
 
   const emailForm = useForm<EmailFormValues>({
     resolver: zodResolver(emailSchema),
@@ -42,6 +56,14 @@ export default function Login() {
     defaultValues: { identifier: "", password: "" },
   });
 
+  if (isInitializing || (accessToken && isLoading)) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
   const onSubmit = (values: EmailFormValues | EmployeeFormValues) => {
     loginMutation.mutate({ data: values }, {
       onSuccess: (data) => {
@@ -49,7 +71,7 @@ export default function Login() {
         toast.success("Login successful");
       },
       onError: (error: any) => {
-        toast.error(error.message || "Failed to login");
+        toast.error(getApiErrorMessage(error, "Failed to sign in. Check your email and password."));
       }
     });
   };
@@ -70,13 +92,9 @@ export default function Login() {
         <div className="absolute bottom-1/4 left-1/4 w-64 h-64 bg-purple-600/15 blur-[80px] rounded-full pointer-events-none" />
 
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-12">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
-              <Zap size={22} className="text-white fill-white" />
-            </div>
-            <h1 className="text-lg font-semibold text-white tracking-tight">Nexus CMS</h1>
+          <div className="mb-12">
+            <AppLogo size="xl" />
           </div>
-
           <div className="space-y-6">
             <p className="text-base text-muted-foreground max-w-xs leading-relaxed font-medium">
               The command center for software agencies.
@@ -270,7 +288,7 @@ export default function Login() {
               <div className="mt-8">
                 <Separator className="bg-border/40" />
                 <p className="text-[10px] text-muted-foreground text-center mt-6">
-                  © 2025 Nexus CMS. All rights reserved.
+                  {BRAND.copyright}
                 </p>
               </div>
             </CardContent>

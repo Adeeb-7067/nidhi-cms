@@ -7,14 +7,17 @@
  */
 import type { ProjectInputPriority } from "./projectInputPriority";
 import type { ProjectInputStatus } from "./projectInputStatus";
+import type { ProjectInputType } from "./projectInputType";
 
 export interface ProjectInput {
   name: string;
+  companyId?: number;
   clientId: number;
   pmId?: number;
   description?: string;
   status?: ProjectInputStatus;
   priority: ProjectInputPriority;
+  type?: ProjectInputType;
   startDate: string;
   deadline: string;
   techStack?: string[];
@@ -22,4 +25,7 @@ export interface ProjectInput {
   repoUrl?: string;
   stagingUrl?: string;
   productionUrl?: string;
+  adminUrl?: string;
+  websiteUrl?: string;
+  postmanJson?: string;
 }

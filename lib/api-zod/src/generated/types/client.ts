@@ -17,9 +17,14 @@ export interface Client {
   /** @nullable */
   address?: string | null;
   /** @nullable */
-  businessId?: string | null;
+  gstNumber?: string | null;
   /** @nullable */
   logoUrl?: string | null;
+  /** @nullable */
+  industry?: string | null;
+  /** @nullable */
+  website?: string | null;
+  tier?: string;
   status: ClientStatus;
   portalLogin: boolean;
   clientSince: string;

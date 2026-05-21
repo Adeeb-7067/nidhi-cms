@@ -5,11 +5,16 @@
  * Client Management System API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListProjectsPriority } from "./listProjectsPriority";
+import type { ListProjectsType } from "./listProjectsType";
 
 export type ListProjectsParams = {
   status?: string;
   clientId?: number;
+  companyId?: number;
   search?: string;
+  type?: ListProjectsType;
+  priority?: ListProjectsPriority;
   page?: number;
   limit?: number;
 };

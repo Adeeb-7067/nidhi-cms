@@ -1,19 +1,18 @@
 import { Router } from "express";
-import { db } from "../lib/db";
 import {
   projectsTable, clientsTable, usersTable, bugsTable, dailyLogsTable,
   apkSchedulesTable, resourceRequestsTable, projectMembersTable, auditLogsTable,
+  milestonesTable, ticketsTable
 } from "@workspace/db/schema";
-import { eq, and, sql, desc, isNull, gte, lte, count } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 
 const router = Router();
 
 // GET /api/analytics/dashboard
 router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayStr = today.toISOString().split("T")[0];
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
   const [
     activeProjects,
@@ -24,66 +23,116 @@ router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), asyn
     apksDueToday,
     pipeline,
     bugSeverity,
+    recentLogs,
+    milestoneStatus,
+    openTickets
   ] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(projectsTable).where(eq(projectsTable.status, "in_progress")),
-    db.select({ count: sql<number>`count(*)` }).from(clientsTable).where(eq(clientsTable.status, "active")),
-    db.select({ count: sql<number>`count(*)` }).from(projectsTable).where(and(sql`${projectsTable.deadline} < now()`, sql`${projectsTable.status} != 'completed'`)),
-    db.select({ count: sql<number>`count(*)` }).from(bugsTable).where(eq(bugsTable.status, "open")),
-    db.select({ count: sql<number>`count(*)` }).from(resourceRequestsTable).where(eq(resourceRequestsTable.status, "pending")),
-    db.select({ count: sql<number>`count(*)` }).from(apkSchedulesTable).where(sql`date(${apkSchedulesTable.scheduledDate}) = current_date`),
-    db.select({ status: projectsTable.status, count: sql<number>`count(*)` }).from(projectsTable).groupBy(projectsTable.status),
-    db.select({ severity: bugsTable.severity, count: sql<number>`count(*)` }).from(bugsTable).where(eq(bugsTable.status, "open")).groupBy(bugsTable.severity),
+    projectsTable.countDocuments({ status: "in_progress" }),
+    clientsTable.countDocuments({ status: "active" }),
+    projectsTable.countDocuments({ deadline: { $lt: now }, status: { $ne: "completed" } }),
+    bugsTable.countDocuments({ status: "open" }),
+    resourceRequestsTable.countDocuments({ status: "pending" }),
+    apkSchedulesTable.countDocuments({ scheduledDate: { $gte: startOfToday, $lt: endOfToday } }),
+    
+    projectsTable.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]),
+    
+    bugsTable.aggregate([
+      { $match: { status: "open" } },
+      { $group: { _id: "$severity", count: { $sum: 1 } } }
+    ]),
+    
+    auditLogsTable
+      .find({}, { action: 1, entityType: 1, userId: 1, createdAt: 1 })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean(),
+
+    milestonesTable.aggregate([
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]),
+    
+    ticketsTable.countDocuments({ status: { $in: ["open", "pending"] } })
+  ]);
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+  const [projectsTrend, bugsTrend] = await Promise.all([
+    projectsTable.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ]),
+    bugsTable.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, count: { $sum: 1 } } },
+      { $sort: { _id: 1 } }
+    ])
   ]);
 
   const pipelineMap: Record<string, number> = {};
-  for (const row of pipeline) {
-    pipelineMap[row.status] = Number(row.count);
-  }
+  pipeline.forEach((row) => {
+    if (row._id) pipelineMap[row._id] = row.count;
+  });
 
   const severityMap: Record<string, number> = {};
-  for (const row of bugSeverity) {
-    severityMap[row.severity] = Number(row.count);
-  }
+  bugSeverity.forEach((row) => {
+    if (row._id) severityMap[row._id] = row.count;
+  });
 
-  // Recent activity from audit logs
-  const recentActivity = await db
-    .select({
-      id: auditLogsTable.id,
-      action: auditLogsTable.action,
-      entityType: auditLogsTable.entityType,
-      entityId: auditLogsTable.entityId,
-      createdAt: auditLogsTable.createdAt,
-      actorName: usersTable.name,
-      actorAvatarUrl: usersTable.avatarUrl,
+  // Add actor details to recent logs
+  const recentActivity = await Promise.all(
+    recentLogs.map(async (log: any) => {
+      let actorName = "System";
+      let actorAvatarUrl = null;
+      
+      if (log.actorId) {
+        const user = await usersTable.findOne({ id: log.actorId });
+        if (user) {
+          actorName = user.name;
+          actorAvatarUrl = user.avatarUrl;
+        }
+      }
+      
+      return {
+        id: log.id,
+        actorName,
+        actorAvatarUrl,
+        action: log.action,
+        entityType: log.entityType,
+        entityName: `${log.entityType} #${log.entityId}`,
+        timestamp: log.createdAt.toISOString(),
+      };
     })
-    .from(auditLogsTable)
-    .leftJoin(usersTable, eq(usersTable.id, auditLogsTable.actorId))
-    .orderBy(desc(auditLogsTable.createdAt))
-    .limit(10);
+  );
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const teamMembersOnline = await usersTable.countDocuments({
+    role: "developer",
+    lastLoginAt: { $gte: todayStart }
+  });
 
   res.json({
-    activeProjects: Number(activeProjects[0].count),
-    totalClients: Number(totalClients[0].count),
-    teamMembersOnline: 0,
-    overdueProjects: Number(overdueProjects[0].count),
-    apksDueToday: Number(apksDueToday[0].count),
-    openBugs: Number(openBugs[0].count),
-    openRequests: Number(openRequests[0].count),
-    recentActivity: recentActivity.map((a) => ({
-      id: a.id,
-      actorName: a.actorName ?? "System",
-      actorAvatarUrl: a.actorAvatarUrl ?? null,
-      action: a.action,
-      entityType: a.entityType,
-      entityName: `${a.entityType} #${a.entityId}`,
-      timestamp: a.createdAt.toISOString(),
-    })),
+    activeProjects,
+    totalClients,
+    teamMembersOnline,
+    overdueProjects,
+    apksDueToday,
+    openBugs,
+    openRequests,
+    openTickets,
+    recentActivity,
     projectPipeline: {
       scoping: pipelineMap["scoping"] ?? 0,
       inProgress: pipelineMap["in_progress"] ?? 0,
       uat: pipelineMap["uat"] ?? 0,
       onHold: pipelineMap["on_hold"] ?? 0,
       completed: pipelineMap["completed"] ?? 0,
+      maintenance: pipelineMap["maintenance"] ?? 0,
     },
     bugSeverityBreakdown: {
       critical: severityMap["critical"] ?? 0,
@@ -91,6 +140,11 @@ router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), asyn
       medium: severityMap["medium"] ?? 0,
       low: severityMap["low"] ?? 0,
     },
+    milestonesStatus: milestoneStatus.map((m: any) => ({ status: m._id, count: m.count })),
+    trends: {
+      projects: projectsTrend.map((t: any) => ({ month: t._id, count: t.count })),
+      bugs: bugsTrend.map((t: any) => ({ month: t._id, count: t.count }))
+    }
   });
 });
 
@@ -98,27 +152,8 @@ router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), asyn
 router.get("/analytics/projects/:id", requireAuth, async (req, res) => {
   const projectId = parseInt(req.params['id'] as string);
 
-  const members = await db
-    .select({
-      userId: projectMembersTable.userId,
-      completionPct: projectMembersTable.completionPct,
-      name: usersTable.name,
-    })
-    .from(projectMembersTable)
-    .innerJoin(usersTable, eq(usersTable.id, projectMembersTable.userId))
-    .where(eq(projectMembersTable.projectId, projectId));
-
-  const logs = await db
-    .select({
-      logDate: dailyLogsTable.logDate,
-      hoursSpent: dailyLogsTable.hoursSpent,
-      completionPct: dailyLogsTable.completionPct,
-      workCategories: dailyLogsTable.workCategories,
-      developerId: dailyLogsTable.developerId,
-    })
-    .from(dailyLogsTable)
-    .where(eq(dailyLogsTable.projectId, projectId))
-    .orderBy(dailyLogsTable.logDate);
+  const members = await projectMembersTable.find({ projectId });
+  const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: 1 });
 
   // Completion over time
   const completionMap = new Map<string, number>();
@@ -127,11 +162,11 @@ router.get("/analytics/projects/:id", requireAuth, async (req, res) => {
   }
   const completionOverTime = Array.from(completionMap.entries()).map(([date, value]) => ({ date, value }));
 
-  // Hours per week (group by week)
+  // Hours per month
   const hoursMap = new Map<string, number>();
   for (const log of logs) {
-    const week = log.logDate.slice(0, 7); // group by month for simplicity
-    hoursMap.set(week, (hoursMap.get(week) ?? 0) + Number(log.hoursSpent));
+    const month = log.logDate.slice(0, 7); // YYYY-MM
+    hoursMap.set(month, (hoursMap.get(month) ?? 0) + Number(log.hoursSpent));
   }
   const hoursPerWeek = Array.from(hoursMap.entries()).map(([date, value]) => ({ date, value }));
 
@@ -150,12 +185,17 @@ router.get("/analytics/projects/:id", requireAuth, async (req, res) => {
     devHoursMap.set(log.developerId, (devHoursMap.get(log.developerId) ?? 0) + Number(log.hoursSpent));
   }
 
-  const developerContributions = members.map((m) => ({
-    developerId: m.userId,
-    developerName: m.name,
-    completionPct: m.completionPct,
-    hoursLogged: devHoursMap.get(m.userId) ?? 0,
-  }));
+  const developerContributions = await Promise.all(
+    members.map(async (m: any) => {
+      const user = await usersTable.findOne({ id: m.userId });
+      return {
+        developerId: m.userId,
+        developerName: user?.name ?? "Unknown",
+        completionPct: m.completionPct,
+        hoursLogged: devHoursMap.get(m.userId) ?? 0,
+      };
+    })
+  );
 
   const totalHoursLogged = logs.reduce((sum, l) => sum + Number(l.hoursSpent), 0);
   const averageCompletionPct = members.length ? Math.round(members.reduce((sum, m) => sum + m.completionPct, 0) / members.length) : 0;
@@ -168,30 +208,27 @@ router.get("/analytics/team", requireAuth, requireRole("super_admin"), async (re
   const now = new Date();
   const month = parseInt((req.query.month as string) ?? String(now.getMonth() + 1));
   const year = parseInt((req.query.year as string) ?? String(now.getFullYear()));
+  
+  const monthPattern = `${year}-${String(month).padStart(2, "0")}`; // matches YYYY-MM
 
-  const developers = await db.select().from(usersTable).where(eq(usersTable.role, "developer"));
+  const developers = await usersTable.find({ role: "developer" });
 
-  const statsPromises = developers.map(async (dev) => {
-    const [activeProjects] = await db
-      .select({ count: sql<number>`count(distinct ${projectMembersTable.projectId})` })
-      .from(projectMembersTable)
-      .where(eq(projectMembersTable.userId, dev.id));
-
-    const logs = await db
-      .select({ logDate: dailyLogsTable.logDate, hoursSpent: dailyLogsTable.hoursSpent })
-      .from(dailyLogsTable)
-      .where(and(eq(dailyLogsTable.developerId, dev.id), sql`extract(month from ${dailyLogsTable.logDate}) = ${month}`, sql`extract(year from ${dailyLogsTable.logDate}) = ${year}`));
+  const statsPromises = developers.map(async (dev: any) => {
+    const activeProjects = await projectMembersTable.countDocuments({ userId: dev.id });
+    
+    // Match logDates that start with target year-month (since we stored logDate as YYYY-MM-DD string)
+    const logs = await dailyLogsTable.find({
+      developerId: dev.id,
+      logDate: { $regex: `^${monthPattern}` }
+    });
 
     const totalHoursThisMonth = logs.reduce((sum, l) => sum + Number(l.hoursSpent), 0);
     const workingDays = 22;
     const utilisationPct = Math.min(100, Math.round((totalHoursThisMonth / (workingDays * 8)) * 100));
 
-    const [lastLog] = await db
-      .select({ logDate: dailyLogsTable.logDate })
-      .from(dailyLogsTable)
-      .where(eq(dailyLogsTable.developerId, dev.id))
-      .orderBy(desc(dailyLogsTable.logDate))
-      .limit(1);
+    const lastLog = await dailyLogsTable
+      .findOne({ developerId: dev.id })
+      .sort({ logDate: -1 });
 
     return {
       userId: dev.id,
@@ -199,7 +236,7 @@ router.get("/analytics/team", requireAuth, requireRole("super_admin"), async (re
       employeeId: dev.employeeId,
       avatarUrl: dev.avatarUrl,
       subType: dev.subType,
-      activeProjects: Number(activeProjects.count),
+      activeProjects,
       totalHoursThisMonth,
       utilisationPct,
       lastLogDate: lastLog?.logDate ?? null,
@@ -209,10 +246,9 @@ router.get("/analytics/team", requireAuth, requireRole("super_admin"), async (re
   const stats = await Promise.all(statsPromises);
 
   // Heatmap: log activity by date for the current month
-  const allLogs = await db
-    .select({ logDate: dailyLogsTable.logDate })
-    .from(dailyLogsTable)
-    .where(and(sql`extract(month from ${dailyLogsTable.logDate}) = ${month}`, sql`extract(year from ${dailyLogsTable.logDate}) = ${year}`));
+  const allLogs = await dailyLogsTable.find({
+    logDate: { $regex: `^${monthPattern}` }
+  });
 
   const heatMap = new Map<string, number>();
   for (const log of allLogs) {
@@ -227,24 +263,81 @@ router.get("/analytics/team", requireAuth, requireRole("super_admin"), async (re
 router.get("/analytics/bugs", requireAuth, async (req, res) => {
   const { projectId } = req.query as Record<string, string>;
 
-  const conditions = [];
-  if (projectId) conditions.push(eq(bugsTable.projectId, parseInt(projectId)));
+  const query: Record<string, any> = {};
+  if (projectId) query.projectId = parseInt(projectId);
 
   const [totalOpen, totalFixed, severityDist, statusDist, platformDist] = await Promise.all([
-    db.select({ count: sql<number>`count(*)` }).from(bugsTable).where(and(...conditions, eq(bugsTable.status, "open"))),
-    db.select({ count: sql<number>`count(*)` }).from(bugsTable).where(and(...conditions, eq(bugsTable.status, "fixed"))),
-    db.select({ name: bugsTable.severity, count: sql<number>`count(*)` }).from(bugsTable).where(conditions.length ? and(...conditions) : undefined).groupBy(bugsTable.severity),
-    db.select({ name: bugsTable.status, count: sql<number>`count(*)` }).from(bugsTable).where(conditions.length ? and(...conditions) : undefined).groupBy(bugsTable.status),
-    db.select({ name: bugsTable.platform, count: sql<number>`count(*)` }).from(bugsTable).where(conditions.length ? and(...conditions) : undefined).groupBy(bugsTable.platform),
+    bugsTable.countDocuments({ ...query, status: "open" }),
+    bugsTable.countDocuments({ ...query, status: "fixed" }),
+    bugsTable.aggregate([
+      { $match: query },
+      { $group: { _id: "$severity", count: { $sum: 1 } } }
+    ]),
+    bugsTable.aggregate([
+      { $match: query },
+      { $group: { _id: "$status", count: { $sum: 1 } } }
+    ]),
+    bugsTable.aggregate([
+      { $match: query },
+      { $group: { _id: "$platform", count: { $sum: 1 } } }
+    ]),
   ]);
 
   res.json({
-    totalOpen: Number(totalOpen[0].count),
-    totalFixed: Number(totalFixed[0].count),
-    severityDistribution: severityDist.map((r) => ({ name: r.name, count: Number(r.count) })),
-    statusDistribution: statusDist.map((r) => ({ name: r.name, count: Number(r.count) })),
-    platformDistribution: platformDist.map((r) => ({ name: r.name, count: Number(r.count) })),
+    totalOpen,
+    totalFixed,
+    severityDistribution: severityDist.map((r) => ({ name: r._id, count: r.count })),
+    statusDistribution: statusDist.map((r) => ({ name: r._id, count: r.count })),
+    platformDistribution: platformDist.map((r) => ({ name: r._id, count: r.count })),
   });
+});
+
+// GET /api/analytics/companies
+router.get("/analytics/companies", requireAuth, requireRole("super_admin"), async (_req, res) => {
+  const companies = await clientsTable.find({ status: "active" }).sort({ companyName: 1 }).limit(100);
+  const now = new Date();
+
+  const cards = await Promise.all(
+    companies.map(async (c) => {
+      const companyId = c.id;
+      const projectFilter = { $or: [{ companyId }, { clientId: companyId }] };
+      const projects = await projectsTable.find(projectFilter).select("id status deadline").lean();
+      const projectIds = projects.map((p) => p.id);
+
+      const [openTickets, pendingRequests, developerCount] = await Promise.all([
+        ticketsTable.countDocuments({
+          status: { $in: ["open", "pending"] },
+          $or: [{ companyId }, ...(projectIds.length ? [{ projectId: { $in: projectIds } }] : [])],
+        }),
+        resourceRequestsTable.countDocuments({
+          status: "pending",
+          ...(projectIds.length ? { projectId: { $in: projectIds } } : { projectId: -1 }),
+        }),
+        projectIds.length
+          ? projectMembersTable.distinct("userId", { projectId: { $in: projectIds } }).then((ids) => ids.length)
+          : Promise.resolve(0),
+      ]);
+
+      const delayed = projects.filter(
+        (p) => p.deadline && new Date(p.deadline) < now && p.status !== "completed",
+      ).length;
+
+      return {
+        companyId,
+        companyName: c.companyName,
+        clientId: companyId,
+        totalProjects: projects.length,
+        activeProjects: projects.filter((p) => p.status === "in_progress").length,
+        completedProjects: projects.filter((p) => p.status === "completed").length,
+        delayedProjects: delayed,
+        openTickets,
+        pendingRequests,
+        developerCount,
+      };
+    }),
+  );
+
+  res.json({ companies: cards });
 });
 
 export default router;

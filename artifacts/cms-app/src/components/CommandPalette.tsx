@@ -5,6 +5,7 @@ import { useGlobalSearch, getGlobalSearchQueryKey } from "@workspace/api-client-
 import { Briefcase, Building, Bug, Loader2, Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -15,6 +16,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 300);
@@ -92,7 +94,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                       <CommandItem
                         key={`project-${p.id}`}
                         value={`project-${p.id}-${p.name}`}
-                        onSelect={() => navigate(`/admin/projects/${p.id}`)}
+                        onSelect={() => {
+                          if (user?.role === "client") navigate("/client");
+                          else navigate(`/admin/projects/${p.id}`);
+                        }}
                         className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm cursor-pointer aria-selected:bg-muted"
                       >
                         <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-blue-500/10">

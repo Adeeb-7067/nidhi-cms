@@ -22,4 +22,5 @@ export interface BugUpdate {
   buildVersion?: string;
   platform?: BugUpdatePlatform;
   assigneeId?: number;
+  attachmentUrl?: string;
 }

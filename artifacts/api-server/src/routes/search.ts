@@ -1,7 +1,5 @@
 import { Router } from "express";
-import { db } from "../lib/db";
 import { usersTable, clientsTable, projectsTable, bugsTable } from "@workspace/db/schema";
-import { or, like, and, eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/auth";
 
 const router = Router();
@@ -10,38 +8,75 @@ const router = Router();
 router.get("/search", requireAuth, async (req, res) => {
   const q = (req.query["q"] as string || "").trim();
   if (!q || q.length < 2) {
-    res.json({ projects: [], clients: [], employees: [], bugs: [] });
+    res.json({ projects: [], companies: [], clients: [], employees: [], bugs: [] });
     return;
   }
   const limit = Math.min(parseInt((req.query["limit"] as string) || "5"), 10);
-  const pattern = `%${q}%`;
+  
+  const regex = { $regex: q, $options: "i" };
 
   const [projects, clients, employees, bugs] = await Promise.all([
-    db.select({ id: projectsTable.id, name: projectsTable.name, status: projectsTable.status, priority: projectsTable.priority, completionOverride: projectsTable.completionOverride, description: projectsTable.description, techStack: projectsTable.techStack, clientId: projectsTable.clientId, pmId: projectsTable.pmId, startDate: projectsTable.startDate, deadline: projectsTable.deadline, figmaUrl: projectsTable.figmaUrl, repoUrl: projectsTable.repoUrl, stagingUrl: projectsTable.stagingUrl, productionUrl: projectsTable.productionUrl, createdAt: projectsTable.createdAt, updatedAt: projectsTable.updatedAt })
-      .from(projectsTable)
-      .where(or(like(projectsTable.name, pattern), like(projectsTable.description, pattern)))
-      .limit(limit),
-    db.select()
-      .from(clientsTable)
-      .where(or(like(clientsTable.companyName, pattern), like(clientsTable.contactPerson, pattern), like(clientsTable.email, pattern)))
-      .limit(limit),
-    db.select({ id: usersTable.id, employeeId: usersTable.employeeId, name: usersTable.name, email: usersTable.email, role: usersTable.role, subType: usersTable.subType, designation: usersTable.designation, avatarUrl: usersTable.avatarUrl, status: usersTable.status, lastLoginAt: usersTable.lastLoginAt, createdAt: usersTable.createdAt })
-      .from(usersTable)
-      .where(and(or(like(usersTable.name, pattern), like(usersTable.email, pattern)), eq(usersTable.role, "developer")))
-      .limit(limit),
-    db.select({ id: bugsTable.id, bugNumber: bugsTable.bugNumber, title: bugsTable.title, severity: bugsTable.severity, priority: bugsTable.priority, status: bugsTable.status, platform: bugsTable.platform, projectId: bugsTable.projectId, reporterId: bugsTable.reporterId, assigneeId: bugsTable.assigneeId, description: bugsTable.description, buildVersion: bugsTable.buildVersion, createdAt: bugsTable.createdAt, updatedAt: bugsTable.updatedAt, resolvedAt: bugsTable.resolvedAt, stepsToReproduce: bugsTable.stepsToReproduce, expectedBehavior: bugsTable.expectedBehavior, actualBehavior: bugsTable.actualBehavior })
-      .from(bugsTable)
-      .where(or(like(bugsTable.title, pattern), like(bugsTable.bugNumber, pattern)))
-      .limit(limit),
+    projectsTable.find({
+      $or: [
+        { name: regex },
+        { description: regex }
+      ]
+    }).limit(limit),
+    
+    clientsTable.find({
+      $or: [
+        { companyName: regex },
+        { contactPerson: regex },
+        { email: regex }
+      ]
+    }).limit(limit),
+    
+    usersTable.find({
+      role: "developer",
+      $or: [
+        { name: regex },
+        { email: regex }
+      ]
+    }).limit(limit),
+    
+    bugsTable.find({
+      $or: [
+        { title: regex },
+        { bugNumber: regex }
+      ]
+    }).limit(limit),
   ]);
 
   const formatDate = (d: Date | string | null | undefined) => d ? new Date(d).toISOString() : null;
   
   res.json({
-    projects: projects.map(p => ({ ...p, startDate: formatDate(p.startDate), deadline: formatDate(p.deadline), createdAt: formatDate(p.createdAt), updatedAt: formatDate(p.updatedAt) })),
-    clients: clients.map(c => ({ ...c, createdAt: formatDate(c.createdAt) })),
-    employees: employees.map(u => ({ ...u, lastLoginAt: formatDate(u.lastLoginAt), createdAt: formatDate(u.createdAt) })),
-    bugs: bugs.map(b => ({ ...b, createdAt: formatDate(b.createdAt), updatedAt: formatDate(b.updatedAt), resolvedAt: formatDate(b.resolvedAt) })),
+    projects: projects.map((p: any) => ({
+      id: p.id, name: p.name, status: p.status, type: p.type || (p.status === 'maintenance' ? 'maintenance' : 'development'), priority: p.priority, completionOverride: p.completionOverride, description: p.description, techStack: p.techStack, companyId: p.companyId ?? p.clientId, clientId: p.clientId, pmId: p.pmId, 
+      startDate: formatDate(p.startDate), deadline: formatDate(p.deadline), figmaUrl: p.figmaUrl, repoUrl: p.repoUrl, stagingUrl: p.stagingUrl, productionUrl: p.productionUrl, 
+      createdAt: formatDate(p.createdAt), updatedAt: formatDate(p.updatedAt)
+    })),
+    companies: clients.map((c: any) => ({
+      id: c.id,
+      companyId: c.id,
+      companyName: c.companyName,
+      companyCode: c.companyCode ?? null,
+      contactPerson: c.contactPerson,
+      email: c.email,
+      phone: c.phone,
+      status: c.status,
+      clientSince: formatDate(c.clientSince),
+    })),
+    clients: clients.map((c: any) => ({
+      id: c.id, companyName: c.companyName, contactPerson: c.contactPerson, email: c.email, phone: c.phone, address: c.address, gstNumber: c.gstNumber ?? (c as { businessId?: string }).businessId ?? null, logoUrl: c.logoUrl, status: c.status, portalLogin: c.portalLogin, clientSince: formatDate(c.clientSince), userId: c.userId, createdAt: formatDate(c.createdAt)
+    })),
+    employees: employees.map((u: any) => ({
+      id: u.id, employeeId: u.employeeId, name: u.name, email: u.email, role: u.role, subType: u.subType, designation: u.designation, avatarUrl: u.avatarUrl, status: u.status, 
+      lastLoginAt: formatDate(u.lastLoginAt), createdAt: formatDate(u.createdAt)
+    })),
+    bugs: bugs.map((b: any) => ({
+      id: b.id, bugNumber: b.bugNumber, title: b.title, severity: b.severity, priority: b.priority, status: b.status, platform: b.platform, projectId: b.projectId, reporterId: b.reporterId, assigneeId: b.assigneeId, description: b.description, buildVersion: b.buildVersion, 
+      createdAt: formatDate(b.createdAt), updatedAt: formatDate(b.updatedAt), resolvedAt: formatDate(b.resolvedAt), stepsToReproduce: b.stepsToReproduce, expectedBehavior: b.expectedBehavior, actualBehavior: b.actualBehavior
+    })),
   });
 });
 

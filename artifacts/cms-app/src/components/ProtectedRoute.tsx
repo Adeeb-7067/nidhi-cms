@@ -8,16 +8,16 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, isLoading, accessToken } = useAuth();
+  const { user, isLoading, isInitializing, accessToken } = useAuth();
   const [, setLocation] = useLocation();
 
   React.useEffect(() => {
-    if (!isLoading && !accessToken) {
+    if (!isInitializing && !isLoading && !accessToken) {
       setLocation("/login");
     }
-  }, [isLoading, accessToken, setLocation]);
+  }, [isInitializing, isLoading, accessToken, setLocation]);
 
-  if (isLoading) {
+  if (isInitializing || isLoading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />

@@ -1,42 +1,101 @@
 import { Router } from "express";
-import { db } from "../lib/db";
-import { notificationsTable } from "@workspace/db/schema";
-import { eq, and, isNull, sql, desc } from "drizzle-orm";
-import { requireAuth } from "../middlewares/auth";
+import { notificationsTable, getNextSequence, usersTable } from "@workspace/db/schema";
+import { requireAuth, requireRole } from "../middlewares/auth";
+import { broadcast } from "../lib/realtime";
+import { parsePagination } from "../lib/route-errors";
+import {
+  formatNotificationRow,
+  NOTIFICATION_LIST_PROJECTION,
+  unreadNotificationFilter,
+} from "../lib/notification-format";
 
 const router = Router();
 
 // GET /api/notifications
 router.get("/notifications", requireAuth, async (req, res) => {
-  const { unreadOnly, page = "1", limit = "20" } = req.query as Record<string, string>;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const q = req.query as Record<string, string>;
+  const { page, limit, skip } = parsePagination(q);
+  const unreadOnly = q.unreadOnly === "true";
+  const userId = req.user!.id;
+  const unreadFilter = unreadNotificationFilter(userId);
+  const query = unreadOnly ? unreadFilter : { userId };
 
-  const conditions = [eq(notificationsTable.userId, req.user!.id)];
-  if (unreadOnly === "true") conditions.push(isNull(notificationsTable.readAt));
+  // Badge polling: unreadOnly + limit 1 → count only (no document fetch)
+  if (unreadOnly && limit === 1 && page === 1) {
+    const unreadCount = await notificationsTable.countDocuments(unreadFilter);
+    res.json({ notifications: [], unreadCount, total: unreadCount });
+    return;
+  }
 
-  const [notifications, countResult, unreadCount] = await Promise.all([
-    db.select().from(notificationsTable).where(and(...conditions)).orderBy(desc(notificationsTable.createdAt)).limit(parseInt(limit)).offset(offset),
-    db.select({ count: sql<number>`count(*)` }).from(notificationsTable).where(and(...conditions)),
-    db.select({ count: sql<number>`count(*)` }).from(notificationsTable).where(and(eq(notificationsTable.userId, req.user!.id), isNull(notificationsTable.readAt))),
+  const [notifications, total, unreadCount] = await Promise.all([
+    notificationsTable
+      .find(query, NOTIFICATION_LIST_PROJECTION)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    notificationsTable.countDocuments(query),
+    notificationsTable.countDocuments(unreadFilter),
   ]);
 
   res.json({
-    notifications: notifications.map((n) => ({ ...n, readAt: n.readAt?.toISOString() ?? null, createdAt: n.createdAt.toISOString() })),
-    unreadCount: Number(unreadCount[0].count),
-    total: Number(countResult[0].count),
+    notifications: notifications.map((n) => formatNotificationRow(n as never)),
+    unreadCount,
+    total,
   });
 });
 
 // POST /api/notifications/mark-all-read
 router.post("/notifications/mark-all-read", requireAuth, async (req, res) => {
-  await db.update(notificationsTable).set({ readAt: new Date() }).where(and(eq(notificationsTable.userId, req.user!.id), isNull(notificationsTable.readAt)));
+  await notificationsTable.updateMany(unreadNotificationFilter(req.user!.id), {
+    $set: { readAt: new Date(), isRead: true },
+  });
   res.json({ message: "All marked read" });
 });
 
 // POST /api/notifications/:id/read
 router.post("/notifications/:id/read", requireAuth, async (req, res) => {
-  await db.update(notificationsTable).set({ readAt: new Date() }).where(and(eq(notificationsTable.id, parseInt(req.params['id'] as string)), eq(notificationsTable.userId, req.user!.id)));
+  const id = parseInt(req.params['id'] as string);
+  await notificationsTable.updateOne(
+    { id, userId: req.user!.id },
+    { $set: { readAt: new Date(), isRead: true } }
+  );
   res.json({ message: "Marked read" });
+});
+
+// POST /api/notifications/broadcast
+router.post("/notifications/broadcast", requireAuth, requireRole("super_admin"), async (req, res) => {
+  const { title, body, type = "broadcast" } = req.body;
+  if (!title || !body) {
+    res.status(400).json({ error: "title and body required" });
+    return;
+  }
+
+  const users = await usersTable.find({ status: "active" });
+  
+  const notifications = await Promise.all(users.map(async (u: any) => {
+    const id = await getNextSequence("notifications");
+    return {
+      id,
+      userId: u.id,
+      type,
+      title,
+      body,
+      isRead: false,
+      createdAt: new Date()
+    };
+  }));
+
+  await notificationsTable.insertMany(notifications);
+  
+  broadcast("notification", {
+    type,
+    title,
+    body,
+    broadcast: true
+  });
+
+  res.status(201).json({ message: `Broadcast sent to ${users.length} users` });
 });
 
 export default router;

@@ -1,0 +1,132 @@
+# =============================================================================
+# .graphifyignore — tuned for the Content-Management-Hub monorepo
+# Goal: keep token usage MINIMAL by excluding everything that is
+#   - auto-generated (orval, codegen, build output)
+#   - vendored / dependency code (node_modules)
+#   - non-source artifacts (lockfiles, uploads, transcripts, terminals)
+#   - binary / media files
+# Code in artifacts/* and lib/* (excl. generated/) is processed locally via
+# tree-sitter and consumes NO LLM tokens. Only docs/PDFs/images do.
+# =============================================================================
+
+# ---- Dependencies & package manager ----------------------------------------
+node_modules/
+**/node_modules/
+.pnpm-store/
+.pnp.*
+.yarn/
+
+# ---- Lockfiles & manifests that aren't useful for graphs -------------------
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+**/pnpm-lock.yaml
+**/package-lock.json
+**/yarn.lock
+
+# ---- Build / dist / cache outputs ------------------------------------------
+dist/
+build/
+out/
+.next/
+.vite/
+.turbo/
+.cache/
+**/dist/
+**/build/
+**/out/
+**/.next/
+**/.vite/
+**/.turbo/
+**/.cache/
+**/coverage/
+**/*.tsbuildinfo
+
+# ---- Auto-generated API client code (HUGE token sink) ----------------------
+# These are 147+ files of generated zod/orval types — completely redundant
+# with the source-of-truth openapi.yaml which IS indexed.
+lib/api-zod/src/generated/
+lib/api-client-react/src/generated/
+**/generated/
+
+# ---- Local runtime data / uploads ------------------------------------------
+uploads/
+**/uploads/
+artifacts/api-server/uploads/
+
+# ---- Cursor / agent / IDE workspace data -----------------------------------
+.cursor/
+agent-transcripts/
+terminals/
+.vscode/
+.idea/
+
+# ---- Environment & secrets (never want these in a graph anyway) ------------
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# ---- Logs & temp files -----------------------------------------------------
+*.log
+**/*.log
+*.tmp
+**/*.tmp
+*.pid
+
+# ---- Source maps & minified assets -----------------------------------------
+*.map
+**/*.map
+*.min.js
+*.min.css
+**/*.min.js
+**/*.min.css
+
+# ---- Test snapshots & fixtures (usually noise) -----------------------------
+**/__snapshots__/
+**/*.snap
+**/fixtures/**/*.json
+
+# ---- Binary / media (saves heavy LLM transcription tokens) -----------------
+# Remove these lines if you actually want videos/images analyzed.
+*.mp4
+*.mov
+*.mp3
+*.wav
+*.zip
+*.tar
+*.tar.gz
+*.7z
+*.apk
+*.ipa
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Images — keep PNGs/JPGs OFF by default to save tokens. Uncomment to include.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.ico
+
+# PDFs — comment this out if you want PDF docs indexed (uses LLM tokens).
+*.pdf
+
+# ---- Generated docs / reports ----------------------------------------------
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/cache/
+
+# ---- DB / sandbox test files -----------------------------------------------
+lib/db/src/test.cjs
+
+# ---- Misc ------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.bak
+*.orig

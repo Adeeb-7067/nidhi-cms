@@ -1,39 +1,57 @@
-import { pgTable, serial, text, timestamp, integer, pgEnum, index } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
-import { projectsTable } from "./projects";
-import { apkSchedulesTable, apkAudienceEnum } from "./projects";
+import mongoose, { Schema } from "mongoose";
+import { apkAudiences, ApkAudience } from "./projects";
 
-export const apkReleaseTypeEnum = pgEnum("apk_release_type", ["alpha", "beta", "rc", "production"]);
-export const apkPlatformEnum = pgEnum("apk_platform", ["android", "ios"]);
+export const apkReleaseTypes = ["alpha", "beta", "rc", "production"] as const;
+export const apkPlatforms = ["android", "ios"] as const;
 
-export const apkReleasesTable = pgTable("apk_releases", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projectsTable.id),
-  uploaderId: integer("uploader_id").notNull().references(() => usersTable.id),
-  version: text("version").notNull(),
-  buildNumber: integer("build_number").notNull(),
-  releaseType: apkReleaseTypeEnum("release_type").notNull().default("alpha"),
-  changelog: text("changelog"),
-  platform: apkPlatformEnum("platform").notNull().default("android"),
-  minOsVersion: text("min_os_version"),
-  fileUrl: text("file_url").notNull(),
-  audience: apkAudienceEnum("audience").notNull().default("team_only"),
-  apkScheduleId: integer("apk_schedule_id").references(() => apkSchedulesTable.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-}, (table) => [
-  index("apk_releases_project_id_idx").on(table.projectId),
-]);
+export type ApkReleaseType = typeof apkReleaseTypes[number];
+export type ApkPlatform = typeof apkPlatforms[number];
 
-export const apkDownloadLogsTable = pgTable("apk_download_logs", {
-  id: serial("id").primaryKey(),
-  apkReleaseId: integer("apk_release_id").notNull().references(() => apkReleasesTable.id),
-  userId: integer("user_id").references(() => usersTable.id),
-  ipAddress: text("ip_address"),
-  downloadedAt: timestamp("downloaded_at").notNull().defaultNow(),
+const apkReleaseSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  companyId: { type: Number, ref: "Clients", index: true },
+  projectId: { type: Number, ref: "Projects", required: true, index: true },
+  uploaderId: { type: Number, ref: "Users", required: true },
+  version: { type: String, required: true },
+  buildNumber: { type: Number, required: true },
+  releaseType: { type: String, enum: apkReleaseTypes, default: "alpha", required: true },
+  changelog: { type: String },
+  platform: { type: String, enum: apkPlatforms, default: "android", required: true },
+  minOsVersion: { type: String },
+  fileUrl: { type: String, required: true },
+  audience: { type: String, enum: apkAudiences, default: "team_only", required: true },
+  apkScheduleId: { type: Number, ref: "ApkSchedules" },
+  createdAt: { type: Date, default: Date.now },
 });
 
-export const insertApkReleaseSchema = createInsertSchema(apkReleasesTable).omit({ id: true, createdAt: true });
-export type InsertApkRelease = z.infer<typeof insertApkReleaseSchema>;
-export type ApkRelease = typeof apkReleasesTable.$inferSelect;
+export const ApkReleases = mongoose.models.ApkReleases || mongoose.model("ApkReleases", apkReleaseSchema);
+
+const apkDownloadLogSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  apkReleaseId: { type: Number, ref: "ApkReleases", required: true },
+  userId: { type: Number, ref: "Users" },
+  ipAddress: { type: String },
+  downloadedAt: { type: Date, default: Date.now },
+});
+
+export const ApkDownloadLogs = mongoose.models.ApkDownloadLogs || mongoose.model("ApkDownloadLogs", apkDownloadLogSchema);
+
+export interface ApkRelease {
+  id: number;
+  companyId: number | null;
+  projectId: number;
+  uploaderId: number;
+  version: string;
+  buildNumber: number;
+  releaseType: ApkReleaseType;
+  changelog: string | null;
+  platform: ApkPlatform;
+  minOsVersion: string | null;
+  fileUrl: string;
+  audience: ApkAudience;
+  apkScheduleId: number | null;
+  createdAt: Date;
+}
+
+export const apkReleasesTable = ApkReleases;
+export const apkDownloadLogsTable = ApkDownloadLogs;

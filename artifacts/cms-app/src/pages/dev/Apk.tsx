@@ -14,9 +14,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { FileUploader } from "@/components/ui/file-uploader";
 
 const apkReleaseSchema = z.object({
   version: z.string().min(1, "Version is required"),
@@ -74,8 +76,7 @@ export default function DevApk() {
       form.reset();
       refetchReleases();
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
-      toast.error(msg);
+      toastApiError(error, "Action failed. Please try again.");
     }
   };
 
@@ -121,7 +122,7 @@ export default function DevApk() {
           </Tooltip>
         </TooltipProvider>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
+          <DialogContent className="sm:max-w-[600px] bg-card border-border">
             <DialogHeader>
               <DialogTitle>Upload New Release</DialogTitle>
               <DialogDescription>
@@ -230,11 +231,17 @@ export default function DevApk() {
                   name="fileUrl"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>File URL / Download Link</FormLabel>
+                      <FormLabel>Binary Attachment (APK/IPA)</FormLabel>
                       <FormControl>
-                        <Input placeholder="https://storage.googleapis.com/..." {...field} />
+                        <FileUploader
+                          category="apk"
+                          onUploadComplete={field.onChange}
+                          value={field.value}
+                          accept=".apk,.ipa,.zip,.aar,.app"
+                          label="Drag & drop build or click to select"
+                        />
                       </FormControl>
-                      <FormDescription>Link to the hosted APK/IPA file</FormDescription>
+                      <FormDescription>Select the build artifact to upload directly to system storage</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

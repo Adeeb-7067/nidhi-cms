@@ -1,16 +1,22 @@
-import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
+import mongoose, { Schema } from "mongoose";
 
-export const companySettingsTable = pgTable("company_settings", {
-  id: serial("id").primaryKey(),
-  companyName: text("company_name").notNull().default("My Agency"),
-  logoUrl: text("logo_url"),
-  address: text("address"),
-  sealUrl: text("seal_url"),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+const companySettingsSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  companyName: { type: String, default: "My Agency", required: true },
+  logoUrl: { type: String },
+  address: { type: String },
+  sealUrl: { type: String },
+}, { timestamps: { createdAt: false, updatedAt: true } });
 
-export const insertCompanySettingsSchema = createInsertSchema(companySettingsTable).omit({ id: true });
-export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
-export type CompanySettings = typeof companySettingsTable.$inferSelect;
+export const CompanySettings = mongoose.models.CompanySettings || mongoose.model("CompanySettings", companySettingsSchema);
+
+export interface CompanySettings {
+  id: number;
+  companyName: string;
+  logoUrl: string | null;
+  address: string | null;
+  sealUrl: string | null;
+  updatedAt: Date;
+}
+
+export const companySettingsTable = CompanySettings;

@@ -5,6 +5,7 @@
  * Client Management System API
  * OpenAPI spec version: 1.0.0
  */
+import type { ListBugsScope } from "./listBugsScope";
 
 export type ListBugsParams = {
   projectId?: number;
@@ -12,4 +13,6 @@ export type ListBugsParams = {
   severity?: string;
   page?: number;
   limit?: number;
+  assigneeId?: number;
+  scope?: ListBugsScope;
 };

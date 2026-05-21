@@ -8,6 +8,10 @@
 
 export type ListMyLogsParams = {
   projectId?: number;
+  /**
+   * Filter by employee (super admin only)
+   */
+  developerId?: number;
   month?: number;
   year?: number;
   page?: number;

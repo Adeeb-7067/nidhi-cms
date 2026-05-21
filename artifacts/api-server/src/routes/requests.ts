@@ -1,84 +1,156 @@
 import { Router } from "express";
-import { db } from "../lib/db";
-import { resourceRequestsTable, usersTable, projectsTable } from "@workspace/db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import {
+  resourceRequestsTable,
+  usersTable,
+  notificationsTable,
+  getNextSequence,
+} from "@workspace/db/schema";
 import { requireAuth, requireRole } from "../middlewares/auth";
+import { notifyUser, broadcast } from "../lib/realtime";
+import { formatRequestRow, formatRequestRows } from "../lib/request-format";
+import { paginateModel } from "../lib/mongo-list";
+import { logger } from "../lib/logger";
+import {
+  badRequest,
+  notFound,
+  parseIdParam,
+  parsePagination,
+  optionalString,
+} from "../lib/route-errors";
 
 const router = Router();
 
-async function formatRequest(r: typeof resourceRequestsTable.$inferSelect) {
-  const [dev] = await db.select({ name: usersTable.name }).from(usersTable).where(eq(usersTable.id, r.developerId));
-  const [proj] = await db.select({ name: projectsTable.name }).from(projectsTable).where(eq(projectsTable.id, r.projectId));
-  return {
-    id: r.id,
-    developerId: r.developerId,
-    developerName: dev?.name ?? "Unknown",
-    projectId: r.projectId,
-    projectName: proj?.name ?? "Unknown",
-    type: r.type,
-    title: r.title,
-    description: r.description,
-    urgency: r.urgency,
-    status: r.status,
-    adminNote: r.adminNote,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-  };
-}
-
 // GET /api/requests
 router.get("/requests", requireAuth, async (req, res) => {
-  const { status, projectId, page = "1", limit = "20" } = req.query as Record<string, string>;
-  const offset = (parseInt(page) - 1) * parseInt(limit);
+  const { status, projectId } = req.query as Record<string, string>;
+  const pagination = parsePagination(req.query as Record<string, unknown>);
 
-  const conditions = [];
-  if (req.user!.role === "developer") conditions.push(eq(resourceRequestsTable.developerId, req.user!.id));
-  if (status) conditions.push(eq(resourceRequestsTable.status, status as "pending" | "approved" | "rejected"));
-  if (projectId) conditions.push(eq(resourceRequestsTable.projectId, parseInt(projectId)));
+  const query: Record<string, unknown> = {};
+  if (req.user!.role === "developer" || req.user!.role === "client") {
+    query.developerId = req.user!.id;
+  }
+  if (status) query.status = status;
+  if (projectId) query.projectId = parseInt(projectId, 10);
 
-  const [requests, countResult] = await Promise.all([
-    db.select().from(resourceRequestsTable).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(resourceRequestsTable.createdAt)).limit(parseInt(limit)).offset(offset),
-    db.select({ count: sql<number>`count(*)` }).from(resourceRequestsTable).where(conditions.length ? and(...conditions) : undefined),
-  ]);
+  const { items, total, page, limit } = await paginateModel(resourceRequestsTable, query, pagination);
+  const requests = await formatRequestRows(items as unknown as Parameters<typeof formatRequestRows>[0]);
 
-  const formatted = await Promise.all(requests.map(formatRequest));
-  res.json({ requests: formatted, total: Number(countResult[0].count), page: parseInt(page), limit: parseInt(limit) });
+  res.json({ requests, total, page, limit });
 });
 
 // POST /api/requests
 router.post("/requests", requireAuth, async (req, res) => {
-  const { projectId, type, title, description, urgency } = req.body;
-  if (!projectId || !type || !title || !description || !urgency) {
-    res.status(400).json({ error: "projectId, type, title, description, urgency required" });
-    return;
+  const body = req.body as Record<string, unknown>;
+  const projectId = Number(body.projectId);
+  const type = optionalString(body.type);
+  const title = optionalString(body.title);
+  const description = optionalString(body.description);
+  const urgency = optionalString(body.urgency);
+
+  if (!Number.isFinite(projectId) || projectId < 1) badRequest("Project is required.", "projectId");
+  if (!type) badRequest("Request type is required.", "type");
+  if (!title) badRequest("Title is required.", "title");
+  if (!description) badRequest("Description is required.", "description");
+  if (!urgency) badRequest("Urgency is required.", "urgency");
+
+  const nextId = await getNextSequence("resource_requests");
+  const request = await resourceRequestsTable.create({
+    id: nextId,
+    developerId: req.user!.id,
+    projectId,
+    type,
+    title,
+    description,
+    urgency,
+  });
+
+  const formatted = await formatRequestRow(request as unknown as Parameters<typeof formatRequestRow>[0]);
+
+  try {
+    const admins = await usersTable
+      .find({ role: "super_admin", status: "active" }, { id: 1 })
+      .lean();
+    const requestLabel = type === "add_on_work" ? "Add-on Work" : "Resource";
+    const requesterName = req.user!.name;
+
+    await Promise.all(
+      admins.map(async (admin) => {
+        const notifId = await getNextSequence("notifications");
+        await notificationsTable.create({
+          id: notifId,
+          userId: admin.id,
+          type: "request",
+          title: `New ${requestLabel} Request`,
+          body: `${requesterName} submitted: "${title}"`,
+          entityType: "request",
+          entityId: nextId,
+          isRead: false,
+        });
+        notifyUser(admin.id, "notification", {
+          type: "request",
+          title: `New ${requestLabel} Request`,
+          body: `${requesterName} submitted: "${title}"`,
+        });
+      }),
+    );
+    broadcast("request_update", { id: nextId });
+  } catch (err) {
+    logger.warn({ err, requestId: nextId }, "Failed to notify admins about new request");
   }
-  const [request] = await db.insert(resourceRequestsTable).values({ developerId: req.user!.id, projectId, type, title, description, urgency }).returning();
-  res.status(201).json(await formatRequest(request));
+
+  res.status(201).json(formatted);
 });
 
 // GET /api/requests/:id
 router.get("/requests/:id", requireAuth, async (req, res) => {
-  const r = await db.query.resourceRequestsTable.findFirst({ where: eq(resourceRequestsTable.id, parseInt(req.params['id'] as string)) });
-  if (!r) {
-    res.status(404).json({ error: "Request not found" });
-    return;
-  }
-  res.json(await formatRequest(r));
+  const id = parseIdParam(req.params.id, "request id");
+  const r = await resourceRequestsTable.findOne({ id }).lean();
+  if (!r) notFound("Request");
+  res.json(await formatRequestRow(r as unknown as unknown as Parameters<typeof formatRequestRow>[0]));
 });
 
 // PATCH /api/requests/:id
 router.patch("/requests/:id", requireAuth, requireRole("super_admin"), async (req, res) => {
-  const { status, adminNote } = req.body;
-  const [r] = await db
-    .update(resourceRequestsTable)
-    .set({ status, adminNote, updatedAt: new Date() })
-    .where(eq(resourceRequestsTable.id, parseInt(req.params['id'] as string)))
-    .returning();
-  if (!r) {
-    res.status(404).json({ error: "Request not found" });
-    return;
+  const id = parseIdParam(req.params.id, "request id");
+  const status = optionalString((req.body as { status?: string }).status);
+  const adminNote = (req.body as { adminNote?: string }).adminNote;
+
+  const r = await resourceRequestsTable.findOneAndUpdate(
+    { id },
+    { $set: { status, adminNote } },
+    { new: true },
+  );
+
+  if (!r) notFound("Request");
+
+  const formatted = await formatRequestRow(r as unknown as Parameters<typeof formatRequestRow>[0]);
+
+  if (status) {
+    try {
+      const notifId = await getNextSequence("notifications");
+      const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+      await notificationsTable.create({
+        id: notifId,
+        userId: r.developerId,
+        type: "request",
+        title: `Request ${statusLabel}`,
+        body: `Your request "${r.title}" has been ${status}`,
+        entityType: "request",
+        entityId: r.id,
+        isRead: false,
+      });
+      notifyUser(r.developerId, "notification", {
+        type: "request",
+        title: `Request ${statusLabel}`,
+        body: `Your request "${r.title}" has been ${status}`,
+      });
+      broadcast("request_update", { id: r.id });
+    } catch (err) {
+      logger.warn({ err, requestId: id }, "Failed to notify user about request status change");
+    }
   }
-  res.json(await formatRequest(r));
+
+  res.json(formatted);
 });
 
 export default router;

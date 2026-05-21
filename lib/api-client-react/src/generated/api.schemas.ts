@@ -28,11 +28,16 @@ export interface ResetPasswordInput {
   newPassword: string;
 }
 
+export interface FcmTokenInput {
+  token: string;
+}
+
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const UserRole = {
   super_admin: "super_admin",
   developer: "developer",
+  tester: "tester",
   client: "client",
 } as const;
 
@@ -57,6 +62,13 @@ export interface User {
   designation?: string | null;
   /** @nullable */
   avatarUrl?: string | null;
+  department?: string;
+  /** @nullable */
+  phoneNumber?: string | null;
+  /** @nullable */
+  joiningDate?: string | null;
+  /** @nullable */
+  linkedinUrl?: string | null;
   status: UserStatus;
   /** @nullable */
   lastLoginAt?: string | null;
@@ -74,6 +86,7 @@ export type UserInputRole = (typeof UserInputRole)[keyof typeof UserInputRole];
 export const UserInputRole = {
   super_admin: "super_admin",
   developer: "developer",
+  tester: "tester",
   client: "client",
 } as const;
 
@@ -85,6 +98,10 @@ export interface UserInput {
   subType?: string;
   designation?: string;
   avatarUrl?: string;
+  department?: string;
+  phoneNumber?: string;
+  joiningDate?: string;
+  linkedinUrl?: string;
 }
 
 export type UserUpdateStatus =
@@ -102,6 +119,10 @@ export interface UserUpdate {
   subType?: string;
   designation?: string;
   avatarUrl?: string;
+  department?: string;
+  phoneNumber?: string;
+  joiningDate?: string;
+  linkedinUrl?: string;
   status?: UserUpdateStatus;
 }
 
@@ -126,6 +147,7 @@ export const ProjectStatus = {
   on_hold: "on_hold",
   uat: "uat",
   completed: "completed",
+  maintenance: "maintenance",
 } as const;
 
 export type ProjectPriority =
@@ -138,9 +160,18 @@ export const ProjectPriority = {
   critical: "critical",
 } as const;
 
+export type ProjectType = (typeof ProjectType)[keyof typeof ProjectType];
+
+export const ProjectType = {
+  development: "development",
+  maintenance: "maintenance",
+} as const;
+
 export interface Project {
   id: number;
   name: string;
+  companyId: number;
+  companyName: string;
   clientId: number;
   clientName: string;
   /** @nullable */
@@ -151,6 +182,7 @@ export interface Project {
   description?: string | null;
   status: ProjectStatus;
   priority: ProjectPriority;
+  type: ProjectType;
   startDate: string;
   deadline: string;
   techStack: string[];
@@ -162,6 +194,12 @@ export interface Project {
   stagingUrl?: string | null;
   /** @nullable */
   productionUrl?: string | null;
+  /** @nullable */
+  adminUrl?: string | null;
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  postmanJson?: string | null;
   completionPct: number;
   /** @nullable */
   completionOverride?: number | null;
@@ -187,9 +225,14 @@ export interface Client {
   /** @nullable */
   address?: string | null;
   /** @nullable */
-  businessId?: string | null;
+  gstNumber?: string | null;
   /** @nullable */
   logoUrl?: string | null;
+  /** @nullable */
+  industry?: string | null;
+  /** @nullable */
+  website?: string | null;
+  tier?: string;
   status: ClientStatus;
   portalLogin: boolean;
   clientSince: string;
@@ -248,6 +291,8 @@ export interface Bug {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  /** @nullable */
+  assigneeRole?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -266,6 +311,8 @@ export interface Bug {
   createdAt: string;
   /** @nullable */
   resolvedAt?: string | null;
+  /** @nullable */
+  attachmentUrl?: string | null;
 }
 
 export interface SearchResult {
@@ -303,6 +350,39 @@ export interface CredentialHistory {
   trigger: string;
 }
 
+export type Company = Client & {
+  companyId?: number;
+  /** @nullable */
+  companyCode?: string | null;
+  totalProjects?: number;
+  openTickets?: number;
+};
+
+export interface CompanyListResult {
+  companies: Company[];
+  clients?: Client[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface CompanyAnalyticsCard {
+  companyId: number;
+  companyName: string;
+  clientId?: number;
+  totalProjects: number;
+  activeProjects: number;
+  completedProjects?: number;
+  delayedProjects?: number;
+  openTickets?: number;
+  pendingRequests?: number;
+  developerCount?: number;
+}
+
+export interface CompanyAnalyticsResult {
+  companies: CompanyAnalyticsCard[];
+}
+
 export type ClientInputStatus =
   (typeof ClientInputStatus)[keyof typeof ClientInputStatus];
 
@@ -318,8 +398,11 @@ export interface ClientInput {
   email: string;
   phone?: string;
   address?: string;
-  businessId?: string;
+  gstNumber?: string;
   logoUrl?: string;
+  industry?: string;
+  website?: string;
+  tier?: string;
   status?: ClientInputStatus;
 }
 
@@ -338,8 +421,11 @@ export interface ClientUpdate {
   email?: string;
   phone?: string;
   address?: string;
-  businessId?: string;
+  gstNumber?: string;
   logoUrl?: string;
+  industry?: string;
+  website?: string;
+  tier?: string;
   status?: ClientUpdateStatus;
 }
 
@@ -359,6 +445,7 @@ export const ProjectInputStatus = {
   on_hold: "on_hold",
   uat: "uat",
   completed: "completed",
+  maintenance: "maintenance",
 } as const;
 
 export type ProjectInputPriority =
@@ -371,13 +458,23 @@ export const ProjectInputPriority = {
   critical: "critical",
 } as const;
 
+export type ProjectInputType =
+  (typeof ProjectInputType)[keyof typeof ProjectInputType];
+
+export const ProjectInputType = {
+  development: "development",
+  maintenance: "maintenance",
+} as const;
+
 export interface ProjectInput {
   name: string;
+  companyId?: number;
   clientId: number;
   pmId?: number;
   description?: string;
   status?: ProjectInputStatus;
   priority: ProjectInputPriority;
+  type?: ProjectInputType;
   startDate: string;
   deadline: string;
   techStack?: string[];
@@ -385,6 +482,9 @@ export interface ProjectInput {
   repoUrl?: string;
   stagingUrl?: string;
   productionUrl?: string;
+  adminUrl?: string;
+  websiteUrl?: string;
+  postmanJson?: string;
 }
 
 export type ProjectUpdateStatus =
@@ -396,6 +496,7 @@ export const ProjectUpdateStatus = {
   on_hold: "on_hold",
   uat: "uat",
   completed: "completed",
+  maintenance: "maintenance",
 } as const;
 
 export type ProjectUpdatePriority =
@@ -408,12 +509,21 @@ export const ProjectUpdatePriority = {
   critical: "critical",
 } as const;
 
+export type ProjectUpdateType =
+  (typeof ProjectUpdateType)[keyof typeof ProjectUpdateType];
+
+export const ProjectUpdateType = {
+  development: "development",
+  maintenance: "maintenance",
+} as const;
+
 export interface ProjectUpdate {
   name?: string;
   pmId?: number;
   description?: string;
   status?: ProjectUpdateStatus;
   priority?: ProjectUpdatePriority;
+  type?: ProjectUpdateType;
   startDate?: string;
   deadline?: string;
   techStack?: string[];
@@ -421,6 +531,9 @@ export interface ProjectUpdate {
   repoUrl?: string;
   stagingUrl?: string;
   productionUrl?: string;
+  adminUrl?: string;
+  websiteUrl?: string;
+  postmanJson?: string;
   completionOverride?: number;
 }
 
@@ -614,6 +727,7 @@ export interface BugInput {
   buildVersion?: string;
   platform: BugInputPlatform;
   assigneeId?: number;
+  attachmentUrl?: string;
 }
 
 export type BugUpdateSeverity =
@@ -671,6 +785,177 @@ export interface BugUpdate {
   buildVersion?: string;
   platform?: BugUpdatePlatform;
   assigneeId?: number;
+  attachmentUrl?: string;
+}
+
+export type WorkTaskStatus =
+  (typeof WorkTaskStatus)[keyof typeof WorkTaskStatus];
+
+export const WorkTaskStatus = {
+  backlog: "backlog",
+  todo: "todo",
+  in_progress: "in_progress",
+  in_review: "in_review",
+  done: "done",
+  blocked: "blocked",
+} as const;
+
+export type WorkTaskPriority =
+  (typeof WorkTaskPriority)[keyof typeof WorkTaskPriority];
+
+export const WorkTaskPriority = {
+  urgent: "urgent",
+  high: "high",
+  normal: "normal",
+  low: "low",
+} as const;
+
+export type WorkTaskType = (typeof WorkTaskType)[keyof typeof WorkTaskType];
+
+export const WorkTaskType = {
+  task: "task",
+  feature: "feature",
+  bug_fix: "bug_fix",
+  qa: "qa",
+  chore: "chore",
+} as const;
+
+export interface WorkTask {
+  id: number;
+  taskNumber: string;
+  projectId: number;
+  projectName: string;
+  createdById: number;
+  createdByName: string;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  /** @nullable */
+  assigneeRole?: string | null;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  status: WorkTaskStatus;
+  priority: WorkTaskPriority;
+  type: WorkTaskType;
+  /** @nullable */
+  dueDate?: string | null;
+  labels: string[];
+  createdAt: string;
+  updatedAt: string;
+  /** @nullable */
+  completedAt?: string | null;
+}
+
+export type TaskInputStatus =
+  (typeof TaskInputStatus)[keyof typeof TaskInputStatus];
+
+export const TaskInputStatus = {
+  backlog: "backlog",
+  todo: "todo",
+  in_progress: "in_progress",
+  in_review: "in_review",
+  done: "done",
+  blocked: "blocked",
+} as const;
+
+export type TaskInputPriority =
+  (typeof TaskInputPriority)[keyof typeof TaskInputPriority];
+
+export const TaskInputPriority = {
+  urgent: "urgent",
+  high: "high",
+  normal: "normal",
+  low: "low",
+} as const;
+
+export type TaskInputType = (typeof TaskInputType)[keyof typeof TaskInputType];
+
+export const TaskInputType = {
+  task: "task",
+  feature: "feature",
+  bug_fix: "bug_fix",
+  qa: "qa",
+  chore: "chore",
+} as const;
+
+export interface TaskInput {
+  projectId: number;
+  title: string;
+  description?: string;
+  assigneeId?: number;
+  status?: TaskInputStatus;
+  priority?: TaskInputPriority;
+  type?: TaskInputType;
+  dueDate?: string;
+  labels?: string[];
+}
+
+export type TaskUpdateStatus =
+  (typeof TaskUpdateStatus)[keyof typeof TaskUpdateStatus];
+
+export const TaskUpdateStatus = {
+  backlog: "backlog",
+  todo: "todo",
+  in_progress: "in_progress",
+  in_review: "in_review",
+  done: "done",
+  blocked: "blocked",
+} as const;
+
+export type TaskUpdatePriority =
+  (typeof TaskUpdatePriority)[keyof typeof TaskUpdatePriority];
+
+export const TaskUpdatePriority = {
+  urgent: "urgent",
+  high: "high",
+  normal: "normal",
+  low: "low",
+} as const;
+
+export type TaskUpdateType =
+  (typeof TaskUpdateType)[keyof typeof TaskUpdateType];
+
+export const TaskUpdateType = {
+  task: "task",
+  feature: "feature",
+  bug_fix: "bug_fix",
+  qa: "qa",
+  chore: "chore",
+} as const;
+
+export interface TaskUpdate {
+  title?: string;
+  description?: string;
+  /** @nullable */
+  assigneeId?: number | null;
+  status?: TaskUpdateStatus;
+  priority?: TaskUpdatePriority;
+  type?: TaskUpdateType;
+  dueDate?: string;
+  labels?: string[];
+}
+
+export interface TaskListResult {
+  tasks: WorkTask[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface AssignableMember {
+  id: number;
+  name: string;
+  role: string;
+  /** @nullable */
+  employeeId?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+}
+
+export interface AssignableMemberList {
+  members: AssignableMember[];
 }
 
 export interface BugListResult {
@@ -954,6 +1239,7 @@ export interface ProjectPipeline {
   uat: number;
   onHold: number;
   completed: number;
+  maintenance: number;
 }
 
 export interface BugSeverityBreakdown {
@@ -1121,6 +1407,134 @@ export interface CompanySettingsUpdate {
   sealUrl?: string;
 }
 
+export interface CredentialRevealResult {
+  password: string;
+}
+
+export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus];
+
+export const TicketStatus = {
+  open: "open",
+  pending: "pending",
+  resolved: "resolved",
+  closed: "closed",
+} as const;
+
+export type TicketPriority =
+  (typeof TicketPriority)[keyof typeof TicketPriority];
+
+export const TicketPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface Ticket {
+  id: number;
+  /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
+  projectName?: string | null;
+  creatorId: number;
+  creatorName?: string;
+  /** @nullable */
+  assignedTo?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  attachments?: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TicketInputPriority =
+  (typeof TicketInputPriority)[keyof typeof TicketInputPriority];
+
+export const TicketInputPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface TicketInput {
+  projectId?: number;
+  title: string;
+  description: string;
+  priority?: TicketInputPriority;
+  assignedTo?: number;
+}
+
+export type TicketUpdateStatus =
+  (typeof TicketUpdateStatus)[keyof typeof TicketUpdateStatus];
+
+export const TicketUpdateStatus = {
+  open: "open",
+  pending: "pending",
+  resolved: "resolved",
+  closed: "closed",
+} as const;
+
+export type TicketUpdatePriority =
+  (typeof TicketUpdatePriority)[keyof typeof TicketUpdatePriority];
+
+export const TicketUpdatePriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  urgent: "urgent",
+} as const;
+
+export interface TicketUpdate {
+  title?: string;
+  description?: string;
+  status?: TicketUpdateStatus;
+  priority?: TicketUpdatePriority;
+  assignedTo?: number;
+}
+
+export interface TicketListResult {
+  tickets: Ticket[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export type AuditLogOldVal = { [key: string]: unknown };
+
+export type AuditLogNewVal = { [key: string]: unknown };
+
+export type AuditLogMetadata = { [key: string]: unknown };
+
+export interface AuditLog {
+  id: number;
+  /** @nullable */
+  actorId?: number | null;
+  action: string;
+  entityType: string;
+  /** @nullable */
+  entityId?: number | null;
+  oldVal?: AuditLogOldVal;
+  newVal?: AuditLogNewVal;
+  /** @nullable */
+  ipAddress?: string | null;
+  metadata?: AuditLogMetadata;
+  createdAt: string;
+}
+
+export type ListTicketsParams = {
+  status?: string;
+  priority?: string;
+  projectId?: number;
+  search?: string;
+  page?: number;
+  limit?: number;
+};
+
 export type ListUsersParams = {
   role?: string;
   subType?: string;
@@ -1136,16 +1550,53 @@ export type ListClientsParams = {
   limit?: number;
 };
 
-export type ListProjectsParams = {
+export type ListCompaniesParams = {
   status?: string;
-  clientId?: number;
   search?: string;
   page?: number;
   limit?: number;
 };
 
+export type ListCompanyProjects200 = {
+  projects?: Project[];
+  total?: number;
+};
+
+export type ListProjectsParams = {
+  status?: string;
+  clientId?: number;
+  companyId?: number;
+  search?: string;
+  type?: ListProjectsType;
+  priority?: ListProjectsPriority;
+  page?: number;
+  limit?: number;
+};
+
+export type ListProjectsType =
+  (typeof ListProjectsType)[keyof typeof ListProjectsType];
+
+export const ListProjectsType = {
+  development: "development",
+  maintenance: "maintenance",
+} as const;
+
+export type ListProjectsPriority =
+  (typeof ListProjectsPriority)[keyof typeof ListProjectsPriority];
+
+export const ListProjectsPriority = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  critical: "critical",
+} as const;
+
 export type ListMyLogsParams = {
   projectId?: number;
+  /**
+   * Filter by employee (super admin only)
+   */
+  developerId?: number;
   month?: number;
   year?: number;
   page?: number;
@@ -1158,7 +1609,53 @@ export type ListBugsParams = {
   severity?: string;
   page?: number;
   limit?: number;
+  assigneeId?: number;
+  scope?: ListBugsScope;
 };
+
+export type ListBugsScope = (typeof ListBugsScope)[keyof typeof ListBugsScope];
+
+export const ListBugsScope = {
+  all: "all",
+  mine: "mine",
+  unassigned: "unassigned",
+} as const;
+
+export type AssignBugBody = {
+  /** @nullable */
+  assigneeId?: number | null;
+};
+
+export type ListTasksParams = {
+  projectId?: number;
+  status?: string;
+  assigneeId?: number;
+  scope?: ListTasksScope;
+  page?: number;
+  limit?: number;
+};
+
+export type ListTasksScope =
+  (typeof ListTasksScope)[keyof typeof ListTasksScope];
+
+export const ListTasksScope = {
+  all: "all",
+  mine: "mine",
+  unassigned: "unassigned",
+  created: "created",
+} as const;
+
+export type ListAssignableMembersParams = {
+  for?: ListAssignableMembersFor;
+};
+
+export type ListAssignableMembersFor =
+  (typeof ListAssignableMembersFor)[keyof typeof ListAssignableMembersFor];
+
+export const ListAssignableMembersFor = {
+  bug: "bug",
+  task: "task",
+} as const;
 
 export type ListCommentsParams = {
   threadType: string;

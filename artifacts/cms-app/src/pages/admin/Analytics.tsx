@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { useGetDashboardStats, useListRequests, useListUsers } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { 
@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, CheckCircle2, Clock, Users, Bug, Activity, Zap } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { StatCard, PageKpiRow } from "@/components/dashboard/dashboard-kit";
 
 export default function AdminAnalytics() {
   const { data: stats, isLoading } = useGetDashboardStats();
@@ -75,58 +76,13 @@ export default function AdminAnalytics() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium">Total Active Bugs</CardTitle>
-            <Bug className="h-3.5 w-3.5 text-red-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-bold">{totalBugs}</div>
-            <p className="text-[10px] text-muted-foreground">
-              {stats?.bugSeverityBreakdown.critical} critical severity
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium">Project Health</CardTitle>
-            <Activity className="h-3.5 w-3.5 text-blue-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-bold">{completionRate}%</div>
-            <p className="text-[10px] text-muted-foreground">
-              Overall completion rate
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium">Team Size</CardTitle>
-            <Users className="h-3.5 w-3.5 text-purple-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-bold">{usersData?.users.length || 0}</div>
-            <p className="text-[10px] text-muted-foreground">
-              Active developers
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="bg-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 pt-3 px-4">
-            <CardTitle className="text-xs font-medium">Pending Requests</CardTitle>
-            <Zap className="h-3.5 w-3.5 text-amber-500" />
-          </CardHeader>
-          <CardContent className="p-4 pt-0">
-            <div className="text-xl font-bold">
-              {requestsData?.requests.filter(r => r.status === 'pending').length || 0}
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              Awaiting admin approval
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <PageKpiRow>
+        <StatCard title="Active bugs" value={totalBugs} hint={`${stats?.bugSeverityBreakdown.critical} critical`} icon={Bug} accent="red" alert={totalBugs > 0} delay={0} />
+        <StatCard title="Project health" value={`${completionRate}%`} hint="Overall completion rate" icon={Activity} accent="blue" delay={1} />
+        <StatCard title="Team size" value={usersData?.users.length || 0} hint="Active developers" icon={Users} accent="violet" delay={2} />
+        <StatCard title="Pending requests" value={requestsData?.requests.filter((r) => r.status === "pending").length || 0} hint="Awaiting approval" icon={Zap} accent="amber" delay={3} />
+      </PageKpiRow>
+
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         <Card className="bg-card">

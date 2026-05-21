@@ -1,27 +1,6 @@
-import { db } from "./db";
-import { employeeCounterTable } from "@workspace/db/schema";
-import { sql } from "drizzle-orm";
+import { Counter, getNextSequence } from "@workspace/db/schema";
 
-export async function generateEmployeeId(name: string): Promise<string> {
-  // Get next counter
-  const rows = await db
-    .update(employeeCounterTable)
-    .set({ counter: sql`${employeeCounterTable.counter} + 1` })
-    .returning({ counter: employeeCounterTable.counter });
-
-  let counter: number;
-  if (!rows.length) {
-    // Initialize counter
-    const inserted = await db
-      .insert(employeeCounterTable)
-      .values({ counter: 1 })
-      .returning({ counter: employeeCounterTable.counter });
-    counter = inserted[0].counter;
-  } else {
-    counter = rows[0].counter;
-  }
-
-  // Take first 2 chars from first name, uppercase
+function employeeIdFromCounter(name: string, counter: number): string {
   const prefix = name
     .trim()
     .toUpperCase()
@@ -31,4 +10,21 @@ export async function generateEmployeeId(name: string): Promise<string> {
 
   const num = String(counter).padStart(3, "0");
   return `${prefix}${num}`;
+}
+
+/** Preview next employee ID without consuming the sequence counter. */
+export async function previewEmployeeId(name: string): Promise<string> {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "—";
+  }
+  const counter = await Counter.findById("employee_id_counter");
+  const next = (counter?.seq ?? 0) + 1;
+  return employeeIdFromCounter(trimmed, next);
+}
+
+export async function generateEmployeeId(name: string): Promise<string> {
+  // Get next counter using our global MongoDB sequences
+  const counter = await getNextSequence("employee_id_counter");
+  return employeeIdFromCounter(name, counter);
 }

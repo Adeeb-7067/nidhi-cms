@@ -18,6 +18,19 @@ const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 let _baseUrl: string | null = null;
 let _authTokenGetter: AuthTokenGetter | null = null;
 
+// Token refresh concurrency queueing
+let _isRefreshing = false;
+let _refreshSubscribers: Array<(token: string | null) => void> = [];
+
+function _subscribeTokenRefresh(cb: (token: string | null) => void) {
+  _refreshSubscribers.push(cb);
+}
+
+function _onRefreshed(token: string | null) {
+  _refreshSubscribers.forEach((cb) => cb(token));
+  _refreshSubscribers = [];
+}
+
 /**
  * Set a base URL that is prepended to every relative request URL
  * (i.e. paths that start with `/`).
@@ -352,15 +365,87 @@ export async function customFetch<T = unknown>(
   // Attach bearer token when an auth getter is configured and no
   // Authorization header has been explicitly provided.
   if (!headers.has("authorization")) {
-    const token = _authTokenGetter ? await _authTokenGetter() : (typeof localStorage !== "undefined" ? localStorage.getItem("accessToken") : null);
+    const token = _authTokenGetter
+      ? await _authTokenGetter()
+      : typeof localStorage !== "undefined"
+        ? localStorage.getItem("accessToken")
+        : null;
     if (token) {
-      headers.set("authorization", `Bearer ${token}`);
+      headers.set("Authorization", `Bearer ${token}`);
     }
   }
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response = await fetch(input, { ...init, method, headers });
+
+  // Transparent Refresh Token Interception
+  if (
+    response.status === 401 &&
+    !requestInfo.url.includes("/auth/refresh") &&
+    !requestInfo.url.includes("/auth/login")
+  ) {
+    if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (refreshToken) {
+        try {
+          const newToken = await new Promise<string | null>((resolve) => {
+            _subscribeTokenRefresh((token) => {
+              resolve(token);
+            });
+
+            if (!_isRefreshing) {
+              _isRefreshing = true;
+              const refreshUrl = _baseUrl ? `${_baseUrl}/api/auth/refresh` : "/api/auth/refresh";
+              
+              fetch(refreshUrl, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ refreshToken }),
+              })
+                .then(async (res) => {
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data.accessToken && data.refreshToken) {
+                      localStorage.setItem("accessToken", data.accessToken);
+                      localStorage.setItem("refreshToken", data.refreshToken);
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(
+                          new CustomEvent("cms:auth-token-refreshed", {
+                            detail: { accessToken: data.accessToken },
+                          }),
+                        );
+                      }
+                      _onRefreshed(data.accessToken);
+                      return;
+                    }
+                  }
+                  throw new Error("Refresh failed");
+                })
+                .catch(() => {
+                  localStorage.removeItem("accessToken");
+                  localStorage.removeItem("refreshToken");
+                  if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("cms:auth-session-expired"));
+                  }
+                  _onRefreshed(null);
+                })
+                .finally(() => {
+                  _isRefreshing = false;
+                });
+            }
+          });
+
+          if (newToken) {
+            headers.set("Authorization", `Bearer ${newToken}`);
+            response = await fetch(input, { ...init, method, headers });
+          }
+        } catch {
+          // Carry on to normal 401 throw
+        }
+      }
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

@@ -21,6 +21,8 @@ export interface Bug {
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
+  /** @nullable */
+  assigneeRole?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -39,4 +41,6 @@ export interface Bug {
   createdAt: string;
   /** @nullable */
   resolvedAt?: string | null;
+  /** @nullable */
+  attachmentUrl?: string | null;
 }

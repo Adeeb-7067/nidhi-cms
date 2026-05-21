@@ -1,7 +1,8 @@
 import React from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Zap, Home, ArrowLeft } from "lucide-react";
+import { Home, ArrowLeft } from "lucide-react";
+import { AppLogo } from "@/components/brand/AppLogo";
 
 export default function NotFound() {
   return (
@@ -9,16 +10,14 @@ export default function NotFound() {
       <div className="relative mb-8">
         <div className="text-[12rem] font-bold text-muted/20 select-none">404</div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="h-20 w-20 bg-primary rounded-2xl flex items-center justify-center shadow-2xl shadow-primary/20">
-            <Zap size={44} className="text-primary-foreground fill-primary-foreground" />
-          </div>
+          <AppLogo size="lg" className="max-w-[12rem]" />
         </div>
       </div>
 
       <div className="text-center space-y-2 mb-8 relative">
         <h1 className="text-3xl font-bold tracking-tight">Page not found</h1>
         <p className="text-muted-foreground max-w-sm mx-auto">
-          The page you are looking for doesn't exist or has been moved. 
+          The page you are looking for doesn't exist or has been moved.
           Check the URL or return to the dashboard.
         </p>
       </div>
@@ -30,9 +29,9 @@ export default function NotFound() {
             Back to Login
           </Button>
         </Link>
-        <Button 
-          variant="outline" 
-          onClick={() => window.history.back()} 
+        <Button
+          variant="outline"
+          onClick={() => window.history.back()}
           className="gap-2 h-11 px-8"
         >
           <ArrowLeft size={18} />

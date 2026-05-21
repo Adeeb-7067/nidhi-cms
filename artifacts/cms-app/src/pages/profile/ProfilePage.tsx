@@ -1,40 +1,60 @@
-import React, { useState } from "react";
-import { 
-  useGetMe, 
-  useUpdateMyProfile, 
+import React, { useState, useEffect } from "react";
+import { Link } from "wouter";
+import {
+  useGetMe,
+  useUpdateMyProfile,
   useChangeMyPassword,
-  getGetMeQueryKey
+  getGetMeQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { 
-  Card, 
-  CardContent, 
-  CardHeader, 
-  CardTitle, 
-  CardDescription 
+import { PageShell } from "@/components/layout/PageShell";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FileUploader } from "@/components/ui/file-uploader";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  User as UserIcon, 
-  Mail, 
-  Shield, 
-  Key, 
-  Check, 
-  Camera,
+import { getApiErrorMessage } from "@/lib/api-error";
+import {
+  Mail,
+  Shield,
+  Key,
+  Check,
   Loader2,
   Calendar,
   Clock,
-  Briefcase
+  Briefcase,
+  Settings,
+  Bell,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+
+const ROLE_STYLES: Record<string, string> = {
+  super_admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25",
+  developer: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  tester: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
+  client: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+};
+
+function getInitials(name: string) {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
 export default function ProfilePage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
@@ -46,55 +66,49 @@ export default function ProfilePage() {
   const [profileForm, setProfileForm] = useState({
     name: "",
     designation: "",
-    avatarUrl: ""
+    avatarUrl: "",
   });
 
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
     newPassword: "",
-    confirmPassword: ""
+    confirmPassword: "",
   });
 
   const [passwordError, setPasswordError] = useState("");
 
-  // Initialize form when user data is loaded
-  React.useEffect(() => {
+  useEffect(() => {
     if (user) {
       setProfileForm({
         name: user.name || "",
         designation: user.designation || "",
-        avatarUrl: user.avatarUrl || ""
+        avatarUrl: user.avatarUrl || "",
       });
     }
   }, [user]);
 
-  if (isLoadingUser || !user) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const displayAvatar = profileForm.avatarUrl || user?.avatarUrl || undefined;
+  const displayName = profileForm.name || user?.name || "User";
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await updateProfile({
         data: {
-          name: profileForm.name,
-          designation: profileForm.designation,
-          avatarUrl: profileForm.avatarUrl || undefined
-        }
+          name: profileForm.name.trim(),
+          designation: profileForm.designation.trim() || undefined,
+          avatarUrl: profileForm.avatarUrl.trim() || undefined,
+        },
       });
       toast({
         title: "Profile updated",
-        description: "Your profile information has been successfully updated.",
+        description: "Your profile has been saved successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
-    } catch (error: any) {
+      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+    } catch (error: unknown) {
       toast({
         title: "Update failed",
-        description: error?.message || "There was an error updating your profile.",
+        description: getApiErrorMessage(error, "Could not update your profile."),
         variant: "destructive",
       });
     }
@@ -108,14 +122,12 @@ export default function ProfilePage() {
       setPasswordError("Passwords do not match");
       return;
     }
-
     if (passwordForm.newPassword.length < 8) {
-      setPasswordError("Password must be at least 8 characters long");
+      setPasswordError("Password must be at least 8 characters");
       return;
     }
-
     if (passwordForm.newPassword === passwordForm.currentPassword) {
-      setPasswordError("New password cannot be the same as current password");
+      setPasswordError("New password must be different from your current password");
       return;
     }
 
@@ -123,234 +135,276 @@ export default function ProfilePage() {
       await changePassword({
         data: {
           currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword
-        }
+          newPassword: passwordForm.newPassword,
+        },
       });
       toast({
         title: "Password changed",
-        description: "Your password has been successfully updated.",
+        description: "Your password has been updated successfully.",
       });
-      setPasswordForm({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: ""
-      });
-    } catch (error: any) {
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error: unknown) {
       toast({
-        title: "Change password failed",
-        description: error?.message || "There was an error changing your password.",
+        title: "Password change failed",
+        description: getApiErrorMessage(error, "Could not change your password."),
         variant: "destructive",
       });
     }
   };
 
-  const roleColors: Record<string, string> = {
-    super_admin: "bg-purple-500/10 text-purple-500 border-purple-500/20",
-    developer: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-    client: "bg-green-500/10 text-green-500 border-green-500/20",
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .substring(0, 2);
-  };
+  if (isLoadingUser || !user) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">My Profile</h1>
-        <p className="text-sm text-muted-foreground">Manage your account information and security</p>
+    <PageShell hideHeader>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">My Profile</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Update your photo, details, and password
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings">
+              <Settings className="mr-2 h-4 w-4" />
+              Settings
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/notifications">
+              <Bell className="mr-2 h-4 w-4" />
+              Notifications
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-12">
-        {/* Left Column - User Info */}
-        <div className="md:col-span-4 space-y-6">
-          <Card className="bg-card border-border overflow-hidden">
-            <div className="h-24 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
-            <CardContent className="relative pt-0 px-6 pb-6">
-              <div className="absolute -top-12 left-6">
-                <Avatar className="h-24 w-24 border-4 border-background ring-2 ring-primary/10">
-                  <AvatarImage src={user.avatarUrl || undefined} />
-                  <AvatarFallback className="bg-gradient-to-br from-primary/80 to-primary text-primary-foreground text-2xl font-bold">
-                    {getInitials(user.name)}
-                  </AvatarFallback>
-                </Avatar>
+      <div className="grid gap-6 lg:grid-cols-12">
+        <Card className="lg:col-span-4 overflow-hidden border-border/80">
+          <div className="h-28 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent" />
+          <CardContent className="relative px-6 pb-6 pt-0">
+            <div className="-mt-14 mb-4 flex justify-center sm:justify-start">
+              <Avatar className="h-28 w-28 border-4 border-background ring-2 ring-primary/20 shadow-lg">
+                <AvatarImage src={displayAvatar} alt={displayName} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
+                  {getInitials(displayName)}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+
+            <div className="space-y-4 text-center sm:text-left">
+              <div>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <h2 className="text-xl font-bold">{displayName}</h2>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[10px] font-semibold uppercase",
+                      ROLE_STYLES[user.role] ?? "",
+                    )}
+                  >
+                    {user.role.replace("_", " ")}
+                  </Badge>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {profileForm.designation || user.designation || "No designation"}
+                </p>
               </div>
-              
-              <div className="mt-14 space-y-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold">{user.name}</h2>
-                    <Badge variant="outline" className={cn("text-[10px] font-bold uppercase", roleColors[user.role] || "bg-muted text-muted-foreground")}>
-                      {user.role.replace("_", " ")}
-                    </Badge>
+
+              <Separator />
+
+              <ul className="space-y-3 text-sm">
+                {user.employeeId && (
+                  <li className="flex items-center gap-3">
+                    <Shield className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-muted-foreground">Employee ID</span>
+                    <span className="ml-auto font-mono text-xs">{user.employeeId}</span>
+                  </li>
+                )}
+                <li className="flex items-center gap-3 min-w-0">
+                  <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-muted-foreground">{user.email}</span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="text-muted-foreground">
+                    {profileForm.designation || user.designation || "—"}
+                  </span>
+                </li>
+                <li className="flex items-center gap-3">
+                  <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <Badge
+                    variant="outline"
+                    className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25"
+                  >
+                    {user.status === "active" ? "Active" : user.status}
+                  </Badge>
+                </li>
+              </ul>
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-3 text-[11px]">
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                    <Calendar className="h-3 w-3" />
+                    <span>Joined</span>
                   </div>
-                  <p className="text-sm text-muted-foreground font-medium">{user.designation || "No designation set"}</p>
+                  <p className="font-medium">{format(new Date(user.createdAt), "MMM d, yyyy")}</p>
                 </div>
-
-                <Separator className="bg-border/50" />
-
-                <div className="space-y-3">
-                  {user.employeeId && (
-                    <div className="flex items-center gap-3 text-sm">
-                      <Shield className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-muted-foreground font-medium">ID:</span>
-                      <span className="font-mono">{user.employeeId}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-3 text-sm">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="truncate">{user.email}</span>
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
+                  <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                    <Clock className="h-3 w-3" />
+                    <span>Last login</span>
                   </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Briefcase className="h-4 w-4 text-muted-foreground" />
-                    <span>{user.designation || "Not specified"}</span>
-                  </div>
-                  <div className="flex items-center gap-3 text-sm">
-                    <Check className="h-4 w-4 text-green-500" />
-                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-green-500/10 text-green-500 border-green-500/20">Active</Badge>
-                  </div>
-                </div>
-
-                <Separator className="bg-border/50" />
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Member since</span>
-                    </div>
-                    <span className="font-medium">{format(new Date(user.createdAt), "MMM d, yyyy")}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      <span>Last Login</span>
-                    </div>
-                    <span className="font-medium">
-                      {user.lastLoginAt ? format(new Date(user.lastLoginAt), "MMM d, HH:mm") : "Never"}
-                    </span>
-                  </div>
+                  <p className="font-medium">
+                    {user.lastLoginAt
+                      ? format(new Date(user.lastLoginAt), "MMM d, HH:mm")
+                      : "—"}
+                  </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Right Column - Forms */}
-        <div className="md:col-span-8 space-y-6">
-          <Card>
-            <CardHeader className="py-4 px-6">
-              <CardTitle className="text-base font-semibold">Account Information</CardTitle>
-              <CardDescription>Update your personal details and profile picture</CardDescription>
+        <div className="lg:col-span-8 space-y-6">
+          <Card className="border-border/80">
+            <CardHeader>
+              <CardTitle className="text-base">Account information</CardTitle>
+              <CardDescription>Changes apply across the workspace after you save</CardDescription>
             </CardHeader>
-            <CardContent className="p-6 pt-0">
-              <form onSubmit={handleUpdateProfile} className="space-y-4">
+            <CardContent>
+              <form onSubmit={handleUpdateProfile} className="space-y-5">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input 
-                      id="name" 
-                      value={profileForm.name} 
+                    <Label htmlFor="name">Full name</Label>
+                    <Input
+                      id="name"
+                      value={profileForm.name}
                       onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
                       required
-                      className="h-8 text-sm"
                     />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="designation">Designation</Label>
-                    <Input 
-                      id="designation" 
-                      value={profileForm.designation} 
-                      onChange={(e) => setProfileForm({ ...profileForm, designation: e.target.value })}
+                    <Input
+                      id="designation"
+                      value={profileForm.designation}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, designation: e.target.value })
+                      }
                       placeholder="e.g. Senior Developer"
-                      className="h-8 text-sm"
                     />
                   </div>
                 </div>
+
                 <div className="space-y-2">
-                  <Label htmlFor="avatarUrl">Avatar URL</Label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <Input 
-                        id="avatarUrl" 
-                        value={profileForm.avatarUrl} 
-                        onChange={(e) => setProfileForm({ ...profileForm, avatarUrl: e.target.value })}
-                        placeholder="https://example.com/avatar.jpg"
-                        className="h-8 text-sm pl-8"
-                      />
-                      <Camera className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
+                  <Label>Profile photo</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Upload a photo — preview updates on the left before you save.
+                  </p>
+                  <FileUploader
+                    category="avatars"
+                    accept="image/*"
+                    label="Upload profile photo"
+                    value={profileForm.avatarUrl}
+                    maxSizeMB={5}
+                    onUploadComplete={(url) =>
+                      setProfileForm({ ...profileForm, avatarUrl: url })
+                    }
+                  />
                 </div>
-                <div className="flex justify-end">
-                  <Button type="submit" size="sm" disabled={isUpdatingProfile} className="h-8">
-                    {isUpdatingProfile && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                    Save Changes
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setProfileForm({
+                        name: user.name || "",
+                        designation: user.designation || "",
+                        avatarUrl: user.avatarUrl || "",
+                      })
+                    }
+                  >
+                    Reset
+                  </Button>
+                  <Button type="submit" disabled={isUpdatingProfile}>
+                    {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save changes
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="py-4 px-6">
+          <Card className="border-border/80">
+            <CardHeader>
               <div className="flex items-center gap-2">
                 <Key className="h-4 w-4 text-primary" />
-                <CardTitle className="text-base font-semibold">Change Password</CardTitle>
+                <CardTitle className="text-base">Change password</CardTitle>
               </div>
-              <CardDescription>Ensure your account is using a long, random password to stay secure</CardDescription>
+              <CardDescription>Use at least 8 characters with mixed case and numbers</CardDescription>
             </CardHeader>
-            <CardContent className="p-6 pt-0">
+            <CardContent>
               <form onSubmit={handleChangePassword} className="space-y-4">
                 {passwordError && (
-                  <Alert variant="destructive" className="py-2 px-3">
-                    <AlertDescription className="text-xs">{passwordError}</AlertDescription>
+                  <Alert variant="destructive">
+                    <AlertDescription>{passwordError}</AlertDescription>
                   </Alert>
                 )}
                 <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current Password</Label>
-                  <Input 
-                    id="currentPassword" 
+                  <Label htmlFor="currentPassword">Current password</Label>
+                  <Input
+                    id="currentPassword"
                     type="password"
-                    value={passwordForm.currentPassword} 
-                    onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                    autoComplete="current-password"
+                    value={passwordForm.currentPassword}
+                    onChange={(e) =>
+                      setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
+                    }
                     required
-                    className="h-8 text-sm"
                   />
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <Label htmlFor="newPassword">New Password</Label>
-                    <Input 
-                      id="newPassword" 
+                    <Label htmlFor="newPassword">New password</Label>
+                    <Input
+                      id="newPassword"
                       type="password"
-                      value={passwordForm.newPassword} 
-                      onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                      autoComplete="new-password"
+                      value={passwordForm.newPassword}
+                      onChange={(e) =>
+                        setPasswordForm({ ...passwordForm, newPassword: e.target.value })
+                      }
                       required
-                      className="h-8 text-sm"
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
-                    <Input 
-                      id="confirmPassword" 
+                    <Label htmlFor="confirmPassword">Confirm new password</Label>
+                    <Input
+                      id="confirmPassword"
                       type="password"
-                      value={passwordForm.confirmPassword} 
-                      onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                      autoComplete="new-password"
+                      value={passwordForm.confirmPassword}
+                      onChange={(e) =>
+                        setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
+                      }
                       required
-                      className="h-8 text-sm"
                     />
                   </div>
                 </div>
                 <div className="flex justify-end">
-                  <Button type="submit" size="sm" disabled={isChangingPassword} className="h-8" variant="secondary">
-                    {isChangingPassword && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                    Update Password
+                  <Button type="submit" variant="secondary" disabled={isChangingPassword}>
+                    {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Update password
                   </Button>
                 </div>
               </form>
@@ -358,6 +412,8 @@ export default function ProfilePage() {
           </Card>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }
+
+

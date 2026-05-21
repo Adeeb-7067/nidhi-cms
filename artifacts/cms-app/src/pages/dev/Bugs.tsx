@@ -1,13 +1,26 @@
-import React, { useState, useEffect } from "react";
-import { useListBugs, useCreateBug, useUpdateBug, useListProjects, useListUsers, getListBugsQueryKey } from "@workspace/api-client-react";
+import React, { useState, useEffect, useMemo } from "react";
+import {
+  useListBugs,
+  useCreateBug,
+  useUpdateBug,
+  useAssignBug,
+  useListProjects,
+  useListAssignableMembers,
+  getListBugsQueryKey,
+  getListAssignableMembersQueryKey,
+  Bug,
+} from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AdvancedTable } from "@/components/ui/advanced-table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Bug as BugIcon, Search, Filter, Loader2, Edit, Trash2, CheckCircle2, Eye, MoreHorizontal } from "lucide-react";
+import { Plus, Bug as BugIcon, Filter, Loader2, Edit, CheckCircle2, Eye, FileText, DownloadCloud, AlertTriangle, Activity } from "lucide-react";
+import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { PDFService } from "@/lib/pdf-service";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,9 +51,12 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bug } from "@workspace/api-client-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { FileUploader } from "@/components/ui/file-uploader";
+import { useAuth } from "@/contexts/AuthContext";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -57,45 +73,98 @@ const bugSchema = z.object({
   actualBehavior: z.string().optional(),
   buildVersion: z.string().optional(),
   assigneeId: z.string().optional().nullable(),
+  attachmentUrl: z.string().optional().nullable(),
 });
 
 type BugFormValues = z.infer<typeof bugSchema>;
 
 export default function DevBugs() {
+  const { user } = useAuth();
+  const canCreateBug =
+    user?.role === "developer" || user?.role === "tester" || user?.role === "super_admin";
+  const canAssignBugs = user?.role === "tester" || user?.role === "super_admin";
+  const canEditBugReport = canAssignBugs;
+  const canUpdateStatus = canCreateBug;
+  const isAdmin = user?.role === "super_admin";
+
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [editBug, setEditBug] = useState<Bug | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [viewBug, setViewBug] = useState<Bug | null>(null);
+  const [scope, setScope] = useState<"all" | "mine" | "unassigned">(
+    isAdmin ? "all" : user?.role === "tester" ? "all" : "mine",
+  );
 
-  const { data, isLoading } = useListBugs({ 
-    status: statusFilter !== "all" ? statusFilter as any : undefined, 
-    limit: 50 
+  const defaultFormValues: BugFormValues = {
+    projectId: "",
+    title: "",
+    severity: "medium",
+    priority: "p3",
+    status: "open",
+    platform: "all",
+    description: "",
+    stepsToReproduce: "",
+    expectedBehavior: "",
+    actualBehavior: "",
+    buildVersion: "",
+    assigneeId: "none",
+    attachmentUrl: "",
+  };
+
+  const openCreateDialog = () => {
+    setEditBug(null);
+    form.reset(defaultFormValues);
+    setCreateOpen(true);
+  };
+
+  const closeBugDialog = () => {
+    setCreateOpen(false);
+    setEditBug(null);
+  };
+
+  const { data, isLoading } = useListBugs({
+    status: statusFilter !== "all" ? (statusFilter as Bug["status"]) : undefined,
+    limit: 50,
+    ...(scope !== "all" ? { scope } : {}),
   });
   const { data: projectsData } = useListProjects({ limit: 50 });
-  const { data: usersData } = useListUsers({ role: 'developer', limit: 100 });
   const createBugMutation = useCreateBug();
   const updateBugMutation = useUpdateBug();
+  const assignBugMutation = useAssignBug();
 
   const form = useForm<BugFormValues>({
     resolver: zodResolver(bugSchema),
-    defaultValues: {
-      projectId: "",
-      title: "",
-      severity: "medium",
-      priority: "p3",
-      status: "open",
-      platform: "all",
-      description: "",
-      stepsToReproduce: "",
-      expectedBehavior: "",
-      actualBehavior: "",
-      buildVersion: "",
-      assigneeId: "",
-    },
+    defaultValues: defaultFormValues,
   });
+
+  const watchedProjectId = form.watch("projectId");
+  const assignProjectId = editBug?.projectId ?? (watchedProjectId ? Number.parseInt(watchedProjectId, 10) : 0);
+  const { data: assignableData } = useListAssignableMembers(
+    assignProjectId,
+    { for: "bug" },
+    {
+      query: {
+        enabled: assignProjectId > 0,
+        queryKey: getListAssignableMembersQueryKey(assignProjectId, { for: "bug" }),
+      },
+    },
+  );
+  const assignableDevs = assignableData?.members ?? [];
+
+  const { data: viewAssignableData } = useListAssignableMembers(
+    viewBug?.projectId ?? 0,
+    { for: "bug" },
+    {
+      query: {
+        enabled: !!viewBug?.projectId,
+        queryKey: getListAssignableMembersQueryKey(viewBug?.projectId ?? 0, { for: "bug" }),
+      },
+    },
+  );
+  const viewAssignableDevs = viewAssignableData?.members ?? assignableDevs;
 
   useEffect(() => {
     if (editBug) {
@@ -111,55 +180,57 @@ export default function DevBugs() {
         expectedBehavior: editBug.expectedBehavior || "",
         actualBehavior: editBug.actualBehavior || "",
         buildVersion: editBug.buildVersion || "",
-        assigneeId: editBug.assigneeId?.toString() || "",
-      });
-    } else {
-      form.reset({
-        projectId: "",
-        title: "",
-        severity: "medium",
-        priority: "p3",
-        status: "open",
-        platform: "all",
-        description: "",
-        stepsToReproduce: "",
-        expectedBehavior: "",
-        actualBehavior: "",
-        buildVersion: "",
-        assigneeId: "",
+        assigneeId: editBug.assigneeId?.toString() || "none",
+        attachmentUrl: (editBug as any).attachmentUrl || "",
       });
     }
   }, [editBug, form]);
 
   const onSubmit = async (values: BugFormValues) => {
     try {
+      const assigneeId =
+        values.assigneeId && values.assigneeId !== "none"
+          ? parseInt(values.assigneeId, 10)
+          : null;
+
       if (editBug) {
-        await updateBugMutation.mutateAsync({
-          id: editBug.id,
-          data: {
-            ...values,
-            projectId: parseInt(values.projectId),
-            assigneeId: values.assigneeId ? parseInt(values.assigneeId) : null,
-          } as any,
-        });
-        toast.success("Bug updated!");
-        setEditBug(null);
+        if (canEditBugReport) {
+          await updateBugMutation.mutateAsync({
+            id: editBug.id,
+            data: {
+              ...values,
+              projectId: parseInt(values.projectId, 10),
+              assigneeId,
+            } as any,
+          });
+          toast.success("Bug updated!");
+        } else {
+          await updateBugMutation.mutateAsync({
+            id: editBug.id,
+            data: { status: values.status, assigneeId } as any,
+          });
+          toast.success("Status updated!");
+        }
       } else {
         await createBugMutation.mutateAsync({
           data: {
             ...values,
-            projectId: parseInt(values.projectId),
-            assigneeId: values.assigneeId ? parseInt(values.assigneeId) : null,
+            projectId: parseInt(values.projectId, 10),
+            assigneeId: canAssignBugs ? assigneeId : null,
           } as any,
         });
         toast.success("Bug reported!");
-        setOpen(false);
       }
-      form.reset();
-      queryClient.invalidateQueries({ queryKey: getListBugsQueryKey({ status: statusFilter !== "all" ? statusFilter as any : undefined, limit: 50 }) });
+      closeBugDialog();
+      form.reset(defaultFormValues);
+      queryClient.invalidateQueries({
+        queryKey: getListBugsQueryKey({
+          status: statusFilter !== "all" ? (statusFilter as Bug["status"]) : undefined,
+          limit: 50,
+        }),
+      });
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
-      toast.error(msg);
+      toastApiError(error, "Action failed. Please try again.");
     }
   };
 
@@ -172,7 +243,7 @@ export default function DevBugs() {
       toast.success("Bug marked as fixed");
       queryClient.invalidateQueries({ queryKey: getListBugsQueryKey({ status: statusFilter !== "all" ? statusFilter as any : undefined, limit: 50 }) });
     } catch (error: any) {
-      toast.error("Failed to close bug");
+      toastApiError(error, "Failed to close bug");
     }
   };
 
@@ -184,8 +255,18 @@ export default function DevBugs() {
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: getListBugsQueryKey() });
     } catch (error: any) {
-      toast.error("Failed to close bug");
+      toastApiError(error, "Failed to close bug");
     }
+  };
+
+  const handleExportPDF = () => {
+    if (filteredBugs.length === 0) {
+      toast.error("No bugs available in the current filter to export.");
+      return;
+    }
+    const activeProjectName = filteredBugs[0]?.projectName || "General Projects";
+    PDFService.generateBugReportPDF(activeProjectName, "Direct Enterprise Client", filteredBugs);
+    toast.success("Exporting QA Audit Report...");
   };
 
   const getSeverityColor = (severity: string) => {
@@ -215,35 +296,65 @@ export default function DevBugs() {
     bug.projectName.toLowerCase().includes(search.toLowerCase())
   ) || [];
 
+  const bugStats = useMemo(() => {
+    const bugs = data?.bugs ?? [];
+    return {
+      total: data?.total ?? bugs.length,
+      open: bugs.filter((b) => b.status === "open").length,
+      inProgress: bugs.filter((b) => b.status === "in_progress").length,
+      critical: bugs.filter((b) => b.severity === "critical" || b.severity === "high").length,
+    };
+  }, [data]);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Bug Tracker</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Report and track project issues</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Report, track, and resolve project issues
+          </p>
         </div>
-        <Dialog open={open || !!editBug} onOpenChange={(val) => {
-          if (!val) {
-            setOpen(false);
-            setEditBug(null);
-          } else {
-            setOpen(true);
-          }
-        }}>
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Report Bug
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportPDF} className="h-9 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs">
+            <FileText className="mr-1.5 h-3.5 w-3.5" /> Export Audit (PDF)
+          </Button>
+          {canCreateBug && (
+            <Button
+              type="button"
+              className="bg-primary text-primary-foreground h-9 text-xs"
+              onClick={openCreateDialog}
+            >
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Report Bug
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[700px] bg-card border-border overflow-y-auto max-h-[90vh]">
+          )}
+          <Dialog
+            open={createOpen || !!editBug}
+            onOpenChange={(val) => {
+              if (!val) closeBugDialog();
+            }}
+          >
+          <DialogContent className="sm:max-w-[700px] bg-card border-border">
             <DialogHeader>
-              <DialogTitle>{editBug ? "Edit Bug" : "Report a New Bug"}</DialogTitle>
+              <DialogTitle>
+                {editBug
+                  ? canEditBugReport
+                    ? "Edit Bug"
+                    : "Update Bug Status"
+                  : "Report a New Bug"}
+              </DialogTitle>
               <DialogDescription>
-                {editBug ? "Update the details of this bug." : "Provide as much detail as possible to help developers fix it."}
+                {editBug
+                  ? canEditBugReport
+                    ? "Update the details of this bug."
+                    : "Change status or assignee for this issue."
+                  : "Provide as much detail as possible to help the team fix it."}
               </DialogDescription>
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                {(!editBug || canEditBugReport) && (
+                <>
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -251,7 +362,10 @@ export default function DevBugs() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Project</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || undefined}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select project" />
@@ -371,23 +485,27 @@ export default function DevBugs() {
                       </FormItem>
                     )}
                   />
+                  {canAssignBugs && (
                   <FormField
                     control={form.control}
                     name="assigneeId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Assignee (Optional)</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormLabel>Assign to developer</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || "none"}
+                        >
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select developer" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="">Unassigned</SelectItem>
-                            {usersData?.users.map((user) => (
-                              <SelectItem key={user.id} value={user.id.toString()}>
-                                {user.name}
+                            <SelectItem value="none">Unassigned</SelectItem>
+                            {assignableDevs.map((dev) => (
+                              <SelectItem key={dev.id} value={dev.id.toString()}>
+                                {dev.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -396,10 +514,14 @@ export default function DevBugs() {
                       </FormItem>
                     )}
                   />
+                  )}
                 </div>
 
+                </>
+                )}
+
                 {editBug && (
-                  <FormField
+                <FormField
                     control={form.control}
                     name="status"
                     render={({ field }) => (
@@ -426,6 +548,8 @@ export default function DevBugs() {
                   />
                 )}
 
+                {(!editBug || canEditBugReport) && (
+                <>
                 <FormField
                   control={form.control}
                   name="description"
@@ -484,18 +608,51 @@ export default function DevBugs() {
                   </div>
                 </div>
 
+                <FormField
+                  control={form.control}
+                  name="attachmentUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Visual Evidence / Screenshot (Optional)</FormLabel>
+                      <FormControl>
+                        <FileUploader
+                          category="bugs"
+                          onUploadComplete={field.onChange}
+                          value={field.value}
+                          accept="image/*,.pdf,.zip"
+                          label="Drag and drop issue screenshot or asset"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                </>
+                )}
+
                 <DialogFooter className="pt-4 pb-10">
-                  <Button type="submit" disabled={createBugMutation.isPending || updateBugMutation.isPending}>
-                    {(createBugMutation.isPending || updateBugMutation.isPending) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {editBug ? "Update Bug" : "Report Bug"}
+                  <Button
+                    type="submit"
+                    disabled={createBugMutation.isPending || updateBugMutation.isPending}
+                  >
+                    {(createBugMutation.isPending || updateBugMutation.isPending) && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    {editBug
+                      ? canEditBugReport
+                        ? "Update Bug"
+                        : "Save Status"
+                      : "Report Bug"}
                   </Button>
                 </DialogFooter>
               </form>
             </Form>
           </DialogContent>
         </Dialog>
+        </div>
+      </div>
 
-        <AlertDialog open={!!deleteId} onOpenChange={(val) => !val && setDeleteId(null)}>
+      <AlertDialog open={!!deleteId} onOpenChange={(val) => !val && setDeleteId(null)}>
           <AlertDialogContent className="bg-card border-border">
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -510,9 +667,9 @@ export default function DevBugs() {
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
-        </AlertDialog>
+      </AlertDialog>
 
-        <Sheet open={!!viewBug} onOpenChange={(val) => !val && setViewBug(null)}>
+      <Sheet open={!!viewBug} onOpenChange={(val) => !val && setViewBug(null)}>
           <SheetContent className="sm:max-w-[540px] bg-card border-border overflow-y-auto">
             {viewBug && (
               <div className="space-y-6">
@@ -533,9 +690,45 @@ export default function DevBugs() {
                     <p className="text-muted-foreground text-xs uppercase font-semibold">Priority</p>
                     <p className="font-medium capitalize">{viewBug.priority}</p>
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 col-span-2">
                     <p className="text-muted-foreground text-xs uppercase font-semibold">Assignee</p>
-                    <p className="font-medium">{viewBug.assigneeName || "Unassigned"}</p>
+                    {canAssignBugs ? (
+                      <Select
+                        value={viewBug.assigneeId?.toString() ?? "none"}
+                        onValueChange={async (value) => {
+                          try {
+                            const result = await assignBugMutation.mutateAsync({
+                              id: viewBug.id,
+                              data: {
+                                assigneeId:
+                                  value === "none" ? null : Number.parseInt(value, 10),
+                              },
+                            });
+                            setViewBug(result);
+                            toast.success(
+                              value === "none" ? "Bug unassigned" : "Developer assigned",
+                            );
+                            queryClient.invalidateQueries({ queryKey: getListBugsQueryKey() });
+                          } catch (err) {
+                            toastApiError(err, "Failed to assign bug");
+                          }
+                        }}
+                      >
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue placeholder="Assign developer" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Unassigned</SelectItem>
+                          {viewAssignableDevs.map((dev) => (
+                            <SelectItem key={dev.id} value={dev.id.toString()}>
+                              {dev.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <p className="font-medium">{viewBug.assigneeName || "Unassigned"}</p>
+                    )}
                   </div>
                   <div className="space-y-1">
                     <p className="text-muted-foreground text-xs uppercase font-semibold">Reporter</p>
@@ -580,23 +773,70 @@ export default function DevBugs() {
                   </div>
                 </div>
 
+                {(viewBug as any).attachmentUrl && (
+                  <div className="space-y-2 pt-4 border-t border-border">
+                    <h4 className="text-sm font-semibold flex items-center gap-2">
+                      <DownloadCloud className="h-4 w-4 text-green-500" /> Visual Attachment
+                    </h4>
+                    <div className="border rounded-md overflow-hidden bg-muted/20">
+                      {(viewBug as any).attachmentUrl.match(/\.(jpeg|jpg|gif|png|webp)/i) ? (
+                        <a href={(viewBug as any).attachmentUrl} target="_blank" rel="noreferrer" className="block cursor-zoom-in">
+                          <img 
+                            src={(viewBug as any).attachmentUrl} 
+                            alt="Bug Evidence" 
+                            className="w-full h-auto max-h-[240px] object-contain bg-zinc-900 mx-auto"
+                          />
+                        </a>
+                      ) : (
+                        <div className="p-4 flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Document Attached</span>
+                          <Button size="sm" variant="outline" asChild>
+                            <a href={(viewBug as any).attachmentUrl} target="_blank" rel="noreferrer">Download File</a>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="pt-6 flex justify-end gap-3 border-t border-border">
                   {viewBug.status !== 'fixed' && viewBug.status !== 'verified' && (
                     <Button variant="outline" size="sm" onClick={() => handleQuickClose(viewBug)}>
                       <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Fixed
                     </Button>
                   )}
-                  <Button variant="secondary" size="sm" onClick={() => { setViewBug(null); setEditBug(viewBug); }}>
-                    <Edit className="mr-2 h-4 w-4" /> Edit
-                  </Button>
+                  {canUpdateStatus && (
+                    <Button variant="secondary" size="sm" onClick={() => { setViewBug(null); setEditBug(viewBug); }}>
+                      <Edit className="mr-2 h-4 w-4" /> {canEditBugReport ? "Edit" : "Update Status"}
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
           </SheetContent>
-        </Sheet>
-      </div>
+      </Sheet>
 
-      <div className="flex items-center justify-between gap-4">
+      {isLoading && !data ? (
+        <PageKpiSkeleton />
+      ) : (
+        <PageKpiRow>
+          <StatCard title="Total bugs" value={bugStats.total} hint="In current view" icon={BugIcon} accent="violet" delay={0} />
+          <StatCard title="Open" value={bugStats.open} hint="Unresolved issues" icon={AlertTriangle} accent="red" alert={bugStats.open > 0} delay={1} />
+          <StatCard title="In progress" value={bugStats.inProgress} hint="Being worked on" icon={Activity} accent="blue" delay={2} />
+          <StatCard title="Critical / high" value={bugStats.critical} hint="Severity focus" icon={Filter} accent="amber" alert={bugStats.critical > 0} delay={3} />
+        </PageKpiRow>
+      )}
+
+      <div className="flex flex-wrap items-center gap-3">
+        {(isAdmin || user?.role === "tester") && (
+          <Tabs value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
+            <TabsList className="bg-muted/50 p-1 h-8">
+              <TabsTrigger value="all" className="rounded-md text-xs h-7 px-3">All bugs</TabsTrigger>
+              <TabsTrigger value="mine" className="rounded-md text-xs h-7 px-3">My queue</TabsTrigger>
+              <TabsTrigger value="unassigned" className="rounded-md text-xs h-7 px-3">Unassigned</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
         <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
           <TabsList className="bg-muted/50 p-1">
             <TabsTrigger value="all" className="rounded-md">All</TabsTrigger>
@@ -609,105 +849,152 @@ export default function DevBugs() {
       </div>
 
       <Card className="bg-card">
-        <div className="p-4 border-b border-border flex flex-wrap gap-4 items-center justify-between">
-          <div className="relative w-full max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input 
-              type="search" 
-              placeholder="Search bugs..." 
-              className="pl-9" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <Button variant="outline" size="sm">
-            <Filter className="mr-2 h-4 w-4" /> Filter
-          </Button>
-        </div>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[100px] text-xs">ID</TableHead>
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Severity</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Assignee</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                [...Array(5)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                  </TableRow>
-                ))
-              ) : filteredBugs.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
-                    <div className="flex flex-col items-center justify-center">
-                      <BugIcon className="h-8 w-8 mb-2 opacity-50" />
-                      <p>No bugs found.</p>
+        <CardContent className="p-4">
+          {isLoading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
+            </div>
+          ) : (
+            <AdvancedTable<Bug> 
+              data={filteredBugs} 
+              columns={[
+                {
+                  id: "bugNumber",
+                  header: "ID",
+                  accessorKey: "bugNumber",
+                  cell: (bug: Bug) => <span className="font-mono text-[10px] text-muted-foreground">{bug.bugNumber}</span>
+                },
+                {
+                  id: "title",
+                  header: "Issue",
+                  accessorKey: "title",
+                  cell: (bug: Bug) => (
+                    <div className="flex flex-col min-w-[140px] max-w-md">
+                      <span className="font-medium text-[11px] whitespace-normal">{bug.title}</span>
+                      <span className="text-[9px] text-muted-foreground">{bug.projectName}</span>
                     </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredBugs.map((bug) => (
-                  <TableRow key={bug.id} className="cursor-pointer hover:bg-muted/50 text-xs group" onClick={() => setViewBug(bug)}>
-                    <TableCell className="font-mono text-[10px] text-muted-foreground">{bug.bugNumber}</TableCell>
-                    <TableCell className="font-medium text-xs">{bug.title}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">{bug.projectName}</TableCell>
-                    <TableCell>
-                      <Badge className={cn("border-0 text-[10px]", getSeverityColor(bug.severity))}>
-                        {bug.severity.toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={cn("text-[10px]", getStatusColor(bug.status))}>
-                        {bug.status.replace('_', ' ').toUpperCase()}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      <div className="flex items-center justify-between">
-                        <span>{bug.assigneeName || <span className="text-muted-foreground italic">Unassigned</span>}</span>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-7 w-7">
-                                <MoreHorizontal className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setViewBug(bug); }}>
-                                <Eye className="mr-2 h-3 w-3" /> View Details
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setEditBug(bug); }}>
-                                <Edit className="mr-2 h-3 w-3" /> Edit
-                              </DropdownMenuItem>
-                              {bug.status !== 'fixed' && bug.status !== 'verified' && (
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleQuickClose(bug); }}>
-                                  <CheckCircle2 className="mr-2 h-3 w-3 text-green-500" /> Close Bug
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem className="text-red-500" onClick={(e) => { e.stopPropagation(); setDeleteId(bug.id); }}>
-                                <Trash2 className="mr-2 h-3 w-3" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                  )
+                },
+                {
+                  id: "description",
+                  header: "Description",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => (
+                    <p className="whitespace-pre-wrap text-sm">{bug.description?.trim() || "—"}</p>
+                  ),
+                },
+                {
+                  id: "steps",
+                  header: "Steps to reproduce",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => (
+                    <p className="whitespace-pre-wrap text-sm">{bug.stepsToReproduce?.trim() || "—"}</p>
+                  ),
+                },
+                {
+                  id: "expected",
+                  header: "Expected behavior",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => (
+                    <p className="whitespace-pre-wrap text-sm">{bug.expectedBehavior?.trim() || "—"}</p>
+                  ),
+                },
+                {
+                  id: "actual",
+                  header: "Actual behavior",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => (
+                    <p className="whitespace-pre-wrap text-sm">{bug.actualBehavior?.trim() || "—"}</p>
+                  ),
+                },
+                {
+                  id: "reporter",
+                  header: "Reporter",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => bug.reporterName || "—",
+                },
+                {
+                  id: "priority",
+                  header: "Priority",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => bug.priority?.toUpperCase() || "—",
+                },
+                {
+                  id: "buildVersion",
+                  header: "Build version",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => bug.buildVersion || "—",
+                },
+                {
+                  id: "createdAt",
+                  header: "Reported",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) => new Date(bug.createdAt).toLocaleString(),
+                },
+                {
+                  id: "resolvedAt",
+                  header: "Resolved",
+                  detailOnly: true,
+                  detailCell: (bug: Bug) =>
+                    bug.resolvedAt ? new Date(bug.resolvedAt).toLocaleString() : "—",
+                },
+                {
+                  id: "severity",
+                  header: "Severity",
+                  accessorKey: "severity",
+                  cell: (bug: Bug) => (
+                    <Badge className={cn("border-0 text-[9px] px-1.5 h-4", getSeverityColor(bug.severity))}>
+                      {bug.severity.toUpperCase()}
+                    </Badge>
+                  )
+                },
+                {
+                  id: "status",
+                  header: "Status",
+                  accessorKey: "status",
+                  cell: (bug: Bug) => (
+                    <Badge variant="outline" className={cn("text-[9px] px-1.5 h-4", getStatusColor(bug.status))}>
+                      {bug.status.replace('_', ' ').toUpperCase()}
+                    </Badge>
+                  )
+                },
+                {
+                  id: "assigneeName",
+                  header: "Assignee",
+                  accessorKey: "assigneeName",
+                  cell: (bug: Bug) => <span className="text-[10px]">{bug.assigneeName || "—"}</span>
+                },
+                {
+                  id: "platform",
+                  header: "Platform",
+                  accessorKey: "platform",
+                  cell: (bug: Bug) => <Badge variant="secondary" className="text-[9px] px-1.5 h-4 uppercase">{bug.platform}</Badge>
+                },
+                {
+                  id: "actions",
+                  header: "",
+                  hideInDetail: true,
+                  cell: (bug: Bug) => (
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setViewBug(bug); }}>
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                      {canUpdateStatus && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); setEditBug(bug); }}>
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  )
+                }
+              ]} 
+              searchKey="title" 
+              searchPlaceholder="Search issues..." 
+              filename="BugReport"
+              viewStorageKey="bugs"
+              onRowClick={(bug: Bug) => setViewBug(bug)}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

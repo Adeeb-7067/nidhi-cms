@@ -1,15 +1,19 @@
 import { Router } from "express";
-import { db } from "../lib/db";
-import { commentsTable, usersTable } from "@workspace/db/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { commentsTable, usersTable, projectMembersTable, notificationsTable, getNextSequence } from "@workspace/db/schema";
 import { requireAuth } from "../middlewares/auth";
+import { broadcast, notifyUser } from "../lib/realtime";
+import { parsePagination, badRequest, parseIdParam } from "../lib/route-errors";
+import { toIso } from "../lib/mongo-list";
 
 const router = Router();
 
-async function formatComment(c: typeof commentsTable.$inferSelect): Promise<Record<string, unknown>> {
-  const [author] = await db.select({ name: usersTable.name, avatarUrl: usersTable.avatarUrl, role: usersTable.role }).from(usersTable).where(eq(usersTable.id, c.authorId));
-  const replies = await db.select().from(commentsTable).where(eq(commentsTable.parentId, c.id)).orderBy(commentsTable.createdAt);
+async function formatComment(c: any): Promise<Record<string, unknown>> {
+  const author = await usersTable.findOne({ id: c.authorId });
+  
+  // Recurse to get replies
+  const replies = await commentsTable.find({ parentId: c.id }).sort({ createdAt: 1 });
   const formattedReplies = await Promise.all(replies.map(formatComment));
+  
   return {
     id: c.id,
     authorId: c.authorId,
@@ -22,34 +26,37 @@ async function formatComment(c: typeof commentsTable.$inferSelect): Promise<Reco
     parentId: c.parentId,
     isEdited: c.isEdited,
     replies: formattedReplies,
-    createdAt: c.createdAt.toISOString(),
-    updatedAt: c.updatedAt.toISOString(),
+    createdAt: toIso(c.createdAt) ?? new Date().toISOString(),
+    updatedAt: toIso(c.updatedAt) ?? new Date().toISOString(),
   };
 }
 
 // GET /api/comments
 router.get("/comments", requireAuth, async (req, res) => {
-  const { threadType, threadId, page = "1", limit = "50" } = req.query as Record<string, string>;
+  const q = req.query as Record<string, string>;
+  const { threadType, threadId } = q;
   if (!threadType || !threadId) {
-    res.status(400).json({ error: "threadType and threadId required" });
-    return;
+    badRequest("Discussion thread type and id are required.", "threadType");
   }
+  const threadIdNum = parseIdParam(threadId, "threadId");
+  const { page, limit, skip } = parsePagination(q);
 
-  const topLevel = await db
-    .select()
-    .from(commentsTable)
-    .where(and(eq(commentsTable.threadType, threadType as "project" | "log" | "bug" | "apk" | "request"), eq(commentsTable.threadId, parseInt(threadId)), sql`${commentsTable.parentId} IS NULL`))
-    .orderBy(commentsTable.createdAt)
-    .limit(parseInt(limit))
-    .offset((parseInt(page) - 1) * parseInt(limit));
+  const topLevelQuery: Record<string, any> = {
+    threadType,
+    threadId: threadIdNum,
+    $or: [
+      { parentId: null },
+      { parentId: { $exists: false } }
+    ]
+  };
 
-  const [countResult] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(commentsTable)
-    .where(and(eq(commentsTable.threadType, threadType as "project" | "log" | "bug" | "apk" | "request"), eq(commentsTable.threadId, parseInt(threadId)), sql`${commentsTable.parentId} IS NULL`));
+  const [topLevel, total] = await Promise.all([
+    commentsTable.find(topLevelQuery).sort({ createdAt: 1 }).skip(skip).limit(limit),
+    commentsTable.countDocuments(topLevelQuery)
+  ]);
 
   const formatted = await Promise.all(topLevel.map(formatComment));
-  res.json({ comments: formatted, total: Number(countResult.count) });
+  res.json({ comments: formatted, total });
 });
 
 // POST /api/comments
@@ -59,21 +66,89 @@ router.post("/comments", requireAuth, async (req, res) => {
     res.status(400).json({ error: "threadType, threadId, content required" });
     return;
   }
-  const [comment] = await db
-    .insert(commentsTable)
-    .values({ authorId: req.user!.id, threadType: threadType as "project" | "log" | "bug" | "apk" | "request", threadId, content, parentId: parentId ?? null })
-    .returning();
-  res.status(201).json(await formatComment(comment));
+  
+  const nextId = await getNextSequence("comments");
+  const comment = await commentsTable.create({
+    id: nextId,
+    authorId: req.user!.id,
+    threadType,
+    threadId,
+    content,
+    parentId: parentId ?? null
+  });
+  
+  const formattedComment = await formatComment(comment);
+  
+  // Realtime broadcast so all clients listening get the new comment
+  broadcast("comment", {
+    threadType: comment.threadType,
+    threadId: comment.threadId,
+    comment: formattedComment
+  });
+
+  // ── Create targeted notifications for thread participants ──
+  try {
+    // Find all users who should be notified (project members, or thread participants)
+    const recipientIds = new Set<number>();
+
+    if (threadType === "project") {
+      // Notify all project members
+      const members = await projectMembersTable.find({ projectId: threadId });
+      members.forEach((m: any) => recipientIds.add(m.userId));
+    }
+
+    // Also notify unique commenters on this thread (for discussions, tickets, etc.)
+    const threadComments = await commentsTable.find({ threadType, threadId }).select("authorId").lean();
+    threadComments.forEach((c: any) => recipientIds.add(c.authorId));
+
+    // Remove the comment author — don't notify yourself
+    recipientIds.delete(req.user!.id);
+
+    const authorName = req.user!.name;
+    const truncatedContent = content.length > 80 ? content.slice(0, 77) + "..." : content;
+
+    // Create notification records and emit socket events for each recipient
+    await Promise.all(Array.from(recipientIds).map(async (userId) => {
+      const notifId = await getNextSequence("notifications");
+      await notificationsTable.create({
+        id: notifId,
+        userId,
+        type: "comment",
+        title: `${authorName} commented`,
+        body: truncatedContent,
+        entityType: threadType,
+        entityId: threadId,
+        isRead: false,
+        createdAt: new Date()
+      });
+
+      // Push live socket event to this specific user
+      notifyUser(userId, "notification", {
+        type: "comment",
+        title: `${authorName} commented`,
+        body: truncatedContent,
+        entityType: threadType,
+        entityId: threadId
+      });
+    }));
+  } catch (err) {
+    console.error("Failed to create comment notifications:", err);
+  }
+  
+  res.status(201).json(formattedComment);
 });
 
 // PATCH /api/comments/:id
 router.patch("/comments/:id", requireAuth, async (req, res) => {
   const { content } = req.body as { content: string };
-  const [comment] = await db
-    .update(commentsTable)
-    .set({ content, isEdited: true, updatedAt: new Date() })
-    .where(and(eq(commentsTable.id, parseInt(req.params['id'] as string)), eq(commentsTable.authorId, req.user!.id)))
-    .returning();
+  const id = parseInt(req.params['id'] as string);
+
+  const comment = await commentsTable.findOneAndUpdate(
+    { id, authorId: req.user!.id },
+    { $set: { content, isEdited: true } },
+    { new: true }
+  );
+  
   if (!comment) {
     res.status(404).json({ error: "Comment not found" });
     return;
@@ -81,4 +156,4 @@ router.patch("/comments/:id", requireAuth, async (req, res) => {
   res.json(await formatComment(comment));
 });
 
-export default router;
+export default router; 

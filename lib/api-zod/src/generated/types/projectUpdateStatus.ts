@@ -15,4 +15,5 @@ export const ProjectUpdateStatus = {
   on_hold: "on_hold",
   uat: "uat",
   completed: "completed",
+  maintenance: "maintenance",
 } as const;

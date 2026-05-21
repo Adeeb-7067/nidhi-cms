@@ -12,4 +12,5 @@ export interface ProjectPipeline {
   uat: number;
   onHold: number;
   completed: number;
+  maintenance: number;
 }

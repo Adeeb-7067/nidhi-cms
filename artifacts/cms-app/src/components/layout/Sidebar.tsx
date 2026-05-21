@@ -1,207 +1,311 @@
-import React from "react";
+import React, { useEffect, useState, useCallback, memo } from "react";
 import { Link, useLocation } from "wouter";
+import { motion, LayoutGroup } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { 
-  LayoutDashboard, 
-  Briefcase, 
-  Users, 
-  Building2, 
-  BarChart3, 
-  Inbox,
-  LogOut,
-  Bug,
-  Smartphone,
-  FileText,
-  Clock,
-  Zap,
-  Settings,
-  Command
-} from "lucide-react";
+import { ChevronRight, LogOut } from "lucide-react";
+import { AppLogo } from "@/components/brand/AppLogo";
+import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { useListRequests, useListBugs, getListRequestsQueryKey, getListBugsQueryKey } from "@workspace/api-client-react";
+import {
+  useListRequests,
+  useListBugs,
+  getListRequestsQueryKey,
+  getListBugsQueryKey,
+} from "@workspace/api-client-react";
+import { useRealtime } from "@/contexts/RealtimeContext";
+import { QUERY_STALE } from "@/lib/query-config";
+import {
+  getNavSections,
+  getHomeHref,
+  isNavActive,
+  findActiveNavGroupLabel,
+  getSectionDefaultHref,
+  isPathInSection,
+  type UserRole,
+  type NavSection,
+} from "@/lib/navigation";
 
-interface NavSection {
-  label: string;
-  role: string[];
-  items: NavItem[];
-}
+const spring = { type: "spring" as const, stiffness: 380, damping: 28 };
 
-interface NavItem {
-  title: string;
-  href: string;
-  icon: React.ElementType;
-  role: string[];
-  showBadge?: boolean;
-}
-
-export function Sidebar() {
-  const [location] = useLocation();
-  const { user, logout } = useAuth();
-  
+function useBadgeCounts(role: UserRole) {
+  const { unreadNotificationCount } = useRealtime();
   const { data: pendingRequests } = useListRequests(
     { status: "pending", limit: 1 },
-    { 
-      query: { 
-        enabled: user?.role === "super_admin",
-        queryKey: getListRequestsQueryKey({ status: "pending", limit: 1 })
-      } 
-    }
+    {
+      query: {
+        enabled: role === "super_admin",
+        staleTime: QUERY_STALE.list,
+        queryKey: getListRequestsQueryKey({ status: "pending", limit: 1 }),
+      },
+    },
   );
-
   const { data: openBugs } = useListBugs(
     { status: "open", limit: 1 },
-    { 
-      query: { 
-        enabled: user?.role === "developer",
-        queryKey: getListBugsQueryKey({ status: "open", limit: 1 })
-      } 
-    }
+    {
+      query: {
+        enabled: role === "developer" || role === "tester",
+        staleTime: QUERY_STALE.list,
+        queryKey: getListBugsQueryKey({ status: "open", limit: 1 }),
+      },
+    },
+  );
+  return {
+    requests: pendingRequests?.total ?? 0,
+    bugs: openBugs?.total ?? 0,
+    notifications: unreadNotificationCount,
+  };
+}
+
+function SidebarNavLink({
+  href,
+  active,
+  children,
+  count,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+  count?: number;
+}) {
+  return (
+    <Link href={href} className="block outline-none">
+      <motion.div
+        className={cn(
+          "group relative flex items-center gap-2 rounded-md px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide",
+          active
+            ? "bg-sidebar-primary-foreground/18 text-sidebar-primary-foreground shadow-sm"
+            : "text-sidebar-primary-foreground/72 hover:bg-sidebar-primary-foreground/10 hover:text-sidebar-primary-foreground",
+        )}
+        whileHover={{ x: active ? 0 : 3 }}
+        whileTap={{ scale: 0.98 }}
+        transition={spring}
+      >
+        {active && (
+          <motion.span
+            layoutId="sidebar-active-bar"
+            className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-sidebar-primary-foreground"
+            transition={spring}
+          />
+        )}
+        <span className="flex-1 truncate pl-1">{children}</span>
+        {count != null && count > 0 && (
+          <span
+            className={cn(
+              "flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-[9px] font-bold",
+              active ? "bg-sidebar-primary-foreground/25" : "bg-destructive text-destructive-foreground",
+            )}
+          >
+            {count > 9 ? "9+" : count}
+          </span>
+        )}
+        {active && <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-80" />}
+      </motion.div>
+    </Link>
+  );
+}
+
+type SidebarProps = {
+  collapsed?: boolean;
+};
+
+export const Sidebar = memo(function Sidebar({ collapsed = false }: SidebarProps) {
+  const [location, setLocation] = useLocation();
+  const { user, logout } = useAuth();
+  const badges = useBadgeCounts((user?.role ?? "developer") as UserRole);
+
+  const role = user?.role as UserRole;
+  const sections = user ? getNavSections(role) : [];
+  const homeHref = user ? getHomeHref(role) : "/login";
+
+  const [activeGroup, setActiveGroup] = useState(() =>
+    sections.length ? (findActiveNavGroupLabel(sections, location) ?? sections[0].label) : "",
+  );
+
+  useEffect(() => {
+    const label = findActiveNavGroupLabel(sections, location);
+    if (label) setActiveGroup(label);
+  }, [location, sections]);
+
+  const activeSection = sections.find((s) => s.label === activeGroup) ?? sections[0];
+
+  const getBadge = useCallback(
+    (key?: string) => {
+      if (key === "requests") return badges.requests;
+      if (key === "bugs") return badges.bugs;
+      if (key === "notifications") return badges.notifications;
+      return 0;
+    },
+    [badges],
+  );
+
+  /** Rail switches submenu and navigates to that section when not already on a page in it. */
+  const handleRailSelect = useCallback(
+    (section: NavSection) => {
+      setActiveGroup(section.label);
+      if (isPathInSection(location, section)) return;
+      const href = getSectionDefaultHref(section);
+      if (href) setLocation(href);
+    },
+    [location, setLocation],
   );
 
   if (!user) return null;
 
-  const sections: NavSection[] = [
-    {
-      label: "Overview",
-      role: ["super_admin", "developer", "client"],
-      items: [
-        { 
-          title: user.role === "super_admin" ? "Dashboard" : user.role === "developer" ? "Workspace" : "Portal", 
-          href: user.role === "super_admin" ? "/admin" : user.role === "developer" ? "/dev" : "/client", 
-          icon: LayoutDashboard, 
-          role: ["super_admin", "developer", "client"] 
-        },
-      ]
-    },
-    {
-      label: "Workspace",
-      role: ["developer"],
-      items: [
-        { title: "Daily Logs", href: "/dev/logs", icon: Clock, role: ["developer"] },
-        { title: "Bug Tracker", href: "/dev/bugs", icon: Bug, role: ["developer"], showBadge: true },
-        { title: "Releases", href: "/dev/apk", icon: Smartphone, role: ["developer"] },
-        { title: "Reports", href: "/dev/reports", icon: FileText, role: ["developer"] },
-        { title: "Requests", href: "/dev/requests", icon: Inbox, role: ["developer"] },
-      ]
-    },
-    {
-      label: "Manage",
-      role: ["super_admin"],
-      items: [
-        { title: "Projects", href: "/admin/projects", icon: Briefcase, role: ["super_admin"] },
-        { title: "Employees", href: "/admin/employees", icon: Users, role: ["super_admin"] },
-        { title: "Clients", href: "/admin/clients", icon: Building2, role: ["super_admin"] },
-        { title: "Settings", href: "/admin/settings", icon: Settings, role: ["super_admin"] },
-      ]
-    },
-    {
-      label: "Insights",
-      role: ["super_admin", "client"],
-      items: [
-        { title: "Analytics", href: user.role === "super_admin" ? "/admin/analytics" : "/client/analytics", icon: BarChart3, role: ["super_admin", "client"] },
-        { title: "Requests", href: "/admin/requests", icon: Inbox, role: ["super_admin"], showBadge: true },
-        { title: "Releases", href: "/client/apk", icon: Smartphone, role: ["client"] },
-      ]
-    }
-  ];
-
-  const filteredSections = sections.filter(section => section.role.includes(user.role))
-    .map(section => ({
-      ...section,
-      items: section.items.filter(item => item.role.includes(user.role))
-    }))
-    .filter(section => section.items.length > 0);
+  const isProfileActive = isNavActive(location, "/profile");
 
   return (
-    <div className="flex flex-col h-screen w-56 border-r border-border bg-sidebar text-sidebar-foreground">
-      <div className="p-4 border-b border-border flex items-center gap-3 h-11">
-        <div className="h-7 w-7 bg-primary rounded flex items-center justify-center shrink-0">
-          <Zap size={16} className="text-primary-foreground fill-primary-foreground" />
-        </div>
-        <div className="font-semibold text-sm tracking-tight truncate">Nexus CMS</div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
-        {filteredSections.map((section) => (
-          <div key={section.label}>
-            <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground/40 px-3 mb-1 mt-4">
-              {section.label}
-            </div>
-            <div className="space-y-1">
-              {section.items.map((item) => {
-                const isActive = location === item.href || (location.startsWith(item.href) && item.href !== "/admin" && item.href !== "/dev" && item.href !== "/client");
-                const Icon = item.icon;
-                
-                let badgeCount = 0;
-                if (item.showBadge) {
-                  if (item.href === "/admin/requests") badgeCount = pendingRequests?.total || 0;
-                  if (item.href === "/dev/bugs") badgeCount = openBugs?.total || 0;
-                }
+    <LayoutGroup>
+      <aside className="flex h-screen shrink-0 shadow-xl shadow-black/5">
+        {/* Icon rail */}
+        <div className="flex w-[76px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+          <div className="flex h-16 shrink-0 items-center justify-center border-b border-sidebar-border">
+            <Link href={homeHref} title={BRAND.shortName} className="block px-1.5">
+              <motion.div
+                className="flex h-11 w-full items-center justify-center px-1"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                transition={spring}
+              >
+                <AppLogo size="sm" className="mx-auto max-w-full object-center" />
+              </motion.div>
+            </Link>
+          </div>
 
-                return (
-                  <Link key={item.href} href={item.href} className={cn(
-                    "flex items-center gap-3 px-2.5 py-1.5 text-[11px] font-medium transition-colors border-l-2",
-                    isActive 
-                      ? "bg-sidebar-accent/10 text-foreground border-primary" 
-                      : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/10 border-transparent"
-                  )}>
-                    <Icon size={14} />
+          <nav className="dialog-scroll flex flex-1 flex-col gap-1 overflow-y-auto py-2">
+            {sections.map((section) => {
+              const isActive = activeGroup === section.label;
+              const Icon = section.icon;
+              const hasBadge = section.items.some((i) => getBadge(i.badgeKey) > 0);
+
+              return (
+                <button
+                  key={section.label}
+                  type="button"
+                  onClick={() => handleRailSelect(section)}
+                  title={section.label}
+                  className={cn(
+                    "relative mx-1.5 flex flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-[9px] font-bold uppercase tracking-wide transition-colors duration-200",
+                    isActive
+                      ? "text-sidebar-primary-foreground"
+                      : "text-muted-foreground hover:text-sidebar-foreground",
+                  )}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId="sidebar-rail-active"
+                      className="absolute inset-0 rounded-lg bg-sidebar-primary shadow-md"
+                      transition={spring}
+                    />
+                  )}
+                  <span className="relative z-10 flex h-8 w-8 items-center justify-center">
+                    <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.25 : 1.75} />
+                  </span>
+                  <span className="relative z-10 max-w-full truncate leading-tight">
+                    {section.railLabel}
+                  </span>
+                  {hasBadge && !isActive && (
+                    <span className="absolute right-1.5 top-1.5 z-10 h-1.5 w-1.5 rounded-full bg-destructive ring-2 ring-sidebar" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="shrink-0 border-t border-sidebar-border p-2">
+            <Link
+              href="/profile"
+              title="Profile"
+              onClick={() => {
+                const account = sections.find((s) => s.label === "Account");
+                if (account) setActiveGroup(account.label);
+              }}
+              className={cn(
+                "relative flex flex-col items-center rounded-lg py-2 transition-colors",
+                isProfileActive ? "text-sidebar-primary-foreground" : "text-muted-foreground",
+              )}
+            >
+              {isProfileActive && (
+                <motion.span
+                  layoutId="sidebar-rail-active"
+                  className="absolute inset-0 rounded-lg bg-sidebar-primary"
+                  transition={spring}
+                />
+              )}
+              <Avatar className="relative z-10 h-8 w-8 border border-sidebar-border">
+                <AvatarImage src={user.avatarUrl || undefined} />
+                <AvatarFallback className="bg-primary/20 text-primary text-[10px] font-bold">
+                  {user.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            </Link>
+          </div>
+        </div>
+
+        {/* Submenu panel */}
+        {!collapsed && (
+        <motion.div className="flex w-[228px] shrink-0 flex-col bg-sidebar-primary text-sidebar-primary-foreground">
+          <div className="shrink-0 px-5 pt-6 pb-2">
+            <motion.h2
+              key={activeSection?.label}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+              className="text-xl font-bold tracking-tight"
+            >
+              {activeSection?.label}
+            </motion.h2>
+            <div className="mt-3 h-px bg-gradient-to-r from-sidebar-primary-foreground/40 via-sidebar-primary-foreground/20 to-transparent" />
+          </div>
+
+          <nav className="dialog-scroll flex-1 overflow-y-auto px-2 py-2">
+            <motion.ul
+              key={activeSection?.label}
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 0 },
+                show: { opacity: 1, transition: { staggerChildren: 0.04 } },
+              }}
+              className="space-y-0.5"
+            >
+              {activeSection?.items.map((item) => (
+                <motion.li
+                  key={item.href}
+                  variants={{
+                    hidden: { opacity: 0, x: -8 },
+                    show: { opacity: 1, x: 0 },
+                  }}
+                >
+                  <SidebarNavLink
+                    href={item.href}
+                    active={isNavActive(location, item.href)}
+                    count={getBadge(item.badgeKey)}
+                  >
                     {item.title}
-                    {badgeCount > 0 && (
-                      <span className="ml-auto h-4 px-1 rounded-full bg-destructive/15 text-destructive text-[9px] font-medium flex items-center">
-                        {badgeCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
+                  </SidebarNavLink>
+                </motion.li>
+              ))}
+            </motion.ul>
+          </nav>
+
+          <div className="shrink-0 border-t border-sidebar-primary-foreground/20 bg-black/5 px-4 py-3 backdrop-blur-sm">
+            <p className="truncate text-xs font-semibold">{user.name}</p>
+            <p className="truncate text-[10px] capitalize opacity-60">{role.replace("_", " ")}</p>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => void logout()}
+              className="mt-2 h-8 w-full justify-start gap-2 px-2 text-[10px] font-bold uppercase tracking-wide opacity-70 hover:bg-sidebar-primary-foreground/10 hover:opacity-100"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign out
+            </Button>
           </div>
-        ))}
-      </div>
-      
-      <div className="p-3 border-t border-border">
-        <Link href="/profile">
-          <div className="flex items-center gap-3 mb-4 px-2 cursor-pointer group">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <Avatar className="h-7 w-7 border border-border transition-colors group-hover:border-primary">
-                    <AvatarImage src={user.avatarUrl || undefined} />
-                    <AvatarFallback className="bg-primary/20 text-primary">{user.name.charAt(0)}</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col truncate min-w-0">
-                    <span className="text-xs font-medium truncate group-hover:text-primary transition-colors">{user.name}</span>
-                    <div className="flex items-center">
-                      <span className={cn(
-                        "text-[10px] px-1.5 py-0.5 rounded-full font-semibold uppercase tracking-wider",
-                        user.role === "super_admin" ? "bg-primary/10 text-primary border border-primary/20" : "bg-muted text-muted-foreground border border-border/50"
-                      )}>
-                        {user.role.replace("_", " ")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="text-[10px]">
-                View Profile
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        </Link>
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          className="w-full justify-start text-muted-foreground hover:text-foreground h-8 px-2 text-xs" 
-          onClick={logout}
-        >
-          <LogOut size={16} className="mr-2" />
-          Logout
-        </Button>
-      </div>
-    </div>
+        </motion.div>
+        )}
+      </aside>
+    </LayoutGroup>
   );
-}
+});

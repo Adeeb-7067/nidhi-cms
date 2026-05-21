@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useListRequests, useCreateRequest, useListProjects } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Inbox, Loader2 } from "lucide-react";
+import { Plus, Inbox, Loader2, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 
 const requestSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -43,6 +45,16 @@ export default function DevRequests() {
     },
   });
 
+  const requestStats = useMemo(() => {
+    const requests = data?.requests ?? [];
+    return {
+      total: data?.total ?? requests.length,
+      pending: requests.filter((r) => r.status === "pending").length,
+      approved: requests.filter((r) => r.status === "approved").length,
+      rejected: requests.filter((r) => r.status === "rejected").length,
+    };
+  }, [data]);
+
   const onSubmit = async (values: RequestFormValues) => {
     try {
       await createRequest.mutateAsync({
@@ -56,8 +68,7 @@ export default function DevRequests() {
       form.reset();
       refetch();
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
-      toast.error(msg);
+      toastApiError(error, "Action failed. Please try again.");
     }
   };
 
@@ -86,6 +97,72 @@ export default function DevRequests() {
         return <Badge variant="outline" className="text-[10px]">{urgency.toUpperCase()}</Badge>;
     }
   };
+
+  type RequestRow = NonNullable<typeof data>["requests"][number];
+
+  const columns: Column<RequestRow>[] = [
+    {
+      id: "type",
+      header: "Type",
+      cell: (request) => (
+        <span className="capitalize text-xs">{request.type.replace("_", " ")}</span>
+      ),
+    },
+    {
+      id: "title",
+      header: "Title",
+      accessorKey: "title",
+      cell: (request) => <span className="font-medium text-xs">{request.title}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      cell: (request) => (
+        <span className="text-muted-foreground text-xs">{request.projectName}</span>
+      ),
+    },
+    {
+      id: "urgency",
+      header: "Urgency",
+      cell: (request) => getUrgencyBadge(request.urgency),
+    },
+    {
+      id: "status",
+      header: "Status",
+      cell: (request) => getStatusBadge(request.status),
+    },
+    {
+      id: "date",
+      header: "Date",
+      cell: (request) => (
+        <span className="text-muted-foreground text-xs">
+          {new Date(request.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      id: "description",
+      header: "Description",
+      detailOnly: true,
+      detailCell: (request) => (
+        <p className="whitespace-pre-wrap text-sm">{request.description?.trim() || "—"}</p>
+      ),
+    },
+    {
+      id: "adminNote",
+      header: "Admin response",
+      detailOnly: true,
+      detailCell: (request) => (
+        <p className="whitespace-pre-wrap text-sm">{request.adminNote?.trim() || "—"}</p>
+      ),
+    },
+    {
+      id: "updatedAt",
+      header: "Last updated",
+      detailOnly: true,
+      detailCell: (request) => new Date(request.updatedAt).toLocaleString(),
+    },
+  ];
 
   return (
     <div className="space-y-4">
@@ -221,56 +298,40 @@ export default function DevRequests() {
         </Dialog>
       </div>
 
+      {isLoading ? (
+        <PageKpiSkeleton />
+      ) : (
+        <PageKpiRow>
+          <StatCard title="My requests" value={requestStats.total} hint="All submissions" icon={Inbox} accent="violet" delay={0} />
+          <StatCard title="Pending" value={requestStats.pending} hint="Awaiting review" icon={Clock} accent="amber" alert={requestStats.pending > 0} delay={1} />
+          <StatCard title="Approved" value={requestStats.approved} hint="Accepted" icon={CheckCircle2} accent="green" delay={2} />
+          <StatCard title="Rejected" value={requestStats.rejected} hint="Declined" icon={XCircle} accent="red" delay={3} />
+        </PageKpiRow>
+      )}
+
       <Card className="bg-card">
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Urgency</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-right text-xs">Date</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                [...Array(5)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-48" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-24 ml-auto" /></TableCell>
-                  </TableRow>
-                ))
-              ) : data?.requests.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="h-32 text-center text-muted-foreground text-xs">
-                    <div className="flex flex-col items-center justify-center">
-                      <Inbox className="h-8 w-8 mb-2 opacity-50" />
-                      <p>No resource requests found.</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data?.requests.map((request) => (
-                  <TableRow key={request.id} className="text-xs">
-                    <TableCell className="capitalize">{request.type.replace('_', ' ')}</TableCell>
-                    <TableCell className="font-medium">{request.title}</TableCell>
-                    <TableCell className="text-muted-foreground">{request.projectName}</TableCell>
-                    <TableCell>{getUrgencyBadge(request.urgency)}</TableCell>
-                    <TableCell>{getStatusBadge(request.status)}</TableCell>
-                    <TableCell className="text-right text-muted-foreground">
-                      {new Date(request.createdAt).toLocaleDateString()}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <CardContent className="p-4">
+          {isLoading ? (
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : !data?.requests?.length ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs">
+              <Inbox className="h-8 w-8 mb-2 opacity-50" />
+              <p>No resource requests found.</p>
+            </div>
+          ) : (
+            <AdvancedTable
+              data={data.requests}
+              columns={columns}
+              searchKey="title"
+              searchPlaceholder="Search requests..."
+              filename="DevRequestsExport"
+              viewStorageKey="dev-requests"
+            />
+          )}
         </CardContent>
       </Card>
     </div>

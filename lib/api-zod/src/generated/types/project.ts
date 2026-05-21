@@ -7,10 +7,13 @@
  */
 import type { ProjectPriority } from "./projectPriority";
 import type { ProjectStatus } from "./projectStatus";
+import type { ProjectType } from "./projectType";
 
 export interface Project {
   id: number;
   name: string;
+  companyId: number;
+  companyName: string;
   clientId: number;
   clientName: string;
   /** @nullable */
@@ -21,6 +24,7 @@ export interface Project {
   description?: string | null;
   status: ProjectStatus;
   priority: ProjectPriority;
+  type: ProjectType;
   startDate: string;
   deadline: string;
   techStack: string[];
@@ -32,6 +36,12 @@ export interface Project {
   stagingUrl?: string | null;
   /** @nullable */
   productionUrl?: string | null;
+  /** @nullable */
+  adminUrl?: string | null;
+  /** @nullable */
+  websiteUrl?: string | null;
+  /** @nullable */
+  postmanJson?: string | null;
   completionPct: number;
   /** @nullable */
   completionOverride?: number | null;

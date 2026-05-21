@@ -1,71 +1,136 @@
-import { pgTable, serial, text, timestamp, integer, pgEnum, index } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
-import { usersTable } from "./users";
-import { clientsTable } from "./clients";
+import mongoose, { Schema } from "mongoose";
 
-export const projectStatusEnum = pgEnum("project_status", ["scoping", "in_progress", "on_hold", "uat", "completed"]);
-export const projectPriorityEnum = pgEnum("project_priority", ["low", "medium", "high", "critical"]);
-export const milestoneStatusEnum = pgEnum("milestone_status", ["pending", "completed", "delayed"]);
-export const apkAudienceEnum = pgEnum("apk_audience", ["team_only", "client_visible"]);
+export const projectStatuses = ["scoping", "in_progress", "on_hold", "uat", "completed", "maintenance"] as const;
+export const projectPriorities = ["low", "medium", "high", "critical"] as const;
+export const milestoneStatuses = ["pending", "completed", "delayed"] as const;
+export const apkAudiences = ["team_only", "client_visible"] as const;
 
-export const projectsTable = pgTable("projects", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  clientId: integer("client_id").notNull().references(() => clientsTable.id),
-  pmId: integer("pm_id").references(() => usersTable.id),
-  description: text("description"),
-  status: projectStatusEnum("status").notNull().default("scoping"),
-  priority: projectPriorityEnum("priority").notNull().default("medium"),
-  startDate: timestamp("start_date").notNull(),
-  deadline: timestamp("deadline").notNull(),
-  techStack: text("tech_stack").array().notNull().default([]),
-  figmaUrl: text("figma_url"),
-  repoUrl: text("repo_url"),
-  stagingUrl: text("staging_url"),
-  productionUrl: text("production_url"),
-  completionOverride: integer("completion_override"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-}, (table) => [
-  index("projects_client_id_idx").on(table.clientId),
-  index("projects_status_idx").on(table.status),
-]);
+export type ProjectStatus = typeof projectStatuses[number];
+export type ProjectPriority = typeof projectPriorities[number];
+export type MilestoneStatus = typeof milestoneStatuses[number];
+export type ApkAudience = typeof apkAudiences[number];
 
-export const projectMembersTable = pgTable("project_members", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-  userId: integer("user_id").notNull().references(() => usersTable.id),
-  subType: text("sub_type"),
-  completionPct: integer("completion_pct").notNull().default(0),
-  joinedAt: timestamp("joined_at").notNull().defaultNow(),
-}, (table) => [
-  index("project_members_project_id_idx").on(table.projectId),
-  index("project_members_user_id_idx").on(table.userId),
-]);
+// 1. Projects Schema
+const projectSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  name: { type: String, required: true },
+  companyId: { type: Number, ref: "Clients", index: true },
+  clientId: { type: Number, ref: "Clients", required: true, index: true },
+  pmId: { type: Number, ref: "Users" },
+  description: { type: String },
+  status: { type: String, enum: projectStatuses, default: "scoping", required: true, index: true },
+  type: { type: String, enum: ["development", "maintenance"], default: "development", required: true, index: true },
+  priority: { type: String, enum: projectPriorities, default: "medium", required: true },
+  startDate: { type: Date, required: true },
+  deadline: { type: Date, required: true },
+  techStack: { type: [String], default: [], required: true },
+  figmaUrl: { type: String },
+  repoUrl: { type: String },
+  stagingUrl: { type: String },
+  productionUrl: { type: String },
+  adminUrl: { type: String },
+  websiteUrl: { type: String },
+  postmanJson: { type: String },
+  completionOverride: { type: Number },
+}, { timestamps: true });
 
-export const apkSchedulesTable = pgTable("apk_schedules", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-  scheduledDate: timestamp("scheduled_date").notNull(),
-  label: text("label").notNull(),
-  audience: apkAudienceEnum("audience").notNull().default("team_only"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+projectSchema.index({ companyId: 1, status: 1 });
+projectSchema.index({ companyId: 1, deadline: 1 });
+
+export const Projects = mongoose.models.Projects || mongoose.model("Projects", projectSchema);
+
+// 2. Project Members Schema
+const projectMemberSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  projectId: { type: Number, ref: "Projects", required: true, index: true },
+  userId: { type: Number, ref: "Users", required: true, index: true },
+  subType: { type: String },
+  completionPct: { type: Number, default: 0, required: true },
+  joinedAt: { type: Date, default: Date.now, required: true },
 });
 
-export const milestonesTable = pgTable("milestones", {
-  id: serial("id").primaryKey(),
-  projectId: integer("project_id").notNull().references(() => projectsTable.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  plannedDate: timestamp("planned_date").notNull(),
-  actualDate: timestamp("actual_date"),
-  status: milestoneStatusEnum("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
+export const ProjectMembers = mongoose.models.ProjectMembers || mongoose.model("ProjectMembers", projectMemberSchema);
+
+// 3. Apk Schedules Schema
+const apkScheduleSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  projectId: { type: Number, ref: "Projects", required: true, index: true },
+  scheduledDate: { type: Date, required: true },
+  label: { type: String, required: true },
+  audience: { type: String, enum: apkAudiences, default: "team_only", required: true },
+  createdAt: { type: Date, default: Date.now },
 });
 
-export const insertProjectSchema = createInsertSchema(projectsTable).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertProject = z.infer<typeof insertProjectSchema>;
-export type Project = typeof projectsTable.$inferSelect;
-export type ProjectMember = typeof projectMembersTable.$inferSelect;
-export type ApkSchedule = typeof apkSchedulesTable.$inferSelect;
-export type Milestone = typeof milestonesTable.$inferSelect;
+export const ApkSchedules = mongoose.models.ApkSchedules || mongoose.model("ApkSchedules", apkScheduleSchema);
+
+// 4. Milestones Schema
+const milestoneSchema = new Schema({
+  id: { type: Number, unique: true, required: true },
+  projectId: { type: Number, ref: "Projects", required: true, index: true },
+  title: { type: String, required: true },
+  plannedDate: { type: Date, required: true },
+  actualDate: { type: Date },
+  status: { type: String, enum: milestoneStatuses, default: "pending", required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+export const Milestones = mongoose.models.Milestones || mongoose.model("Milestones", milestoneSchema);
+
+// Backward compatibility interfaces
+export interface Project {
+  id: number;
+  name: string;
+  companyId: number | null;
+  clientId: number;
+  pmId: number | null;
+  description: string | null;
+  status: ProjectStatus;
+  type: "development" | "maintenance";
+  priority: ProjectPriority;
+  startDate: Date;
+  deadline: Date;
+  techStack: string[];
+  figmaUrl: string | null;
+  repoUrl: string | null;
+  stagingUrl: string | null;
+  productionUrl: string | null;
+  adminUrl: string | null;
+  websiteUrl: string | null;
+  postmanJson: string | null;
+  completionOverride: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProjectMember {
+  id: number;
+  projectId: number;
+  userId: number;
+  subType: string | null;
+  completionPct: number;
+  joinedAt: Date;
+}
+
+export interface ApkSchedule {
+  id: number;
+  projectId: number;
+  scheduledDate: Date;
+  label: string;
+  audience: ApkAudience;
+  createdAt: Date;
+}
+
+export interface Milestone {
+  id: number;
+  projectId: number;
+  title: string;
+  plannedDate: Date;
+  actualDate: Date | null;
+  status: MilestoneStatus;
+  createdAt: Date;
+}
+
+export const projectsTable = Projects;
+export const projectMembersTable = ProjectMembers;
+export const apkSchedulesTable = ApkSchedules;
+export const milestonesTable = Milestones;

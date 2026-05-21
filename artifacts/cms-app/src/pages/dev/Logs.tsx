@@ -1,9 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useListMyLogs, useCreateLog, useListProjects } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar, Loader2, Check } from "lucide-react";
+import { Plus, Clock, Calendar, Loader2, Check, FileText, Briefcase, TrendingUp } from "lucide-react";
+import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { PDFService } from "@/lib/pdf-service";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -16,6 +18,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { useAuth } from "@/contexts/AuthContext";
+import { User } from "lucide-react";
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -46,6 +51,8 @@ const WORK_CATEGORIES = [
 ];
 
 export default function DevLogs() {
+  const { user } = useAuth();
+  const isAdminView = user?.role === "super_admin";
   const [open, setOpen] = useState(false);
   const currentDate = new Date();
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
@@ -54,6 +61,19 @@ export default function DevLogs() {
   const { data, isLoading, refetch } = useListMyLogs({ month, year, limit: 50 });
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createLog = useCreateLog();
+
+  const handleExportLogs = () => {
+    if (!data?.logs || data.logs.length === 0) {
+      toast.error("No timesheet entries available to export.");
+      return;
+    }
+    const userObj = JSON.parse(localStorage.getItem("cms_user") || sessionStorage.getItem("cms_user") || "{}");
+    const devName = userObj?.name || "Enterprise Developer";
+    const monthStr = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    PDFService.generateDeveloperLogsPDF(devName, monthStr, data.logs);
+    toast.success("Exporting developer timesheet...");
+  };
 
   const form = useForm<LogFormValues>({
     resolver: zodResolver(logSchema),
@@ -70,6 +90,18 @@ export default function DevLogs() {
     },
   });
 
+  const logStats = useMemo(() => {
+    const logs = data?.logs ?? [];
+    const totalHours = logs.reduce((acc, l) => acc + (l.hoursSpent || 0), 0);
+    const projectIds = new Set(logs.map((l) => l.projectId));
+    return {
+      entries: logs.length,
+      totalHours: Math.round(totalHours * 10) / 10,
+      projects: projectIds.size,
+      avgHours: logs.length ? Math.round((totalHours / logs.length) * 10) / 10 : 0,
+    };
+  }, [data?.logs]);
+
   const onSubmit = async (values: LogFormValues) => {
     try {
       await createLog.mutateAsync({
@@ -83,8 +115,7 @@ export default function DevLogs() {
       form.reset();
       refetch();
     } catch (error: any) {
-      const msg = error?.response?.data?.message || error?.message || "Action failed. Please try again.";
-      toast.error(msg);
+      toastApiError(error, "Action failed. Please try again.");
     }
   };
 
@@ -92,8 +123,14 @@ export default function DevLogs() {
     <div className="space-y-4">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Daily Logs</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Track your time and progress</p>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {isAdminView ? "Team daily logs" : "Daily Logs"}
+          </h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {isAdminView
+              ? "All developer and QA log entries across projects"
+              : "Track your time and progress"}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
@@ -123,13 +160,19 @@ export default function DevLogs() {
               })}
             </SelectContent>
           </Select>
+          {!isAdminView && (
+            <Button variant="outline" onClick={handleExportLogs} className="h-9 border-emerald-500/30 text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10">
+              <FileText className="mr-2 h-4 w-4" /> Export PDF
+            </Button>
+          )}
+          {!isAdminView && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="bg-primary text-primary-foreground">
                 <Plus className="mr-2 h-4 w-4" /> Add Log Entry
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] bg-card border-border overflow-y-auto max-h-[90vh]">
+            <DialogContent className="sm:max-w-[600px] bg-card border-border">
               <DialogHeader>
                 <DialogTitle>Add Daily Log Entry</DialogTitle>
               </DialogHeader>
@@ -326,8 +369,20 @@ export default function DevLogs() {
               </Form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
+
+      {isLoading ? (
+        <PageKpiSkeleton />
+      ) : (
+        <PageKpiRow>
+          <StatCard title="Entries" value={logStats.entries} hint={isAdminView ? "Team this month" : "This month"} icon={Calendar} accent="violet" delay={0} />
+          <StatCard title="Hours logged" value={logStats.totalHours} hint="Total time" icon={Clock} accent="blue" delay={1} />
+          <StatCard title="Projects" value={logStats.projects} hint="With activity" icon={Briefcase} accent="green" delay={2} />
+          <StatCard title="Avg per entry" value={logStats.avgHours} hint="Hours per log" icon={TrendingUp} accent="amber" delay={3} />
+        </PageKpiRow>
+      )}
 
       <div className="space-y-4">
         {isLoading ? (
@@ -337,7 +392,11 @@ export default function DevLogs() {
             <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
               <Clock className="h-12 w-12 mb-4 opacity-50" />
               <h3 className="text-lg font-medium text-foreground">No logs found</h3>
-              <p className="text-sm mt-1">You haven't logged any work yet.</p>
+              <p className="text-sm mt-1">
+                {isAdminView
+                  ? "No team log entries for this month yet."
+                  : "You haven't logged any work yet."}
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -351,6 +410,16 @@ export default function DevLogs() {
                       {new Date(log.logDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
                       <span className="mx-2">•</span>
                       <span className="font-medium text-primary">{log.projectName}</span>
+                      {isAdminView && log.developerName && (
+                        <>
+                          <span className="mx-2">•</span>
+                          <span className="inline-flex items-center gap-1 font-medium text-foreground">
+                            <User className="h-3 w-3" />
+                            {log.developerName}
+                            {log.developerEmployeeId ? ` (${log.developerEmployeeId})` : ""}
+                          </span>
+                        </>
+                      )}
                     </div>
                     <h3 className="text-lg font-semibold">{log.taskTitle}</h3>
                     {log.taskDescription && <p className="text-xs text-muted-foreground max-w-3xl">{log.taskDescription}</p>}

@@ -13,5 +13,9 @@ export interface UserUpdate {
   subType?: string;
   designation?: string;
   avatarUrl?: string;
+  department?: string;
+  phoneNumber?: string;
+  joiningDate?: string;
+  linkedinUrl?: string;
   status?: UserUpdateStatus;
 }

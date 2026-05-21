@@ -15,4 +15,8 @@ export interface UserInput {
   subType?: string;
   designation?: string;
   avatarUrl?: string;
+  department?: string;
+  phoneNumber?: string;
+  joiningDate?: string;
+  linkedinUrl?: string;
 }
