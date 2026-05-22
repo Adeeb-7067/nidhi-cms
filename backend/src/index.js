@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import app from "./app";
+import app from "./app.js";
 import { getRequiredPort } from "@/config";
 import { logger } from "@/lib/logger";
 import { initRealtime } from "@/lib/realtime";
