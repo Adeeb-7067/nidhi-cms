@@ -1,0 +1,71 @@
+import { randomUUID } from "crypto";
+import path from "path";
+import fs from "fs/promises";
+import fsSync from "fs";
+import {
+  assertValidStoredFileUrl,
+  isObjectStorageEnabled,
+  uploadBufferToObjectStorage,
+  uploadLocalFileToObjectStorage,
+  UPLOAD_CATEGORIES
+} from "./object-storage";
+const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+function getStorageBackend() {
+  return isObjectStorageEnabled() ? "object" : "local";
+}
+function ensureLocalUploadDir() {
+  if (!fsSync.existsSync(UPLOAD_DIR)) {
+    fsSync.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+}
+function localFilename(originalName) {
+  const safe = originalName.replace(/[^a-zA-Z0-9.]/g, "_");
+  return `${Date.now()}-${randomUUID().slice(0, 8)}-${safe}`;
+}
+async function storeUpload(buffer, originalName, mimetype, category = "misc") {
+  if (isObjectStorageEnabled()) {
+    const { url, key } = await uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
+    return { url, key, storage: "object" };
+  }
+  ensureLocalUploadDir();
+  const filename = localFilename(originalName);
+  const filePath = path.join(UPLOAD_DIR, filename);
+  await fs.writeFile(filePath, buffer);
+  return { url: `/uploads/${filename}`, key: filename, storage: "local" };
+}
+async function storeGeneratedFile(localPath, originalName, mimetype, category = "reports") {
+  if (isObjectStorageEnabled()) {
+    const { url, key } = await uploadLocalFileToObjectStorage(localPath, originalName, mimetype, category);
+    return { url, key, storage: "object" };
+  }
+  const filename = path.basename(localPath);
+  return { url: `/uploads/${filename}`, key: filename, storage: "local" };
+}
+function resolvePublicFileUrl(storedUrl, req) {
+  if (!storedUrl) return null;
+  if (/^https?:\/\//i.test(storedUrl)) return storedUrl;
+  if (storedUrl.startsWith("/uploads/") && req) {
+    return `${req.protocol}://${req.get("host")}${storedUrl}`;
+  }
+  return storedUrl;
+}
+function validateStoredFileUrl(url, fieldName = "fileUrl") {
+  assertValidStoredFileUrl(url, fieldName);
+}
+function validateStoredFileUrls(urls, fieldName = "attachments") {
+  if (!urls?.length) return;
+  for (const url of urls) {
+    assertValidStoredFileUrl(url, fieldName);
+  }
+}
+export {
+  UPLOAD_CATEGORIES,
+  ensureLocalUploadDir,
+  getStorageBackend,
+  isObjectStorageEnabled,
+  resolvePublicFileUrl,
+  storeGeneratedFile,
+  storeUpload,
+  validateStoredFileUrl,
+  validateStoredFileUrls
+};

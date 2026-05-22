@@ -66,6 +66,9 @@ Thumbs.db
 # Graphify — repo root graph only; per-app copies are local noise
 frontend/graphify-out/
 backend/graphify-out/
+
+# Backend is JavaScript-only — ignore stray TypeScript if recreated locally
+backend/**/*.ts
 graphify-out/manifest.json
 graphify-out/cost.json
 graphify-out/cache/

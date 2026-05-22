@@ -2,29 +2,33 @@
 
 **Express 5** + MongoDB API. Deploy this to your **API domain** (e.g. `https://api.yourdomain.com`).
 
-`src/index.ts` creates a Node `http.Server` only so **Socket.IO** can share the same port as Express; all HTTP routing is Express (`src/app.ts`, `src/routes/*`).
+`src/index.js` creates a Node `http.Server` only so **Socket.IO** can share the same port as Express; all HTTP routing is Express (`src/app.js`, `src/routes/*`).
 
 Async route errors are handled with [`express-async-handler`](https://www.npmjs.com/package/express-async-handler) — use it in **route** files only: `router.get("/path", requireAuth, asyncHandler(controllerFn))`.
 
 ## MVC layout
 
+See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full guide. Summary:
+
 ```
 src/
-  models/        # Mongoose schemas & data access
-  controllers/   # Async handler functions only (req, res) — no Router
-  routes/        # Per-feature Express routers: paths, middleware, asyncHandler
-  routes/index.ts  # Mounts feature routers + PUBLIC_API_PATHS auth gate
-  services/      # Business logic (formatters, helpers)
+  config/        # Env (PORT, ALLOWED_ORIGINS), public API paths
+  routes/        # Per-feature routers — paths, middleware, asyncHandler
+  controllers/   # HTTP handlers only (req, res); large domains use subfolders
+  services/      # Business logic, access rules, background jobs
+  mappers/       # DB documents → API JSON (*-format helpers)
+  models/schema/ # Mongoose schemas
+  middlewares/   # Auth, audit, validation, global errors
+  utils/         # HTTP errors, pagination (no I/O)
+  lib/           # Infrastructure (DB, JWT, storage, logger, Socket.IO)
   views/         # JSON response helpers
-  middlewares/   # Auth, audit, validation, errors
-  lib/           # Infrastructure (JWT, DB connection, storage, logger)
   api-zod/       # Generated Zod types from OpenAPI
 ```
 
 Example pairing:
 
-- `controllers/notifications.controller.ts` — `export async function getNotifications(req, res) { ... }`
-- `routes/notifications.routes.ts` — `router.get("/notifications", requireAuth, asyncHandler(getNotifications))`
+- `controllers/notifications.controller.js` — `export async function getNotifications(req, res) { ... }`
+- `routes/notifications.routes.js` — `router.get("/notifications", requireAuth, asyncHandler(getNotifications))`
 
 ## Setup
 
@@ -55,7 +59,6 @@ PORT=8080
 | `npm run build` | Production bundle → `dist/` |
 | `npm run start` | Run `dist/index.mjs` (uses `.env`) |
 | `npm run seed` | Seed database |
-| `npm run typecheck` | TypeScript check |
 
 ## Two-domain deployment
 

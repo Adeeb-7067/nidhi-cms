@@ -42,7 +42,7 @@ backend/
   package.json
   package-lock.json
   build.mjs
-  tsconfig.json
+  jsconfig.json
   openapi.yaml
   src/
   scripts/          # optional — for seed/migrate
@@ -167,7 +167,7 @@ pm2 start dist/index.mjs \
 
 ```bash
 # Do NOT do this
-pm2 start src/index.ts --name cms
+pm2 start dist/index.mjs --name cms --interpreter node
 ```
 
 Always run **`dist/index.mjs`** with **`node`**.
@@ -316,7 +316,7 @@ npm run seed-more
 
 | Problem | Likely cause | Fix |
 |---------|----------------|-----|
-| `Interpreter bun is NOT AVAILABLE` | PM2 started `.ts` with Bun | Use `dist/index.mjs` + `node` or `ecosystem.config.cjs` |
+| `Interpreter bun is NOT AVAILABLE` | PM2 used wrong interpreter | Use `dist/index.mjs` + `node` or `ecosystem.config.cjs` |
 | Passenger 500 / app won’t start | No build, bad `.env`, wrong startup file | `npm run build`; startup `dist/index.mjs`; check logs |
 | 502 Bad Gateway | Node not running or wrong proxy port | `pm2 status`; match nginx `proxy_pass` to `PORT` |
 | CORS / blocked API | `ALLOWED_ORIGINS` mismatch | Exact UI URL with `https`, no trailing `/` |
@@ -353,7 +353,7 @@ pm2 logs cms-api
 | Start (prod) | `npm run start` |
 | Dev | `npm run dev` |
 | Seed | `npm run seed` |
-| Typecheck | `npm run typecheck` |
+| Verify build | `npm run build` |
 | PM2 | `pm2 start ecosystem.config.cjs` |
 
 Architecture: [README.md](./README.md) · Full stack Plesk: [DEPLOYMENT_PLESK.md](../DEPLOYMENT_PLESK.md) · Local dev: [LOCAL_RUNNING.md](../LOCAL_RUNNING.md)

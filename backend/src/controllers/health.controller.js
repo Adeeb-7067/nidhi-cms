@@ -1,0 +1,8 @@
+import { HealthCheckResponse } from "@/api-zod";
+function getHealthz(_req, res) {
+  const data = HealthCheckResponse.parse({ status: "ok" });
+  res.json(data);
+}
+export {
+  getHealthz
+};

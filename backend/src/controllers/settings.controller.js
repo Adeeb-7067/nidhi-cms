@@ -1,0 +1,43 @@
+import { companySettingsTable, getNextSequence } from "@/models/schema";
+async function getOrCreateSettings() {
+  const existing = await companySettingsTable.findOne();
+  if (existing) return existing;
+  const nextId = await getNextSequence("settings");
+  const created = await companySettingsTable.create({
+    id: nextId,
+    companyName: "My Agency"
+  });
+  return created;
+}
+async function getSettings(req, res) {
+  const settings = await getOrCreateSettings();
+  res.json({
+    id: settings.id,
+    companyName: settings.companyName,
+    logoUrl: settings.logoUrl,
+    address: settings.address,
+    sealUrl: settings.sealUrl,
+    updatedAt: settings.updatedAt.toISOString()
+  });
+}
+async function patchSettings(req, res) {
+  const { companyName, logoUrl, address, sealUrl } = req.body;
+  const settings = await getOrCreateSettings();
+  const updated = await companySettingsTable.findOneAndUpdate(
+    { id: settings.id },
+    { $set: { companyName, logoUrl, address, sealUrl } },
+    { new: true }
+  );
+  res.json({
+    id: updated.id,
+    companyName: updated.companyName,
+    logoUrl: updated.logoUrl,
+    address: updated.address,
+    sealUrl: updated.sealUrl,
+    updatedAt: updated.updatedAt.toISOString()
+  });
+}
+export {
+  getSettings,
+  patchSettings
+};
