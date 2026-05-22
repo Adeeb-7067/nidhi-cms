@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 function getRequiredPort() {
   const rawPort = process.env["PORT"];
   if (!rawPort) {
@@ -16,7 +19,19 @@ function getAllowedOrigins() {
   if (!raw) return true;
   return raw.split(",").map((o) => o.trim());
 }
+
+/** Resolved path to built frontend (`index.html`), or null if not configured / missing. */
+function getFrontendDistPath() {
+  const raw = process.env.FRONTEND_DIST?.trim();
+  if (!raw) return null;
+  const resolved = path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+  const indexHtml = path.join(resolved, "index.html");
+  if (!fs.existsSync(indexHtml)) return null;
+  return resolved;
+}
+
 export {
   getAllowedOrigins,
+  getFrontendDistPath,
   getRequiredPort
 };

@@ -10,6 +10,7 @@ import "./lib/db";
 import { auditMiddleware } from "./middlewares/audit";
 import { errorHandler, notFoundHandler } from "./middlewares/error-handler";
 import { responseCompression } from "./middlewares/compression";
+import { registerFrontendServing } from "./middlewares/serve-frontend";
 const app = express();
 app.use(
   pinoHttp({
@@ -50,6 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 app.use(auditMiddleware);
 app.use("/api", router);
+registerFrontendServing(app);
 app.use(notFoundHandler);
 app.use(errorHandler);
 var stdin_default = app;

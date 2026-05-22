@@ -96,6 +96,24 @@ ALLOWED_ORIGINS=https://cms.satyakabir.com,https://www.cms.satyakabir.com
 
 `ALLOWED_ORIGINS` must list every URL where the **browser UI** runs. Required for CORS and Socket.IO when UI and API are on different domains.
 
+### Same host: serve UI from Node (`/login`, `/`)
+
+If nginx (or PM2) sends **all** traffic for `https://cms.satyakabir.com` to the API process (not only `/api`), build the frontend and point the API at it:
+
+```bash
+cd ../frontend && npm install && npm run build
+```
+
+In `backend/.env`:
+
+```env
+FRONTEND_DIST=../frontend/dist/public
+```
+
+After `npm run build` in `backend/` and `pm2 restart cms-api`, `GET https://cms.satyakabir.com/login` returns the SPA. Login API remains `POST /api/auth/login`.
+
+If nginx serves static files for `/` and only proxies `/api` to Node, **do not** set `FRONTEND_DIST`; configure nginx `try_files` for `/login` instead (see frontend README).
+
 For local UI against production API during testing, you can temporarily add:
 
 ```env
