@@ -1,8 +1,8 @@
-import { inventoryEnvironmentsTable, getNextSequence } from "@/models/schema";
-import { clientVisibilityFilter } from "@/services/access/inventory-access";
-import { logInventoryActivity, notifyProjectMembers } from "@/services/inventory/helpers";
+import { inventoryEnvironmentsTable, getNextSequence } from "../../models/schema/index.js";
+import { clientVisibilityFilter } from "../../services/access/inventory-access.js";
+import { logInventoryActivity, notifyProjectMembers } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam, parseInventoryEntityId } from "./guard.js";
-import { badRequest, notFound } from "@/utils/route-errors";
+import { badRequest, notFound } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/environments */
 export async function getProjectsByProjectIdInventoryEnvironments(req, res) {

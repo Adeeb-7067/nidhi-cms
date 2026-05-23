@@ -7,10 +7,10 @@ import {
   clientsTable,
   dailyLogsTable,
   getNextSequence
-} from "@/models/schema";
-import { formatProject } from "@/mappers/project-format";
-import { resolveCompanyIdFromBody, getProjectAccess } from "@/services/access/company-access";
-import { paginateModel } from "@/utils/mongo-list";
+} from "../models/schema/index.js";
+import { formatProject, formatProjectList } from "../mappers/project-format.js";
+import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
+import { paginateModel } from "../utils/mongo-list.js";
 import {
   badRequest,
   conflict,
@@ -18,7 +18,7 @@ import {
   notFound,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 async function getProjects(req, res) {
   const { status, type, clientId, companyId, search } = req.query;
   const pagination = parsePagination(req.query);
@@ -45,7 +45,7 @@ async function getProjects(req, res) {
   }
   if (clientId) query.clientId = parseInt(clientId);
   if (search) query.name = { $regex: search, $options: "i" };
-  if (req.user.role === "developer" || req.user.role === "tester") {
+  if (req.user.role === "developer" || req.user.role === "tester" || req.user.role === "qa") {
     const memberRows = await projectMembersTable.find({ userId: req.user.id });
     const projectIds = memberRows.map((m) => m.projectId);
     if (!projectIds.length) {
@@ -62,9 +62,7 @@ async function getProjects(req, res) {
   }
   const { items, total, page, limit } = await paginateModel(projectsTable, query, pagination);
   const includeTeam = req.user.role === "super_admin";
-  const formatted = await Promise.all(
-    items.map((p) => formatProject(p, { includeTeam }))
-  );
+  const formatted = await formatProjectList(items, { includeTeam });
   res.json({ projects: formatted, total, page, limit });
 }
 async function postProjects(req, res) {
@@ -154,27 +152,67 @@ async function deleteProjectsById(req, res) {
   res.json({ message: "Project deleted" });
 }
 async function getProjectsByIdMembers(req, res) {
-  const projectId = parseInt(req.params["id"]);
-  const members = await projectMembersTable.find({ projectId });
-  const result = await Promise.all(
-    members.map(async (m) => {
-      const user = await usersTable.findOne({ id: m.userId });
-      const lastLog = await dailyLogsTable.findOne({ developerId: m.userId, projectId }).sort({ logDate: -1 });
-      return {
-        id: m.id,
-        userId: m.userId,
-        subType: m.subType,
-        completionPct: m.completionPct,
-        joinedAt: m.joinedAt.toISOString(),
-        name: user?.name ?? "Unknown",
-        employeeId: user?.employeeId ?? null,
-        designation: user?.designation ?? null,
-        avatarUrl: user?.avatarUrl ?? null,
-        lastLogDate: lastLog?.logDate ?? null
-      };
-    })
-  );
+  const projectId = parseInt(req.params["id"], 10);
+  const members = await projectMembersTable.find({ projectId }).lean().exec();
+  if (!members.length) {
+    res.json([]);
+    return;
+  }
+
+  const userIds = members.map((m) => m.userId);
+  const [users, lastLogRows] = await Promise.all([
+    usersTable
+      .find(
+        { id: { $in: userIds } },
+        { id: 1, name: 1, employeeId: 1, designation: 1, avatarUrl: 1 },
+      )
+      .lean()
+      .exec(),
+    dailyLogsTable
+      .aggregate([
+        { $match: { projectId, developerId: { $in: userIds } } },
+        { $sort: { logDate: -1 } },
+        { $group: { _id: "$developerId", logDate: { $first: "$logDate" } } },
+      ])
+      .exec(),
+  ]);
+
+  const userById = new Map(users.map((u) => [u.id, u]));
+  const lastLogByUser = new Map(lastLogRows.map((r) => [r._id, r.logDate]));
+
+  const result = members.map((m) => {
+    const user = userById.get(m.userId);
+    return {
+      id: m.id,
+      userId: m.userId,
+      subType: m.subType,
+      completionPct: m.completionPct,
+      joinedAt: m.joinedAt.toISOString(),
+      name: user?.name ?? "Unknown",
+      employeeId: user?.employeeId ?? null,
+      designation: user?.designation ?? null,
+      avatarUrl: user?.avatarUrl ?? null,
+      lastLogDate: lastLogByUser.get(m.userId) ?? null,
+    };
+  });
+
   res.json(result);
+}
+
+function formatMemberResponse(m, user, lastLogDate = null) {
+  return {
+    id: m.id,
+    userId: m.userId,
+    projectId: m.projectId,
+    subType: m.subType ?? null,
+    name: user?.name ?? "Unknown",
+    employeeId: user?.employeeId ?? null,
+    designation: user?.designation ?? null,
+    avatarUrl: user?.avatarUrl ?? null,
+    joinedAt: m.joinedAt.toISOString(),
+    completionPct: m.completionPct ?? 0,
+    lastLogDate,
+  };
 }
 async function postProjectsByIdMembers(req, res) {
   const projectId = parseInt(req.params["id"]);
@@ -194,19 +232,73 @@ async function postProjectsByIdMembers(req, res) {
     joinedAt: /* @__PURE__ */ new Date(),
     completionPct: 0
   });
-  const user = await usersTable.findOne({ id: uid });
-  res.status(201).json({
+  const user = await usersTable.findOne({ id: uid }).lean();
+  const member = {
     id: nextId,
-    userId: uid,
     projectId,
+    userId: uid,
     subType: subType ?? null,
-    name: user?.name ?? "Unknown",
-    employeeId: user?.employeeId ?? null,
-    designation: user?.designation ?? null,
-    avatarUrl: user?.avatarUrl ?? null,
-    joinedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    joinedAt: new Date(),
     completionPct: 0,
-    lastLogDate: null
+  };
+  res.status(201).json(formatMemberResponse(member, user));
+}
+
+async function postProjectsByIdMembersBatch(req, res) {
+  const projectId = parseInt(req.params["id"], 10);
+  const rawIds = req.body.userIds;
+  const subType = optionalString(req.body.subType) ?? null;
+
+  if (!Array.isArray(rawIds) || rawIds.length === 0) {
+    badRequest("userIds array is required.", "userIds");
+  }
+  if (rawIds.length > 50) {
+    badRequest("Maximum 50 members per request.", "userIds");
+  }
+
+  const userIds = [...new Set(rawIds.map((id) => Number.parseInt(String(id), 10)).filter(Boolean))];
+  const existing = await projectMembersTable
+    .find({ projectId, userId: { $in: userIds } }, { userId: 1 })
+    .lean()
+    .exec();
+  const existingSet = new Set(existing.map((e) => e.userId));
+
+  const toAdd = userIds.filter((uid) => !existingSet.has(uid));
+  const added = [];
+  const skipped = userIds.filter((uid) => existingSet.has(uid)).map((userId) => ({ userId }));
+
+  if (toAdd.length) {
+    const users = await usersTable
+      .find({ id: { $in: toAdd }, status: "active" }, { id: 1, name: 1, employeeId: 1, designation: 1, avatarUrl: 1 })
+      .lean()
+      .exec();
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const joinedAt = new Date();
+
+    for (const uid of toAdd) {
+      if (!userById.has(uid)) {
+        skipped.push({ userId: uid, reason: "User not found or inactive" });
+        continue;
+      }
+      const nextId = await getNextSequence("project_members");
+      const member = {
+        id: nextId,
+        projectId,
+        userId: uid,
+        subType,
+        joinedAt,
+        completionPct: 0,
+      };
+      await projectMembersTable.create(member);
+      added.push(formatMemberResponse(member, userById.get(uid)));
+    }
+  }
+
+  res.status(201).json({
+    added,
+    skipped,
+    addedCount: added.length,
+    skippedCount: skipped.length,
   });
 }
 async function deleteProjectsByIdMembersByUserId(req, res) {
@@ -312,13 +404,22 @@ async function getProjectsByIdLogs(req, res) {
   });
 }
 async function getProjectsByIdBugs(req, res) {
-  const { bugsTable } = await import("@/models/schema");
+  const { bugsTable } = await import("../models/schema/index.js");
+  const { formatBugList } = await import("../mappers/bug-format.js");
   const projectId = parseInt(req.params["id"]);
-  const bugs = await bugsTable.find({ projectId }).sort({ createdAt: -1 });
+  const items = await bugsTable
+    .find({
+      projectId,
+      $or: [{ parentBugId: null }, { parentBugId: { $exists: false } }],
+    })
+    .sort({ createdAt: -1 })
+    .lean()
+    .exec();
+  const bugs = await formatBugList(items);
   res.json({ bugs, total: bugs.length, page: 1, limit: bugs.length });
 }
 async function getProjectsByIdApkReleases(req, res) {
-  const { apkReleasesTable } = await import("@/models/schema");
+  const { apkReleasesTable } = await import("../models/schema/index.js");
   const projectId = parseInt(req.params["id"]);
   const releases = await apkReleasesTable.find({ projectId }).sort({ createdAt: -1 });
   res.json(releases.map((r) => ({
@@ -338,7 +439,7 @@ async function getProjectsByIdApkReleases(req, res) {
   })));
 }
 async function getProjectsByIdHistory(req, res) {
-  const { auditLogsTable } = await import("@/models/schema");
+  const { auditLogsTable } = await import("../models/schema/index.js");
   const projectId = parseInt(req.params["id"]);
   const history = await auditLogsTable.find({
     entityType: "projects",
@@ -362,5 +463,6 @@ export {
   postProjects,
   postProjectsByIdApkSchedules,
   postProjectsByIdMembers,
-  postProjectsByIdMilestones
+  postProjectsByIdMembersBatch,
+  postProjectsByIdMilestones,
 };

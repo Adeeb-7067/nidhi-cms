@@ -1,9 +1,10 @@
-import { dailyLogsTable, usersTable, projectsTable, projectMembersTable, getNextSequence, notificationsTable } from "@/models/schema";
-import { notifyUser } from "@/lib/realtime";
-import { projectCompanyId } from "@/services/access/company-access";
-import { parsePagination, badRequest, forbidden, notFound } from "@/utils/route-errors";
-import { paginateModel, toIso } from "@/utils/mongo-list";
-import { IdLookupCache } from "@/lib/lookup-cache";
+import { dailyLogsTable, usersTable, projectsTable, projectMembersTable, getNextSequence, notificationsTable } from "../models/schema/index.js";
+import { notifyUser } from "../lib/realtime.js";
+import { projectCompanyId } from "../services/access/company-access.js";
+import { buildDailyLogSummary, buildComplianceCalendar } from "../services/daily-log-compliance.js";
+import { parsePagination, badRequest, forbidden, notFound } from "../utils/route-errors.js";
+import { paginateModel, toIso } from "../utils/mongo-list.js";
+import { IdLookupCache } from "../lib/lookup-cache.js";
 function formatLog(log, developerName, developerEmployeeId, projectName) {
   return {
     id: log.id,
@@ -83,6 +84,44 @@ async function getLogs(req, res) {
   });
   res.json({ logs: formattedLogs, total, page, limit });
 }
+async function getLogsComplianceCalendar(req, res) {
+  const month = Number.parseInt(String(req.query.month ?? ""), 10);
+  const year = Number.parseInt(String(req.query.year ?? ""), 10);
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    badRequest("Valid month (1-12) is required.", "month");
+  }
+  if (!Number.isFinite(year) || year < 2000) {
+    badRequest("Valid year is required.", "year");
+  }
+
+  let developerId = req.user.id;
+  if (req.user.role === "super_admin") {
+    const parsed = Number.parseInt(String(req.query.developerId ?? ""), 10);
+    if (!Number.isFinite(parsed)) {
+      badRequest("developerId is required for admin.", "developerId");
+    }
+    developerId = parsed;
+  } else if (req.query.developerId) {
+    forbidden("You can only view your own compliance calendar.");
+  }
+
+  const calendar = await buildComplianceCalendar(developerId, month, year);
+  res.json(calendar);
+}
+
+async function getLogsDailySummary(req, res) {
+  const logDate =
+    typeof req.query.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date)
+      ? req.query.date
+      : new Date().toISOString().slice(0, 10);
+  let userId = req.user.id;
+  if (req.user.role === "super_admin" && req.query.developerId) {
+    const parsed = Number.parseInt(String(req.query.developerId), 10);
+    if (Number.isFinite(parsed)) userId = parsed;
+  }
+  const summary = await buildDailyLogSummary(userId, logDate);
+  res.json(summary);
+}
 async function postLogs(req, res) {
   if (req.user.role === "super_admin" || req.user.role === "client") {
     forbidden("Only developers and testers can submit daily logs.");
@@ -144,7 +183,11 @@ async function postLogs(req, res) {
   } catch (err) {
     console.error("Failed to send log notification:", err);
   }
-  res.status(201).json(formatLog(log, user.name, user.employeeId, project.name));
+  const dailySummary = await buildDailyLogSummary(req.user.id, logDate);
+  res.status(201).json({
+    ...formatLog(log, user.name, user.employeeId, project.name),
+    dailySummary
+  });
 }
 function canAccessLog(role, userId, logDeveloperId) {
   if (role === "super_admin") return true;
@@ -182,10 +225,16 @@ async function patchLogsById(req, res) {
   if (!log) notFound("Log");
   const user = await usersTable.findOne({ id: log.developerId });
   const project = await projectsTable.findOne({ id: log.projectId });
-  res.json(formatLog(log, user?.name ?? "Unknown", user?.employeeId ?? null, project?.name ?? "Unknown"));
+  const dailySummary = await buildDailyLogSummary(log.developerId, log.logDate);
+  res.json({
+    ...formatLog(log, user?.name ?? "Unknown", user?.employeeId ?? null, project?.name ?? "Unknown"),
+    dailySummary
+  });
 }
 export {
   getLogs,
+  getLogsComplianceCalendar,
+  getLogsDailySummary,
   getLogsById,
   patchLogsById,
   postLogs

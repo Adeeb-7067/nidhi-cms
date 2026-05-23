@@ -1,6 +1,6 @@
-import { verifyAccessToken } from "@/lib/jwt";
-import { usersTable } from "@/models/schema";
-import { HttpError } from "@/lib/http-error";
+import { verifyAccessToken } from "../lib/jwt.js";
+import { usersTable } from "../models/schema/index.js";
+import { HttpError } from "../lib/http-error.js";
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {

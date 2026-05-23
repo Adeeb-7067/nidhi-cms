@@ -1,11 +1,12 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth } from "@/middlewares/auth";
-import * as uploadsController from "@/controllers/uploads.controller";
+import { requireAuth } from "../middlewares/auth.js";
+import * as uploadsController from "../controllers/uploads.controller.js";
 import multer from "multer";
+import { UPLOAD_MAX_BYTES } from "../config/upload-limits.js";
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }
+  limits: { fileSize: UPLOAD_MAX_BYTES },
 });
 const router = Router();
 router.post("/upload", requireAuth, upload.single("file"), asyncHandler(uploadsController.postUpload));

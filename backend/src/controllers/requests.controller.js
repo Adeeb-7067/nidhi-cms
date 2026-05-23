@@ -3,18 +3,18 @@ import {
   usersTable,
   notificationsTable,
   getNextSequence
-} from "@/models/schema";
-import { notifyUser, broadcast } from "@/lib/realtime";
-import { formatRequestRow, formatRequestRows } from "@/mappers/request-format";
-import { paginateModel } from "@/utils/mongo-list";
-import { logger } from "@/lib/logger";
+} from "../models/schema/index.js";
+import { notifyUser, broadcast } from "../lib/realtime.js";
+import { formatRequestRow, formatRequestRows } from "../mappers/request-format.js";
+import { paginateModel } from "../utils/mongo-list.js";
+import { logger } from "../lib/logger.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 async function getRequests(req, res) {
   const { status, projectId } = req.query;
   const pagination = parsePagination(req.query);

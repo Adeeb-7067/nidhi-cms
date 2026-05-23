@@ -50,7 +50,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getHomePath(role: string): string {
   if (role === "super_admin") return "/admin";
-  if (role === "developer" || role === "tester") return "/dev";
+  if (role === "developer" || role === "tester" || role === "qa") return "/dev";
   if (role === "client") return "/client";
   return "/login";
 }

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth } from "@/middlewares/auth";
-import * as reportsController from "@/controllers/reports.controller";
+import { requireAuth } from "../middlewares/auth.js";
+import * as reportsController from "../controllers/reports.controller.js";
 const router = Router();
 router.get("/reports", requireAuth, asyncHandler(reportsController.getReports));
 router.post("/reports", requireAuth, asyncHandler(reportsController.postReports));

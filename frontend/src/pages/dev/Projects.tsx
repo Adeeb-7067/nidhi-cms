@@ -202,7 +202,7 @@ function ProjectCard({
 export default function DevProjects() {
   const { user } = useAuth();
   const role = user?.role ?? "developer";
-  const isTester = role === "tester";
+  const isTester = role === "tester" || role === "qa";
   const isDeveloper = role === "developer";
 
   const [tab, setTab] = useState<"ongoing" | "maintenance" | "all">("ongoing");

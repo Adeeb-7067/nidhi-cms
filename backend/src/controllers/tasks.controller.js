@@ -4,13 +4,13 @@ import {
   projectsTable,
   projectMembersTable,
   getNextSequence
-} from "@/models/schema";
-import { projectCompanyId } from "@/services/access/company-access";
+} from "../models/schema/index.js";
+import { projectCompanyId } from "../services/access/company-access.js";
 import {
   notifyAssignment,
   resolveTaskAssignee
-} from "@/services/work-assignments";
-import { badRequest, forbidden, notFound } from "@/utils/route-errors";
+} from "../services/work-assignments.js";
+import { badRequest, forbidden, notFound } from "../utils/route-errors.js";
 async function generateTaskNumber() {
   const count = await getNextSequence("tasks_count");
   return `TASK-${String(count).padStart(4, "0")}`;
@@ -54,7 +54,7 @@ async function buildTaskListQuery(userId, role, params) {
     if (scope === "mine") query.assigneeId = userId;
     return query;
   }
-  if (role === "developer" || role === "tester") {
+  if (role === "developer" || role === "tester" || role === "qa") {
     const projectIdNum = projectId ? Number.parseInt(projectId, 10) : NaN;
     const assigneeIdNum = assigneeId ? Number.parseInt(assigneeId, 10) : NaN;
     if (Number.isFinite(projectIdNum) && Number.isFinite(assigneeIdNum) && assigneeIdNum !== userId) {
@@ -203,7 +203,12 @@ async function getProjectsByIdAssignableMembers(req, res) {
   const memberIds = await projectMembersTable.find({ projectId }).then(
     (rows) => rows.map((r) => r.userId)
   );
-  const roleFilter = assignFor === "bug" ? ["developer"] : assignFor === "task" ? ["developer", "tester"] : ["developer", "tester"];
+  const roleFilter =
+    assignFor === "bug"
+      ? ["developer"]
+      : assignFor === "task"
+        ? ["developer", "tester", "qa"]
+        : ["developer", "tester", "qa"];
   const users = await usersTable.find({
     id: { $in: memberIds },
     role: { $in: roleFilter },

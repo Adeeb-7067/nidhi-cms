@@ -3,7 +3,7 @@ import {
   getCompanyAccess,
   projectCompanyId,
   resolveCompanyIdFromBody
-} from "@/services/access/company-access";
+} from "./company-access.js";
 function clientVisibilityFilter(isClient) {
   if (!isClient) return {};
   return { visibility: "client_visible" };

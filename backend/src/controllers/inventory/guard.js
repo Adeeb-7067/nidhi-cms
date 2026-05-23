@@ -1,5 +1,5 @@
-import { getProjectAccess } from "@/services/access/inventory-access";
-import { forbidden, parseIdParam } from "@/utils/route-errors";
+import { getProjectAccess } from "../../services/access/inventory-access.js";
+import { forbidden, parseIdParam } from "../../utils/route-errors.js";
 
 /** Ensures the caller may access project inventory; optionally requires manage rights. */
 export async function guardInventoryAccess(req, projectId, needManage = false) {

@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "wouter";
-import {
-  useGetMe,
-  useUpdateMyProfile,
-  useChangeMyPassword,
-  getGetMeQueryKey,
-} from "@/api";
+import { useGetMe, useUpdateMyProfile, getGetMeQueryKey } from "@/api";
+import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
+import { AppLoadingScreen } from "@/components/loading";
 import {
   Card,
   CardContent,
@@ -22,7 +19,6 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Separator } from "@/components/ui/separator";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api-error";
 import {
@@ -59,7 +55,6 @@ function getInitials(name: string) {
 export default function ProfilePage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
   const { mutateAsync: updateProfile, isPending: isUpdatingProfile } = useUpdateMyProfile();
-  const { mutateAsync: changePassword, isPending: isChangingPassword } = useChangeMyPassword();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -68,14 +63,6 @@ export default function ProfilePage() {
     designation: "",
     avatarUrl: "",
   });
-
-  const [passwordForm, setPasswordForm] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-
-  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -114,49 +101,13 @@ export default function ProfilePage() {
     }
   };
 
-  const handleChangePassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordError("");
-
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return;
-    }
-    if (passwordForm.newPassword.length < 8) {
-      setPasswordError("Password must be at least 8 characters");
-      return;
-    }
-    if (passwordForm.newPassword === passwordForm.currentPassword) {
-      setPasswordError("New password must be different from your current password");
-      return;
-    }
-
-    try {
-      await changePassword({
-        data: {
-          currentPassword: passwordForm.currentPassword,
-          newPassword: passwordForm.newPassword,
-        },
-      });
-      toast({
-        title: "Password changed",
-        description: "Your password has been updated successfully.",
-      });
-      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-    } catch (error: unknown) {
-      toast({
-        title: "Password change failed",
-        description: getApiErrorMessage(error, "Could not change your password."),
-        variant: "destructive",
-      });
-    }
-  };
-
   if (isLoadingUser || !user) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
+      <AppLoadingScreen
+        variant="embedded"
+        message="Loading profile"
+        submessage="Fetching your account details…"
+      />
     );
   }
 
@@ -354,60 +305,7 @@ export default function ProfilePage() {
               <CardDescription>Use at least 8 characters with mixed case and numbers</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleChangePassword} className="space-y-4">
-                {passwordError && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{passwordError}</AlertDescription>
-                  </Alert>
-                )}
-                <div className="space-y-2">
-                  <Label htmlFor="currentPassword">Current password</Label>
-                  <Input
-                    id="currentPassword"
-                    type="password"
-                    autoComplete="current-password"
-                    value={passwordForm.currentPassword}
-                    onChange={(e) =>
-                      setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">New password</Label>
-                    <Input
-                      id="newPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      value={passwordForm.newPassword}
-                      onChange={(e) =>
-                        setPasswordForm({ ...passwordForm, newPassword: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm new password</Label>
-                    <Input
-                      id="confirmPassword"
-                      type="password"
-                      autoComplete="new-password"
-                      value={passwordForm.confirmPassword}
-                      onChange={(e) =>
-                        setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end">
-                  <Button type="submit" variant="secondary" disabled={isChangingPassword}>
-                    {isChangingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Update password
-                  </Button>
-                </div>
-              </form>
+              <ChangePasswordCard userEmail={user.email} />
             </CardContent>
           </Card>
         </div>

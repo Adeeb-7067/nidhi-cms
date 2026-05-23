@@ -11,9 +11,11 @@ export function ImpersonationBanner() {
   const roleLabel =
     impersonation.targetUser.role === "client"
       ? "client"
-      : impersonation.targetUser.role === "tester"
-        ? "tester"
-        : "developer";
+      : impersonation.targetUser.role === "qa"
+        ? "qa"
+        : impersonation.targetUser.role === "tester"
+          ? "tester"
+          : "developer";
 
   return (
     <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2">

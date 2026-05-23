@@ -109,7 +109,7 @@ paths:
     post:
       operationId: forgotPassword
       tags: [auth]
-      summary: Request password reset link
+      summary: Request password reset OTP by email
       requestBody:
         required: true
         content:
@@ -118,13 +118,28 @@ paths:
               $ref: "#/components/schemas/ForgotPasswordInput"
       responses:
         "200":
-          description: Reset link sent
+          description: OTP sent if account exists
+
+  /auth/verify-reset-otp:
+    post:
+      operationId: verifyResetOtp
+      tags: [auth]
+      summary: Verify password reset OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyResetOtpInput"
+      responses:
+        "200":
+          description: OTP valid
 
   /auth/reset-password:
     post:
       operationId: resetPassword
       tags: [auth]
-      summary: Reset password using token
+      summary: Reset password using email OTP (or legacy token)
       requestBody:
         required: true
         content:
@@ -134,6 +149,17 @@ paths:
       responses:
         "200":
           description: Password reset successful
+
+  /auth/change-password/request-otp:
+    post:
+      operationId: requestChangePasswordOtp
+      tags: [auth]
+      summary: Send OTP to verify in-app password change
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OTP sent
 
   # ── TICKETS ───────────────────────────────────────────────────────────────
   /tickets:
@@ -942,6 +968,59 @@ paths:
               schema:
                 $ref: "#/components/schemas/LogListResult"
 
+  /logs/compliance-calendar:
+    get:
+      operationId: getLogComplianceCalendar
+      tags: [logs]
+      summary: Monthly daily-log compliance calendar for a developer
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: developerId
+          in: query
+          schema:
+            type: integer
+          description: Required for super_admin
+      responses:
+        "200":
+          description: Compliance calendar
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogComplianceCalendar"
+
+  /logs/daily-summary:
+    get:
+      operationId: getDailyLogSummary
+      tags: [logs]
+      summary: Daily log hours summary vs required policy
+      parameters:
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: developerId
+          in: query
+          schema:
+            type: integer
+          description: Super admin only — summary for another user
+      responses:
+        "200":
+          description: Daily summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailyLogSummary"
+
   /logs:
     get:
       operationId: listMyLogs
@@ -1094,7 +1173,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [all, mine, unassigned]
+            enum: [all, mine, unassigned, created]
       responses:
         "200":
           description: Bug list
@@ -1105,7 +1184,7 @@ paths:
     post:
       operationId: createBug
       tags: [bugs]
-      summary: Create a bug report
+      summary: Create a single bug report
       requestBody:
         required: true
         content:
@@ -1115,6 +1194,25 @@ paths:
       responses:
         "201":
           description: Bug created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bug"
+
+  /bugs/batch:
+    post:
+      operationId: createBugBatch
+      tags: [bugs]
+      summary: Create a batch of bugs under one parent report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BugBatchInput"
+      responses:
+        "201":
+          description: Parent bug with nested children
           content:
             application/json:
               schema:
@@ -1806,14 +1904,27 @@ components:
           type: string
       required: [email]
 
+    VerifyResetOtpInput:
+      type: object
+      properties:
+        email:
+          type: string
+        otp:
+          type: string
+      required: [email, otp]
+
     ResetPasswordInput:
       type: object
       properties:
+        email:
+          type: string
+        otp:
+          type: string
         token:
           type: string
         newPassword:
           type: string
-      required: [token, newPassword]
+      required: [newPassword]
 
     FcmTokenInput:
       type: object
@@ -1982,9 +2093,12 @@ components:
       properties:
         currentPassword:
           type: string
+        otp:
+          type: string
+          description: Email verification code (alternative to current password)
         newPassword:
           type: string
-      required: [currentPassword, newPassword]
+      required: [newPassword]
 
     CredentialHistory:
       type: object
@@ -2602,7 +2716,34 @@ components:
           enum: [p1, p2, p3, p4]
         status:
           type: string
-          enum: [open, in_progress, fixed, verified, wont_fix, duplicate]
+          enum: [reported, assigned, in_progress, fixed, pending_qa_verification, reopened, closed]
+        qaStatus:
+          type: string
+          enum: [open, fixed]
+        devStatus:
+          type: string
+          enum: [open, fixed]
+        finalStatus:
+          type: string
+          enum: [open, resolved]
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              issueKey:
+                type: string
+              title:
+                type: string
+              qaStatus:
+                type: string
+                enum: [open, fixed]
+              devStatus:
+                type: string
+                enum: [open, fixed]
+              finalStatus:
+                type: string
+                enum: [open, resolved]
         buildVersion:
           type: ["string", "null"]
         platform:
@@ -2610,11 +2751,95 @@ components:
           enum: [android, ios, web, api, all]
         createdAt:
           type: string
+        updatedAt:
+          type: string
         resolvedAt:
           type: ["string", "null"]
         attachmentUrl:
           type: ["string", "null"]
-      required: [id, bugNumber, projectId, projectName, reporterId, reporterName, title, severity, priority, status, platform, createdAt]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/BugAttachment"
+        parentBugId:
+          type: ["integer", "null"]
+        childCount:
+          type: integer
+        children:
+          type: array
+          items:
+            $ref: "#/components/schemas/Bug"
+      required: [id, bugNumber, projectId, projectName, reporterId, reporterName, title, severity, priority, status, platform, createdAt, updatedAt]
+
+    BugBatchInput:
+      type: object
+      properties:
+        projectId:
+          type: integer
+        priority:
+          type: string
+          enum: [p1, p2, p3, p4]
+        parentTitle:
+          type: string
+        description:
+          type: string
+        assigneeIds:
+          type: array
+          items:
+            type: integer
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/BugAttachment"
+        initialComment:
+          type: string
+        items:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+              qaStatus:
+                type: string
+                enum: [open, fixed]
+              devStatus:
+                type: string
+                enum: [open, fixed]
+              finalStatus:
+                type: string
+                enum: [open, resolved]
+            required: [title]
+      required: [projectId, priority, items]
+
+    BugAssignee:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        employeeId:
+          type: ["string", "null"]
+
+    BugAttachment:
+      type: object
+      properties:
+        url:
+          type: string
+        name:
+          type: ["string", "null"]
+        mimeType:
+          type: ["string", "null"]
+        uploadedBy:
+          type: ["integer", "null"]
+        createdAt:
+          type: ["string", "null"]
 
     BugInput:
       type: object
@@ -2644,9 +2869,22 @@ components:
           enum: [android, ios, web, api, all]
         assigneeId:
           type: integer
+        assigneeIds:
+          type: array
+          items:
+            type: integer
         attachmentUrl:
           type: string
-      required: [projectId, title, severity, priority, platform]
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/BugAttachment"
+        initialComment:
+          type: string
+        status:
+          type: string
+          enum: [reported, assigned, in_progress, fixed, pending_qa_verification, reopened, closed]
+      required: [projectId, title, priority]
 
     BugUpdate:
       type: object
@@ -2669,7 +2907,34 @@ components:
           enum: [p1, p2, p3, p4]
         status:
           type: string
-          enum: [open, in_progress, fixed, verified, wont_fix, duplicate]
+          enum: [reported, assigned, in_progress, fixed, pending_qa_verification, reopened, closed]
+        qaStatus:
+          type: string
+          enum: [open, fixed]
+        devStatus:
+          type: string
+          enum: [open, fixed]
+        finalStatus:
+          type: string
+          enum: [open, resolved]
+        issues:
+          type: array
+          items:
+            type: object
+            properties:
+              issueKey:
+                type: string
+              title:
+                type: string
+              qaStatus:
+                type: string
+                enum: [open, fixed]
+              devStatus:
+                type: string
+                enum: [open, fixed]
+              finalStatus:
+                type: string
+                enum: [open, resolved]
         buildVersion:
           type: string
         platform:
@@ -2677,8 +2942,16 @@ components:
           enum: [android, ios, web, api, all]
         assigneeId:
           type: integer
+        assigneeIds:
+          type: array
+          items:
+            type: integer
         attachmentUrl:
           type: string
+        attachments:
+          type: array
+          items:
+            $ref: "#/components/schemas/BugAttachment"
 
     WorkTask:
       type: object
@@ -3344,9 +3617,16 @@ components:
           type: ["string", "null"]
         sealUrl:
           type: ["string", "null"]
+        requiredDailyWorkHours:
+          type: number
+          description: Required logged hours per working day for developers
+          example: 7.5
+        dailyLogComplianceEnabled:
+          type: boolean
+          description: When true, staff must meet requiredDailyWorkHours and get alerts if not
         updatedAt:
           type: string
-      required: [id, companyName, updatedAt]
+      required: [id, companyName, requiredDailyWorkHours, dailyLogComplianceEnabled, updatedAt]
 
     CompanySettingsUpdate:
       type: object
@@ -3359,6 +3639,75 @@ components:
           type: string
         sealUrl:
           type: string
+        requiredDailyWorkHours:
+          type: number
+          minimum: 1
+          maximum: 16
+        dailyLogComplianceEnabled:
+          type: boolean
+
+    DailyLogSummary:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        complianceEnabled:
+          type: boolean
+        requiredHours:
+          type: ["number", "null"]
+        loggedHours:
+          type: number
+        remainingHours:
+          type: number
+        isComplete:
+          type: boolean
+      required: [date, complianceEnabled, loggedHours, remainingHours, isComplete]
+
+    LogComplianceDay:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        loggedHours:
+          type: number
+        requiredHours:
+          type: ["number", "null"]
+        isComplete:
+          type: ["boolean", "null"]
+        status:
+          type: string
+          enum: [complete, incomplete, weekend, future, no_logs, logged]
+      required: [date, loggedHours, status]
+
+    LogComplianceCalendar:
+      type: object
+      properties:
+        developerId:
+          type: integer
+        developerName:
+          type: string
+        month:
+          type: integer
+        year:
+          type: integer
+        complianceEnabled:
+          type: boolean
+        requiredHours:
+          type: ["number", "null"]
+        completeDays:
+          type: integer
+        incompleteDays:
+          type: integer
+        trackedWeekdays:
+          type: integer
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogComplianceDay"
+      required:
+        [developerId, developerName, month, year, complianceEnabled, completeDays, incompleteDays, trackedWeekdays, days]
 
     CredentialRevealResult:
       type: object

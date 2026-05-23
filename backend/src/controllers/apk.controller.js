@@ -1,6 +1,6 @@
-import { apkReleasesTable, usersTable, getNextSequence } from "@/models/schema";
-import { validateStoredFileUrl } from "@/lib/file-storage";
-import { badRequest, notFound } from "@/utils/route-errors";
+import { apkReleasesTable, usersTable, getNextSequence } from "../models/schema/index.js";
+import { validateStoredFileUrl } from "../lib/file-storage.js";
+import { badRequest, notFound } from "../utils/route-errors.js";
 async function formatRelease(release) {
   const uploader = await usersTable.findOne({ id: release.uploaderId });
   return {

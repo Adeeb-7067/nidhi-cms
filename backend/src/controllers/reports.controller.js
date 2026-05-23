@@ -1,27 +1,37 @@
-import { reportsTable, getNextSequence } from "@/models/schema";
-import { resolvePublicFileUrl } from "@/lib/file-storage";
-import { badRequest, notFound } from "@/utils/route-errors";
+import { reportsTable, reportTypes, getNextSequence } from "../models/schema/index.js";
+import { resolvePublicFileUrl } from "../lib/file-storage.js";
+import { badRequest, notFound } from "../utils/route-errors.js";
+
+function formatReportRow(r, req) {
+  return {
+    id: r.id,
+    type: r.type,
+    status: r.status,
+    requestedBy: r.requestedBy,
+    projectId: r.projectId,
+    month: r.month,
+    year: r.year,
+    includeDescriptions: r.includeDescriptions,
+    fileUrl: resolvePublicFileUrl(r.fileUrl, req) ?? r.fileUrl ?? null,
+    createdAt: r.createdAt.toISOString(),
+    completedAt: r.completedAt?.toISOString() ?? null
+  };
+}
+
 async function getReports(req, res) {
   const reports = await reportsTable.find({ requestedBy: req.user.id }).sort({ createdAt: -1 });
-  res.json(
-    reports.map((r) => ({
-      id: r.id,
-      type: r.type,
-      status: r.status,
-      requestedBy: r.requestedBy,
-      projectId: r.projectId,
-      month: r.month,
-      year: r.year,
-      includeDescriptions: r.includeDescriptions,
-      fileUrl: r.fileUrl,
-      createdAt: r.createdAt.toISOString(),
-      completedAt: r.completedAt?.toISOString() ?? null
-    }))
-  );
+  res.json(reports.map((r) => formatReportRow(r, req)));
 }
 async function postReports(req, res) {
   const { type, projectId, month, year, includeDescriptions } = req.body;
   if (!type) badRequest("type is required.", "type");
+  if (!reportTypes.includes(type)) {
+    badRequest(
+      `Invalid report type. Allowed: ${reportTypes.join(", ")}`,
+      "type",
+    );
+  }
+  if (!projectId) badRequest("projectId is required.", "projectId");
   const nextId = await getNextSequence("reports");
   const report = await reportsTable.create({
     id: nextId,
@@ -31,16 +41,27 @@ async function postReports(req, res) {
     month: month ?? null,
     year: year ?? null,
     includeDescriptions: includeDescriptions ?? false,
-    status: "queued"
+    status: "generating"
   });
   const isExcel = type === "raw_log_export";
   (async () => {
     try {
       let fileUrl = "";
+      const reporting = await import("../services/reporting.js");
       if (isExcel) {
-        fileUrl = await (await import("@/services/reporting")).generateExcelReport(report.id, type, { projectId, month, year });
+        fileUrl = await reporting.generateExcelReport(report.id, type, {
+          projectId,
+          month,
+          year,
+          includeDescriptions: includeDescriptions ?? false,
+        });
       } else {
-        fileUrl = await (await import("@/services/reporting")).generatePdfReport(report.id, type, { projectId, month, year });
+        fileUrl = await reporting.generatePdfReport(report.id, type, {
+          projectId,
+          month,
+          year,
+          includeDescriptions: includeDescriptions ?? false,
+        });
       }
       await reportsTable.updateOne(
         { id: report.id },
@@ -54,19 +75,7 @@ async function postReports(req, res) {
       );
     }
   })();
-  res.status(202).json({
-    id: report.id,
-    type: report.type,
-    status: report.status,
-    requestedBy: report.requestedBy,
-    projectId: report.projectId,
-    month: report.month,
-    year: report.year,
-    includeDescriptions: report.includeDescriptions,
-    fileUrl: null,
-    createdAt: report.createdAt.toISOString(),
-    completedAt: null
-  });
+  res.status(202).json(formatReportRow(report, req));
 }
 async function getReportsByIdDownload(req, res) {
   const report = await reportsTable.findOne({ id: parseInt(req.params["id"]) });

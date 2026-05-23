@@ -15,7 +15,10 @@ export function RoleGate({
   const [location] = useLocation();
 
   if (user && !allowedRoles.includes(user.role as UserRole)) {
-    if (location === "/admin/projects" && (user.role === "developer" || user.role === "tester")) {
+    if (
+      location === "/admin/projects" &&
+      (user.role === "developer" || user.role === "tester" || user.role === "qa")
+    ) {
       return <Redirect to={getProjectsListHref(user.role)} replace />;
     }
   }

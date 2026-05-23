@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-import { apkAudiences } from "./projects";
+import { apkAudiences } from "./projects.js";
 const apkReleaseTypes = ["alpha", "beta", "rc", "production"];
 const apkPlatforms = ["android", "ios"];
 const apkReleaseSchema = new Schema({

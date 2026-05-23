@@ -5,26 +5,26 @@ import {
   projectMembersTable,
   auditLogsTable,
   notificationsTable
-} from "@/models/schema";
-import { notifyUser, broadcast } from "@/lib/realtime";
-import { validateStoredFileUrls } from "@/lib/file-storage";
-import { formatTicketRow, formatTicketRows } from "@/mappers/ticket-format";
-import { paginateModel } from "@/utils/mongo-list";
-import { logger } from "@/lib/logger";
+} from "../models/schema/index.js";
+import { notifyUser, broadcast } from "../lib/realtime.js";
+import { validateStoredFileUrls } from "../lib/file-storage.js";
+import { formatTicketRow, formatTicketRows } from "../mappers/ticket-format.js";
+import { paginateModel } from "../utils/mongo-list.js";
+import { logger } from "../lib/logger.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 async function getTickets(req, res) {
   const { status, priority, projectId, search } = req.query;
   const pagination = parsePagination(req.query);
   const query = {};
   if (req.user.role === "client") {
     query.creatorId = req.user.id;
-  } else if (req.user.role === "developer" || req.user.role === "tester") {
+  } else if (req.user.role === "developer" || req.user.role === "tester" || req.user.role === "qa") {
     const memberRows = await projectMembersTable.find({ userId: req.user.id }, { projectId: 1 }).lean();
     const projectIds = memberRows.map((m) => m.projectId);
     query.$or = [{ assignedTo: req.user.id }, { projectId: { $in: projectIds } }];

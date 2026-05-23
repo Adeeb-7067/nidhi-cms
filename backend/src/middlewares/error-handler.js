@@ -1,6 +1,9 @@
 import { ZodError } from "zod";
-import { isHttpError } from "@/lib/http-error";
-import { formatZodError, toApiErrorBody } from "@/utils/route-errors";
+import { isHttpError } from "../lib/http-error.js";
+import { UPLOAD_MAX_BYTES } from "../config/upload-limits.js";
+import { formatZodError, toApiErrorBody } from "../utils/route-errors.js";
+
+const UPLOAD_MAX_MB = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024));
 function isMongoDuplicateKey(err) {
   return typeof err === "object" && err !== null && err.code === 11e3;
 }
@@ -69,7 +72,7 @@ function errorHandler(err, req, res, _next) {
     const map = {
       LIMIT_FILE_SIZE: {
         status: 413,
-        message: "File is too large. Maximum upload size is 50 MB."
+        message: `File is too large. Maximum upload size is ${UPLOAD_MAX_MB} MB.`
       },
       LIMIT_FILE_COUNT: {
         status: 400,

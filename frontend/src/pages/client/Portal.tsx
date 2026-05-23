@@ -10,6 +10,7 @@ import {
   useGetProjectAnalytics,
   useListRequests,
   useCreateRequest,
+  useGetClientHubDashboard,
   getListCommentsQueryKey,
   getGetProjectLogsQueryKey,
   getGetProjectAnalyticsQueryKey,
@@ -37,7 +38,13 @@ import {
   DashboardHero,
   ExecutiveStatCard,
   PageKpiRow,
+  DashboardSkeleton,
 } from "@/components/dashboard/dashboard-kit";
+import {
+  ChartPanel,
+  ChartGridCell,
+  ChartEmptyState,
+} from "@/components/dashboard/admin-dashboard-charts";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
@@ -58,6 +65,7 @@ export default function ClientPortal() {
   const { user } = useAuth();
   const { socket } = useRealtime();
   const { data, isLoading } = useListProjects({ limit: 100 });
+  const { data: hub, isLoading: hubLoading } = useGetClientHubDashboard();
   const projects = data?.projects ?? [];
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
 
@@ -185,17 +193,8 @@ export default function ClientPortal() {
     toast.success("Postman JSON copied to clipboard");
   };
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Client Portal</h1>
-        <Skeleton className="h-[200px] w-full" />
-        <div className="grid gap-4 md:grid-cols-2">
-          <Skeleton className="h-[300px] w-full" />
-          <Skeleton className="h-[300px] w-full" />
-        </div>
-      </div>
-    );
+  if (isLoading || hubLoading) {
+    return <DashboardSkeleton />;
   }
 
   if (!projects.length) {
@@ -255,34 +254,34 @@ export default function ClientPortal() {
 
       <PageKpiRow>
         <ExecutiveStatCard
-          title="Completion"
-          value={`${project.completionPct}%`}
-          hint="Overall delivery"
-          icon={TrendingUp}
+          title="Projects"
+          value={hub?.projectCount ?? projects.length}
+          hint="In your portfolio"
+          icon={Layout}
           accent="blue"
           delay={0}
         />
         <ExecutiveStatCard
-          title="Milestones"
-          value={`${completedMilestones}/${totalMilestones || "—"}`}
-          hint="Completed"
-          icon={Award}
-          accent="green"
+          title="Avg completion"
+          value={`${hub?.avgCompletionPct ?? project.completionPct}%`}
+          hint={projects.length > 1 ? "Across all projects" : "This project"}
+          icon={TrendingUp}
+          accent="violet"
           delay={1}
         />
         <ExecutiveStatCard
-          title="Releases"
-          value={releaseCount}
-          hint={latestRelease ? `Latest v${latestRelease.version}` : "APK builds"}
-          icon={Smartphone}
-          accent="violet"
+          title="Milestones"
+          value={`${hub?.milestones.completed ?? completedMilestones}/${(hub?.milestones.total ?? totalMilestones) || "—"}`}
+          hint="Completed"
+          icon={Award}
+          accent="green"
           delay={2}
         />
         <ExecutiveStatCard
-          title="Updates"
-          value={commentsData?.comments?.length ?? 0}
-          hint="Project discussion"
-          icon={MessageSquare}
+          title="Releases"
+          value={hub?.releaseCount ?? releaseCount}
+          hint={latestRelease ? `Latest v${latestRelease.version}` : "APK builds"}
+          icon={Smartphone}
           accent="sky"
           delay={3}
         />
@@ -341,27 +340,29 @@ export default function ClientPortal() {
         />
       </div>
 
-      {/* --- EXECUTIVE INTELLIGENCE SUITE --- */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
-        {/* Growth AreaChart */}
-        <Card className="bg-card overflow-hidden border border-border/60 hover:border-primary/30 transition-colors">
-          <CardHeader className="p-4 pb-1">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              Sprint Velocity curve
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
-            <div className="h-[160px] w-full">
-              {isLoadingAnalytics ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
+      <motion.section
+        className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-stretch"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        aria-label="Project analytics"
+      >
+        <ChartGridCell colSpan={4} className="min-h-[260px]">
+          <ChartPanel
+            title="Completion trend"
+            description="Sprint velocity over time"
+            icon={TrendingUp}
+            accent="blue"
+          >
+            {isLoadingAnalytics ? (
+              <Skeleton className="h-[180px] w-full" />
+            ) : projectAnalytics?.completionOverTime?.length ? (
+              <div className="h-[180px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={projectAnalytics?.completionOverTime?.length ? projectAnalytics.completionOverTime : [{date: "Start", value: 0}, {date: "Now", value: project.completionPct}]}>
+                  <AreaChart data={projectAnalytics.completionOverTime}>
                     <defs>
                       <linearGradient id="colorVel" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={8} tickLine={false} />
@@ -369,71 +370,73 @@ export default function ClientPortal() {
                     <Area type="monotone" dataKey="value" name="Completion %" stroke="hsl(var(--primary))" fillOpacity={1} fill="url(#colorVel)" strokeWidth={2} />
                   </AreaChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            ) : (
+              <ChartEmptyState message="Completion history will appear once the team logs progress." icon={TrendingUp} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
 
-        {/* Contribution BarChart */}
-        <Card className="bg-card overflow-hidden border border-border/60 hover:border-emerald-500/30 transition-colors">
-          <CardHeader className="p-4 pb-1">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-emerald-500" />
-              Developer hours
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2">
-            <div className="h-[160px] w-full">
-              {isLoadingAnalytics ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
+        <ChartGridCell colSpan={4} className="min-h-[260px]">
+          <ChartPanel
+            title="Developer hours"
+            description="Contribution by team member"
+            icon={BarChart3}
+            accent="emerald"
+          >
+            {isLoadingAnalytics ? (
+              <Skeleton className="h-[180px] w-full" />
+            ) : projectAnalytics?.developerContributions?.length ? (
+              <div className="h-[180px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={projectAnalytics?.developerContributions?.length ? projectAnalytics.developerContributions : [{developerName: "Team", hoursLogged: projectAnalytics?.totalHoursLogged || 0}]}>
+                  <BarChart data={projectAnalytics.developerContributions}>
                     <XAxis dataKey="developerName" stroke="hsl(var(--muted-foreground))" fontSize={8} tickLine={false} />
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: "10px" }} />
                     <Bar dataKey="hoursLogged" name="Hours Spent" fill="#10b981" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+              </div>
+            ) : (
+              <ChartEmptyState message="Developer hours will show once daily logs are recorded." icon={BarChart3} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
 
-        {/* Allocation PieChart */}
-        <Card className="bg-card overflow-hidden border border-border/60 hover:border-purple-500/30 transition-colors">
-          <CardHeader className="p-4 pb-1">
-            <CardTitle className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              <PieChartIcon className="h-4 w-4 text-purple-500" />
-              Work category breakdown
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-4 pt-2 flex items-center justify-center">
-            <div className="h-[160px] w-full">
-              {isLoadingAnalytics ? (
-                <Skeleton className="h-full w-full" />
-              ) : (
+        <ChartGridCell colSpan={4} className="min-h-[260px]">
+          <ChartPanel
+            title="Work categories"
+            description="How effort is distributed"
+            icon={PieChartIcon}
+            accent="violet"
+          >
+            {isLoadingAnalytics ? (
+              <Skeleton className="h-[180px] w-full" />
+            ) : projectAnalytics?.workCategoryBreakdown?.length ? (
+              <div className="h-[180px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={projectAnalytics?.workCategoryBreakdown?.length ? projectAnalytics.workCategoryBreakdown : [{name: "Pending", count: 1}]}
+                      data={projectAnalytics.workCategoryBreakdown}
                       innerRadius={40}
                       outerRadius={60}
                       paddingAngle={4}
                       dataKey="count"
                     >
-                      {(projectAnalytics?.workCategoryBreakdown || [{name: "Pending", count: 1}]).map((entry: any, idx: number) => (
-                        <Cell key={`cell-${idx}`} fill={["#6366f1", "#a855f7", "#14b8a6", "#f59e0b"][idx % 4]} />
+                      {projectAnalytics.workCategoryBreakdown.map((entry: { name: string }, idx: number) => (
+                        <Cell key={entry.name} fill={["#6366f1", "#a855f7", "#14b8a6", "#f59e0b"][idx % 4]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: "10px" }} />
-                    <Legend wrapperStyle={{ fontSize: '9px' }} />
+                    <Legend wrapperStyle={{ fontSize: "9px" }} />
                   </PieChart>
                 </ResponsiveContainer>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+              </div>
+            ) : (
+              <ChartEmptyState message="Work category breakdown appears when logs include categories." icon={PieChartIcon} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+      </motion.section>
 
       {/* KPI Cards Row */}
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">

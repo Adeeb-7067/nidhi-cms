@@ -3,12 +3,17 @@ import {
   sessionsTable,
   passwordResetTokensTable,
   getNextSequence
-} from "@/models/schema";
-import { verifyPassword, hashPassword } from "@/lib/password";
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from "@/lib/jwt";
-import { validateStoredFileUrl } from "@/lib/file-storage";
-import { badRequest, unauthorized, notFound, parseIdParam, optionalString } from "@/utils/route-errors";
-import crypto from "crypto";
+} from "../models/schema/index.js";
+import { verifyPassword, hashPassword } from "../lib/password.js";
+import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
+import { validateStoredFileUrl } from "../lib/file-storage.js";
+import {
+  issuePasswordOtp,
+  verifyPasswordOtp,
+  consumePasswordOtp,
+  isEmailConfigured,
+} from "../services/password-otp.js";
+import { badRequest, unauthorized, notFound, parseIdParam, optionalString } from "../utils/route-errors.js";
 async function postAuthLogin(req, res) {
   const identifier = optionalString(req.body.identifier);
   const password = optionalString(req.body.password);
@@ -109,39 +114,84 @@ async function postAuthRefresh(req, res) {
 async function postAuthForgotPassword(req, res) {
   const email = optionalString(req.body.email);
   if (!email) badRequest("Email is required.", "email");
-  const user = await usersTable.findOne({ email: email.toLowerCase() });
+  const user = await usersTable.findOne({ email: email.toLowerCase(), status: "active" });
+  let meta = { expiresInSeconds: 600 };
   if (user) {
-    const token = crypto.randomBytes(32).toString("hex");
-    const tokenId = await getNextSequence("password_reset_tokens");
-    await passwordResetTokensTable.create({
-      id: tokenId,
-      userId: user.id,
-      token,
-      expiresAt: new Date(Date.now() + 60 * 60 * 1e3)
+    meta = await issuePasswordOtp({
+      user,
+      purpose: "forgot_password",
+      log: req.log,
     });
-    req.log.info({ userId: user.id }, "Password reset token generated");
+    req.log.info({ userId: user.id }, "Password reset OTP issued");
   }
-  res.json({ message: "If an account exists, a reset link has been sent." });
+  res.json({
+    message: "If an account exists, a verification code has been sent to your email.",
+    expiresInSeconds: meta.expiresInSeconds,
+    emailConfigured: isEmailConfigured(),
+    ...(meta.devOtp ? { devOtp: meta.devOtp } : {}),
+  });
 }
+
+async function postAuthVerifyResetOtp(req, res) {
+  const email = optionalString(req.body.email);
+  const otp = optionalString(req.body.otp);
+  await verifyPasswordOtp({ email, otp, purpose: "forgot_password" });
+  res.json({ valid: true, message: "Code verified. You can set a new password." });
+}
+
 async function postAuthResetPassword(req, res) {
+  const email = optionalString(req.body.email);
+  const otp = optionalString(req.body.otp);
   const token = optionalString(req.body.token);
   const newPassword = optionalString(req.body.newPassword);
-  if (!token) badRequest("Reset token is required.", "token");
   if (!newPassword) badRequest("New password is required.", "newPassword");
   if (newPassword.length < 8) {
     badRequest("New password must be at least 8 characters.", "newPassword");
   }
-  const resetToken = await passwordResetTokensTable.findOne({
-    token,
-    expiresAt: { $gt: /* @__PURE__ */ new Date() }
-  });
-  if (!resetToken || resetToken.usedAt) {
-    badRequest("This reset link is invalid or has expired. Request a new password reset.", "token");
+
+  let userId;
+
+  if (email && otp) {
+    const record = await verifyPasswordOtp({ email, otp, purpose: "forgot_password" });
+    userId = record.userId;
+    await consumePasswordOtp(record.id);
+  } else if (token) {
+    const resetToken = await passwordResetTokensTable.findOne({
+      token,
+      expiresAt: { $gt: new Date() },
+    });
+    if (!resetToken || resetToken.usedAt) {
+      badRequest("This reset link is invalid or has expired. Request a new password reset.", "token");
+    }
+    userId = resetToken.userId;
+    await passwordResetTokensTable.updateOne(
+      { id: resetToken.id },
+      { $set: { usedAt: new Date() } },
+    );
+  } else {
+    badRequest("Email and verification code are required.", "otp");
   }
+
   const hash = await hashPassword(newPassword);
-  await usersTable.updateOne({ id: resetToken.userId }, { $set: { passwordHash: hash } });
-  await passwordResetTokensTable.updateOne({ id: resetToken.id }, { $set: { usedAt: /* @__PURE__ */ new Date() } });
+  await usersTable.updateOne({ id: userId }, { $set: { passwordHash: hash, forcePasswordChange: false } });
+  await sessionsTable.deleteMany({ userId });
   res.json({ message: "Password reset successful" });
+}
+
+async function postAuthRequestChangePasswordOtp(req, res) {
+  const user = await usersTable.findOne({ id: req.user.id });
+  if (!user || user.status !== "active") notFound("User");
+  const meta = await issuePasswordOtp({
+    user,
+    purpose: "change_password",
+    log: req.log,
+  });
+  res.json({
+    message: "Verification code sent to your email.",
+    expiresInSeconds: meta.expiresInSeconds,
+    emailConfigured: isEmailConfigured(),
+    ...(meta.devOtp ? { devOtp: meta.devOtp } : {}),
+  });
 }
 async function postAuthFcmToken(req, res) {
   const fcmToken = optionalString(req.body.token);
@@ -175,10 +225,10 @@ async function postAuthImpersonateByUserId(req, res) {
   if (!target || target.status !== "active") {
     notFound("User (must be active)");
   }
-  const allowedRoles = ["developer", "tester", "client"];
+  const allowedRoles = ["developer", "tester", "qa", "client"];
   if (!allowedRoles.includes(target.role)) {
     badRequest(
-      "View-as only works for developer, tester, or client portal accounts.",
+      "View-as only works for developer, tester, QA, or client portal accounts.",
       "userId"
     );
   }
@@ -273,6 +323,8 @@ export {
   postAuthLogin,
   postAuthLogout,
   postAuthRefresh,
+  postAuthRequestChangePasswordOtp,
   postAuthResetPassword,
-  postAuthStopImpersonate
+  postAuthStopImpersonate,
+  postAuthVerifyResetOtp,
 };

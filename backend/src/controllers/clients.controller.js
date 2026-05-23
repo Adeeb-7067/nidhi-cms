@@ -1,17 +1,17 @@
-import { clientsTable, usersTable, getNextSequence } from "@/models/schema";
-import { formatCompanyRecord } from "@/mappers/company-format";
+import { clientsTable, usersTable, getNextSequence } from "../models/schema/index.js";
+import { formatCompanyRecord } from "../mappers/company-format.js";
 import {
   createClientPortalUser,
   updateClientPortalPassword
-} from "@/services/client-portal";
-import { paginateModel } from "@/utils/mongo-list";
+} from "../services/client-portal.js";
+import { paginateModel } from "../utils/mongo-list.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 function resolveGstNumber(body) {
   const value = body.gstNumber ?? body.businessId;
   const trimmed = typeof value === "string" ? value.trim() : "";

@@ -15,6 +15,7 @@ const dailyLogSchema = new Schema({
   blockers: { type: String },
   nextDayPlan: { type: String }
 }, { timestamps: true });
+dailyLogSchema.index({ projectId: 1, developerId: 1, logDate: -1 });
 const DailyLogs = mongoose.models.DailyLogs || mongoose.model("DailyLogs", dailyLogSchema);
 const dailyLogsTable = DailyLogs;
 export {

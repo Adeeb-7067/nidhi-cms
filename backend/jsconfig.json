@@ -2,12 +2,8 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",
-    "moduleResolution": "bundler",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
+    "moduleResolution": "node",
     "checkJs": false
   },
-  "include": ["src/**/*.js", "scripts/**/*.js"]
+  "include": ["src/**/*.js", "scripts/**/*.js", "index.js", "load-env.js"]
 }

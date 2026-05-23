@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { FileUploader } from "@/components/ui/file-uploader";
+import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import {
   Palette,
   Bell,
@@ -160,6 +161,8 @@ export default function SettingsPage() {
     address: "",
     logoUrl: "",
     sealUrl: "",
+    requiredDailyWorkHours: "7.5",
+    dailyLogComplianceEnabled: true,
   });
 
   const userSections: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
@@ -198,6 +201,8 @@ export default function SettingsPage() {
         address: orgSettings.address || "",
         logoUrl: orgSettings.logoUrl || "",
         sealUrl: orgSettings.sealUrl || "",
+        requiredDailyWorkHours: String(orgSettings.requiredDailyWorkHours ?? 7.5),
+        dailyLogComplianceEnabled: orgSettings.dailyLogComplianceEnabled !== false,
       });
     }
   }, [orgSettings]);
@@ -223,6 +228,8 @@ export default function SettingsPage() {
           address: companyForm.address,
           logoUrl: companyForm.logoUrl || undefined,
           sealUrl: companyForm.sealUrl || undefined,
+          requiredDailyWorkHours: Number.parseFloat(companyForm.requiredDailyWorkHours),
+          dailyLogComplianceEnabled: companyForm.dailyLogComplianceEnabled,
         },
       });
       toast({ title: "Organization updated", description: "Branding saved for all users." });
@@ -582,20 +589,18 @@ export default function SettingsPage() {
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Your security</CardTitle>
-                  <CardDescription>Password and session</CardDescription>
+                  <CardTitle className="text-base">Change password</CardTitle>
+                  <CardDescription>
+                    Use your current password or verify with a code sent to your email
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Change your password from your profile. Sessions expire after 24 hours of
-                    inactivity.
-                  </p>
-                  <Button variant="outline" asChild>
-                    <Link href="/profile">Change password</Link>
-                  </Button>
+                  <ChangePasswordCard userEmail={user?.email} compact />
                   <div className="rounded-lg border border-dashed border-border p-4">
-                    <p className="text-xs font-medium text-muted-foreground">Two-factor auth</p>
-                    <p className="text-xs text-muted-foreground mt-1">Coming soon for enterprise plans</p>
+                    <p className="text-xs font-medium text-muted-foreground">Sessions</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Refresh tokens expire after 30 days; sign out on shared devices.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -623,18 +628,21 @@ export default function SettingsPage() {
           )}
 
           {section === "organization" && isAdmin && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Organization</CardTitle>
-                <CardDescription>Branding on reports, PDFs, and client portal</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loadingOrg ? (
-                  <div className="flex justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  </div>
-                ) : (
-                  <form onSubmit={handleUpdateCompany} className="space-y-4 max-w-xl">
+            <div className="space-y-6">
+            {loadingOrg ? (
+              <Card>
+                <CardContent className="flex justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </CardContent>
+              </Card>
+            ) : (
+              <form onSubmit={handleUpdateCompany} className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Organization</CardTitle>
+                    <CardDescription>Branding on reports, PDFs, and client portal</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 max-w-xl">
                     <div className="space-y-2">
                       <Label htmlFor="companyName">Company name</Label>
                       <Input
@@ -699,14 +707,65 @@ export default function SettingsPage() {
                         )}
                       </div>
                     </div>
-                    <Button type="submit" disabled={savingOrg}>
-                      {savingOrg && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Save organization
-                    </Button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Daily log policy</CardTitle>
+                    <CardDescription>
+                      Required work hours for developers and QA. Incomplete weekdays trigger
+                      in-app alerts and email.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4 max-w-xl">
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="dailyLogComplianceEnabled">Enforce daily hours</Label>
+                        <p className="text-xs text-muted-foreground">
+                          Staff must log the required total hours each working day
+                        </p>
+                      </div>
+                      <Switch
+                        id="dailyLogComplianceEnabled"
+                        checked={companyForm.dailyLogComplianceEnabled}
+                        onCheckedChange={(checked) =>
+                          setCompanyForm({ ...companyForm, dailyLogComplianceEnabled: checked })
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="requiredDailyWorkHours">Required hours per day</Label>
+                      <Input
+                        id="requiredDailyWorkHours"
+                        type="number"
+                        min={1}
+                        max={16}
+                        step={0.5}
+                        disabled={!companyForm.dailyLogComplianceEnabled}
+                        value={companyForm.requiredDailyWorkHours}
+                        onChange={(e) =>
+                          setCompanyForm({
+                            ...companyForm,
+                            requiredDailyWorkHours: e.target.value,
+                          })
+                        }
+                        required
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Example: 7.5 means daily logs must total 7.5 hours (multiple entries allowed).
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Button type="submit" disabled={savingOrg}>
+                  {savingOrg && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save organization settings
+                </Button>
+              </form>
+            )}
+            </div>
           )}
 
 

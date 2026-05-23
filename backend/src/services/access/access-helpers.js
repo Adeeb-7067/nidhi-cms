@@ -1,6 +1,6 @@
-import { getCompanyAccess } from "@/services/access/company-access";
-import { getProjectAccess } from "@/services/access/inventory-access";
-import { HttpError } from "@/lib/http-error";
+import { getCompanyAccess } from "./company-access.js";
+import { getProjectAccess } from "./inventory-access.js";
+import { HttpError } from "../../lib/http-error.js";
 async function assertCompanyAccess(req, companyId, options) {
   const access = await getCompanyAccess(req, companyId);
   const allowSuperAdmin = options?.allowSuperAdmin !== false;

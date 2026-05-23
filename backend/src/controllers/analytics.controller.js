@@ -10,7 +10,13 @@ import {
   auditLogsTable,
   milestonesTable,
   ticketsTable
-} from "@/models/schema";
+} from "../models/schema/index.js";
+import { resolveListStatusFilter } from "../services/bugs/bug-workflow.js";
+import {
+  buildWorkspaceDashboard,
+  buildClientHubDashboard,
+} from "../services/workspace-dashboard.js";
+
 async function getAnalyticsDashboard(req, res) {
   const now = /* @__PURE__ */ new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -31,14 +37,14 @@ async function getAnalyticsDashboard(req, res) {
     projectsTable.countDocuments({ status: "in_progress" }),
     clientsTable.countDocuments({ status: "active" }),
     projectsTable.countDocuments({ deadline: { $lt: now }, status: { $ne: "completed" } }),
-    bugsTable.countDocuments({ status: "open" }),
+    bugsTable.countDocuments({ status: { $nin: ["closed", "verified", "wont_fix", "duplicate"] } }),
     resourceRequestsTable.countDocuments({ status: "pending" }),
     apkSchedulesTable.countDocuments({ scheduledDate: { $gte: startOfToday, $lt: endOfToday } }),
     projectsTable.aggregate([
       { $group: { _id: "$status", count: { $sum: 1 } } }
     ]),
     bugsTable.aggregate([
-      { $match: { status: "open" } },
+      { $match: { status: { $nin: ["closed", "verified", "wont_fix", "duplicate"] } } },
       { $group: { _id: "$severity", count: { $sum: 1 } } }
     ]),
     auditLogsTable.find({}, { action: 1, entityType: 1, userId: 1, createdAt: 1 }).sort({ createdAt: -1 }).limit(10).lean(),
@@ -212,9 +218,18 @@ async function getAnalyticsBugs(req, res) {
   const { projectId } = req.query;
   const query = {};
   if (projectId) query.projectId = parseInt(projectId);
+  const listableRoots = { $or: [{ parentBugId: null }, { parentBugId: { $exists: false } }] };
+  const openFilter = resolveListStatusFilter("open");
+  const closedFilter = resolveListStatusFilter("closed");
   const [totalOpen, totalFixed, severityDist, statusDist, platformDist] = await Promise.all([
-    bugsTable.countDocuments({ ...query, status: "open" }),
-    bugsTable.countDocuments({ ...query, status: "fixed" }),
+    bugsTable.countDocuments({
+      ...query,
+      $and: [openFilter, listableRoots].filter(Boolean),
+    }),
+    bugsTable.countDocuments({
+      ...query,
+      $and: [closedFilter, listableRoots].filter(Boolean),
+    }),
     bugsTable.aggregate([
       { $match: query },
       { $group: { _id: "$severity", count: { $sum: 1 } } }
@@ -275,10 +290,22 @@ async function getAnalyticsCompanies(req, res) {
   );
   res.json({ companies: cards });
 }
+async function getAnalyticsWorkspace(req, res) {
+  const data = await buildWorkspaceDashboard(req.user);
+  res.json(data);
+}
+
+async function getAnalyticsClientHub(req, res) {
+  const data = await buildClientHubDashboard(req.user);
+  res.json(data);
+}
+
 export {
   getAnalyticsBugs,
+  getAnalyticsClientHub,
   getAnalyticsCompanies,
   getAnalyticsDashboard,
   getAnalyticsProjectsById,
-  getAnalyticsTeam
+  getAnalyticsTeam,
+  getAnalyticsWorkspace,
 };

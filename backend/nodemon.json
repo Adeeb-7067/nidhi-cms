@@ -1,5 +1,5 @@
 {
-  "watch": ["src"],
+  "watch": ["src", "index.js", "load-env.js"],
   "ext": "js,json",
   "ignore": ["dist", "node_modules"],
   "exec": "node ./build.mjs && node --env-file=.env --enable-source-maps ./dist/index.mjs",

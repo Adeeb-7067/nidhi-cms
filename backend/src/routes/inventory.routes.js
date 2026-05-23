@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth } from "@/middlewares/auth";
-import * as inventoryController from "@/controllers/inventory";
+import { requireAuth } from "../middlewares/auth.js";
+import * as inventoryController from "../controllers/inventory/index.js";
 const router = Router();
 router.get("/projects/:projectId/inventory/summary", requireAuth, asyncHandler(inventoryController.getProjectsByProjectIdInventorySummary));
 router.get("/projects/:projectId/inventory/activities", requireAuth, asyncHandler(inventoryController.getProjectsByProjectIdInventoryActivities));

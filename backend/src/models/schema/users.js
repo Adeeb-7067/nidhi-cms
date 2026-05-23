@@ -1,5 +1,8 @@
 import mongoose, { Schema } from "mongoose";
-const userRoles = ["super_admin", "developer", "tester", "client"];
+const userRoles = ["super_admin", "developer", "tester", "qa", "client"];
+/** Roles that receive an employee ID and use the dev portal (except super_admin). */
+const staffEmployeeRoles = ["developer", "tester", "qa"];
+const adminStaffRoles = ["super_admin", "developer", "tester", "qa"];
 const userStatuses = ["active", "inactive", "suspended"];
 const credentialTriggers = ["initial_setup", "admin_reset", "self_reset", "policy_expiry"];
 const userSchema = new Schema({
@@ -43,12 +46,19 @@ const sessionsSchema = new Schema({
   deviceInfo: { type: String }
 }, { timestamps: true });
 const Sessions = mongoose.models.Sessions || mongoose.model("Sessions", sessionsSchema);
+const passwordOtpPurposes = ["forgot_password", "change_password"];
+
 const passwordResetTokensSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   userId: { type: Number, required: true, index: true },
-  token: { type: String, required: true, unique: true },
-  expiresAt: { type: Date, required: true },
-  usedAt: { type: Date }
+  email: { type: String, lowercase: true, index: true },
+  /** Legacy link token (optional) */
+  token: { type: String, sparse: true, unique: true },
+  otpHash: { type: String },
+  purpose: { type: String, enum: passwordOtpPurposes, default: "forgot_password", index: true },
+  attempts: { type: Number, default: 0 },
+  expiresAt: { type: Date, required: true, index: true },
+  usedAt: { type: Date },
 }, { timestamps: true });
 const PasswordResetTokens = mongoose.models.PasswordResetTokens || mongoose.model("PasswordResetTokens", passwordResetTokensSchema);
 const usersTable = Users;
@@ -62,9 +72,12 @@ export {
   Users,
   credentialHistoryTable,
   credentialTriggers,
+  passwordOtpPurposes,
   passwordResetTokensTable,
   sessionsTable,
   userRoles,
   userStatuses,
+  staffEmployeeRoles,
+  adminStaffRoles,
   usersTable
 };

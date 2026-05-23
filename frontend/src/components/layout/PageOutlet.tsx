@@ -42,7 +42,7 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/projects/:id">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa"]}>
           <AdminProjectDetail />
         </RoleGate>
       </Route>
@@ -62,12 +62,12 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/tickets">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "client"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
           <AdminTickets />
         </RoleGate>
       </Route>
       <Route path="/admin/discussions">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "client"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
           <AdminDiscussions />
         </RoleGate>
       </Route>
@@ -83,53 +83,53 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/settings">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "client"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
 
       <Route path="/dev">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevWorkspace />
         </RoleGate>
       </Route>
       <Route path="/dev/projects">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevProjects />
         </RoleGate>
       </Route>
       <Route path="/dev/logs">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevLogs />
         </RoleGate>
       </Route>
       <Route path="/dev/tasks/:id">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <TaskDetail />
         </RoleGate>
       </Route>
       <Route path="/dev/tasks">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevTasks />
         </RoleGate>
       </Route>
       <Route path="/dev/bugs">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevBugs />
         </RoleGate>
       </Route>
       <Route path="/dev/apk">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevApk />
         </RoleGate>
       </Route>
       <Route path="/dev/reports">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevReports />
         </RoleGate>
       </Route>
       <Route path="/dev/requests">
-        <RoleGate allowedRoles={["developer", "tester", "super_admin"]}>
+        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
           <DevRequests />
         </RoleGate>
       </Route>
@@ -151,12 +151,12 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/profile">
-        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester", "qa"]}>
           <ProfilePage />
         </RoleGate>
       </Route>
       <Route path="/notifications">
-        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester"]}>
+        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester", "qa"]}>
           <NotificationsPage />
         </RoleGate>
       </Route>

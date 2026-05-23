@@ -1,7 +1,7 @@
-import { inventoryFoldersTable, getNextSequence } from "@/models/schema";
-import { logInventoryActivity } from "@/services/inventory/helpers";
+import { inventoryFoldersTable, getNextSequence } from "../../models/schema/index.js";
+import { logInventoryActivity } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam } from "./guard.js";
-import { badRequest } from "@/utils/route-errors";
+import { badRequest } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/folders */
 export async function getProjectsByProjectIdInventoryFolders(req, res) {

@@ -1,7 +1,7 @@
-import { inventorySubscriptionsTable, getNextSequence } from "@/models/schema";
-import { logInventoryActivity } from "@/services/inventory/helpers";
+import { inventorySubscriptionsTable, getNextSequence } from "../../models/schema/index.js";
+import { logInventoryActivity } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam } from "./guard.js";
-import { badRequest } from "@/utils/route-errors";
+import { badRequest } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/subscriptions */
 export async function getProjectsByProjectIdInventorySubscriptions(req, res) {

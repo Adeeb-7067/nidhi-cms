@@ -1,4 +1,4 @@
-import { projectsTable, ticketsTable, auditLogsTable } from "@/models/schema";
+import { projectsTable, ticketsTable, auditLogsTable } from "../models/schema/index.js";
 async function formatCompanyRecord(client) {
   const companyId = client.id;
   const projectIds = await projectIdsForCompany(companyId);

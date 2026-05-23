@@ -3,6 +3,7 @@ const PUBLIC_API_PATHS = /* @__PURE__ */ new Set([
   "/auth/login",
   "/auth/refresh",
   "/auth/forgot-password",
+  "/auth/verify-reset-otp",
   "/auth/reset-password"
 ]);
 export {

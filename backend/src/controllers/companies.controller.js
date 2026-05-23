@@ -4,19 +4,19 @@ import {
   ticketsTable,
   usersTable,
   getNextSequence
-} from "@/models/schema";
-import { formatCompanyRecord, getCompanyActivity } from "@/mappers/company-format";
-import { formatProject } from "@/mappers/project-format";
-import { createClientPortalUser } from "@/services/client-portal";
-import { assertCompanyAccess } from "@/services/access/access-helpers";
-import { paginateModel } from "@/utils/mongo-list";
+} from "../models/schema/index.js";
+import { formatCompanyRecord, getCompanyActivity } from "../mappers/company-format.js";
+import { formatProject } from "../mappers/project-format.js";
+import { createClientPortalUser } from "../services/client-portal.js";
+import { assertCompanyAccess } from "../services/access/access-helpers.js";
+import { paginateModel } from "../utils/mongo-list.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 function resolveGstNumber(body) {
   const value = body.gstNumber ?? body.businessId;
   const trimmed = typeof value === "string" ? value.trim() : "";

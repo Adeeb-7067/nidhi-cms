@@ -1,4 +1,4 @@
-import { usersTable, clientsTable, projectsTable, bugsTable } from "@/models/schema";
+import { usersTable, clientsTable, projectsTable, bugsTable } from "../models/schema/index.js";
 async function getSearch(req, res) {
   const q = (req.query["q"] || "").trim();
   if (!q || q.length < 2) {

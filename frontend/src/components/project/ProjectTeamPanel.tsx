@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import {
   useGetProjectMembers,
   getGetProjectMembersQueryKey,
-  useAddProjectMember,
   useRemoveProjectMember,
   useListUsers,
+  getListUsersQueryKey,
   type ProjectMember,
 } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,13 +25,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Loader2, Plus, Trash2, UserPlus, ChevronRight, ListTodo, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { formatUserRole } from "@/lib/bug-workflow";
+import {
+  Loader2,
+  Trash2,
+  UserPlus,
+  ChevronRight,
+  ListTodo,
+  Clock,
+  ChevronDown,
+  X,
+} from "lucide-react";
 import { TeamMemberWorkSheet, type MemberWorkTab } from "@/components/project/TeamMemberWorkSheet";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListProjectsQueryKey } from "@/api";
+import { addProjectMembersBatch, getListProjectsQueryKey } from "@/api";
 
 const SUB_TYPES = ["Developer", "QA", "Project Manager", "Designer", "DevOps"] as const;
 
@@ -44,7 +58,7 @@ type ProjectTeamPanelProps = {
 export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPanelProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [userId, setUserId] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [subType, setSubType] = useState<string>("Developer");
   const [workSheetOpen, setWorkSheetOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
@@ -54,14 +68,20 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
     query: { enabled: !!projectId, queryKey: getGetProjectMembersQueryKey(projectId) },
   });
 
-  const { data: usersData } = useListUsers({ limit: 200 });
-  const addMember = useAddProjectMember();
+  const staffParams = { staff: "1" as const, limit: 100 };
+  const { data: usersData } = useListUsers(staffParams, {
+    query: {
+      queryKey: getListUsersQueryKey(staffParams),
+      staleTime: 120_000,
+    },
+  });
+  const [adding, setAdding] = useState(false);
   const removeMember = useRemoveProjectMember();
 
   const assignedIds = new Set((members ?? []).map((m) => m.userId));
   const availableUsers = (usersData?.users ?? []).filter(
     (u) =>
-      (u.role === "developer" || u.role === "tester") &&
+      (u.role === "developer" || u.role === "tester" || u.role === "qa") &&
       u.status === "active" &&
       !assignedIds.has(u.id),
   );
@@ -71,27 +91,50 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
     queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
   };
 
+  const resetAddDialog = () => {
+    setSelectedUserIds([]);
+    setSubType("Developer");
+  };
+
+  const toggleUser = (id: string, checked: boolean) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return [...next];
+    });
+  };
+
   const handleAdd = async () => {
-    if (!userId) {
-      toast.error("Select a team member");
+    if (selectedUserIds.length === 0) {
+      toast.error("Select at least one team member");
       return;
     }
+    setAdding(true);
     try {
-      await addMember.mutateAsync({
-        id: projectId,
-        data: { userId: parseInt(userId, 10), subType },
-      });
-      toast.success("Team member added");
-      setOpen(false);
-      setUserId("");
-      setSubType("Developer");
-      invalidate();
+      const userIds = selectedUserIds.map((id) => Number.parseInt(id, 10));
+      const result = await addProjectMembersBatch(projectId, userIds, subType);
+      if (result.addedCount > 0) {
+        toast.success(
+          result.addedCount === 1
+            ? "Team member added"
+            : `${result.addedCount} team members added`,
+        );
+        invalidate();
+        setOpen(false);
+        resetAddDialog();
+      }
+      if (result.skippedCount > 0) {
+        toast.error(
+          result.skippedCount === userIds.length
+            ? "No members were added (already on project or invalid)."
+            : `${result.skippedCount} skipped (already assigned or invalid).`,
+        );
+      }
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ||
-        (err as Error)?.message ||
-        "Failed to add member";
-      toastApiError(err, msg);
+      toastApiError(err, "Failed to add members");
+    } finally {
+      setAdding(false);
     }
   };
 
@@ -116,41 +159,100 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
       <CardHeader className="p-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm">Project team</CardTitle>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) resetAddDialog();
+            }}
+          >
             <DialogTrigger asChild>
               <Button size="sm" className="h-7 text-xs">
                 <UserPlus className="h-3.5 w-3.5 mr-1" />
-                Add member
+                Add members
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[400px] bg-card border-border">
+            <DialogContent className="sm:max-w-[440px] bg-card border-border">
               <DialogHeader>
-                <DialogTitle className="text-sm">Add team member</DialogTitle>
+                <DialogTitle className="text-sm">Add team members</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Assign a developer or QA to this project.
+                  Select one or more developers or QA to assign to this project.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
-                  <Label className="text-xs">Team member</Label>
-                  <Select value={userId} onValueChange={setUserId}>
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
+                  <Label className="text-xs">Team members</Label>
+                  <Popover modal={false}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-between font-normal h-9 text-xs",
+                          !selectedUserIds.length && "text-muted-foreground",
+                        )}
+                      >
+                        {selectedUserIds.length
+                          ? `${selectedUserIds.length} selected`
+                          : "Select members"}
+                        <ChevronDown className="h-4 w-4 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2" align="start">
                       {availableUsers.length === 0 ? (
-                        <SelectItem value="_none" disabled>
-                          No available users
-                        </SelectItem>
+                        <p className="text-xs text-muted-foreground p-2">
+                          No available users — everyone active is already on this project.
+                        </p>
                       ) : (
-                        availableUsers.map((u) => (
-                          <SelectItem key={u.id} value={String(u.id)}>
-                            {u.name} ({u.role === "tester" ? "QA" : "Dev"})
-                          </SelectItem>
-                        ))
+                        <div className="max-h-[240px] overflow-y-auto space-y-0.5">
+                          {availableUsers.map((u) => {
+                            const id = String(u.id);
+                            const checked = selectedUserIds.includes(id);
+                            return (
+                              <label
+                                key={u.id}
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={checked}
+                                  onCheckedChange={(c) => toggleUser(id, c === true)}
+                                />
+                                <span className="flex-1 text-xs font-medium truncate">{u.name}</span>
+                                <span className="text-[10px] text-muted-foreground shrink-0">
+                                  {formatUserRole(u.role)}
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
                       )}
-                    </SelectContent>
-                  </Select>
+                    </PopoverContent>
+                  </Popover>
+                  {selectedUserIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {selectedUserIds.map((id) => {
+                        const u = availableUsers.find((x) => String(x.id) === id);
+                        if (!u) return null;
+                        return (
+                          <Badge
+                            key={id}
+                            variant="secondary"
+                            className="text-[10px] font-normal gap-1 pr-1"
+                          >
+                            {u.name}
+                            <button
+                              type="button"
+                              className="rounded-sm hover:bg-muted p-0.5"
+                              aria-label={`Remove ${u.name}`}
+                              onClick={() => toggleUser(id, false)}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">Role on project</Label>
@@ -172,11 +274,13 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
                 <Button
                   type="button"
                   size="sm"
-                  onClick={handleAdd}
-                  disabled={addMember.isPending || !userId}
+                  onClick={() => void handleAdd()}
+                  disabled={adding || selectedUserIds.length === 0}
                 >
-                  {addMember.isPending && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
-                  Add to project
+                  {adding && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+                  {selectedUserIds.length > 1
+                    ? `Add ${selectedUserIds.length} members`
+                    : "Add to project"}
                 </Button>
               </DialogFooter>
             </DialogContent>

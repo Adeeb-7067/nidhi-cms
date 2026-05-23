@@ -6,7 +6,7 @@ import { PageOutlet } from "./PageOutlet";
 /** Single persistent shell — sidebar/navbar stay mounted while pages change. */
 export function AuthenticatedShell() {
   return (
-    <ProtectedRoute allowedRoles={["super_admin", "developer", "tester", "client"]}>
+    <ProtectedRoute allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
       <AppLayout>
         <PageOutlet />
       </AppLayout>

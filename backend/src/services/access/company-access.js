@@ -2,7 +2,7 @@ import {
   projectsTable,
   projectMembersTable,
   clientsTable
-} from "@/models/schema";
+} from "../../models/schema/index.js";
 function projectCompanyId(project) {
   return project.companyId ?? project.clientId;
 }
@@ -20,7 +20,7 @@ async function getCompanyAccess(req, companyId) {
     const allowed = !!company && company.id === companyId;
     return { allowed, canManage: false, isClient: true };
   }
-  if (role === "developer" || role === "tester") {
+  if (role === "developer" || role === "tester" || role === "qa") {
     const projects = await projectsTable.find({ $or: [{ companyId }, { clientId: companyId }] }).select("id").lean();
     const projectIds = projects.map((p) => p.id);
     if (!projectIds.length) {
@@ -56,7 +56,7 @@ async function getProjectAccess(req, projectId) {
     const allowed = !!company && company.id === companyId;
     return { allowed, canManage: false, isClient: true, companyId };
   }
-  if (role === "developer" || role === "tester") {
+  if (role === "developer" || role === "tester" || role === "qa") {
     const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
     return {
       allowed: !!member,

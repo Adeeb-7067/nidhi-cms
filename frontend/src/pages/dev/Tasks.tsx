@@ -404,7 +404,7 @@ export default function DevTasks() {
                           <SelectItem value="none">Unassigned (backlog)</SelectItem>
                           {assignableData?.members.map((m) => (
                             <SelectItem key={m.id} value={m.id.toString()}>
-                              {m.name} ({m.role === "tester" ? "QA" : "Dev"})
+                              {m.name} ({m.role === "tester" || m.role === "qa" ? "QA" : "Dev"})
                             </SelectItem>
                           ))}
                         </SelectContent>

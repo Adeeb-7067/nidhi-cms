@@ -4,7 +4,9 @@ const companySettingsSchema = new Schema({
   companyName: { type: String, default: "My Agency", required: true },
   logoUrl: { type: String },
   address: { type: String },
-  sealUrl: { type: String }
+  sealUrl: { type: String },
+  requiredDailyWorkHours: { type: Number, default: 7.5, min: 1, max: 16 },
+  dailyLogComplianceEnabled: { type: Boolean, default: true }
 }, { timestamps: { createdAt: false, updatedAt: true } });
 const CompanySettings = mongoose.models.CompanySettings || mongoose.model("CompanySettings", companySettingsSchema);
 const companySettingsTable = CompanySettings;

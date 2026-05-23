@@ -24,7 +24,9 @@ export interface ForgotPasswordInput {
 }
 
 export interface ResetPasswordInput {
-  token: string;
+  email?: string;
+  otp?: string;
+  token?: string;
   newPassword: string;
 }
 
@@ -38,6 +40,7 @@ export const UserRole = {
   super_admin: "super_admin",
   developer: "developer",
   tester: "tester",
+  qa: "qa",
   client: "client",
 } as const;
 
@@ -87,6 +90,7 @@ export const UserInputRole = {
   super_admin: "super_admin",
   developer: "developer",
   tester: "tester",
+  qa: "qa",
   client: "client",
 } as const;
 
@@ -262,13 +266,37 @@ export const BugPriority = {
 export type BugStatus = (typeof BugStatus)[keyof typeof BugStatus];
 
 export const BugStatus = {
-  open: "open",
+  reported: "reported",
+  assigned: "assigned",
   in_progress: "in_progress",
   fixed: "fixed",
-  verified: "verified",
-  wont_fix: "wont_fix",
-  duplicate: "duplicate",
+  pending_qa_verification: "pending_qa_verification",
+  reopened: "reopened",
+  closed: "closed",
 } as const;
+
+export interface BugAssignee {
+  id: number;
+  name: string;
+  /** @nullable */
+  role?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  employeeId?: string | null;
+}
+
+export interface BugAttachment {
+  url: string;
+  /** @nullable */
+  name?: string | null;
+  /** @nullable */
+  mimeType?: string | null;
+  /** @nullable */
+  uploadedBy?: number | null;
+  /** @nullable */
+  createdAt?: string | null;
+}
 
 export type BugPlatform = (typeof BugPlatform)[keyof typeof BugPlatform];
 
@@ -288,11 +316,17 @@ export interface Bug {
   reporterId: number;
   reporterName: string;
   /** @nullable */
+  reporterRole?: string | null;
+  /** @nullable */
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
   /** @nullable */
   assigneeRole?: string | null;
+  assigneeIds?: number[];
+  assignees?: BugAssignee[];
+  /** @nullable */
+  latestComment?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -305,14 +339,26 @@ export interface Bug {
   severity: BugSeverity;
   priority: BugPriority;
   status: BugStatus;
+  qaStatus?: "open" | "fixed";
+  devStatus?: "open" | "fixed";
+  finalStatus?: "open" | "resolved";
+  issueKey?: string;
+  issues?: Bug[];
   /** @nullable */
   buildVersion?: string | null;
   platform: BugPlatform;
   createdAt: string;
+  updatedAt?: string;
   /** @nullable */
   resolvedAt?: string | null;
   /** @nullable */
   attachmentUrl?: string | null;
+  attachments?: BugAttachment[];
+  /** @nullable — set on child issues in a batch */
+  parentBugId?: number | null;
+  /** Child issues when this row is a batch parent */
+  childCount?: number;
+  children?: Bug[];
 }
 
 export interface SearchResult {
@@ -327,7 +373,8 @@ export interface PasswordResetInput {
 }
 
 export interface ChangePasswordInput {
-  currentPassword: string;
+  currentPassword?: string;
+  otp?: string;
   newPassword: string;
 }
 
@@ -719,15 +766,22 @@ export interface BugInput {
   projectId: number;
   title: string;
   description?: string;
+  priority: BugInputPriority;
+  status?: BugStatus;
+  qaStatus?: "open" | "fixed";
+  devStatus?: "open" | "fixed";
+  finalStatus?: "open" | "resolved";
+  assigneeId?: number;
+  assigneeIds?: number[];
+  attachmentUrl?: string;
+  attachments?: BugAttachment[];
+  initialComment?: string;
+  severity?: BugInputSeverity;
+  platform?: BugInputPlatform;
   stepsToReproduce?: string;
   expectedBehavior?: string;
   actualBehavior?: string;
-  severity: BugInputSeverity;
-  priority: BugInputPriority;
   buildVersion?: string;
-  platform: BugInputPlatform;
-  assigneeId?: number;
-  attachmentUrl?: string;
 }
 
 export type BugUpdateSeverity =
@@ -754,12 +808,13 @@ export type BugUpdateStatus =
   (typeof BugUpdateStatus)[keyof typeof BugUpdateStatus];
 
 export const BugUpdateStatus = {
-  open: "open",
+  reported: "reported",
+  assigned: "assigned",
   in_progress: "in_progress",
   fixed: "fixed",
-  verified: "verified",
-  wont_fix: "wont_fix",
-  duplicate: "duplicate",
+  pending_qa_verification: "pending_qa_verification",
+  reopened: "reopened",
+  closed: "closed",
 } as const;
 
 export type BugUpdatePlatform =
@@ -776,16 +831,22 @@ export const BugUpdatePlatform = {
 export interface BugUpdate {
   title?: string;
   description?: string;
+  priority?: BugUpdatePriority;
+  status?: BugUpdateStatus;
+  qaStatus?: "open" | "fixed";
+  devStatus?: "open" | "fixed";
+  finalStatus?: "open" | "resolved";
+  issueKey?: string;
+  assigneeId?: number;
+  assigneeIds?: number[];
+  attachmentUrl?: string;
+  attachments?: BugAttachment[];
+  severity?: BugUpdateSeverity;
+  platform?: BugUpdatePlatform;
   stepsToReproduce?: string;
   expectedBehavior?: string;
   actualBehavior?: string;
-  severity?: BugUpdateSeverity;
-  priority?: BugUpdatePriority;
-  status?: BugUpdateStatus;
   buildVersion?: string;
-  platform?: BugUpdatePlatform;
-  assigneeId?: number;
-  attachmentUrl?: string;
 }
 
 export type WorkTaskStatus =
@@ -1397,6 +1458,10 @@ export interface CompanySettings {
   address?: string | null;
   /** @nullable */
   sealUrl?: string | null;
+  /** Required logged hours per working day for developers */
+  requiredDailyWorkHours: number;
+  /** When true, staff must meet required hours and receive alerts if not */
+  dailyLogComplianceEnabled: boolean;
   updatedAt: string;
 }
 
@@ -1405,7 +1470,62 @@ export interface CompanySettingsUpdate {
   logoUrl?: string;
   address?: string;
   sealUrl?: string;
+  requiredDailyWorkHours?: number;
+  dailyLogComplianceEnabled?: boolean;
 }
+
+export interface DailyLogSummary {
+  date: string;
+  complianceEnabled: boolean;
+  /** @nullable */
+  requiredHours?: number | null;
+  loggedHours: number;
+  remainingHours: number;
+  isComplete: boolean;
+}
+
+export type GetDailyLogSummaryParams = {
+  date?: string;
+  developerId?: number;
+};
+
+export type LogComplianceDayStatus =
+  | "complete"
+  | "incomplete"
+  | "weekend"
+  | "future"
+  | "no_logs"
+  | "logged";
+
+export interface LogComplianceDay {
+  date: string;
+  loggedHours: number;
+  /** @nullable */
+  requiredHours?: number | null;
+  /** @nullable */
+  isComplete?: boolean | null;
+  status: LogComplianceDayStatus;
+}
+
+export interface LogComplianceCalendar {
+  developerId: number;
+  developerName: string;
+  month: number;
+  year: number;
+  complianceEnabled: boolean;
+  /** @nullable */
+  requiredHours?: number | null;
+  completeDays: number;
+  incompleteDays: number;
+  trackedWeekdays: number;
+  days: LogComplianceDay[];
+}
+
+export type GetLogComplianceCalendarParams = {
+  month: number;
+  year: number;
+  developerId?: number;
+};
 
 export interface CredentialRevealResult {
   password: string;
@@ -1537,6 +1657,8 @@ export type ListTicketsParams = {
 
 export type ListUsersParams = {
   role?: string;
+  /** When "1" or "true", returns internal staff (developer, tester, qa, super_admin). */
+  staff?: string;
   subType?: string;
   search?: string;
   page?: number;
@@ -1619,6 +1741,7 @@ export const ListBugsScope = {
   all: "all",
   mine: "mine",
   unassigned: "unassigned",
+  created: "created",
 } as const;
 
 export type AssignBugBody = {

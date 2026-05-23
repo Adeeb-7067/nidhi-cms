@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth } from "@/middlewares/auth";
-import * as ticketsController from "@/controllers/tickets.controller";
+import { requireAuth } from "../middlewares/auth.js";
+import * as ticketsController from "../controllers/tickets.controller.js";
 const router = Router();
 router.get("/tickets", requireAuth, asyncHandler(ticketsController.getTickets));
 router.post("/tickets", requireAuth, asyncHandler(ticketsController.postTickets));

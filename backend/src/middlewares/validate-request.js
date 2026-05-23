@@ -1,5 +1,5 @@
-import { HttpError } from "@/lib/http-error";
-import { formatZodError } from "@/utils/route-errors";
+import { HttpError } from "../lib/http-error.js";
+import { formatZodError } from "../utils/route-errors.js";
 function validateBody(schema) {
   return (req, _res, next) => {
     const result = schema.safeParse(req.body);

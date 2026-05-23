@@ -1,8 +1,8 @@
-import { requireAuth, requireRole } from "./auth";
-import { auditMiddleware } from "./audit";
-import { responseCompression } from "./compression";
-import { errorHandler, notFoundHandler } from "./error-handler";
-import { validateBody, validateQuery } from "./validate-request";
+import { requireAuth, requireRole } from "./auth.js";
+import { auditMiddleware } from "./audit.js";
+import { responseCompression } from "./compression.js";
+import { errorHandler, notFoundHandler } from "./error-handler.js";
+import { validateBody, validateQuery } from "./validate-request.js";
 export {
   auditMiddleware,
   errorHandler,

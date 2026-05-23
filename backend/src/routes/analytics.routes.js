@@ -1,9 +1,21 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth, requireRole } from "@/middlewares/auth";
-import * as analyticsController from "@/controllers/analytics.controller";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
+import * as analyticsController from "../controllers/analytics.controller.js";
 const router = Router();
 router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), asyncHandler(analyticsController.getAnalyticsDashboard));
+router.get(
+  "/analytics/workspace",
+  requireAuth,
+  requireRole("developer", "tester", "qa", "super_admin"),
+  asyncHandler(analyticsController.getAnalyticsWorkspace),
+);
+router.get(
+  "/analytics/client-hub",
+  requireAuth,
+  requireRole("client"),
+  asyncHandler(analyticsController.getAnalyticsClientHub),
+);
 router.get("/analytics/projects/:id", requireAuth, asyncHandler(analyticsController.getAnalyticsProjectsById));
 router.get("/analytics/team", requireAuth, requireRole("super_admin"), asyncHandler(analyticsController.getAnalyticsTeam));
 router.get("/analytics/bugs", requireAuth, asyncHandler(analyticsController.getAnalyticsBugs));

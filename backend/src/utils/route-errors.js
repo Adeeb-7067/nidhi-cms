@@ -1,4 +1,4 @@
-import { HttpError } from "@/lib/http-error";
+import { HttpError } from "../lib/http-error.js";
 function badRequest(message, field) {
   throw new HttpError(400, message, { code: "BAD_REQUEST", field });
 }

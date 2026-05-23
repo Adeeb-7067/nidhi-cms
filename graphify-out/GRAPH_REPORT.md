@@ -1,16 +1,16 @@
-# Graph Report - Content-Management-Hub  (2026-05-22)
+# Graph Report - Content-Management-Hub  (2026-05-23)
 
 ## Corpus Check
-- 281 files · ~119,370 words
+- 314 files · ~138,359 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2157 nodes · 5155 edges · 128 communities (120 shown, 8 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 69 edges (avg confidence: 0.8)
+- 2570 nodes · 6779 edges · 143 communities (133 shown, 10 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 127 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1eabc4ec`
+- Built from commit: `8cc97a35`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -25,6 +25,7 @@
 - [[_COMMUNITY_Community 7|Community 7]]
 - [[_COMMUNITY_Community 8|Community 8]]
 - [[_COMMUNITY_Community 9|Community 9]]
+- [[_COMMUNITY_Community 10|Community 10]]
 - [[_COMMUNITY_Community 11|Community 11]]
 - [[_COMMUNITY_Community 12|Community 12]]
 - [[_COMMUNITY_Community 13|Community 13]]
@@ -40,15 +41,18 @@
 - [[_COMMUNITY_Community 23|Community 23]]
 - [[_COMMUNITY_Community 24|Community 24]]
 - [[_COMMUNITY_Community 25|Community 25]]
+- [[_COMMUNITY_Community 26|Community 26]]
 - [[_COMMUNITY_Community 27|Community 27]]
 - [[_COMMUNITY_Community 28|Community 28]]
 - [[_COMMUNITY_Community 29|Community 29]]
 - [[_COMMUNITY_Community 30|Community 30]]
 - [[_COMMUNITY_Community 31|Community 31]]
 - [[_COMMUNITY_Community 32|Community 32]]
+- [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 34|Community 34]]
 - [[_COMMUNITY_Community 35|Community 35]]
 - [[_COMMUNITY_Community 36|Community 36]]
+- [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 38|Community 38]]
 - [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
@@ -62,7 +66,9 @@
 - [[_COMMUNITY_Community 48|Community 48]]
 - [[_COMMUNITY_Community 49|Community 49]]
 - [[_COMMUNITY_Community 50|Community 50]]
+- [[_COMMUNITY_Community 51|Community 51]]
 - [[_COMMUNITY_Community 52|Community 52]]
+- [[_COMMUNITY_Community 53|Community 53]]
 - [[_COMMUNITY_Community 54|Community 54]]
 - [[_COMMUNITY_Community 55|Community 55]]
 - [[_COMMUNITY_Community 56|Community 56]]
@@ -112,57 +118,69 @@
 - [[_COMMUNITY_Community 105|Community 105]]
 - [[_COMMUNITY_Community 106|Community 106]]
 - [[_COMMUNITY_Community 107|Community 107]]
+- [[_COMMUNITY_Community 108|Community 108]]
+- [[_COMMUNITY_Community 109|Community 109]]
 - [[_COMMUNITY_Community 110|Community 110]]
 - [[_COMMUNITY_Community 111|Community 111]]
 - [[_COMMUNITY_Community 112|Community 112]]
 - [[_COMMUNITY_Community 113|Community 113]]
 - [[_COMMUNITY_Community 114|Community 114]]
+- [[_COMMUNITY_Community 115|Community 115]]
 - [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
 - [[_COMMUNITY_Community 118|Community 118]]
 - [[_COMMUNITY_Community 119|Community 119]]
+- [[_COMMUNITY_Community 120|Community 120]]
 - [[_COMMUNITY_Community 121|Community 121]]
 - [[_COMMUNITY_Community 122|Community 122]]
+- [[_COMMUNITY_Community 123|Community 123]]
+- [[_COMMUNITY_Community 124|Community 124]]
+- [[_COMMUNITY_Community 131|Community 131]]
 - [[_COMMUNITY_Community 132|Community 132]]
 - [[_COMMUNITY_Community 133|Community 133]]
 - [[_COMMUNITY_Community 134|Community 134]]
 - [[_COMMUNITY_Community 135|Community 135]]
 - [[_COMMUNITY_Community 136|Community 136]]
 - [[_COMMUNITY_Community 137|Community 137]]
+- [[_COMMUNITY_Community 138|Community 138]]
+- [[_COMMUNITY_Community 139|Community 139]]
+- [[_COMMUNITY_Community 140|Community 140]]
+- [[_COMMUNITY_Community 141|Community 141]]
+- [[_COMMUNITY_Community 145|Community 145]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `cn()` - 196 edges
-2. `useAuth()` - 48 edges
-3. `badRequest()` - 46 edges
-4. `requireAuth()` - 44 edges
-5. `getNextSequence()` - 40 edges
-6. `Button` - 39 edges
-7. `guardInventoryAccess()` - 36 edges
-8. `parseProjectIdParam()` - 35 edges
-9. `parseIdParam()` - 34 edges
-10. `requireRole()` - 33 edges
+1. `cn()` - 235 edges
+2. `badRequest()` - 72 edges
+3. `requireAuth()` - 64 edges
+4. `useAuth()` - 48 edges
+5. `Button` - 47 edges
+6. `getNextSequence()` - 45 edges
+7. `requireRole()` - 44 edges
+8. `parseIdParam()` - 42 edges
+9. `Badge()` - 38 edges
+10. `optionalString()` - 37 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `cn()` --calls--> `clsx`  [INFERRED]
   frontend/src/lib/utils.ts → frontend/package.json
+- `ClientPortal()` --calls--> `useGetClientHubDashboard()`  [INFERRED]
+  frontend/src/pages/client/Portal.tsx → frontend/src/api/workspace-dashboard.ts
+- `AdminProjectDetail()` --calls--> `useCreateMilestone`  [INFERRED]
+  frontend/src/pages/admin/ProjectDetail.tsx → frontend/src/store/apislice.ts
 - `main()` --calls--> `getNextSequence()`  [INFERRED]
   backend/scripts/seed-more.js → backend/src/models/schema/counter.js
 - `main()` --calls--> `getNextSequence()`  [INFERRED]
   backend/scripts/seed.js → backend/src/models/schema/counter.js
-- `registerFrontendServing()` --calls--> `getFrontendDistPath()`  [INFERRED]
-  backend/src/middlewares/serve-frontend.js → backend/src/config/env.js
-- `patchBugsById()` --calls--> `forbidden()`  [INFERRED]
-  backend/src/controllers/bugs.controller.js → backend/src/utils/route-errors.js
 
-## Communities (128 total, 8 thin omitted)
+## Communities (143 total, 10 thin omitted)
 
 ### Community 0 - "Community 0"
 Cohesion: 0.13
-Nodes (25): RequestRow, State, accentMap, DashboardHero(), ExecutiveStatCard(), fadeUp, KpiSimpleCard(), PageKpiRow() (+17 more)
+Nodes (35): RequestRow, accentMap, DashboardHero(), DashboardSkeleton(), ExecutiveStatCard(), fadeUp, KpiSimpleCard(), PageKpiRow() (+27 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.16
-Nodes (27): category, parseCategory(), postUpload(), router, upload, ensureLocalUploadDir(), getStorageBackend(), localFilename() (+19 more)
+Cohesion: 0.25
+Nodes (19): ensureLocalUploadDir(), getStorageBackend(), localFilename(), StorageBackend, storeUpload(), UPLOAD_DIR, assertValidStoredFileUrl(), buildObjectKey() (+11 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.03
@@ -170,22 +188,22 @@ Nodes (58): devDependencies, class-variance-authority, clsx, cmdk, date-fns, emb
 
 ### Community 3 - "Community 3"
 Cohesion: 0.10
-Nodes (43): ClientFormValues, clientSchema, CHART_COLORS, EmployeeFormValues, employeeSchema, AdminTickets(), TicketFormValues, ticketSchema (+35 more)
+Nodes (32): AdminProjectDetail(), MilestoneFormValues, milestoneSchema, TicketFormValues, ticketSchema, AssigneeAvatars(), BugAttachmentsGallery(), BugAttachmentThumb() (+24 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.12
-Nodes (26): MilestoneFormValues, milestoneSchema, TaskFormValues, taskSchema, ProjectInventoryPanel(), toastApiError(), ProjectTeamPanel(), ProjectTeamPanelProps (+18 more)
+Cohesion: 0.10
+Nodes (33): REPORT_TYPE_LABELS, REPORT_TYPE_OPTIONS, EditFormValues, editSchema, TaskDetailPage(), TaskFormValues, taskSchema, TASK_PRIORITY_LABELS (+25 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.08
-Nodes (28): useIsMobile(), Sidebar(), SidebarContent(), SidebarContext, SidebarContextProps, SidebarFooter(), SidebarGroup(), SidebarGroupAction() (+20 more)
+Cohesion: 0.06
+Nodes (46): ChartCard(), KpiInlineStat(), KpiMetricCard(), useIsMobile(), OmniSlash(), cn(), ComplianceSummary(), PanelBody() (+38 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.25
-Nodes (10): notifyExpiry(), runExpiryCheck(), startInventoryExpiryJob(), DB, isDatabaseConnected(), safeUrl, whenDatabaseReady(), notifyExpiry() (+2 more)
+Cohesion: 0.09
+Nodes (26): body, description, getRequests(), getRequestsById(), id, pagination, patchRequestsById(), projectId (+18 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.14
+Cohesion: 0.15
 Nodes (25): getClients(), getCompanies(), buildLogsListQuery(), canAccessLog(), formatLog(), formattedLogs, getLogs(), getLogsById() (+17 more)
 
 ### Community 8 - "Community 8"
@@ -193,76 +211,84 @@ Cohesion: 0.27
 Nodes (10): backendRoot, convertTree(), main(), removeGeneratedTypes(), removeStale(), scriptsRoot, srcRoot, STALE_TS (+2 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.23
-Nodes (8): CommandPalette(), CommandPaletteProps, Badge(), BadgeProps, badgeVariants, Milestone, ProjectTimelineProps, TooltipContent
+Cohesion: 0.17
+Nodes (15): notifyExpiry(), runExpiryCheck(), startInventoryExpiryJob(), DB, isDatabaseConnected(), safeUrl, whenDatabaseReady(), notifyExpiry() (+7 more)
+
+### Community 10 - "Community 10"
+Cohesion: 0.13
+Nodes (22): body, description, id, pagination, patchTicketsById(), postTickets(), projectIds, query (+14 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.11
-Nodes (28): ApiError, applyBaseUrl(), AuthTokenGetter, BodyType, buildErrorMessage(), customFetch(), CustomFetchOptions, ErrorType (+20 more)
+Cohesion: 0.07
+Nodes (41): BugBatchInput, BugBatchItem, createBugBatch(), ApiError, applyBaseUrl(), AuthTokenGetter, BodyType, buildErrorMessage() (+33 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.07
-Nodes (40): assertProjectAccess(), getClientCompanyForUser(), getCompanyAccess(), getProjectAccess(), projectCompanyId(), resolveCompanyIdFromBody(), body, deadline (+32 more)
+Cohesion: 0.05
+Nodes (74): assertProjectAccess(), getClientCompanyForUser(), getCompanyAccess(), getProjectAccess(), projectCompanyId(), resolveCompanyIdFromBody(), clientVisibilityFilter(), body (+66 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.06
 Nodes (30): 10. PDF reports (optional), 11. Verify, 1. Upload the project, 2. Install dependencies and build (SSH), 3. Production env, 4. Seed database (once, SSH), 5. Run the API with Plesk Node.js, 6. Serve the React app (document root) (+22 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.36
-Nodes (11): ApiErrorBody, conflict(), formatZodError(), humanizeField(), internalError(), notFound(), requireBodyFields(), toApiErrorBody() (+3 more)
+Cohesion: 0.05
+Nodes (50): AdminClients(), canViewAsClient(), AdminEmployees(), canViewAsEmployee(), AdminProjects(), AdminTickets(), DevApk(), DevReports() (+42 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.07
-Nodes (30): catMap, completionMap, completionOverTime, devHoursMap, endOfToday, getAnalyticsBugs(), getAnalyticsCompanies(), getAnalyticsDashboard() (+22 more)
+Cohesion: 0.06
+Nodes (39): catMap, completionMap, completionOverTime, devHoursMap, endOfToday, getAnalyticsBugs(), getAnalyticsClientHub(), getAnalyticsCompanies() (+31 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.17
-Nodes (15): getNotifications(), id, { page, limit, skip }, postNotificationsBroadcast(), postNotificationsByIdRead(), postNotificationsMarkAllRead(), q, router (+7 more)
+Cohesion: 0.18
+Nodes (16): getNotifications(), id, { page, limit, skip }, postNotificationsBroadcast(), postNotificationsByIdRead(), postNotificationsMarkAllRead(), q, router (+8 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.11
 Nodes (23): apkDownloadLogSchema, ApkPlatform, apkPlatforms, ApkRelease, apkReleaseSchema, ApkReleaseType, apkReleaseTypes, ApkAudience (+15 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.07
-Nodes (28): ProtectedRoute(), ProtectedRouteProps, AuthenticatedShell(), AdminAnalytics, AdminClients, AdminDashboard, AdminDiscussions, AdminEmployees (+20 more)
+Cohesion: 0.08
+Nodes (24): AdminAnalytics, AdminClients, AdminDashboard, AdminDiscussions, AdminEmployees, AdminProjectDetail, AdminProjects, AdminRequests (+16 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.07
-Nodes (51): formatRelease(), getApkReleasesById(), postProjectsByIdApkReleases(), projectId, router, accessToken, allowedRoles, email (+43 more)
+Nodes (52): formatRelease(), getApkReleasesById(), postProjectsByIdApkReleases(), projectId, router, accessToken, allowedRoles, email (+44 more)
 
 ### Community 20 - "Community 20"
 Cohesion: 0.25
 Nodes (10): defaultNotif, defaultWorkspace, getNotificationPrefs(), getWorkspacePrefs(), NotificationPrefs, read(), saveNotificationPrefs(), saveWorkspacePrefs() (+2 more)
 
 ### Community 21 - "Community 21"
-Cohesion: 0.08
-Nodes (32): avatarUrl, body, credId, currentPassword, deleteUsersById(), email, getUsersById(), getUsersByIdCredentials() (+24 more)
+Cohesion: 0.10
+Nodes (31): avatarUrl, body, credId, currentPassword, deleteUsersById(), email, getUsersById(), getUsersByIdCredentials() (+23 more)
 
 ### Community 22 - "Community 22"
-Cohesion: 0.09
-Nodes (35): guard(), body, buildTaskListQuery(), { for: assignFor }, formatTask(), generateTaskNumber(), getProjectsByIdAssignableMembers(), getTasks() (+27 more)
+Cohesion: 0.11
+Nodes (19): { encrypted, iv, authTag }, filtered, id, l, limit, notDeleted, p, { password } (+11 more)
 
 ### Community 23 - "Community 23"
 Cohesion: 0.15
 Nodes (20): activitySchema, credentialAccessLogSchema, credentialSchema, deviceSchema, environmentSchema, folderSchema, InventoryCredentialType, inventoryCredentialTypes (+12 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.07
-Nodes (46): clientVisibilityFilter(), { encrypted, iv, authTag }, filtered, id, l, limit, notDeleted, p (+38 more)
+Cohesion: 0.16
+Nodes (18): body, buildTaskListQuery(), { for: assignFor }, formatTask(), generateTaskNumber(), getProjectsByIdAssignableMembers(), getTasks(), getTasksById() (+10 more)
 
 ### Community 25 - "Community 25"
+Cohesion: 0.09
+Nodes (22): dependencies, @aws-sdk/client-s3, bcryptjs, compression, cookie-parser, cors, dotenv, exceljs (+14 more)
+
+### Community 26 - "Community 26"
 Cohesion: 0.10
-Nodes (21): dependencies, @aws-sdk/client-s3, bcryptjs, compression, cookie-parser, cors, exceljs, express (+13 more)
+Nodes (38): ClientFormValues, clientSchema, CHART_COLORS, EmployeeFormValues, employeeSchema, ProjectFormValues, ProjectListItem, projectSchema (+30 more)
 
 ### Community 27 - "Community 27"
-Cohesion: 0.08
-Nodes (30): AdminClients(), canViewAsClient(), DiscussionsPage(), AdminEmployees(), canViewAsEmployee(), AdminProjectDetail(), ClientAnalytics(), ClientPortal() (+22 more)
+Cohesion: 0.12
+Nodes (34): assertStatusTransition(), BUG_STATUSES, canSetDevStatus(), canSetFinalStatus(), canSetInitialBugStatus(), canSetQaStatus(), canSetStatus(), CLOSED_BUG_STATUSES (+26 more)
 
 ### Community 28 - "Community 28"
-Cohesion: 0.10
-Nodes (19): ErrorBoundary, AppLayout(), Navbar(), NavbarProps, OmniSlash(), spring, Sidebar, formatNavbarClock() (+11 more)
+Cohesion: 0.16
+Nodes (14): bootstrapBackgroundJobs(), bootstrapInventoryJob(), port, runDailyLogComplianceCheck, runInventoryExpiryCheck, server, backendRoot, getFirebaseAdmin() (+6 more)
 
 ### Community 29 - "Community 29"
 Cohesion: 0.10
@@ -277,28 +303,36 @@ Cohesion: 0.11
 Nodes (18): 1. Install dependencies, 2. Environment files, 3. Seed the database, 4. Start dev servers, 5. Production build, Backend — `backend/.env`, code:powershell (cd backend), code:env (DATABASE_URL=mongodb://127.0.0.1:27017/nexus_cms) (+10 more)
 
 ### Community 32 - "Community 32"
-Cohesion: 0.07
-Nodes (32): ActivityFeedItem(), ChartCard(), KpiInlineStat(), KpiMetricCard(), OverviewTile(), SystemHealthRow(), cn(), ProjectPriorityBanner() (+24 more)
+Cohesion: 0.18
+Nodes (12): Item(), ItemActions(), ItemContent(), ItemDescription(), ItemFooter(), ItemGroup(), ItemHeader(), ItemMedia() (+4 more)
+
+### Community 33 - "Community 33"
+Cohesion: 0.18
+Nodes (12): assertCanViewBug(), { assigneeId }, getBugsById(), id, newAssignee, pagination, params, router (+4 more)
 
 ### Community 34 - "Community 34"
-Cohesion: 0.11
-Nodes (21): body, description, getRequestsById(), id, pagination, patchRequestsById(), projectId, query (+13 more)
+Cohesion: 0.38
+Nodes (6): firebaseConfig, initFirebase(), isFirebaseConfigured(), registerServiceWorker(), requestFirebaseToken(), subscribeForegroundMessages()
 
 ### Community 35 - "Community 35"
-Cohesion: 0.06
-Nodes (38): { content }, formatComment(), getComments(), id, { page, limit, skip }, patchCommentsById(), postComments(), q (+30 more)
+Cohesion: 0.27
+Nodes (16): createInitialComment(), generateBugNumber(), insertBugRecord(), normalizeAttachmentsInput(), notifyNewAssignees(), patchBugsById(), patchBugsByIdAssign(), postBugs() (+8 more)
 
 ### Community 36 - "Community 36"
 Cohesion: 0.12
 Nodes (16): aliases, components, hooks, lib, ui, utils, rsc, $schema (+8 more)
+
+### Community 37 - "Community 37"
+Cohesion: 0.16
+Nodes (15): SidebarNavLink(), SidebarProps, spring, useBadgeCounts(), listQueryOptions(), findActiveNavGroupLabel(), getHomeHref(), getNavSections() (+7 more)
 
 ### Community 38 - "Community 38"
 Cohesion: 0.12
 Nodes (11): Menubar, MenubarCheckboxItem, MenubarContent, MenubarItem, MenubarLabel, MenubarRadioItem, MenubarSeparator, MenubarShortcut() (+3 more)
 
 ### Community 39 - "Community 39"
-Cohesion: 0.13
-Nodes (10): AdminDashboard(), BUG_SEVERITIES, getGreeting(), KpiCard(), Panel(), PIPELINE_STAGES, SERVICES, stagger (+2 more)
+Cohesion: 0.06
+Nodes (32): AdminAnalytics(), AdminDashboard(), BUG_SEVERITIES, DashboardPayload, getGreeting(), KpiCard(), Panel(), PIPELINE_COLORS (+24 more)
 
 ### Community 40 - "Community 40"
 Cohesion: 0.12
@@ -306,15 +340,15 @@ Nodes (16): devDependencies, esbuild-plugin-pino, nodemon, pino-pretty, thread-s
 
 ### Community 41 - "Community 41"
 Cohesion: 0.10
-Nodes (26): Action, ActionType, actionTypes, addToRemoveQueue(), dispatch(), genId(), listeners, memoryState (+18 more)
+Nodes (27): Action, ActionType, actionTypes, addToRemoveQueue(), dispatch(), genId(), listeners, memoryState (+19 more)
 
 ### Community 42 - "Community 42"
-Cohesion: 0.17
-Nodes (19): setBaseUrl(), apiUrl(), configureApiClient(), getApiBaseUrl(), authHeaders(), createInventoryCredential(), createInventoryEnvironment(), createInventoryResource() (+11 more)
+Cohesion: 0.23
+Nodes (15): authHeaders(), createInventoryCredential(), createInventoryEnvironment(), createInventoryResource(), getInventorySummary(), inv(), InventorySummary, listInventoryActivities() (+7 more)
 
 ### Community 43 - "Community 43"
-Cohesion: 0.19
-Nodes (13): CredentialHistory, credentialHistorySchema, CredentialTrigger, credentialTriggers, passwordResetTokensSchema, Session, sessionsSchema, User (+5 more)
+Cohesion: 0.15
+Nodes (16): adminStaffRoles, CredentialHistory, credentialHistorySchema, CredentialTrigger, credentialTriggers, passwordOtpPurposes, passwordResetTokensSchema, Session (+8 more)
 
 ### Community 44 - "Community 44"
 Cohesion: 0.20
@@ -329,24 +363,28 @@ Cohesion: 0.16
 Nodes (12): ButtonProps, buttonVariants, Calendar(), CalendarDayButton(), Pagination(), PaginationContent, PaginationEllipsis(), PaginationItem (+4 more)
 
 ### Community 47 - "Community 47"
-Cohesion: 0.09
-Nodes (24): AuthProvider(), RealtimeProvider(), BRAND_THEME_CLASSES, FontSize, Theme, ThemeContext, ThemeContextValue, ThemeProvider() (+16 more)
+Cohesion: 0.12
+Nodes (13): setBaseUrl(), ThemeProvider(), useTheme(), configureApiClient(), ForgotPassword, Login, queryClient, apiSlice (+5 more)
 
 ### Community 48 - "Community 48"
 Cohesion: 0.06
 Nodes (46): 10. Updating a release, 1. Upload the backend folder, 2. Install and build, 3. Environment variables, 4. Seed database (first deploy only), 5. Run the API, 6. Reverse proxy (nginx), 7. Frontend coordination (split domain) (+38 more)
 
 ### Community 49 - "Community 49"
-Cohesion: 0.12
-Nodes (19): AppLogo(), AppLogoProps, sizeClass, SidebarNavLink(), SidebarProps, spring, useBadgeCounts(), appName (+11 more)
+Cohesion: 0.18
+Nodes (13): WayfinderTrail(), PageShell(), PageShellProps, RoleGate(), UserRole, getProjectsListHref(), getRouteBreadcrumbs(), getRouteMeta() (+5 more)
 
-### Community 50 - "Community 50"
-Cohesion: 0.13
-Nodes (16): ButtonGroup(), ButtonGroupSeparator(), ButtonGroupText(), buttonGroupVariants, Field(), FieldContent(), FieldDescription(), FieldError() (+8 more)
+### Community 51 - "Community 51"
+Cohesion: 0.11
+Nodes (16): AppLogo(), AppLogoProps, sizeClass, appName, appShortName, BRAND, logoSrc, AppLoadingScreen() (+8 more)
 
 ### Community 52 - "Community 52"
-Cohesion: 0.23
-Nodes (10): Bug, BugPlatform, bugPlatforms, bugPriorities, BugPriority, bugSchema, bugSeverities, BugSeverity (+2 more)
+Cohesion: 0.16
+Nodes (14): Bug, bugAttachmentSchema, bugIssueSchema, BugPlatform, bugPlatforms, bugPriorities, BugPriority, bugSchema (+6 more)
+
+### Community 53 - "Community 53"
+Cohesion: 0.27
+Nodes (8): expiresAt, formatReportRow(), getReports(), getReportsByIdDownload(), postReports(), router, resolvePublicFileUrl(), router
 
 ### Community 54 - "Community 54"
 Cohesion: 0.18
@@ -365,8 +403,8 @@ Cohesion: 0.20
 Nodes (9): ContextMenuCheckboxItem, ContextMenuContent, ContextMenuItem, ContextMenuLabel, ContextMenuRadioItem, ContextMenuSeparator, ContextMenuShortcut(), ContextMenuSubContent (+1 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.27
-Nodes (7): DataViewToggle(), DataViewToggleProps, ToggleGroup, ToggleGroupContext, ToggleGroupItem, Toggle, toggleVariants
+Cohesion: 0.07
+Nodes (50): BugStatusBadge(), BugTrackStatusBadges(), BugWorkflowToggle(), PHASE_STYLES, buildBatchParentTitle(), newDraftRow(), resolveCreateStatus(), rowId() (+42 more)
 
 ### Community 59 - "Community 59"
 Cohesion: 0.22
@@ -377,8 +415,8 @@ Cohesion: 0.20
 Nodes (9): CMS Backend (API), code:block1 (src/), code:powershell (cd backend), code:env (ALLOWED_ORIGINS=https://app.yourdomain.com), Core dependencies (security-related), MVC layout, Scripts, Setup (+1 more)
 
 ### Community 61 - "Community 61"
-Cohesion: 0.22
-Nodes (9): dependencies, firebase, jspdf, jspdf-autotable, lottie-react, react, react-dom, socket.io-client (+1 more)
+Cohesion: 0.18
+Nodes (11): dependencies, firebase, jspdf, jspdf-autotable, lottie-react, react, react-dom, react-redux (+3 more)
 
 ### Community 62 - "Community 62"
 Cohesion: 0.28
@@ -409,8 +447,8 @@ Cohesion: 0.25
 Nodes (6): DrawerContent, DrawerDescription, DrawerFooter(), DrawerHeader(), DrawerOverlay, DrawerTitle
 
 ### Community 69 - "Community 69"
-Cohesion: 0.73
-Nodes (4): backfillFromProjects(), backfillProjects(), main(), normalizeCompanies()
+Cohesion: 0.36
+Nodes (7): Navbar(), formatNavbarClock(), getSearchShortcutLabel(), getTimeGreeting(), NotificationsPage(), useMarkAllNotificationsRead, useMarkNotificationRead
 
 ### Community 70 - "Community 70"
 Cohesion: 0.32
@@ -425,15 +463,15 @@ Cohesion: 0.33
 Nodes (6): HubSection, ProjectHubNav(), ProjectHubNavProps, ProjectHubTab, sectionForTab(), SECTIONS
 
 ### Community 73 - "Community 73"
-Cohesion: 0.18
-Nodes (6): AssignBugBody, ListAssignableMembersParams, data, getHealthz(), router, router
+Cohesion: 0.16
+Nodes (9): AssignBugBody, ListAssignableMembersParams, data, getHealthz(), router, asyncHandler(), wrapRouterHandlers(), router (+1 more)
 
 ### Community 74 - "Community 74"
 Cohesion: 0.33
 Nodes (5): delay, exec, ext, ignore, watch
 
 ### Community 75 - "Community 75"
-Cohesion: 0.33
+Cohesion: 0.29
 Nodes (5): apiProxy, appRoot, env, port, socketProxy
 
 ### Community 76 - "Community 76"
@@ -477,128 +515,172 @@ Cohesion: 0.50
 Nodes (3): code:powershell (cd backend), Content Management Hub, Quick start (local)
 
 ### Community 86 - "Community 86"
-Cohesion: 0.09
-Nodes (15): JwtPayload, verifyAccessToken(), verifyRefreshToken(), extractBearerToken(), Request, requireAuth(), requireRole(), router (+7 more)
+Cohesion: 0.10
+Nodes (22): router, verifyAccessToken(), extractBearerToken(), Request, requireAuth(), requireRole(), router, router (+14 more)
 
 ### Community 87 - "Community 87"
 Cohesion: 0.50
 Nodes (3): AccordionContent, AccordionItem, AccordionTrigger
 
 ### Community 88 - "Community 88"
-Cohesion: 0.08
-Nodes (29): ApkReleaseFormValues, apkReleaseSchema, LogFormValues, logSchema, WORK_CATEGORIES, RequestFormValues, requestSchema, PDFService (+21 more)
+Cohesion: 0.13
+Nodes (16): ButtonGroup(), ButtonGroupSeparator(), ButtonGroupText(), buttonGroupVariants, Field(), FieldContent(), FieldDescription(), FieldError() (+8 more)
 
 ### Community 89 - "Community 89"
 Cohesion: 0.50
 Nodes (3): firebaseConfig, messaging, notificationOptions
 
 ### Community 91 - "Community 91"
-Cohesion: 0.14
-Nodes (20): ProjectFormValues, ProjectListItem, projectSchema, ProjectTeamPreview, TECH_OPTIONS, readDiscussionsProjectIdFromUrl(), ROLE_STYLES, Alert (+12 more)
+Cohesion: 0.27
+Nodes (8): logger, auditMiddleware(), responseCompression, registerFrontendServing(), SPA_ROUTES, App(), req(), res()
+
+### Community 92 - "Community 92"
+Cohesion: 0.09
+Nodes (27): CommentBubble(), roleBadgeClass(), roleLabel(), BugDetailSheet(), IssueView, BugTable(), BugFormValues, BugListScope (+19 more)
 
 ### Community 98 - "Community 98"
 Cohesion: 0.07
-Nodes (45): assertCompanyAccess(), body, companyName, contactPerson, email, formatClient(), getClientsById(), id (+37 more)
+Nodes (29): State, LogFormValues, logSchema, WORK_CATEGORIES, ErrorPayload, getApiErrorMessage(), payloadMessage(), STATUS_HINTS (+21 more)
 
 ### Community 99 - "Community 99"
 Cohesion: 0.09
 Nodes (19): assignHandlerNames(), callEnd, callText, controllersDir, ctrlPath, def, __dirname, extra (+11 more)
 
 ### Community 105 - "Community 105"
-Cohesion: 0.08
-Nodes (28): { assigneeId }, buildBugListQuery(), getBugs(), getBugsById(), id, newAssignee, pagination, params (+20 more)
+Cohesion: 0.06
+Nodes (45): DiscussionsPage(), BugCommentsSection(), ClientAnalytics(), ClientPortal(), CommandPalette(), CommandPaletteProps, AuthContext, AuthContextType (+37 more)
 
 ### Community 106 - "Community 106"
 Cohesion: 0.10
-Nodes (20): Adding a new endpoint, Auth, Backend architecture, code:block1 (HTTP request), code:block2 (src/), code:json ({ "error": "Human message", "code": "NOT_FOUND", "field": "e), Controllers (`controllers/*.controller.js`), Controllers (`controllers/*.controller.ts`) (+12 more)
+Nodes (20): Adding a new endpoint, Auth, Backend architecture, code:block1 (HTTP request), code:block2 (index.js                # HTTP server entry (backend root)), code:json ({ "error": "Human message", "code": "NOT_FOUND", "field": "e), Controllers (`controllers/*.controller.js`), Controllers (`controllers/*.controller.ts`) (+12 more)
 
 ### Community 107 - "Community 107"
-Cohesion: 0.80
-Nodes (3): generateExcelReport(), generatePdfReport(), persistGeneratedFile()
+Cohesion: 0.33
+Nodes (12): postAuthRequestChangePasswordOtp(), buildTransportOptions(), getFromAddress(), getSmtpPass(), getSmtpUser(), getTransporter(), isEmailConfigured(), sendDailyLogComplianceEmail() (+4 more)
+
+### Community 108 - "Community 108"
+Cohesion: 0.16
+Nodes (7): ErrorBoundary, ProtectedRoute(), ProtectedRouteProps, AppLayout(), AuthenticatedShell(), PageOutlet(), Sidebar
+
+### Community 109 - "Community 109"
+Cohesion: 0.17
+Nodes (15): apiPath, apislicePath, buildMutationInvoke(), __dirname, endpointBlock(), generateApislice(), ID_ONLY_QUERIES, mutationCallBody (+7 more)
 
 ### Community 110 - "Community 110"
-Cohesion: 0.16
-Nodes (11): ErrorPayload, getApiErrorMessage(), payloadMessage(), STATUS_HINTS, SettingsSection, FileUploader(), FileUploaderProps, UploadCategory (+3 more)
+Cohesion: 0.32
+Nodes (7): backendRoot, p, processFile(), resolveAliasTarget(), srcRoot, toRelativeImport(), walk()
 
 ### Community 111 - "Community 111"
-Cohesion: 0.12
-Nodes (14): LoginLottie(), LoginLottieProps, Lottie, assets, ddd, fr, h, ip (+6 more)
+Cohesion: 0.17
+Nodes (11): assets, ddd, fr, h, ip, layers, markers, nm (+3 more)
 
 ### Community 112 - "Community 112"
-Cohesion: 0.19
-Nodes (9): auditMiddleware(), responseCompression, registerFrontendServing(), SPA_ROUTES, validateBody(), validateQuery(), App(), req() (+1 more)
+Cohesion: 0.33
+Nodes (5): backendRoot, count, fixFile(), p, walk()
 
 ### Community 113 - "Community 113"
-Cohesion: 0.18
-Nodes (13): WayfinderTrail(), PageShell(), PageShellProps, RoleGate(), UserRole, getProjectsListHref(), getRouteBreadcrumbs(), getRouteMeta() (+5 more)
+Cohesion: 0.15
+Nodes (17): BugBatchCreate(), BugFormDialog(), EditFormValues, editSchema, formSchema, FormValues, openBugFormDeferred(), SharedFormValues (+9 more)
 
 ### Community 114 - "Community 114"
 Cohesion: 0.25
 Nodes (7): accessModules, dirs, full, mapperModules, root, serviceModules, src
 
+### Community 115 - "Community 115"
+Cohesion: 0.08
+Nodes (20): LoginBackground(), ORBS, PARTICLES, LoginLottie(), LoginLottieProps, Lottie, ORBITALS, SPHERES (+12 more)
+
 ### Community 116 - "Community 116"
-Cohesion: 0.24
-Nodes (6): expiresAt, getReports(), getReportsByIdDownload(), postReports(), router, router
+Cohesion: 0.29
+Nodes (7): Empty(), EmptyContent(), EmptyDescription(), EmptyHeader(), EmptyMedia(), emptyMediaVariants, EmptyTitle()
 
 ### Community 117 - "Community 117"
-Cohesion: 0.33
-Nodes (5): getOrCreateSettings(), getSettings(), patchSettings(), router, router
+Cohesion: 0.24
+Nodes (14): getLogsDailySummary(), getWorkPolicy(), buildComplianceCalendar(), buildDailyLogSummary(), complianceAlertAlreadySent(), dateKeyFromIso(), daysInMonth(), isWeekendDate() (+6 more)
 
 ### Community 118 - "Community 118"
-Cohesion: 0.22
-Nodes (13): AuthContext, AuthContextType, refreshAccessToken(), clearTokens(), getAccessToken(), getRefreshToken(), hasStoredSession(), setTokens() (+5 more)
+Cohesion: 0.16
+Nodes (16): { content }, formatComment(), formatCommentsPage(), getComments(), id, mapCommentRow(), { page, limit, skip }, patchCommentsById() (+8 more)
 
 ### Community 119 - "Community 119"
-Cohesion: 0.22
-Nodes (12): HttpError, isHttpError(), statusToCode(), formatZodError(), toApiErrorBody(), duplicateKeyMessage(), errorHandler(), isCastError() (+4 more)
+Cohesion: 0.33
+Nodes (10): getBugs(), getProjectsByIdBugs(), attachChildBugsToParents(), attachLegacyChildBugs(), BugRow, formatBugList(), formatBugRow(), formatBugRows() (+2 more)
+
+### Community 120 - "Community 120"
+Cohesion: 0.17
+Nodes (14): BRAND_THEME_CLASSES, FontSize, Theme, ThemeContext, ThemeContextValue, applyAccentVariables(), BRAND_LOGO_COLORS, BrandLogoColorKey (+6 more)
 
 ### Community 121 - "Community 121"
 Cohesion: 0.53
 Nodes (4): forgotPasswordLimiter, loginLimiter, refreshLimiter, router
 
 ### Community 122 - "Community 122"
-Cohesion: 0.36
-Nodes (4): PUBLIC_API_PATHS, getAllowedOrigins(), getFrontendDistPath(), getRequiredPort()
+Cohesion: 0.38
+Nodes (10): ApiErrorBody, conflict(), formatZodError(), humanizeField(), internalError(), notFound(), requireBodyFields(), tooManyRequests() (+2 more)
+
+### Community 123 - "Community 123"
+Cohesion: 0.18
+Nodes (16): HttpError, isHttpError(), statusToCode(), formatZodError(), toApiErrorBody(), duplicateKeyMessage(), errorHandler(), isCastError() (+8 more)
+
+### Community 131 - "Community 131"
+Cohesion: 0.50
+Nodes (7): storeGeneratedFile(), escapeHtml(), generateExcelReport(), generatePdfReport(), loadProjectLogs(), logDateFilter(), persistGeneratedFile()
 
 ### Community 132 - "Community 132"
 Cohesion: 0.21
-Nodes (12): RealtimeContext, RealtimeContextType, firebaseConfig, initFirebase(), isFirebaseConfigured(), registerServiceWorker(), requestFirebaseToken(), subscribeForegroundMessages() (+4 more)
+Nodes (7): ApiErrorBody, badRequest(), conflict(), humanizeField(), parseIdParam(), requireBodyFields(), unauthorized()
+
+### Community 133 - "Community 133"
+Cohesion: 0.24
+Nodes (8): getUploadMaxBytesForCategory(), category, parseCategory(), postUpload(), router, upload, router, upload
 
 ### Community 134 - "Community 134"
-Cohesion: 0.22
-Nodes (10): getFirebaseAdmin(), initFirebaseAdmin(), isFirebaseAdminReady(), logger, getIO(), initRealtime(), bootstrapInventoryJob(), port (+2 more)
+Cohesion: 0.57
+Nodes (6): getOrCreateSettings(), getSettings(), parseRequiredDailyHours(), patchSettings(), formatSettings(), getOrCreateSettings()
 
 ### Community 135 - "Community 135"
-Cohesion: 0.18
+Cohesion: 0.20
 Nodes (6): getSearch(), limit, q, regex, router, router
 
 ### Community 136 - "Community 136"
-Cohesion: 0.11
-Nodes (11): asyncHandler(), wrapRouterHandlers(), router, router, router, featureRouters, PUBLIC_API_PATHS, router (+3 more)
+Cohesion: 0.33
+Nodes (6): AuthProvider(), getInitials(), ProfilePage(), useChangeMyPassword, useGetMe(), useUpdateMyProfile
 
 ### Community 137 - "Community 137"
-Cohesion: 0.29
-Nodes (7): Empty(), EmptyContent(), EmptyDescription(), EmptyHeader(), EmptyMedia(), emptyMediaVariants, EmptyTitle()
+Cohesion: 0.24
+Nodes (11): guard(), assertCompanyAccess(), assertProjectAccess(), getClientCompanyForUser(), getCompanyAccess(), getProjectAccess(), projectCompanyId(), resolveCompanyIdFromBody() (+3 more)
+
+### Community 138 - "Community 138"
+Cohesion: 0.07
+Nodes (48): assertCompanyAccess(), body, companyName, contactPerson, email, formatClient(), getClientsById(), id (+40 more)
+
+### Community 139 - "Community 139"
+Cohesion: 0.50
+Nodes (4): DevBugs(), useAssignBug, useCreateBug, useUpdateBug
+
+### Community 145 - "Community 145"
+Cohesion: 0.36
+Nodes (4): PUBLIC_API_PATHS, getAllowedOrigins(), getFrontendDistPath(), getRequiredPort()
 
 ## Knowledge Gaps
-- **812 isolated node(s):** `name`, `private`, `description`, `artifactDir`, `target` (+807 more)
+- **912 isolated node(s):** `name`, `private`, `description`, `artifactDir`, `port` (+907 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **10 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `App()` connect `Community 112` to `Community 134`, `Community 47`?**
-  _High betweenness centrality (0.304) - this node is a cross-community bridge._
-- **Why does `cn()` connect `Community 32` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 9`, `Community 137`, `Community 27`, `Community 28`, `Community 38`, `Community 39`, `Community 41`, `Community 45`, `Community 46`, `Community 47`, `Community 49`, `Community 50`, `Community 54`, `Community 56`, `Community 57`, `Community 58`, `Community 62`, `Community 66`, `Community 67`, `Community 68`, `Community 72`, `Community 81`, `Community 82`, `Community 87`, `Community 88`, `Community 91`, `Community 92`, `Community 110`, `Community 113`?**
-  _High betweenness centrality (0.208) - this node is a cross-community bridge._
-- **Why does `devDependencies` connect `Community 2` to `Community 55`?**
-  _High betweenness centrality (0.072) - this node is a cross-community bridge._
+- **Why does `App()` connect `Community 91` to `Community 47`?**
+  _High betweenness centrality (0.324) - this node is a cross-community bridge._
+- **Why does `cn()` connect `Community 5` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 136`, `Community 140`, `Community 14`, `Community 26`, `Community 32`, `Community 37`, `Community 38`, `Community 39`, `Community 41`, `Community 45`, `Community 46`, `Community 49`, `Community 51`, `Community 54`, `Community 56`, `Community 57`, `Community 58`, `Community 62`, `Community 66`, `Community 67`, `Community 68`, `Community 69`, `Community 72`, `Community 81`, `Community 82`, `Community 87`, `Community 88`, `Community 92`, `Community 98`, `Community 105`, `Community 113`, `Community 116`, `Community 124`?**
+  _High betweenness centrality (0.134) - this node is a cross-community bridge._
+- **Why does `clsx` connect `Community 2` to `Community 5`?**
+  _High betweenness centrality (0.033) - this node is a cross-community bridge._
 - **Are the 15 inferred relationships involving `badRequest()` (e.g. with `postProjectsByIdApkReleases()` and `postBugs()`) actually correct?**
   _`badRequest()` has 15 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `name`, `private`, `description` to the rest of the system?**
-  _812 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _912 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.1337126600284495 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.12996632996632998 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
   _Cohesion score 0.034482758620689655 - nodes in this community are weakly interconnected._

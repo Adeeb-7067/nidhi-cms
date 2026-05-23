@@ -13,8 +13,8 @@ import {
   parsePagination,
   formatZodError,
   toApiErrorBody
-} from "./route-errors";
-import { paginateModel, toIso } from "./mongo-list";
+} from "./route-errors.js";
+import { paginateModel, toIso } from "./mongo-list.js";
 export {
   badRequest,
   conflict,

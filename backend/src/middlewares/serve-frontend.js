@@ -1,7 +1,7 @@
 import path from "node:path";
 import express from "express";
-import { getFrontendDistPath } from "@/config";
-import { logger } from "@/lib/logger";
+import { getFrontendDistPath } from "../config/index.js";
+import { logger } from "../lib/logger.js";
 
 /** Client routes that must return index.html (SPA). */
 const SPA_ROUTES = ["/", "/login"];

@@ -9,8 +9,10 @@ import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
 import { AuthenticatedShell } from "@/components/layout/AuthenticatedShell";
 import { QUERY_GC, QUERY_STALE } from "@/lib/query-config";
+import { AppLoadingScreen } from "@/components/loading";
 
 const Login = React.lazy(() => import("@/pages/login"));
+const ForgotPassword = React.lazy(() => import("@/pages/auth/forgot-password"));
 
 function getHttpStatus(error: Error): number | undefined {
   return (error as Error & { response?: { status?: number } }).response?.status;
@@ -40,14 +42,13 @@ function Router() {
   return (
     <Switch>
       <Route path="/login">
-        <React.Suspense
-          fallback={
-            <div className="flex h-screen items-center justify-center bg-background">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-            </div>
-          }
-        >
+        <React.Suspense fallback={<AppLoadingScreen message="Loading sign in" />}>
           <Login />
+        </React.Suspense>
+      </Route>
+      <Route path="/forgot-password">
+        <React.Suspense fallback={<AppLoadingScreen message="Loading" />}>
+          <ForgotPassword />
         </React.Suspense>
       </Route>
 

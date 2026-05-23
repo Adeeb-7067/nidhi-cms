@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser, getListUsersQueryKey, useGetTeamAnalytics, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
+import {
+  useListUsers,
+  useCreateUser,
+  useUpdateUser,
+  useDeleteUser,
+  getListUsersQueryKey,
+  useGetTeamAnalytics,
+  useGetUserCredentials,
+  useRevealCredential,
+  getGetUserCredentialsQueryKey,
+  useGetLogComplianceCalendar,
+  getGetLogComplianceCalendarQueryKey,
+} from "@/api";
+import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn } from "lucide-react";
+import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAccessToken } from "@/lib/auth-storage";
 import { apiUrl } from "@/lib/api-base";
@@ -62,6 +75,7 @@ import { toastApiError } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
 import { useQueryClient } from "@tanstack/react-query";
 import { User } from "@/api";
+import { cn } from "@/lib/utils";
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
@@ -70,7 +84,7 @@ const employeeSchema = z
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
   password: z.string().optional().or(z.literal("")),
-  role: z.enum(["developer", "super_admin"]),
+  role: z.enum(["developer", "qa", "super_admin"]),
   status: z.enum(["active", "inactive"]).optional(),
   designation: z.string().optional(),
   subType: z.string().optional(),
@@ -93,7 +107,24 @@ const employeeSchema = z
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 function canViewAsEmployee(user: User): boolean {
-  return user.status === "active" && (user.role === "developer" || user.role === "tester");
+  return (
+    user.status === "active" &&
+    (user.role === "developer" || user.role === "tester" || user.role === "qa")
+  );
+}
+
+function employeeRoleLabel(role: string): string {
+  if (role === "super_admin") return "Admin";
+  if (role === "qa") return "QA";
+  if (role === "tester") return "Tester";
+  return "Developer";
+}
+
+function employeeRoleBadgeClass(role: string): string {
+  if (role === "super_admin") return "bg-purple-500/10 text-purple-500";
+  if (role === "qa") return "bg-amber-500/10 text-amber-700";
+  if (role === "tester") return "bg-cyan-500/10 text-cyan-700";
+  return "bg-blue-500/10 text-blue-500";
 }
 
 export default function AdminEmployees() {
@@ -112,22 +143,22 @@ export default function AdminEmployees() {
 
   const PAGE_SIZE = 10;
   const { data, isLoading } = useListUsers(
-    { role: "developer", search, page, limit: PAGE_SIZE },
+    { staff: "1", search, page, limit: PAGE_SIZE },
     {
       query: listQueryOptions({
-        queryKey: getListUsersQueryKey({ role: "developer", search, page, limit: PAGE_SIZE }),
+        queryKey: getListUsersQueryKey({ staff: "1", search, page, limit: PAGE_SIZE }),
       }),
     },
   );
   const { data: statsData, isLoading: statsLoading } = useListUsers(
-    { limit: 500 },
-    { query: listQueryOptions({ queryKey: getListUsersQueryKey({ limit: 500 }), staleTime: 120_000 }) },
+    { staff: "1", limit: 500 },
+    { query: listQueryOptions({ queryKey: getListUsersQueryKey({ staff: "1", limit: 500 }), staleTime: 120_000 }) },
   );
   const { data: teamAnalytics, isLoading: isLoadingAnalytics } = useGetTeamAnalytics();
 
   const teamStats = useMemo(() => {
     const users = (statsData?.users ?? []).filter(
-      (u) => u.role === "developer" || u.role === "tester",
+      (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
     );
     const active = users.filter((u) => u.status === "active").length;
     const inactive = users.filter((u) => u.status !== "active").length;
@@ -148,6 +179,9 @@ export default function AdminEmployees() {
   const deleteUserMutation = useDeleteUser();
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const complianceNow = new Date();
+  const [complianceMonth, setComplianceMonth] = useState(complianceNow.getMonth() + 1);
+  const [complianceYear, setComplianceYear] = useState(complianceNow.getFullYear());
   const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
   const [revealTimer, setRevealTimer] = useState<Record<number, NodeJS.Timeout>>({});
 
@@ -156,6 +190,43 @@ export default function AdminEmployees() {
   });
 
   const revealMutation = useRevealCredential();
+
+  const showLogCompliance =
+    selectedUser &&
+    (selectedUser.role === "developer" || selectedUser.role === "tester" || selectedUser.role === "qa");
+
+  const { data: employeeCompliance, isLoading: employeeComplianceLoading } =
+    useGetLogComplianceCalendar(
+      { month: complianceMonth, year: complianceYear, developerId: selectedUser?.id ?? 0 },
+      {
+        query: {
+          enabled: Boolean(showLogCompliance && selectedUser?.id),
+          queryKey: getGetLogComplianceCalendarQueryKey({
+            month: complianceMonth,
+            year: complianceYear,
+            developerId: selectedUser?.id ?? 0,
+          }),
+        },
+      },
+    );
+
+  useEffect(() => {
+    if (!selectedUser?.id) return;
+    const now = new Date();
+    setComplianceMonth(now.getMonth() + 1);
+    setComplianceYear(now.getFullYear());
+  }, [selectedUser?.id]);
+
+  const shiftComplianceMonth = (delta: number) => {
+    const d = new Date(complianceYear, complianceMonth - 1 + delta, 1);
+    setComplianceMonth(d.getMonth() + 1);
+    setComplianceYear(d.getFullYear());
+  };
+
+  const complianceMonthLabel = new Date(complianceYear, complianceMonth - 1).toLocaleString(
+    "default",
+    { month: "long", year: "numeric" },
+  );
 
   const handleReveal = async (credId: number) => {
     if (!selectedUser) return;
@@ -351,11 +422,11 @@ export default function AdminEmployees() {
       accessorKey: "role",
       cell: (user) => (
         <div className="flex flex-col gap-1">
-          <Badge 
-            variant="secondary" 
-            className={`${user.role === 'super_admin' ? 'bg-purple-500/10 text-purple-500 w-fit' : 'bg-blue-500/10 text-blue-500 w-fit'} text-[10px]`}
+          <Badge
+            variant="secondary"
+            className={`${employeeRoleBadgeClass(user.role)} w-fit text-[10px]`}
           >
-            {user.role === 'super_admin' ? 'Admin' : 'Developer'}
+            {employeeRoleLabel(user.role)}
           </Badge>
           <span className="text-[9px] text-muted-foreground">{user.designation || "General"}</span>
         </div>
@@ -606,6 +677,7 @@ export default function AdminEmployees() {
                           </FormControl>
                           <SelectContent>
                             <SelectItem value="developer">Developer</SelectItem>
+                            <SelectItem value="qa">QA</SelectItem>
                             <SelectItem value="super_admin">Super Admin</SelectItem>
                           </SelectContent>
                         </Select>
@@ -978,7 +1050,7 @@ export default function AdminEmployees() {
         </TabsContent>
       </Tabs>
       <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="w-[400px] sm:w-[540px] sm:max-w-lg overflow-y-auto">
+        <SheetContent className="w-[400px] sm:w-[580px] sm:max-w-[580px] overflow-y-auto">
           <SheetHeader className="space-y-3">
             <div className="flex items-center gap-4">
               <Avatar className="h-12 w-12 border-2 border-primary/10">
@@ -1010,8 +1082,18 @@ export default function AdminEmployees() {
           </SheetHeader>
 
           <Tabs defaultValue="overview" className="mt-6">
-            <TabsList className="grid w-full grid-cols-2 h-8">
+            <TabsList
+              className={cn(
+                "grid w-full h-8",
+                showLogCompliance ? "grid-cols-3" : "grid-cols-2",
+              )}
+            >
               <TabsTrigger value="overview" className="text-[10px] py-1">Overview</TabsTrigger>
+              {showLogCompliance && (
+                <TabsTrigger value="compliance" className="text-[10px] py-1 flex items-center">
+                  <Clock className="h-3 w-3 mr-1" /> Daily logs
+                </TabsTrigger>
+              )}
               <TabsTrigger value="credentials" className="text-[10px] py-1 flex items-center"><Key className="h-3 w-3 mr-1.5" /> Credential Vault</TabsTrigger>
             </TabsList>
             
@@ -1067,6 +1149,87 @@ export default function AdminEmployees() {
                 </a>
               )}
             </TabsContent>
+
+            {showLogCompliance && (
+              <TabsContent value="compliance" className="space-y-4 pt-3">
+                <Card className="border-border/50 bg-muted/15 shadow-none">
+                  <CardContent className="p-3 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                          Daily log compliance
+                        </p>
+                        <p className="text-sm font-semibold truncate">{complianceMonthLabel}</p>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => shiftComplianceMonth(-1)}
+                          aria-label="Previous month"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => shiftComplianceMonth(1)}
+                          aria-label="Next month"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Select
+                        value={complianceMonth.toString()}
+                        onValueChange={(v) => setComplianceMonth(Number.parseInt(v, 10))}
+                      >
+                        <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 12 }, (_, i) => (
+                            <SelectItem key={i + 1} value={(i + 1).toString()}>
+                              {new Date(2000, i).toLocaleString("default", { month: "long" })}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Select
+                        value={complianceYear.toString()}
+                        onValueChange={(v) => setComplianceYear(Number.parseInt(v, 10))}
+                      >
+                        <SelectTrigger className="w-[100px] h-8 text-xs bg-background">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 5 }, (_, i) => {
+                            const y = new Date().getFullYear() - 2 + i;
+                            return (
+                              <SelectItem key={y} value={y.toString()}>
+                                {y}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <LogComplianceCalendarPanel
+                  data={employeeCompliance}
+                  isLoading={employeeComplianceLoading}
+                  variant="sheet"
+                  compact
+                />
+              </TabsContent>
+            )}
             
             <TabsContent value="credentials" className="pt-3">
               <div className="rounded-md border bg-card shadow-sm overflow-hidden">

@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import * as schema from "@/models/schema";
+import * as schema from "../src/models/schema/index.js";
 import bcrypt from "bcryptjs";
 async function main() {
   console.log("Connecting to database...");

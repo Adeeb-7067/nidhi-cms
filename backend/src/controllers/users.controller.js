@@ -2,17 +2,24 @@ import {
   usersTable,
   credentialHistoryTable,
   auditLogsTable,
-  getNextSequence
-} from "@/models/schema";
+  getNextSequence,
+  staffEmployeeRoles,
+  adminStaffRoles
+} from "../models/schema/index.js";
 import {
   hashPassword,
+  verifyPassword,
   encryptPasswordForHistory,
-  decryptPasswordFromHistory
-} from "@/lib/password";
-import { generateEmployeeId, previewEmployeeId } from "@/services/employeeId";
-import { validateStoredFileUrl } from "@/lib/file-storage";
-import { formatUser } from "@/mappers/user-format";
-import { paginateModel, toIso } from "@/utils/mongo-list";
+  decryptPasswordFromHistory,
+} from "../lib/password.js";
+import {
+  verifyPasswordOtp,
+  consumePasswordOtp,
+} from "../services/password-otp.js";
+import { generateEmployeeId, previewEmployeeId } from "../services/employeeId.js";
+import { validateStoredFileUrl } from "../lib/file-storage.js";
+import { formatUser } from "../mappers/user-format.js";
+import { paginateModel, toIso } from "../utils/mongo-list.js";
 import {
   badRequest,
   conflict,
@@ -20,7 +27,7 @@ import {
   parseIdParam,
   parsePagination,
   optionalString
-} from "@/utils/route-errors";
+} from "../utils/route-errors.js";
 const USER_LIST_PROJECTION = {
   id: 1,
   employeeId: 1,
@@ -30,15 +37,23 @@ const USER_LIST_PROJECTION = {
   subType: 1,
   designation: 1,
   avatarUrl: 1,
+  department: 1,
+  phoneNumber: 1,
+  joiningDate: 1,
+  linkedinUrl: 1,
   status: 1,
   lastLoginAt: 1,
   createdAt: 1
 };
 async function getUsers(req, res) {
-  const { role, subType, search } = req.query;
+  const { role, subType, search, staff } = req.query;
   const pagination = parsePagination(req.query);
   const query = {};
-  if (role) query.role = role;
+  if (staff === "true" || staff === "1") {
+    query.role = { $in: adminStaffRoles };
+  } else if (role) {
+    query.role = role;
+  }
   if (subType) query.subType = subType;
   if (search?.trim()) {
     query.$or = [
@@ -81,7 +96,9 @@ async function postUsers(req, res) {
   const existing = await usersTable.findOne({ email: email.toLowerCase() }).lean();
   if (existing) conflict("This email is already registered.", "email");
   const passwordHash = await hashPassword(password);
-  const employeeId = role === "developer" ? await generateEmployeeId(name) : null;
+  const employeeId = staffEmployeeRoles.includes(role)
+    ? await generateEmployeeId(name)
+    : null;
   const userId = await getNextSequence("users");
   const user = await usersTable.create({
     id: userId,
@@ -114,16 +131,36 @@ async function postUsers(req, res) {
 async function patchUsersMePassword(req, res) {
   const currentPassword = optionalString(req.body.currentPassword);
   const newPassword = optionalString(req.body.newPassword);
-  if (!currentPassword) badRequest("Current password is required.", "currentPassword");
+  const otp = optionalString(req.body.otp);
   if (!newPassword || newPassword.length < 8) {
     badRequest("New password must be at least 8 characters.", "newPassword");
   }
   const user = await usersTable.findOne({ id: req.user.id });
   if (!user) notFound("User");
-  const { verifyPassword } = await import("../lib/password");
-  const valid = await verifyPassword(currentPassword, user.passwordHash);
-  if (!valid) badRequest("Current password is incorrect.", "currentPassword");
-  await usersTable.updateOne({ id: user.id }, { $set: { passwordHash: await hashPassword(newPassword) } });
+
+  if (otp) {
+    const record = await verifyPasswordOtp({
+      email: user.email,
+      otp,
+      purpose: "change_password",
+    });
+    if (record.userId !== user.id) {
+      badRequest("Verification code does not match your account.", "otp");
+    }
+    await consumePasswordOtp(record.id);
+  } else {
+    if (!currentPassword) {
+      badRequest("Enter your current password or request an email verification code.", "currentPassword");
+    }
+    const valid = await verifyPassword(currentPassword, user.passwordHash);
+    if (!valid) badRequest("Current password is incorrect.", "currentPassword");
+  }
+
+  const hash = await hashPassword(newPassword);
+  await usersTable.updateOne(
+    { id: user.id },
+    { $set: { passwordHash: hash, forcePasswordChange: false } },
+  );
   res.json({ message: "Password changed" });
 }
 async function getUsersById(req, res) {

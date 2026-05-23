@@ -1,4 +1,4 @@
-import { toIso } from "@/utils/mongo-list";
+import { toIso } from "../utils/mongo-list.js";
 function formatUser(user) {
   return {
     id: user.id,
@@ -9,6 +9,10 @@ function formatUser(user) {
     subType: user.subType ?? null,
     designation: user.designation ?? null,
     avatarUrl: user.avatarUrl ?? null,
+    department: user.department ?? null,
+    phoneNumber: user.phoneNumber ?? null,
+    joiningDate: toIso(user.joiningDate),
+    linkedinUrl: user.linkedinUrl ?? null,
     status: user.status,
     lastLoginAt: toIso(user.lastLoginAt),
     createdAt: toIso(user.createdAt) ?? (/* @__PURE__ */ new Date()).toISOString()

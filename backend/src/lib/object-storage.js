@@ -2,8 +2,8 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { logger } from "./logger";
-import { HttpError } from "./http-error";
+import { logger } from "./logger.js";
+import { HttpError } from "./http-error.js";
 const UPLOAD_CATEGORIES = [
   "bugs",
   "apk",

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth, requireRole } from "@/middlewares/auth";
-import * as projectsController from "@/controllers/projects.controller";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
+import * as projectsController from "../controllers/projects.controller.js";
 const router = Router();
 router.get("/projects", requireAuth, asyncHandler(projectsController.getProjects));
 router.post("/projects", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjects));
@@ -9,6 +9,7 @@ router.get("/projects/:id", requireAuth, asyncHandler(projectsController.getProj
 router.patch("/projects/:id", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.patchProjectsById));
 router.delete("/projects/:id", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.deleteProjectsById));
 router.get("/projects/:id/members", requireAuth, asyncHandler(projectsController.getProjectsByIdMembers));
+router.post("/projects/:id/members/batch", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjectsByIdMembersBatch));
 router.post("/projects/:id/members", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjectsByIdMembers));
 router.delete("/projects/:id/members/:userId", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.deleteProjectsByIdMembersByUserId));
 router.get("/projects/:id/apk-schedules", requireAuth, asyncHandler(projectsController.getProjectsByIdApkSchedules));

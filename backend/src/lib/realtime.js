@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 let io;
 function initRealtime(server) {
   io = new Server(server, {
@@ -29,8 +29,8 @@ function getIO() {
   }
   return io;
 }
-import { getFirebaseAdmin } from "./firebase";
-import { usersTable } from "@/models/schema";
+import { getFirebaseAdmin } from "./firebase.js";
+import { usersTable } from "../models/schema/index.js";
 async function notifyUser(userId, event, data) {
   if (io) {
     io.to(`user:${userId}`).emit(event, data);

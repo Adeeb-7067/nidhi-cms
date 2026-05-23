@@ -5,8 +5,8 @@ import {
   inventoryDevicesTable,
   inventorySubscriptionsTable,
   apkReleasesTable,
-} from "@/models/schema";
-import { clientVisibilityFilter } from "@/services/access/inventory-access";
+} from "../../models/schema/index.js";
+import { clientVisibilityFilter } from "../../services/access/inventory-access.js";
 import { guardInventoryAccess, parseProjectIdParam } from "./guard.js";
 
 /** GET /api/projects/:projectId/inventory/summary */

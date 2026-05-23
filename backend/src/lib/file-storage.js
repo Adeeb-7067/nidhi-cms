@@ -8,7 +8,7 @@ import {
   uploadBufferToObjectStorage,
   uploadLocalFileToObjectStorage,
   UPLOAD_CATEGORIES
-} from "./object-storage";
+} from "./object-storage.js";
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 function getStorageBackend() {
   return isObjectStorageEnabled() ? "object" : "local";

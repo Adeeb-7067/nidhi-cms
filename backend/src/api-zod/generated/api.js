@@ -14,7 +14,7 @@ const LoginResponse = zod.object({
     employeeId: zod.string().nullish(),
     name: zod.string(),
     email: zod.string(),
-    role: zod.enum(["super_admin", "developer", "tester", "client"]),
+    role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
     subType: zod.string().nullish(),
     designation: zod.string().nullish(),
     avatarUrl: zod.string().nullish(),
@@ -38,7 +38,7 @@ const RefreshTokenResponse = zod.object({
     employeeId: zod.string().nullish(),
     name: zod.string(),
     email: zod.string(),
-    role: zod.enum(["super_admin", "developer", "tester", "client"]),
+    role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
     subType: zod.string().nullish(),
     designation: zod.string().nullish(),
     avatarUrl: zod.string().nullish(),
@@ -130,7 +130,7 @@ const GetMeResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "tester", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -152,7 +152,7 @@ const UpdateMyProfileResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "tester", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -178,7 +178,7 @@ const ListUsersResponse = zod.object({
       employeeId: zod.string().nullish(),
       name: zod.string(),
       email: zod.string(),
-      role: zod.enum(["super_admin", "developer", "tester", "client"]),
+      role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
       subType: zod.string().nullish(),
       designation: zod.string().nullish(),
       avatarUrl: zod.string().nullish(),
@@ -199,7 +199,7 @@ const CreateUserBody = zod.object({
   name: zod.string(),
   email: zod.string(),
   password: zod.string(),
-  role: zod.enum(["super_admin", "developer", "tester", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
   subType: zod.string().optional(),
   designation: zod.string().optional(),
   avatarUrl: zod.string().optional(),
@@ -216,7 +216,7 @@ const GetUserResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "tester", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -248,7 +248,7 @@ const UpdateUserResponse = zod.object({
   employeeId: zod.string().nullish(),
   name: zod.string(),
   email: zod.string(),
-  role: zod.enum(["super_admin", "developer", "tester", "client"]),
+  role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
   subType: zod.string().nullish(),
   designation: zod.string().nullish(),
   avatarUrl: zod.string().nullish(),
@@ -983,7 +983,7 @@ const ListBugsQueryParams = zod.object({
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional(),
   assigneeId: zod.coerce.number().optional(),
-  scope: zod.enum(["all", "mine", "unassigned"]).optional()
+  scope: zod.enum(["all", "mine", "unassigned", "created"]).optional()
 });
 const ListBugsResponse = zod.object({
   bugs: zod.array(
@@ -1762,7 +1762,7 @@ const GlobalSearchResponse = zod.object({
       employeeId: zod.string().nullish(),
       name: zod.string(),
       email: zod.string(),
-      role: zod.enum(["super_admin", "developer", "tester", "client"]),
+      role: zod.enum(["super_admin", "developer", "tester", "qa", "client"]),
       subType: zod.string().nullish(),
       designation: zod.string().nullish(),
       avatarUrl: zod.string().nullish(),
@@ -1815,13 +1815,17 @@ const GetSettingsResponse = zod.object({
   logoUrl: zod.string().nullish(),
   address: zod.string().nullish(),
   sealUrl: zod.string().nullish(),
+  requiredDailyWorkHours: zod.number(),
+  dailyLogComplianceEnabled: zod.boolean(),
   updatedAt: zod.string()
 });
 const UpdateSettingsBody = zod.object({
   companyName: zod.string().optional(),
   logoUrl: zod.string().optional(),
   address: zod.string().optional(),
-  sealUrl: zod.string().optional()
+  sealUrl: zod.string().optional(),
+  requiredDailyWorkHours: zod.number().min(1).max(16).optional(),
+  dailyLogComplianceEnabled: zod.boolean().optional()
 });
 const UpdateSettingsResponse = zod.object({
   id: zod.number(),
@@ -1829,7 +1833,21 @@ const UpdateSettingsResponse = zod.object({
   logoUrl: zod.string().nullish(),
   address: zod.string().nullish(),
   sealUrl: zod.string().nullish(),
+  requiredDailyWorkHours: zod.number(),
+  dailyLogComplianceEnabled: zod.boolean(),
   updatedAt: zod.string()
+});
+const GetDailyLogSummaryQueryParams = zod.object({
+  date: zod.coerce.string().optional(),
+  developerId: zod.coerce.number().optional()
+});
+const GetDailyLogSummaryResponse = zod.object({
+  date: zod.string(),
+  complianceEnabled: zod.boolean(),
+  requiredHours: zod.number().nullish(),
+  loggedHours: zod.number(),
+  remainingHours: zod.number(),
+  isComplete: zod.boolean()
 });
 export {
   AddProjectMemberBody,

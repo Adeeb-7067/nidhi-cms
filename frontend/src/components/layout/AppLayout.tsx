@@ -5,18 +5,7 @@ import { Sidebar } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-
-function InlinePageLoader() {
-  return (
-    <div className="flex min-h-[50vh] items-center justify-center">
-      <motion.div
-        className="h-9 w-9 rounded-full border-2 border-primary border-t-transparent"
-        animate={{ rotate: 360 }}
-        transition={{ duration: 0.8, repeat: Infinity, ease: "linear" }}
-      />
-    </div>
-  );
-}
+import { AppLoadingScreen } from "@/components/loading";
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -34,7 +23,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="dialog-scroll relative flex-1 overflow-y-auto page-shell">
           <div className="app-shell-container py-4 sm:py-5 lg:py-6">
             <ErrorBoundary>
-              <React.Suspense fallback={<InlinePageLoader />}>
+              <React.Suspense
+                fallback={
+                  <AppLoadingScreen
+                    variant="embedded"
+                    message="Loading page"
+                    submessage="Just a moment…"
+                  />
+                }
+              >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location}

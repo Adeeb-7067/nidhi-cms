@@ -4,11 +4,11 @@ import {
   inventoryCredentialAccessLogsTable,
   usersTable,
   getNextSequence,
-} from "@/models/schema";
-import { encryptSecret, decryptSecret } from "@/lib/inventory-crypto";
-import { logInventoryActivity, notifyProjectMembers } from "@/services/inventory/helpers";
+} from "../../models/schema/index.js";
+import { encryptSecret, decryptSecret } from "../../lib/inventory-crypto.js";
+import { logInventoryActivity, notifyProjectMembers } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam, parseInventoryEntityId } from "./guard.js";
-import { badRequest, forbidden, notFound, unauthorized } from "@/utils/route-errors";
+import { badRequest, forbidden, notFound, unauthorized } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/credentials */
 export async function getProjectsByProjectIdInventoryCredentials(req, res) {

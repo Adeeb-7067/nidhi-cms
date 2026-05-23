@@ -3,14 +3,14 @@ import cors from "cors";
 import helmet from "helmet";
 import path from "node:path";
 import pinoHttp from "pino-http";
-import { getAllowedOrigins } from "@/config";
-import router from "./routes";
-import { logger } from "@/lib/logger";
-import "./lib/db";
-import { auditMiddleware } from "./middlewares/audit";
-import { errorHandler, notFoundHandler } from "./middlewares/error-handler";
-import { responseCompression } from "./middlewares/compression";
-import { registerFrontendServing } from "./middlewares/serve-frontend";
+import { getAllowedOrigins } from "./config/index.js";
+import router from "./routes/index.js";
+import { logger } from "./lib/logger.js";
+import "./lib/db.js";
+import { auditMiddleware } from "./middlewares/audit.js";
+import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
+import { responseCompression } from "./middlewares/compression.js";
+import { registerFrontendServing } from "./middlewares/serve-frontend.js";
 const app = express();
 app.use(
   pinoHttp({

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import * as healthController from "@/controllers/health.controller";
+import * as healthController from "../controllers/health.controller.js";
 const router = Router();
 router.get("/healthz", asyncHandler(healthController.getHealthz));
 var stdin_default = router;

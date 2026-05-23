@@ -2,7 +2,7 @@
 
 **Express 5** + MongoDB API. Deploy this to your **API domain** (e.g. `https://api.yourdomain.com`).
 
-`src/index.js` creates a Node `http.Server` only so **Socket.IO** can share the same port as Express; all HTTP routing is Express (`src/app.js`, `src/routes/*`).
+`index.js` creates a Node `http.Server` only so **Socket.IO** can share the same port as Express; all HTTP routing is Express (`src/app.js`, `src/routes/*`).
 
 Async route errors are handled with [`express-async-handler`](https://www.npmjs.com/package/express-async-handler) — use it in **route** files only: `router.get("/path", requireAuth, asyncHandler(controllerFn))`.
 

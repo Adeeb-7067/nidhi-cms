@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth, requireRole } from "@/middlewares/auth";
-import * as companiesController from "@/controllers/companies.controller";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
+import * as companiesController from "../controllers/companies.controller.js";
 const router = Router();
 router.get("/companies", requireAuth, asyncHandler(companiesController.getCompanies));
 router.post("/companies", requireAuth, requireRole("super_admin"), asyncHandler(companiesController.postCompanies));

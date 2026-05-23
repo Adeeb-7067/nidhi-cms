@@ -1,4 +1,4 @@
-import { inventoryActivitiesTable, usersTable } from "@/models/schema";
+import { inventoryActivitiesTable, usersTable } from "../../models/schema/index.js";
 import { guardInventoryAccess, parseProjectIdParam } from "./guard.js";
 
 /** GET /api/projects/:projectId/inventory/activities */

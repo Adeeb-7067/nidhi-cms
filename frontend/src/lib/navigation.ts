@@ -21,7 +21,16 @@ import {
   ListTodo,
 } from "lucide-react";
 
-export type UserRole = "super_admin" | "developer" | "tester" | "client";
+export type UserRole = "super_admin" | "developer" | "tester" | "qa" | "client";
+
+export function isDevPortalRole(role: UserRole | string | undefined): boolean {
+  return role === "developer" || role === "tester" || role === "qa";
+}
+
+/** Tester legacy role and dedicated QA role share QA workflows (bugs, project test views). */
+export function isQaStaffRole(role: UserRole | string | undefined): boolean {
+  return role === "tester" || role === "qa";
+}
 
 export type NavItem = {
   title: string;
@@ -48,101 +57,177 @@ export function getHomeHref(role: UserRole): string {
 
 export function getNavSections(role: UserRole): NavSection[] {
   const all: NavSection[] = [
-    {
-      label: "Menu",
-      railLabel: "Menu",
-      icon: LayoutGrid,
-      roles: ["super_admin", "developer", "tester", "client"],
-      items: [
-        {
-          title: role === "super_admin" ? "Dashboard" : role === "client" ? "Portal" : "Workspace",
-          href: getHomeHref(role),
-          icon: LayoutDashboard,
-          roles: ["super_admin", "developer", "tester", "client"],
-        },
-        {
-          title: "Projects",
-          href: "/admin/projects",
-          icon: Briefcase,
-          roles: ["super_admin"],
-        },
-        {
-          title: "Tickets",
-          href: "/admin/tickets",
-          icon: Ticket,
-          roles: ["super_admin", "developer", "tester", "client"],
-        },
-        {
-          title: "Discussions",
-          href: "/admin/discussions",
-          icon: MessageSquare,
-          roles: ["super_admin", "developer", "tester", "client"],
-        },
-      ],
-    },
-    {
-      label: "Delivery",
-      railLabel: "Delivery",
-      icon: Package,
-      roles: ["super_admin", "developer", "tester"],
-      items: [
-        { title: "My projects", href: "/dev/projects", icon: Briefcase, roles: ["developer", "tester"] },
-        { title: "Tasks", href: "/dev/tasks", icon: ListTodo, roles: ["super_admin", "developer", "tester"] },
-        { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["super_admin", "developer", "tester"] },
-        { title: "Bugs", href: "/dev/bugs", icon: Bug, roles: ["super_admin", "developer", "tester"], badgeKey: "bugs" },
-        { title: "Releases", href: "/dev/apk", icon: Smartphone, roles: ["super_admin", "developer", "tester"] },
-        { title: "Reports", href: "/dev/reports", icon: FileText, roles: ["super_admin", "developer"] },
-        { title: "My requests", href: "/dev/requests", icon: Inbox, roles: ["developer"] },
-      ],
-    },
+    // =========================
+    // MANAGE (FIRST PRIORITY)
+    // =========================
     {
       label: "Manage",
       railLabel: "Manage",
       icon: Shield,
       roles: ["super_admin"],
       items: [
-        { title: "Team", href: "/admin/employees", icon: Users, roles: ["super_admin"] },
+        { title: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["super_admin"] },
         { title: "Companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"] },
-        { title: "Requests", href: "/admin/requests", icon: Inbox, roles: ["super_admin"], badgeKey: "requests" },
+        { title: "Projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"] },
+        { title: "Team", href: "/admin/employees", icon: Users, roles: ["super_admin"] },
+        {
+          title: "Requests",
+          href: "/admin/requests",
+          icon: Inbox,
+          roles: ["super_admin"],
+          badgeKey: "requests",
+        },
         { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"] },
       ],
     },
+
+    // =========================
+    // DELIVERY
+    // =========================
     {
-      label: "Account",
-      railLabel: "Account",
-      icon: UserCircle,
-      roles: ["super_admin", "developer", "tester", "client"],
+      label: "Delivery",
+      railLabel: "Delivery",
+      icon: Package,
+      roles: ["super_admin", "developer", "tester", "qa"],
       items: [
         {
-          title: "Notifications",
-          href: "/notifications",
-          icon: Bell,
-          roles: ["super_admin", "developer", "tester", "client"],
-          badgeKey: "notifications",
+          title: "Workspace",
+          href: "/dev",
+          icon: LayoutDashboard,
+          roles: ["developer", "tester", "qa"],
         },
         {
-          title: "Settings",
-          href: "/settings",
-          icon: Settings,
-          roles: ["super_admin", "developer", "tester", "client"],
+          title: "My projects",
+          href: "/dev/projects",
+          icon: Briefcase,
+          roles: ["developer", "tester", "qa"],
+        },
+        {
+          title: "Tasks",
+          href: "/dev/tasks",
+          icon: ListTodo,
+          roles: ["super_admin", "developer", "tester", "qa"],
+        },
+        {
+          title: "Daily logs",
+          href: "/dev/logs",
+          icon: Clock,
+          roles: ["super_admin", "developer", "tester", "qa"],
+        },
+        {
+          title: "Bugs",
+          href: "/dev/bugs",
+          icon: Bug,
+          roles: ["super_admin", "developer", "tester", "qa"],
+          badgeKey: "bugs",
+        },
+        {
+          title: "Releases",
+          href: "/dev/apk",
+          icon: Smartphone,
+          roles: ["super_admin", "developer", "tester", "qa"],
+        },
+        {
+          title: "Reports",
+          href: "/dev/reports",
+          icon: FileText,
+          roles: ["super_admin", "developer"],
+        },
+        {
+          title: "My requests",
+          href: "/dev/requests",
+          icon: Inbox,
+          roles: ["developer"],
         },
       ],
     },
+
+    // =========================
+    // COLLABORATION
+    // =========================
+    {
+      label: "Collaboration",
+      railLabel: "Collab",
+      icon: MessageSquare,
+      roles: ["super_admin", "developer", "tester", "qa", "client"],
+      items: [
+        {
+          title: "Tickets",
+          href: "/admin/tickets",
+          icon: Ticket,
+          roles: ["super_admin", "developer", "tester", "qa", "client"],
+        },
+        {
+          title: "Discussions",
+          href: "/admin/discussions",
+          icon: MessageSquare,
+          roles: ["super_admin", "developer", "tester", "qa", "client"],
+        },
+      ],
+    },
+
+    // =========================
+    // CLIENT
+    // =========================
     {
       label: "Client",
       railLabel: "Client",
       icon: Building2,
       roles: ["client"],
       items: [
-        { title: "Downloads", href: "/client/apk", icon: Smartphone, roles: ["client"] },
-        { title: "Analytics", href: "/client/analytics", icon: BarChart3, roles: ["client"] },
+        {
+          title: "Portal",
+          href: "/client",
+          icon: LayoutDashboard,
+          roles: ["client"],
+        },
+        {
+          title: "Downloads",
+          href: "/client/apk",
+          icon: Smartphone,
+          roles: ["client"],
+        },
+        {
+          title: "Analytics",
+          href: "/client/analytics",
+          icon: BarChart3,
+          roles: ["client"],
+        },
+      ],
+    },
+
+    // =========================
+    // ACCOUNT (LAST)
+    // =========================
+    {
+      label: "Account",
+      railLabel: "Account",
+      icon: UserCircle,
+      roles: ["super_admin", "developer", "tester", "qa", "client"],
+      items: [
+        {
+          title: "Notifications",
+          href: "/notifications",
+          icon: Bell,
+          roles: ["super_admin", "developer", "tester", "qa", "client"],
+          badgeKey: "notifications",
+        },
+        {
+          title: "Settings",
+          href: "/settings",
+          icon: Settings,
+          roles: ["super_admin", "developer", "tester", "qa", "client"],
+        },
       ],
     },
   ];
 
   return all
     .filter((s) => s.roles.includes(role))
-    .map((s) => ({ ...s, items: s.items.filter((i) => i.roles.includes(role)) }))
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((i) => i.roles.includes(role)),
+    }))
     .filter((s) => s.items.length > 0);
 }
 

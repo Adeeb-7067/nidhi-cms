@@ -1,6 +1,7 @@
 import React from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
+import { AppLoadingScreen } from "@/components/loading";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,9 +20,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
 
   if (isInitializing || isLoading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
+      <AppLoadingScreen
+        message="Preparing your workspace"
+        submessage="Verifying your session…"
+      />
     );
   }
 

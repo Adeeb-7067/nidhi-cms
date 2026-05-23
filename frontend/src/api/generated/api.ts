@@ -62,6 +62,10 @@ import type {
   ListCompaniesParams,
   ListCompanyProjects200,
   ListMyLogsParams,
+  GetDailyLogSummaryParams,
+  DailyLogSummary,
+  GetLogComplianceCalendarParams,
+  LogComplianceCalendar,
   ListNotificationsParams,
   ListProjectsParams,
   ListRequestsParams,
@@ -3800,6 +3804,170 @@ export function useGetProjectLogs<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetProjectLogsQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Monthly daily-log compliance calendar for a developer
+ */
+export const getLogComplianceCalendarUrl = (params: GetLogComplianceCalendarParams) => {
+  const normalizedParams = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+  return `/api/logs/compliance-calendar?${normalizedParams.toString()}`;
+};
+
+export const getLogComplianceCalendar = async (
+  params: GetLogComplianceCalendarParams,
+  options?: RequestInit,
+): Promise<LogComplianceCalendar> => {
+  return customFetch<LogComplianceCalendar>(getLogComplianceCalendarUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetLogComplianceCalendarQueryKey = (params: GetLogComplianceCalendarParams) => {
+  return [`/api/logs/compliance-calendar`, params] as const;
+};
+
+export const getGetLogComplianceCalendarQueryOptions = <
+  TData = Awaited<ReturnType<typeof getLogComplianceCalendar>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLogComplianceCalendarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLogComplianceCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+  const queryKey = queryOptions?.queryKey ?? getGetLogComplianceCalendarQueryKey(params);
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getLogComplianceCalendar>>> = ({
+    signal,
+  }) => getLogComplianceCalendar(params, { signal, ...requestOptions });
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getLogComplianceCalendar>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export function useGetLogComplianceCalendar<
+  TData = Awaited<ReturnType<typeof getLogComplianceCalendar>>,
+  TError = ErrorType<unknown>,
+>(
+  params: GetLogComplianceCalendarParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getLogComplianceCalendar>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetLogComplianceCalendarQueryOptions(params, options);
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Daily log hours summary vs required policy
+ */
+export const getDailyLogSummaryUrl = (params?: GetDailyLogSummaryParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/logs/daily-summary?${stringifiedParams}`
+    : `/api/logs/daily-summary`;
+};
+
+export const getDailyLogSummary = async (
+  params?: GetDailyLogSummaryParams,
+  options?: RequestInit,
+): Promise<DailyLogSummary> => {
+  return customFetch<DailyLogSummary>(getDailyLogSummaryUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetDailyLogSummaryQueryKey = (params?: GetDailyLogSummaryParams) => {
+  return [`/api/logs/daily-summary`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetDailyLogSummaryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getDailyLogSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDailyLogSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDailyLogSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetDailyLogSummaryQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getDailyLogSummary>>> = ({
+    signal,
+  }) => getDailyLogSummary(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getDailyLogSummary>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetDailyLogSummaryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getDailyLogSummary>>
+>;
+export type GetDailyLogSummaryQueryError = ErrorType<unknown>;
+
+export function useGetDailyLogSummary<
+  TData = Awaited<ReturnType<typeof getDailyLogSummary>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: GetDailyLogSummaryParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getDailyLogSummary>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetDailyLogSummaryQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

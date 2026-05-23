@@ -1,11 +1,10 @@
-import { commentsTable, usersTable, projectMembersTable, notificationsTable, getNextSequence } from "@/models/schema";
-import { broadcast, notifyUser } from "@/lib/realtime";
-import { parsePagination, badRequest, notFound, parseIdParam } from "@/utils/route-errors";
-import { toIso } from "@/utils/mongo-list";
-async function formatComment(c) {
-  const author = await usersTable.findOne({ id: c.authorId });
-  const replies = await commentsTable.find({ parentId: c.id }).sort({ createdAt: 1 });
-  const formattedReplies = await Promise.all(replies.map(formatComment));
+import { commentsTable, usersTable, projectMembersTable, notificationsTable, getNextSequence } from "../models/schema/index.js";
+import { broadcast, notifyUser } from "../lib/realtime.js";
+import { parsePagination, badRequest, notFound, parseIdParam } from "../utils/route-errors.js";
+import { toIso } from "../utils/mongo-list.js";
+
+function mapCommentRow(c, authorMap, repliesByParent) {
+  const author = authorMap.get(c.authorId);
   return {
     id: c.id,
     authorId: c.authorId,
@@ -17,10 +16,52 @@ async function formatComment(c) {
     content: c.content,
     parentId: c.parentId,
     isEdited: c.isEdited,
-    replies: formattedReplies,
-    createdAt: toIso(c.createdAt) ?? (/* @__PURE__ */ new Date()).toISOString(),
-    updatedAt: toIso(c.updatedAt) ?? (/* @__PURE__ */ new Date()).toISOString()
+    replies: (repliesByParent.get(c.id) ?? []).map((r) => mapCommentRow(r, authorMap, repliesByParent)),
+    createdAt: toIso(c.createdAt) ?? new Date().toISOString(),
+    updatedAt: toIso(c.updatedAt) ?? new Date().toISOString(),
   };
+}
+
+async function formatComment(c) {
+  const all = await commentsTable.find({ threadType: c.threadType, threadId: c.threadId }).lean().exec();
+  const threadRows = c.parentId == null ? all : [...all, c];
+  const authorIds = [...new Set(threadRows.map((row) => row.authorId))];
+  const authors = await usersTable
+    .find({ id: { $in: authorIds } }, { id: 1, name: 1, avatarUrl: 1, role: 1 })
+    .lean()
+    .exec();
+  const authorMap = new Map(authors.map((a) => [a.id, a]));
+  const repliesByParent = new Map();
+  for (const row of all) {
+    if (row.parentId == null) continue;
+    if (!repliesByParent.has(row.parentId)) repliesByParent.set(row.parentId, []);
+    repliesByParent.get(row.parentId).push(row);
+  }
+  for (const list of repliesByParent.values()) {
+    list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }
+  return mapCommentRow(c, authorMap, repliesByParent);
+}
+
+async function formatCommentsPage(threadType, threadIdNum, topLevel) {
+  if (!topLevel.length) return [];
+  const all = await commentsTable.find({ threadType, threadId: threadIdNum }).lean().exec();
+  const authorIds = [...new Set(all.map((row) => row.authorId))];
+  const authors = await usersTable
+    .find({ id: { $in: authorIds } }, { id: 1, name: 1, avatarUrl: 1, role: 1 })
+    .lean()
+    .exec();
+  const authorMap = new Map(authors.map((a) => [a.id, a]));
+  const repliesByParent = new Map();
+  for (const row of all) {
+    if (row.parentId == null) continue;
+    if (!repliesByParent.has(row.parentId)) repliesByParent.set(row.parentId, []);
+    repliesByParent.get(row.parentId).push(row);
+  }
+  for (const list of repliesByParent.values()) {
+    list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  }
+  return topLevel.map((c) => mapCommentRow(c, authorMap, repliesByParent));
 }
 async function getComments(req, res) {
   const q = req.query;
@@ -42,7 +83,7 @@ async function getComments(req, res) {
     commentsTable.find(topLevelQuery).sort({ createdAt: 1 }).skip(skip).limit(limit),
     commentsTable.countDocuments(topLevelQuery)
   ]);
-  const formatted = await Promise.all(topLevel.map(formatComment));
+  const formatted = await formatCommentsPage(threadType, threadIdNum, topLevel);
   res.json({ comments: formatted, total });
 }
 async function postComments(req, res) {

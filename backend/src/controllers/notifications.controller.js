@@ -1,11 +1,11 @@
-import { notificationsTable, getNextSequence, usersTable } from "@/models/schema";
-import { broadcast } from "@/lib/realtime";
-import { parsePagination, badRequest } from "@/utils/route-errors";
+import { notificationsTable, getNextSequence, usersTable } from "../models/schema/index.js";
+import { broadcast } from "../lib/realtime.js";
+import { parsePagination, badRequest } from "../utils/route-errors.js";
 import {
   formatNotificationRow,
   NOTIFICATION_LIST_PROJECTION,
   unreadNotificationFilter
-} from "@/mappers/notification-format";
+} from "../mappers/notification-format.js";
 async function getNotifications(req, res) {
   const q = req.query;
   const { page, limit, skip } = parsePagination(q);

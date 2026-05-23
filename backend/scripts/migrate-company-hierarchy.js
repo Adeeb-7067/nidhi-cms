@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import * as schema from "@/models/schema";
+import * as schema from "../src/models/schema/index.js";
 async function backfillFromProjects(collection, projectField = "projectId") {
   const projects = await schema.projectsTable.find({}).select("id clientId companyId").lean();
   const projectMap = new Map(projects.map((p) => [

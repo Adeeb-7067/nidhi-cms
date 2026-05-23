@@ -1,5 +1,5 @@
-import { auditLogsTable, getNextSequence } from "@/models/schema";
-import { logger } from "@/lib/logger";
+import { auditLogsTable, getNextSequence } from "../models/schema/index.js";
+import { logger } from "../lib/logger.js";
 async function auditMiddleware(req, res, next) {
   const originalJson = res.json;
   const originalSend = res.send;

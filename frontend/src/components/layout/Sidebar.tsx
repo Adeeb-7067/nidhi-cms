@@ -45,7 +45,7 @@ function useBadgeCounts(role: UserRole) {
     { status: "open", limit: 1 },
     {
       query: {
-        enabled: role === "developer" || role === "tester",
+        enabled: role === "developer" || role === "tester" || role === "qa",
         staleTime: QUERY_STALE.list,
         queryKey: getListBugsQueryKey({ status: "open", limit: 1 }),
       },

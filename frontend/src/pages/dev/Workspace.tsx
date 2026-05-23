@@ -1,19 +1,5 @@
-import React, { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import {
-  useListProjects,
-  useListMyLogs,
-  useListBugs,
-  useListTickets,
-  useListNotifications,
-  getListMyLogsQueryKey,
-} from "@/api";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import {
   Briefcase,
   Clock,
@@ -25,18 +11,31 @@ import {
   Bell,
   FlaskConical,
   LayoutDashboard,
+  Layers,
+  TrendingUp,
+  Activity,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGetWorkspaceDashboard } from "@/api";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   DashboardHero,
   ExecutiveStatCard,
-  PanelCard,
-  PageKpiRow,
+  DashboardSkeleton,
   QuickAction,
 } from "@/components/dashboard/dashboard-kit";
+import {
+  ChartPanel,
+  ChartGridCell,
+  ChartEmptyState,
+  DashboardTrendChart,
+  DashboardPipelineChart,
+  DashboardSeverityChart,
+} from "@/components/dashboard/admin-dashboard-charts";
 import { cn } from "@/lib/utils";
 import { getProjectDetailHref } from "@/lib/project-routes";
-import { formatDistanceToNow } from "date-fns";
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -45,55 +44,73 @@ function getGreeting() {
   return "Good evening";
 }
 
+function formatTrendMonth(monthKey: string) {
+  const [year, month] = monthKey.split("-");
+  if (!year || !month) return monthKey;
+  return new Date(Number(year), Number(month) - 1).toLocaleDateString(undefined, {
+    month: "short",
+    year: "2-digit",
+  });
+}
+
 const ROLE_LABELS: Record<string, string> = {
   developer: "Developer",
   tester: "QA / Tester",
+  qa: "QA / Tester",
   super_admin: "Super Admin",
 };
 
 export default function DevWorkspace() {
   const { user } = useAuth();
-  const role = user?.role ?? "developer";
-  const isTester = role === "tester";
-  const isDeveloper = role === "developer";
-  const canReportBugs = isTester || role === "super_admin";
-
-  const [activeTab, setActiveTab] = useState<"development" | "maintenance">("development");
-
-  const { data: projectsData, isLoading: projectsLoading } = useListProjects({
-    status: activeTab === "maintenance" ? "maintenance" : "!maintenance",
-    limit: 50,
-  });
-
-  const projectsByCompany = useMemo(() => {
-    const map = new Map<string, NonNullable<typeof projectsData>["projects"]>();
-    for (const p of projectsData?.projects ?? []) {
-      const label = p.companyName ?? p.clientName ?? "Company";
-      const list = map.get(label) ?? [];
-      list.push(p);
-      map.set(label, list);
-    }
-    return [...map.entries()];
-  }, [projectsData?.projects]);
-
-  const { data: logsData, isLoading: logsLoading } = useListMyLogs(
-    { limit: 5 },
-    {
-      query: {
-        enabled: isDeveloper || role === "super_admin",
-        queryKey: getListMyLogsQueryKey({ limit: 5 }),
-      },
-    },
-  );
-
-  const { data: bugsData, isLoading: bugsLoading } = useListBugs({ status: "open", limit: 5 });
-  const { data: ticketsData, isLoading: ticketsLoading } = useListTickets({ status: "open", limit: 5 });
-  const { data: projectsTotal } = useListProjects({ limit: 1 });
-  const { data: bugsTotal } = useListBugs({ status: "open", limit: 1 });
-  const { data: ticketsTotal } = useListTickets({ status: "open", limit: 1 });
-  const { data: notifData } = useListNotifications({ unreadOnly: true, limit: 1 });
+  const { data, isLoading, isError } = useGetWorkspaceDashboard();
 
   if (!user) return null;
+  if (isLoading) return <DashboardSkeleton />;
+  if (isError || !data) {
+    return (
+      <div className="py-16 text-center text-sm text-muted-foreground">
+        Unable to load workspace dashboard. Please refresh or try again later.
+      </div>
+    );
+  }
+
+  const role = data.role ?? user.role ?? "developer";
+  const isTester = role === "tester" || role === "qa";
+  const isDeveloper = role === "developer";
+  const canReportBugs = isTester || role === "super_admin";
+  const kpis = data.kpis;
+
+  const pipelineData = [
+    { name: "Scoping", value: data.projectPipeline.scoping },
+    { name: "In Progress", value: data.projectPipeline.inProgress },
+    { name: "UAT", value: data.projectPipeline.uat },
+    { name: "On Hold", value: data.projectPipeline.onHold },
+    { name: "Done", value: data.projectPipeline.completed },
+    { name: "Maintenance", value: data.projectPipeline.maintenance },
+  ].filter((d) => d.value > 0);
+
+  const bugData = [
+    { name: "Critical", value: data.bugSeverityBreakdown.critical, color: "#ef4444" },
+    { name: "High", value: data.bugSeverityBreakdown.high, color: "#f97316" },
+    { name: "Medium", value: data.bugSeverityBreakdown.medium, color: "#f59e0b" },
+    { name: "Low", value: data.bugSeverityBreakdown.low, color: "#22c55e" },
+  ].filter((d) => d.value > 0);
+
+  const logHoursTrend = data.trends.logHours.map((h) => ({
+    month: h.week,
+    count: h.hours,
+  }));
+
+  const bugTrends = data.trends.bugs.map((b) => ({
+    month: formatTrendMonth(b.month),
+    count: b.count,
+  }));
+
+  const today = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 
   const quickActions = isTester
     ? [
@@ -112,13 +129,20 @@ export default function DevWorkspace() {
       ];
 
   return (
-    <motion.div className="space-y-6 pb-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+    <motion.div
+      className="space-y-4 pb-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.25 }}
+    >
       <DashboardHero
         title={`${getGreeting()}, ${user.name.split(" ")[0]}`}
         subtitle={
-          isTester
-            ? "Track quality across projects, report bugs, and stay on top of tickets."
-            : "Your delivery hub — projects, logs, releases, and bugs in one place."
+          data.attentionCount > 0
+            ? `${data.attentionCount} item${data.attentionCount === 1 ? "" : "s"} need attention · ${today}`
+            : isTester
+              ? `Quality overview · ${today}`
+              : `Your delivery hub · ${today}`
         }
         badge={ROLE_LABELS[role] ?? role}
         actions={
@@ -133,15 +157,80 @@ export default function DevWorkspace() {
         }
       />
 
-      <PageKpiRow>
-        <ExecutiveStatCard title="My Projects" value={projectsTotal?.total ?? 0} hint="Assigned to you" icon={Briefcase} href="/dev/projects" accent="blue" delay={0} />
-        <ExecutiveStatCard title="Open Bugs" value={bugsTotal?.total ?? 0} hint="Needs attention" icon={Bug} href="/dev/bugs" accent="red" alert={(bugsTotal?.total ?? 0) > 0} delay={1} />
-        <ExecutiveStatCard title="Open Tickets" value={ticketsTotal?.total ?? 0} hint="Support queue" icon={Ticket} href="/admin/tickets" accent="violet" delay={2} />
-        <ExecutiveStatCard title="Notifications" value={notifData?.unreadCount ?? notifData?.total ?? 0} hint="Unread" icon={Bell} href="/notifications" accent="sky" alert={(notifData?.unreadCount ?? 0) > 0} delay={3} />
-      </PageKpiRow>
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+        <ExecutiveStatCard
+          title="My Projects"
+          value={kpis.projects}
+          hint={`${kpis.activeDevProjects} active · ${kpis.maintenanceProjects} maintenance`}
+          icon={Briefcase}
+          href="/dev/projects"
+          accent="blue"
+          delay={0}
+        />
+        <ExecutiveStatCard
+          title="Open Bugs"
+          value={kpis.openBugs}
+          hint={isDeveloper && kpis.bugsAssigned != null ? `${kpis.bugsAssigned} assigned to you` : "Needs attention"}
+          icon={Bug}
+          href="/dev/bugs"
+          accent="red"
+          alert={kpis.openBugs > 0}
+          delay={1}
+        />
+        <ExecutiveStatCard
+          title="Open Tickets"
+          value={kpis.openTickets}
+          hint="Support queue"
+          icon={Ticket}
+          href="/admin/tickets"
+          accent="violet"
+          alert={kpis.openTickets > 0}
+          delay={2}
+        />
+        <ExecutiveStatCard
+          title="Notifications"
+          value={kpis.unreadNotifications}
+          hint="Unread"
+          icon={Bell}
+          href="/notifications"
+          accent="sky"
+          alert={kpis.unreadNotifications > 0}
+          delay={3}
+        />
+      </div>
+
+      {(isDeveloper || isTester) && (
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {isDeveloper && kpis.hoursThisWeek != null && (
+            <ExecutiveStatCard
+              title="Hours This Week"
+              value={kpis.hoursThisWeek}
+              hint="Logged time"
+              icon={Clock}
+              href="/dev/logs"
+              accent="green"
+              delay={4}
+            />
+          )}
+          {isTester && kpis.bugsReported != null && (
+            <ExecutiveStatCard
+              title="Bugs Reported"
+              value={kpis.bugsReported}
+              hint="Open issues you filed"
+              icon={FlaskConical}
+              href="/dev/bugs"
+              accent="amber"
+              alert={kpis.bugsReported > 0}
+              delay={4}
+            />
+          )}
+        </div>
+      )}
 
       <section>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick actions</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">
+          Quick actions
+        </p>
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {quickActions.map((action, i) => (
             <QuickAction key={`${action.href}-${action.title}`} {...action} delay={i} />
@@ -149,141 +238,185 @@ export default function DevWorkspace() {
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          <PanelCard
-            title={isTester ? "Projects under test" : "My projects"}
-            description={isTester ? "Active builds and environments you're covering" : "Projects you are actively assigned to"}
+      <motion.section
+        className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-stretch"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+        aria-label="Workspace analytics"
+      >
+        <ChartGridCell colSpan={8} className="min-h-[340px] lg:min-h-[380px]">
+          <ChartPanel
+            title="Recent projects"
+            description="Your latest assignments and progress"
+            icon={Briefcase}
+            accent="blue"
             viewAllHref="/dev/projects"
+            badge={data.recentProjects.length}
           >
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "development" | "maintenance")} className="mb-4">
-                <TabsList className="grid w-full max-w-xs grid-cols-2 h-9">
-                  <TabsTrigger value="development" className="text-xs font-medium">Active dev</TabsTrigger>
-                  <TabsTrigger value="maintenance" className="text-xs font-medium">Maintenance</TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              <motion.div className="space-y-3">
-                {projectsLoading ? (
-                  [...Array(3)].map((_, i) => <Skeleton key={i} className="h-[72px] rounded-xl" />)
-                ) : !projectsData?.projects.length ? (
-                  <div className="rounded-xl border border-dashed border-border py-12 text-center">
-                    <Briefcase className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-                    <p className="text-sm text-muted-foreground">No projects in this view</p>
-                  </div>
-                ) : (
-                  projectsByCompany.map(([companyName, companyProjects], groupIdx) => (
-                    <div key={companyName} className="space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground px-1">
-                        {companyName}
-                      </p>
-                      {companyProjects.map((project, i) => (
-                    <motion.div
-                      key={project.id}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: (groupIdx * 3 + i) * 0.05 }}
-                    >
-                      <Link href={getProjectDetailHref(project.id)}>
-                        <div className="group rounded-xl border border-border/60 p-4 transition-all hover:border-primary/30 hover:bg-muted/30 hover:shadow-sm">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <h4 className="font-semibold text-sm truncate group-hover:text-primary transition-colors">{project.name}</h4>
-                              <p className="text-xs text-muted-foreground mt-0.5 truncate">{companyName}</p>
-                            </div>
-                            <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
-                              {project.status.replace(/_/g, " ")}
-                            </Badge>
-                          </div>
-                          <div className="mt-3 space-y-1.5">
-                            <div className="flex justify-between text-[11px] text-muted-foreground">
-                              <span>Progress</span>
-                              <span className="font-medium text-foreground">{project.completionPct}%</span>
-                            </div>
-                            <Progress value={project.completionPct} className="h-1.5" />
-                          </div>
+            {data.recentProjects.length > 0 ? (
+              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+                {data.recentProjects.map((project) => (
+                  <Link key={project.id} href={getProjectDetailHref(project.id)}>
+                    <div className="group rounded-xl border border-border/60 p-3 transition-all hover:border-primary/30 hover:bg-muted/30">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold truncate group-hover:text-primary">{project.name}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {project.companyName ?? "Project"}
+                          </p>
                         </div>
-                      </Link>
-                    </motion.div>
-                      ))}
+                        <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
+                          {project.status.replace(/_/g, " ")}
+                        </Badge>
+                      </div>
+                      <div className="mt-2 space-y-1">
+                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                          <span>Progress</span>
+                          <span className="font-medium text-foreground">{project.completionPct}%</span>
+                        </div>
+                        <Progress value={project.completionPct} className="h-1.5" />
+                      </div>
                     </div>
-                  ))
-                )}
-              </motion.div>
-          </PanelCard>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ChartEmptyState message="No projects assigned yet." icon={Briefcase} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <div className="lg:col-span-4 grid grid-rows-2 gap-3 min-h-[340px] lg:min-h-[380px]">
+          <div className="flex min-h-0 flex-col">
+            <ChartPanel
+              title="Project pipeline"
+              description="Status across your portfolio"
+              icon={Layers}
+              accent="blue"
+            >
+              {pipelineData.length > 0 ? (
+                <DashboardPipelineChart data={pipelineData} />
+              ) : (
+                <ChartEmptyState message="No projects in your pipeline yet." icon={Layers} />
+              )}
+            </ChartPanel>
+          </div>
+          <div className="flex min-h-0 flex-col">
+            <ChartPanel title="Bug severity" description="Open issues by priority" icon={Bug} accent="rose">
+              {bugData.length > 0 ? (
+                <DashboardSeverityChart data={bugData} />
+              ) : (
+                <ChartEmptyState message="No open bugs in your scope." icon={Bug} />
+              )}
+            </ChartPanel>
+          </div>
         </div>
 
-        <div className="lg:col-span-4 space-y-6">
-          {(isDeveloper || role === "super_admin") && (
-            <PanelCard title="Recent logs" description="Latest daily entries" viewAllHref="/dev/logs">
+        <ChartGridCell colSpan={4} className="min-h-[280px]">
+          <ChartPanel
+            title={isDeveloper ? "Log hours trend" : "Bugs reported"}
+            description={isDeveloper ? "Weekly hours · last 8 weeks" : "Issues filed · last 6 months"}
+            icon={TrendingUp}
+            accent="blue"
+          >
+            {isDeveloper ? (
+              logHoursTrend.length > 0 ? (
+                <DashboardTrendChart
+                  data={logHoursTrend}
+                  stroke="#22c55e"
+                  gradientId="devLogGrad"
+                  summaryLabel="Total hours"
+                />
+              ) : (
+                <ChartEmptyState message="Log daily hours to see your trend here." icon={Clock} />
+              )
+            ) : bugTrends.length > 0 ? (
+              <DashboardTrendChart
+                data={bugTrends}
+                stroke="hsl(var(--primary))"
+                gradientId="qaBugGrad"
+                summaryLabel="Total reported"
+              />
+            ) : (
+              <ChartEmptyState message="Report bugs to see your activity trend." icon={Bug} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <ChartGridCell colSpan={8} className="min-h-[280px]">
+          <ChartPanel
+            title="Open bugs"
+            description="Latest issues in your projects"
+            icon={Activity}
+            accent="amber"
+            viewAllHref="/dev/bugs"
+            badge={data.recentBugs.length}
+          >
+            {data.recentBugs.length > 0 ? (
               <div className="space-y-2">
-                {logsLoading ? (
-                  [...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)
-                ) : !logsData?.logs.length ? (
-                  <p className="text-xs text-muted-foreground text-center py-6">No logs yet today</p>
-                ) : (
-                  logsData.logs.map((log) => (
-                    <div key={log.id} className="rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/40 transition-colors">
+                {data.recentBugs.map((bug) => (
+                  <Link key={bug.id} href="/dev/bugs">
+                    <div className="rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/40 transition-colors block">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium line-clamp-1">{bug.title}</p>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px] shrink-0 capitalize",
+                            bug.severity === "critical" && "border-red-500/50 text-red-500",
+                            bug.severity === "high" && "border-orange-500/50 text-orange-500",
+                          )}
+                        >
+                          {bug.severity}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {bug.bugNumber} · {bug.projectName}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ChartEmptyState message="No recent bugs in your projects." icon={Bug} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        {isDeveloper && (
+          <ChartGridCell colSpan={12} className="min-h-[200px]">
+            <ChartPanel
+              title="Recent logs"
+              description="Latest daily entries"
+              icon={Clock}
+              accent="emerald"
+              viewAllHref="/dev/logs"
+            >
+              {data.recentLogs.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.recentLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/40 transition-colors"
+                    >
                       <div className="flex justify-between gap-2">
                         <p className="text-xs font-medium line-clamp-1">{log.taskTitle}</p>
                         <span className="text-xs font-bold text-primary shrink-0">{log.hoursSpent}h</span>
                       </div>
-                      <p className="text-[10px] text-muted-foreground mt-1 truncate">{log.projectName}</p>
+                      <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                        {log.projectName} · {log.logDate}
+                      </p>
                     </div>
-                  ))
-                )}
-              </div>
-            </PanelCard>
-          )}
-
-          <PanelCard
-            title="Open bugs"
-            description={isTester ? "Recently reported issues" : "Assigned and open"}
-            viewAllHref="/dev/bugs"
-          >
-            <motion.div className="space-y-2">
-              {bugsLoading ? (
-                [...Array(3)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)
-              ) : !bugsData?.bugs.length ? (
-                <p className="text-xs text-muted-foreground text-center py-6">No open bugs</p>
+                  ))}
+                </div>
               ) : (
-                bugsData.bugs.map((bug) => (
-                  <Link key={bug.id} href="/dev/bugs">
-                    <div className="rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/40 transition-colors mb-2 block">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-xs font-medium line-clamp-1">{bug.title}</p>
-                        <Badge variant="outline" className={cn("text-[9px] shrink-0 capitalize", bug.severity === "critical" && "border-red-500/50 text-red-500", bug.severity === "high" && "border-orange-500/50 text-orange-500")}>
-                          {bug.severity}
-                        </Badge>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground mt-1">{bug.bugNumber} · {bug.projectName}</p>
-                    </div>
-                  </Link>
-                ))
+                <ChartEmptyState message="No logs yet. Start logging your daily work." icon={Clock} />
               )}
-            </motion.div>
-          </PanelCard>
-
-          <PanelCard title="Open tickets" viewAllHref="/admin/tickets">
-            <div className="space-y-2">
-              {ticketsLoading ? (
-                [...Array(2)].map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)
-              ) : !ticketsData?.tickets?.length ? (
-                <p className="text-xs text-muted-foreground text-center py-6">No open tickets</p>
-              ) : (
-                ticketsData.tickets.map((ticket) => (
-                  <Link key={ticket.id} href="/admin/tickets">
-                    <div className="rounded-lg border border-border/40 px-3 py-2.5 hover:bg-muted/40 transition-colors mb-2 block">
-                      <p className="text-xs font-medium line-clamp-1">{ticket.title}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{formatDistanceToNow(new Date(ticket.createdAt), { addSuffix: true })}</p>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
-          </PanelCard>
-        </div>
-      </div>
+            </ChartPanel>
+          </ChartGridCell>
+        )}
+      </motion.section>
     </motion.div>
   );
 }

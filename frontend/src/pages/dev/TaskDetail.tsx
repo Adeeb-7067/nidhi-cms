@@ -274,7 +274,9 @@ export default function TaskDetailPage() {
                   <User className="h-3.5 w-3.5" />
                   {task.assigneeName}
                   {task.assigneeRole && (
-                    <span className="text-xs">({task.assigneeRole === "tester" ? "QA" : "Dev"})</span>
+                    <span className="text-xs">
+                      ({task.assigneeRole === "tester" || task.assigneeRole === "qa" ? "QA" : "Dev"})
+                    </span>
                   )}
                 </span>
               )}
@@ -380,7 +382,7 @@ export default function TaskDetailPage() {
                       <SelectItem value="none">Unassigned</SelectItem>
                       {assignableData?.members.map((m) => (
                         <SelectItem key={m.id} value={m.id.toString()}>
-                          {m.name} ({m.role === "tester" ? "QA" : "Dev"})
+                          {m.name} ({m.role === "tester" || m.role === "qa" ? "QA" : "Dev"})
                         </SelectItem>
                       ))}
                     </SelectContent>

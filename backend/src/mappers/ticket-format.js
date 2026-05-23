@@ -1,6 +1,6 @@
-import { usersTable, projectsTable } from "@/models/schema";
-import { IdLookupCache } from "@/lib/lookup-cache";
-import { toIso } from "@/utils/mongo-list";
+import { usersTable, projectsTable } from "../models/schema/index.js";
+import { IdLookupCache } from "../lib/lookup-cache.js";
+import { toIso } from "../utils/mongo-list.js";
 async function formatTicketRows(rows) {
   const users = new IdLookupCache(async (ids) => {
     const rows2 = await usersTable.find({ id: { $in: ids } }, { id: 1, name: 1 }).lean().exec();

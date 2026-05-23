@@ -36,6 +36,7 @@ const projectMemberSchema = new Schema({
   completionPct: { type: Number, default: 0, required: true },
   joinedAt: { type: Date, default: Date.now, required: true }
 });
+projectMemberSchema.index({ projectId: 1, userId: 1 }, { unique: true });
 const ProjectMembers = mongoose.models.ProjectMembers || mongoose.model("ProjectMembers", projectMemberSchema);
 const apkScheduleSchema = new Schema({
   id: { type: Number, unique: true, required: true },

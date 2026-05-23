@@ -1,5 +1,5 @@
 /**
- * Bundle a scripts/*.js entry (with @/ alias) and run with .env loaded.
+ * Bundle a scripts/*.js entry and run with .env loaded.
  * Usage: node scripts/run-bundled.mjs seed
  */
 import { spawnSync } from "node:child_process";
@@ -24,9 +24,6 @@ esbuild.buildSync({
   format: "esm",
   outfile,
   packages: "external",
-  alias: {
-    "@": path.join(backendRoot, "src"),
-  },
   logLevel: "silent",
 });
 

@@ -1,5 +1,5 @@
 import admin from "firebase-admin";
-import { logger } from "./logger";
+import { logger } from "./logger.js";
 function initFirebaseAdmin() {
   try {
     const existingApps = admin.apps ?? [];

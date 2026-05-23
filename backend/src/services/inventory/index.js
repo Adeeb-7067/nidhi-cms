@@ -1,5 +1,5 @@
-import { logInventoryActivity, notifyProjectMembers } from "./helpers";
-import { startInventoryExpiryJob } from "./expiry-job";
+import { logInventoryActivity, notifyProjectMembers } from "./helpers.js";
+import { startInventoryExpiryJob } from "./expiry-job.js";
 export {
   logInventoryActivity,
   notifyProjectMembers,

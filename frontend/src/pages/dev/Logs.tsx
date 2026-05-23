@@ -1,9 +1,20 @@
 import React, { useState, useMemo } from "react";
-import { useListMyLogs, useCreateLog, useListProjects } from "@/api";
+import {
+  useListMyLogs,
+  useCreateLog,
+  useListProjects,
+  useGetDailyLogSummary,
+  getGetDailyLogSummaryQueryKey,
+  useListUsers,
+  getListUsersQueryKey,
+  useGetLogComplianceCalendar,
+  getGetLogComplianceCalendarQueryKey,
+} from "@/api";
+import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar, Loader2, Check, FileText, Briefcase, TrendingUp } from "lucide-react";
+import { Plus, Clock, Calendar, Loader2, Check, FileText, Briefcase, TrendingUp, AlertTriangle } from "lucide-react";
 import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { PDFService } from "@/lib/pdf-service";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -20,6 +31,9 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Progress } from "@/components/ui/progress";
 import { User } from "lucide-react";
 
 const logSchema = z.object({
@@ -55,10 +69,65 @@ export default function DevLogs() {
   const isAdminView = user?.role === "super_admin";
   const [open, setOpen] = useState(false);
   const currentDate = new Date();
+  const todayIso = currentDate.toISOString().split("T")[0];
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [year, setYear] = useState(currentDate.getFullYear());
+  const [developerFilterId, setDeveloperFilterId] = useState<string>("");
+  const queryClient = useQueryClient();
 
-  const { data, isLoading, refetch } = useListMyLogs({ month, year, limit: 50 });
+  const { data: staffData } = useListUsers(
+    { staff: "1", limit: 200 },
+    {
+      query: {
+        enabled: isAdminView,
+        queryKey: getListUsersQueryKey({ staff: "1", limit: 200 }),
+      },
+    },
+  );
+  const staffDevs = useMemo(
+    () =>
+      (staffData?.users ?? []).filter(
+        (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
+      ),
+    [staffData?.users],
+  );
+
+  const listParams = useMemo(() => {
+    const base: { month: number; year: number; limit: number; developerId?: number } = {
+      month,
+      year,
+      limit: isAdminView ? 200 : 50,
+    };
+    if (isAdminView && developerFilterId) {
+      base.developerId = Number.parseInt(developerFilterId, 10);
+    }
+    return base;
+  }, [month, year, isAdminView, developerFilterId]);
+
+  const { data, isLoading, refetch } = useListMyLogs(listParams);
+
+  const complianceDeveloperId =
+    isAdminView && developerFilterId
+      ? Number.parseInt(developerFilterId, 10)
+      : user?.id;
+
+  const { data: complianceCalendar, isLoading: complianceLoading } = useGetLogComplianceCalendar(
+    { month, year, developerId: complianceDeveloperId! },
+    {
+      query: {
+        enabled: Boolean(complianceDeveloperId),
+        queryKey: getGetLogComplianceCalendarQueryKey({
+          month,
+          year,
+          developerId: complianceDeveloperId!,
+        }),
+      },
+    },
+  );
+  const { data: dailySummary, refetch: refetchDailySummary } = useGetDailyLogSummary(
+    { date: todayIso },
+    { query: { enabled: !isAdminView, queryKey: getGetDailyLogSummaryQueryKey({ date: todayIso }) } },
+  );
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createLog = useCreateLog();
 
@@ -111,9 +180,24 @@ export default function DevLogs() {
         },
       });
       toast.success("Log entry submitted!");
+      if (
+        dailySummary?.complianceEnabled &&
+        values.logDate === todayIso &&
+        dailySummary.requiredHours != null
+      ) {
+        const projected = dailySummary.loggedHours + values.hoursSpent;
+        const remaining = Math.max(0, dailySummary.requiredHours - projected);
+        if (remaining > 0.05) {
+          toast.info(`You still need ${remaining.toFixed(1)}h logged for today.`);
+        } else {
+          toast.success("Today's required hours are complete.");
+        }
+      }
       setOpen(false);
       form.reset();
       refetch();
+      void refetchDailySummary();
+      void queryClient.invalidateQueries({ queryKey: getGetDailyLogSummaryQueryKey() });
     } catch (error: any) {
       toastApiError(error, "Action failed. Please try again.");
     }
@@ -132,7 +216,25 @@ export default function DevLogs() {
               : "Track your time and progress"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdminView && (
+            <Select
+              value={developerFilterId || "all"}
+              onValueChange={(v) => setDeveloperFilterId(v === "all" ? "" : v)}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="All developers" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All developers</SelectItem>
+                {staffDevs.map((u) => (
+                  <SelectItem key={u.id} value={u.id.toString()}>
+                    {u.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
             <SelectTrigger className="w-[130px]">
               <SelectValue placeholder="Month" />
@@ -372,6 +474,64 @@ export default function DevLogs() {
           )}
         </div>
       </div>
+
+      {isAdminView && (
+        <>
+          {!developerFilterId ? (
+            <Card className="border-dashed">
+              <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                Select a developer to view their daily hours compliance calendar.
+              </CardContent>
+            </Card>
+          ) : (
+            <LogComplianceCalendarPanel
+              data={complianceCalendar}
+              isLoading={complianceLoading}
+              title="Developer compliance calendar"
+            />
+          )}
+        </>
+      )}
+
+      {!isAdminView && dailySummary?.complianceEnabled && dailySummary.requiredHours != null && (
+        <Card className="border-primary/20 bg-primary/[0.03]">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold">Today&apos;s hours ({todayIso})</p>
+                <p className="text-xs text-muted-foreground">
+                  Required: {dailySummary.requiredHours}h · Logged: {dailySummary.loggedHours}h
+                </p>
+              </div>
+              <Badge
+                variant={dailySummary.isComplete ? "default" : "destructive"}
+                className="w-fit"
+              >
+                {dailySummary.isComplete
+                  ? "Complete"
+                  : `${dailySummary.remainingHours.toFixed(1)}h remaining`}
+              </Badge>
+            </div>
+            <Progress
+              value={Math.min(
+                100,
+                (dailySummary.loggedHours / dailySummary.requiredHours) * 100,
+              )}
+              className="h-2"
+            />
+            {!dailySummary.isComplete && (
+              <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Daily hours incomplete</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Log {dailySummary.remainingHours.toFixed(1)} more hour(s) today. If you miss the
+                  target, you will receive an in-app notification and email reminder.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading ? (
         <PageKpiSkeleton />

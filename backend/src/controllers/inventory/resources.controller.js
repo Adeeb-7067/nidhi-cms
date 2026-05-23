@@ -1,9 +1,9 @@
-import { inventoryResourcesTable, usersTable, getNextSequence } from "@/models/schema";
-import { validateStoredFileUrl } from "@/lib/file-storage";
-import { clientVisibilityFilter } from "@/services/access/inventory-access";
-import { logInventoryActivity, notifyProjectMembers } from "@/services/inventory/helpers";
+import { inventoryResourcesTable, usersTable, getNextSequence } from "../../models/schema/index.js";
+import { validateStoredFileUrl } from "../../lib/file-storage.js";
+import { clientVisibilityFilter } from "../../services/access/inventory-access.js";
+import { logInventoryActivity, notifyProjectMembers } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam, parseInventoryEntityId } from "./guard.js";
-import { badRequest, forbidden, notFound } from "@/utils/route-errors";
+import { badRequest, forbidden, notFound } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/resources */
 export async function getProjectsByProjectIdInventoryResources(req, res) {

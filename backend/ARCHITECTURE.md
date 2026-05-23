@@ -18,8 +18,9 @@ HTTP request
 ## Directory layout
 
 ```
+index.js                # HTTP server entry (backend root)
+load-env.js             # dotenv bootstrap
 src/
-  index.js              # HTTP server, jobs, DB bootstrap
   app.js                # Express app + global middleware
   config/               # Env validation, public API paths
   routes/               # One router per feature; wire middleware + controllers
@@ -51,7 +52,7 @@ src/
 
 - Export named `async function` handlers only.
 - Import `Request` / `Response` from `express`.
-- Use `@/utils/route-errors` (`badRequest`, `notFound`, `parseIdParam`, …) instead of manual `res.status().json()` where possible.
+- Use `utils/route-errors` (`badRequest`, `notFound`, `parseIdParam`, …) instead of manual `res.status().json()` where possible.
 - Do not import Mongoose models unless the handler is trivial; prefer `services/` for multi-step logic.
 - Large features (e.g. inventory) live under `controllers/<feature>/` with an `index.js` barrel.
 
@@ -95,11 +96,11 @@ src/
 
 - Global gate in `routes/index.js` skips `PUBLIC_API_PATHS` and `OPTIONS`.
 - Per-route `requireRole("super_admin")` etc. in feature routers.
-- Access helpers: `@/services/access` (`getCompanyAccess`, `getProjectAccess`, …).
+- Access helpers: `services/access` (`getCompanyAccess`, `getProjectAccess`, …).
 
 ## Errors
 
-Throw from controllers/services using `@/utils/route-errors` helpers; `middlewares/error-handler.js` maps them (and Zod/Mongo/Multer) to consistent JSON:
+Throw from controllers/services using `utils/route-errors` helpers; `middlewares/error-handler.js` maps them (and Zod/Mongo/Multer) to consistent JSON:
 
 ```json
 { "error": "Human message", "code": "NOT_FOUND", "field": "email" }

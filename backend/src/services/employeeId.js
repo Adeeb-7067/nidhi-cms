@@ -1,4 +1,4 @@
-import { Counter, getNextSequence } from "@/models/schema";
+import { Counter, getNextSequence } from "../models/schema/index.js";
 function employeeIdFromCounter(name, counter) {
   const prefix = name.trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2).padEnd(2, "X");
   const num = String(counter).padStart(3, "0");

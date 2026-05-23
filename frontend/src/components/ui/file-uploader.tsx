@@ -9,6 +9,15 @@ import { apiUrl } from "@/lib/api-base";
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
 export type UploadCategory = "bugs" | "apk" | "inventory" | "avatars" | "reports" | "misc";
 
+const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
+  apk: 500,
+  avatars: 5,
+  bugs: 50,
+  inventory: 50,
+  reports: 50,
+  misc: 50,
+};
+
 interface FileUploaderProps {
   onUploadComplete: (url: string) => void;
   accept?: string;
@@ -23,9 +32,10 @@ export function FileUploader({
   accept = "*/*",
   label = "Drag & drop or click to upload",
   value = "",
-  maxSizeMB = 50,
+  maxSizeMB,
   category = "misc",
 }: FileUploaderProps) {
+  const limitMb = maxSizeMB ?? CATEGORY_MAX_SIZE_MB[category] ?? 50;
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentFileUrl, setCurrentFileUrl] = useState<string | null>(value || null);
@@ -40,8 +50,8 @@ export function FileUploader({
     if (!file) return;
 
     // Validation Size Check
-    if (file.size > maxSizeMB * 1024 * 1024) {
-      toast.error(`File is too large. Max allowed is ${maxSizeMB}MB`);
+    if (file.size > limitMb * 1024 * 1024) {
+      toast.error(`File is too large. Max allowed is ${limitMb}MB`);
       return;
     }
 
@@ -143,7 +153,7 @@ export function FileUploader({
               <UploadCloud className="h-6 w-6 text-muted-foreground opacity-60" />
               <div>
                 <p className="text-xs font-medium text-foreground">{label}</p>
-                <p className="text-[9px] text-muted-foreground mt-0.5">Max {maxSizeMB}MB</p>
+                <p className="text-[9px] text-muted-foreground mt-0.5">Max {limitMb}MB</p>
               </div>
             </>
           )}

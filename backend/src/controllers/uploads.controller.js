@@ -3,8 +3,9 @@ import {
   resolvePublicFileUrl,
   storeUpload,
   UPLOAD_CATEGORIES
-} from "@/lib/file-storage";
-import { badRequest } from "@/utils/route-errors";
+} from "../lib/file-storage.js";
+import { getUploadMaxBytesForCategory } from "../config/upload-limits.js";
+import { badRequest } from "../utils/route-errors.js";
 function parseCategory(raw) {
   if (typeof raw !== "string" || !raw) return "misc";
   const c = raw.toLowerCase();
@@ -15,6 +16,11 @@ async function postUpload(req, res) {
     badRequest('No file was uploaded. Choose a file and use the field name "file".', "file");
   }
   const category = parseCategory(req.query.category);
+  const maxBytes = getUploadMaxBytesForCategory(category);
+  if (req.file.size > maxBytes) {
+    const maxMb = Math.round(maxBytes / (1024 * 1024));
+    badRequest(`File is too large. Maximum size for ${category} uploads is ${maxMb} MB.`, "file");
+  }
   const stored = await storeUpload(
     req.file.buffer,
     req.file.originalname,

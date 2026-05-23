@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { requireAuth, requireRole } from "@/middlewares/auth";
-import * as notificationsController from "@/controllers/notifications.controller";
+import { requireAuth, requireRole } from "../middlewares/auth.js";
+import * as notificationsController from "../controllers/notifications.controller.js";
 const router = Router();
 router.get("/notifications", requireAuth, asyncHandler(notificationsController.getNotifications));
 router.post("/notifications/mark-all-read", requireAuth, asyncHandler(notificationsController.postNotificationsMarkAllRead));

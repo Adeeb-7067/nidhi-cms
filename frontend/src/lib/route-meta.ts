@@ -122,7 +122,10 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
         : { label: "Dev", href: "/dev" as const };
     return [
       home,
-      { label: role === "tester" ? "My QA projects" : "My projects", href: getProjectsListHref(role) },
+      {
+        label: role === "tester" || role === "qa" ? "My QA projects" : "My projects",
+        href: getProjectsListHref(role),
+      },
       { label: meta.title },
     ];
   }

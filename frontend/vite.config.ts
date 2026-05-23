@@ -56,6 +56,30 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: path.resolve(appRoot, "dist/public"),
       emptyOutDir: true,
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          // Only split heavy libs that do not share React init with the app shell.
+          // Custom react/radix chunks caused circular vendor ↔ vendor-react loads and
+          // "Cannot read properties of undefined (reading 'forwardRef')" in production.
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return;
+
+            const nm = (pkg: string) =>
+              id.includes(`node_modules/${pkg}`) || id.includes(`node_modules\\${pkg}`);
+
+            if (nm("recharts") || nm("framer-motion") || nm("lottie-react") || nm("lottie-web")) {
+              return "vendor-charts-motion";
+            }
+            if (nm("date-fns") || nm("jspdf") || nm("jspdf-autotable")) {
+              return "vendor-utils";
+            }
+            if (nm("firebase")) {
+              return "vendor-firebase";
+            }
+          },
+        },
+      },
     },
     server: {
       port,

@@ -2,9 +2,9 @@ import {
   usersTable,
   credentialHistoryTable,
   getNextSequence
-} from "@/models/schema";
-import { hashPassword, encryptPasswordForHistory } from "@/lib/password";
-import { HttpError } from "@/lib/http-error";
+} from "../models/schema/index.js";
+import { hashPassword, encryptPasswordForHistory } from "../lib/password.js";
+import { HttpError } from "../lib/http-error.js";
 async function createClientPortalUser(params) {
   const email = params.email.toLowerCase().trim();
   if (!email) {

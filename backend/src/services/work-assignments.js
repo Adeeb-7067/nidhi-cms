@@ -4,10 +4,10 @@ import {
   projectsTable,
   notificationsTable,
   getNextSequence
-} from "@/models/schema";
-import { projectCompanyId } from "@/services/access/company-access";
-import { notifyUser } from "@/lib/realtime";
-import { HttpError } from "@/lib/http-error";
+} from "../models/schema/index.js";
+import { projectCompanyId } from "./access/company-access.js";
+import { notifyUser } from "../lib/realtime.js";
+import { HttpError } from "../lib/http-error.js";
 async function getProjectMemberIds(projectId) {
   const members = await projectMembersTable.find({ projectId }, { userId: 1 });
   return members.map((m) => m.userId);
@@ -51,9 +51,20 @@ async function resolveBugAssignee(assigneeId, projectId) {
   await assertProjectMember(assignee.id, projectId);
   return assignee.id;
 }
+
+async function resolveBugAssignees(assigneeIds, projectId) {
+  if (!Array.isArray(assigneeIds) || assigneeIds.length === 0) return [];
+  const unique = [...new Set(assigneeIds.map((id) => Number(id)).filter((id) => id > 0))];
+  const resolved = [];
+  for (const id of unique) {
+    const devId = await resolveBugAssignee(id, projectId);
+    if (devId) resolved.push(devId);
+  }
+  return resolved;
+}
 async function resolveTaskAssignee(assigneeId, projectId) {
   if (assigneeId == null || assigneeId === 0) return null;
-  const assignee = await assertAssigneeRole(assigneeId, ["developer", "tester"]);
+  const assignee = await assertAssigneeRole(assigneeId, ["developer", "tester", "qa"]);
   await assertProjectMember(assignee.id, projectId);
   return assignee.id;
 }
@@ -89,5 +100,6 @@ export {
   getProjectMemberIds,
   notifyAssignment,
   resolveBugAssignee,
+  resolveBugAssignees,
   resolveTaskAssignee
 };

@@ -4,10 +4,10 @@ import {
   getNextSequence,
   projectMembersTable,
   usersTable
-} from "@/models/schema";
-import { notifyUser } from "@/lib/realtime";
-import { logger } from "@/lib/logger";
-import { isDatabaseConnected } from "@/lib/db";
+} from "../../models/schema/index.js";
+import { notifyUser } from "../../lib/realtime.js";
+import { logger } from "../../lib/logger.js";
+import { isDatabaseConnected } from "../../lib/db.js";
 const DAY_MS = 864e5;
 async function notifyExpiry(projectId, title, body, entityId) {
   const members = await projectMembersTable.find({ projectId });

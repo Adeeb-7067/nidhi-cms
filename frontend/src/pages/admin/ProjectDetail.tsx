@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { 
   useGetProject, 
@@ -23,6 +23,11 @@ import {
   useGetProjectHistory,
   getGetProjectHistoryQueryKey
 } from "@/api";
+import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-dialog";
+import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
+import { ProjectBugsPanel } from "@/components/bugs/project-bugs-panel";
+import { canUserModifyBug } from "@/lib/bug-workflow";
+import { getListBugsQueryKey, type Bug as BugRecord } from "@/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -45,7 +50,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
   ArrowLeft, Users, Github, Layout, Globe, Calendar, Clock, Download, Bug, MessageSquare, 
-  Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson 
+  Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson, Package 
 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -77,6 +82,18 @@ export default function AdminProjectDetail() {
 
   const openDiscussions = () => setLocation(discussionsHref);
   const { user } = useAuth();
+  const role = user?.role;
+  const canReportBugs =
+    role === "developer" ||
+    role === "tester" ||
+    role === "qa" ||
+    role === "super_admin";
+  const canAssignBugs =
+    role === "tester" || role === "qa" || role === "super_admin";
+  const [bugFormOpen, setBugFormOpen] = useState(false);
+  const [detailBugId, setDetailBugId] = useState<number | null>(null);
+  const [detailIssueKey, setDetailIssueKey] = useState<string | null>(null);
+  const [editBug, setEditBug] = useState<BugRecord | null>(null);
   const projectsListHref = getProjectsListHref(user?.role);
   const { socket } = useRealtime();
   const queryClient = useQueryClient();
@@ -97,50 +114,46 @@ export default function AdminProjectDetail() {
     return undefined;
   }, [socket, projectId, queryClient]);
 
-  const handleCopyPostman = () => {
-    if (!project?.postmanJson) return;
-    navigator.clipboard.writeText(project.postmanJson);
-    toast.success("Postman JSON copied to clipboard");
-  };
+  const validProjectId = !!projectId && !Number.isNaN(projectId);
 
   const { data: project, isLoading } = useGetProject(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectQueryKey(projectId) },
   });
 
   const { data: members } = useGetProjectMembers(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectMembersQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectMembersQueryKey(projectId) }
   });
 
   const { data: analytics } = useGetProjectAnalytics(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectAnalyticsQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectAnalyticsQueryKey(projectId) }
   });
 
   const { data: apks } = useGetApkReleases(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetApkReleasesQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetApkReleasesQueryKey(projectId) }
   });
 
   const { data: bugs } = useGetProjectBugs(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectBugsQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectBugsQueryKey(projectId) }
   });
 
   const { data: logs } = useGetProjectLogs(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectLogsQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectLogsQueryKey(projectId) }
   });
 
   const { data: comments } = useListComments({ threadType: "project", threadId: projectId }, {
-    query: { enabled: !!projectId, queryKey: getListCommentsQueryKey({ threadType: "project", threadId: projectId }) }
+    query: { enabled: validProjectId, queryKey: getListCommentsQueryKey({ threadType: "project", threadId: projectId }) }
   });
 
   const { data: requests } = useListRequests({ projectId, limit: 50 }, {
-    query: { enabled: !!projectId, queryKey: getListRequestsQueryKey({ projectId, limit: 50 }) }
+    query: { enabled: validProjectId, queryKey: getListRequestsQueryKey({ projectId, limit: 50 }) }
   });
 
   const { data: milestones } = useGetProjectMilestones(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectMilestonesQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectMilestonesQueryKey(projectId) }
   });
   
   const { data: history } = useGetProjectHistory(projectId, {
-    query: { enabled: !!projectId, queryKey: getGetProjectHistoryQueryKey(projectId) }
+    query: { enabled: validProjectId, queryKey: getGetProjectHistoryQueryKey(projectId) }
   });
 
   const [activeTab, setActiveTab] = useState<ProjectHubTab>("overview");
@@ -172,30 +185,29 @@ export default function AdminProjectDetail() {
     }
   };
 
+  const approvedAddonRequests = useMemo(
+    () =>
+      (requests?.requests ?? []).filter(
+        (r) =>
+          (r as { type: string }).type === "add_on_work" && r.status === "approved",
+      ),
+    [requests?.requests],
+  );
+
+  if (!validProjectId) {
+    return <div className="py-16 text-center text-sm text-muted-foreground">Invalid project link.</div>;
+  }
+
   if (isLoading) {
     return <div className="space-y-4"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-64 w-full" /></div>;
   }
 
-  if (!project) return <div>Project not found</div>;
+  if (!project) return <div className="py-16 text-center text-sm text-muted-foreground">Project not found</div>;
 
-  const getSeverityColor = (severity: string) => {
-    switch(severity) {
-      case 'critical': return 'bg-red-500 text-white border-red-500';
-      case 'high': return 'bg-orange-500 text-white border-orange-500';
-      case 'medium': return 'bg-amber-500 text-white border-amber-500';
-      case 'low': return 'bg-green-500 text-white border-green-500';
-      default: return '';
-    }
-  };
-
-  const getBugStatusColor = (status: string) => {
-    switch(status) {
-      case 'open': return 'text-red-500 bg-red-500/10 border-red-500/20';
-      case 'in_progress': return 'text-blue-500 bg-blue-500/10 border-blue-500/20';
-      case 'fixed': return 'text-purple-500 bg-purple-500/10 border-purple-500/20';
-      case 'verified': return 'text-green-500 bg-green-500/10 border-green-500/20';
-      default: return 'text-gray-500 bg-gray-500/10 border-gray-500/20';
-    }
+  const handleCopyPostman = () => {
+    if (!project.postmanJson) return;
+    navigator.clipboard.writeText(project.postmanJson);
+    toast.success("Postman JSON copied to clipboard");
   };
 
   return (
@@ -247,6 +259,49 @@ export default function AdminProjectDetail() {
                 </div>
               </CardContent>
             </Card>
+
+            {approvedAddonRequests.length > 0 && (
+              <Card className="md:col-span-2 bg-card border-emerald-500/20">
+                <CardHeader className="p-3 pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Package className="h-4 w-4 text-emerald-600" />
+                    Approved add-on work
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Client add-on requests accepted by super admin — included in project scope
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-3 pt-0 space-y-2">
+                  {approvedAddonRequests.map((req) => (
+                    <div
+                      key={req.id}
+                      className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-semibold">{req.title}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            Requested by {req.developerName} ·{" "}
+                            {new Date(req.createdAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <Badge className="bg-emerald-500/15 text-emerald-700 border-emerald-500/30">
+                          Approved
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                        {req.description}
+                      </p>
+                      {req.adminNote && (
+                        <p className="text-[10px] mt-2 text-foreground/80 border-t border-border/50 pt-2">
+                          <span className="font-medium">Admin note:</span> {req.adminNote}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             <Card className="bg-card">
               <CardHeader className="p-3 pb-0">
@@ -367,48 +422,45 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="bugs" className="mt-4">
+        <TabsContent value="bugs" className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-muted-foreground">
+              Report multiple bugs at once or open the full tracker.
+            </p>
+            <div className="flex gap-2">
+              {canReportBugs && (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => openBugFormDeferred(() => setBugFormOpen(true))}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Report bugs
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="h-8 text-xs" asChild>
+                <Link href={`/dev/bugs?projectId=${projectId}`}>Open bug tracker</Link>
+              </Button>
+            </div>
+          </div>
           <Card className="bg-card">
             <CardHeader className="p-3">
-              <CardTitle className="text-sm">Project Bugs</CardTitle>
+              <CardTitle className="text-sm">Project bugs</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">ID</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Title</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Severity</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Reporter</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bugs?.bugs.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-20 text-xs">No bugs reported</TableCell>
-                    </TableRow>
-                  ) : (
-                    bugs?.bugs.map((bug) => (
-                      <TableRow key={bug.id} className="text-xs">
-                        <TableCell className="font-mono text-[10px] text-muted-foreground">{bug.bugNumber}</TableCell>
-                        <TableCell className="font-medium">{bug.title}</TableCell>
-                        <TableCell>
-                          <Badge className={`${getSeverityColor(bug.severity)} text-[10px] px-1.5 py-0 h-4`}>
-                            {bug.severity.toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`${getBugStatusColor(bug.status)} text-[10px] px-1.5 py-0 h-4`}>
-                            {bug.status.replace('_', ' ').toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{bug.reporterName}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+              <ProjectBugsPanel
+                bugs={bugs?.bugs ?? []}
+                onOpenBug={(bug) => {
+                  setDetailBugId(bug.id);
+                  setDetailIssueKey(bug.issueKey ?? null);
+                }}
+                onEditBug={(bug) => {
+                  setEditBug(bug);
+                  setDetailBugId(null);
+                  openBugFormDeferred(() => setBugFormOpen(true));
+                }}
+                canEdit={(bug) => canUserModifyBug(role, user?.id, bug)}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -757,6 +809,59 @@ export default function AdminProjectDetail() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <BugFormDialog
+        open={bugFormOpen}
+        onOpenChange={(open) => {
+          setBugFormOpen(open);
+          if (!open) {
+            setEditBug(null);
+            if (validProjectId) {
+              queryClient.invalidateQueries({
+                queryKey: getGetProjectBugsQueryKey(projectId),
+              });
+              queryClient.invalidateQueries({ queryKey: ["/api/bugs"] });
+            }
+          }
+        }}
+        editBug={editBug}
+        userRole={role}
+        userId={user?.id}
+        canAssign={canAssignBugs}
+        canFullEdit={canAssignBugs}
+        isAdmin={role === "super_admin"}
+        defaultProjectId={projectId}
+      />
+
+      <BugDetailSheet
+        bugId={detailBugId}
+        initialIssueKey={detailIssueKey}
+        open={detailBugId != null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDetailBugId(null);
+            setDetailIssueKey(null);
+          }
+        }}
+        onEdit={(bug) => {
+          setEditBug(bug);
+          setDetailBugId(null);
+          setDetailIssueKey(null);
+          openBugFormDeferred(() => setBugFormOpen(true));
+        }}
+        canComment={!!user}
+        userRole={role}
+        userId={user?.id}
+        listQueryKey={getGetProjectBugsQueryKey(projectId)}
+        onSelectChild={(child) => {
+          setDetailBugId(child.id);
+          setDetailIssueKey(child.issueKey ?? null);
+        }}
+        onSelectParent={(parentId) => {
+          setDetailBugId(parentId);
+          setDetailIssueKey(null);
+        }}
+      />
     </div>
   );
 }

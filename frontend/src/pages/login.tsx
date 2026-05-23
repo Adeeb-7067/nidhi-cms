@@ -8,14 +8,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { Lock, Mail, User as UserIcon, CheckCircle, Shield, Users, Sparkles, Loader2 } from "lucide-react";
+import { Lock, Mail, User as UserIcon, CheckCircle, Shield, Users, Sparkles, Loader2, ArrowRight } from "lucide-react";
 import { AppLogo } from "@/components/brand/AppLogo";
 import { BRAND } from "@/lib/brand";
+import { AppLoadingScreen } from "@/components/loading";
 import { LoginLottie } from "@/components/auth/LoginLottie";
+import { LoginBackground } from "@/components/auth/LoginBackground";
 import { AnimatePresence, motion } from "framer-motion";
 
 const emailSchema = z.object({
@@ -32,25 +33,36 @@ type EmailFormValues = z.infer<typeof emailSchema>;
 type EmployeeFormValues = z.infer<typeof employeeSchema>;
 
 const FEATURES = [
-  { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-500/10", label: "Real-time project tracking" },
-  { icon: Shield, color: "text-blue-600", bg: "bg-blue-500/10", label: "Enterprise-grade security" },
-  { icon: Users, color: "text-violet-600", bg: "bg-violet-500/10", label: "Multi-role team management" },
+  { icon: CheckCircle, color: "text-emerald-600", bg: "bg-emerald-500/10", ring: "ring-emerald-500/20", label: "Real-time project tracking" },
+  { icon: Shield, color: "text-blue-600", bg: "bg-blue-500/10", ring: "ring-blue-500/20", label: "Enterprise-grade security" },
+  { icon: Users, color: "text-violet-600", bg: "bg-violet-500/10", ring: "ring-violet-500/20", label: "Multi-role team management" },
 ] as const;
 
+const spring = { type: "spring" as const, stiffness: 260, damping: 24 };
+
 const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
+  hidden: { opacity: 0, y: 20 },
   show: (i: number) => ({
     opacity: 1,
     y: 0,
-    transition: { delay: i * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] as const },
+    transition: { delay: 0.08 + i * 0.07, duration: 0.55, ease: [0.22, 1, 0.36, 1] as const },
   }),
 };
 
 const tabMotion = {
-  initial: { opacity: 0, x: 12 },
-  animate: { opacity: 1, x: 0 },
-  exit: { opacity: 0, x: -12 },
-  transition: { duration: 0.25 },
+  initial: { opacity: 0, x: 20, filter: "blur(4px)" },
+  animate: { opacity: 1, x: 0, filter: "blur(0px)" },
+  exit: { opacity: 0, x: -20, filter: "blur(4px)" },
+  transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const },
+};
+
+const fieldStagger = {
+  hidden: { opacity: 0, y: 10 },
+  show: (i: number) => ({
+    opacity: 1,
+    y: 0,
+    transition: { delay: i * 0.06, duration: 0.35, ease: [0.22, 1, 0.36, 1] as const },
+  }),
 };
 
 type LoginFormPanelProps = {
@@ -58,90 +70,145 @@ type LoginFormPanelProps = {
   form: UseFormReturn<EmailFormValues> | UseFormReturn<EmployeeFormValues>;
   onSubmit: (values: EmailFormValues | EmployeeFormValues) => void;
   isPending: boolean;
+  showForgotLink?: boolean;
 };
 
-function LoginFormPanel({ mode, form, onSubmit, isPending }: LoginFormPanelProps) {
+function LoginFormPanel({ mode, form, onSubmit, isPending, showForgotLink }: LoginFormPanelProps) {
   const isEmail = mode === "email";
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-3.5">
-        <FormField
-          control={form.control}
-          name="identifier"
-          render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <FormLabel className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                {isEmail ? "Email" : "Employee ID"}
-              </FormLabel>
-              <FormControl>
-                <div className="group relative">
-                  {isEmail ? (
-                    <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-600" />
-                  ) : (
-                    <UserIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-600" />
-                  )}
-                  <Input
-                    placeholder={isEmail ? "name@agency.com" : "e.g. DE001"}
-                    className="h-10 border-slate-200/80 bg-white/80 pl-9 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:ring-blue-500/20"
-                    {...field}
-                  />
-                </div>
-              </FormControl>
-              <FormMessage className="text-[11px]" />
-            </FormItem>
-          )}
-        />
-        <FormField
-          control={form.control}
-          name="password"
-          render={({ field }) => (
-            <FormItem className="space-y-1.5">
-              <div className="flex items-center justify-between">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <motion.div custom={0} variants={fieldStagger} initial="hidden" animate="show">
+          <FormField
+            control={form.control}
+            name="identifier"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
                 <FormLabel className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-                  Password
+                  {isEmail ? "Email" : "Employee ID"}
                 </FormLabel>
-                <a
-                  href="#"
-                  className="text-[10px] font-medium text-blue-600 transition-colors hover:text-blue-700"
-                  onClick={(e) => e.preventDefault()}
-                >
-                  Forgot password?
-                </a>
-              </div>
-              <FormControl>
-                <div className="group relative">
-                  <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-600" />
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    className="h-10 border-slate-200/80 bg-white/80 pl-9 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:ring-blue-500/20"
-                    {...field}
-                  />
-                </div>
-              </FormControl>
-              <FormMessage className="text-[11px]" />
-            </FormItem>
-          )}
-        />
-        <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
-          <Button
-            type="submit"
-            className="h-10 w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 hover:from-blue-700 hover:to-indigo-700"
-            disabled={isPending}
-          >
-            {isPending ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Signing in...
-              </span>
-            ) : (
-              "Sign in"
+                <FormControl>
+                  <div className="group relative">
+                    {isEmail ? (
+                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within:text-blue-600" />
+                    ) : (
+                      <UserIcon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within:text-blue-600" />
+                    )}
+                    <Input
+                      placeholder={isEmail ? "name@agency.com" : "e.g. DE001"}
+                      className="h-11 border-slate-200/80 bg-white/90 pl-9 text-sm text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25"
+                      {...field}
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage className="text-[11px]" />
+              </FormItem>
             )}
-          </Button>
+          />
+        </motion.div>
+
+        <motion.div custom={1} variants={fieldStagger} initial="hidden" animate="show">
+          <FormField
+            control={form.control}
+            name="password"
+            render={({ field }) => (
+              <FormItem className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <FormLabel className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                    Password
+                  </FormLabel>
+                  {showForgotLink ? (
+                    <a
+                      href="/forgot-password"
+                      className="text-[10px] font-medium text-blue-600 transition-colors hover:text-blue-700"
+                    >
+                      Forgot password?
+                    </a>
+                  ) : (
+                    <span className="text-[10px] text-slate-400">Use email tab to reset</span>
+                  )}
+                </div>
+                <FormControl>
+                  <div className="group relative">
+                    <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within:text-blue-600" />
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      className="h-11 border-slate-200/80 bg-white/90 pl-9 text-sm text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25"
+                      {...field}
+                    />
+                  </div>
+                </FormControl>
+                <FormMessage className="text-[11px]" />
+              </FormItem>
+            )}
+          />
+        </motion.div>
+
+        <motion.div custom={2} variants={fieldStagger} initial="hidden" animate="show">
+          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} transition={spring}>
+            <Button
+              type="submit"
+              className="group relative h-11 w-full overflow-hidden bg-gradient-to-r from-blue-600 via-blue-600 to-indigo-600 text-sm font-semibold text-white shadow-lg shadow-blue-500/30 hover:from-blue-500 hover:to-indigo-500"
+              disabled={isPending}
+            >
+              <motion.span
+                className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+                initial={{ x: "-100%" }}
+                animate={{ x: "200%" }}
+                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 1.2, ease: "easeInOut" }}
+              />
+              {isPending ? (
+                <span className="relative flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                <span className="relative flex items-center justify-center gap-2">
+                  Sign in
+                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                </span>
+              )}
+            </Button>
+          </motion.div>
         </motion.div>
       </form>
     </Form>
+  );
+}
+
+function LoginTabs({
+  activeTab,
+  onChange,
+}: {
+  activeTab: "email" | "employee";
+  onChange: (tab: "email" | "employee") => void;
+}) {
+  return (
+    <div className="relative mb-5 grid h-11 grid-cols-2 rounded-xl bg-slate-100/90 p-1 ring-1 ring-slate-200/60">
+      <motion.div
+        className="absolute inset-y-1 rounded-lg bg-white shadow-md shadow-slate-200/80 ring-1 ring-slate-200/50"
+        layout
+        transition={spring}
+        style={{
+          width: "calc(50% - 4px)",
+          left: activeTab === "email" ? 4 : "calc(50% + 0px)",
+        }}
+      />
+      {(["email", "employee"] as const).map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          onClick={() => onChange(tab)}
+          className={`relative z-10 rounded-lg text-xs font-semibold transition-colors duration-200 ${
+            activeTab === tab ? "text-slate-900" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {tab === "email" ? "Email" : "Employee ID"}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -165,7 +232,8 @@ export default function Login() {
     if (isInitializing || isLoading) return;
     if (accessToken && user) {
       if (user.role === "super_admin") setLocation("/admin");
-      else if (user.role === "developer" || user.role === "tester") setLocation("/dev");
+      else if (user.role === "developer" || user.role === "tester" || user.role === "qa")
+        setLocation("/dev");
       else if (user.role === "client") setLocation("/client");
     }
   }, [isInitializing, isLoading, accessToken, user, setLocation]);
@@ -183,13 +251,10 @@ export default function Login() {
 
   if (isInitializing || (accessToken && isLoading)) {
     return (
-      <div className="fixed inset-0 flex h-dvh w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          className="h-10 w-10 rounded-full border-2 border-blue-600 border-t-transparent"
-        />
-      </div>
+      <AppLoadingScreen
+        message="Preparing your workspace"
+        submessage="Signing you in…"
+      />
     );
   }
 
@@ -209,36 +274,31 @@ export default function Login() {
   };
 
   return (
-    <div className="fixed inset-0 h-dvh w-full overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/90 to-indigo-100/80 text-slate-900">
-      <motion.div
-        className="pointer-events-none absolute -left-32 top-10 h-72 w-72 rounded-full bg-blue-400/20 blur-3xl"
-        animate={{ x: [0, 40, 0], y: [0, 20, 0] }}
-        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }}
-      />
-      <motion.div
-        className="pointer-events-none absolute -right-24 bottom-0 h-64 w-64 rounded-full bg-violet-400/20 blur-3xl"
-        animate={{ x: [0, -30, 0], y: [0, -25, 0] }}
-        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
-      />
+    <div className="fixed inset-0 h-dvh w-full overflow-hidden text-slate-900">
+      <LoginBackground />
 
       <div className="relative z-10 flex h-full min-h-0 w-full flex-col lg:flex-row">
-        {/* Hero — desktop only */}
+        {/* Hero — desktop */}
         <motion.section
-          initial={{ opacity: 0, x: -20 }}
+          initial={{ opacity: 0, x: -32 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="hidden h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-white/60 bg-white/40 px-8 py-6 backdrop-blur-sm lg:flex xl:px-12"
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+          className="hidden h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-white/50 bg-white/30 px-8 py-8 backdrop-blur-md lg:flex xl:px-14"
         >
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-5 overflow-hidden">
             <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
-              <AppLogo size="lg" className="drop-shadow-sm" />
+              <AppLogo size="lg" className="drop-shadow-md" />
             </motion.div>
 
             <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/80 bg-blue-50 px-2.5 py-0.5 text-[11px] font-medium text-blue-700">
+              <motion.span
+                className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/80 bg-blue-50/90 px-3 py-1 text-[11px] font-medium text-blue-700 shadow-sm"
+                animate={{ boxShadow: ["0 0 0 0 rgba(59,130,246,0)", "0 0 0 8px rgba(59,130,246,0)", "0 0 0 0 rgba(59,130,246,0)"] }}
+                transition={{ duration: 2.5, repeat: Infinity }}
+              >
                 <Sparkles className="h-3 w-3" />
                 Welcome to {BRAND.shortName}
-              </span>
+              </motion.span>
             </motion.div>
 
             <motion.h1
@@ -246,26 +306,20 @@ export default function Login() {
               variants={fadeUp}
               initial="hidden"
               animate="show"
-              className="shrink-0 text-2xl font-bold tracking-tight text-slate-900 xl:text-3xl"
+              className="shrink-0 bg-gradient-to-r from-slate-900 via-slate-800 to-blue-900 bg-clip-text text-3xl font-bold tracking-tight text-transparent xl:text-4xl"
             >
               Your agency command center
             </motion.h1>
 
-            <motion.p
-              custom={3}
-              variants={fadeUp}
-              initial="hidden"
-              animate="show"
-              className="line-clamp-2 shrink-0 text-sm leading-snug text-slate-600"
-            >
+            <motion.p custom={3} variants={fadeUp} initial="hidden" animate="show" className="max-w-md shrink-0 text-sm leading-relaxed text-slate-600">
               {BRAND.description}
             </motion.p>
 
             <motion.div custom={4} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
-              <LoginLottie className="h-[120px] w-full max-w-[240px] xl:h-[140px]" />
+              <LoginLottie className="h-[160px] w-full max-w-[300px] xl:h-[180px]" />
             </motion.div>
 
-            <ul className="grid shrink-0 gap-2">
+            <ul className="grid shrink-0 gap-3">
               {FEATURES.map((feature, i) => (
                 <motion.li
                   key={feature.label}
@@ -273,12 +327,16 @@ export default function Login() {
                   variants={fadeUp}
                   initial="hidden"
                   animate="show"
-                  className="flex items-center gap-2.5"
+                  whileHover={{ x: 6, transition: { duration: 0.2 } }}
+                  className="flex cursor-default items-center gap-3 rounded-xl border border-white/60 bg-white/50 px-3 py-2.5 shadow-sm backdrop-blur-sm"
                 >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${feature.bg}`}>
-                    <feature.icon className={`h-3.5 w-3.5 ${feature.color}`} />
-                  </div>
-                  <span className="text-xs font-medium text-slate-700">{feature.label}</span>
+                  <motion.div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${feature.bg} ${feature.ring}`}
+                    whileHover={{ rotate: [0, -8, 8, 0], transition: { duration: 0.4 } }}
+                  >
+                    <feature.icon className={`h-4 w-4 ${feature.color}`} />
+                  </motion.div>
+                  <span className="text-sm font-medium text-slate-700">{feature.label}</span>
                 </motion.li>
               ))}
             </ul>
@@ -287,68 +345,106 @@ export default function Login() {
 
         {/* Sign-in */}
         <motion.section
-          initial={{ opacity: 0, y: 16 }}
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="flex h-full min-h-0 flex-1 items-center justify-center overflow-hidden px-4 py-4 sm:px-6 lg:px-10"
+          transition={{ duration: 0.55, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+          className="flex h-full min-h-0 flex-1 items-center justify-center overflow-hidden px-4 py-6 sm:px-8 lg:px-12"
         >
-          <div className="flex w-full max-w-[400px] flex-col items-center justify-center">
-            <div className="mb-4 shrink-0 lg:hidden">
+          <div className="flex w-full max-w-[420px] flex-col items-center justify-center">
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.4 }}
+              className="mb-5 shrink-0 lg:hidden"
+            >
               <AppLogo size="md" />
-            </div>
+            </motion.div>
 
             <motion.div
-              className="w-full shrink-0 overflow-hidden rounded-2xl border border-white/80 bg-white/90 px-6 py-6 shadow-xl shadow-slate-300/25 backdrop-blur-xl sm:px-7"
-              whileHover={{ boxShadow: "0 20px 40px -12px rgba(59, 130, 246, 0.12)" }}
-              transition={{ duration: 0.3 }}
+              initial={{ opacity: 0, y: 28, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.55, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+              className="relative w-full shrink-0"
             >
-              <div className="mb-5 space-y-1">
-                <h2 className="text-xl font-bold tracking-tight text-slate-900">Welcome back</h2>
-                <p className="text-xs text-slate-500">Sign in to continue to your workspace</p>
+              <motion.div
+                className="pointer-events-none absolute -inset-px rounded-[1.35rem] bg-gradient-to-br from-blue-400/40 via-indigo-400/20 to-violet-400/30 opacity-70 blur-sm"
+                animate={{ opacity: [0.5, 0.85, 0.5] }}
+                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              />
+
+              <div className="relative overflow-hidden rounded-2xl border border-white/90 bg-white/95 px-6 py-7 shadow-2xl shadow-blue-900/10 backdrop-blur-xl sm:px-8">
+                <motion.div
+                  className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-blue-400/10 blur-2xl"
+                  animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.5, 0.3] }}
+                  transition={{ duration: 5, repeat: Infinity }}
+                />
+
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className="relative mb-6 space-y-1"
+                >
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">Welcome back</h2>
+                  <p className="text-sm text-slate-500">Sign in to continue to your workspace</p>
+                </motion.div>
+
+                <LoginTabs activeTab={activeTab} onChange={setActiveTab} />
+
+                <AnimatePresence mode="wait">
+                  {activeTab === "email" ? (
+                    <motion.div key="email" {...tabMotion}>
+                      <LoginFormPanel
+                        mode="email"
+                        form={emailForm}
+                        onSubmit={onSubmit}
+                        isPending={loginMutation.isPending}
+                        showForgotLink
+                      />
+                    </motion.div>
+                  ) : (
+                    <motion.div key="employee" {...tabMotion}>
+                      <LoginFormPanel
+                        mode="employee"
+                        form={employeeForm}
+                        onSubmit={onSubmit}
+                        isPending={loginMutation.isPending}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.45 }}
+                  className="relative mt-6"
+                >
+                  <Separator className="bg-slate-200/80" />
+                  <p className="mt-4 text-center text-[10px] text-slate-400">{BRAND.copyright}</p>
+                </motion.div>
               </div>
+            </motion.div>
 
-              <Tabs
-                value={activeTab}
-                onValueChange={(v) => setActiveTab(v as "email" | "employee")}
-                className="w-full"
-              >
-                <TabsList className="mb-5 grid h-10 w-full grid-cols-2 rounded-lg bg-slate-100/80 p-1">
-                  <TabsTrigger
-                    value="email"
-                    className="rounded-md text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-                  >
-                    Email
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="employee"
-                    className="rounded-md text-xs font-medium data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-                  >
-                    Employee ID
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              <AnimatePresence mode="wait">
-                {activeTab === "email" ? (
-                  <motion.div key="email" {...tabMotion}>
-                    <LoginFormPanel mode="email" form={emailForm} onSubmit={onSubmit} isPending={loginMutation.isPending} />
-                  </motion.div>
-                ) : (
-                  <motion.div key="employee" {...tabMotion}>
-                    <LoginFormPanel
-                      mode="employee"
-                      form={employeeForm}
-                      onSubmit={onSubmit}
-                      isPending={loginMutation.isPending}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="mt-5">
-                <Separator className="bg-slate-200/80" />
-                <p className="mt-3 text-center text-[10px] text-slate-400">{BRAND.copyright}</p>
-              </div>
+            {/* Mobile feature pills */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.5 }}
+              className="mt-6 flex flex-wrap justify-center gap-2 lg:hidden"
+            >
+              {FEATURES.map((f, i) => (
+                <motion.span
+                  key={f.label}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: 0.55 + i * 0.08 }}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-medium ring-1 ${f.bg} ${f.ring} ${f.color}`}
+                >
+                  <f.icon className="h-3 w-3" />
+                  {f.label.split(" ")[0]}
+                </motion.span>
+              ))}
             </motion.div>
           </div>
         </motion.section>

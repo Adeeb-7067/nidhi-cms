@@ -2,8 +2,8 @@ import {
   inventoryActivitiesTable,
   notificationsTable,
   getNextSequence
-} from "@/models/schema";
-import { notifyUser } from "@/lib/realtime";
+} from "../../models/schema/index.js";
+import { notifyUser } from "../../lib/realtime.js";
 async function logInventoryActivity(req, projectId, action, entityType, entityId, entityName, oldVal, newVal) {
   const id = await getNextSequence("inventory_activities");
   await inventoryActivitiesTable.create({
@@ -20,10 +20,10 @@ async function logInventoryActivity(req, projectId, action, entityType, entityId
   });
 }
 async function notifyProjectMembers(projectId, excludeUserId, title, body, entityType, entityId) {
-  const { projectMembersTable } = await import("@/models/schema");
+  const { projectMembersTable } = await import("../../models/schema/index.js");
   const members = await projectMembersTable.find({ projectId });
   const recipientIds = new Set(members.map((m) => m.userId));
-  const { usersTable } = await import("@/models/schema");
+  const { usersTable } = await import("../../models/schema/index.js");
   const admins = await usersTable.find({ role: "super_admin", status: "active" });
   admins.forEach((a) => recipientIds.add(a.id));
   recipientIds.delete(excludeUserId);
