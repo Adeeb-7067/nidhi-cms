@@ -120,6 +120,9 @@ export const UserUpdateStatus = {
 export interface UserUpdate {
   name?: string;
   email?: string;
+  /** Super admin only — min 8 chars; omit to keep current password */
+  password?: string;
+  role?: string;
   subType?: string;
   designation?: string;
   avatarUrl?: string;
@@ -1119,6 +1122,7 @@ export const CommentThreadType = {
   bug: "bug",
   apk: "apk",
   request: "request",
+  ticket: "ticket",
 } as const;
 
 export interface Comment {
@@ -1148,6 +1152,7 @@ export const CommentInputThreadType = {
   bug: "bug",
   apk: "apk",
   request: "request",
+  ticket: "ticket",
 } as const;
 
 export interface CommentInput {
@@ -1184,6 +1189,8 @@ export interface NotificationListResult {
   notifications: Notification[];
   unreadCount: number;
   total: number;
+  page?: number;
+  limit?: number;
 }
 
 export type ResourceRequestType =
@@ -1550,6 +1557,14 @@ export const TicketPriority = {
   urgent: "urgent",
 } as const;
 
+export type TicketAudience =
+  (typeof TicketAudience)[keyof typeof TicketAudience];
+
+export const TicketAudience = {
+  client: "client",
+  staff: "staff",
+} as const;
+
 export interface Ticket {
   id: number;
   /** @nullable */
@@ -1558,6 +1573,9 @@ export interface Ticket {
   projectName?: string | null;
   creatorId: number;
   creatorName?: string;
+  /** @nullable */
+  creatorRole?: string | null;
+  audience?: TicketAudience;
   /** @nullable */
   assignedTo?: number | null;
   /** @nullable */
@@ -1651,6 +1669,7 @@ export type ListTicketsParams = {
   priority?: string;
   projectId?: number;
   search?: string;
+  audience?: "client" | "staff" | "all";
   page?: number;
   limit?: number;
 };
@@ -1729,6 +1748,8 @@ export type ListBugsParams = {
   projectId?: number;
   status?: string;
   severity?: string;
+  priority?: string;
+  search?: string;
   page?: number;
   limit?: number;
   assigneeId?: number;

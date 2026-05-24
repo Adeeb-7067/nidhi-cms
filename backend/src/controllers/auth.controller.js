@@ -117,12 +117,20 @@ async function postAuthForgotPassword(req, res) {
   const user = await usersTable.findOne({ email: email.toLowerCase(), status: "active" });
   let meta = { expiresInSeconds: 600 };
   if (user) {
-    meta = await issuePasswordOtp({
-      user,
-      purpose: "forgot_password",
-      log: req.log,
-    });
-    req.log.info({ userId: user.id }, "Password reset OTP issued");
+    try {
+      meta = await issuePasswordOtp({
+        user,
+        purpose: "forgot_password",
+        log: req.log,
+      });
+      req.log.info({ userId: user.id }, "Password reset OTP issued");
+    } catch (err) {
+      req.log.error(
+        { err, keyPattern: err?.keyPattern, keyValue: err?.keyValue },
+        "Failed to issue password reset OTP",
+      );
+      throw err;
+    }
   }
   res.json({
     message: "If an account exists, a verification code has been sent to your email.",

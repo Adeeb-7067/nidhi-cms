@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -403,8 +404,7 @@ function CredentialsTab({
           </DialogHeader>
           {!revealed ? (
             <div className="space-y-3">
-              <Input
-                type="password"
+              <PasswordInput
                 placeholder="Your account password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -481,8 +481,7 @@ function CredentialsTab({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Secret value</Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={form.value}
                 onChange={(e) => setForm({ ...form, value: e.target.value })}
                 className="h-8 text-xs"

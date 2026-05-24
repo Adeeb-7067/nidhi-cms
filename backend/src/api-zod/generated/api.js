@@ -63,6 +63,7 @@ const ListTicketsQueryParams = zod.object({
   priority: zod.coerce.string().optional(),
   projectId: zod.coerce.number().optional(),
   search: zod.coerce.string().optional(),
+  audience: zod.enum(["all", "client", "staff"]).optional(),
   page: zod.coerce.number().optional(),
   limit: zod.coerce.number().optional()
 });
@@ -74,6 +75,8 @@ const ListTicketsResponse = zod.object({
       projectName: zod.string().nullish(),
       creatorId: zod.number(),
       creatorName: zod.string().optional(),
+      creatorRole: zod.string().nullish(),
+      audience: zod.enum(["client", "staff"]).optional(),
       assignedTo: zod.number().nullish(),
       assigneeName: zod.string().nullish(),
       title: zod.string(),

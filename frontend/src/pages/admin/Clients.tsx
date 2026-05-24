@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useListClients, useCreateClient, useUpdateClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn } from "lucide-react";
+import { Search, Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -54,6 +56,7 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError, getApiErrorMessage } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
+import { useClientPagination } from "@/lib/table-pagination";
 import { useQueryClient } from "@tanstack/react-query";
 import { Client } from "@/api";
 
@@ -64,6 +67,7 @@ const clientSchema = z.object({
   portalEmail: z.string().email("Invalid portal login email").optional().or(z.literal("")),
   password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal("")),
   phone: z.string().optional(),
+  address: z.string().optional(),
   gstNumber: z.string().optional(),
   industry: z.string().optional(),
   website: z.string().optional(),
@@ -119,6 +123,9 @@ export default function AdminClients() {
   const { data: credentials, isLoading: isLoadingCredentials } = useGetUserCredentials(selectedClient?.userId || 0, {
     query: { enabled: !!selectedClient?.userId, queryKey: getGetUserCredentialsQueryKey(selectedClient?.userId || 0) }
   });
+  const { pageItems: credentialRows, pagination: credentialsPagination } = useClientPagination(
+    credentials ?? [],
+  );
 
   const revealMutation = useRevealCredential();
 
@@ -161,6 +168,7 @@ export default function AdminClients() {
       portalEmail: "",
       password: "",
       phone: "",
+      address: "",
       gstNumber: "",
       industry: "",
       website: "",
@@ -178,6 +186,7 @@ export default function AdminClients() {
         portalEmail: "",
         password: "",
         phone: editClient.phone || "",
+        address: editClient.address || "",
         gstNumber: editClient.gstNumber || "",
         industry: (editClient as any).industry || "",
         website: (editClient as any).website || "",
@@ -192,6 +201,7 @@ export default function AdminClients() {
         portalEmail: "",
         password: "",
         phone: "",
+        address: "",
         gstNumber: "",
         industry: "",
         website: "",
@@ -319,14 +329,14 @@ export default function AdminClients() {
       id: "phone",
       header: "Phone",
       detailOnly: true,
-      detailCell: (client) => client.phone || "—",
+      detailCell: (client) => client.phone || "?",
     },
     {
       id: "address",
       header: "Address",
       detailOnly: true,
       detailCell: (client) => (
-        <span className="whitespace-pre-wrap">{client.address || "—"}</span>
+        <span className="whitespace-pre-wrap">{client.address || "?"}</span>
       ),
     },
     {
@@ -345,7 +355,7 @@ export default function AdminClients() {
             {client.website}
           </a>
         ) : (
-          "—"
+          "?"
         ),
     },
     {
@@ -428,6 +438,7 @@ export default function AdminClients() {
                 portalEmail: "",
                 password: "",
                 phone: "",
+                address: "",
                 gstNumber: "",
                 industry: "",
                 website: "",
@@ -439,7 +450,7 @@ export default function AdminClients() {
           >
             <Plus className="mr-2 h-4 w-4" /> Add Client
           </Button>
-          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto bg-card border-border">
+          <DialogContent className="sm:max-w-[520px] bg-card border-border">
             <DialogHeader>
               <DialogTitle>{editClient ? "Edit Client" : "Add Client"}</DialogTitle>
               <DialogDescription>
@@ -518,7 +529,7 @@ export default function AdminClients() {
                           {editClient ? "New portal password (optional)" : "Portal password"}
                         </FormLabel>
                         <FormControl>
-                          <Input placeholder="Min. 8 characters" type="password" autoComplete="new-password" {...field} />
+                          <PasswordInput placeholder="Min. 8 characters" autoComplete="new-password" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -533,6 +544,23 @@ export default function AdminClients() {
                       <FormLabel>Phone</FormLabel>
                       <FormControl>
                         <Input placeholder="+1 (555) 000-0000" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="address"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Street, city, state, postal code"
+                          className="min-h-[72px] resize-none"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -684,9 +712,9 @@ export default function AdminClients() {
         </CardContent>
       </Card>
       <DataPagination
-        page={page}
+        page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={PAGE_SIZE}
+        limit={data?.limit ?? PAGE_SIZE}
         onPageChange={setPage}
       />
 
@@ -716,7 +744,7 @@ export default function AdminClients() {
                   onClick={() => void handleViewAsClient(selectedClient)}
                 >
                   <LogIn className="mr-1.5 h-3 w-3" />
-                  {impersonatingUserId === selectedClient.userId ? "Opening�" : "View as client"}
+                  {impersonatingUserId === selectedClient.userId ? "Opening?" : "View as client"}
                 </Button>
               )}
             </div>
@@ -759,6 +787,13 @@ export default function AdminClients() {
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {selectedClient?.phone || "Not Provided"}</p>
                 </div>
+                <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Address</p>
+                  <p className="text-xs font-semibold flex items-start gap-1.5 text-foreground whitespace-pre-wrap">
+                    <MapPin className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
+                    {selectedClient?.address?.trim() || "Not provided"}
+                  </p>
+                </div>
               </div>
 
               {(selectedClient as any)?.website && (
@@ -783,7 +818,7 @@ export default function AdminClients() {
 
               {!selectedClient?.userId && (
                 <div className="bg-amber-500/10 border border-amber-500/20 rounded-md p-3 text-[10px] text-amber-600 flex gap-2 items-start mt-3">
-                  <span className="mt-0.5">⚠️</span>
+                  <span className="mt-0.5">??</span>
                   <div>
                     <p className="font-semibold">No Portal Access Linked</p>
                     <p className="text-amber-700/80 mt-0.5">This record has no associated portal account user, meaning access tracking and vault security tools are restricted for this client.</p>
@@ -811,10 +846,10 @@ export default function AdminClients() {
                     <TableBody>
                       {isLoadingCredentials ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">Loading vault records...</TableCell></TableRow>
-                      ) : credentials?.length === 0 ? (
+                      ) : credentialRows.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No credential snapshots captured.</TableCell></TableRow>
                       ) : (
-                        credentials?.map((cred: any) => (
+                        credentialRows.map((cred: any) => (
                           <TableRow key={cred.id} className="text-[10px] group/row hover:bg-muted/20 border-border/30">
                             <TableCell className="py-1 pl-3 text-center font-mono text-muted-foreground bg-muted/10 font-medium">#{cred.entryNumber}</TableCell>
                             <TableCell className="py-1 font-medium">{cred.setBy}</TableCell>
@@ -822,7 +857,7 @@ export default function AdminClients() {
                             <TableCell className="py-1 pr-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 <span className={`font-mono select-all px-1.5 py-0.5 rounded ${revealedPasswords[cred.id] ? 'text-primary bg-primary/10 font-semibold text-[10px]' : 'text-muted-foreground/60 tracking-widest text-[8px]'}`}>
-                                  {revealedPasswords[cred.id] || '••••••••'}
+                                  {revealedPasswords[cred.id] || '????????'}
                                 </span>
                                 <Button 
                                   size="icon" 
@@ -840,10 +875,11 @@ export default function AdminClients() {
                       )}
                     </TableBody>
                   </Table>
+                  <DataPagination {...credentialsPagination} />
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
-                <span>ℹ️</span> Portals passwords decrypt for 10 seconds only. High-security tracing active.
+                <span>??</span> Portals passwords decrypt for 10 seconds only. High-security tracing active.
               </p>
             </TabsContent>
           </Tabs>

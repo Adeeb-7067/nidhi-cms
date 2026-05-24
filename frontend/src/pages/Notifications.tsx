@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   useListNotifications,
   useMarkAllNotificationsRead,
@@ -18,19 +18,31 @@ import { cn } from "@/lib/utils";
 import { stopPersistentAlert } from "@/lib/notification-alert";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { QUERY_STALE } from "@/lib/query-config";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 
 export default function NotificationsPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"all" | "unread">("all");
+  const { page, setPage, resetPage, limit } = useTablePagination();
+
+  useEffect(() => {
+    resetPage();
+  }, [filter, resetPage]);
 
   const { data, isLoading, refetch } = useListNotifications(
     {
       unreadOnly: filter === "unread" ? true : undefined,
-      limit: 50,
+      page,
+      limit,
     },
     {
       query: {
-        queryKey: getListNotificationsQueryKey({ unreadOnly: filter === "unread" ? true : undefined, limit: 50 }),
+        queryKey: getListNotificationsQueryKey({
+          unreadOnly: filter === "unread" ? true : undefined,
+          page,
+          limit,
+        }),
         staleTime: QUERY_STALE.list,
       },
     },
@@ -186,6 +198,13 @@ export default function NotificationsPage() {
           )}
         </CardContent>
       </Card>
+
+      <DataPagination
+        page={data?.page ?? page}
+        total={data?.total ?? 0}
+        limit={data?.limit ?? limit}
+        onPageChange={setPage}
+      />
     </div>
   );
 }

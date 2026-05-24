@@ -378,7 +378,7 @@ export function BugFormDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-h-[min(90dvh,100dvh-2rem)] overflow-y-auto bg-card/95 backdrop-blur-xl border-border shadow-2xl",
+          "bg-card/95 backdrop-blur-xl border-border shadow-2xl",
           isCreate ? "sm:max-w-[720px]" : "sm:max-w-[640px]",
         )}
       >

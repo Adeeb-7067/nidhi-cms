@@ -78,10 +78,20 @@ function withListableBugsOnly(query) {
 
 async function buildBugListQuery(userId, role, params) {
   const query = {};
-  const { projectId, status, severity, assigneeId, scope } = params;
+  const { projectId, status, severity, assigneeId, scope, priority, search } = params;
   if (projectId) query.projectId = Number.parseInt(projectId, 10);
   applyStatusFilter(query, status);
   if (severity) query.severity = severity;
+  if (priority) query.priority = priority;
+  const searchText = typeof search === "string" ? search.trim() : "";
+  if (searchText) {
+    mergeAndClause(query, {
+      $or: [
+        { title: { $regex: searchText, $options: "i" } },
+        { bugNumber: { $regex: searchText, $options: "i" } },
+      ],
+    });
+  }
 
   if (role === "super_admin") {
     const aid = parseAssigneeIdsParam(assigneeId);

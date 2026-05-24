@@ -18,6 +18,20 @@ const forgotPasswordLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "Too many password reset requests. Please try again in 1 hour." }
 });
+const verifyResetOtpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1e3,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many verification attempts. Please try again shortly." }
+});
+const resetPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1e3,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many reset attempts. Please try again shortly." }
+});
 const refreshLimiter = rateLimit({
   windowMs: 5 * 60 * 1e3,
   max: 30,
@@ -30,8 +44,8 @@ router.post("/auth/login", loginLimiter, asyncHandler(authController.postAuthLog
 router.post("/auth/logout", requireAuth, asyncHandler(authController.postAuthLogout));
 router.post("/auth/refresh", refreshLimiter, asyncHandler(authController.postAuthRefresh));
 router.post("/auth/forgot-password", forgotPasswordLimiter, asyncHandler(authController.postAuthForgotPassword));
-router.post("/auth/verify-reset-otp", forgotPasswordLimiter, asyncHandler(authController.postAuthVerifyResetOtp));
-router.post("/auth/reset-password", asyncHandler(authController.postAuthResetPassword));
+router.post("/auth/verify-reset-otp", verifyResetOtpLimiter, asyncHandler(authController.postAuthVerifyResetOtp));
+router.post("/auth/reset-password", resetPasswordLimiter, asyncHandler(authController.postAuthResetPassword));
 router.post(
   "/auth/change-password/request-otp",
   requireAuth,

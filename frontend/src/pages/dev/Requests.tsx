@@ -7,6 +7,7 @@ import { Plus, Inbox, Loader2, Clock, CheckCircle2, XCircle } from "lucide-react
 import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { useTablePagination } from "@/lib/table-pagination";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,8 @@ type RequestFormValues = z.infer<typeof requestSchema>;
 
 export default function DevRequests() {
   const [open, setOpen] = useState(false);
-  const { data, isLoading, refetch } = useListRequests({ limit: 50 });
+  const { page, setPage, limit } = useTablePagination();
+  const { data, isLoading, refetch } = useListRequests({ page, limit });
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createRequest = useCreateRequest();
 
@@ -330,6 +332,12 @@ export default function DevRequests() {
               searchPlaceholder="Search requests..."
               filename="DevRequestsExport"
               viewStorageKey="dev-requests"
+              pagination={{
+                page: data.page ?? page,
+                total: data.total ?? 0,
+                limit: data.limit ?? limit,
+                onPageChange: setPage,
+              }}
             />
           )}
         </CardContent>

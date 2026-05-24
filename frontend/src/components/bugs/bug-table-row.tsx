@@ -17,6 +17,11 @@ function descPreview(text?: string | null, max = 72) {
   return t.length > max ? `${t.slice(0, max)}…` : t;
 }
 
+function formatPriorityLabel(priority?: string | null) {
+  if (!priority) return "—";
+  return PRIORITY_LABELS[priority] ?? priority.toUpperCase();
+}
+
 export const BugTableRow = React.memo(function BugTableRow({
   bug,
   isChild = false,
@@ -151,7 +156,7 @@ export const BugTableRow = React.memo(function BugTableRow({
       </TableCell>
       <TableCell className="py-2.5">
         <Badge variant="outline" className="text-[9px] h-5 font-mono">
-          {bug.priority.toUpperCase()}
+          {formatPriorityLabel(bug.priority)}
         </Badge>
       </TableCell>
       <TableCell className="py-2.5 max-w-[180px]">

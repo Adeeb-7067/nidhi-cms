@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Table,
   TableHeader,
@@ -24,8 +24,10 @@ import { TableDetailPanel, getColumnDetailContent } from "./table-detail-panel";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { DataViewToggle } from "./data-view-toggle";
+import { DataPagination } from "./data-pagination";
 import { useDataViewMode, type DataViewMode } from "@/lib/data-view";
 import { cn } from "@/lib/utils";
+import type { TablePaginationProps } from "@/lib/table-pagination";
 
 export interface Column<T> {
   id: string;
@@ -59,6 +61,10 @@ interface AdvancedTableProps<T> {
   /** Expandable row with full field details (table view) */
   showRowDetails?: boolean;
   getRowClassName?: (item: T) => string | undefined;
+  /** Server-driven pagination (data is already the current page) */
+  pagination?: TablePaginationProps;
+  /** Slice filtered rows client-side when the API returns the full list */
+  clientPagination?: TablePaginationProps;
 }
 
 /** Light tinted card backgrounds (cycles per row); dark mode uses muted equivalents */
@@ -148,6 +154,8 @@ export function AdvancedTable<T>({
   gridClassName = "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4",
   showRowDetails = true,
   getRowClassName,
+  pagination,
+  clientPagination,
 }: AdvancedTableProps<T>) {
   const [viewMode, setViewMode] = useDataViewMode(viewStorageKey, defaultViewMode);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -167,6 +175,36 @@ export function AdvancedTable<T>({
       return false;
     });
   }, [data, searchQuery, searchKey]);
+
+  const displayData = useMemo(() => {
+    if (!clientPagination) return filteredData;
+    const start = (clientPagination.page - 1) * clientPagination.limit;
+    return filteredData.slice(start, start + clientPagination.limit);
+  }, [filteredData, clientPagination]);
+
+  const resolvedPagination = useMemo((): TablePaginationProps | undefined => {
+    if (pagination) return pagination;
+    if (clientPagination) {
+      return {
+        ...clientPagination,
+        total: filteredData.length,
+      };
+    }
+    return undefined;
+  }, [pagination, clientPagination, filteredData.length]);
+
+  useEffect(() => {
+    if (!clientPagination) return;
+    clientPagination.onPageChange(1);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (!clientPagination) return;
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / clientPagination.limit));
+    if (clientPagination.page > totalPages) {
+      clientPagination.onPageChange(totalPages);
+    }
+  }, [filteredData.length, clientPagination?.page, clientPagination?.limit]);
 
   const toggleColumn = (id: string) => {
     setVisibleColumns((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -296,9 +334,9 @@ export function AdvancedTable<T>({
       </div>
 
       {viewMode === "grid" ? (
-        filteredData.length > 0 ? (
+        displayData.length > 0 ? (
           <div className={gridClassName}>
-            {filteredData.map((item, index) => (
+            {displayData.map((item, index) => (
               <React.Fragment key={index}>
                 {renderGridCard ? (
                   renderGridCard(item)
@@ -337,8 +375,8 @@ export function AdvancedTable<T>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredData.length > 0 ? (
-                filteredData.map((item, rowIndex) => {
+              {displayData.length > 0 ? (
+                displayData.map((item, rowIndex) => {
                   const isExpanded = expandedRow === rowIndex;
                   return (
                     <React.Fragment key={rowIndex}>
@@ -410,6 +448,15 @@ export function AdvancedTable<T>({
             </TableBody>
           </Table>
         </div>
+      )}
+      {resolvedPagination && (
+        <DataPagination
+          page={resolvedPagination.page}
+          total={resolvedPagination.total}
+          limit={resolvedPagination.limit}
+          onPageChange={resolvedPagination.onPageChange}
+          className="-mx-0 mt-0 rounded-b-lg"
+        />
       )}
     </div>
   );

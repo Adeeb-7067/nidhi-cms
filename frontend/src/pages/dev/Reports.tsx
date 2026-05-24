@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Download, Loader2, Plus, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
@@ -41,7 +42,9 @@ const REPORT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 export default function DevReports() {
+  const { limit } = useTablePagination();
   const { data: reportsData, isLoading: reportsLoading, refetch } = useListReports();
+  const { pagination: clientPagination } = useClientPagination(reportsData ?? [], limit);
   const { data: projectsData } = useListProjects({ limit: 100 });
   const generateMutation = useGenerateReport();
   const [open, setOpen] = useState(false);
@@ -392,6 +395,7 @@ export default function DevReports() {
               filename="ReportsExport"
               viewStorageKey="dev-reports"
               showViewToggle
+              clientPagination={clientPagination}
             />
           )}
         </CardContent>

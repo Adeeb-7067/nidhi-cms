@@ -126,6 +126,7 @@ export default function DevWorkspace() {
         { title: "Upload release", description: "Ship a new APK build to clients", icon: Smartphone, href: "/dev/apk", accent: "green" as const },
         { title: canReportBugs ? "Report bug" : "Bug tracker", description: canReportBugs ? "File a new issue" : "Update status and assignees", icon: Bug, href: "/dev/bugs", accent: "red" as const },
         { title: "Resource request", description: "Request tools, access, or assets", icon: FileText, href: "/dev/requests", accent: "amber" as const },
+        { title: "Support tickets", description: "Raise and track tickets you have submitted", icon: Ticket, href: "/admin/tickets", accent: "violet" as const },
       ];
 
   return (
@@ -180,7 +181,7 @@ export default function DevWorkspace() {
         <ExecutiveStatCard
           title="Open Tickets"
           value={kpis.openTickets}
-          hint="Support queue"
+          hint={isDeveloper ? "Tickets you raised" : "Support queue"}
           icon={Ticket}
           href="/admin/tickets"
           accent="violet"

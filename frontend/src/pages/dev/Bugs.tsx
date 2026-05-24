@@ -21,6 +21,7 @@ import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-d
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
 import { BugTable } from "@/components/bugs/bug-table";
 import { BUG_STATUSES, bugStatsFromList, canUserModifyBug } from "@/lib/bug-workflow";
+import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
 
 type BugListScope = "all" | "mine" | "unassigned" | "created";
 
@@ -58,6 +59,7 @@ export default function DevBugs() {
   const [scope, setScope] = useState<BugListScope>(() => defaultBugListScope(role));
   const [projectFilterId, setProjectFilterId] = useState("all");
   const scopeUserId = useRef<number | undefined>(user?.id);
+  const { page, setPage, resetPage, limit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
 
   useEffect(() => {
     if (!user?.id || scopeUserId.current === user.id) return;
@@ -73,16 +75,25 @@ export default function DevBugs() {
     }
   }, [isAdmin]);
 
+  useEffect(() => {
+    resetPage();
+  }, [scope, projectFilterId, statusFilter, priorityFilter, search, resetPage]);
+
   const listBugsParams = useMemo((): ListBugsParams => {
     const params: ListBugsParams = {
-      limit: isAdmin ? 150 : 80,
+      page,
+      limit,
       scope,
     };
     if (isAdmin && projectFilterId !== "all") {
       params.projectId = Number.parseInt(projectFilterId, 10);
     }
+    if (statusFilter !== "all") params.status = statusFilter;
+    if (priorityFilter !== "all") params.priority = priorityFilter;
+    const q = search.trim();
+    if (q) params.search = q;
     return params;
-  }, [scope, projectFilterId, isAdmin]);
+  }, [scope, projectFilterId, isAdmin, page, limit, statusFilter, priorityFilter, search]);
 
   const { data, isLoading } = useListBugs(listBugsParams, {
     query: {
@@ -264,6 +275,12 @@ export default function DevBugs() {
               onStatusFilterChange={setStatusFilter}
               priorityFilter={priorityFilter}
               onPriorityFilterChange={setPriorityFilter}
+              pagination={{
+                page: data?.page ?? page,
+                total: data?.total ?? 0,
+                limit: data?.limit ?? limit,
+                onPageChange: setPage,
+              }}
               onRowClick={openDetail}
               onEdit={openEdit}
               canEdit={canEditBug}

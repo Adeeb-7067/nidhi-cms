@@ -15,8 +15,10 @@ import {
 import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { useClientPagination } from "@/lib/table-pagination";
 import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getAccessToken } from "@/lib/auth-storage";
@@ -188,6 +190,9 @@ export default function AdminEmployees() {
   const { data: credentials, isLoading: isLoadingCredentials } = useGetUserCredentials(selectedUser?.id || 0, {
     query: { enabled: !!selectedUser, queryKey: getGetUserCredentialsQueryKey(selectedUser?.id || 0) }
   });
+  const { pageItems: credentialRows, pagination: credentialsPagination } = useClientPagination(
+    credentials ?? [],
+  );
 
   const revealMutation = useRevealCredential();
 
@@ -341,12 +346,16 @@ export default function AdminEmployees() {
     try {
       if (editUser) {
         const { password, ...updateData } = values;
-        await updateUserMutation.mutateAsync({ 
-          id: editUser.id, 
-          data: password ? values : updateData as any 
+        const trimmedPassword = password?.trim() ?? "";
+        await updateUserMutation.mutateAsync({
+          id: editUser.id,
+          data: trimmedPassword
+            ? ({ ...updateData, password: trimmedPassword } as any)
+            : (updateData as any),
         });
-        toast.success("Employee updated!");
+        toast.success(trimmedPassword ? "Employee and password updated!" : "Employee updated!");
         setEditUser(null);
+        setIsDialogOpen(false);
       } else {
         if (!values.password?.trim()) {
           form.setError("password", { message: "Login password is required for new employees" });
@@ -587,7 +596,7 @@ export default function AdminEmployees() {
           >
             <Plus className="mr-2 h-4 w-4" /> Add Employee
           </Button>
-          <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto bg-card border-border">
+          <DialogContent className="sm:max-w-[520px] bg-card border-border">
             <DialogHeader>
               <DialogTitle>{editUser ? "Edit Employee" : "Add Employee"}</DialogTitle>
               <DialogDescription>
@@ -646,9 +655,8 @@ export default function AdminEmployees() {
                     <FormItem>
                       <FormLabel>{editUser ? "New login password (optional)" : "Login password"}</FormLabel>
                       <FormControl>
-                        <Input
+                        <PasswordInput
                           placeholder="Min. 8 characters"
-                          type="password"
                           autoComplete="new-password"
                           {...field}
                         />
@@ -894,9 +902,9 @@ export default function AdminEmployees() {
             </CardContent>
           </Card>
           <DataPagination
-            page={page}
+            page={data?.page ?? page}
             total={data?.total ?? 0}
-            limit={PAGE_SIZE}
+            limit={data?.limit ?? PAGE_SIZE}
             onPageChange={setPage}
           />
         </TabsContent>
@@ -1250,10 +1258,10 @@ export default function AdminEmployees() {
                     <TableBody>
                       {isLoadingCredentials ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">Loading vault history...</TableCell></TableRow>
-                      ) : credentials?.length === 0 ? (
+                      ) : credentialRows.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No historical logs recorded.</TableCell></TableRow>
                       ) : (
-                        credentials?.map((cred: any) => (
+                        credentialRows.map((cred: any) => (
                           <TableRow key={cred.id} className="text-[10px] group/row hover:bg-muted/20 border-border/30">
                             <TableCell className="py-1 pl-3 text-center font-mono text-muted-foreground bg-muted/10 font-medium">#{cred.entryNumber}</TableCell>
                             <TableCell className="py-1 font-medium">{cred.setBy}</TableCell>
@@ -1279,6 +1287,7 @@ export default function AdminEmployees() {
                       )}
                     </TableBody>
                   </Table>
+                  <DataPagination {...credentialsPagination} />
                 </div>
               </div>
               <p className="text-[9px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">

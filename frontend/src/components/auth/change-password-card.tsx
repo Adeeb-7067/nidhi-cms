@@ -3,6 +3,7 @@ import { useChangeMyPassword } from "@/api";
 import { requestChangePasswordOtp } from "@/api/password-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -163,9 +164,8 @@ export function ChangePasswordCard({
       {mode === "current" ? (
         <div className="space-y-2">
           <Label htmlFor="currentPassword">Current password</Label>
-          <Input
+          <PasswordInput
             id="currentPassword"
-            type="password"
             autoComplete="current-password"
             value={form.currentPassword}
             onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
@@ -206,9 +206,8 @@ export function ChangePasswordCard({
       <div className={compact ? "grid gap-3" : "grid gap-4 sm:grid-cols-2"}>
         <div className="space-y-2">
           <Label htmlFor="newPassword">New password</Label>
-          <Input
+          <PasswordInput
             id="newPassword"
-            type="password"
             autoComplete="new-password"
             value={form.newPassword}
             onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
@@ -217,9 +216,8 @@ export function ChangePasswordCard({
         </div>
         <div className="space-y-2">
           <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
+          <PasswordInput
             id="confirmPassword"
-            type="password"
             autoComplete="new-password"
             value={form.confirmPassword}
             onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}

@@ -10,5 +10,5 @@ const responseCompression = compression({
   }
 });
 export {
-  responseCompression
+  responseCompression  
 };

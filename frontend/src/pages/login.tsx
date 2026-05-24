@@ -7,6 +7,7 @@ import { useLogin } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
@@ -132,9 +133,9 @@ function LoginFormPanel({ mode, form, onSubmit, isPending, showForgotLink }: Log
                 <FormControl>
                   <div className="group relative">
                     <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 transition-colors duration-200 group-focus-within:text-blue-600" />
-                    <Input
-                      type="password"
+                    <PasswordInput
                       placeholder="••••••••"
+                      autoComplete="current-password"
                       className="h-11 border-slate-200/80 bg-white/90 pl-9 text-sm text-slate-900 shadow-sm transition-all duration-200 placeholder:text-slate-400 focus-visible:border-blue-400 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-blue-500/25"
                       {...field}
                     />

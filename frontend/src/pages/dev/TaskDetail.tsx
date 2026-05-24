@@ -455,7 +455,7 @@ export default function TaskDetailPage() {
 
       {/* Edit dialog — large description field */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col">
+        <DialogContent className="sm:max-w-2xl flex flex-col">
           <DialogHeader className="shrink-0">
             <DialogTitle>Edit task</DialogTitle>
             <DialogDescription>{task.taskNumber}</DialogDescription>

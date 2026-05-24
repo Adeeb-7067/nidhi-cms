@@ -1103,9 +1103,9 @@ export default function AdminProjects() {
         )}
       </div>
       <DataPagination
-        page={page}
+        page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={PAGE_SIZE}
+        limit={data?.limit ?? PAGE_SIZE}
         onPageChange={setPage}
       />
     </div>

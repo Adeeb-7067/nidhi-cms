@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   useListMyLogs,
   useCreateLog,
@@ -35,6 +35,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { User } from "lucide-react";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -74,6 +76,7 @@ export default function DevLogs() {
   const [year, setYear] = useState(currentDate.getFullYear());
   const [developerFilterId, setDeveloperFilterId] = useState<string>("");
   const queryClient = useQueryClient();
+  const { page, setPage, resetPage, limit } = useTablePagination();
 
   const { data: staffData } = useListUsers(
     { staff: "1", limit: 200 },
@@ -92,17 +95,22 @@ export default function DevLogs() {
     [staffData?.users],
   );
 
+  useEffect(() => {
+    resetPage();
+  }, [month, year, developerFilterId, resetPage]);
+
   const listParams = useMemo(() => {
-    const base: { month: number; year: number; limit: number; developerId?: number } = {
+    const base: { month: number; year: number; page: number; limit: number; developerId?: number } = {
       month,
       year,
-      limit: isAdminView ? 200 : 50,
+      page,
+      limit,
     };
     if (isAdminView && developerFilterId) {
       base.developerId = Number.parseInt(developerFilterId, 10);
     }
     return base;
-  }, [month, year, isAdminView, developerFilterId]);
+  }, [month, year, isAdminView, developerFilterId, page, limit]);
 
   const { data, isLoading, refetch } = useListMyLogs(listParams);
 
@@ -620,6 +628,12 @@ export default function DevLogs() {
             </Card>
           ))
         )}
+        <DataPagination
+          page={data?.page ?? page}
+          total={data?.total ?? 0}
+          limit={data?.limit ?? limit}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   );

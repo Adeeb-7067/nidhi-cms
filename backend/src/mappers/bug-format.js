@@ -60,6 +60,8 @@ function mapIssueToChild(bug, issue, base) {
     assignees: base.assignees,
     title: issue.title,
     description: null,
+    priority: base.priority ?? bug.priority,
+    severity: base.severity ?? bug.severity,
     ...track,
     status: deriveLegacyStatus({ ...bug, ...track }),
     parentBugId: bug.id,

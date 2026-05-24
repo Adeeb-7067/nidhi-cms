@@ -52,8 +52,8 @@ const passwordResetTokensSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   userId: { type: Number, required: true, index: true },
   email: { type: String, lowercase: true, index: true },
-  /** Legacy link token (optional) */
-  token: { type: String, sparse: true, unique: true },
+  /** Legacy link token (optional; not used for email OTP records) */
+  token: { type: String, sparse: true, index: true },
   otpHash: { type: String },
   purpose: { type: String, enum: passwordOtpPurposes, default: "forgot_password", index: true },
   attempts: { type: Number, default: 0 },

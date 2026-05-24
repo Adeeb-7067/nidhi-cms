@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
 
 const PIPELINE_COLORS = [
   { fill: "#3b82f6", soft: "bg-blue-500/15 text-blue-600 dark:text-blue-400" },
@@ -246,22 +248,27 @@ type PipelineSlice = { name: string; value: number };
 
 export function DashboardPipelineChart({ data }: { data: PipelineSlice[] }) {
   const total = data.reduce((s, d) => s + d.value, 0);
+  const singleSlice = data.length === 1;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="relative min-h-[120px] flex-1 max-h-[160px] rounded-lg bg-muted/15 border border-border/40">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      <div className="relative mx-auto flex h-[148px] w-full max-w-[220px] items-center justify-center rounded-lg bg-muted/15 border border-border/40">
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
             <Pie
               data={data}
               cx="50%"
               cy="50%"
-              innerRadius={56}
-              outerRadius={76}
-              paddingAngle={4}
+              innerRadius="62%"
+              outerRadius="88%"
+              startAngle={90}
+              endAngle={-270}
+              paddingAngle={singleSlice ? 0 : 2}
+              cornerRadius={singleSlice ? 0 : 2}
               dataKey="value"
               stroke="hsl(var(--card))"
               strokeWidth={2}
+              isAnimationActive={false}
             >
               {data.map((_, i) => (
                 <Cell key={i} fill={PIPELINE_COLORS[i % PIPELINE_COLORS.length].fill} />
@@ -284,19 +291,19 @@ export function DashboardPipelineChart({ data }: { data: PipelineSlice[] }) {
             />
           </PieChart>
         </ResponsiveContainer>
-        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none leading-none">
           <span className="text-3xl font-bold tabular-nums tracking-tight">{total}</span>
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <span className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             Total
           </span>
         </div>
       </div>
-      <div className="shrink-0 space-y-1.5 max-h-[140px] overflow-y-auto dialog-scroll pr-0.5">
+      <div className="shrink-0 space-y-2 max-h-[140px] overflow-y-auto dialog-scroll px-0.5 pb-1">
         {data.map((d, i) => {
           const pct = total ? Math.round((d.value / total) * 100) : 0;
           const color = PIPELINE_COLORS[i % PIPELINE_COLORS.length];
           return (
-            <div key={d.name} className="space-y-1">
+            <div key={d.name} className="space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="inline-flex items-center gap-2 font-medium text-foreground">
                   <span
@@ -376,8 +383,11 @@ export function DashboardPortfolioTable({
     delayedProjects?: number;
   }[];
 }) {
+  const { pageItems, pagination } = useClientPagination(companies, DEFAULT_TABLE_PAGE_SIZE);
+
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border/50">
+    <div className="min-h-0 flex-1 flex flex-col gap-2">
+    <div className="flex-1 overflow-auto rounded-lg border border-border/50">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-muted/40 text-left text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -389,7 +399,7 @@ export function DashboardPortfolioTable({
           </tr>
         </thead>
         <tbody>
-          {companies.map((c, i) => (
+          {pageItems.map((c, i) => (
             <tr
               key={c.companyId}
               className={cn(
@@ -430,6 +440,8 @@ export function DashboardPortfolioTable({
           ))}
         </tbody>
       </table>
+    </div>
+    <DataPagination {...pagination} />
     </div>
   );
 }

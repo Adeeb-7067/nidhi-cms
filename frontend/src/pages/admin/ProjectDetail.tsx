@@ -53,6 +53,8 @@ import {
   Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson, Package 
 } from "lucide-react";
 import { toast } from "sonner";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useClientPagination } from "@/lib/table-pagination";
 import { toastApiError } from "@/lib/api-error";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -159,6 +161,21 @@ export default function AdminProjectDetail() {
   const [activeTab, setActiveTab] = useState<ProjectHubTab>("overview");
   const [milestoneOpen, setMilestoneOpen] = useState(false);
   const createMilestoneMutation = useCreateMilestone();
+
+  const sortedMilestones = useMemo(() => {
+    const list = [...(milestones ?? [])];
+    return list.sort(
+      (a, b) => new Date(a.plannedDate).getTime() - new Date(b.plannedDate).getTime(),
+    );
+  }, [milestones]);
+
+  const { pageItems: apkRows, pagination: apkPagination } = useClientPagination(apks ?? []);
+  const { pageItems: requestRows, pagination: requestsPagination } = useClientPagination(
+    requests?.requests ?? [],
+  );
+  const { pageItems: milestoneRows, pagination: milestonesPagination } =
+    useClientPagination(sortedMilestones);
+  const { pageItems: historyRows, pagination: historyPagination } = useClientPagination(history ?? []);
 
   const form = useForm<MilestoneFormValues>({
     resolver: zodResolver(milestoneSchema),
@@ -383,7 +400,7 @@ export default function AdminProjectDetail() {
             <CardHeader className="p-3">
               <CardTitle className="text-sm">APK Releases</CardTitle>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 space-y-0">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -396,12 +413,12 @@ export default function AdminProjectDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {apks?.length === 0 ? (
+                  {apkRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground h-20 text-xs">No APK releases yet</TableCell>
                     </TableRow>
                   ) : (
-                    apks?.map((apk) => (
+                    apkRows.map((apk) => (
                       <TableRow key={apk.id} className="text-xs">
                         <TableCell className="font-medium">v{apk.version} ({apk.buildNumber})</TableCell>
                         <TableCell>
@@ -418,6 +435,7 @@ export default function AdminProjectDetail() {
                   )}
                 </TableBody>
               </Table>
+              <DataPagination {...apkPagination} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -572,12 +590,12 @@ export default function AdminProjectDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {requests?.requests.length === 0 ? (
+                  {requestRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-muted-foreground h-20 text-xs">No requests found</TableCell>
                     </TableRow>
                   ) : (
-                    requests?.requests.map((req) => (
+                    requestRows.map((req) => (
                       <TableRow key={req.id} className="text-xs">
                         <TableCell className="capitalize">{req.type.replace('_', ' ')}</TableCell>
                         <TableCell className="font-medium">{req.title}</TableCell>
@@ -597,6 +615,7 @@ export default function AdminProjectDetail() {
                   )}
                 </TableBody>
               </Table>
+              <DataPagination {...requestsPagination} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -721,12 +740,12 @@ export default function AdminProjectDetail() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {!milestones || (milestones as any).length === 0 ? (
+                  {milestoneRows.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center text-muted-foreground h-16 text-[11px]">No timeline milestones recorded.</TableCell>
                     </TableRow>
                   ) : (
-                    [...(milestones as any)].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime()).map((m: any) => (
+                    milestoneRows.map((m: any) => (
                       <TableRow key={m.id} className="text-[11px]">
                         <TableCell className="font-medium flex items-center gap-1.5 py-2.5">
                           <MapPin className="h-3 w-3 text-primary/70" />
@@ -735,7 +754,7 @@ export default function AdminProjectDetail() {
                             {m.description && <div className="text-[9px] text-muted-foreground font-normal">{m.description}</div>}
                           </div>
                         </TableCell>
-                        <TableCell className="py-2.5">{new Date(m.targetDate).toLocaleDateString()}</TableCell>
+                        <TableCell className="py-2.5">{new Date(m.plannedDate).toLocaleDateString()}</TableCell>
                         <TableCell className="py-2.5">
                           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
                             m.status === 'completed' ? 'text-green-500 border-green-500/20 bg-green-500/10' :
@@ -751,6 +770,7 @@ export default function AdminProjectDetail() {
                   )}
                 </TableBody>
               </Table>
+              <DataPagination {...milestonesPagination} />
             </CardContent>
           </Card>
         </TabsContent>
@@ -771,12 +791,12 @@ export default function AdminProjectDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {!history || history.length === 0 ? (
+                    {historyRows.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={3} className="text-center text-muted-foreground h-16 text-xs">No history recorded.</TableCell>
                       </TableRow>
                     ) : (
-                      history.map((h) => (
+                      historyRows.map((h) => (
                         <TableRow key={h.id} className="text-[11px]">
                           <TableCell className="font-medium align-top py-2.5">
                             <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 uppercase">{h.action}</Badge>
@@ -805,6 +825,7 @@ export default function AdminProjectDetail() {
                   </TableBody>
                 </Table>
               </div>
+              <DataPagination {...historyPagination} />
             </CardContent>
           </Card>
         </TabsContent>

@@ -169,17 +169,51 @@ async function getUsersById(req, res) {
   if (!user) notFound("User");
   res.json(formatUser(user));
 }
+async function adminSetUserPassword(userId, newPassword, adminUser) {
+  if (!newPassword || newPassword.length < 8) {
+    badRequest("New password must be at least 8 characters.", "password");
+  }
+  const hash = await hashPassword(newPassword);
+  const user = await usersTable.findOneAndUpdate(
+    { id: userId },
+    { $set: { passwordHash: hash, forcePasswordChange: false } },
+    { new: true },
+  );
+  if (!user) notFound("User");
+  await credentialHistoryTable.updateMany(
+    { userId, status: "active" },
+    { $set: { status: "expired", replacedAt: /* @__PURE__ */ new Date() } },
+  );
+  const credCount = await credentialHistoryTable.countDocuments({ userId });
+  const credId = await getNextSequence("credential_history");
+  await credentialHistoryTable.create({
+    id: credId,
+    userId,
+    entryNumber: credCount + 1,
+    setByUserId: adminUser.id,
+    setByLabel: adminUser.name,
+    passwordEncrypted: encryptPasswordForHistory(newPassword),
+    trigger: "admin_reset",
+    status: "active",
+  });
+  return user;
+}
 async function patchUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const body = req.body;
   const avatarUrl = body.avatarUrl !== void 0 ? optionalString(body.avatarUrl) : void 0;
   validateStoredFileUrl(avatarUrl, "avatarUrl");
+  const password = optionalString(body.password) ?? optionalString(body.newPassword);
+  if (password) {
+    await adminSetUserPassword(id, password, req.user);
+  }
   const user = await usersTable.findOneAndUpdate(
     { id },
     {
       $set: {
         ...body.name !== void 0 && { name: optionalString(body.name) },
         ...body.email !== void 0 && { email: optionalString(body.email)?.toLowerCase() },
+        ...body.role !== void 0 && { role: optionalString(body.role) },
         ...body.subType !== void 0 && { subType: optionalString(body.subType) ?? null },
         ...body.designation !== void 0 && { designation: optionalString(body.designation) ?? null },
         ...body.avatarUrl !== void 0 && { avatarUrl: avatarUrl ?? null },
@@ -206,28 +240,7 @@ async function deleteUsersById(req, res) {
 async function patchUsersByIdPassword(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const newPassword = optionalString(req.body.newPassword);
-  if (!newPassword || newPassword.length < 8) {
-    badRequest("New password must be at least 8 characters.", "newPassword");
-  }
-  const hash = await hashPassword(newPassword);
-  const user = await usersTable.findOneAndUpdate({ id }, { $set: { passwordHash: hash } }, { new: true });
-  if (!user) notFound("User");
-  await credentialHistoryTable.updateMany(
-    { userId: id, status: "active" },
-    { $set: { status: "expired", replacedAt: /* @__PURE__ */ new Date() } }
-  );
-  const credCount = await credentialHistoryTable.countDocuments({ userId: id });
-  const credId = await getNextSequence("credential_history");
-  await credentialHistoryTable.create({
-    id: credId,
-    userId: id,
-    entryNumber: credCount + 1,
-    setByUserId: req.user.id,
-    setByLabel: req.user.name,
-    passwordEncrypted: encryptPasswordForHistory(newPassword),
-    trigger: "admin_reset",
-    status: "active"
-  });
+  await adminSetUserPassword(id, newPassword, req.user);
   res.json({ message: "Password reset" });
 }
 async function getUsersByIdCredentials(req, res) {

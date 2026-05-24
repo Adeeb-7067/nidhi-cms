@@ -326,7 +326,6 @@
 /* Visible scrollbars in modals, dialogs, and scroll areas */
 .dialog-scroll,
 [data-radix-scroll-area-viewport] {
-  scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: hsl(var(--muted-foreground) / 0.45) hsl(var(--muted) / 0.5);
 }

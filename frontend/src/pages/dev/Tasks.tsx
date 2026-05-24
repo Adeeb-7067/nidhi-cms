@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import {
   useListTasks,
@@ -51,6 +51,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
 
 const taskSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -73,14 +74,20 @@ export default function DevTasks() {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">(isAdmin ? "all" : "mine");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const { page, setPage, resetPage, limit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
+
+  useEffect(() => {
+    resetPage();
+  }, [statusFilter, scope, resetPage]);
 
   const listParams = useMemo(
     () => ({
-      limit: 100,
+      page,
+      limit,
       ...(statusFilter !== "all" ? { status: statusFilter as WorkTask["status"] } : {}),
       ...(isAdmin && scope !== "all" ? { scope } : !isAdmin ? { scope: "mine" as const } : {}),
     }),
-    [statusFilter, scope, isAdmin],
+    [statusFilter, scope, isAdmin, page, limit],
   );
 
   const { data, isLoading } = useListTasks(listParams);
@@ -227,6 +234,12 @@ export default function DevTasks() {
           ) : (
           <AdvancedTable
             data={data?.tasks ?? []}
+            pagination={{
+              page: data?.page ?? page,
+              total: data?.total ?? 0,
+              limit: data?.limit ?? limit,
+              onPageChange: setPage,
+            }}
             columns={[
               {
                 id: "task",

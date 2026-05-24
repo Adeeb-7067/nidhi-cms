@@ -2,7 +2,6 @@ import {
   ticketsTable,
   getNextSequence,
   usersTable,
-  projectMembersTable,
   auditLogsTable,
   notificationsTable
 } from "../models/schema/index.js";
@@ -14,35 +13,48 @@ import { logger } from "../lib/logger.js";
 import {
   badRequest,
   notFound,
+  forbidden,
   parseIdParam,
   parsePagination,
   optionalString
 } from "../utils/route-errors.js";
+import {
+  ticketAudienceFromRole,
+  buildTicketListFilter,
+} from "../services/ticket-support.js";
+
+function combineFilters(andClauses) {
+  const parts = andClauses.filter(Boolean);
+  if (parts.length === 0) return {};
+  if (parts.length === 1) return parts[0];
+  return { $and: parts };
+}
+
 async function getTickets(req, res) {
-  const { status, priority, projectId, search } = req.query;
+  const { status, priority, projectId, search, audience } = req.query;
   const pagination = parsePagination(req.query);
-  const query = {};
-  if (req.user.role === "client") {
-    query.creatorId = req.user.id;
-  } else if (req.user.role === "developer" || req.user.role === "tester" || req.user.role === "qa") {
-    const memberRows = await projectMembersTable.find({ userId: req.user.id }, { projectId: 1 }).lean();
-    const projectIds = memberRows.map((m) => m.projectId);
-    query.$or = [{ assignedTo: req.user.id }, { projectId: { $in: projectIds } }];
-  }
-  if (status) query.status = status;
-  if (priority) query.priority = priority;
-  if (projectId) query.projectId = parseInt(projectId, 10);
+  const and = await buildTicketListFilter(req.user, { audience });
+
+  if (status) and.push({ status });
+  if (priority) and.push({ priority });
+  if (projectId) and.push({ projectId: parseInt(projectId, 10) });
+
   if (search?.trim()) {
-    const searchClause = [
-      { title: { $regex: search.trim(), $options: "i" } },
-      { description: { $regex: search.trim(), $options: "i" } }
-    ];
-    query.$or = query.$or ? [...query.$or, ...searchClause] : searchClause;
+    const q = search.trim();
+    and.push({
+      $or: [
+        { title: { $regex: q, $options: "i" } },
+        { description: { $regex: q, $options: "i" } },
+      ],
+    });
   }
+
+  const query = combineFilters(and);
   const { items, total, page, limit } = await paginateModel(ticketsTable, query, pagination);
   const tickets = await formatTicketRows(items);
   res.json({ tickets, total, page, limit });
 }
+
 async function postTickets(req, res) {
   const body = req.body;
   const title = optionalString(body.title);
@@ -52,10 +64,12 @@ async function postTickets(req, res) {
   const attachmentList = Array.isArray(body.attachments) ? body.attachments : [];
   validateStoredFileUrls(attachmentList, "attachments");
   const nextId = await getNextSequence("tickets");
+  const audience = ticketAudienceFromRole(req.user.role);
   const ticket = await ticketsTable.create({
     id: nextId,
     projectId: body.projectId ? parseInt(String(body.projectId), 10) : null,
     creatorId: req.user.id,
+    audience,
     assignedTo: body.assignedTo ? parseInt(String(body.assignedTo), 10) : null,
     title,
     description,
@@ -121,6 +135,7 @@ async function postTickets(req, res) {
   broadcast("ticket_update", { id: ticket.id });
   res.status(201).json(await formatTicketRow(ticket));
 }
+
 async function patchTicketsById(req, res) {
   const id = parseIdParam(req.params.id, "ticket id");
   const body = req.body;
@@ -130,6 +145,15 @@ async function patchTicketsById(req, res) {
   }
   const oldTicket = await ticketsTable.findOne({ id });
   if (!oldTicket) notFound("Ticket");
+  if (req.user.role !== "super_admin" && oldTicket.creatorId !== req.user.id) {
+    forbidden("Only the ticket creator or an administrator can update this ticket.");
+  }
+  if (
+    req.user.role !== "super_admin" &&
+    (body.status || body.assignedTo !== undefined || body.priority)
+  ) {
+    forbidden("Only administrators can change status, priority, or assignment.");
+  }
   const updates = {};
   if (optionalString(body.status)) updates.status = optionalString(body.status);
   if (optionalString(body.priority)) updates.priority = optionalString(body.priority);
@@ -180,6 +204,7 @@ async function patchTicketsById(req, res) {
   broadcast("ticket_update", { id });
   res.json(await formatTicketRow(ticket));
 }
+
 export {
   getTickets,
   patchTicketsById,

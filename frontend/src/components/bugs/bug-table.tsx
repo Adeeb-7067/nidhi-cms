@@ -9,7 +9,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -17,16 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import {
-  PRIORITY_LABELS,
-  BUG_STATUSES,
-  normalizeBugStatus,
-  normalizeFinalStatus,
-} from "@/lib/bug-workflow";
+import { PRIORITY_LABELS, BUG_STATUSES } from "@/lib/bug-workflow";
 import { cn } from "@/lib/utils";
-import { ChevronLeft, ChevronRight, ArrowUpDown } from "lucide-react";
+import { ArrowUpDown } from "lucide-react";
 import { BugTableRow } from "./bug-table-row";
+import { DataPagination } from "@/components/ui/data-pagination";
+import type { TablePaginationProps } from "@/lib/table-pagination";
 
 type SortKey =
   | "projectName"
@@ -34,31 +29,6 @@ type SortKey =
   | "priority"
   | "status"
   | "updatedAt";
-
-const PAGE_SIZE = 12;
-
-function matchesBug(
-  bug: Bug,
-  q: string,
-  statusFilter: string,
-  priorityFilter: string,
-): boolean {
-  if (statusFilter !== "all") {
-    if (statusFilter === "resolved") {
-      if (normalizeFinalStatus(bug.finalStatus) !== "resolved") return false;
-    } else if (normalizeBugStatus(bug.status) !== statusFilter) {
-      return false;
-    }
-  }
-  if (priorityFilter !== "all" && bug.priority !== priorityFilter) return false;
-  if (!q) return true;
-  return (
-    bug.title.toLowerCase().includes(q) ||
-    bug.projectName.toLowerCase().includes(q) ||
-    bug.bugNumber.toLowerCase().includes(q) ||
-    (bug.latestComment?.toLowerCase().includes(q) ?? false)
-  );
-}
 
 export function BugTable({
   bugs,
@@ -71,6 +41,7 @@ export function BugTable({
   onStatusFilterChange,
   priorityFilter,
   onPriorityFilterChange,
+  pagination,
 }: {
   bugs: Bug[];
   onRowClick: (bug: Bug) => void;
@@ -82,25 +53,14 @@ export function BugTable({
   onStatusFilterChange: (v: string) => void;
   priorityFilter: string;
   onPriorityFilterChange: (v: string) => void;
+  pagination: TablePaginationProps;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
 
-  const filtered = useMemo(() => {
-    let list = [...bugs];
-    const q = search.trim().toLowerCase();
-    list = list.filter((b) => {
-      if (matchesBug(b, q, statusFilter, priorityFilter)) return true;
-      return b.children?.some((c) => matchesBug(c, q, statusFilter, priorityFilter)) ?? false;
-    });
-    if (q || statusFilter !== "all" || priorityFilter !== "all") {
-      list = list.map((b) => ({
-        ...b,
-        children: b.children?.filter((c) => matchesBug(c, q, statusFilter, priorityFilter)),
-      }));
-    }
+  const sortedRows = useMemo(() => {
+    const list = [...bugs];
     list.sort((a, b) => {
       let av: string | number = "";
       let bv: string | number = "";
@@ -119,11 +79,7 @@ export function BugTable({
       return 0;
     });
     return list;
-  }, [bugs, search, statusFilter, priorityFilter, sortKey, sortDir]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageSafe = Math.min(page, totalPages);
-  const pageRows = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+  }, [bugs, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -150,18 +106,12 @@ export function BugTable({
         <Input
           placeholder="Search project, title, comment…"
           value={search}
-          onChange={(e) => {
-            onSearchChange(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => onSearchChange(e.target.value)}
           className="h-9 text-xs bg-muted/30 border-border/60 max-w-md"
         />
         <Select
           value={statusFilter}
-          onValueChange={(v) => {
-            onStatusFilterChange(v);
-            setPage(1);
-          }}
+          onValueChange={onStatusFilterChange}
         >
           <SelectTrigger className="h-9 w-[160px] text-xs">
             <SelectValue placeholder="Status" />
@@ -178,10 +128,7 @@ export function BugTable({
         </Select>
         <Select
           value={priorityFilter}
-          onValueChange={(v) => {
-            onPriorityFilterChange(v);
-            setPage(1);
-          }}
+          onValueChange={onPriorityFilterChange}
         >
           <SelectTrigger className="h-9 w-[140px] text-xs">
             <SelectValue placeholder="Priority" />
@@ -197,8 +144,8 @@ export function BugTable({
         </Select>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden">
-        <div className="overflow-x-auto max-h-[min(70vh,720px)] overflow-y-auto">
+      <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
+        <div className="overflow-x-auto max-h-[min(70vh,720px)] overflow-y-auto flex-1 min-h-0">
           <Table>
             <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-sm">
               <TableRow className="hover:bg-transparent border-border/60">
@@ -227,14 +174,14 @@ export function BugTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pageRows.length === 0 ? (
+              {sortedRows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="h-24 text-center text-xs text-muted-foreground">
                     No bugs match your filters
                   </TableCell>
                 </TableRow>
               ) : (
-                pageRows.flatMap((bug) => {
+                sortedRows.flatMap((bug) => {
                   const childCount = bug.childCount ?? bug.children?.length ?? 0;
                   const isOpen = expanded.has(bug.id);
                   const rows = [
@@ -278,32 +225,13 @@ export function BugTable({
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {filtered.length} report{filtered.length !== 1 ? "s" : ""}
-          {filtered.length > PAGE_SIZE && ` · page ${pageSafe} of ${totalPages}`}
-        </span>
-        <div className="flex gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={pageSafe <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8"
-            disabled={pageSafe >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <DataPagination
+        page={pagination.page}
+        total={pagination.total}
+        limit={pagination.limit}
+        onPageChange={pagination.onPageChange}
+        className="rounded-b-xl border-border/60"
+      />
     </div>
   );
 }

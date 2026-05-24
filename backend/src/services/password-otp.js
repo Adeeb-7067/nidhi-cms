@@ -1,11 +1,62 @@
 import crypto from "crypto";
 import { passwordResetTokensTable, getNextSequence } from "../models/schema/index.js";
+import { Counter } from "../models/schema/counter.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { sendPasswordOtpEmail, isEmailConfigured } from "../lib/email.js";
 import { badRequest } from "../utils/route-errors.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
+const OTP_SEQUENCE = "password_reset_tokens";
+let passwordResetIndexesReady = false;
+
+async function ensurePasswordResetTokenIndexes() {
+  if (passwordResetIndexesReady) return;
+  try {
+    await passwordResetTokensTable.collection.dropIndex("token_1");
+  } catch {
+    // Index may not exist or already non-unique.
+  }
+  await passwordResetTokensTable.syncIndexes();
+  passwordResetIndexesReady = true;
+}
+
+async function syncPasswordResetTokenSequence() {
+  const maxDoc = await passwordResetTokensTable.findOne().sort({ id: -1 }).select("id").lean();
+  if (!maxDoc?.id) return;
+  await Counter.findOneAndUpdate(
+    { _id: OTP_SEQUENCE },
+    { $max: { seq: maxDoc.id } },
+    { upsert: true },
+  );
+}
+
+async function createPasswordResetTokenRecord(payload) {
+  await ensurePasswordResetTokenIndexes();
+  await syncPasswordResetTokenSequence();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const id = await getNextSequence(OTP_SEQUENCE);
+    try {
+      await passwordResetTokensTable.create({ id, ...payload });
+      return id;
+    } catch (err) {
+      const duplicateId =
+        typeof err === "object" &&
+        err !== null &&
+        err.code === 11000 &&
+        err.keyPattern &&
+        "id" in err.keyPattern;
+      if (duplicateId && attempt < 2) {
+        await syncPasswordResetTokenSequence();
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  badRequest("Could not issue verification code. Please try again.", "otp");
+}
 
 export function generateOtpCode() {
   return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
@@ -29,9 +80,7 @@ export async function issuePasswordOtp({ user, purpose, log }) {
 
   await invalidateActiveOtps(user.id, purpose);
 
-  const id = await getNextSequence("password_reset_tokens");
-  await passwordResetTokensTable.create({
-    id,
+  await createPasswordResetTokenRecord({
     userId: user.id,
     email,
     otpHash,

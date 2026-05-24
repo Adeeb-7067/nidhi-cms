@@ -1,7 +1,12 @@
-import { commentsTable, usersTable, projectMembersTable, notificationsTable, getNextSequence } from "../models/schema/index.js";
+import { commentsTable, usersTable, projectMembersTable, notificationsTable, ticketsTable, getNextSequence } from "../models/schema/index.js";
 import { broadcast, notifyUser } from "../lib/realtime.js";
-import { parsePagination, badRequest, notFound, parseIdParam } from "../utils/route-errors.js";
+import { parsePagination, badRequest, notFound, forbidden, parseIdParam } from "../utils/route-errors.js";
 import { toIso } from "../utils/mongo-list.js";
+import {
+  assertTicketAccess,
+  getTicketParticipantIds,
+  nextStatusAfterReply,
+} from "../services/ticket-support.js";
 
 function mapCommentRow(c, authorMap, repliesByParent) {
   const author = authorMap.get(c.authorId);
@@ -70,6 +75,9 @@ async function getComments(req, res) {
     badRequest("Discussion thread type and id are required.", "threadType");
   }
   const threadIdNum = parseIdParam(threadId, "threadId");
+  if (threadType === "ticket") {
+    await assertTicketAccess(req.user, threadIdNum);
+  }
   const { page, limit, skip } = parsePagination(q);
   const topLevelQuery = {
     threadType,
@@ -91,15 +99,27 @@ async function postComments(req, res) {
   if (!threadType || !threadId || !content) {
     badRequest("threadType, threadId, and content are required.", !threadType ? "threadType" : !threadId ? "threadId" : "content");
   }
+  const threadIdNum = parseIdParam(threadId, "threadId");
+  let ticketForThread = null;
+  if (threadType === "ticket") {
+    ticketForThread = await assertTicketAccess(req.user, threadIdNum);
+  }
   const nextId = await getNextSequence("comments");
   const comment = await commentsTable.create({
     id: nextId,
     authorId: req.user.id,
     threadType,
-    threadId,
+    threadId: threadIdNum,
     content,
     parentId: parentId ?? null
   });
+  if (ticketForThread) {
+    const statusUpdate = nextStatusAfterReply(ticketForThread, req.user.role);
+    if (statusUpdate) {
+      await ticketsTable.updateOne({ id: ticketForThread.id }, { $set: { status: statusUpdate } });
+      broadcast("ticket_update", { id: ticketForThread.id, status: statusUpdate });
+    }
+  }
   const formattedComment = await formatComment(comment);
   broadcast("comment", {
     threadType: comment.threadType,
@@ -109,10 +129,16 @@ async function postComments(req, res) {
   try {
     const recipientIds = /* @__PURE__ */ new Set();
     if (threadType === "project") {
-      const members = await projectMembersTable.find({ projectId: threadId });
+      const members = await projectMembersTable.find({ projectId: threadIdNum });
       members.forEach((m) => recipientIds.add(m.userId));
+    } else if (threadType === "ticket" && ticketForThread) {
+      const ids = await getTicketParticipantIds(ticketForThread, req.user.id);
+      ids.forEach((id) => recipientIds.add(id));
     }
-    const threadComments = await commentsTable.find({ threadType, threadId }).select("authorId").lean();
+    const threadComments = await commentsTable
+      .find({ threadType, threadId: threadIdNum })
+      .select("authorId")
+      .lean();
     threadComments.forEach((c) => recipientIds.add(c.authorId));
     recipientIds.delete(req.user.id);
     const authorName = req.user.name;
@@ -125,8 +151,8 @@ async function postComments(req, res) {
         type: "comment",
         title: `${authorName} commented`,
         body: truncatedContent,
-        entityType: threadType,
-        entityId: threadId,
+        entityType: threadType === "ticket" ? "ticket" : threadType,
+        entityId: threadIdNum,
         isRead: false,
         createdAt: /* @__PURE__ */ new Date()
       });
@@ -134,8 +160,8 @@ async function postComments(req, res) {
         type: "comment",
         title: `${authorName} commented`,
         body: truncatedContent,
-        entityType: threadType,
-        entityId: threadId
+        entityType: threadType === "ticket" ? "ticket" : threadType,
+        entityId: threadIdNum
       });
     }));
   } catch (err) {

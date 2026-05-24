@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useListRequests, useUpdateRequest } from "@/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/da
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
 
 type RequestRow = {
   id: number;
@@ -52,6 +53,14 @@ export default function AdminRequests() {
   );
 
   const tableData = activeSection === "addon" ? addonRequests : resourceRequests;
+  const { pagination: clientPagination, setPage: setClientPage } = useClientPagination(
+    tableData,
+    DEFAULT_TABLE_PAGE_SIZE,
+  );
+
+  useEffect(() => {
+    setClientPage(1);
+  }, [status, activeSection, setClientPage]);
 
   const handleUpdateStatus = (id: number, newStatus: "approved" | "rejected") => {
     updateMutation.mutate(
@@ -261,6 +270,7 @@ export default function AdminRequests() {
               filename="RequestsExport"
               viewStorageKey={`admin-requests-${activeSection}`}
               showViewToggle
+              clientPagination={clientPagination}
             />
           )}
         </CardContent>

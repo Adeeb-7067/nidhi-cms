@@ -26,7 +26,9 @@ async function getNotifications(req, res) {
   res.json({
     notifications: notifications.map((n) => formatNotificationRow(n)),
     unreadCount,
-    total
+    total,
+    page,
+    limit,
   });
 }
 async function postNotificationsMarkAllRead(req, res) {

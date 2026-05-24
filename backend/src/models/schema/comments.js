@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-const threadTypes = ["project", "log", "bug", "apk", "request"];
+const threadTypes = ["project", "log", "bug", "apk", "request", "ticket"];
 const commentSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   authorId: { type: Number, ref: "Users", required: true, index: true },
