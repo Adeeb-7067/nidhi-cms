@@ -16,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +34,10 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useUserWithPresence } from "@/contexts/PresenceContext";
+import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
+import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
+import { formatLastLogin } from "@/lib/presence";
 
 const ROLE_STYLES: Record<string, string> = {
   super_admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25",
@@ -42,15 +45,6 @@ const ROLE_STYLES: Record<string, string> = {
   tester: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
   client: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
 };
-
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
 
 export default function ProfilePage() {
   const { data: user, isLoading: isLoadingUser } = useGetMe();
@@ -60,6 +54,7 @@ export default function ProfilePage() {
 
   const [profileForm, setProfileForm] = useState({
     name: "",
+    email: "",
     designation: "",
     avatarUrl: "",
   });
@@ -68,12 +63,14 @@ export default function ProfilePage() {
     if (user) {
       setProfileForm({
         name: user.name || "",
+        email: user.email || "",
         designation: user.designation || "",
         avatarUrl: user.avatarUrl || "",
       });
     }
   }, [user]);
 
+  const userWithPresence = useUserWithPresence(user);
   const displayAvatar = profileForm.avatarUrl || user?.avatarUrl || undefined;
   const displayName = profileForm.name || user?.name || "User";
 
@@ -83,6 +80,7 @@ export default function ProfilePage() {
       await updateProfile({
         data: {
           name: profileForm.name.trim(),
+          email: profileForm.email.trim().toLowerCase(),
           designation: profileForm.designation.trim() || undefined,
           avatarUrl: profileForm.avatarUrl.trim() || undefined,
         },
@@ -141,12 +139,12 @@ export default function ProfilePage() {
           <div className="h-28 bg-gradient-to-br from-primary/25 via-primary/10 to-transparent" />
           <CardContent className="relative px-6 pb-6 pt-0">
             <div className="-mt-14 mb-4 flex justify-center sm:justify-start">
-              <Avatar className="h-28 w-28 border-4 border-background ring-2 ring-primary/20 shadow-lg">
-                <AvatarImage src={displayAvatar} alt={displayName} />
-                <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
-                  {getInitials(displayName)}
-                </AvatarFallback>
-              </Avatar>
+              <AvatarWithPresence
+                name={displayName}
+                avatarUrl={displayAvatar}
+                presenceStatus={userWithPresence?.presenceStatus ?? "online"}
+                avatarClassName="h-28 w-28 border-4 border-background ring-2 ring-primary/20 shadow-lg"
+              />
             </div>
 
             <div className="space-y-4 text-center sm:text-left">
@@ -201,6 +199,15 @@ export default function ProfilePage() {
 
               <Separator />
 
+              {userWithPresence && (
+                <UserPresenceMeta
+                  presenceStatus={userWithPresence.presenceStatus}
+                  lastSeenAt={userWithPresence.lastSeenAt}
+                  lastLoginAt={userWithPresence.lastLoginAt}
+                  compact
+                />
+              )}
+
               <div className="grid grid-cols-2 gap-3 text-[11px]">
                 <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
                   <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
@@ -214,11 +221,7 @@ export default function ProfilePage() {
                     <Clock className="h-3 w-3" />
                     <span>Last login</span>
                   </div>
-                  <p className="font-medium">
-                    {user.lastLoginAt
-                      ? format(new Date(user.lastLoginAt), "MMM d, HH:mm")
-                      : "—"}
-                  </p>
+                  <p className="font-medium">{formatLastLogin(user.lastLoginAt)}</p>
                 </div>
               </div>
             </div>
@@ -243,6 +246,19 @@ export default function ProfilePage() {
                       required
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={profileForm.email}
+                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="designation">Designation</Label>
                     <Input
@@ -280,6 +296,7 @@ export default function ProfilePage() {
                     onClick={() =>
                       setProfileForm({
                         name: user.name || "",
+                        email: user.email || "",
                         designation: user.designation || "",
                         avatarUrl: user.avatarUrl || "",
                       })

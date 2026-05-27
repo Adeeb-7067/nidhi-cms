@@ -1,17 +1,20 @@
 import React from "react";
-import { useAuth } from "@/contexts/AuthContext";
 import { useListProjects, useGetProjectAnalytics, getGetProjectAnalyticsQueryKey } from "@/api";
+import { ClientProjectTeamCard } from "@/components/presence/ClientProjectTeamCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KpiSimpleCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+} from "@/components/layout/portal-page-kit";
+import { BarChart3, Clock, TrendingUp, Users } from "lucide-react";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
   LineChart, Line, PieChart, Pie, Cell, Legend
 } from "recharts";
 
 export default function ClientAnalytics() {
-  const { user } = useAuth();
-  
   // For a client, we get their first active project
   const { data: projectsData } = useListProjects({ limit: 1 });
   const projectId = projectsData?.projects[0]?.id;
@@ -25,14 +28,15 @@ export default function ClientAnalytics() {
 
   if (isLoading || !projectId) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Project Analytics</h1>
+      <PortalPageShell>
+        <PortalPageHero title="Project Analytics" subtitle="Deep dive into project metrics" />
+        <PortalKpiGrid loading count={4} items={[]} />
         <div className="grid gap-4 md:grid-cols-2">
           <Skeleton className="h-[400px] w-full" />
           <Skeleton className="h-[400px] w-full" />
           <Skeleton className="h-[300px] w-full md:col-span-2" />
         </div>
-      </div>
+      </PortalPageShell>
     );
   }
 
@@ -41,20 +45,22 @@ export default function ClientAnalytics() {
   const COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Project Analytics</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Deep dive into project metrics</p>
-        </div>
-      </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Project Analytics"
+        subtitle="Deep dive into project metrics"
+      />
 
-      <PageKpiRow>
-        <KpiSimpleCard label="Completion" value={`${analytics.averageCompletionPct}%`} />
-        <KpiSimpleCard label="Hours logged" value={analytics.totalHoursLogged} />
-        <KpiSimpleCard label="Contributors" value={analytics.developerContributions?.length ?? 0} />
-        <KpiSimpleCard label="Work categories" value={analytics.workCategoryBreakdown?.length ?? 0} />
-      </PageKpiRow>
+      <PortalKpiGrid
+        items={[
+          { title: "Completion", value: `${analytics.averageCompletionPct}%`, hint: "Overall progress", icon: TrendingUp, accent: "violet" },
+          { title: "Hours logged", value: analytics.totalHoursLogged, hint: "Team effort", icon: Clock, accent: "blue" },
+          { title: "Contributors", value: analytics.developerContributions?.length ?? 0, hint: "Active developers", icon: Users, accent: "green" },
+          { title: "Work categories", value: analytics.workCategoryBreakdown?.length ?? 0, hint: "Activity types", icon: BarChart3, accent: "amber" },
+        ]}
+      />
+
+      <ClientProjectTeamCard projectId={projectId} />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="bg-card">
@@ -132,6 +138,6 @@ export default function ClientAnalytics() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </PortalPageShell>
   );
 }

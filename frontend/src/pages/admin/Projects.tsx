@@ -6,9 +6,11 @@ import {
   useUpdateProject,
   useDeleteProject,
   getListProjectsQueryKey,
+  getListClientsQueryKey,
   ListProjectsType,
   ListProjectsPriority,
 } from "@/api";
+import { QUERY_STALE } from "@/lib/query-config";
 import {
   Card,
   CardContent,
@@ -20,6 +22,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import {
   Search,
@@ -39,7 +42,12 @@ import {
   AlertTriangle,
   TrendingUp,
 } from "lucide-react";
-import { StatCard } from "@/components/dashboard/dashboard-kit";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  portalActionButtonClass,
+} from "@/components/layout/portal-page-kit";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Link } from "wouter";
@@ -173,7 +181,7 @@ export default function AdminProjects() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [activeTab, setActiveTab] = useState<ListProjectsType>(
     ListProjectsType.development,
   );
@@ -182,23 +190,29 @@ export default function AdminProjects() {
 
   useEffect(() => {
     setStatusFilter("");
-    setPage(1);
-  }, [activeTab]);
+    resetPage();
+  }, [activeTab, resetPage]);
 
   useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, priorityFilter]);
+    resetPage();
+  }, [search, statusFilter, priorityFilter, resetPage]);
 
-  const PAGE_SIZE = 12;
   const { data, isLoading } = useListProjects({
     ...(search ? { search } : {}),
     type: activeTab,
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(priorityFilter ? { priority: priorityFilter as ListProjectsPriority } : {}),
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   });
-  const { data: clientsData } = useListClients({ limit: 100 });
+  const clientsPickerParams = { limit: 100 };
+  const { data: clientsData } = useListClients(clientsPickerParams, {
+    query: {
+      queryKey: getListClientsQueryKey(clientsPickerParams),
+      staleTime: QUERY_STALE.reference,
+      enabled: isDialogOpen,
+    },
+  });
   const createProjectMutation = useCreateProject();
   const updateProjectMutation = useUpdateProject();
   const deleteProjectMutation = useDeleteProject();
@@ -620,24 +634,27 @@ export default function AdminProjects() {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-end">
-        <Dialog
-          open={isDialogOpen || !!editProject}
-          onOpenChange={(open) => {
-            if (!open) {
-              setIsDialogOpen(false);
-              setEditProject(null);
-            } else {
-              setIsDialogOpen(true);
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> New Project
-            </Button>
-          </DialogTrigger>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Projects"
+        subtitle="Manage development and maintenance portfolios"
+        actions={
+          <Dialog
+            open={isDialogOpen || !!editProject}
+            onOpenChange={(open) => {
+              if (!open) {
+                setIsDialogOpen(false);
+                setEditProject(null);
+              } else {
+                setIsDialogOpen(true);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button className={portalActionButtonClass("bg-primary text-primary-foreground")}>
+                <Plus className="mr-2 h-4 w-4" /> New Project
+              </Button>
+            </DialogTrigger>
           <DialogContent className="sm:max-w-[600px] bg-card border-border">
             <DialogHeader>
               <DialogTitle>
@@ -993,7 +1010,9 @@ export default function AdminProjects() {
             </Form>
           </DialogContent>
         </Dialog>
-        <AlertDialog
+        }
+      />
+      <AlertDialog
           open={!!deleteId}
           onOpenChange={(open) => !open && setDeleteId(null)}
         >
@@ -1016,44 +1035,45 @@ export default function AdminProjects() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
 
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Projects"
-          value={projectStats.total}
-          hint="In this view"
-          icon={Briefcase}
-          accent="blue"
-          delay={0}
-        />
-        <StatCard
-          title="Avg completion"
-          value={`${projectStats.avgCompletion}%`}
-          hint="Across listed projects"
-          icon={TrendingUp}
-          accent="green"
-          delay={1}
-        />
-        <StatCard
-          title="High priority"
-          value={projectStats.highPriority}
-          hint="High + critical"
-          icon={AlertTriangle}
-          accent="amber"
-          alert={projectStats.highPriority > 0}
-          delay={2}
-        />
-        <StatCard
-          title="Overdue"
-          value={projectStats.overdue}
-          hint="Past deadline"
-          icon={BarChart3}
-          accent="red"
-          alert={projectStats.overdue > 0}
-          delay={3}
-        />
-      </div>
+      <PortalKpiGrid
+        items={[
+          {
+            title: "Projects",
+            value: projectStats.total,
+            hint: "In this view",
+            icon: Briefcase,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Avg completion",
+            value: `${projectStats.avgCompletion}%`,
+            hint: "Across listed projects",
+            icon: TrendingUp,
+            accent: "green",
+            delay: 1,
+          },
+          {
+            title: "High priority",
+            value: projectStats.highPriority,
+            hint: "High + critical",
+            icon: AlertTriangle,
+            accent: "amber",
+            alert: projectStats.highPriority > 0,
+            delay: 2,
+          },
+          {
+            title: "Overdue",
+            value: projectStats.overdue,
+            hint: "Past deadline",
+            icon: BarChart3,
+            accent: "red",
+            alert: projectStats.overdue > 0,
+            delay: 3,
+          },
+        ]}
+      />
 
       <Tabs
         defaultValue="development"
@@ -1105,9 +1125,11 @@ export default function AdminProjects() {
       <DataPagination
         page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={data?.limit ?? PAGE_SIZE}
+        limit={limit}
+        loadedRowCount={list.length}
         onPageChange={setPage}
+        onLimitChange={setLimit}
       />
-    </div>
+    </PortalPageShell>
   );
 }

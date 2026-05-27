@@ -193,6 +193,27 @@ function canAccessLog(role, userId, logDeveloperId) {
   if (role === "super_admin") return true;
   return userId === logDeveloperId;
 }
+
+function todayDateIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Staff may only edit logs whose logDate is today (admins may edit any time). */
+function assertCanEditLog(user, log) {
+  if (user.role === "super_admin") return;
+  if (user.role === "client") {
+    forbidden("Clients cannot edit daily logs.");
+  }
+  if (user.id !== log.developerId) {
+    forbidden();
+  }
+  const logDay = String(log.logDate).slice(0, 10);
+  if (logDay !== todayDateIso()) {
+    forbidden(
+      "Daily logs can only be edited on the same day as the log date. Create a new entry for other days.",
+    );
+  }
+}
 async function getLogsById(req, res) {
   const log = await dailyLogsTable.findOne({ id: parseInt(req.params["id"], 10) });
   if (!log) notFound("Log");
@@ -207,6 +228,18 @@ async function patchLogsById(req, res) {
   const existing = await dailyLogsTable.findOne({ id });
   if (!existing) notFound("Log");
   if (!canAccessLog(req.user.role, req.user.id, existing.developerId)) forbidden();
+  assertCanEditLog(req.user, existing);
+  if (
+    taskTitle === void 0 &&
+    workCategories === void 0 &&
+    taskDescription === void 0 &&
+    hoursSpent === void 0 &&
+    completionPct === void 0 &&
+    blockers === void 0 &&
+    nextDayPlan === void 0
+  ) {
+    badRequest("At least one field is required to update a log entry.");
+  }
   const log = await dailyLogsTable.findOneAndUpdate(
     { id },
     {
@@ -223,6 +256,12 @@ async function patchLogsById(req, res) {
     { new: true }
   );
   if (!log) notFound("Log");
+  if (completionPct !== void 0) {
+    await projectMembersTable.updateOne(
+      { projectId: log.projectId, userId: log.developerId },
+      { $set: { completionPct: log.completionPct } },
+    );
+  }
   const user = await usersTable.findOne({ id: log.developerId });
   const project = await projectsTable.findOne({ id: log.projectId });
   const dailySummary = await buildDailyLogSummary(log.developerId, log.logDate);

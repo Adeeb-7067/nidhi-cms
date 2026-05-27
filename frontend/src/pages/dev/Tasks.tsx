@@ -11,13 +11,21 @@ import {
   type WorkTask,
 } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AdvancedTable } from "@/components/ui/advanced-table";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevToolbar,
+  DevTabsList,
+  DevTabsTrigger,
+  DevContentCard,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import {
   Dialog,
   DialogContent,
@@ -41,7 +49,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
 import { Plus, ListTodo, User, Calendar, Loader2, CheckCircle2, Eye } from "lucide-react";
 import { TASK_STATUS_LABELS, taskStatusClass } from "@/lib/task-ui";
 import { useForm } from "react-hook-form";
@@ -74,7 +82,7 @@ export default function DevTasks() {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"all" | "mine" | "unassigned">(isAdmin ? "all" : "mine");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const { page, setPage, resetPage, limit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
 
   useEffect(() => {
     resetPage();
@@ -83,11 +91,11 @@ export default function DevTasks() {
   const listParams = useMemo(
     () => ({
       page,
-      limit,
+      limit: apiLimit,
       ...(statusFilter !== "all" ? { status: statusFilter as WorkTask["status"] } : {}),
       ...(isAdmin && scope !== "all" ? { scope } : !isAdmin ? { scope: "mine" as const } : {}),
     }),
-    [statusFilter, scope, isAdmin, page, limit],
+    [statusFilter, scope, isAdmin, page, apiLimit],
   );
 
   const { data, isLoading } = useListTasks(listParams);
@@ -174,48 +182,45 @@ export default function DevTasks() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {isAdmin ? "Tasks" : "My tasks"}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {isAdmin
-              ? "Assign and track work across your team — ClickUp-style task board"
-              : "Work assigned to you by your project lead"}
-          </p>
-        </div>
-        {isAdmin && (
-          <Button className="bg-primary text-primary-foreground h-9 text-xs" onClick={() => setOpen(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Assign task
-          </Button>
-        )}
-      </div>
+    <DevPageShell>
+      <DevPageHero
+        title={isAdmin ? "Tasks" : "My tasks"}
+        subtitle={
+          isAdmin
+            ? "Assign and track work across your team — ClickUp-style task board"
+            : "Work assigned to you by your project lead"
+        }
+        actions={
+          isAdmin ? (
+            <Button className={devActionButtonClass()} onClick={() => setOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Assign task
+            </Button>
+          ) : undefined
+        }
+      />
 
-      {isLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard title="Total" value={taskStats.total} hint="Visible tasks" icon={ListTodo} accent="violet" delay={0} />
-          <StatCard title="Assigned to me" value={taskStats.mine} hint="Your queue" icon={User} accent="blue" delay={1} />
-          <StatCard title="In progress" value={taskStats.inProgress} hint="Active work" icon={Loader2} accent="amber" delay={2} />
-          <StatCard title="Completed" value={taskStats.done} hint="Done" icon={CheckCircle2} accent="green" delay={3} />
-        </PageKpiRow>
-      )}
+      <DevKpiGrid
+        loading={isLoading && !data}
+        items={[
+          { title: "Total", value: taskStats.total, hint: "Visible tasks", icon: ListTodo, accent: "violet" },
+          { title: "Assigned to me", value: taskStats.mine, hint: "Your queue", icon: User, accent: "blue" },
+          { title: "In progress", value: taskStats.inProgress, hint: "Active work", icon: Loader2, accent: "amber" },
+          { title: "Completed", value: taskStats.done, hint: "Done", icon: CheckCircle2, accent: "green" },
+        ]}
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
+      <DevToolbar className="flex-wrap">
         {isAdmin && (
           <Tabs value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
-            <TabsList className="h-8">
-              <TabsTrigger value="all" className="text-xs px-3 h-7">All</TabsTrigger>
-              <TabsTrigger value="mine" className="text-xs px-3 h-7">Assigned to me</TabsTrigger>
-              <TabsTrigger value="unassigned" className="text-xs px-3 h-7">Unassigned</TabsTrigger>
-            </TabsList>
+            <DevTabsList>
+              <DevTabsTrigger value="all">All</DevTabsTrigger>
+              <DevTabsTrigger value="mine">Assigned to me</DevTabsTrigger>
+              <DevTabsTrigger value="unassigned">Unassigned</DevTabsTrigger>
+            </DevTabsList>
           </Tabs>
         )}
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 w-[140px] text-xs">
+          <SelectTrigger className="h-8 w-[140px] text-xs bg-muted/50 border-0">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -225,10 +230,9 @@ export default function DevTasks() {
             ))}
           </SelectContent>
         </Select>
-      </div>
+      </DevToolbar>
 
-      <Card className="bg-card border-border/60">
-        <CardContent className="p-0">
+      <DevContentCard contentClassName="p-0">
           {isLoading ? (
             <p className="p-6 text-center text-sm text-muted-foreground">Loading tasks…</p>
           ) : (
@@ -237,8 +241,9 @@ export default function DevTasks() {
             pagination={{
               page: data?.page ?? page,
               total: data?.total ?? 0,
-              limit: data?.limit ?? limit,
+              limit,
               onPageChange: setPage,
+              onLimitChange: setLimit,
             }}
             columns={[
               {
@@ -347,8 +352,7 @@ export default function DevTasks() {
             onRowClick={(task) => setLocation(`/dev/tasks/${task.id}`)}
           />
           )}
-        </CardContent>
-      </Card>
+      </DevContentCard>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[560px]">
@@ -489,6 +493,6 @@ export default function DevTasks() {
           </Form>
         </DialogContent>
       </Dialog>
-    </div>
+    </DevPageShell>
   );
 }

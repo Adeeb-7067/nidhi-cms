@@ -14,5 +14,7 @@ export {
   type WorkspaceDashboard,
   type ClientHubDashboard,
 } from "./workspace-dashboard";
+export { fetchPresence, fetchMyPresence, postPresenceHeartbeat, presenceQueryKey } from "./presence";
+export type { PresenceMapResult } from "./presence";
 export { setBaseUrl, setAuthTokenGetter, ApiError } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";

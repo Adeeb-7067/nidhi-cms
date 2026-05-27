@@ -377,7 +377,7 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  let response = await fetch(input, { ...init, method, headers });
+  let response = await fetch(input, { cache: "no-store", ...init, method, headers });
 
   // Transparent Refresh Token Interception
   if (
@@ -438,7 +438,7 @@ export async function customFetch<T = unknown>(
 
           if (newToken) {
             headers.set("Authorization", `Bearer ${newToken}`);
-            response = await fetch(input, { ...init, method, headers });
+            response = await fetch(input, { cache: "no-store", ...init, method, headers });
           }
         } catch {
           // Carry on to normal 401 throw

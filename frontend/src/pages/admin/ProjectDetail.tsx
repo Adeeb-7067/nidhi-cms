@@ -66,6 +66,7 @@ import { getProjectsListHref } from "@/lib/project-routes";
 import { ProjectPriorityBanner } from "@/components/project/ProjectPriorityBanner";
 import { ProjectTeamPanel } from "@/components/project/ProjectTeamPanel";
 import { getDiscussionsHref } from "@/lib/discussions-navigation";
+import { commentThreadQueryParams } from "@/lib/comment-thread-query";
 
 const milestoneSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -142,8 +143,12 @@ export default function AdminProjectDetail() {
     query: { enabled: validProjectId, queryKey: getGetProjectLogsQueryKey(projectId) }
   });
 
-  const { data: comments } = useListComments({ threadType: "project", threadId: projectId }, {
-    query: { enabled: validProjectId, queryKey: getListCommentsQueryKey({ threadType: "project", threadId: projectId }) }
+  const projectCommentsParams = commentThreadQueryParams("project", projectId);
+  const { data: comments } = useListComments(projectCommentsParams, {
+    query: {
+      enabled: validProjectId,
+      queryKey: getListCommentsQueryKey(projectCommentsParams),
+    },
   });
 
   const { data: requests } = useListRequests({ projectId, limit: 50 }, {

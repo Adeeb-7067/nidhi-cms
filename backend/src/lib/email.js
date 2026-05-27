@@ -21,6 +21,27 @@ function getFromAddress() {
   );
 }
 
+function isLocalhostUrl(value) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(value);
+}
+
+function resolveAppUrl() {
+  const explicit =
+    process.env.APP_URL?.trim() ||
+    process.env.FRONTEND_URL?.trim() ||
+    process.env.PUBLIC_APP_URL?.trim() ||
+    "";
+  if (explicit) return explicit;
+
+  const origins = (process.env.ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  const nonLocal = origins.find((origin) => !isLocalhostUrl(origin));
+  if (nonLocal) return nonLocal;
+  return origins[0] || "http://localhost:5173";
+}
+
 function buildTransportOptions() {
   const smtpUrl = process.env.SMTP_URL?.trim();
   if (smtpUrl) {
@@ -159,10 +180,7 @@ export async function sendDailyLogComplianceEmail({ to, name, date, loggedHours,
     "Open Daily Logs in the CMS to complete your timesheet."
   ].join("\n");
 
-  const appUrl =
-    process.env.APP_URL?.trim() ||
-    process.env.FRONTEND_URL?.trim() ||
-    "http://localhost:5173";
+  const appUrl = resolveAppUrl();
 
   const html = wrapHtmlEmail({
     title: subject,

@@ -27,7 +27,7 @@ import { DataViewToggle } from "./data-view-toggle";
 import { DataPagination } from "./data-pagination";
 import { useDataViewMode, type DataViewMode } from "@/lib/data-view";
 import { cn } from "@/lib/utils";
-import type { TablePaginationProps } from "@/lib/table-pagination";
+import { effectivePageSize, type TablePaginationProps } from "@/lib/table-pagination";
 
 export interface Column<T> {
   id: string;
@@ -178,8 +178,9 @@ export function AdvancedTable<T>({
 
   const displayData = useMemo(() => {
     if (!clientPagination) return filteredData;
-    const start = (clientPagination.page - 1) * clientPagination.limit;
-    return filteredData.slice(start, start + clientPagination.limit);
+    const pageSize = effectivePageSize(clientPagination.limit, filteredData.length);
+    const start = (clientPagination.page - 1) * pageSize;
+    return filteredData.slice(start, start + pageSize);
   }, [filteredData, clientPagination]);
 
   const resolvedPagination = useMemo((): TablePaginationProps | undefined => {
@@ -200,7 +201,8 @@ export function AdvancedTable<T>({
 
   useEffect(() => {
     if (!clientPagination) return;
-    const totalPages = Math.max(1, Math.ceil(filteredData.length / clientPagination.limit));
+    const pageSize = effectivePageSize(clientPagination.limit, filteredData.length);
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
     if (clientPagination.page > totalPages) {
       clientPagination.onPageChange(totalPages);
     }
@@ -454,7 +456,10 @@ export function AdvancedTable<T>({
           page={resolvedPagination.page}
           total={resolvedPagination.total}
           limit={resolvedPagination.limit}
+          loadedRowCount={displayData.length}
           onPageChange={resolvedPagination.onPageChange}
+          onLimitChange={resolvedPagination.onLimitChange}
+          pageSizeOptions={resolvedPagination.pageSizeOptions}
           className="-mx-0 mt-0 rounded-b-lg"
         />
       )}

@@ -12,3 +12,22 @@ export function readDiscussionsProjectIdFromUrl(): number | null {
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
 }
+
+/** Remove `?project=` after the deep-link channel has been opened. */
+export function clearDiscussionsProjectFromUrl(): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("project")) return;
+  url.searchParams.delete("project");
+  const next = url.pathname + (url.search ? url.search : "");
+  window.history.replaceState({}, "", next);
+}
+
+/** Select a project channel in state (sidebar click). */
+export function selectDiscussionsProject(
+  projectId: number,
+  setSelectedProjectId: (id: number) => void,
+): void {
+  setSelectedProjectId(projectId);
+  clearDiscussionsProjectFromUrl();
+}

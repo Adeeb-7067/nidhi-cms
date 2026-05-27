@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { Loader2, Mail } from "lucide-react";
+import { Loader2, Mail, ShieldCheck } from "lucide-react";
 
 type Mode = "current" | "otp";
 
@@ -122,8 +122,16 @@ export function ChangePasswordCard({
     }
   };
 
+  const containerClass = compact
+    ? "space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3"
+    : "space-y-4 rounded-xl border border-border/60 bg-muted/15 p-4";
+
   return (
-    <form onSubmit={handleSubmit} className={compact ? "space-y-3" : "space-y-4"}>
+    <form onSubmit={handleSubmit} className={containerClass}>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+        Use current password or email OTP verification
+      </div>
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
@@ -138,23 +146,25 @@ export function ChangePasswordCard({
         </Alert>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button
           type="button"
-          size="sm"
+          size={compact ? "sm" : "default"}
           variant={mode === "current" ? "default" : "outline"}
           onClick={() => setMode("current")}
+          className="justify-start"
         >
           Current password
         </Button>
         <Button
           type="button"
-          size="sm"
+          size={compact ? "sm" : "default"}
           variant={mode === "otp" ? "default" : "outline"}
           onClick={() => {
             setMode("otp");
             if (!otpSent) void sendOtp();
           }}
+          className="justify-start"
         >
           <Mail className="mr-1.5 h-3.5 w-3.5" />
           Email code
@@ -225,6 +235,10 @@ export function ChangePasswordCard({
           />
         </div>
       </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        Password should be at least 8 characters and include upper/lowercase letters and numbers.
+      </p>
 
       <div className="flex justify-end">
         <Button type="submit" disabled={changeMutation.isPending}>

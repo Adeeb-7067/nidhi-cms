@@ -1,16 +1,24 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useListRequests, useUpdateRequest } from "@/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { useListRequests, useUpdateRequest, getListRequestsQueryKey } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X, MessageSquare, PlusCircle, Package, Clock, Zap, Inbox } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Check, X, MessageSquare, PlusCircle, Package, Clock, Inbox } from "lucide-react";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalTabsList,
+  PortalTabsTrigger,
+  PortalContentCard,
+} from "@/components/layout/portal-page-kit";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
+import { QUERY_STALE } from "@/lib/query-config";
+import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 
 type RequestRow = {
   id: number;
@@ -30,18 +38,49 @@ export default function AdminRequests() {
   const [status, setStatus] = useState<"pending" | "approved" | "rejected" | undefined>("pending");
   const [activeSection, setActiveSection] = useState<"resource" | "addon">("addon");
   const { data, isLoading, refetch } = useListRequests({ status, limit: 100 });
-  const { data: allRequests, isLoading: statsLoading } = useListRequests({ limit: 500 });
+  const countQueryBase = { staleTime: QUERY_STALE.reference, select: selectListTotal };
+  const { data: requestTotal = 0, isLoading: totalLoading } = useListRequests(LIST_COUNT_PARAMS, {
+    query: { ...countQueryBase, queryKey: getListRequestsQueryKey(LIST_COUNT_PARAMS) },
+  });
+  const { data: pendingTotal = 0, isLoading: pendingLoading } = useListRequests(
+    { ...LIST_COUNT_PARAMS, status: "pending" },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "pending" }),
+      },
+    },
+  );
+  const { data: approvedTotal = 0, isLoading: approvedLoading } = useListRequests(
+    { ...LIST_COUNT_PARAMS, status: "approved" },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "approved" }),
+      },
+    },
+  );
+  const { data: rejectedTotal = 0, isLoading: rejectedLoading } = useListRequests(
+    { ...LIST_COUNT_PARAMS, status: "rejected" },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "rejected" }),
+      },
+    },
+  );
   const updateMutation = useUpdateRequest();
 
-  const requestStats = useMemo(() => {
-    const requests = allRequests?.requests ?? [];
-    return {
-      total: allRequests?.total ?? requests.length,
-      pending: requests.filter((r) => r.status === "pending").length,
-      approved: requests.filter((r) => r.status === "approved").length,
-      rejected: requests.filter((r) => r.status === "rejected").length,
-    };
-  }, [allRequests]);
+  const requestStats = useMemo(
+    () => ({
+      total: requestTotal,
+      pending: pendingTotal,
+      approved: approvedTotal,
+      rejected: rejectedTotal,
+    }),
+    [requestTotal, pendingTotal, approvedTotal, rejectedTotal],
+  );
+  const statsLoading = totalLoading || pendingLoading || approvedLoading || rejectedLoading;
 
   const addonRequests = useMemo(
     () => (data?.requests.filter((r) => (r as { type: string }).type === "add_on_work") || []) as RequestRow[],
@@ -208,53 +247,50 @@ export default function AdminRequests() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Requests Management</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">Manage resource and add-on work requests</p>
-        </div>
-      </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Requests Management"
+        subtitle="Manage resource and add-on work requests"
+      />
 
-      {statsLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard title="Total requests" value={requestStats.total} hint="All submissions" icon={Inbox} accent="violet" delay={0} />
-          <StatCard title="Pending" value={requestStats.pending} hint="Awaiting review" icon={Clock} accent="amber" alert={requestStats.pending > 0} delay={1} />
-          <StatCard title="Approved" value={requestStats.approved} hint="Accepted requests" icon={Check} accent="green" delay={2} />
-          <StatCard title="Rejected" value={requestStats.rejected} hint="Declined requests" icon={X} accent="red" delay={3} />
-        </PageKpiRow>
-      )}
+      <PortalKpiGrid
+        loading={statsLoading}
+        items={[
+          { title: "Total requests", value: requestStats.total, hint: "All submissions", icon: Inbox, accent: "violet" },
+          { title: "Pending", value: requestStats.pending, hint: "Awaiting review", icon: Clock, accent: "amber", alert: requestStats.pending > 0 },
+          { title: "Approved", value: requestStats.approved, hint: "Accepted requests", icon: Check, accent: "green" },
+          { title: "Rejected", value: requestStats.rejected, hint: "Declined requests", icon: X, accent: "red" },
+        ]}
+      />
 
       <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as "resource" | "addon")}>
-        <TabsList className="h-9 mb-4">
-          <TabsTrigger value="addon" className="text-xs flex items-center gap-1.5">
+        <PortalTabsList className="mb-4">
+          <PortalTabsTrigger value="addon" className="flex items-center gap-1.5">
             <PlusCircle className="h-3.5 w-3.5" /> Add-on Work Requests
             {addonRequests.filter((r) => r.status === "pending").length > 0 && (
               <Badge variant="destructive" className="text-[9px] px-1 py-0 h-3.5 ml-1">
                 {addonRequests.filter((r) => r.status === "pending").length}
               </Badge>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="resource" className="text-xs flex items-center gap-1.5">
+          </PortalTabsTrigger>
+          <PortalTabsTrigger value="resource" className="flex items-center gap-1.5">
             <Package className="h-3.5 w-3.5" /> Resource Requests
-          </TabsTrigger>
-        </TabsList>
+          </PortalTabsTrigger>
+        </PortalTabsList>
       </Tabs>
 
-      <Card className="bg-card">
+      <PortalContentCard contentClassName="p-0">
         <div className="p-3 border-b border-border">
           <Tabs value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? undefined : (v as typeof status))}>
-            <TabsList className="h-8">
-              <TabsTrigger value="pending" className="text-xs">Pending</TabsTrigger>
-              <TabsTrigger value="approved" className="text-xs">Approved</TabsTrigger>
-              <TabsTrigger value="rejected" className="text-xs">Rejected</TabsTrigger>
-              <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-            </TabsList>
+            <PortalTabsList>
+              <PortalTabsTrigger value="pending">Pending</PortalTabsTrigger>
+              <PortalTabsTrigger value="approved">Approved</PortalTabsTrigger>
+              <PortalTabsTrigger value="rejected">Rejected</PortalTabsTrigger>
+              <PortalTabsTrigger value="all">All</PortalTabsTrigger>
+            </PortalTabsList>
           </Tabs>
         </div>
-        <CardContent className="p-4">
+        <div className="p-4">
           {isLoading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => (
@@ -273,8 +309,8 @@ export default function AdminRequests() {
               clientPagination={clientPagination}
             />
           )}
-        </CardContent>
-      </Card>
-    </div>
+        </div>
+      </PortalContentCard>
+    </PortalPageShell>
   );
 }

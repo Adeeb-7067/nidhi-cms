@@ -9,6 +9,8 @@ import {
   getNextSequence
 } from "../models/schema/index.js";
 import { formatProject, formatProjectList } from "../mappers/project-format.js";
+import { attachPresenceToUser } from "../services/presence.js";
+import { toIso } from "../utils/mongo-list.js";
 import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import {
@@ -164,7 +166,15 @@ async function getProjectsByIdMembers(req, res) {
     usersTable
       .find(
         { id: { $in: userIds } },
-        { id: 1, name: 1, employeeId: 1, designation: 1, avatarUrl: 1 },
+        {
+          id: 1,
+          name: 1,
+          employeeId: 1,
+          designation: 1,
+          avatarUrl: 1,
+          lastLoginAt: 1,
+          lastSeenAt: 1,
+        },
       )
       .lean()
       .exec(),
@@ -182,7 +192,7 @@ async function getProjectsByIdMembers(req, res) {
 
   const result = members.map((m) => {
     const user = userById.get(m.userId);
-    return {
+    const base = {
       id: m.id,
       userId: m.userId,
       subType: m.subType,
@@ -193,6 +203,20 @@ async function getProjectsByIdMembers(req, res) {
       designation: user?.designation ?? null,
       avatarUrl: user?.avatarUrl ?? null,
       lastLogDate: lastLogByUser.get(m.userId) ?? null,
+      lastLoginAt: toIso(user?.lastLoginAt),
+      lastSeenAt: toIso(user?.lastSeenAt),
+    };
+    const presence = attachPresenceToUser({
+      id: m.userId,
+      lastLoginAt: base.lastLoginAt,
+      lastSeenAt: base.lastSeenAt,
+    });
+    return {
+      ...base,
+      presenceStatus: presence.presenceStatus,
+      isActiveNow: presence.isActiveNow,
+      lastSeenAt: presence.lastSeenAt,
+      lastActivityAt: presence.lastActivityAt,
     };
   });
 
@@ -371,31 +395,37 @@ async function postProjectsByIdMilestones(req, res) {
 }
 async function getProjectsByIdLogs(req, res) {
   const projectId = parseInt(req.params["id"]);
-  const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: -1 });
+  const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: -1 }).lean();
   const isClient = req.user?.role === "client";
-  const formattedLogs = await Promise.all(
-    logs.map(async (l) => {
-      const user = await usersTable.findOne({ id: l.developerId });
-      return {
-        id: l.id,
-        developerId: l.developerId,
-        projectId: l.projectId,
-        logDate: l.logDate,
-        workCategories: l.workCategories,
-        taskTitle: l.taskTitle,
-        taskDescription: isClient ? "Detailed description restricted." : l.taskDescription,
-        hoursSpent: Number(l.hoursSpent),
-        completionPct: l.completionPct,
-        blockers: isClient ? "Details restricted." : l.blockers,
-        nextDayPlan: isClient ? "Details restricted." : l.nextDayPlan,
-        createdAt: l.createdAt.toISOString(),
-        updatedAt: l.updatedAt.toISOString(),
-        developerName: user?.name ?? "Unknown",
-        developerEmployeeId: user?.employeeId ?? null,
-        projectName: ""
-      };
-    })
-  );
+  const developerIds = [...new Set(logs.map((l) => l.developerId).filter(Boolean))];
+  const developers = developerIds.length
+    ? await usersTable
+        .find({ id: { $in: developerIds } })
+        .select({ id: 1, name: 1, employeeId: 1 })
+        .lean()
+    : [];
+  const developerById = new Map(developers.map((u) => [u.id, u]));
+  const formattedLogs = logs.map((l) => {
+    const user = developerById.get(l.developerId);
+    return {
+      id: l.id,
+      developerId: l.developerId,
+      projectId: l.projectId,
+      logDate: l.logDate,
+      workCategories: l.workCategories,
+      taskTitle: l.taskTitle,
+      taskDescription: isClient ? "Detailed description restricted." : l.taskDescription,
+      hoursSpent: Number(l.hoursSpent),
+      completionPct: l.completionPct,
+      blockers: isClient ? "Details restricted." : l.blockers,
+      nextDayPlan: isClient ? "Details restricted." : l.nextDayPlan,
+      createdAt: l.createdAt.toISOString(),
+      updatedAt: l.updatedAt.toISOString(),
+      developerName: user?.name ?? "Unknown",
+      developerEmployeeId: user?.employeeId ?? null,
+      projectName: "",
+    };
+  });
   res.json({
     logs: formattedLogs,
     total: formattedLogs.length,

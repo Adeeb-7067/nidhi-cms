@@ -22,6 +22,7 @@ const userSchema = new Schema({
   status: { type: String, enum: userStatuses, default: "active", required: true },
   forcePasswordChange: { type: Boolean, default: false, required: true },
   lastLoginAt: { type: Date },
+  lastSeenAt: { type: Date },
   fcmTokens: { type: [String], default: [] }
 }, { timestamps: true });
 const Users = mongoose.models.Users || mongoose.model("Users", userSchema);

@@ -1538,7 +1538,9 @@ const UpdateRequestResponse = zod.object({
 const GetDashboardStatsResponse = zod.object({
   activeProjects: zod.number(),
   totalClients: zod.number(),
-  teamMembersOnline: zod.number(),
+  teamMembersActive: zod.number(),
+  teamMembersOnlineToday: zod.number(),
+  teamMembersOnline: zod.number().optional(),
   overdueProjects: zod.number(),
   apksDueToday: zod.number(),
   openBugs: zod.number(),

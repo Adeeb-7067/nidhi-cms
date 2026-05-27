@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
   useListProjects, 
@@ -21,7 +21,10 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { CommentAuthorPresence } from "@/components/presence/CommentAuthorPresence";
+import { ClientProjectTeamCard } from "@/components/presence/ClientProjectTeamCard";
+import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
+import { useUserWithPresence } from "@/contexts/PresenceContext";
 import { 
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, 
@@ -34,12 +37,13 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-kit";
 import {
-  DashboardHero,
-  ExecutiveStatCard,
-  PageKpiRow,
-  DashboardSkeleton,
-} from "@/components/dashboard/dashboard-kit";
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalEmptyState,
+} from "@/components/layout/portal-page-kit";
 import {
   ChartPanel,
   ChartGridCell,
@@ -47,9 +51,17 @@ import {
 } from "@/components/dashboard/admin-dashboard-charts";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { listInventoryResources } from "@/lib/inventory-api";
+import {
+  appendCommentToListCache,
+  commentThreadQueryParams,
+  flattenCommentThread,
+} from "@/lib/comment-thread-query";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import { CommentBody } from "@/components/chat/comment-body";
+import { ChatComposer } from "@/components/chat/chat-composer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -63,6 +75,7 @@ import {
 
 export default function ClientPortal() {
   const { user } = useAuth();
+  const userWithPresence = useUserWithPresence(user);
   const { socket } = useRealtime();
   const { data, isLoading } = useListProjects({ limit: 100 });
   const { data: hub, isLoading: hubLoading } = useGetClientHubDashboard();
@@ -82,11 +95,19 @@ export default function ClientPortal() {
   const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
   const queryClient = useQueryClient();
 
+  const commentsQueryParams = project?.id
+    ? commentThreadQueryParams("project", project.id)
+    : null;
+
   useEffect(() => {
     if (socket && project?.id) {
-      const handleNewComment = (data: any) => {
-        if (data.threadType === "project" && data.threadId === project.id) {
-          queryClient.invalidateQueries({ queryKey: getListCommentsQueryKey({ threadType: "project", threadId: project.id }) });
+      const handleNewComment = (data: {
+        threadType?: string;
+        threadId?: number;
+        comment?: import("@/api").Comment;
+      }) => {
+        if (data.threadType === "project" && data.threadId === project.id && data.comment) {
+          appendCommentToListCache(queryClient, "project", project.id, data.comment);
         }
       };
 
@@ -119,6 +140,7 @@ export default function ClientPortal() {
   );
 
   const [commentText, setCommentText] = useState("");
+  const discussionScrollRef = useRef<HTMLDivElement>(null);
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [addonForm, setAddonForm] = useState({ title: "", description: "" });
 
@@ -128,14 +150,31 @@ export default function ClientPortal() {
   );
 
   const { data: commentsData, isLoading: isLoadingComments } = useListComments(
-    { threadType: "project", threadId: project?.id as number },
-    { query: { enabled: !!project?.id, queryKey: getListCommentsQueryKey({ threadType: "project", threadId: project?.id as number }) } }
+    commentsQueryParams ?? { threadType: "project", threadId: 0 },
+    {
+      query: {
+        enabled: !!project?.id,
+        queryKey: commentsQueryParams
+          ? getListCommentsQueryKey(commentsQueryParams)
+          : getListCommentsQueryKey({ threadType: "project", threadId: 0 }),
+      },
+    },
   );
 
   const { data: projectAnalytics, isLoading: isLoadingAnalytics } = useGetProjectAnalytics(
     project?.id as number,
     { query: { enabled: !!project?.id, queryKey: getGetProjectAnalyticsQueryKey(project?.id as number) } }
   );
+
+  const channelMessages = useMemo(
+    () => flattenCommentThread(commentsData?.comments ?? []),
+    [commentsData?.comments],
+  );
+
+  useEffect(() => {
+    const el = discussionScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [project?.id, channelMessages]);
 
   const createCommentMutation = useCreateComment();
   const createRequestMutation = useCreateRequest();
@@ -145,23 +184,40 @@ export default function ClientPortal() {
     { query: { enabled: !!project?.id, queryKey: getListRequestsQueryKey({ projectId: project?.id as number }) } }
   );
 
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim() || !project?.id) return;
-    
+  const { data: resourcesData, isLoading: isLoadingResources } = useQuery({
+    queryKey: ["inventory-resources", project?.id],
+    queryFn: () => listInventoryResources(project!.id),
+    enabled: !!project?.id,
+  });
+
+  const handlePostComment = async (payload: {
+    content?: string;
+    attachmentUrl?: string;
+    attachmentName?: string;
+    attachmentMimeType?: string;
+  }) => {
+    if (!project?.id) return;
+    if (!payload.content?.trim() && !payload.attachmentUrl) return;
+
     try {
-      await createCommentMutation.mutateAsync({
+      const created = await createCommentMutation.mutateAsync({
         data: {
           threadType: "project",
           threadId: project.id,
-          content: commentText.trim()
-        }
+          content: payload.content ?? "",
+          attachmentUrl: payload.attachmentUrl,
+          attachmentName: payload.attachmentName,
+          attachmentMimeType: payload.attachmentMimeType,
+        },
       });
-      setCommentText("");
-      queryClient.invalidateQueries({ queryKey: getListCommentsQueryKey({ threadType: "project", threadId: project.id }) });
+      appendCommentToListCache(queryClient, "project", project.id, created);
+      if (payload.attachmentUrl) {
+        queryClient.invalidateQueries({ queryKey: ["inventory-resources", project.id] });
+      }
       toast.success("Comment posted successfully");
     } catch (err) {
       toastApiError(err, "Failed to post comment");
+      throw err;
     }
   };
 
@@ -199,15 +255,18 @@ export default function ClientPortal() {
 
   if (!projects.length) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Welcome, {user?.name}</h1>
-        <Card className="bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center p-4">
-            <h3 className="text-lg font-medium mb-2">No active projects</h3>
-            <p className="text-xs text-muted-foreground">We are currently setting up your workspace. Check back soon.</p>
-          </CardContent>
-        </Card>
-      </div>
+      <PortalPageShell>
+        <PortalPageHero
+          title={`Welcome, ${user?.name?.split(" ")[0] ?? "there"}`}
+          subtitle="Your client workspace"
+          badge="Client Portal"
+        />
+        <PortalEmptyState
+          icon={Layout}
+          title="No active projects"
+          description="We are currently setting up your workspace. Check back soon."
+        />
+      </PortalPageShell>
     );
   }
 
@@ -220,10 +279,11 @@ export default function ClientPortal() {
     milestones?.filter((m: { status?: string }) => m.status === "completed").length ?? 0;
   const totalMilestones = milestones?.length ?? 0;
   const releaseCount = releases?.length ?? 0;
+  const releaseKpiCount = Math.max(hub?.releaseCount ?? 0, releaseCount);
 
   return (
-    <motion.div className="space-y-6 pb-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-      <DashboardHero
+    <PortalPageShell className="space-y-6">
+      <PortalPageHero
         title={`Welcome, ${user?.name?.split(" ")[0] ?? "there"}`}
         subtitle={
           projects.length > 1
@@ -252,40 +312,28 @@ export default function ClientPortal() {
         }
       />
 
-      <PageKpiRow>
-        <ExecutiveStatCard
-          title="Projects"
-          value={hub?.projectCount ?? projects.length}
-          hint="In your portfolio"
-          icon={Layout}
-          accent="blue"
-          delay={0}
-        />
-        <ExecutiveStatCard
-          title="Avg completion"
-          value={`${hub?.avgCompletionPct ?? project.completionPct}%`}
-          hint={projects.length > 1 ? "Across all projects" : "This project"}
-          icon={TrendingUp}
-          accent="violet"
-          delay={1}
-        />
-        <ExecutiveStatCard
-          title="Milestones"
-          value={`${hub?.milestones.completed ?? completedMilestones}/${(hub?.milestones.total ?? totalMilestones) || "—"}`}
-          hint="Completed"
-          icon={Award}
-          accent="green"
-          delay={2}
-        />
-        <ExecutiveStatCard
-          title="Releases"
-          value={hub?.releaseCount ?? releaseCount}
-          hint={latestRelease ? `Latest v${latestRelease.version}` : "APK builds"}
-          icon={Smartphone}
-          accent="sky"
-          delay={3}
-        />
-      </PageKpiRow>
+      {userWithPresence && (
+        <Card className="border-border/60 bg-card/80 shadow-sm">
+          <CardContent className="p-4">
+            <UserPresenceMeta
+              presenceStatus={userWithPresence.presenceStatus}
+              lastSeenAt={userWithPresence.lastSeenAt}
+              lastLoginAt={userWithPresence.lastLoginAt}
+              compact
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      <PortalKpiGrid
+        loading={hubLoading && !hub}
+        items={[
+          { title: "Projects", value: hub?.projectCount ?? projects.length, hint: "In your portfolio", icon: Layout, accent: "blue", href: "/client" },
+          { title: "Avg completion", value: `${hub?.avgCompletionPct ?? project.completionPct}%`, hint: projects.length > 1 ? "Across all projects" : "This project", icon: TrendingUp, accent: "violet", href: "/client/analytics" },
+          { title: "Milestones", value: `${hub?.milestones.completed ?? completedMilestones}/${(hub?.milestones.total ?? totalMilestones) || "—"}`, hint: "Completed", icon: Award, accent: "green" },
+          { title: "Releases", value: releaseKpiCount, hint: latestRelease ? `Latest v${latestRelease.version}` : "APK builds", icon: Smartphone, accent: "sky", href: "/client/apk" },
+        ]}
+      />
 
       <div className="dashboard-panel bg-gradient-to-br from-primary/15 via-card to-violet-500/10 rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex-1 space-y-3">
@@ -627,6 +675,8 @@ export default function ClientPortal() {
 
         {/* Sidebar Content: Links and Live Chat Widget */}
         <div className="space-y-4">
+          <ClientProjectTeamCard projectId={project?.id} />
+
           {/* Shared Assets Panel */}
           <Card className="bg-card shadow-sm">
             <CardHeader className="pb-2 p-4 border-b">
@@ -636,6 +686,54 @@ export default function ClientPortal() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-3 space-y-2.5">
+              {isLoadingResources ? (
+                <Skeleton className="h-16 w-full" />
+              ) : resourcesData?.resources?.length ? (
+                <div className="space-y-2 pb-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Shared files
+                  </p>
+                  {resourcesData.resources.map((r) => {
+                    const isImage = r.mimeType?.startsWith("image/") && r.fileUrl;
+                    return (
+                      <div
+                        key={r.id}
+                        className="flex items-center gap-2 rounded-md border border-border/60 bg-muted/10 p-2"
+                      >
+                        {isImage ? (
+                          <a href={r.fileUrl} target="_blank" rel="noreferrer" className="shrink-0">
+                            <img
+                              src={r.fileUrl}
+                              alt={r.name}
+                              className="h-10 w-10 rounded object-cover border"
+                              loading="lazy"
+                            />
+                          </a>
+                        ) : (
+                          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[10px] font-medium truncate">{r.name}</p>
+                          <p className="text-[9px] text-muted-foreground truncate">
+                            {r.uploaderName}
+                            {r.category === "discussion" ? " · from discussion" : ""}
+                          </p>
+                        </div>
+                        {(r.fileUrl || r.url) && (
+                          <a
+                            href={r.fileUrl || r.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] text-primary hover:underline shrink-0"
+                          >
+                            Open
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
               {project.repoUrl && (
                 <a href={project.repoUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-slate-600 hover:text-slate-900 hover:underline p-2 rounded-md bg-slate-50 border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
                   <Github className="mr-2.5 h-3.5 w-3.5" /> Git Repository
@@ -666,7 +764,12 @@ export default function ClientPortal() {
                   <FileJson className="mr-1.5 h-3.5 w-3.5 text-primary" /> Copy Postman Collection JSON
                 </Button>
               ) : (
-                (!project.repoUrl && !project.figmaUrl && !project.stagingUrl && !project.adminUrl && !project.websiteUrl) && (
+                (!project.repoUrl &&
+                  !project.figmaUrl &&
+                  !project.stagingUrl &&
+                  !project.adminUrl &&
+                  !project.websiteUrl &&
+                  !resourcesData?.resources?.length) && (
                   <div className="text-center text-[10px] text-muted-foreground py-4 border border-dashed rounded bg-muted/5">
                     No linked environment assets yet.
                   </div>
@@ -684,22 +787,34 @@ export default function ClientPortal() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 flex-1 flex flex-col overflow-hidden relative">
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
+              <div
+                ref={discussionScrollRef}
+                className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin"
+              >
                 {isLoadingComments ? (
                   <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
-                ) : commentsData && commentsData.comments.length > 0 ? (
-                  commentsData.comments.map((c: any) => (
+                ) : channelMessages.length > 0 ? (
+                  channelMessages.map((c) => (
                     <div key={c.id} className="flex items-start gap-2.5">
-                      <Avatar className="h-6 w-6 border shrink-0 mt-0.5">
-                        <AvatarImage src={c.authorAvatarUrl || undefined} />
-                        <AvatarFallback className="text-[9px] bg-muted text-muted-foreground font-semibold">{c.authorName.charAt(0)}</AvatarFallback>
-                      </Avatar>
+                      <CommentAuthorPresence
+                        authorId={c.authorId}
+                        authorName={c.authorName}
+                        authorAvatarUrl={c.authorAvatarUrl}
+                        className="h-6 w-6 border shrink-0 mt-0.5"
+                      />
                       <div className="flex-1 min-w-0 bg-muted/30 rounded-lg px-2.5 py-1.5 border border-border/40 text-xs">
                         <div className="flex items-center justify-between gap-2 mb-0.5">
                           <span className="font-bold text-foreground text-[10px] truncate">{c.authorName}</span>
                           <span className="text-[8px] text-muted-foreground shrink-0">{c.createdAt ? formatDistanceToNow(new Date(c.createdAt), { addSuffix: true }) : "just now"}</span>
                         </div>
-                        <p className="text-[11px] text-muted-foreground leading-snug break-words whitespace-pre-wrap">{c.content}</p>
+                        <CommentBody
+                          comment={c}
+                          bubbleClassName="border-0 bg-transparent p-0 shadow-none text-[11px] text-muted-foreground"
+                          onImageLoad={() => {
+                            const el = discussionScrollRef.current;
+                            if (el) el.scrollTop = el.scrollHeight;
+                          }}
+                        />
                       </div>
                     </div>
                   ))
@@ -712,24 +827,19 @@ export default function ClientPortal() {
                 )}
               </div>
               
-              <form onSubmit={handlePostComment} className="p-3 bg-muted/20 border-t border-border shrink-0">
-                <div className="flex gap-2">
-                  <Textarea 
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Type message to devs..."
-                    className="resize-none min-h-[32px] h-8 text-[11px] py-1.5 rounded-md flex-1 scrollbar-none focus-visible:ring-primary"
-                  />
-                  <Button 
-                    type="submit" 
-                    size="icon" 
-                    className="h-8 w-8 shrink-0 bg-primary hover:bg-primary/90"
-                    disabled={!commentText.trim() || createCommentMutation.isPending}
-                  >
-                    <Send className="h-3 w-3" />
-                  </Button>
-                </div>
-              </form>
+              <div className="p-3 bg-muted/20 border-t border-border shrink-0">
+                <ChatComposer
+                  value={commentText}
+                  onChange={setCommentText}
+                  onSubmit={async (payload) => {
+                    await handlePostComment(payload);
+                    setCommentText("");
+                  }}
+                  isSubmitting={createCommentMutation.isPending}
+                  placeholder="Type message to devs..."
+                  textareaClassName="min-h-[32px] h-8 text-[11px] py-1.5"
+                />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -823,6 +933,6 @@ export default function ClientPortal() {
         </Card>
       </div>
 
-    </motion.div>
+    </PortalPageShell>
   );
 }

@@ -15,10 +15,19 @@ import {
   Ticket,
   Bell,
   LayoutGrid,
-  Package,
   Shield,
   UserCircle,
   ListTodo,
+  TrendingUp,
+  Target,
+  Handshake,
+  FileSpreadsheet,
+  UserPlus,
+  CalendarClock,
+  Receipt,
+  Wallet,
+  Package,
+  Layers,
 } from "lucide-react";
 
 export type UserRole = "super_admin" | "developer" | "tester" | "qa" | "client";
@@ -78,6 +87,31 @@ export function getNavSections(role: UserRole): NavSection[] {
           badgeKey: "requests",
         },
         { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"] },
+      ],
+    },
+
+    // =========================
+    // CRM & SALES
+    // =========================
+    {
+      label: "CRM & Sales",
+      railLabel: "Sales",
+      icon: TrendingUp,
+      roles: ["super_admin"],
+      items: [
+        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: ["super_admin"] },
+        { title: "Lead management", href: "/sales/leads", icon: Target, roles: ["super_admin"] },
+        { title: "Follow-ups & activities", href: "/sales/follow-ups", icon: CalendarClock, roles: ["super_admin"] },
+        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: ["super_admin"] },
+        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: ["super_admin"] },
+        { title: "Installments", href: "/sales/installments", icon: Layers, roles: ["super_admin"] },
+        { title: "Products & services", href: "/sales/products", icon: Package, roles: ["super_admin"] },
+        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: ["super_admin"] },
+        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: ["super_admin"] },
+        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: ["super_admin"] },
+        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: ["super_admin"] },
+        { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin"] },
+        { title: "Automation & settings", href: "/sales/settings", icon: Settings, roles: ["super_admin"] },
       ],
     },
 
@@ -233,7 +267,7 @@ export function getNavSections(role: UserRole): NavSection[] {
 
 export function isNavActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
-  if (href === "/admin" || href === "/dev" || href === "/client") return false;
+  if (href === "/admin" || href === "/dev" || href === "/client" || href === "/sales") return false;
   return pathname.startsWith(href + "/") || pathname.startsWith(href);
 }
 

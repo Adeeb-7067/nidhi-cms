@@ -97,6 +97,7 @@ async function postTickets(req, res) {
       body: `You have been assigned to ticket: ${ticket.title}`,
       entityType: "ticket",
       entityId: ticket.id,
+      projectId: ticket.projectId ?? null,
       isRead: false,
       createdAt: /* @__PURE__ */ new Date()
     });
@@ -105,7 +106,8 @@ async function postTickets(req, res) {
       title: "New Ticket Assigned",
       body: `You have been assigned to ticket: ${ticket.title}`,
       entityType: "ticket",
-      entityId: ticket.id
+      entityId: ticket.id,
+      projectId: ticket.projectId ?? null
     });
   }
   try {
@@ -120,13 +122,17 @@ async function postTickets(req, res) {
         body: `${req.user.name} raised: "${ticket.title}"`,
         entityType: "ticket",
         entityId: ticket.id,
+        projectId: ticket.projectId ?? null,
         isRead: false,
         createdAt: /* @__PURE__ */ new Date()
       });
       notifyUser(admin.id, "notification", {
         type: "ticket_created",
         title: "New Ticket Raised",
-        body: `${req.user.name} raised: "${ticket.title}"`
+        body: `${req.user.name} raised: "${ticket.title}"`,
+        entityType: "ticket",
+        entityId: ticket.id,
+        projectId: ticket.projectId ?? null
       });
     }));
   } catch (err) {
@@ -190,6 +196,7 @@ async function patchTicketsById(req, res) {
       body: `Your ticket "${ticket.title}" status is now ${status}`,
       entityType: "ticket",
       entityId: id,
+      projectId: ticket.projectId ?? null,
       isRead: false,
       createdAt: /* @__PURE__ */ new Date()
     });
@@ -198,7 +205,8 @@ async function patchTicketsById(req, res) {
       title: "Ticket Status Updated",
       body: `Your ticket "${ticket.title}" status is now ${status}`,
       entityType: "ticket",
-      entityId: id
+      entityId: id,
+      projectId: ticket.projectId ?? null
     });
   }
   broadcast("ticket_update", { id });

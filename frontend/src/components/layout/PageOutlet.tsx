@@ -28,6 +28,27 @@ const ClientApk = React.lazy(() => import("@/pages/client/Apk"));
 const ProfilePage = React.lazy(() => import("@/pages/profile/ProfilePage"));
 const NotificationsPage = React.lazy(() => import("@/pages/Notifications"));
 
+const SalesDashboard = React.lazy(() => import("@/pages/sales/Dashboard"));
+const SalesLeads = React.lazy(() => import("@/pages/sales/Leads"));
+const SalesLeadDetail = React.lazy(() => import("@/pages/sales/LeadDetail"));
+const SalesFollowUps = React.lazy(() => import("@/pages/sales/FollowUps"));
+const SalesProposals = React.lazy(() => import("@/pages/sales/Proposals"));
+const SalesProposalCreate = React.lazy(() => import("@/pages/sales/ProposalCreate"));
+const SalesProposalDetail = React.lazy(() => import("@/pages/sales/ProposalDetail"));
+const SalesCustomers = React.lazy(() => import("@/pages/sales/Customers"));
+const SalesCustomerDetail = React.lazy(() => import("@/pages/sales/CustomerDetail"));
+const SalesTeam = React.lazy(() => import("@/pages/sales/Team"));
+const SalesReports = React.lazy(() => import("@/pages/sales/Reports"));
+const SalesProducts = React.lazy(() => import("@/pages/sales/Products"));
+const SalesInvoices = React.lazy(() => import("@/pages/sales/Invoices"));
+const SalesInvoiceDetail = React.lazy(() => import("@/pages/sales/InvoiceDetail"));
+const SalesPayments = React.lazy(() => import("@/pages/sales/Payments"));
+const SalesInstallments = React.lazy(() => import("@/pages/sales/Installments"));
+const SalesInstallmentDetail = React.lazy(() => import("@/pages/sales/InstallmentDetail"));
+const SalesReceiptDetail = React.lazy(() => import("@/pages/sales/ReceiptDetail"));
+const SalesSettings = React.lazy(() => import("@/pages/sales/Settings"));
+const SalesNotifications = React.lazy(() => import("@/pages/sales/SalesNotifications"));
+
 /** Inner route switch — rendered inside persistent AppLayout (no layout remount on navigate). */
 export function PageOutlet() {
   return (
@@ -79,6 +100,107 @@ export function PageOutlet() {
       <Route path="/admin/requests">
         <RoleGate allowedRoles={["super_admin"]}>
           <AdminRequests />
+        </RoleGate>
+      </Route>
+
+      <Route path="/sales/leads/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesLeadDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/proposals/create">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesProposalCreate />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/proposals/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesProposalDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/receipts/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesReceiptDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/installments/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesInstallmentDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/invoices/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesInvoiceDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/customers/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesCustomerDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/leads">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesLeads />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/follow-ups">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesFollowUps />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/proposals">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesProposals />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/installments">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesInstallments />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/invoices">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesInvoices />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/payments">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesPayments />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/customers">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesCustomers />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/products">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesProducts />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/team">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesTeam />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/reports">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesReports />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/settings">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesSettings />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/notifications">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesNotifications />
+        </RoleGate>
+      </Route>
+      <Route path="/sales">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <SalesDashboard />
         </RoleGate>
       </Route>
 

@@ -43,6 +43,7 @@ const USER_LIST_PROJECTION = {
   linkedinUrl: 1,
   status: 1,
   lastLoginAt: 1,
+  lastSeenAt: 1,
   createdAt: 1
 };
 async function getUsers(req, res) {
@@ -68,7 +69,7 @@ async function getUsers(req, res) {
     { projection: USER_LIST_PROJECTION }
   );
   res.json({
-    users: items.map((u) => formatUser(u)),
+    users: items.map((u) => formatUser(u, { withPresence: true })),
     total,
     page,
     limit
@@ -167,7 +168,7 @@ async function getUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const user = await usersTable.findOne({ id }).lean();
   if (!user) notFound("User");
-  res.json(formatUser(user));
+  res.json(formatUser(user, { withPresence: true }));
 }
 async function adminSetUserPassword(userId, newPassword, adminUser) {
   if (!newPassword || newPassword.length < 8) {
@@ -229,7 +230,7 @@ async function patchUsersById(req, res) {
     { new: true }
   );
   if (!user) notFound("User");
-  res.json(formatUser(user));
+  res.json(formatUser(user, { withPresence: true }));
 }
 async function deleteUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");

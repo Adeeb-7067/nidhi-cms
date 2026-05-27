@@ -229,7 +229,10 @@ export function BugTable({
         page={pagination.page}
         total={pagination.total}
         limit={pagination.limit}
+        loadedRowCount={bugs.length}
         onPageChange={pagination.onPageChange}
+        onLimitChange={pagination.onLimitChange}
+        pageSizeOptions={pagination.pageSizeOptions}
         className="rounded-b-xl border-border/60"
       />
     </div>

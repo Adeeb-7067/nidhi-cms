@@ -2,17 +2,29 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   useListNotifications,
   useMarkAllNotificationsRead,
-  useMarkNotificationRead,
   getListNotificationsQueryKey,
+  type Notification,
 } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
+import { useNotificationClick } from "@/hooks/use-notification-click";
+import { canNavigateNotification } from "@/lib/notification-navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bell, CheckCheck, Mail, MailOpen } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { Tabs } from "@/components/ui/tabs";
+import { Bell, CheckCheck, ChevronRight, Mail, MailOpen } from "lucide-react";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalToolbar,
+  PortalTabsList,
+  PortalTabsTrigger,
+  PortalContentCard,
+  PortalEmptyState,
+  portalActionButtonClass,
+} from "@/components/layout/portal-page-kit";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { stopPersistentAlert } from "@/lib/notification-alert";
@@ -22,9 +34,10 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const { page, setPage, resetPage, limit } = useTablePagination();
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
   useEffect(() => {
     resetPage();
@@ -34,14 +47,14 @@ export default function NotificationsPage() {
     {
       unreadOnly: filter === "unread" ? true : undefined,
       page,
-      limit,
+      limit: apiLimit,
     },
     {
       query: {
         queryKey: getListNotificationsQueryKey({
           unreadOnly: filter === "unread" ? true : undefined,
           page,
-          limit,
+          limit: apiLimit,
         }),
         staleTime: QUERY_STALE.list,
       },
@@ -49,7 +62,6 @@ export default function NotificationsPage() {
   );
 
   const markAllRead = useMarkAllNotificationsRead();
-  const markOneRead = useMarkNotificationRead();
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -67,21 +79,9 @@ export default function NotificationsPage() {
     });
   };
 
-  const handleMarkOne = (id: number) => {
-    markOneRead.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          invalidate();
-          if (unreadCount <= 1) stopPersistentAlert();
-        },
-        onError: (err) => toast.error(getApiErrorMessage(err, "Failed to mark notification as read")),
-      },
-    );
-  };
-
   const notifications = data?.notifications ?? [];
   const unreadCount = data?.unreadCount ?? 0;
+  const { handleNotificationClick, getTarget, isNavigating } = useNotificationClick({ unreadCount });
 
   const notifStats = useMemo(() => ({
     total: data?.total ?? notifications.length,
@@ -91,67 +91,86 @@ export default function NotificationsPage() {
   }), [data?.total, notifications.length, unreadCount]);
 
   return (
-    <div className="space-y-4">
-      {isLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard title="Total" value={notifStats.total} hint="All notifications" icon={Bell} accent="violet" delay={0} />
-          <StatCard title="Unread" value={notifStats.unread} hint="Needs attention" icon={Mail} accent="red" alert={notifStats.unread > 0} delay={1} />
-          <StatCard title="Read" value={notifStats.read} hint="Already seen" icon={MailOpen} accent="green" delay={2} />
-          <StatCard title="In view" value={notifStats.shown} hint="Loaded items" icon={CheckCheck} accent="blue" delay={3} />
-        </PageKpiRow>
-      )}
+    <PortalPageShell>
+      <PortalPageHero
+        title="Notifications"
+        subtitle="Alerts and updates across your workspace"
+      />
 
-      <div className="flex justify-end">
+      <PortalKpiGrid
+        loading={isLoading}
+        items={[
+          { title: "Total", value: notifStats.total, hint: "All notifications", icon: Bell, accent: "violet" },
+          { title: "Unread", value: notifStats.unread, hint: "Needs attention", icon: Mail, accent: "red", alert: notifStats.unread > 0 },
+          { title: "Read", value: notifStats.read, hint: "Already seen", icon: MailOpen, accent: "green" },
+          { title: "In view", value: notifStats.shown, hint: "Loaded items", icon: CheckCheck, accent: "blue" },
+        ]}
+      />
+
+      <PortalToolbar>
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "unread")}>
+          <PortalTabsList>
+            <PortalTabsTrigger value="all">All</PortalTabsTrigger>
+            <PortalTabsTrigger value="unread">
+              Unread
+              {unreadCount > 0 && (
+                <Badge variant="destructive" className="ml-1.5 h-4 px-1 text-[9px]">
+                  {unreadCount}
+                </Badge>
+              )}
+            </PortalTabsTrigger>
+          </PortalTabsList>
+        </Tabs>
         {unreadCount > 0 && (
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleMarkAll} disabled={markAllRead.isPending}>
+          <Button variant="outline" className={portalActionButtonClass()} onClick={handleMarkAll} disabled={markAllRead.isPending}>
             <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
             Mark all read
           </Button>
         )}
-      </div>
+      </PortalToolbar>
 
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "unread")}>
-        <TabsList className="h-8">
-          <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-          <TabsTrigger value="unread" className="text-xs">
-            Unread
-            {unreadCount > 0 && (
-              <Badge variant="destructive" className="ml-1.5 h-4 px-1 text-[9px]">
-                {unreadCount}
-              </Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
-
-      <Card className="bg-card">
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4 space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          ) : notifications.length === 0 ? (
-            <div className="py-16 text-center text-muted-foreground">
-              <Bell className="h-10 w-10 mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-medium">No notifications</p>
-              <p className="text-xs mt-1 opacity-70">
-                {filter === "unread" ? "No unread notifications" : "New alerts will appear here"}
-              </p>
-            </div>
-          ) : (
+      {isLoading ? (
+        <PortalContentCard contentClassName="p-4">
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </PortalContentCard>
+      ) : notifications.length === 0 ? (
+        <PortalEmptyState
+          icon={Bell}
+          title="No notifications"
+          description={filter === "unread" ? "No unread notifications" : "New alerts will appear here"}
+        />
+      ) : (
+        <PortalContentCard contentClassName="p-0">
             <ul className="divide-y divide-border">
               {notifications.map((n) => {
                 const isUnread = !n.readAt;
+                const target = getTarget(n);
+                const clickable = canNavigateNotification(n, user?.role);
                 return (
                   <li
                     key={n.id}
+                    role={clickable ? "button" : undefined}
+                    tabIndex={clickable ? 0 : undefined}
+                    onClick={clickable && !isNavigating ? () => handleNotificationClick(n) : undefined}
+                    onKeyDown={
+                      clickable
+                        ? (e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleNotificationClick(n);
+                            }
+                          }
+                        : undefined
+                    }
                     className={cn(
                       "flex items-start gap-3 p-4 transition-colors",
                       isUnread && "bg-primary/5 border-l-2 border-l-primary",
+                      clickable && !isNavigating && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                      clickable && isNavigating && "opacity-60 pointer-events-none",
                     )}
                   >
                     <div className="mt-0.5 h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
@@ -179,32 +198,28 @@ export default function NotificationsPage() {
                           minute: "2-digit",
                         })}
                       </p>
+                      {target && (
+                        <p className="text-[10px] font-medium text-primary mt-1.5 inline-flex items-center gap-0.5">
+                          {target.label}
+                          <ChevronRight className="h-3 w-3" />
+                        </p>
+                      )}
                     </div>
-                    {isUnread && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-[10px] shrink-0"
-                        onClick={() => handleMarkOne(n.id)}
-                        disabled={markOneRead.isPending}
-                      >
-                        Mark read
-                      </Button>
-                    )}
                   </li>
                 );
               })}
             </ul>
-          )}
-        </CardContent>
-      </Card>
+        </PortalContentCard>
+      )}
 
       <DataPagination
         page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={data?.limit ?? limit}
+        limit={limit}
+        loadedRowCount={notifications.length}
         onPageChange={setPage}
+        onLimitChange={setLimit}
       />
-    </div>
+    </PortalPageShell>
   );
 }

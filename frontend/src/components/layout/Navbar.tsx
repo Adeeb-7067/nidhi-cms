@@ -13,9 +13,11 @@ import { Button } from "@/components/ui/button";
 import {
   useListNotifications,
   useMarkAllNotificationsRead,
-  useMarkNotificationRead,
   getListNotificationsQueryKey,
+  type Notification,
 } from "@/api";
+import { useNotificationClick } from "@/hooks/use-notification-click";
+import { canNavigateNotification } from "@/lib/notification-navigation";
 import { Link, useLocation } from "wouter";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -180,8 +182,9 @@ function OrbitDock({
   theme,
   onToggleTheme,
   onMarkAllRead,
-  onMarkOneRead,
+  onNotificationClick,
   notifications,
+  canNavigate,
   markAllPending,
   notifMenuOpen,
   onNotifMenuOpenChange,
@@ -191,8 +194,9 @@ function OrbitDock({
   theme: string;
   onToggleTheme: () => void;
   onMarkAllRead: () => void;
-  onMarkOneRead: (id: number) => void;
-  notifications: { id: number; title: string; body: string }[] | undefined;
+  onNotificationClick: (notification: Notification) => void;
+  notifications: Notification[] | undefined;
+  canNavigate: (notification: Notification) => boolean;
   markAllPending: boolean;
   notifMenuOpen: boolean;
   onNotifMenuOpenChange: (open: boolean) => void;
@@ -279,10 +283,15 @@ function OrbitDock({
                       <DropdownMenuItem
                         key={n.id}
                         className="mx-1 flex cursor-pointer flex-col items-start gap-0.5 rounded-lg p-3"
-                        onClick={() => onMarkOneRead(n.id)}
+                        onClick={() => {
+                          if (canNavigate(n)) onNotificationClick(n);
+                        }}
                       >
                         <span className="w-full truncate text-sm font-medium">{n.title}</span>
                         <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                        {canNavigate(n) && (
+                          <span className="text-[10px] font-medium text-primary">View</span>
+                        )}
                       </DropdownMenuItem>
                     ))}
                   </div>
@@ -333,7 +342,10 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
   const searchShortcut = getSearchShortcutLabel();
 
   const markAllRead = useMarkAllNotificationsRead();
-  const markOneRead = useMarkNotificationRead();
+  const { handleNotificationClick } = useNotificationClick({
+    unreadCount,
+    onAfterNavigate: () => setNotifMenuOpen(false),
+  });
 
   const firstName = user?.name?.trim().split(/\s+/)[0];
   const greeting = getTimeGreeting(now.getHours());
@@ -361,18 +373,6 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
         queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       },
     });
-  };
-
-  const handleMarkOneRead = (id: number) => {
-    markOneRead.mutate(
-      { id },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-          if (unreadCount <= 1) stopPersistentAlert();
-        },
-      },
-    );
   };
 
   return (
@@ -434,8 +434,9 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
             theme={theme}
             onToggleTheme={toggleTheme}
             onMarkAllRead={handleMarkAllRead}
-            onMarkOneRead={handleMarkOneRead}
+            onNotificationClick={handleNotificationClick}
             notifications={notificationsData?.notifications}
+            canNavigate={(n) => canNavigateNotification(n, user?.role)}
             markAllPending={markAllRead.isPending}
             notifMenuOpen={notifMenuOpen}
             onNotifMenuOpenChange={setNotifMenuOpen}

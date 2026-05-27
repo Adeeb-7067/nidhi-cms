@@ -27,16 +27,13 @@ export async function getProjectsByProjectIdInventoryDevices(req, res) {
   await guardInventoryAccess(req, projectId);
 
   const devices = await inventoryDevicesTable.find({ projectId, deletedAt: null }).lean();
-
-  const formatted = await Promise.all(
-    devices.map(async (d) => {
-      let assignedName = null;
-      if (d.assignedUserId) {
-        const u = await usersTable.findOne({ id: d.assignedUserId }).lean();
-        assignedName = u?.name ?? null;
-      }
-      return formatDeviceRow(d, assignedName);
-    }),
+  const assigneeIds = [...new Set(devices.map((d) => d.assignedUserId).filter(Boolean))];
+  const assignees = assigneeIds.length
+    ? await usersTable.find({ id: { $in: assigneeIds } }).select("id name").lean()
+    : [];
+  const assigneeById = new Map(assignees.map((u) => [u.id, u]));
+  const formatted = devices.map((d) =>
+    formatDeviceRow(d, d.assignedUserId ? (assigneeById.get(d.assignedUserId)?.name ?? null) : null),
   );
   res.json(formatted);
 }

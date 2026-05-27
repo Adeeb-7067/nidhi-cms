@@ -6,16 +6,22 @@ import {
   downloadReport,
   type ReportInputType,
 } from "@/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
-import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
+import { useClientPagination } from "@/lib/table-pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FileText, Download, Loader2, Plus, CheckCircle2, AlertCircle, Clock } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevContentCard,
+  DevEmptyState,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { apiUrl } from "@/lib/api-base";
@@ -42,9 +48,8 @@ const REPORT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
 );
 
 export default function DevReports() {
-  const { limit } = useTablePagination();
   const { data: reportsData, isLoading: reportsLoading, refetch } = useListReports();
-  const { pagination: clientPagination } = useClientPagination(reportsData ?? [], limit);
+  const { pagination: clientPagination } = useClientPagination(reportsData ?? []);
   const { data: projectsData } = useListProjects({ limit: 100 });
   const generateMutation = useGenerateReport();
   const [open, setOpen] = useState(false);
@@ -240,17 +245,15 @@ export default function DevReports() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Reports</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Generate project and time reports</p>
-        </div>
-
+    <DevPageShell>
+      <DevPageHero
+        title="Reports"
+        subtitle="Generate project and time reports"
+        actions={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> Generate Report
+            <Button className={devActionButtonClass()}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Generate Report
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[425px]">
@@ -333,62 +336,35 @@ export default function DevReports() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
+
+      <DevKpiGrid
+        loading={reportsLoading && !reportsData}
+        items={[
+          { title: "Total reports", value: reportStats.total, hint: "Generated files", icon: FileText, accent: "violet" },
+          { title: "Ready", value: reportStats.ready, hint: "Available to download", icon: CheckCircle2, accent: "green" },
+          { title: "In progress", value: reportStats.generating, hint: "Queued or generating", icon: Clock, accent: "blue" },
+          { title: "Failed", value: reportStats.failed, hint: "Needs retry", icon: AlertCircle, accent: "red", alert: reportStats.failed > 0 },
+        ]}
+      />
 
       {reportsLoading ? (
-        <PageKpiSkeleton />
+        <DevContentCard>
+          <div className="space-y-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </DevContentCard>
+      ) : !reportsData?.length ? (
+        <DevEmptyState
+          icon={FileText}
+          title="No reports generated yet"
+          description="Use Generate Report to create a timesheet, project summary, or bug export."
+        />
       ) : (
-        <PageKpiRow>
-          <StatCard
-            title="Total reports"
-            value={reportStats.total}
-            hint="Generated files"
-            icon={FileText}
-            accent="violet"
-            delay={0}
-          />
-          <StatCard
-            title="Ready"
-            value={reportStats.ready}
-            hint="Available to download"
-            icon={CheckCircle2}
-            accent="green"
-            delay={1}
-          />
-          <StatCard
-            title="In progress"
-            value={reportStats.generating}
-            hint="Queued or generating"
-            icon={Clock}
-            accent="blue"
-            delay={2}
-          />
-          <StatCard
-            title="Failed"
-            value={reportStats.failed}
-            hint="Needs retry"
-            icon={AlertCircle}
-            accent="red"
-            alert={reportStats.failed > 0}
-            delay={3}
-          />
-        </PageKpiRow>
-      )}
-
-      <Card className="bg-card">
-        <CardContent className="p-4">
-          {reportsLoading ? (
-            <div className="space-y-4">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : !reportsData?.length ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs">
-              <FileText className="h-8 w-8 mb-2 opacity-50" />
-              No reports generated yet.
-            </div>
-          ) : (
+        <DevContentCard>
             <AdvancedTable
               data={reportsData}
               columns={columns}
@@ -397,9 +373,8 @@ export default function DevReports() {
               showViewToggle
               clientPagination={clientPagination}
             />
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </DevContentCard>
+      )}
+    </DevPageShell>
   );
 }

@@ -44,6 +44,76 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     title: "Analytics",
     description: "Agency-wide metrics and performance trends.",
   },
+  "/sales": {
+    title: "Admin dashboard",
+    description: "Super admin control center — leads, revenue, team, and pipeline at a glance.",
+    hideHeader: true,
+  },
+  "/sales/leads": {
+    title: "Lead management",
+    description: "View, assign, and manage all leads across sources.",
+    hideHeader: true,
+  },
+  "/sales/follow-ups": {
+    title: "Follow-ups & activities",
+    description: "Calendar, overdue tracking, and activity logs.",
+    hideHeader: true,
+  },
+  "/sales/proposals": {
+    title: "Proposals",
+    description: "Quotations and estimates sent to prospects.",
+    hideHeader: true,
+  },
+  "/sales/proposals/create": {
+    title: "Create proposal",
+    description: "Build a new quotation with line items and terms.",
+    hideHeader: true,
+  },
+  "/sales/installments": {
+    title: "Installment management",
+    description: "Milestone billing, due dates, and collection progress.",
+    hideHeader: true,
+  },
+  "/sales/invoices": {
+    title: "Invoices",
+    description: "Billing documents generated from approved proposals.",
+    hideHeader: true,
+  },
+  "/sales/payments": {
+    title: "Payments",
+    description: "Payment collection, receipts, and outstanding balances.",
+    hideHeader: true,
+  },
+  "/sales/customers": {
+    title: "Customer management",
+    description: "Converted clients and account relationships.",
+    hideHeader: true,
+  },
+  "/sales/products": {
+    title: "Products & services",
+    description: "Central product catalog, pricing, and tax configuration.",
+    hideHeader: true,
+  },
+  "/sales/team": {
+    title: "Sales team",
+    description: "Executive performance, targets, and leaderboard.",
+    hideHeader: true,
+  },
+  "/sales/reports": {
+    title: "Sales reports",
+    description: "Conversion, revenue, and pipeline analytics.",
+    hideHeader: true,
+  },
+  "/sales/notifications": {
+    title: "Sales alerts",
+    description: "Lead assignments, follow-ups, and payment updates.",
+    hideHeader: true,
+  },
+  "/sales/settings": {
+    title: "Automation & settings",
+    description: "Lead assignment, status flow, notifications, and tax rules.",
+    hideHeader: true,
+  },
   "/settings": {
     title: "Settings",
     description: "Appearance, notifications, workspace, and account preferences.",
@@ -135,6 +205,7 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
 
   const zones: Record<string, { label: string; home: string }> = {
     admin: { label: "Admin", home: "/admin" },
+    sales: { label: "Sales", home: "/sales" },
     dev: { label: "Dev", home: "/dev" },
     client: { label: "Client", home: "/client" },
     settings: { label: "Settings", home: "/settings" },
@@ -186,6 +257,25 @@ export function getRouteMeta(pathname: string): RouteMeta {
       description: "Task details, description, and properties.",
       hideHeader: true,
     };
+  }
+
+  if (/^\/sales\/leads\/\d+/.test(pathname)) {
+    return { title: "Lead details", hideHeader: true };
+  }
+  if (/^\/sales\/proposals\/\d+/.test(pathname)) {
+    return { title: "Proposal details", hideHeader: true };
+  }
+  if (/^\/sales\/installments\/\d+/.test(pathname)) {
+    return { title: "Installment details", hideHeader: true };
+  }
+  if (/^\/sales\/invoices\/\d+/.test(pathname)) {
+    return { title: "Invoice details", hideHeader: true };
+  }
+  if (/^\/sales\/receipts\/\d+/.test(pathname)) {
+    return { title: "Payment receipt", hideHeader: true };
+  }
+  if (/^\/sales\/customers\/\d+/.test(pathname)) {
+    return { title: "Customer profile", hideHeader: true };
   }
 
   return { title: "CMS", description: undefined };

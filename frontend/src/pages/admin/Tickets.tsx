@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useListTickets,
   useCreateTicket,
@@ -28,13 +29,24 @@ import {
   Wrench,
   LayoutGrid,
 } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalToolbar,
+  PortalTabsList,
+  PortalTabsTrigger,
+  portalActionButtonClass,
+} from "@/components/layout/portal-page-kit";
 import { cn } from "@/lib/utils";
 import { DataViewToggle } from "@/components/ui/data-view-toggle";
 import { useDataViewMode } from "@/lib/data-view";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
+import { listQueryOptions } from "@/lib/list-query-options";
+import { QUERY_STALE } from "@/lib/query-config";
+import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import {
@@ -70,6 +82,7 @@ import { useTablePagination } from "@/lib/table-pagination";
 import { TicketDetailSheet } from "@/components/tickets/ticket-detail-sheet";
 import { formatUserRole } from "@/lib/bug-workflow";
 import { isDevPortalRole } from "@/lib/navigation";
+import { clearUrlSearchParam, readTicketIdFromUrl } from "@/lib/notification-navigation";
 
 const ticketSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -122,7 +135,7 @@ export default function AdminTickets() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [audienceTab, setAudienceTab] = useState<AdminAudienceTab>("all");
-  const { page, setPage, resetPage } = useTablePagination(12);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [viewMode, setViewMode] = useDataViewMode(
     isAdmin ? "admin-tickets" : "staff-tickets",
@@ -130,6 +143,10 @@ export default function AdminTickets() {
   );
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [location] = useLocation();
+  const ticketIdFromUrl = readTicketIdFromUrl();
+  const [pendingTicketId, setPendingTicketId] = useState<number | null>(null);
+  const deepLinkErrorShownRef = useRef<number | null>(null);
 
   const listParams = useMemo(
     () => ({
@@ -137,35 +154,96 @@ export default function AdminTickets() {
       ...(statusFilter !== "all" ? { status: statusFilter } : {}),
       ...(isAdmin && audienceTab !== "all" ? { audience: audienceTab } : {}),
       page,
-      limit: 12,
+      limit: apiLimit,
     }),
-    [search, statusFilter, audienceTab, isAdmin, page],
+    [search, statusFilter, audienceTab, isAdmin, page, apiLimit],
   );
 
   const listQueryKey = getListTicketsQueryKey(listParams);
 
-  const { data, isLoading } = useListTickets(listParams);
-  const { data: statsData, isLoading: statsLoading } = useListTickets(
-    isAdmin
-      ? audienceTab !== "all"
-        ? { limit: 500, audience: audienceTab }
-        : { limit: 500 }
-      : { limit: 500 },
+  const { data, isLoading, isFetching } = useListTickets(listParams, {
+    query: listQueryOptions({ queryKey: listQueryKey }),
+  });
+
+  const statsAudience =
+    isAdmin && audienceTab !== "all" ? { audience: audienceTab as TicketAudience } : {};
+  const countQueryBase = {
+    staleTime: QUERY_STALE.reference,
+    select: selectListTotal,
+  };
+  const { data: ticketTotal = 0, isLoading: totalStatsLoading } = useListTickets(
+    { ...LIST_COUNT_PARAMS, ...statsAudience },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListTicketsQueryKey({ ...LIST_COUNT_PARAMS, ...statsAudience }),
+      },
+    },
+  );
+  const { data: openCount = 0, isLoading: openStatsLoading } = useListTickets(
+    { ...LIST_COUNT_PARAMS, status: "open", ...statsAudience },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListTicketsQueryKey({ ...LIST_COUNT_PARAMS, status: "open", ...statsAudience }),
+      },
+    },
+  );
+  const { data: pendingCount = 0, isLoading: pendingStatsLoading } = useListTickets(
+    { ...LIST_COUNT_PARAMS, status: "pending", ...statsAudience },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListTicketsQueryKey({
+          ...LIST_COUNT_PARAMS,
+          status: "pending",
+          ...statsAudience,
+        }),
+      },
+    },
+  );
+  const { data: urgentCount = 0, isLoading: urgentStatsLoading } = useListTickets(
+    { ...LIST_COUNT_PARAMS, priority: "urgent", ...statsAudience },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListTicketsQueryKey({
+          ...LIST_COUNT_PARAMS,
+          priority: "urgent",
+          ...statsAudience,
+        }),
+      },
+    },
+  );
+  const { data: highCount = 0, isLoading: highStatsLoading } = useListTickets(
+    { ...LIST_COUNT_PARAMS, priority: "high", ...statsAudience },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListTicketsQueryKey({
+          ...LIST_COUNT_PARAMS,
+          priority: "high",
+          ...statsAudience,
+        }),
+      },
+    },
   );
 
   useEffect(() => {
     resetPage();
   }, [search, statusFilter, audienceTab, resetPage]);
 
-  const ticketStats = useMemo(() => {
-    const tickets = statsData?.tickets ?? [];
-    return {
-      total: statsData?.total ?? tickets.length,
-      open: tickets.filter((t) => t.status === "open").length,
-      pending: tickets.filter((t) => t.status === "pending").length,
-      urgent: tickets.filter((t) => t.priority === "urgent" || t.priority === "high").length,
-    };
-  }, [statsData]);
+  const ticketStats = useMemo(
+    () => ({
+      total: ticketTotal,
+      open: openCount,
+      pending: pendingCount,
+      urgent: urgentCount + highCount,
+    }),
+    [ticketTotal, openCount, pendingCount, urgentCount, highCount],
+  );
+  const statsLoading =
+    totalStatsLoading || openStatsLoading || pendingStatsLoading || urgentStatsLoading || highStatsLoading;
 
   const projectsParams = { limit: 100 };
   const { data: projectsData } = useListProjects(projectsParams, {
@@ -197,6 +275,35 @@ export default function AdminTickets() {
     setSelectedTicket(ticket);
     setSheetOpen(true);
   };
+
+  // Pick up ?ticket= when landing or when notification navigation updates the query string.
+  useEffect(() => {
+    if (ticketIdFromUrl != null) {
+      deepLinkErrorShownRef.current = null;
+      setPendingTicketId(ticketIdFromUrl);
+    }
+  }, [location, ticketIdFromUrl]);
+
+  useEffect(() => {
+    if (!pendingTicketId) return;
+
+    const pool = data?.tickets ?? [];
+    const found = pool.find((t) => t.id === pendingTicketId);
+    if (found) {
+      setSelectedTicket(found);
+      setSheetOpen(true);
+      setPendingTicketId(null);
+      clearUrlSearchParam("ticket");
+      return;
+    }
+
+    if (!isLoading && !isFetching && deepLinkErrorShownRef.current !== pendingTicketId) {
+      deepLinkErrorShownRef.current = pendingTicketId;
+      toast.error("Ticket not found or you do not have access.");
+      setPendingTicketId(null);
+      clearUrlSearchParam("ticket");
+    }
+  }, [pendingTicketId, data?.tickets, isLoading, isFetching]);
 
   const onSubmit = async (values: TicketFormValues) => {
     try {
@@ -236,16 +343,15 @@ export default function AdminTickets() {
       : "Raise issues and chat with support until resolved";
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{pageTitle}</h1>
-          <p className="text-muted-foreground">{pageSubtitle}</p>
-        </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title={pageTitle}
+        subtitle={pageSubtitle}
+        actions={
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" /> New ticket
+            <Button className={portalActionButtonClass()}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New ticket
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px]">
@@ -366,7 +472,8 @@ export default function AdminTickets() {
             </Form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
 
       {isAdmin && (
         <Tabs
@@ -374,73 +481,47 @@ export default function AdminTickets() {
           onValueChange={(v) => setAudienceTab(v as AdminAudienceTab)}
           className="w-full"
         >
-          <TabsList className="grid w-full max-w-xl grid-cols-3">
-            <TabsTrigger value="all" className="gap-2">
+          <PortalTabsList className="grid w-full max-w-xl grid-cols-3 h-auto p-1">
+            <PortalTabsTrigger value="all" className="gap-2 h-8">
               <LayoutGrid className="h-4 w-4" />
               All tickets
-            </TabsTrigger>
-            <TabsTrigger value="client" className="gap-2">
+            </PortalTabsTrigger>
+            <PortalTabsTrigger value="client" className="gap-2 h-8">
               <Headphones className="h-4 w-4" />
               Client requests
-            </TabsTrigger>
-            <TabsTrigger value="staff" className="gap-2">
+            </PortalTabsTrigger>
+            <PortalTabsTrigger value="staff" className="gap-2 h-8">
               <Wrench className="h-4 w-4" />
               Dev / QA requests
-            </TabsTrigger>
-          </TabsList>
+            </PortalTabsTrigger>
+          </PortalTabsList>
         </Tabs>
       )}
 
-      {statsLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard
-            title="Total"
-            value={ticketStats.total}
-            hint={
-              isAdmin
-                ? audienceTab === "all"
-                  ? "All tickets"
-                  : audienceTab === "client"
-                    ? "Client tickets"
-                    : "Staff tickets"
-                : "Your tickets"
-            }
-            icon={TicketIcon}
-            accent="violet"
-            delay={0}
-          />
-          <StatCard
-            title="Open"
-            value={ticketStats.open}
-            hint="Needs first response"
-            icon={AlertCircle}
-            accent="red"
-            alert={ticketStats.open > 0}
-            delay={1}
-          />
-          <StatCard
-            title="In progress"
-            value={ticketStats.pending}
-            hint="Active conversation"
-            icon={Clock}
-            accent="amber"
-            delay={2}
-          />
-          <StatCard
-            title="High priority"
-            value={ticketStats.urgent}
-            hint="Urgent + high"
-            icon={MessageSquare}
-            accent="blue"
-            alert={ticketStats.urgent > 0}
-            delay={3}
-          />
-        </PageKpiRow>
-      )}
+      <PortalKpiGrid
+        loading={statsLoading}
+        items={[
+          {
+            title: "Total",
+            value: ticketStats.total,
+            hint: isAdmin
+              ? audienceTab === "all"
+                ? "All tickets"
+                : audienceTab === "client"
+                  ? "Client tickets"
+                  : "Staff tickets"
+              : "Your tickets",
+            icon: TicketIcon,
+            accent: "violet",
+          },
+          { title: "Open", value: ticketStats.open, hint: "Needs first response", icon: AlertCircle, accent: "red", alert: ticketStats.open > 0 },
+          { title: "In progress", value: ticketStats.pending, hint: "Active conversation", icon: Clock, accent: "amber" },
+          { title: "High priority", value: ticketStats.urgent, hint: "Urgent + high", icon: MessageSquare, accent: "blue", alert: ticketStats.urgent > 0 },
+        ]}
+      />
 
-      <div className="flex flex-col sm:flex-row gap-4 items-center">
+      <PortalToolbar>
+      <div className="flex flex-col sm:flex-row gap-4 items-center flex-1 w-full">
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -465,6 +546,7 @@ export default function AdminTickets() {
           </SelectContent>
         </Select>
       </div>
+      </PortalToolbar>
 
       {viewMode === "table" ? (
         <div
@@ -591,8 +673,10 @@ export default function AdminTickets() {
       <DataPagination
         page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={data?.limit ?? 12}
+        limit={limit}
+        loadedRowCount={data?.tickets?.length ?? 0}
         onPageChange={setPage}
+        onLimitChange={setLimit}
       />
 
       <TicketDetailSheet
@@ -606,6 +690,6 @@ export default function AdminTickets() {
         userId={user?.id}
         listQueryKey={listQueryKey}
       />
-    </div>
+    </PortalPageShell>
   );
 }

@@ -12,23 +12,23 @@ export async function getProjectsByProjectIdInventoryActivities(req, res) {
     .sort({ createdAt: -1 })
     .limit(limit);
 
-  const formatted = await Promise.all(
-    activities.map(async (a) => {
-      const actor = await usersTable.findOne({ id: a.actorId });
-      return {
-        id: a.id,
-        projectId: a.projectId,
-        actorId: a.actorId,
-        actorName: actor?.name ?? "Unknown",
-        action: a.action,
-        entityType: a.entityType,
-        entityId: a.entityId,
-        entityName: a.entityName,
-        oldVal: a.oldVal,
-        newVal: a.newVal,
-        createdAt: a.createdAt.toISOString(),
-      };
-    }),
-  );
+  const actorIds = [...new Set(activities.map((a) => a.actorId).filter(Boolean))];
+  const actors = actorIds.length
+    ? await usersTable.find({ id: { $in: actorIds } }).select("id name").lean()
+    : [];
+  const actorById = new Map(actors.map((u) => [u.id, u]));
+  const formatted = activities.map((a) => ({
+    id: a.id,
+    projectId: a.projectId,
+    actorId: a.actorId,
+    actorName: actorById.get(a.actorId)?.name ?? "Unknown",
+    action: a.action,
+    entityType: a.entityType,
+    entityId: a.entityId,
+    entityName: a.entityName,
+    oldVal: a.oldVal,
+    newVal: a.newVal,
+    createdAt: a.createdAt.toISOString(),
+  }));
   res.json({ activities: formatted, total: formatted.length });
 }

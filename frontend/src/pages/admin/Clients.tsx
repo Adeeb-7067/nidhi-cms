@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useListClients, useCreateClient, useUpdateClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -10,7 +9,13 @@ import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalContentCard,
+  portalActionButtonClass,
+} from "@/components/layout/portal-page-kit";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -56,9 +61,15 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError, getApiErrorMessage } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
-import { useClientPagination } from "@/lib/table-pagination";
+import { LIST_LIMIT, QUERY_STALE } from "@/lib/query-config";
+import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
+import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { useQueryClient } from "@tanstack/react-query";
 import { Client } from "@/api";
+import { useRefreshPresenceForUserIds } from "@/hooks/use-presence-refresh";
+import { useMergedPresenceForUser, type PresenceUserFields } from "@/hooks/use-merged-presence";
+import { PresenceTableCell } from "@/components/presence/PresenceTableCell";
+import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
 
 const clientSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
@@ -81,6 +92,82 @@ function canViewAsClient(client: Client): boolean {
   return client.status === "active" && client.userId != null && client.userId > 0;
 }
 
+function clientPortalPresenceUser(client: Client): PresenceUserFields | null {
+  if (!client.userId) return null;
+  return {
+    id: client.userId,
+    lastLoginAt: client.portalLastLoginAt,
+    lastSeenAt: client.portalLastSeenAt,
+    presenceStatus: client.portalPresenceStatus,
+    isActiveNow: client.portalIsActiveNow,
+  };
+}
+
+function ClientPresenceCell({ client }: { client: Client }) {
+  const merged = useMergedPresenceForUser(clientPortalPresenceUser(client));
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      lastLoginAt={merged.lastLoginAt}
+      variant="presence"
+    />
+  );
+}
+
+function ClientLastSeenCell({ client }: { client: Client }) {
+  const merged = useMergedPresenceForUser(clientPortalPresenceUser(client));
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      variant="lastSeen"
+    />
+  );
+}
+
+function ClientLastLoginCell({ client }: { client: Client }) {
+  const merged = useMergedPresenceForUser(clientPortalPresenceUser(client));
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastLoginAt={merged.lastLoginAt}
+      variant="lastLogin"
+    />
+  );
+}
+
+function ClientPresenceDetailCell({ client }: { client: Client }) {
+  const merged = useMergedPresenceForUser(clientPortalPresenceUser(client));
+  if (!merged) return "—";
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      lastLoginAt={merged.lastLoginAt}
+      variant="combined"
+    />
+  );
+}
+
+function ClientPortalPresenceMeta({ client }: { client: Client }) {
+  const merged = useMergedPresenceForUser(clientPortalPresenceUser(client));
+  if (!merged) {
+    return <p className="text-xs text-muted-foreground">No portal user linked.</p>;
+  }
+  return (
+    <UserPresenceMeta
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      lastLoginAt={merged.lastLoginAt}
+      compact
+    />
+  );
+}
+
 export default function AdminClients() {
   const { impersonate, isImpersonating } = useAuth();
   const [impersonatingUserId, setImpersonatingUserId] = useState<number | null>(null);
@@ -89,29 +176,66 @@ export default function AdminClients() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editClient, setEditClient] = useState<Client | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => {
+    resetPage();
+  }, [search, resetPage]);
 
-  const PAGE_SIZE = 10;
   const { data, isLoading } = useListClients(
-    { search, page, limit: PAGE_SIZE },
-    { query: listQueryOptions({ queryKey: getListClientsQueryKey({ search, page, limit: PAGE_SIZE }) }) },
+    { search, page, limit: apiLimit },
+    { query: listQueryOptions({ queryKey: getListClientsQueryKey({ search, page, limit: apiLimit }) }) },
   );
-  const { data: statsData, isLoading: statsLoading } = useListClients(
-    { limit: 500 },
-    { query: listQueryOptions({ queryKey: getListClientsQueryKey({ limit: 500 }), staleTime: 120_000 }) },
+  const countQueryBase = { staleTime: QUERY_STALE.reference, select: selectListTotal };
+  const { data: totalClients = 0, isLoading: totalLoading } = useListClients(LIST_COUNT_PARAMS, {
+    query: { ...countQueryBase, queryKey: getListClientsQueryKey(LIST_COUNT_PARAMS) },
+  });
+  const { data: activeClients = 0, isLoading: activeLoading } = useListClients(
+    { ...LIST_COUNT_PARAMS, status: "active" },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListClientsQueryKey({ ...LIST_COUNT_PARAMS, status: "active" }),
+      },
+    },
+  );
+  const { data: inactiveClients = 0, isLoading: inactiveLoading } = useListClients(
+    { ...LIST_COUNT_PARAMS, status: "inactive" },
+    {
+      query: {
+        ...countQueryBase,
+        queryKey: getListClientsQueryKey({ ...LIST_COUNT_PARAMS, status: "inactive" }),
+      },
+    },
+  );
+  const { data: activeProjectSum = 0, isLoading: projectsSumLoading } = useListClients(
+    { page: 1, limit: LIST_LIMIT.admin },
+    {
+      query: {
+        queryKey: [...getListClientsQueryKey({ limit: LIST_LIMIT.admin }), "activeProjectSum"],
+        staleTime: QUERY_STALE.reference,
+        select: (d) =>
+          (d.clients ?? []).reduce((acc, c) => acc + (c.activeProjectCount || 0), 0),
+      },
+    },
   );
 
-  const clientStats = useMemo(() => {
-    const clients = statsData?.clients ?? [];
-    return {
-      total: statsData?.total ?? clients.length,
-      active: clients.filter((c) => c.status === "active").length,
-      inactive: clients.filter((c) => c.status !== "active").length,
-      activeProjects: clients.reduce((acc, c) => acc + (c.activeProjectCount || 0), 0),
-    };
-  }, [statsData]);
+  const clientStats = useMemo(
+    () => ({
+      total: totalClients,
+      active: activeClients,
+      inactive: inactiveClients,
+      activeProjects: activeProjectSum,
+    }),
+    [totalClients, activeClients, inactiveClients, activeProjectSum],
+  );
+  const statsLoading = totalLoading || activeLoading || inactiveLoading || projectsSumLoading;
+
+  const pagePortalUserIds = useMemo(
+    () => (data?.clients ?? []).map((c) => c.userId).filter((id): id is number => id != null && id > 0),
+    [data?.clients],
+  );
+  useRefreshPresenceForUserIds(pagePortalUserIds);
   const createClientMutation = useCreateClient();
   const updateClientMutation = useUpdateClient();
   const deleteClientMutation = { mutateAsync: async (_: { id: number }) => {}, isPending: false }; // Mock: useDeleteClient does not exist in generated spec
@@ -316,6 +440,22 @@ export default function AdminClients() {
       )
     },
     {
+      id: "presence",
+      header: "Presence",
+      cell: (client) => <ClientPresenceCell client={client} />,
+      detailCell: (client) => <ClientPresenceDetailCell client={client} />,
+    },
+    {
+      id: "lastSeen",
+      header: "Last seen",
+      cell: (client) => <ClientLastSeenCell client={client} />,
+    },
+    {
+      id: "lastLogin",
+      header: "Last login",
+      cell: (client) => <ClientLastLoginCell client={client} />,
+    },
+    {
       id: "clientSince",
       header: "Client Since",
       accessorKey: "clientSince",
@@ -409,12 +549,12 @@ export default function AdminClients() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Companies</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">Manage your client relationships</p>
-        </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Companies"
+        subtitle="Manage your client relationships"
+        actions={
+        <>
         <Dialog
           open={isDialogOpen || !!editClient}
           onOpenChange={(open) => {
@@ -428,7 +568,7 @@ export default function AdminClients() {
         >
           <Button
             type="button"
-            className="bg-primary text-primary-foreground"
+            className={portalActionButtonClass("bg-primary text-primary-foreground")}
             onClick={() => {
               setEditClient(null);
               form.reset({
@@ -679,21 +819,21 @@ export default function AdminClients() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
+        </>
+        }
+      />
 
-      {statsLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard title="Companies" value={clientStats.total} hint="Registered clients" icon={Building} accent="violet" delay={0} />
-          <StatCard title="Active" value={clientStats.active} hint="Active partnerships" icon={Users} accent="green" delay={1} />
-          <StatCard title="Active projects" value={clientStats.activeProjects} hint="Across all companies" icon={Briefcase} accent="blue" delay={2} />
-          <StatCard title="Inactive" value={clientStats.inactive} hint="Paused or churned" icon={TrendingUp} accent="amber" alert={clientStats.inactive > 0} delay={3} />
-        </PageKpiRow>
-      )}
+      <PortalKpiGrid
+        loading={statsLoading}
+        items={[
+          { title: "Companies", value: clientStats.total, hint: "Registered clients", icon: Building, accent: "violet" },
+          { title: "Active", value: clientStats.active, hint: "Active partnerships", icon: Users, accent: "green" },
+          { title: "Active projects", value: clientStats.activeProjects, hint: "Across all companies", icon: Briefcase, accent: "blue" },
+          { title: "Inactive", value: clientStats.inactive, hint: "Paused or churned", icon: TrendingUp, accent: "amber", alert: clientStats.inactive > 0 },
+        ]}
+      />
 
-      <Card className="bg-card">
-        <CardContent className="p-4">
+      <PortalContentCard>
           {isLoading ? (
             <div className="space-y-4">
               {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -709,13 +849,14 @@ export default function AdminClients() {
               onRowClick={(client) => setSelectedClient(client)}
             />
           )}
-        </CardContent>
-      </Card>
+      </PortalContentCard>
       <DataPagination
         page={data?.page ?? page}
         total={data?.total ?? 0}
-        limit={data?.limit ?? PAGE_SIZE}
+        limit={limit}
+        loadedRowCount={data?.clients?.length ?? 0}
         onPageChange={setPage}
+        onLimitChange={setLimit}
       />
 
       <Sheet open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
@@ -783,6 +924,12 @@ export default function AdminClients() {
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Account Email</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all"><Mail className="h-3.5 w-3.5 text-primary shrink-0" /> {selectedClient?.email}</p>
                 </div>
+                {selectedClient?.userId ? (
+                  <div className="col-span-2 rounded-md border border-border/50 bg-muted/30 p-3">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Portal activity</p>
+                    <ClientPortalPresenceMeta client={selectedClient} />
+                  </div>
+                ) : null}
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {selectedClient?.phone || "Not Provided"}</p>
@@ -885,6 +1032,6 @@ export default function AdminClients() {
           </Tabs>
         </SheetContent>
       </Sheet>
-    </div>
+    </PortalPageShell>
   );
 }

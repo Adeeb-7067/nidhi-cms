@@ -1,10 +1,16 @@
 import React, { useState, useMemo } from "react";
 import { useListRequests, useCreateRequest, useListProjects } from "@/api";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Inbox, Loader2, Clock, CheckCircle2, XCircle } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevContentCard,
+  DevEmptyState,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { useTablePagination } from "@/lib/table-pagination";
@@ -31,8 +37,8 @@ type RequestFormValues = z.infer<typeof requestSchema>;
 
 export default function DevRequests() {
   const [open, setOpen] = useState(false);
-  const { page, setPage, limit } = useTablePagination();
-  const { data, isLoading, refetch } = useListRequests({ page, limit });
+  const { page, setPage, limit, apiLimit, setLimit } = useTablePagination();
+  const { data, isLoading, refetch } = useListRequests({ page, limit: apiLimit });
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createRequest = useCreateRequest();
 
@@ -167,16 +173,15 @@ export default function DevRequests() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Resource Requests</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Request tools, hardware, or access</p>
-        </div>
+    <DevPageShell>
+      <DevPageHero
+        title="Resource Requests"
+        subtitle="Request tools, hardware, or access"
+        actions={
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground">
-              <Plus className="mr-2 h-4 w-4" /> New Request
+            <Button className={devActionButtonClass()}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New Request
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[500px] bg-card border-border">
@@ -298,33 +303,35 @@ export default function DevRequests() {
             </Form>
           </DialogContent>
         </Dialog>
-      </div>
+        }
+      />
+
+      <DevKpiGrid
+        loading={isLoading && !data}
+        items={[
+          { title: "My requests", value: requestStats.total, hint: "All submissions", icon: Inbox, accent: "violet" },
+          { title: "Pending", value: requestStats.pending, hint: "Awaiting review", icon: Clock, accent: "amber", alert: requestStats.pending > 0 },
+          { title: "Approved", value: requestStats.approved, hint: "Accepted", icon: CheckCircle2, accent: "green" },
+          { title: "Rejected", value: requestStats.rejected, hint: "Declined", icon: XCircle, accent: "red" },
+        ]}
+      />
 
       {isLoading ? (
-        <PageKpiSkeleton />
+        <DevContentCard>
+          <div className="space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </DevContentCard>
+      ) : !data?.requests?.length ? (
+        <DevEmptyState
+          icon={Inbox}
+          title="No resource requests found"
+          description="Submit a new request when you need tools, hardware, or access."
+        />
       ) : (
-        <PageKpiRow>
-          <StatCard title="My requests" value={requestStats.total} hint="All submissions" icon={Inbox} accent="violet" delay={0} />
-          <StatCard title="Pending" value={requestStats.pending} hint="Awaiting review" icon={Clock} accent="amber" alert={requestStats.pending > 0} delay={1} />
-          <StatCard title="Approved" value={requestStats.approved} hint="Accepted" icon={CheckCircle2} accent="green" delay={2} />
-          <StatCard title="Rejected" value={requestStats.rejected} hint="Declined" icon={XCircle} accent="red" delay={3} />
-        </PageKpiRow>
-      )}
-
-      <Card className="bg-card">
-        <CardContent className="p-4">
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : !data?.requests?.length ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground text-xs">
-              <Inbox className="h-8 w-8 mb-2 opacity-50" />
-              <p>No resource requests found.</p>
-            </div>
-          ) : (
+        <DevContentCard>
             <AdvancedTable
               data={data.requests}
               columns={columns}
@@ -335,13 +342,13 @@ export default function DevRequests() {
               pagination={{
                 page: data.page ?? page,
                 total: data.total ?? 0,
-                limit: data.limit ?? limit,
+                limit,
                 onPageChange: setPage,
+                onLimitChange: setLimit,
               }}
             />
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        </DevContentCard>
+      )}
+    </DevPageShell>
   );
 }

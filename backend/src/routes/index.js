@@ -22,6 +22,7 @@ import settingsRoutes from "./settings.routes.js";
 import uploadsRoutes from "./uploads.routes.js";
 import ticketsRoutes from "./tickets.routes.js";
 import inventoryRoutes from "./inventory.routes.js";
+import presenceRoutes from "./presence.routes.js";
 const router = Router();
 router.use((req, res, next) => {
   if (req.method === "OPTIONS" || PUBLIC_API_PATHS.has(req.path)) {
@@ -50,7 +51,8 @@ const featureRouters = [
   settingsRoutes,
   uploadsRoutes,
   ticketsRoutes,
-  inventoryRoutes
+  inventoryRoutes,
+  presenceRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

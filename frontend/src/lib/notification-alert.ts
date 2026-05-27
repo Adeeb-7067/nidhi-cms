@@ -1,8 +1,12 @@
 /**
- * Repeating alert tone until explicitly stopped (e.g. when unread notifications = 0).
+ * Short notification alert: three beeps, then silence (no repeating loop).
  */
 
-let intervalId: ReturnType<typeof setInterval> | null = null;
+const ALERT_BEEP_COUNT = 3;
+const ALERT_BEEP_GAP_MS = 650;
+
+let beepTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let beepsPlayed = 0;
 let audioCtx: AudioContext | null = null;
 let beepToggle = false;
 
@@ -41,20 +45,40 @@ export function playAlertBeep(): void {
   osc.stop(ctx.currentTime + 0.35);
 }
 
+function scheduleNextBeep(): void {
+  beepTimeoutId = setTimeout(() => {
+    beepTimeoutId = null;
+    if (beepsPlayed >= ALERT_BEEP_COUNT) return;
+    playAlertBeep();
+    beepsPlayed += 1;
+    if (beepsPlayed < ALERT_BEEP_COUNT) {
+      scheduleNextBeep();
+    }
+  }, ALERT_BEEP_GAP_MS);
+}
+
 export function isAlertPlaying(): boolean {
-  return intervalId !== null;
+  return beepTimeoutId !== null || (beepsPlayed > 0 && beepsPlayed < ALERT_BEEP_COUNT);
 }
 
-/** Start repeating alert every ~2s until stopPersistentAlert(). */
-export function startPersistentAlert(): void {
-  if (intervalId !== null) return;
+/** Play exactly three alert beeps, then stop. */
+export function playNotificationAlert(): void {
+  stopPersistentAlert();
   playAlertBeep();
-  intervalId = setInterval(playAlertBeep, 2000);
-}
-
-export function stopPersistentAlert(): void {
-  if (intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
+  beepsPlayed = 1;
+  if (ALERT_BEEP_COUNT > 1) {
+    scheduleNextBeep();
   }
 }
+
+/** Cancel any scheduled beeps (e.g. when all notifications are read). */
+export function stopPersistentAlert(): void {
+  if (beepTimeoutId !== null) {
+    clearTimeout(beepTimeoutId);
+    beepTimeoutId = null;
+  }
+  beepsPlayed = 0;
+}
+
+/** @deprecated Use playNotificationAlert */
+export const startPersistentAlert = playNotificationAlert;

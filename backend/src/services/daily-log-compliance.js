@@ -43,6 +43,17 @@ function localHour(date = new Date()) {
   return date.getUTCHours();
 }
 
+/** 24-hour local time (0–23). Default 0 = 12:00 AM midnight (end of day). */
+function resolveComplianceCheckHour() {
+  const raw = process.env.COMPLIANCE_CHECK_HOUR ?? "0";
+  const hour = Number.parseInt(raw, 10);
+  if (Number.isNaN(hour) || hour < 0 || hour > 23) {
+    logger.warn({ raw }, "Invalid COMPLIANCE_CHECK_HOUR; using 0 (12:00 AM)");
+    return 0;
+  }
+  return hour;
+}
+
 function dateKeyFromIso(dateStr) {
   return Number.parseInt(String(dateStr).replace(/-/g, ""), 10);
 }
@@ -258,7 +269,12 @@ export async function runDailyLogComplianceCheck(forDate) {
 let lastComplianceRunDate = null;
 
 export function startDailyLogComplianceJob() {
-  const checkHour = Number.parseInt(process.env.COMPLIANCE_CHECK_HOUR ?? "21", 10);
+  const checkHour = resolveComplianceCheckHour();
+  const tz = process.env.COMPLIANCE_TIMEZONE?.trim() || "(server local / UTC fallback)";
+  logger.info(
+    { checkHour, timezone: tz, label: formatCheckHourLabel(checkHour) },
+    "Daily log compliance reminders scheduled"
+  );
   const intervalMs = 30 * 60 * 1000;
 
   const tick = () => {
@@ -280,4 +296,11 @@ export function startDailyLogComplianceJob() {
 
   setInterval(tick, intervalMs);
   return tick;
+}
+
+function formatCheckHourLabel(hour24) {
+  if (hour24 === 0) return "12:00 AM (midnight)";
+  if (hour24 === 12) return "12:00 PM (noon)";
+  if (hour24 < 12) return `${hour24}:00 AM`;
+  return `${hour24 - 12}:00 PM`;
 }

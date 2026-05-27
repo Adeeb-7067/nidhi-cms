@@ -7,14 +7,34 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { getPaginationMeta } from "@/lib/table-pagination";
+import {
+  API_PAGE_LIMIT_CAP,
+  DEFAULT_TABLE_PAGE_SIZE,
+  PAGE_SIZE_ALL,
+  PAGE_SIZE_ALL_SELECT_VALUE,
+  TABLE_PAGE_SIZE_OPTIONS,
+  getPaginationMeta,
+  isShowAllPageSize,
+  normalizePageLimit,
+} from "@/lib/table-pagination";
 
 export interface DataPaginationProps {
   page: number;
   total: number;
   limit: number;
   onPageChange: (page: number) => void;
+  onLimitChange?: (limit: number) => void;
+  pageSizeOptions?: readonly number[];
+  /** Rows currently rendered (avoids “1–N” when server “All” is capped below total). */
+  loadedRowCount?: number;
   className?: string;
   hideWhenSinglePage?: boolean;
 }
@@ -45,10 +65,18 @@ export function DataPagination({
   total,
   limit,
   onPageChange,
+  onLimitChange,
+  pageSizeOptions = TABLE_PAGE_SIZE_OPTIONS,
+  loadedRowCount,
   className,
   hideWhenSinglePage = false,
 }: DataPaginationProps) {
-  const { totalPages, safePage, start, end } = getPaginationMeta(total, page, limit);
+  const { totalPages, safePage, start, end } = getPaginationMeta(
+    total,
+    page,
+    limit,
+    loadedRowCount,
+  );
 
   const pageList = useMemo(
     () => buildPageList(safePage, totalPages),
@@ -59,8 +87,9 @@ export function DataPagination({
     totalPages > 0 ? Math.round((safePage / totalPages) * 100) : 0;
 
   const goTo = (next: number) => {
+    if (totalPages < 1) return;
     const clamped = Math.min(Math.max(1, next), totalPages);
-    if (clamped !== page) onPageChange(clamped);
+    if (clamped !== safePage) onPageChange(clamped);
   };
 
   if (total === 0) return null;
@@ -91,6 +120,14 @@ export function DataPagination({
             <span className="inline-flex items-center rounded-full border border-border/60 bg-background/80 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground shadow-sm">
               {total} {total === 1 ? "row" : "rows"}
             </span>
+            {onLimitChange && (
+              <PageSizeSelect
+                limit={limit}
+                total={total}
+                options={pageSizeOptions}
+                onLimitChange={onLimitChange}
+              />
+            )}
             {showControls && (
               <span className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary ring-1 ring-primary/20">
                 Page {safePage} / {totalPages}
@@ -252,6 +289,63 @@ function NavIconButton({
     >
       {children}
     </button>
+  );
+}
+
+function PageSizeSelect({
+  limit,
+  total,
+  options,
+  onLimitChange,
+}: {
+  limit: number;
+  total: number;
+  options: readonly number[];
+  onLimitChange: (limit: number) => void;
+}) {
+  const sizes = options.length > 0 ? options : TABLE_PAGE_SIZE_OPTIONS;
+  const value = isShowAllPageSize(limit)
+    ? PAGE_SIZE_ALL_SELECT_VALUE
+    : String(normalizePageLimit(limit));
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="text-[10px] font-medium text-muted-foreground whitespace-nowrap">Rows</span>
+      <Select
+        value={value}
+        onValueChange={(next) => {
+          if (next === PAGE_SIZE_ALL_SELECT_VALUE) {
+            onLimitChange(PAGE_SIZE_ALL);
+            return;
+          }
+          const parsed = Number.parseInt(next, 10);
+          if (!Number.isFinite(parsed)) return;
+          onLimitChange(normalizePageLimit(parsed));
+        }}
+      >
+        <SelectTrigger
+          className="h-7 min-w-[4.25rem] w-auto border-border/60 bg-background/90 px-2 text-xs font-semibold tabular-nums shadow-sm"
+          aria-label="Rows per page"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="start">
+          {sizes.map((size) => (
+            <SelectItem key={size} value={String(size)} className="text-xs tabular-nums">
+              {size}
+            </SelectItem>
+          ))}
+          <SelectItem value={PAGE_SIZE_ALL_SELECT_VALUE} className="text-xs font-medium">
+            All
+            {total > 0
+              ? total > API_PAGE_LIMIT_CAP
+                ? ` (up to ${API_PAGE_LIMIT_CAP})`
+                : ` (${total})`
+              : ""}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
   );
 }
 

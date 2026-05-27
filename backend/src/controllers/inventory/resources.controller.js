@@ -28,32 +28,35 @@ export async function getProjectsByProjectIdInventoryResources(req, res) {
     inventoryResourcesTable.countDocuments(query),
   ]);
 
-  const resources = await Promise.all(
-    items.map(async (r) => {
-      const uploader = await usersTable.findOne({ id: r.uploadedBy });
-      return {
-        id: r.id,
-        projectId: r.projectId,
-        folderId: r.folderId,
-        type: r.type,
-        name: r.name,
-        description: r.description,
-        url: r.url,
-        fileUrl: r.fileUrl,
-        mimeType: r.mimeType,
-        fileSize: r.fileSize,
-        tags: r.tags,
-        category: r.category,
-        visibility: r.visibility,
-        version: r.version,
-        parentResourceId: r.parentResourceId,
-        uploadedBy: r.uploadedBy,
-        uploaderName: uploader?.name ?? "Unknown",
-        createdAt: r.createdAt.toISOString(),
-        updatedAt: r.updatedAt.toISOString(),
-      };
-    }),
-  );
+  const uploaderIds = [...new Set(items.map((r) => r.uploadedBy).filter(Boolean))];
+  const uploaders = uploaderIds.length
+    ? await usersTable.find({ id: { $in: uploaderIds } }).select("id name").lean()
+    : [];
+  const uploaderById = new Map(uploaders.map((u) => [u.id, u]));
+  const resources = items.map((r) => {
+    const uploader = uploaderById.get(r.uploadedBy);
+    return {
+      id: r.id,
+      projectId: r.projectId,
+      folderId: r.folderId,
+      type: r.type,
+      name: r.name,
+      description: r.description,
+      url: r.url,
+      fileUrl: r.fileUrl,
+      mimeType: r.mimeType,
+      fileSize: r.fileSize,
+      tags: r.tags,
+      category: r.category,
+      visibility: r.visibility,
+      version: r.version,
+      parentResourceId: r.parentResourceId,
+      uploadedBy: r.uploadedBy,
+      uploaderName: uploader?.name ?? "Unknown",
+      createdAt: r.createdAt.toISOString(),
+      updatedAt: r.updatedAt.toISOString(),
+    };
+  });
   res.json({ resources, total, page: p, limit: l });
 }
 

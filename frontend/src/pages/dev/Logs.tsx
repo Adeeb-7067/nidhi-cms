@@ -2,20 +2,25 @@ import React, { useEffect, useState, useMemo } from "react";
 import {
   useListMyLogs,
   useCreateLog,
+  useUpdateLog,
   useListProjects,
   useGetDailyLogSummary,
   getGetDailyLogSummaryQueryKey,
-  useListUsers,
-  getListUsersQueryKey,
-  useGetLogComplianceCalendar,
-  getGetLogComplianceCalendarQueryKey,
+  type DailyLog,
 } from "@/api";
-import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
+import { AdminTeamLogsPanel } from "@/components/logs/AdminTeamLogsPanel";
+import { DailyLogDetailDialog } from "@/components/logs/DailyLogDetailDialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, Calendar, Loader2, Check, FileText, Briefcase, TrendingUp, AlertTriangle } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { Plus, Clock, Calendar, Loader2, FileText, Briefcase, TrendingUp, AlertTriangle, Pencil } from "lucide-react";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevEmptyState,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import { PDFService } from "@/lib/pdf-service";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -34,9 +39,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
-import { User } from "lucide-react";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
+import {
+  formatDailyLogUpdatedLabel,
+  formatDailyLogWorkDate,
+} from "@/lib/daily-log-format";
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -68,76 +76,78 @@ const WORK_CATEGORIES = [
 
 export default function DevLogs() {
   const { user } = useAuth();
-  const isAdminView = user?.role === "super_admin";
+  if (user?.role === "super_admin") {
+    return <AdminTeamLogsPanel />;
+  }
+  return <DeveloperLogsView />;
+}
+
+function DeveloperLogsView() {
   const [open, setOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<DailyLog | null>(null);
+  const [viewingLog, setViewingLog] = useState<DailyLog | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
   const currentDate = new Date();
   const todayIso = currentDate.toISOString().split("T")[0];
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [year, setYear] = useState(currentDate.getFullYear());
-  const [developerFilterId, setDeveloperFilterId] = useState<string>("");
   const queryClient = useQueryClient();
-  const { page, setPage, resetPage, limit } = useTablePagination();
-
-  const { data: staffData } = useListUsers(
-    { staff: "1", limit: 200 },
-    {
-      query: {
-        enabled: isAdminView,
-        queryKey: getListUsersQueryKey({ staff: "1", limit: 200 }),
-      },
-    },
-  );
-  const staffDevs = useMemo(
-    () =>
-      (staffData?.users ?? []).filter(
-        (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
-      ),
-    [staffData?.users],
-  );
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
   useEffect(() => {
     resetPage();
-  }, [month, year, developerFilterId, resetPage]);
+  }, [month, year, resetPage]);
 
-  const listParams = useMemo(() => {
-    const base: { month: number; year: number; page: number; limit: number; developerId?: number } = {
-      month,
-      year,
-      page,
-      limit,
-    };
-    if (isAdminView && developerFilterId) {
-      base.developerId = Number.parseInt(developerFilterId, 10);
-    }
-    return base;
-  }, [month, year, isAdminView, developerFilterId, page, limit]);
+  const listParams = useMemo(
+    () => ({ month, year, page, limit: apiLimit }),
+    [month, year, page, apiLimit],
+  );
 
   const { data, isLoading, refetch } = useListMyLogs(listParams);
-
-  const complianceDeveloperId =
-    isAdminView && developerFilterId
-      ? Number.parseInt(developerFilterId, 10)
-      : user?.id;
-
-  const { data: complianceCalendar, isLoading: complianceLoading } = useGetLogComplianceCalendar(
-    { month, year, developerId: complianceDeveloperId! },
-    {
-      query: {
-        enabled: Boolean(complianceDeveloperId),
-        queryKey: getGetLogComplianceCalendarQueryKey({
-          month,
-          year,
-          developerId: complianceDeveloperId!,
-        }),
-      },
-    },
-  );
   const { data: dailySummary, refetch: refetchDailySummary } = useGetDailyLogSummary(
     { date: todayIso },
-    { query: { enabled: !isAdminView, queryKey: getGetDailyLogSummaryQueryKey({ date: todayIso }) } },
+    { query: { queryKey: getGetDailyLogSummaryQueryKey({ date: todayIso }) } },
   );
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createLog = useCreateLog();
+  const updateLog = useUpdateLog();
+  const isEditMode = editingLog != null;
+  const isSaving = createLog.isPending || updateLog.isPending;
+
+  const canEditLogEntry = (log: DailyLog) =>
+    String(log.logDate).slice(0, 10) === todayIso;
+
+  const openCreateDialog = () => {
+    setEditingLog(null);
+    form.reset({
+      projectId: "",
+      logDate: todayIso,
+      taskTitle: "",
+      workCategories: [],
+      hoursSpent: 1,
+      completionPct: 0,
+      taskDescription: "",
+      blockers: "",
+      nextDayPlan: "",
+    });
+    setOpen(true);
+  };
+
+  const openEditDialog = (log: DailyLog) => {
+    setEditingLog(log);
+    form.reset({
+      projectId: log.projectId.toString(),
+      logDate: String(log.logDate).slice(0, 10),
+      taskTitle: log.taskTitle,
+      workCategories: log.workCategories ?? [],
+      hoursSpent: log.hoursSpent,
+      completionPct: log.completionPct,
+      taskDescription: log.taskDescription ?? "",
+      blockers: log.blockers ?? "",
+      nextDayPlan: log.nextDayPlan ?? "",
+    });
+    setOpen(true);
+  };
 
   const handleExportLogs = () => {
     if (!data?.logs || data.logs.length === 0) {
@@ -181,19 +191,46 @@ export default function DevLogs() {
 
   const onSubmit = async (values: LogFormValues) => {
     try {
-      await createLog.mutateAsync({
-        data: {
-          ...values,
-          projectId: parseInt(values.projectId),
-        },
-      });
-      toast.success("Log entry submitted!");
+      if (isEditMode && editingLog) {
+        await updateLog.mutateAsync({
+          id: editingLog.id,
+          data: {
+            taskTitle: values.taskTitle,
+            workCategories: values.workCategories,
+            hoursSpent: values.hoursSpent,
+            completionPct: values.completionPct,
+            taskDescription: values.taskDescription || undefined,
+            blockers: values.blockers || undefined,
+            nextDayPlan: values.nextDayPlan || undefined,
+          },
+        });
+        toast.success("Log entry updated!");
+      } else {
+        await createLog.mutateAsync({
+          data: {
+            ...values,
+            projectId: parseInt(values.projectId, 10),
+          },
+        });
+        toast.success("Log entry submitted!");
+      }
+
+      const affectsToday =
+        values.logDate === todayIso ||
+        (isEditMode && editingLog && String(editingLog.logDate).slice(0, 10) === todayIso);
+
       if (
+        affectsToday &&
         dailySummary?.complianceEnabled &&
-        values.logDate === todayIso &&
         dailySummary.requiredHours != null
       ) {
-        const projected = dailySummary.loggedHours + values.hoursSpent;
+        void refetchDailySummary();
+        const priorHours =
+          isEditMode && editingLog && String(editingLog.logDate).slice(0, 10) === todayIso
+            ? editingLog.hoursSpent
+            : 0;
+        const projected =
+          dailySummary.loggedHours - priorHours + values.hoursSpent;
         const remaining = Math.max(0, dailySummary.requiredHours - projected);
         if (remaining > 0.05) {
           toast.info(`You still need ${remaining.toFixed(1)}h logged for today.`);
@@ -201,90 +238,86 @@ export default function DevLogs() {
           toast.success("Today's required hours are complete.");
         }
       }
+
       setOpen(false);
+      setEditingLog(null);
       form.reset();
       refetch();
       void refetchDailySummary();
       void queryClient.invalidateQueries({ queryKey: getGetDailyLogSummaryQueryKey() });
-    } catch (error: any) {
-      toastApiError(error, "Action failed. Please try again.");
+    } catch (error: unknown) {
+      toastApiError(error, isEditMode ? "Failed to update log entry." : "Action failed. Please try again.");
     }
   };
 
+  const monthYearFilters = (
+    <>
+      <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
+        <SelectTrigger className={devActionButtonClass("w-[130px] bg-muted/50 border-0")}>
+          <SelectValue placeholder="Month" />
+        </SelectTrigger>
+        <SelectContent>
+          {Array.from({ length: 12 }, (_, i) => (
+            <SelectItem key={i + 1} value={(i + 1).toString()}>
+              {new Date(2000, i).toLocaleString("default", { month: "long" })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
+        <SelectTrigger className={devActionButtonClass("w-[100px] bg-muted/50 border-0")}>
+          <SelectValue placeholder="Year" />
+        </SelectTrigger>
+        <SelectContent>
+          {Array.from({ length: 3 }, (_, i) => {
+            const y = new Date().getFullYear() - 2 + i;
+            return (
+              <SelectItem key={y} value={y.toString()}>
+                {y}
+              </SelectItem>
+            );
+          })}
+        </SelectContent>
+      </Select>
+    </>
+  );
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">
-            {isAdminView ? "Team daily logs" : "Daily Logs"}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {isAdminView
-              ? "All developer and QA log entries across projects"
-              : "Track your time and progress"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {isAdminView && (
-            <Select
-              value={developerFilterId || "all"}
-              onValueChange={(v) => setDeveloperFilterId(v === "all" ? "" : v)}
+    <DevPageShell>
+      <DevPageHero
+        title="Daily Logs"
+        subtitle="Track your time and progress"
+        badge={`${new Date(year, month - 1).toLocaleString("default", { month: "short" })} ${year}`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {monthYearFilters}
+            <Button
+              variant="outline"
+              onClick={handleExportLogs}
+              className={devActionButtonClass("border-emerald-500/30 text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10")}
             >
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="All developers" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All developers</SelectItem>
-                {staffDevs.map((u) => (
-                  <SelectItem key={u.id} value={u.id.toString()}>
-                    {u.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          <Select value={month.toString()} onValueChange={(v) => setMonth(parseInt(v))}>
-            <SelectTrigger className="w-[130px]">
-              <SelectValue placeholder="Month" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 12 }, (_, i) => (
-                <SelectItem key={i + 1} value={(i + 1).toString()}>
-                  {new Date(2000, i).toLocaleString('default', { month: 'long' })}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue placeholder="Year" />
-            </SelectTrigger>
-            <SelectContent>
-              {Array.from({ length: 3 }, (_, i) => {
-                const y = new Date().getFullYear() - 2 + i;
-                return (
-                  <SelectItem key={y} value={y.toString()}>
-                    {y}
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-          {!isAdminView && (
-            <Button variant="outline" onClick={handleExportLogs} className="h-9 border-emerald-500/30 text-emerald-500 bg-emerald-500/5 hover:bg-emerald-500/10">
-              <FileText className="mr-2 h-4 w-4" /> Export PDF
+              <FileText className="mr-1.5 h-3.5 w-3.5" /> Export PDF
             </Button>
-          )}
-          {!isAdminView && (
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(next) => {
+              setOpen(next);
+              if (!next) setEditingLog(null);
+            }}
+          >
             <DialogTrigger asChild>
-              <Button className="bg-primary text-primary-foreground">
-                <Plus className="mr-2 h-4 w-4" /> Add Log Entry
+              <Button className={devActionButtonClass()} onClick={openCreateDialog}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Log Entry
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] bg-card border-border">
               <DialogHeader>
-                <DialogTitle>Add Daily Log Entry</DialogTitle>
+                <DialogTitle>{isEditMode ? "Edit Daily Log Entry" : "Add Daily Log Entry"}</DialogTitle>
+                {isEditMode && (
+                  <p className="text-xs text-muted-foreground">
+                    You can edit today&apos;s logs only. Project and date cannot be changed.
+                  </p>
+                )}
               </DialogHeader>
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
@@ -295,9 +328,13 @@ export default function DevLogs() {
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Project</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={isEditMode}
+                          >
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger disabled={isEditMode}>
                                 <SelectValue placeholder="Select project" />
                               </SelectTrigger>
                             </FormControl>
@@ -320,7 +357,7 @@ export default function DevLogs() {
                         <FormItem>
                           <FormLabel>Date</FormLabel>
                           <FormControl>
-                            <Input type="date" {...field} />
+                            <Input type="date" {...field} disabled={isEditMode} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -470,38 +507,20 @@ export default function DevLogs() {
                   />
 
                   <DialogFooter className="pt-4">
-                    <Button type="submit" disabled={createLog.isPending}>
-                      {createLog.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Submit Log Entry
+                    <Button type="submit" disabled={isSaving}>
+                      {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isEditMode ? "Save changes" : "Submit Log Entry"}
                     </Button>
                   </DialogFooter>
                 </form>
               </Form>
             </DialogContent>
           </Dialog>
-          )}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      {isAdminView && (
-        <>
-          {!developerFilterId ? (
-            <Card className="border-dashed">
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Select a developer to view their daily hours compliance calendar.
-              </CardContent>
-            </Card>
-          ) : (
-            <LogComplianceCalendarPanel
-              data={complianceCalendar}
-              isLoading={complianceLoading}
-              title="Developer compliance calendar"
-            />
-          )}
-        </>
-      )}
-
-      {!isAdminView && dailySummary?.complianceEnabled && dailySummary.requiredHours != null && (
+      {dailySummary?.complianceEnabled && dailySummary.requiredHours != null && (
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardContent className="p-4 space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -541,53 +560,48 @@ export default function DevLogs() {
         </Card>
       )}
 
-      {isLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard title="Entries" value={logStats.entries} hint={isAdminView ? "Team this month" : "This month"} icon={Calendar} accent="violet" delay={0} />
-          <StatCard title="Hours logged" value={logStats.totalHours} hint="Total time" icon={Clock} accent="blue" delay={1} />
-          <StatCard title="Projects" value={logStats.projects} hint="With activity" icon={Briefcase} accent="green" delay={2} />
-          <StatCard title="Avg per entry" value={logStats.avgHours} hint="Hours per log" icon={TrendingUp} accent="amber" delay={3} />
-        </PageKpiRow>
-      )}
+      <DevKpiGrid
+        loading={isLoading && !data}
+        items={[
+          { title: "Entries", value: logStats.entries, hint: "This month", icon: Calendar, accent: "violet" },
+          { title: "Hours logged", value: logStats.totalHours, hint: "Total time", icon: Clock, accent: "blue" },
+          { title: "Projects", value: logStats.projects, hint: "With activity", icon: Briefcase, accent: "green" },
+          { title: "Avg per entry", value: logStats.avgHours, hint: "Hours per log", icon: TrendingUp, accent: "amber" },
+        ]}
+      />
 
       <div className="space-y-4">
         {isLoading ? (
           [...Array(5)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)
         ) : data?.logs.length === 0 ? (
-          <Card className="bg-card">
-            <CardContent className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-              <Clock className="h-12 w-12 mb-4 opacity-50" />
-              <h3 className="text-lg font-medium text-foreground">No logs found</h3>
-              <p className="text-sm mt-1">
-                {isAdminView
-                  ? "No team log entries for this month yet."
-                  : "You haven't logged any work yet."}
-              </p>
-            </CardContent>
-          </Card>
+          <DevEmptyState
+            icon={Clock}
+            title="No logs found"
+            description="You haven't logged any work yet."
+          />
         ) : (
           data?.logs.map(log => (
-            <Card key={log.id} className="bg-card hover:bg-muted/30 transition-colors">
+            <Card
+              key={log.id}
+              className="bg-card hover:bg-muted/30 transition-colors cursor-pointer"
+              onClick={() => {
+                setViewingLog(log);
+                setDetailOpen(true);
+              }}
+            >
               <CardContent className="p-4">
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {new Date(log.logDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' })}
-                      <span className="mx-2">•</span>
-                      <span className="font-medium text-primary">{log.projectName}</span>
-                      {isAdminView && log.developerName && (
-                        <>
-                          <span className="mx-2">•</span>
-                          <span className="inline-flex items-center gap-1 font-medium text-foreground">
-                            <User className="h-3 w-3" />
-                            {log.developerName}
-                            {log.developerEmployeeId ? ` (${log.developerEmployeeId})` : ""}
-                          </span>
-                        </>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      <Calendar className="h-3.5 w-3.5 shrink-0" />
+                      <span>{formatDailyLogWorkDate(log.logDate)}</span>
+                      {log.updatedAt && (
+                        <span className="text-[10px] tabular-nums">
+                          {formatDailyLogUpdatedLabel(log.logDate, log.updatedAt)}
+                        </span>
                       )}
+                      <span className="mx-1 hidden sm:inline">•</span>
+                      <span className="font-medium text-primary">{log.projectName}</span>
                     </div>
                     <h3 className="text-lg font-semibold">{log.taskTitle}</h3>
                     {log.taskDescription && <p className="text-xs text-muted-foreground max-w-3xl">{log.taskDescription}</p>}
@@ -606,6 +620,21 @@ export default function DevLogs() {
                       <div className="text-lg font-bold text-green-500">{log.completionPct}%</div>
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Complete</div>
                     </div>
+                    {canEditLogEntry(log) && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditDialog(log);
+                        }}
+                      >
+                        <Pencil className="mr-1 h-3 w-3" />
+                        Edit
+                      </Button>
+                    )}
                   </div>
                 </div>
                 {(log.blockers || log.nextDayPlan) && (
@@ -631,10 +660,21 @@ export default function DevLogs() {
         <DataPagination
           page={data?.page ?? page}
           total={data?.total ?? 0}
-          limit={data?.limit ?? limit}
+          limit={limit}
+          loadedRowCount={data?.logs?.length ?? 0}
           onPageChange={setPage}
+          onLimitChange={setLimit}
         />
       </div>
-    </div>
+
+      <DailyLogDetailDialog
+        log={viewingLog}
+        open={detailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) setViewingLog(null);
+        }}
+      />
+    </DevPageShell>
   );
 }

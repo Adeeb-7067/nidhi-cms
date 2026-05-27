@@ -1,5 +1,9 @@
 import { formatBugRow, formatBugRows } from "./bug-format.js";
-import { formatCompanyRecord, getCompanyActivity } from "./company-format.js";
+import {
+  formatCompanyRecord,
+  formatCompanyRecordsBatch,
+  getCompanyActivity,
+} from "./company-format.js";
 import {
   formatNotificationRow,
   NOTIFICATION_LIST_PROJECTION,
@@ -14,6 +18,7 @@ export {
   formatBugRow,
   formatBugRows,
   formatCompanyRecord,
+  formatCompanyRecordsBatch,
   formatNotificationRow,
   formatProject,
   formatRequestRow,

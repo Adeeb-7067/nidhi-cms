@@ -6,6 +6,7 @@ import {
   useDeleteUser,
   getListUsersQueryKey,
   useGetTeamAnalytics,
+  getGetTeamAnalyticsQueryKey,
   useGetUserCredentials,
   useRevealCredential,
   getGetUserCredentialsQueryKey,
@@ -13,14 +14,22 @@ import {
   getGetLogComplianceCalendarQueryKey,
 } from "@/api";
 import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
+import { TeamAnalyticsPanel } from "@/components/team/TeamAnalyticsPanel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
-import { useClientPagination } from "@/lib/table-pagination";
-import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, PieChart as PieChartIcon, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
+import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
+import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePresence } from "@/contexts/PresenceContext";
+import { useRefreshPresenceForUserIds } from "@/hooks/use-presence-refresh";
+import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
+import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
+import { formatLastLogin, mergeUserPresence, parsePresenceStatus } from "@/lib/presence";
+import { PresenceTableCell } from "@/components/presence/PresenceTableCell";
+import { useMergedPresenceForUser } from "@/hooks/use-merged-presence";
 import { getAccessToken } from "@/lib/auth-storage";
 import { apiUrl } from "@/lib/api-base";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -28,7 +37,15 @@ import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalKpiGrid,
+  PortalTabsList,
+  PortalTabsTrigger,
+  PortalContentCard,
+  portalActionButtonClass,
+} from "@/components/layout/portal-page-kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -65,21 +82,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Cell, Legend
-} from "recharts";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
+import { LIST_LIMIT, QUERY_STALE } from "@/lib/query-config";
+import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { useQueryClient } from "@tanstack/react-query";
 import { User } from "@/api";
 import { cn } from "@/lib/utils";
-
-const CHART_COLORS = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
 const employeeSchema = z
   .object({
@@ -129,8 +142,59 @@ function employeeRoleBadgeClass(role: string): string {
   return "bg-blue-500/10 text-blue-500";
 }
 
+function EmployeePresenceCell({ user }: { user: User }) {
+  const merged = useMergedPresenceForUser(user);
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      lastLoginAt={merged.lastLoginAt}
+      variant="presence"
+    />
+  );
+}
+
+function EmployeeLastSeenCell({ user }: { user: User }) {
+  const merged = useMergedPresenceForUser(user);
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      variant="lastSeen"
+    />
+  );
+}
+
+function EmployeeLastLoginCell({ user }: { user: User }) {
+  const merged = useMergedPresenceForUser(user);
+  if (!merged) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastLoginAt={merged.lastLoginAt}
+      variant="lastLogin"
+    />
+  );
+}
+
+function EmployeePresenceDetailCell({ user }: { user: User }) {
+  const merged = useMergedPresenceForUser(user);
+  if (!merged) return "—";
+  return (
+    <PresenceTableCell
+      presenceStatus={merged.presenceStatus}
+      lastSeenAt={merged.lastSeenAt}
+      lastLoginAt={merged.lastLoginAt}
+      variant="combined"
+    />
+  );
+}
+
 export default function AdminEmployees() {
   const { impersonate, isImpersonating } = useAuth();
+  const { getPresence } = usePresence();
   const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
   const [previewEmployeeId, setPreviewEmployeeId] = useState("");
   const queryClient = useQueryClient();
@@ -139,27 +203,55 @@ export default function AdminEmployees() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => {
+    resetPage();
+  }, [search, resetPage]);
 
-  const PAGE_SIZE = 10;
   const { data, isLoading } = useListUsers(
-    { staff: "1", search, page, limit: PAGE_SIZE },
+    { staff: "1", search, page, limit: apiLimit },
     {
       query: listQueryOptions({
-        queryKey: getListUsersQueryKey({ staff: "1", search, page, limit: PAGE_SIZE }),
+        queryKey: getListUsersQueryKey({ staff: "1", search, page, limit: apiLimit }),
       }),
     },
   );
-  const { data: statsData, isLoading: statsLoading } = useListUsers(
-    { staff: "1", limit: 500 },
-    { query: listQueryOptions({ queryKey: getListUsersQueryKey({ staff: "1", limit: 500 }), staleTime: 120_000 }) },
+
+  const pageUserIds = useMemo(() => data?.users?.map((u) => u.id) ?? [], [data?.users]);
+  useRefreshPresenceForUserIds(pageUserIds);
+  const staffCountParams = { staff: "1" as const, ...LIST_COUNT_PARAMS };
+  const { data: staffTotal = 0, isLoading: staffTotalLoading } = useListUsers(staffCountParams, {
+    query: {
+      queryKey: getListUsersQueryKey(staffCountParams),
+      staleTime: QUERY_STALE.reference,
+      select: selectListTotal,
+    },
+  });
+  const staffSummaryParams = { staff: "1" as const, page: 1, limit: LIST_LIMIT.admin };
+  const { data: staffSummary, isLoading: staffSummaryLoading } = useListUsers(staffSummaryParams, {
+    query: {
+      queryKey: [...getListUsersQueryKey(staffSummaryParams), "kpiSummary"],
+      staleTime: QUERY_STALE.reference,
+    },
+  });
+  const now = new Date();
+  const { data: teamAnalytics } = useGetTeamAnalytics(
+    { month: now.getMonth() + 1, year: now.getFullYear() },
+    {
+      query: {
+        queryKey: getGetTeamAnalyticsQueryKey({
+          month: now.getMonth() + 1,
+          year: now.getFullYear(),
+        }),
+        staleTime: QUERY_STALE.analytics,
+        enabled: activeTab === "list" || activeTab === "analytics",
+      },
+    },
   );
-  const { data: teamAnalytics, isLoading: isLoadingAnalytics } = useGetTeamAnalytics();
 
   const teamStats = useMemo(() => {
-    const users = (statsData?.users ?? []).filter(
+    const users = (staffSummary?.users ?? []).filter(
       (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
     );
     const active = users.filter((u) => u.status === "active").length;
@@ -170,17 +262,27 @@ export default function AdminEmployees() {
         ? Math.round(devs.reduce((sum, d) => sum + (d.utilisationPct ?? 0), 0) / devs.length)
         : 0;
     return {
-      total: statsData?.total ?? users.length,
+      total: staffTotal,
       active,
       inactive,
       avgUtilization,
     };
-  }, [statsData, teamAnalytics]);
+  }, [staffSummary, staffTotal, teamAnalytics]);
+  const statsLoading = staffTotalLoading || staffSummaryLoading;
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const selectedWithPresence = useMemo(() => {
+    if (!selectedUser) return null;
+    return mergeUserPresence(selectedUser, getPresence(selectedUser.id));
+  }, [selectedUser, getPresence]);
+
+  const presenceForUser = (user: User) =>
+    parsePresenceStatus(getPresence(user.id)?.status ?? user.presenceStatus);
+
   const complianceNow = new Date();
   const [complianceMonth, setComplianceMonth] = useState(complianceNow.getMonth() + 1);
   const [complianceYear, setComplianceYear] = useState(complianceNow.getFullYear());
@@ -412,10 +514,12 @@ export default function AdminEmployees() {
       accessorKey: "name",
       cell: (user) => (
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedUser(user)}>
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user.avatarUrl || undefined} />
-            <AvatarFallback className="bg-primary/20 text-primary text-[10px]">{user.name.charAt(0)}</AvatarFallback>
-          </Avatar>
+          <AvatarWithPresence
+            name={user.name}
+            avatarUrl={user.avatarUrl}
+            presenceStatus={presenceForUser(user)}
+            avatarClassName="h-8 w-8"
+          />
           <div>
             <p className="text-xs font-medium">{user.name}</p>
             <p className="text-[10px] text-muted-foreground flex items-center mt-0.5">
@@ -458,19 +562,21 @@ export default function AdminEmployees() {
       )
     },
     {
+      id: "presence",
+      header: "Presence",
+      cell: (user) => <EmployeePresenceCell user={user} />,
+      detailCell: (user) => <EmployeePresenceDetailCell user={user} />,
+    },
+    {
+      id: "lastSeen",
+      header: "Last seen",
+      cell: (user) => <EmployeeLastSeenCell user={user} />,
+    },
+    {
       id: "lastLoginAt",
-      header: "Last Login",
+      header: "Last login",
       accessorKey: "lastLoginAt",
-      cell: (user) => (
-        <span className="text-xs text-muted-foreground">
-          {user.lastLoginAt ? (
-            <div className="flex items-center">
-              <Clock className="mr-1.5 h-3 w-3" />
-              {new Date(user.lastLoginAt).toLocaleDateString()}
-            </div>
-          ) : "Never"}
-        </span>
-      )
+      cell: (user) => <EmployeeLastLoginCell user={user} />,
     },
     {
       id: "department",
@@ -547,18 +653,17 @@ export default function AdminEmployees() {
   ];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Team</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">Manage your agency's team members</p>
-        </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Team"
+        subtitle="Manage your agency's team members"
+        actions={
         <div className="flex items-center gap-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
-            <TabsList className="bg-muted/50 p-1">
-              <TabsTrigger value="list" className="rounded-md px-3 h-8 text-xs">Team List</TabsTrigger>
-              <TabsTrigger value="analytics" className="rounded-md px-3 h-8 text-xs">Analytics</TabsTrigger>
-            </TabsList>
+            <PortalTabsList>
+              <PortalTabsTrigger value="list">Team List</PortalTabsTrigger>
+              <PortalTabsTrigger value="analytics">Analytics</PortalTabsTrigger>
+            </PortalTabsList>
           </Tabs>
           <Dialog
             open={isDialogOpen || !!editUser}
@@ -574,7 +679,7 @@ export default function AdminEmployees() {
           >
           <Button
             type="button"
-            className="bg-primary text-primary-foreground"
+            className={portalActionButtonClass("bg-primary text-primary-foreground")}
             onClick={() => {
               setEditUser(null);
               setPreviewEmployeeId("");
@@ -838,53 +943,23 @@ export default function AdminEmployees() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
-    </div>
+        </div>
+        }
+      />
 
-      {statsLoading ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard
-            title="Team members"
-            value={teamStats.total}
-            hint="Developers & QA"
-            icon={UsersIcon}
-            accent="violet"
-            delay={0}
-          />
-          <StatCard
-            title="Active"
-            value={teamStats.active}
-            hint="Can sign in"
-            icon={Zap}
-            accent="green"
-            delay={1}
-          />
-          <StatCard
-            title="Inactive"
-            value={teamStats.inactive}
-            hint="Deactivated accounts"
-            icon={Clock}
-            accent="amber"
-            alert={teamStats.inactive > 0}
-            delay={2}
-          />
-          <StatCard
-            title="Avg utilization"
-            value={`${teamStats.avgUtilization}%`}
-            hint="This month (logged hours)"
-            icon={BarChart3}
-            accent="blue"
-            delay={3}
-          />
-        </PageKpiRow>
-      )}
+      <PortalKpiGrid
+        loading={statsLoading}
+        items={[
+          { title: "Team members", value: teamStats.total, hint: "Developers & QA", icon: UsersIcon, accent: "violet" },
+          { title: "Active", value: teamStats.active, hint: "Can sign in", icon: Zap, accent: "green" },
+          { title: "Inactive", value: teamStats.inactive, hint: "Deactivated accounts", icon: Clock, accent: "amber", alert: teamStats.inactive > 0 },
+          { title: "Avg utilization", value: `${teamStats.avgUtilization}%`, hint: "This month (logged hours)", icon: BarChart3, accent: "blue" },
+        ]}
+      />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsContent value="list" className="space-y-4 m-0">
-          <Card className="bg-card">
-            <CardContent className="p-4">
+          <PortalContentCard>
               {isLoading ? (
                 <div className="space-y-4">
                   {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -899,172 +974,33 @@ export default function AdminEmployees() {
                   viewStorageKey="employees"
                 />
               )}
-            </CardContent>
-          </Card>
+          </PortalContentCard>
           <DataPagination
             page={data?.page ?? page}
             total={data?.total ?? 0}
-            limit={data?.limit ?? PAGE_SIZE}
+            limit={limit}
+            loadedRowCount={data?.users?.length ?? 0}
             onPageChange={setPage}
+            onLimitChange={setLimit}
           />
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6 m-0">
-          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-            <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
-                <CardTitle className="text-[10px] font-medium">Top Performer</CardTitle>
-                <Award className="h-3 w-3 text-yellow-500" />
-              </CardHeader>
-              <CardContent className="px-3 pb-2.5 pt-1">
-                <div className="text-lg font-bold">
-                  {teamAnalytics?.developers?.[0]?.name || "N/A"}
-                </div>
-                <p className="text-[9px] text-muted-foreground">
-                  Most active developer
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
-                <CardTitle className="text-[10px] font-medium">Avg Completion</CardTitle>
-                <Zap className="h-3 w-3 text-blue-500" />
-              </CardHeader>
-              <CardContent className="px-3 pb-2.5 pt-1">
-                <div className="text-lg font-bold">
-                  {teamAnalytics?.developers?.length ? 
-                    Math.round(teamAnalytics.developers.reduce((acc, d) => acc + (d.utilisationPct || 0), 0) / teamAnalytics.developers.length) : 0}%
-                </div>
-                <p className="text-[9px] text-muted-foreground">
-                  Team project health
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
-                <CardTitle className="text-[10px] font-medium">Active Team</CardTitle>
-                <UsersIcon className="h-3 w-3 text-purple-500" />
-              </CardHeader>
-              <CardContent className="px-3 pb-2.5 pt-1">
-                <div className="text-lg font-bold">{data?.total || 0}</div>
-                <p className="text-[9px] text-muted-foreground">
-                  Total developers
-                </p>
-              </CardContent>
-            </Card>
-            <Card className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 pt-2 px-3">
-                <CardTitle className="text-[10px] font-medium">Total Workload</CardTitle>
-                <BarChart3 className="h-3 w-3 text-green-500" />
-              </CardHeader>
-              <CardContent className="px-3 pb-2.5 pt-1">
-                <div className="text-lg font-bold">
-                  {teamAnalytics?.developers?.reduce((acc, d) => acc + (d.activeProjects || 0), 0) || 0}
-                </div>
-                <p className="text-[9px] text-muted-foreground">
-                  Active project assignments
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm">Bugs Resolved per Developer</CardTitle>
-                <CardDescription className="text-xs">Performance in bug tracking</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={teamAnalytics?.developers || []}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
-                      <Bar dataKey="bugsResolvedCount" name="Bugs Resolved" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm">Hours Logged this Month</CardTitle>
-                <CardDescription className="text-xs">Time tracking per developer</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={teamAnalytics?.developers || []}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
-                      <Bar dataKey="hoursLogged" name="Hours Logged" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm">Project Assignments</CardTitle>
-                <CardDescription className="text-xs">Number of active projects per developer</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart layout="vertical" data={teamAnalytics?.developers || []}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                      <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis dataKey="name" type="category" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
-                      <Bar dataKey="activeProjects" name="Active Projects" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-card">
-              <CardHeader className="p-4 pb-2">
-                <CardTitle className="text-sm">Team Performance (Avg Completion %)</CardTitle>
-                <CardDescription className="text-xs">Individual progress across assigned projects</CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="h-[240px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={teamAnalytics?.developers || []}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                      <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
-                      <Bar dataKey="utilisationPct" name="Utilisation %" radius={[4, 4, 0, 0]}>
-                        {(teamAnalytics?.developers || []).map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="analytics" className="m-0">
+          <TeamAnalyticsPanel />
         </TabsContent>
       </Tabs>
       <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
         <SheetContent className="w-[400px] sm:w-[580px] sm:max-w-[580px] overflow-y-auto">
           <SheetHeader className="space-y-3">
             <div className="flex items-center gap-4">
-              <Avatar className="h-12 w-12 border-2 border-primary/10">
-                <AvatarImage src={selectedUser?.avatarUrl || undefined} />
-                <AvatarFallback className="text-lg bg-primary/10 text-primary font-bold">{selectedUser?.name?.charAt(0)}</AvatarFallback>
-              </Avatar>
+              {selectedWithPresence ? (
+                <AvatarWithPresence
+                  name={selectedWithPresence.name}
+                  avatarUrl={selectedWithPresence.avatarUrl}
+                  presenceStatus={selectedWithPresence.presenceStatus}
+                  avatarClassName="h-12 w-12 border-2 border-primary/10"
+                />
+              ) : null}
               <div>
                 <SheetTitle className="text-base font-bold tracking-tight">{selectedUser?.name}</SheetTitle>
                 <SheetDescription className="text-xs font-mono text-muted-foreground">{selectedUser?.employeeId || "No Employee ID"}</SheetDescription>
@@ -1106,6 +1042,13 @@ export default function AdminEmployees() {
             </TabsList>
             
             <TabsContent value="overview" className="space-y-4 pt-3">
+              {selectedWithPresence && (
+                <UserPresenceMeta
+                  presenceStatus={selectedWithPresence.presenceStatus}
+                  lastSeenAt={selectedWithPresence.lastSeenAt}
+                  lastLoginAt={selectedWithPresence.lastLoginAt}
+                />
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Department</p>
@@ -1132,8 +1075,8 @@ export default function AdminEmployees() {
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Briefcase className="h-3.5 w-3.5 text-amber-500 shrink-0" /> {selectedUser?.subType || "Standard Fulltime"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Last Session Activity</p>
-                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Clock className="h-3.5 w-3.5 text-purple-500 shrink-0" /> {selectedUser?.lastLoginAt ? new Date(selectedUser.lastLoginAt).toLocaleDateString() : "Never logged"}</p>
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Last Login</p>
+                  <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Clock className="h-3.5 w-3.5 text-purple-500 shrink-0" /> {formatLastLogin(selectedWithPresence?.lastLoginAt)}</p>
                 </div>
               </div>
 
@@ -1297,6 +1240,6 @@ export default function AdminEmployees() {
           </Tabs>
         </SheetContent>
       </Sheet>
-    </div>
+    </PortalPageShell>
   );
 }

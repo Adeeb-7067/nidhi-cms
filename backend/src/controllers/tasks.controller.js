@@ -15,12 +15,10 @@ async function generateTaskNumber() {
   const count = await getNextSequence("tasks_count");
   return `TASK-${String(count).padStart(4, "0")}`;
 }
-async function formatTask(task) {
-  const [project, creator, assignee] = await Promise.all([
-    projectsTable.findOne({ id: task.projectId }),
-    usersTable.findOne({ id: task.createdById }),
-    task.assigneeId ? usersTable.findOne({ id: task.assigneeId }) : null
-  ]);
+function mapTaskRow(task, projectById, userById) {
+  const project = projectById.get(task.projectId);
+  const creator = userById.get(task.createdById);
+  const assignee = task.assigneeId ? userById.get(task.assigneeId) : null;
   return {
     id: task.id,
     taskNumber: task.taskNumber,
@@ -40,8 +38,33 @@ async function formatTask(task) {
     labels: task.labels ?? [],
     createdAt: task.createdAt.toISOString(),
     updatedAt: task.updatedAt.toISOString(),
-    completedAt: task.completedAt?.toISOString() ?? null
+    completedAt: task.completedAt?.toISOString() ?? null,
   };
+}
+
+async function formatTaskList(tasks) {
+  if (!tasks.length) return [];
+  const projectIds = [...new Set(tasks.map((t) => t.projectId))];
+  const userIds = new Set();
+  for (const t of tasks) {
+    userIds.add(t.createdById);
+    if (t.assigneeId) userIds.add(t.assigneeId);
+  }
+  const [projects, users] = await Promise.all([
+    projectsTable.find({ id: { $in: projectIds } }).select("id name").lean(),
+    usersTable
+      .find({ id: { $in: [...userIds] } })
+      .select("id name role")
+      .lean(),
+  ]);
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const userById = new Map(users.map((u) => [u.id, u]));
+  return tasks.map((t) => mapTaskRow(t, projectById, userById));
+}
+
+async function formatTask(task) {
+  const [row] = await formatTaskList([task]);
+  return row;
 }
 async function buildTaskListQuery(userId, role, params) {
   const query = {};
@@ -87,7 +110,7 @@ async function getTasks(req, res) {
     tasksTable.find(query).sort({ updatedAt: -1 }).skip(skip).limit(limit),
     tasksTable.countDocuments(query)
   ]);
-  const formatted = await Promise.all(tasks.map((t) => formatTask(t)));
+  const formatted = await formatTaskList(tasks);
   res.json({ tasks: formatted, total, page, limit });
 }
 async function postTasks(req, res) {

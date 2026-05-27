@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRealtime } from "@/contexts/RealtimeContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -58,20 +59,32 @@ import { formatDistanceToNow } from "date-fns";
 
 export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
   const { user } = useAuth();
+  const { socket } = useRealtime();
   const qc = useQueryClient();
   const isClient = user?.role === "client";
   const canManage = user?.role === "super_admin" || user?.role === "developer";
-
-  const { data: summary, isLoading: summaryLoading } = useQuery({
-    queryKey: ["inventory-summary", projectId],
-    queryFn: () => getInventorySummary(projectId),
-  });
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["inventory-summary", projectId] });
     qc.invalidateQueries({ queryKey: ["inventory-resources", projectId] });
     qc.invalidateQueries({ queryKey: ["inventory-activities", projectId] });
   };
+
+  useEffect(() => {
+    if (!socket || !projectId) return undefined;
+    const onInventory = (payload: { projectId?: number }) => {
+      if (payload.projectId === projectId) invalidate();
+    };
+    socket.on("inventory_update", onInventory);
+    return () => {
+      socket.off("inventory_update", onInventory);
+    };
+  }, [socket, projectId, qc]);
+
+  const { data: summary, isLoading: summaryLoading } = useQuery({
+    queryKey: ["inventory-summary", projectId],
+    queryFn: () => getInventorySummary(projectId),
+  });
 
   return (
     <div className="space-y-6 min-w-0">
@@ -225,31 +238,57 @@ function ResourcesTab({
             <p className="text-xs text-muted-foreground text-center py-8">No resources yet</p>
           ) : (
             <div className="space-y-2">
-              {data.resources.map((r: any) => (
-                <div
-                  key={r.id}
-                  className="flex items-center justify-between gap-2 border rounded-md p-2.5 hover:bg-muted/30 min-w-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate">{r.name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">
-                      {r.type} · {r.uploaderName} · v{r.version}
-                    </p>
-                  </div>
-                  <div className="flex gap-1 shrink-0">
-                    <Badge variant="outline" className="text-[9px]">
-                      {r.visibility}
-                    </Badge>
-                    {(r.fileUrl || r.url) && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-                        <a href={r.fileUrl || r.url} target="_blank" rel="noreferrer">
-                          <Download className="h-3.5 w-3.5" />
-                        </a>
-                      </Button>
+              {data.resources.map((r: any) => {
+                const isImage = r.mimeType?.startsWith("image/") && r.fileUrl;
+                const fromDiscussion =
+                  r.category === "discussion" || r.tags?.includes?.("discussion");
+                return (
+                  <div
+                    key={r.id}
+                    className="flex items-start gap-2 border rounded-md p-2.5 hover:bg-muted/30 min-w-0"
+                  >
+                    {isImage && (
+                      <a
+                        href={r.fileUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0"
+                      >
+                        <img
+                          src={r.fileUrl}
+                          alt={r.name}
+                          className="h-12 w-12 rounded-md border object-cover bg-muted"
+                          loading="lazy"
+                        />
+                      </a>
                     )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{r.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">
+                        {r.type}
+                        {fromDiscussion ? " · discussion" : ""} · {r.uploaderName} · v{r.version}
+                      </p>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      {fromDiscussion && (
+                        <Badge variant="secondary" className="text-[9px]">
+                          chat
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-[9px]">
+                        {r.visibility}
+                      </Badge>
+                      {(r.fileUrl || r.url) && (
+                        <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+                          <a href={r.fileUrl || r.url} target="_blank" rel="noreferrer">
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>

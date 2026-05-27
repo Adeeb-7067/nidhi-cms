@@ -1,46 +1,146 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useListProjects,
   useListComments,
   useCreateComment,
   getListCommentsQueryKey,
+  type Comment,
+  type Project,
 } from "@/api";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import { useRefreshPresenceForUserIds } from "@/hooks/use-presence-refresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { CommentAuthorPresence } from "@/components/presence/CommentAuthorPresence";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, Search, Users, Hash, Briefcase, Activity } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { MessageSquare, Search, Users, Hash, Bell } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
-import { readDiscussionsProjectIdFromUrl } from "@/lib/discussions-navigation";
+import {
+  clearDiscussionsProjectFromUrl,
+  readDiscussionsProjectIdFromUrl,
+  selectDiscussionsProject,
+} from "@/lib/discussions-navigation";
+import { useLocation } from "wouter";
+import {
+  appendCommentToListCache,
+  commentThreadQueryParams,
+  flattenCommentThread,
+} from "@/lib/comment-thread-query";
+import { CommentBody } from "@/components/chat/comment-body";
+import { ChatComposer } from "@/components/chat/chat-composer";
+import {
+  PortalPageShell,
+  PortalKpiGrid,
+} from "@/components/layout/portal-page-kit";
+
+type ChannelActivity = {
+  lastMessageAt: string;
+  unreadCount: number;
+  lastPreview?: string;
+  lastAuthorName?: string;
+};
+
+function commentPreview(comment: Comment): string {
+  const text = comment.content?.trim();
+  if (text) return text.length > 60 ? `${text.slice(0, 57)}...` : text;
+  if (comment.attachmentUrl) {
+    if (
+      comment.attachmentMimeType === "application/pdf" ||
+      comment.attachmentName?.toLowerCase().endsWith(".pdf")
+    ) {
+      return "Sent a PDF";
+    }
+    return "Sent an image";
+  }
+  return "New message";
+}
+
+function upsertChannelActivity(
+  prev: Record<number, ChannelActivity>,
+  projectId: number,
+  patch: Partial<ChannelActivity> & { lastMessageAt?: string },
+): Record<number, ChannelActivity> {
+  const existing = prev[projectId];
+  return {
+    ...prev,
+    [projectId]: {
+      lastMessageAt: patch.lastMessageAt ?? existing?.lastMessageAt ?? new Date().toISOString(),
+      unreadCount: patch.unreadCount ?? existing?.unreadCount ?? 0,
+      lastPreview: patch.lastPreview ?? existing?.lastPreview,
+      lastAuthorName: patch.lastAuthorName ?? existing?.lastAuthorName,
+    },
+  };
+}
 
 export default function DiscussionsPage() {
   const { user } = useAuth();
   const { socket } = useRealtime();
   const queryClient = useQueryClient();
+  const [location] = useLocation();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [commentText, setCommentText] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [channelActivity, setChannelActivity] = useState<Record<number, ChannelActivity>>({});
+  const messagesScrollRef = React.useRef<HTMLDivElement>(null);
+  const selectedProjectIdRef = useRef<number | null>(null);
+  const userIdRef = useRef<number | undefined>(undefined);
+  const projectsRef = useRef<Project[]>([]);
+
+  const { data: projectsData, isLoading: isLoadingProjects } = useListProjects({
+    limit: 100,
+    ...(searchQuery ? { search: searchQuery } : {}),
+  });
+
+  const projects = useMemo(
+    () => projectsData?.projects ?? [],
+    [projectsData?.projects],
+  );
+  projectsRef.current = projects;
+  selectedProjectIdRef.current = selectedProjectId;
+  userIdRef.current = user?.id;
 
   useEffect(() => {
     if (!socket) return undefined;
 
-    const handleNewComment = (data: { threadType?: string; threadId?: number }) => {
-      if (data.threadType === "project" && data.threadId === selectedProjectId) {
-        queryClient.invalidateQueries({
-          queryKey: getListCommentsQueryKey({
-            threadType: "project",
-            threadId: selectedProjectId as number,
-          }),
+    const handleNewComment = (data: {
+      threadType?: string;
+      threadId?: number;
+      comment?: Comment;
+    }) => {
+      if (data.threadType !== "project" || data.threadId == null || !data.comment) return;
+
+      const projectId = data.threadId;
+      const comment = data.comment;
+      const isActiveChannel = projectId === selectedProjectIdRef.current;
+      const isOwnMessage = comment.authorId === userIdRef.current;
+
+      appendCommentToListCache(queryClient, "project", projectId, comment);
+
+      setChannelActivity((prev) =>
+        upsertChannelActivity(prev, projectId, {
+          lastMessageAt: comment.createdAt ?? new Date().toISOString(),
+          lastPreview: commentPreview(comment),
+          lastAuthorName: comment.authorName,
+          unreadCount: isActiveChannel || isOwnMessage ? 0 : (prev[projectId]?.unreadCount ?? 0) + 1,
+        }),
+      );
+
+      if (!isActiveChannel && !isOwnMessage) {
+        const projectName =
+          projectsRef.current.find((p) => p.id === projectId)?.name ?? "Project channel";
+        toast.info(`${comment.authorName} · #${projectName}`, {
+          description: commentPreview(comment),
+          duration: 6000,
+          action: {
+            label: "Open",
+            onClick: () => selectDiscussionsProject(projectId, setSelectedProjectId),
+          },
         });
       }
     };
@@ -49,71 +149,134 @@ export default function DiscussionsPage() {
     return () => {
       socket.off("comment", handleNewComment);
     };
-  }, [socket, selectedProjectId, queryClient]);
+  }, [socket, queryClient]);
 
-  const { data: projectsData, isLoading: isLoadingProjects } = useListProjects({
-    limit: 100,
-    ...(searchQuery ? { search: searchQuery } : {}),
-  });
+  useEffect(() => {
+    if (!selectedProjectId) return;
+    setChannelActivity((prev) => {
+      const current = prev[selectedProjectId];
+      if (!current?.unreadCount) return prev;
+      return upsertChannelActivity(prev, selectedProjectId, { unreadCount: 0 });
+    });
+  }, [selectedProjectId]);
 
-  const projects = projectsData?.projects ?? [];
-
+  // Sync selection with project list / notification deep-link. URL is read once then cleared
+  // so switching channels is not forced back to ?project=.
   useEffect(() => {
     if (projects.length === 0) {
       setSelectedProjectId(null);
       return;
     }
+
     const fromUrl = readDiscussionsProjectIdFromUrl();
     if (fromUrl && projects.some((p) => p.id === fromUrl)) {
       setSelectedProjectId(fromUrl);
+      clearDiscussionsProjectFromUrl();
       return;
     }
-    if (!selectedProjectId || !projects.some((p) => p.id === selectedProjectId)) {
-      setSelectedProjectId(projects[0].id);
-    }
-  }, [projects, selectedProjectId]);
+
+    setSelectedProjectId((current) => {
+      if (current && projects.some((p) => p.id === current)) return current;
+      return projects[0].id;
+    });
+  }, [projects, location]);
+
+  const commentsQueryParams = selectedProjectId
+    ? commentThreadQueryParams("project", selectedProjectId)
+    : null;
 
   const { data: commentsData, isLoading: isLoadingComments } = useListComments(
-    { threadType: "project", threadId: selectedProjectId as number },
+    commentsQueryParams ?? { threadType: "project", threadId: 0 },
     {
       query: {
         enabled: !!selectedProjectId,
-        queryKey: getListCommentsQueryKey({
-          threadType: "project",
-          threadId: selectedProjectId as number,
-        }),
+        queryKey: commentsQueryParams
+          ? getListCommentsQueryKey(commentsQueryParams)
+          : getListCommentsQueryKey({ threadType: "project", threadId: 0 }),
       },
     },
   );
 
   const createCommentMutation = useCreateComment();
 
-  const handlePostComment = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim() || !selectedProjectId) return;
+  const handlePostComment = async (payload: {
+    content?: string;
+    attachmentUrl?: string;
+    attachmentName?: string;
+    attachmentMimeType?: string;
+  }) => {
+    if (!selectedProjectId) return;
+    if (!payload.content?.trim() && !payload.attachmentUrl) return;
 
     try {
-      await createCommentMutation.mutateAsync({
+      const created = await createCommentMutation.mutateAsync({
         data: {
           threadType: "project",
           threadId: selectedProjectId,
-          content: commentText.trim(),
+          content: payload.content ?? "",
+          attachmentUrl: payload.attachmentUrl,
+          attachmentName: payload.attachmentName,
+          attachmentMimeType: payload.attachmentMimeType,
         },
       });
-      setCommentText("");
-      queryClient.invalidateQueries({
-        queryKey: getListCommentsQueryKey({
-          threadType: "project",
-          threadId: selectedProjectId,
-        }),
-      });
+      appendCommentToListCache(queryClient, "project", selectedProjectId, created);
       toast.success("Message sent");
     } catch (error) {
       toastApiError(error, "Failed to send message");
+      throw error;
     }
   };
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
+
+  const channelMessages = useMemo(
+    () => flattenCommentThread(commentsData?.comments ?? []),
+    [commentsData?.comments],
+  );
+
+  const authorIds = useMemo(
+    () => [...new Set(channelMessages.map((m) => m.authorId))],
+    [channelMessages],
+  );
+  useRefreshPresenceForUserIds(authorIds);
+
+  const messageCount = channelMessages.length;
+
+  useEffect(() => {
+    if (!selectedProjectId || channelMessages.length === 0) return;
+    const latest = channelMessages[channelMessages.length - 1];
+    setChannelActivity((prev) =>
+      upsertChannelActivity(prev, selectedProjectId, {
+        lastMessageAt: latest.createdAt ?? new Date().toISOString(),
+        lastPreview: commentPreview(latest),
+        lastAuthorName: latest.authorName,
+        unreadCount: 0,
+      }),
+    );
+  }, [selectedProjectId, channelMessages]);
+
+  const sortedProjects = useMemo(() => {
+    return [...projects].sort((a, b) => {
+      const aTime = channelActivity[a.id]?.lastMessageAt;
+      const bTime = channelActivity[b.id]?.lastMessageAt;
+      if (aTime && bTime) {
+        return new Date(bTime).getTime() - new Date(aTime).getTime();
+      }
+      if (aTime) return -1;
+      if (bTime) return 1;
+      return 0;
+    });
+  }, [projects, channelActivity]);
+
+  const totalUnread = useMemo(
+    () =>
+      Object.entries(channelActivity).reduce(
+        (sum, [id, activity]) =>
+          Number(id) === selectedProjectId ? sum : sum + activity.unreadCount,
+        0,
+      ),
+    [channelActivity, selectedProjectId],
+  );
 
   const discussionStats = useMemo(() => {
     const inProgress = projects.filter((p) => p.status === "in_progress").length;
@@ -122,58 +285,42 @@ export default function DiscussionsPage() {
       channels: projects.length,
       inProgress,
       completed,
-      messages: commentsData?.comments?.length ?? 0,
+      messages: messageCount,
     };
-  }, [projects, commentsData?.comments?.length]);
+  }, [projects, messageCount]);
+
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [selectedProjectId, channelMessages]);
+
+  const scrollMessagesToBottom = () => {
+    const el = messagesScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
 
   return (
-    <div className="flex h-[calc(100dvh-7.25rem)] max-h-[calc(100dvh-7.25rem)] flex-col gap-3 overflow-hidden -my-2">
-      <div className="shrink-0">
-        <h1 className="text-xl font-semibold tracking-tight">Discussions</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          Project channels and team messages
-        </p>
+    <PortalPageShell className="flex h-[calc(100dvh-5.75rem)] max-h-[calc(100dvh-5.75rem)] flex-col gap-2 overflow-hidden -my-2 pb-0">
+      <div className="shrink-0 flex items-baseline justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold tracking-tight">Discussions</h1>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            Project channels and team messages
+          </p>
+        </div>
       </div>
 
       <div className="shrink-0">
-        {isLoadingProjects ? (
-          <PageKpiSkeleton />
-        ) : (
-          <PageKpiRow>
-            <StatCard
-              title="Channels"
-              value={discussionStats.channels}
-              hint="Project threads"
-              icon={Hash}
-              accent="violet"
-              delay={0}
-            />
-            <StatCard
-              title="In progress"
-              value={discussionStats.inProgress}
-              hint="Active projects"
-              icon={Activity}
-              accent="blue"
-              delay={1}
-            />
-            <StatCard
-              title="Completed"
-              value={discussionStats.completed}
-              hint="Finished projects"
-              icon={Briefcase}
-              accent="green"
-              delay={2}
-            />
-            <StatCard
-              title="Messages"
-              value={discussionStats.messages}
-              hint="Current channel"
-              icon={MessageSquare}
-              accent="amber"
-              delay={3}
-            />
-          </PageKpiRow>
-        )}
+        <PortalKpiGrid
+          loading={isLoadingProjects}
+          columns={4}
+          items={[
+            { title: "Channels", value: discussionStats.channels, hint: "Active projects", icon: Hash, accent: "blue", delay: 0 },
+            { title: "In progress", value: discussionStats.inProgress, hint: "Open channels", icon: Users, accent: "amber", delay: 1 },
+            { title: "Completed", value: discussionStats.completed, hint: "Closed projects", icon: MessageSquare, accent: "green", delay: 2 },
+            { title: "Unread", value: totalUnread, hint: "Across channels", icon: Bell, accent: "red", alert: totalUnread > 0, delay: 3 },
+          ]}
+        />
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3 overflow-hidden">
@@ -201,38 +348,73 @@ export default function DiscussionsPage() {
                 <Skeleton className="h-12 w-full" />
                 <Skeleton className="h-12 w-full" />
               </div>
-            ) : projects.length > 0 ? (
+            ) : sortedProjects.length > 0 ? (
               <div className="divide-y divide-border">
-                {projects.map((project) => (
+                {sortedProjects.map((project) => {
+                  const activity = channelActivity[project.id];
+                  const unread = activity?.unreadCount ?? 0;
+                  const hasActivity = Boolean(activity?.lastPreview);
+                  return (
                   <button
                     key={project.id}
                     type="button"
-                    onClick={() => setSelectedProjectId(project.id)}
+                    onClick={() => selectDiscussionsProject(project.id, setSelectedProjectId)}
                     className={cn(
                       "w-full p-3 text-left transition-colors hover:bg-muted/50",
                       "flex flex-col gap-1 border-l-4",
                       selectedProjectId === project.id
                         ? "border-l-primary bg-primary/5"
-                        : "border-l-transparent",
+                        : unread > 0
+                          ? "border-l-primary/40 bg-primary/[0.03]"
+                          : "border-l-transparent",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="flex min-w-0 items-center gap-1 text-xs font-semibold">
+                      <span
+                        className={cn(
+                          "flex min-w-0 items-center gap-1 text-xs",
+                          unread > 0 && selectedProjectId !== project.id
+                            ? "font-bold text-foreground"
+                            : "font-semibold",
+                        )}
+                      >
                         <Hash className="h-3 w-3 shrink-0 text-muted-foreground" />
                         <span className="truncate">{project.name}</span>
                       </span>
-                      <Badge
-                        variant="outline"
-                        className="shrink-0 text-[8px] h-4 px-1 uppercase tracking-tighter"
-                      >
-                        {project.status.replace("_", " ")}
-                      </Badge>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {unread > 0 && selectedProjectId !== project.id && (
+                          <Badge className="h-4 min-w-4 px-1 text-[9px] tabular-nums bg-primary text-primary-foreground">
+                            {unread > 99 ? "99+" : unread}
+                          </Badge>
+                        )}
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 text-[8px] h-4 px-1 uppercase tracking-tighter"
+                        >
+                          {project.status.replace("_", " ")}
+                        </Badge>
+                      </div>
                     </div>
-                    <p className="truncate pl-4 text-[10px] text-muted-foreground">
-                      {project.clientName ?? project.companyName ?? "â€”"}
+                    <p
+                      className={cn(
+                        "truncate pl-4 text-[10px]",
+                        unread > 0 && selectedProjectId !== project.id
+                          ? "text-foreground/80"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {hasActivity ? (
+                        <>
+                          <span className="font-medium">{activity?.lastAuthorName}:</span>{" "}
+                          {activity?.lastPreview}
+                        </>
+                      ) : (
+                        project.clientName ?? project.companyName ?? "—"
+                      )}
                     </p>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="p-8 text-center text-muted-foreground">
@@ -261,39 +443,40 @@ export default function DiscussionsPage() {
                           <Users className="h-3 w-3" />
                           Project channel
                         </span>
-                        <span>â€¢</span>
+                        <span>·</span>
                         <span className="truncate">
                           {selectedProject.clientName ?? selectedProject.companyName}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 text-[10px] uppercase bg-primary/5 text-primary border-primary/10"
-                  >
-                    {selectedProject.status.replace("_", " ")}
-                  </Badge>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Badge variant="outline" className="shrink-0 text-[10px] tabular-nums">
+                      {messageCount} {messageCount === 1 ? "message" : "messages"}
+                    </Badge>
+                    <Badge
+                      variant="secondary"
+                      className="shrink-0 text-[10px] uppercase bg-primary/5 text-primary border-primary/10"
+                    >
+                      {selectedProject.status.replace("_", " ")}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
 
-              <div className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-4">
+              <div
+                ref={messagesScrollRef}
+                className="min-h-0 flex-1 overflow-y-auto bg-muted/10 p-4"
+              >
                 {isLoadingComments ? (
                   <div className="space-y-4">
                     <Skeleton className="h-16 w-2/3" />
                     <Skeleton className="h-16 w-1/2 ml-auto" />
                     <Skeleton className="h-16 w-3/4" />
                   </div>
-                ) : commentsData && commentsData.comments.length > 0 ? (
+                ) : channelMessages.length > 0 ? (
                   <div className="space-y-4">
-                    {commentsData.comments.map((comment: {
-                      id: number;
-                      authorId?: number;
-                      authorName: string;
-                      authorAvatarUrl?: string | null;
-                      content: string;
-                      createdAt?: string;
-                    }) => {
+                    {channelMessages.map((comment: Comment) => {
                       const isMe = comment.authorId === user?.id;
                       return (
                         <div
@@ -303,12 +486,12 @@ export default function DiscussionsPage() {
                             isMe ? "flex-row-reverse" : "flex-row",
                           )}
                         >
-                          <Avatar className="h-8 w-8 shrink-0 border">
-                            <AvatarImage src={comment.authorAvatarUrl ?? undefined} />
-                            <AvatarFallback className="bg-primary/10 text-[10px] font-bold text-primary">
-                              {comment.authorName.charAt(0)}
-                            </AvatarFallback>
-                          </Avatar>
+                          <CommentAuthorPresence
+                            authorId={comment.authorId}
+                            authorName={comment.authorName}
+                            authorAvatarUrl={comment.authorAvatarUrl}
+                            className="h-8 w-8 shrink-0 border"
+                          />
                           <div
                             className={cn(
                               "flex max-w-[min(100%,28rem)] flex-col space-y-1",
@@ -327,16 +510,20 @@ export default function DiscussionsPage() {
                                   : "just now"}
                               </span>
                             </div>
-                            <div
-                              className={cn(
-                                "rounded-2xl px-3 py-2 text-xs leading-relaxed shadow-sm",
+                            <CommentBody
+                              comment={comment}
+                              onImageLoad={scrollMessagesToBottom}
+                              bubbleClassName={cn(
                                 isMe
-                                  ? "rounded-tr-sm bg-primary text-primary-foreground"
+                                  ? "rounded-tr-sm bg-primary text-primary-foreground border-primary/20 [&_img]:border-primary-foreground/20"
                                   : "rounded-tl-sm border border-border bg-card",
                               )}
-                            >
-                              {comment.content}
-                            </div>
+                              linkClassName={
+                                isMe
+                                  ? "text-primary-foreground underline decoration-primary-foreground/70 hover:text-primary-foreground/90"
+                                  : undefined
+                              }
+                            />
                           </div>
                         </div>
                       );
@@ -357,32 +544,19 @@ export default function DiscussionsPage() {
               </div>
 
               <div className="shrink-0 border-t bg-card p-3">
-                <form onSubmit={handlePostComment} className="flex items-end gap-2">
-                  <Textarea
-                    value={commentText}
-                    onChange={(e) => setCommentText(e.target.value)}
-                    placeholder={`Message #${selectedProject.name}...`}
-                    className="min-h-[40px] max-h-28 flex-1 resize-none rounded-xl border-border/60 py-2.5 text-xs leading-normal"
-                    rows={1}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void handlePostComment(e);
-                      }
-                    }}
-                  />
-                  <Button
-                    type="submit"
-                    size="icon"
-                    className="h-9 w-9 shrink-0 rounded-lg"
-                    disabled={!commentText.trim() || createCommentMutation.isPending}
-                    aria-label="Send message"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </form>
+                <ChatComposer
+                  value={commentText}
+                  onChange={setCommentText}
+                  onSubmit={async (payload) => {
+                    await handlePostComment(payload);
+                    setCommentText("");
+                  }}
+                  isSubmitting={createCommentMutation.isPending}
+                  placeholder={`Message #${selectedProject.name}...`}
+                  textareaClassName="min-h-[40px] max-h-28 py-2.5 text-xs leading-normal"
+                />
                 <p className="mt-1.5 text-center text-[9px] text-muted-foreground">
-                  Enter to send · Shift+Enter for new line
+                  Enter to send · Shift+Enter for new line · Attach images or PDFs
                 </p>
               </div>
             </>
@@ -399,7 +573,7 @@ export default function DiscussionsPage() {
           )}
         </Card>
       </div>
-    </div>
+    </PortalPageShell>
   );
 }
 

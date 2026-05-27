@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
+import { PresenceProvider } from "@/contexts/PresenceContext";
 import { AuthenticatedShell } from "@/components/layout/AuthenticatedShell";
 import { QUERY_GC, QUERY_STALE } from "@/lib/query-config";
 import { AppLoadingScreen } from "@/components/loading";
@@ -71,7 +72,9 @@ function App() {
           <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
             <AuthProvider>
               <RealtimeProvider>
-                <Router />
+                <PresenceProvider>
+                  <Router />
+                </PresenceProvider>
               </RealtimeProvider>
             </AuthProvider>
           </WouterRouter>

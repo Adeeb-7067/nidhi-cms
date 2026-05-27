@@ -5,7 +5,11 @@ import {
   usersTable,
   getNextSequence
 } from "../models/schema/index.js";
-import { formatCompanyRecord, getCompanyActivity } from "../mappers/company-format.js";
+import {
+  formatCompanyRecord,
+  formatCompanyRecordsBatch,
+  getCompanyActivity,
+} from "../mappers/company-format.js";
 import { formatProject } from "../mappers/project-format.js";
 import { createClientPortalUser } from "../services/client-portal.js";
 import { assertCompanyAccess } from "../services/access/access-helpers.js";
@@ -34,9 +38,7 @@ async function getCompanies(req, res) {
     { page, limit, skip },
     { sort: { clientSince: -1 } }
   );
-  const formatted = await Promise.all(
-    items.map((c) => formatCompanyRecord(c))
-  );
+  const formatted = await formatCompanyRecordsBatch(items);
   res.json({ companies: formatted, clients: formatted, total, page: pageNum, limit: limitNum });
 }
 async function postCompanies(req, res) {

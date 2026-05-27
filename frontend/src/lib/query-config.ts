@@ -4,6 +4,8 @@ export const QUERY_STALE = {
   list: 60_000,
   /** Reference data (users, projects pickers) */
   reference: 120_000,
+  /** Charts / team & company analytics */
+  analytics: 120_000,
   /** Current user / session */
   profile: 180_000,
   /** Unread badge — socket invalidates; polling is backup only */

@@ -75,6 +75,12 @@ export interface User {
   status: UserStatus;
   /** @nullable */
   lastLoginAt?: string | null;
+  /** @nullable */
+  lastSeenAt?: string | null;
+  presenceStatus?: "online" | "away" | "offline";
+  isActiveNow?: boolean;
+  /** @nullable */
+  lastActivityAt?: string | null;
   createdAt: string;
 }
 
@@ -135,6 +141,7 @@ export interface UserUpdate {
 
 export interface UpdateMyProfileInput {
   name?: string;
+  email?: string;
   designation?: string;
   avatarUrl?: string;
 }
@@ -246,6 +253,12 @@ export interface Client {
   /** @nullable */
   userId?: number | null;
   activeProjectCount: number;
+  /** @nullable */
+  portalLastLoginAt?: string | null;
+  /** @nullable */
+  portalLastSeenAt?: string | null;
+  portalPresenceStatus?: "online" | "away" | "offline";
+  portalIsActiveNow?: boolean;
 }
 
 export type BugSeverity = (typeof BugSeverity)[keyof typeof BugSeverity];
@@ -609,6 +622,14 @@ export interface ProjectMember {
   completionPct: number;
   /** @nullable */
   lastLogDate?: string | null;
+  /** @nullable */
+  lastLoginAt?: string | null;
+  /** @nullable */
+  lastSeenAt?: string | null;
+  presenceStatus?: "online" | "away" | "offline";
+  isActiveNow?: boolean;
+  /** @nullable */
+  lastActivityAt?: string | null;
 }
 
 export interface ProjectMemberInput {
@@ -1136,6 +1157,12 @@ export interface Comment {
   threadId: number;
   content: string;
   /** @nullable */
+  attachmentUrl?: string | null;
+  /** @nullable */
+  attachmentName?: string | null;
+  /** @nullable */
+  attachmentMimeType?: string | null;
+  /** @nullable */
   parentId?: number | null;
   isEdited: boolean;
   replies?: Comment[];
@@ -1158,7 +1185,10 @@ export const CommentInputThreadType = {
 export interface CommentInput {
   threadType: CommentInputThreadType;
   threadId: number;
-  content: string;
+  content?: string;
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentMimeType?: string;
   parentId?: number;
 }
 
@@ -1180,6 +1210,8 @@ export interface Notification {
   entityType?: string | null;
   /** @nullable */
   entityId?: number | null;
+  /** @nullable */
+  projectId?: number | null;
   /** @nullable */
   readAt?: string | null;
   createdAt: string;
@@ -1320,7 +1352,14 @@ export interface BugSeverityBreakdown {
 export interface DashboardStats {
   activeProjects: number;
   totalClients: number;
-  teamMembersOnline: number;
+  /** Active developers, testers, and QA (matches Team page). */
+  teamMembersActive: number;
+  /** Active staff who logged in today. */
+  teamMembersOnlineToday: number;
+  /** Staff with live presence (active now). */
+  teamMembersOnlineNow?: number;
+  /** @deprecated Use teamMembersActive */
+  teamMembersOnline?: number;
   overdueProjects: number;
   apksDueToday: number;
   openBugs: number;
@@ -1371,6 +1410,9 @@ export interface DeveloperStats {
   utilisationPct: number;
   /** @nullable */
   lastLogDate?: string | null;
+  logEntriesCount: number;
+  avgCompletionPct: number;
+  bugsResolvedCount: number;
 }
 
 export interface HeatmapPoint {
@@ -1806,6 +1848,7 @@ export type ListCommentsParams = {
   threadId: number;
   page?: number;
   limit?: number;
+  recent?: boolean;
 };
 
 export type ListNotificationsParams = {

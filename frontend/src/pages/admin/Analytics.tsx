@@ -1,203 +1,827 @@
-import React from "react";
-import { useGetDashboardStats, useListRequests, useListUsers } from "@/api";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell
-} from "recharts";
-import { Skeleton } from "@/components/ui/skeleton";
+import React, { useMemo, useState } from "react";
+import { Link } from "wouter";
+import {
+  useGetBugAnalytics,
+  useGetCompanyAnalytics,
+  useGetTeamAnalytics,
+  getGetTeamAnalyticsQueryKey,
+  getGetBugAnalyticsQueryKey,
+  getGetCompanyAnalyticsQueryKey,
+  type DeveloperStats,
+  type CompanyAnalyticsCard,
+} from "@/api";
+import { analyticsQueryOptions } from "@/lib/list-query-options";
+import { LogActivityHeatmap } from "@/components/analytics/log-activity-heatmap";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle2, Clock, Users, Bug, Activity, Zap } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { StatCard, PageKpiRow } from "@/components/dashboard/dashboard-kit";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalContentCard,
+} from "@/components/layout/portal-page-kit";
+import {
+  AlertTriangle,
+  ArrowRight,
+  BarChart3,
+  Bug,
+  Building2,
+  Gauge,
+  LayoutDashboard,
+  Lightbulb,
+  Scale,
+  Target,
+  Users,
+} from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ResponsiveContainer,
+  Scatter,
+  ScatterChart,
+  Tooltip,
+  XAxis,
+  YAxis,
+  ZAxis,
+} from "recharts";
+import { cn } from "@/lib/utils";
+
+const MONTHLY_CAPACITY_HOURS = 176; // 22 days × 8h
+
+const chartTooltip = {
+  backgroundColor: "hsl(var(--card))",
+  borderColor: "hsl(var(--border))",
+  fontSize: 11,
+  borderRadius: 8,
+};
+
+function formatMonthLabel(month: number, year: number) {
+  return new Date(year, month - 1, 1).toLocaleString(undefined, {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function clientRiskScore(c: CompanyAnalyticsCard): number {
+  const delayedPct =
+    c.totalProjects > 0 ? ((c.delayedProjects ?? 0) / c.totalProjects) * 100 : 0;
+  const ticketLoad =
+    c.activeProjects > 0 ? (c.openTickets ?? 0) / c.activeProjects : (c.openTickets ?? 0) * 2;
+  const requestNoise = (c.pendingRequests ?? 0) * 8;
+  return Math.round(delayedPct * 0.5 + ticketLoad * 12 + requestNoise);
+}
+
+function riskLabel(score: number): { label: string; className: string } {
+  if (score >= 60) return { label: "High", className: "bg-red-500/15 text-red-700 border-red-500/30" };
+  if (score >= 30) return { label: "Medium", className: "bg-amber-500/15 text-amber-700 border-amber-500/30" };
+  return { label: "Low", className: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30" };
+}
+
+function InsightStrip({ items }: { items: { text: string; tone?: "warn" | "ok" | "neutral" }[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs max-w-full",
+            item.tone === "warn" && "border-amber-500/30 bg-amber-500/8 text-amber-900 dark:text-amber-200",
+            item.tone === "ok" && "border-emerald-500/30 bg-emerald-500/8 text-emerald-900 dark:text-emerald-200",
+            (!item.tone || item.tone === "neutral") && "border-border bg-muted/30 text-muted-foreground",
+          )}
+        >
+          <Lightbulb className="h-3.5 w-3.5 shrink-0 opacity-70" />
+          <span>{item.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PeriodPicker({
+  month,
+  year,
+  onMonth,
+  onYear,
+}: {
+  month: number;
+  year: number;
+  onMonth: (m: number) => void;
+  onYear: (y: number) => void;
+}) {
+  const yearOptions = [new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1];
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={String(month)} onValueChange={(v) => onMonth(Number(v))}>
+        <SelectTrigger className="h-9 w-[140px] text-sm bg-card">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {Array.from({ length: 12 }, (_, i) => (
+            <SelectItem key={i + 1} value={String(i + 1)}>
+              {new Date(2000, i).toLocaleString("default", { month: "long" })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={String(year)} onValueChange={(v) => onYear(Number(v))}>
+        <SelectTrigger className="h-9 w-[92px] text-sm bg-card">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {yearOptions.map((y) => (
+            <SelectItem key={y} value={String(y)}>
+              {y}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
 
 export default function AdminAnalytics() {
-  const { data: stats, isLoading } = useGetDashboardStats();
-  const { data: requestsData, isLoading: isLoadingRequests } = useListRequests({ limit: 5 });
-  const { data: usersData, isLoading: isLoadingUsers } = useListUsers({ role: 'developer', limit: 100 });
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [tab, setTab] = useState("workforce");
 
-  if (isLoading || isLoadingRequests || isLoadingUsers) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-[100px] w-full" />
-          ))}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Skeleton className="h-[280px] w-full" />
-          <Skeleton className="h-[280px] w-full md:col-span-2" />
-        </div>
-        <Skeleton className="h-[320px] w-full" />
-      </div>
-    );
-  }
+  const { data: teamData, isLoading: teamLoading } = useGetTeamAnalytics(
+    { month, year },
+    {
+      query: analyticsQueryOptions({
+        queryKey: getGetTeamAnalyticsQueryKey({ month, year }),
+      }),
+    },
+  );
+  const { data: bugData, isLoading: bugsLoading } = useGetBugAnalytics(undefined, {
+    query: {
+      ...analyticsQueryOptions({ queryKey: getGetBugAnalyticsQueryKey() }),
+      enabled: tab === "defects",
+    },
+  });
+  const { data: companyData, isLoading: companiesLoading } = useGetCompanyAnalytics({
+    query: {
+      ...analyticsQueryOptions({ queryKey: getGetCompanyAnalyticsQueryKey() }),
+      enabled: tab === "clients",
+    },
+  });
 
-  const bugData = stats ? [
-    { name: "Critical", value: stats.bugSeverityBreakdown.critical },
-    { name: "High", value: stats.bugSeverityBreakdown.high },
-    { name: "Medium", value: stats.bugSeverityBreakdown.medium },
-    { name: "Low", value: stats.bugSeverityBreakdown.low },
-  ] : [];
+  const developers = teamData?.developers ?? [];
+  const heatmap = teamData?.heatmapData ?? [];
 
-  const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#22c55e'];
+  const workforceInsights = useMemo(() => {
+    const under = developers.filter((d) => d.utilisationPct < 50 && d.totalHoursThisMonth > 0);
+    const idle = developers.filter((d) => d.totalHoursThisMonth === 0);
+    const heavy = developers.filter((d) => d.activeProjects >= 4);
+    const totalHours = developers.reduce((s, d) => s + d.totalHoursThisMonth, 0);
+    const capacity = developers.length * MONTHLY_CAPACITY_HOURS;
+    const capacityUsed = capacity > 0 ? Math.round((totalHours / capacity) * 100) : 0;
+    return { under, idle, heavy, totalHours, capacityUsed };
+  }, [developers]);
 
-  const pipelineData = stats ? [
-    { name: "Scoping", value: stats.projectPipeline.scoping },
-    { name: "In Progress", value: stats.projectPipeline.inProgress },
-    { name: "UAT", value: stats.projectPipeline.uat },
-    { name: "On Hold", value: stats.projectPipeline.onHold },
-    { name: "Completed", value: stats.projectPipeline.completed },
-  ] : [];
+  const utilizationCompare = useMemo(
+    () =>
+      developers.map((d) => ({
+        name: (d.name.split(" ")[0] ?? d.name).slice(0, 10),
+        logged: d.totalHoursThisMonth,
+        target: MONTHLY_CAPACITY_HOURS,
+        gap: Math.round((MONTHLY_CAPACITY_HOURS - d.totalHoursThisMonth) * 10) / 10,
+      })),
+    [developers],
+  );
 
-  const totalBugs = stats ? 
-    stats.bugSeverityBreakdown.critical + 
-    stats.bugSeverityBreakdown.high + 
-    stats.bugSeverityBreakdown.medium + 
-    stats.bugSeverityBreakdown.low : 0;
+  const scatterData = useMemo(
+    () =>
+      developers
+        .filter((d) => d.totalHoursThisMonth > 0 || d.bugsResolvedCount > 0)
+        .map((d) => ({
+          name: d.name,
+          hours: d.totalHoursThisMonth,
+          bugs: d.bugsResolvedCount,
+          z: d.activeProjects,
+        })),
+    [developers],
+  );
 
-  const totalProjects = stats ? 
-    stats.projectPipeline.scoping + 
-    stats.projectPipeline.inProgress + 
-    stats.projectPipeline.uat + 
-    stats.projectPipeline.onHold + 
-    stats.projectPipeline.completed : 0;
+  const bugInsights = useMemo(() => {
+    if (!bugData) return null;
+    const total = bugData.totalOpen + bugData.totalFixed;
+    const fixRate = total > 0 ? Math.round((bugData.totalFixed / total) * 100) : 0;
+    const topPlatform = [...(bugData.platformDistribution ?? [])].sort((a, b) => b.count - a.count)[0];
+    return { fixRate, topPlatform };
+  }, [bugData]);
 
-  const completionRate = totalProjects > 0 ? 
-    Math.round((stats?.projectPipeline.completed || 0) / totalProjects * 100) : 0;
+  const rankedClients = useMemo(() => {
+    return [...(companyData?.companies ?? [])]
+      .map((c) => ({ ...c, risk: clientRiskScore(c) }))
+      .sort((a, b) => b.risk - a.risk);
+  }, [companyData?.companies]);
+
+  const clientInsights = useMemo(() => {
+    const high = rankedClients.filter((c) => c.risk >= 60);
+    const delayed = rankedClients.filter((c) => (c.delayedProjects ?? 0) > 0);
+    return { high, delayed };
+  }, [rankedClients]);
+
+  const isLoading = teamLoading && !teamData;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Analytics</h1>
-          <p className="text-muted-foreground text-xs mt-0.5">Company-wide insights and performance metrics</p>
-        </div>
-      </div>
-
-      <PageKpiRow>
-        <StatCard title="Active bugs" value={totalBugs} hint={`${stats?.bugSeverityBreakdown.critical} critical`} icon={Bug} accent="red" alert={totalBugs > 0} delay={0} />
-        <StatCard title="Project health" value={`${completionRate}%`} hint="Overall completion rate" icon={Activity} accent="blue" delay={1} />
-        <StatCard title="Team size" value={usersData?.users.length || 0} hint="Active developers" icon={Users} accent="violet" delay={2} />
-        <StatCard title="Pending requests" value={requestsData?.requests.filter((r) => r.status === "pending").length || 0} hint="Awaiting approval" icon={Zap} accent="amber" delay={3} />
-      </PageKpiRow>
-
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="bg-card">
-          <CardHeader className="p-4 pb-0">
-            <CardTitle className="text-sm">Bug Severity Distribution</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={bugData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={70}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {bugData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="flex justify-center gap-4 text-[10px] mt-2">
-              {bugData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center">
-                  <span className="w-1.5 h-1.5 rounded-full mr-1" style={{ backgroundColor: COLORS[index] }}></span>
-                  {entry.name}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card md:col-span-2">
-          <CardHeader className="p-4 pb-0">
-            <CardTitle className="text-sm">Project Pipeline Overview</CardTitle>
-          </CardHeader>
-          <CardContent className="p-4">
-            <div className="h-[180px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={pipelineData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))", fontSize: '10px' }} cursor={{fill: 'hsl(var(--muted))'}} />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="bg-card">
-        <CardHeader className="p-4 pb-0">
-          <CardTitle className="text-sm">Resource Request Pipeline</CardTitle>
-          <CardDescription className="text-xs text-muted-foreground mt-0.5">Recent developer resource requests awaiting action</CardDescription>
-        </CardHeader>
-        <CardContent className="p-4">
-          <div className="space-y-3">
-            {requestsData?.requests.length === 0 ? (
-              <div className="h-[160px] flex items-center justify-center border border-dashed border-border rounded-md text-muted-foreground text-xs">
-                No active requests
-              </div>
-            ) : (
-              <div className="rounded-md border border-border">
-                <div className="grid grid-cols-4 bg-muted/50 p-2 text-[10px] font-medium text-muted-foreground border-b border-border">
-                  <div>DEVELOPER / TYPE</div>
-                  <div>TITLE</div>
-                  <div>URGENCY</div>
-                  <div className="text-right">STATUS / DATE</div>
-                </div>
-                {requestsData?.requests.map((request) => (
-                  <div key={request.id} className="grid grid-cols-4 p-2 text-xs items-center border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
-                    <div className="flex flex-col">
-                      <span className="font-medium">{request.developerName || "Developer"}</span>
-                      <span className="text-[10px] text-muted-foreground capitalize">{request.type.replace('_', ' ')}</span>
-                    </div>
-                    <div className="font-medium truncate pr-4">{request.title}</div>
-                    <div>
-                      <Badge variant="outline" className={`capitalize text-[10px] px-1.5 py-0 h-4 ${
-                        request.urgency === 'high' ? 'border-red-500 text-red-500' :
-                        request.urgency === 'medium' ? 'border-amber-500 text-amber-500' :
-                        'border-green-500 text-green-500'
-                      }`}>
-                        {request.urgency}
-                      </Badge>
-                    </div>
-                    <div className="text-right flex flex-col items-end">
-                      <div className="flex items-center gap-1">
-                        {request.status === 'pending' ? <Clock className="h-2.5 w-2.5 text-blue-500" /> :
-                         request.status === 'approved' ? <CheckCircle2 className="h-2.5 w-2.5 text-green-500" /> :
-                         <AlertCircle className="h-2.5 w-2.5 text-red-500" />}
-                        <span className={`capitalize font-medium text-[10px] ${
-                          request.status === 'pending' ? 'text-blue-500' :
-                          request.status === 'approved' ? 'text-green-500' :
-                          'text-red-500'
-                        }`}>{request.status}</span>
-                      </div>
-                      <span className="text-[9px] text-muted-foreground">
-                        {formatDistanceToNow(new Date(request.createdAt), { addSuffix: true })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+    <PortalPageShell>
+      <PortalPageHero
+        title="Insights"
+        subtitle="Period-based analysis — workforce capacity, defect patterns, and client risk. For live operations, use the dashboard."
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <PeriodPicker month={month} year={year} onMonth={setMonth} onYear={setYear} />
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin">
+                <LayoutDashboard className="h-4 w-4 mr-2" />
+                Dashboard
+              </Link>
+            </Button>
           </div>
+        }
+      />
+
+      <Card className="border-dashed border-primary/25 bg-primary/[0.03]">
+        <CardContent className="py-3 px-4 flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
+          <div className="flex items-start gap-2 text-muted-foreground">
+            <BarChart3 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+            <p>
+              <span className="font-medium text-foreground">Analytics vs Dashboard — </span>
+              Dashboard shows what needs attention today. This page compares performance over{" "}
+              <span className="font-medium text-foreground">{formatMonthLabel(month, year)}</span> and
+              highlights imbalances.
+            </p>
+          </div>
+          <Button variant="ghost" size="sm" className="shrink-0 self-start sm:self-center" asChild>
+            <Link href="/admin/employees">
+              Team drill-down
+              <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
         </CardContent>
       </Card>
+
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="h-10 bg-muted/50 p-1 w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
+          <TabsTrigger value="workforce" className="text-xs gap-1.5">
+            <Users className="h-3.5 w-3.5" />
+            Workforce
+          </TabsTrigger>
+          <TabsTrigger value="defects" className="text-xs gap-1.5">
+            <Bug className="h-3.5 w-3.5" />
+            Defects
+          </TabsTrigger>
+          <TabsTrigger value="clients" className="text-xs gap-1.5">
+            <Building2 className="h-3.5 w-3.5" />
+            Client risk
+          </TabsTrigger>
+        </TabsList>
+
+        {/* —— Workforce —— */}
+        <TabsContent value="workforce" className="space-y-4 m-0">
+          {isLoading ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (
+            <>
+              <InsightStrip
+                items={[
+                  {
+                    text: `Org capacity used: ${workforceInsights.capacityUsed}% of ${developers.length * MONTHLY_CAPACITY_HOURS}h available`,
+                    tone: workforceInsights.capacityUsed < 60 ? "warn" : "ok",
+                  },
+                  workforceInsights.idle.length > 0
+                    ? {
+                        text: `${workforceInsights.idle.length} member(s) with zero hours logged this month`,
+                        tone: "warn",
+                      }
+                    : {
+                        text: "All active staff have logged time this month",
+                        tone: "ok",
+                      },
+                  workforceInsights.heavy.length > 0
+                    ? {
+                        text: `${workforceInsights.heavy.length} on 4+ projects — check workload balance`,
+                        tone: "warn",
+                      }
+                    : {
+                        text: "No one is assigned to 4+ projects",
+                        tone: "neutral",
+                      },
+                ]}
+              />
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Gauge className="h-4 w-4 text-violet-500" />
+                      Logged vs capacity
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Each bar: hours logged · dashed line = {MONTHLY_CAPACITY_HOURS}h monthly target
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {utilizationCompare.length === 0 ? (
+                      <EmptyChart message="No workforce data for this period" />
+                    ) : (
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ComposedChart data={utilizationCompare} margin={{ left: -8, right: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                            <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                            <YAxis tick={{ fontSize: 10 }} />
+                            <Tooltip contentStyle={chartTooltip} />
+                            <Legend wrapperStyle={{ fontSize: 10 }} />
+                            <Bar dataKey="logged" name="Hours logged" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                            <Line
+                              type="monotone"
+                              dataKey="target"
+                              name="Target (176h)"
+                              stroke="#94a3b8"
+                              strokeDasharray="4 4"
+                              dot={false}
+                              strokeWidth={2}
+                            />
+                          </ComposedChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Target className="h-4 w-4 text-primary" />
+                      Output efficiency
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Hours logged vs bugs closed (bubble size = active projects)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {scatterData.length === 0 ? (
+                      <EmptyChart message="Need hours or bug closures to plot" />
+                    ) : (
+                      <div className="h-[260px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ScatterChart margin={{ left: -8, right: 8, bottom: 8 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                            <XAxis type="number" dataKey="hours" name="Hours" tick={{ fontSize: 10 }} />
+                            <YAxis type="number" dataKey="bugs" name="Bugs closed" tick={{ fontSize: 10 }} allowDecimals={false} />
+                            <ZAxis type="number" dataKey="z" range={[60, 400]} />
+                            <Tooltip
+                              contentStyle={chartTooltip}
+                              formatter={(value, name) => [value, name]}
+                              labelFormatter={(_, payload) =>
+                                payload?.[0]?.payload?.name ?? ""
+                              }
+                            />
+                            <Scatter name="Team" data={scatterData} fill="#6366f1" />
+                          </ScatterChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Daily log density</CardTitle>
+                  <CardDescription className="text-xs">
+                    When the team submits work logs — darker days = more entries
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <LogActivityHeatmap heatmapData={heatmap} month={month} year={year} />
+                </CardContent>
+              </Card>
+
+              <WorkforceTable developers={developers} />
+            </>
+          )}
+        </TabsContent>
+
+        {/* —— Defects —— */}
+        <TabsContent value="defects" className="space-y-4 m-0">
+          {bugsLoading && !bugData ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (
+            <>
+              <InsightStrip
+                items={[
+                  bugInsights
+                    ? {
+                        text: `Resolution rate: ${bugInsights.fixRate}% of tracked bugs are closed (${bugData?.totalFixed} fixed, ${bugData?.totalOpen} still open)`,
+                        tone: bugInsights.fixRate >= 50 ? "ok" : "warn",
+                      }
+                    : { text: "Loading defect metrics…", tone: "neutral" },
+                  bugInsights?.topPlatform
+                    ? {
+                        text: `Most issues on ${bugInsights.topPlatform.name} platform (${bugInsights.topPlatform.count} bugs)`,
+                        tone: "neutral",
+                      }
+                    : { text: "No platform breakdown yet", tone: "neutral" },
+                ]}
+              />
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card className="md:col-span-1">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Open vs fixed</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-center">
+                        <p className="text-2xl font-bold tabular-nums text-amber-700 dark:text-amber-400">
+                          {bugData?.totalOpen ?? 0}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Open</p>
+                      </div>
+                      <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-center">
+                        <p className="text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                          {bugData?.totalFixed ?? 0}
+                        </p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Fixed</p>
+                      </div>
+                    </div>
+                    {bugInsights && (
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-muted-foreground">Closure rate</span>
+                          <span className="font-semibold">{bugInsights.fixRate}%</span>
+                        </div>
+                        <Progress value={bugInsights.fixRate} className="h-2" />
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card className="md:col-span-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Status workflow</CardTitle>
+                    <CardDescription className="text-xs">Where bugs sit in the pipeline</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <DistributionList items={bugData?.statusDistribution ?? []} />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">By platform</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {(bugData?.platformDistribution?.length ?? 0) === 0 ? (
+                      <EmptyChart message="No platform data" />
+                    ) : (
+                      <div className="h-[220px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            layout="vertical"
+                            data={bugData?.platformDistribution ?? []}
+                            margin={{ left: 8, right: 12 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                            <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
+                            <YAxis
+                              type="category"
+                              dataKey="name"
+                              width={72}
+                              tick={{ fontSize: 10 }}
+                              tickFormatter={(v) => String(v).replace(/_/g, " ")}
+                            />
+                            <Tooltip contentStyle={chartTooltip} />
+                            <Bar dataKey="count" name="Bugs" fill="#f59e0b" radius={[0, 4, 4, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">By severity</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DistributionList
+                      items={bugData?.severityDistribution ?? []}
+                      colors={["#ef4444", "#f97316", "#f59e0b", "#22c55e"]}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Defects closed per person</CardTitle>
+                  <CardDescription className="text-xs">
+                    {formatMonthLabel(month, year)} — assignee closures
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {developers.length === 0 ? (
+                    <EmptyChart message="No team bug data for this month" />
+                  ) : (
+                    <div className="h-[200px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={developers.map((d) => ({
+                            name: d.name.split(" ")[0],
+                            closed: d.bugsResolvedCount,
+                          }))}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                          <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+                          <Tooltip contentStyle={chartTooltip} />
+                          <Bar dataKey="closed" name="Closed" fill="#10b981" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </>
+          )}
+        </TabsContent>
+
+        {/* —— Client risk —— */}
+        <TabsContent value="clients" className="space-y-4 m-0">
+          {companiesLoading && !companyData ? (
+            <Skeleton className="h-48 w-full" />
+          ) : (
+            <>
+              <InsightStrip
+                items={[
+                  clientInsights.high.length > 0
+                    ? {
+                        text: `${clientInsights.high.length} client(s) flagged high risk — review delayed work and tickets`,
+                        tone: "warn",
+                      }
+                    : {
+                        text: "No clients in the high-risk band right now",
+                        tone: "ok",
+                      },
+                  clientInsights.delayed.length > 0
+                    ? {
+                        text: `${clientInsights.delayed.length} with overdue projects`,
+                        tone: "warn",
+                      }
+                    : { text: "No delayed projects across portfolio", tone: "ok" },
+                ]}
+              />
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Scale className="h-4 w-4 text-rose-500" />
+                    Risk ranking
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Composite score from delayed projects, open tickets per active project, and
+                    pending requests — not shown on the dashboard
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="text-[10px]">Rank</TableHead>
+                          <TableHead className="text-[10px]">Company</TableHead>
+                          <TableHead className="text-[10px] text-center">Risk</TableHead>
+                          <TableHead className="text-[10px] text-center">Delayed</TableHead>
+                          <TableHead className="text-[10px] text-center">Tickets</TableHead>
+                          <TableHead className="text-[10px] text-center">Active proj.</TableHead>
+                          <TableHead className="text-[10px] text-center">Requests</TableHead>
+                          <TableHead className="text-[10px] text-center">Devs</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {rankedClients.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={8} className="h-20 text-center text-xs text-muted-foreground">
+                              No client data
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          rankedClients.map((c, i) => {
+                            const risk = riskLabel(c.risk);
+                            return (
+                              <TableRow key={c.companyId} className="text-xs">
+                                <TableCell className="font-mono text-muted-foreground">{i + 1}</TableCell>
+                                <TableCell>
+                                  <Link
+                                    href="/admin/clients"
+                                    className="font-medium hover:text-primary"
+                                  >
+                                    {c.companyName}
+                                  </Link>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge variant="outline" className={cn("text-[10px]", risk.className)}>
+                                    {risk.label} · {c.risk}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center tabular-nums">
+                                  {c.delayedProjects ?? 0}
+                                  <span className="text-muted-foreground">
+                                    /{c.totalProjects}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-center tabular-nums">{c.openTickets ?? 0}</TableCell>
+                                <TableCell className="text-center tabular-nums">{c.activeProjects}</TableCell>
+                                <TableCell className="text-center tabular-nums">{c.pendingRequests ?? 0}</TableCell>
+                                <TableCell className="text-center tabular-nums">{c.developerCount ?? 0}</TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {rankedClients.slice(0, 3).map((c) => (
+                  <Card
+                    key={c.companyId}
+                    className={cn(
+                      "border-l-4",
+                      c.risk >= 60
+                        ? "border-l-red-500"
+                        : c.risk >= 30
+                          ? "border-l-amber-500"
+                          : "border-l-emerald-500",
+                    )}
+                  >
+                    <CardHeader className="pb-2 pt-4">
+                      <CardTitle className="text-sm truncate">{c.companyName}</CardTitle>
+                      <CardDescription className="text-xs">
+                        Risk score {c.risk} · {riskLabel(c.risk).label}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="text-xs space-y-2 pb-4">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Delivery</span>
+                        <span>
+                          {c.completedProjects ?? 0} done / {c.totalProjects} total
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Support load</span>
+                        <span>{c.openTickets ?? 0} open tickets</span>
+                      </div>
+                      {(c.delayedProjects ?? 0) > 0 && (
+                        <p className="flex items-center gap-1 text-amber-700 dark:text-amber-400 pt-1">
+                          <AlertTriangle className="h-3 w-3" />
+                          {c.delayedProjects} delayed project(s)
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
+    </PortalPageShell>
+  );
+}
+
+function EmptyChart({ message }: { message: string }) {
+  return (
+    <div className="h-[200px] flex items-center justify-center rounded-lg border border-dashed text-xs text-muted-foreground">
+      {message}
     </div>
+  );
+}
+
+function DistributionList({
+  items,
+  colors,
+}: {
+  items: { name: string; count: number }[];
+  colors?: string[];
+}) {
+  if (!items.length) {
+    return <EmptyChart message="No distribution data" />;
+  }
+  const max = Math.max(...items.map((i) => i.count), 1);
+  const palette = colors ?? ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b"];
+
+  return (
+    <div className="space-y-3 py-1">
+      {items.map((item, i) => (
+        <div key={item.name}>
+          <div className="flex justify-between text-xs mb-1">
+            <span className="capitalize font-medium">{item.name.replace(/_/g, " ")}</span>
+            <span className="tabular-nums font-semibold">{item.count}</span>
+          </div>
+          <div className="h-2 rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{
+                width: `${Math.max(8, (item.count / max) * 100)}%`,
+                background: palette[i % palette.length],
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WorkforceTable({ developers }: { developers: DeveloperStats[] }) {
+  return (
+    <PortalContentCard>
+      <div className="p-4 border-b border-border">
+        <h3 className="text-sm font-semibold">Capacity & workload detail</h3>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          Gap = hours still needed to hit {MONTHLY_CAPACITY_HOURS}h target
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="text-[10px]">Member</TableHead>
+              <TableHead className="text-[10px] text-right">Hours</TableHead>
+              <TableHead className="text-[10px] text-right">Gap</TableHead>
+              <TableHead className="text-[10px] min-w-[100px]">Utilisation</TableHead>
+              <TableHead className="text-[10px] text-center">Projects</TableHead>
+              <TableHead className="text-[10px] text-center">Avg done %</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {developers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground h-16">
+                  No data
+                </TableCell>
+              </TableRow>
+            ) : (
+              developers.map((d) => {
+                const gap = Math.max(0, MONTHLY_CAPACITY_HOURS - d.totalHoursThisMonth);
+                return (
+                  <TableRow key={d.userId} className="text-xs">
+                    <TableCell className="font-medium">{d.name}</TableCell>
+                    <TableCell className="text-right tabular-nums">{d.totalHoursThisMonth}h</TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right tabular-nums",
+                        gap > 40 ? "text-amber-600 font-medium" : "text-muted-foreground",
+                      )}
+                    >
+                      {gap > 0 ? `−${gap}h` : "✓"}
+                    </TableCell>
+                    <TableCell>
+                      <Progress value={d.utilisationPct} className="h-1.5" />
+                    </TableCell>
+                    <TableCell className="text-center tabular-nums">{d.activeProjects}</TableCell>
+                    <TableCell className="text-center tabular-nums">{d.avgCompletionPct}%</TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </PortalContentCard>
   );
 }

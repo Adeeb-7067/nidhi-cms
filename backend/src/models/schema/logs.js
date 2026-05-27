@@ -16,6 +16,8 @@ const dailyLogSchema = new Schema({
   nextDayPlan: { type: String }
 }, { timestamps: true });
 dailyLogSchema.index({ projectId: 1, developerId: 1, logDate: -1 });
+dailyLogSchema.index({ developerId: 1, logDate: -1 });
+dailyLogSchema.index({ logDate: 1 });
 const DailyLogs = mongoose.models.DailyLogs || mongoose.model("DailyLogs", dailyLogSchema);
 const dailyLogsTable = DailyLogs;
 export {

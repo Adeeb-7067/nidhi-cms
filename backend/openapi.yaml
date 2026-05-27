@@ -40,6 +40,8 @@ tags:
     description: System settings
   - name: tickets
     description: Support tickets
+  - name: presence
+    description: Real-time user presence
 
 paths:
   /healthz:
@@ -399,6 +401,52 @@ paths:
       responses:
         "200":
           description: User deactivated
+
+  /presence:
+    get:
+      operationId: getPresence
+      tags: [presence]
+      summary: Bulk user presence (live + last seen)
+      parameters:
+        - name: ids
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated user IDs (max 200). Omit for all live users.
+      responses:
+        "200":
+          description: Presence map keyed by user id
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresenceMapResult"
+
+  /presence/me:
+    get:
+      operationId: getMyPresence
+      tags: [presence]
+      summary: Current user presence
+      responses:
+        "200":
+          description: Presence snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPresence"
+
+  /presence/heartbeat:
+    post:
+      operationId: postPresenceHeartbeat
+      tags: [presence]
+      summary: Refresh activity timestamp (also sent via socket)
+      responses:
+        "200":
+          description: Updated presence
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPresence"
 
   /users/{id}/password:
     patch:
@@ -1104,7 +1152,7 @@ paths:
     patch:
       operationId: updateLog
       tags: [logs]
-      summary: Update a log entry
+      summary: Update a log entry (staff may only edit logs dated today; super admin anytime)
       parameters:
         - name: id
           in: path
@@ -1505,6 +1553,11 @@ paths:
           in: query
           schema:
             type: integer
+        - name: recent
+          in: query
+          schema:
+            type: boolean
+          description: When true, returns the most recent comments up to limit.
       responses:
         "200":
           description: Comments
@@ -1984,9 +2037,46 @@ components:
           enum: [active, inactive, suspended]
         lastLoginAt:
           type: ["string", "null"]
+        lastSeenAt:
+          type: ["string", "null"]
+        presenceStatus:
+          type: string
+          enum: [online, away, offline]
+        isActiveNow:
+          type: boolean
+        lastActivityAt:
+          type: ["string", "null"]
         createdAt:
           type: string
       required: [id, name, email, role, status, createdAt]
+
+    PresenceStatus:
+      type: string
+      enum: [online, away, offline]
+
+    UserPresence:
+      type: object
+      properties:
+        userId:
+          type: integer
+        status:
+          $ref: "#/components/schemas/PresenceStatus"
+        isActiveNow:
+          type: boolean
+        lastSeenAt:
+          type: ["string", "null"]
+        lastActivityAt:
+          type: ["string", "null"]
+      required: [userId, status, isActiveNow]
+
+    PresenceMapResult:
+      type: object
+      properties:
+        presence:
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/UserPresence"
+      required: [presence]
 
     UserInput:
       type: object
@@ -2051,6 +2141,8 @@ components:
       type: object
       properties:
         name:
+          type: string
+        email:
           type: string
         designation:
           type: string
@@ -2241,6 +2333,15 @@ components:
           type: ["integer", "null"]
         activeProjectCount:
           type: integer
+        portalLastLoginAt:
+          type: ["string", "null"]
+        portalLastSeenAt:
+          type: ["string", "null"]
+        portalPresenceStatus:
+          type: string
+          enum: [online, away, offline]
+        portalIsActiveNow:
+          type: boolean
       required: [id, companyName, contactPerson, email, status, portalLogin, clientSince, activeProjectCount]
 
     ClientInput:
@@ -2514,6 +2615,17 @@ components:
         completionPct:
           type: integer
         lastLogDate:
+          type: ["string", "null"]
+        lastLoginAt:
+          type: ["string", "null"]
+        lastSeenAt:
+          type: ["string", "null"]
+        presenceStatus:
+          type: string
+          enum: [online, away, offline]
+        isActiveNow:
+          type: boolean
+        lastActivityAt:
           type: ["string", "null"]
       required: [userId, name, joinedAt, completionPct]
 
@@ -3204,6 +3316,12 @@ components:
           type: integer
         content:
           type: string
+        attachmentUrl:
+          type: ["string", "null"]
+        attachmentName:
+          type: ["string", "null"]
+        attachmentMimeType:
+          type: ["string", "null"]
         parentId:
           type: ["integer", "null"]
         isEdited:
@@ -3228,9 +3346,15 @@ components:
           type: integer
         content:
           type: string
+        attachmentUrl:
+          type: string
+        attachmentName:
+          type: string
+        attachmentMimeType:
+          type: string
         parentId:
           type: integer
-      required: [threadType, threadId, content]
+      required: [threadType, threadId]
 
     CommentUpdate:
       type: object
@@ -3266,6 +3390,9 @@ components:
           type: ["string", "null"]
         entityId:
           type: ["integer", "null"]
+        projectId:
+          type: ["integer", "null"]
+          description: Related project for deep links (discussions, logs, bugs)
         readAt:
           type: ["string", "null"]
         createdAt:
@@ -3369,8 +3496,19 @@ components:
           type: integer
         totalClients:
           type: integer
+        teamMembersActive:
+          type: integer
+          description: Active developers, testers, and QA (matches Team page)
+        teamMembersOnlineToday:
+          type: integer
+          description: Active staff who logged in today
+        teamMembersOnlineNow:
+          type: integer
+          description: Staff with live presence (green / active now)
         teamMembersOnline:
           type: integer
+          deprecated: true
+          description: Same as teamMembersActive (legacy field)
         overdueProjects:
           type: integer
         apksDueToday:
@@ -3387,7 +3525,7 @@ components:
           $ref: "#/components/schemas/ProjectPipeline"
         bugSeverityBreakdown:
           $ref: "#/components/schemas/BugSeverityBreakdown"
-      required: [activeProjects, totalClients, teamMembersOnline, overdueProjects, apksDueToday, openBugs, openRequests, recentActivity, projectPipeline, bugSeverityBreakdown]
+      required: [activeProjects, totalClients, teamMembersActive, teamMembersOnlineToday, overdueProjects, apksDueToday, openBugs, openRequests, recentActivity, projectPipeline, bugSeverityBreakdown]
 
     ActivityItem:
       type: object
@@ -3551,7 +3689,13 @@ components:
           type: integer
         lastLogDate:
           type: ["string", "null"]
-      required: [userId, name, activeProjects, totalHoursThisMonth, utilisationPct]
+        logEntriesCount:
+          type: integer
+        avgCompletionPct:
+          type: integer
+        bugsResolvedCount:
+          type: integer
+      required: [userId, name, activeProjects, totalHoursThisMonth, utilisationPct, logEntriesCount, avgCompletionPct, bugsResolvedCount]
 
     HeatmapPoint:
       type: object

@@ -1,6 +1,8 @@
 import { toIso } from "../utils/mongo-list.js";
-function formatUser(user) {
-  return {
+import { attachPresenceToUser } from "../services/presence.js";
+
+function formatUser(user, { withPresence = false } = {}) {
+  const base = {
     id: user.id,
     employeeId: user.employeeId ?? null,
     name: user.name,
@@ -15,8 +17,10 @@ function formatUser(user) {
     linkedinUrl: user.linkedinUrl ?? null,
     status: user.status,
     lastLoginAt: toIso(user.lastLoginAt),
-    createdAt: toIso(user.createdAt) ?? (/* @__PURE__ */ new Date()).toISOString()
+    lastSeenAt: toIso(user.lastSeenAt),
+    createdAt: toIso(user.createdAt) ?? (/* @__PURE__ */ new Date()).toISOString(),
   };
+  return withPresence ? attachPresenceToUser(base) : base;
 }
 export {
   formatUser

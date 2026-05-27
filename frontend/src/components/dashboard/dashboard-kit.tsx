@@ -62,7 +62,7 @@ export function DashboardHero({
   );
 }
 
-type StatCardProps = {
+export type StatCardProps = {
   title: string;
   value: number | string;
   hint?: string;

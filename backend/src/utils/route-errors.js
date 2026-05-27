@@ -49,7 +49,7 @@ function parseIdParam(raw, label = "id") {
   }
   return id;
 }
-const MAX_PAGE_LIMIT = 100;
+const MAX_PAGE_LIMIT = 500;
 const DEFAULT_PAGE_LIMIT = 20;
 function parsePagination(query) {
   const page = Math.max(1, Number.parseInt(String(query.page ?? "1"), 10) || 1);

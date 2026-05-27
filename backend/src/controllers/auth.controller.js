@@ -2,7 +2,9 @@ import {
   usersTable,
   sessionsTable,
   passwordResetTokensTable,
-  getNextSequence
+  auditLogsTable,
+  getNextSequence,
+  staffEmployeeRoles,
 } from "../models/schema/index.js";
 import { verifyPassword, hashPassword } from "../lib/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
@@ -14,15 +16,27 @@ import {
   isEmailConfigured,
 } from "../services/password-otp.js";
 import { badRequest, unauthorized, notFound, parseIdParam, optionalString } from "../utils/route-errors.js";
+import { formatUser } from "../mappers/user-format.js";
 async function postAuthLogin(req, res) {
   const identifier = optionalString(req.body.identifier);
   const password = optionalString(req.body.password);
   if (!identifier) badRequest("Email or employee ID is required.", "identifier");
   if (!password) badRequest("Password is required.", "password");
-  let user = await usersTable.findOne({ email: identifier.toLowerCase() });
-  if (!user) {
-    user = await usersTable.findOne({ employeeId: identifier.toUpperCase() });
+
+  const trimmed = identifier.trim();
+  let user = null;
+
+  if (trimmed.includes("@")) {
+    user = await usersTable.findOne({ email: trimmed.toLowerCase() });
+    if (user && staffEmployeeRoles.includes(user.role)) {
+      unauthorized(
+        "Developers and QA must sign in with their Employee ID (e.g. DE001), not email."
+      );
+    }
+  } else {
+    user = await usersTable.findOne({ employeeId: trimmed.toUpperCase() });
   }
+
   if (!user || user.status !== "active") {
     unauthorized(
       "Invalid email/employee ID or password. Check your credentials and try again."
@@ -46,6 +60,20 @@ async function postAuthLogin(req, res) {
     deviceInfo: req.headers["user-agent"] ?? null
   });
   await usersTable.updateOne({ id: user.id }, { $set: { lastLoginAt: /* @__PURE__ */ new Date() } });
+  try {
+    const auditId = await getNextSequence("audit_logs");
+    await auditLogsTable.create({
+      id: auditId,
+      actorId: user.id,
+      action: "login",
+      entityType: "session",
+      entityId: sessionId,
+      ipAddress: req.ip ?? null,
+      metadata: { userAgent: req.headers["user-agent"] ?? null },
+    });
+  } catch {
+    /* non-blocking */
+  }
   res.json({
     accessToken,
     refreshToken,
@@ -279,28 +307,27 @@ async function postAuthStopImpersonate(req, res) {
 async function getAuthMe(req, res) {
   const user = await usersTable.findOne({ id: req.user.id });
   if (!user) notFound("User");
-  res.json({
-    id: user.id,
-    employeeId: user.employeeId,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    subType: user.subType,
-    designation: user.designation,
-    avatarUrl: user.avatarUrl,
-    status: user.status,
-    lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
-    createdAt: user.createdAt.toISOString()
-  });
+  res.json(formatUser(user, { withPresence: true }));
 }
 async function patchAuthMe(req, res) {
-  const { name, designation, avatarUrl } = req.body;
+  const { name, designation, avatarUrl, email } = req.body;
   validateStoredFileUrl(avatarUrl, "avatarUrl");
+  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : void 0;
+  if (normalizedEmail) {
+    const existing = await usersTable.findOne({
+      email: normalizedEmail,
+      id: { $ne: req.user.id },
+    });
+    if (existing) {
+      badRequest("This email is already in use by another account.", "email");
+    }
+  }
   const updated = await usersTable.findOneAndUpdate(
     { id: req.user.id },
     {
       $set: {
         ...name && { name },
+        ...normalizedEmail && { email: normalizedEmail },
         ...designation !== void 0 && { designation },
         ...avatarUrl !== void 0 && { avatarUrl: avatarUrl || null }
       }
@@ -308,19 +335,7 @@ async function patchAuthMe(req, res) {
     { new: true }
   );
   if (!updated) notFound("User");
-  res.json({
-    id: updated.id,
-    employeeId: updated.employeeId,
-    name: updated.name,
-    email: updated.email,
-    role: updated.role,
-    subType: updated.subType,
-    designation: updated.designation,
-    avatarUrl: updated.avatarUrl,
-    status: updated.status,
-    lastLoginAt: updated.lastLoginAt?.toISOString() ?? null,
-    createdAt: updated.createdAt.toISOString()
-  });
+  res.json(formatUser(updated, { withPresence: true }));
 }
 export {
   getAuthMe,

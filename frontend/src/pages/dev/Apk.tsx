@@ -1,9 +1,17 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useListProjects, useGetApkReleases, useCreateApkRelease } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Smartphone, Download, Loader2, Info } from "lucide-react";
+import { Plus, Smartphone, Download, Loader2, Info, Briefcase, Package, Rocket } from "lucide-react";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevToolbar,
+  DevEmptyState,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -90,6 +98,23 @@ export default function DevApk() {
     }
   };
 
+  const apkStats = useMemo(() => {
+    const projects = projectsData?.projects ?? [];
+    const releases = releasesData ?? [];
+    const production = releases.filter((r) => r.releaseType === "production").length;
+    const latest = releases.length
+      ? [...releases].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0]
+      : null;
+    return {
+      projects: projects.length,
+      releases: selectedProjectId ? releases.length : 0,
+      production: selectedProjectId ? production : 0,
+      latestVersion: latest ? `v${latest.version}` : "—",
+    };
+  }, [projectsData?.projects, releasesData, selectedProjectId]);
+
   const getAudienceColor = (audience: string) => {
     switch (audience) {
       case "team_only": return "bg-slate-500/10 text-slate-500 border-slate-500/50";
@@ -99,28 +124,90 @@ export default function DevApk() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">APK Releases</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Upload and manage application builds</p>
+    <DevPageShell>
+      <DevPageHero
+        title="APK Releases"
+        subtitle="Upload and manage application builds"
+        badge={
+          selectedProjectId
+            ? projectsData?.projects.find((p) => p.id === selectedProjectId)?.name
+            : undefined
+        }
+        actions={
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    className={devActionButtonClass()}
+                    disabled={!selectedProjectId}
+                    onClick={() => setOpen(true)}
+                  >
+                    <Plus className="mr-1.5 h-3.5 w-3.5" /> Upload Release
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!selectedProjectId && (
+                <TooltipContent>
+                  <p>Select a project first to upload a release</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        }
+      />
+
+      <DevKpiGrid
+        loading={projectsLoading}
+        items={[
+          { title: "Projects", value: apkStats.projects, hint: "Assigned to you", icon: Briefcase, accent: "blue" },
+          {
+            title: "Releases",
+            value: apkStats.releases,
+            hint: selectedProjectId ? "Selected project" : "Select a project",
+            icon: Package,
+            accent: "violet",
+          },
+          {
+            title: "Production",
+            value: apkStats.production,
+            hint: "Live builds",
+            icon: Rocket,
+            accent: "green",
+          },
+          {
+            title: "Latest build",
+            value: apkStats.latestVersion,
+            hint: "Most recent upload",
+            icon: Smartphone,
+            accent: "amber",
+          },
+        ]}
+      />
+
+      <DevToolbar>
+        <div className="w-full sm:max-w-md space-y-1.5">
+          <label className="text-xs font-medium text-muted-foreground">
+            Select a project to view its releases
+          </label>
+          <Select
+            value={selectedProjectId?.toString()}
+            onValueChange={(v) => setSelectedProjectId(parseInt(v))}
+          >
+            <SelectTrigger className="h-9 text-xs bg-muted/30">
+              <SelectValue placeholder="Select a project" />
+            </SelectTrigger>
+            <SelectContent>
+              {projectsData?.projects.map((project) => (
+                <SelectItem key={project.id} value={project.id.toString()} className="text-xs">
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button className="bg-primary text-primary-foreground" disabled={!selectedProjectId} onClick={() => setOpen(true)}>
-                  <Plus className="mr-2 h-4 w-4" /> Upload Release
-                </Button>
-              </span>
-            </TooltipTrigger>
-            {!selectedProjectId && (
-              <TooltipContent>
-                <p>Select a project first to upload a release</p>
-              </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+      </DevToolbar>
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent className="sm:max-w-[600px] bg-card border-border">
             <DialogHeader>
@@ -286,47 +373,23 @@ export default function DevApk() {
             </Form>
           </DialogContent>
         </Dialog>
-      </div>
-
-      <div className="space-y-4">
-        <label className="text-xs font-medium">Select a project to view its releases</label>
-        <Select 
-          value={selectedProjectId?.toString()} 
-          onValueChange={(v) => setSelectedProjectId(parseInt(v))}
-        >
-          <SelectTrigger className="w-full max-w-md h-9 text-xs">
-            <SelectValue placeholder="Select a project" />
-          </SelectTrigger>
-          <SelectContent>
-            {projectsData?.projects.map((project) => (
-              <SelectItem key={project.id} value={project.id.toString()} className="text-xs">
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
 
       {!selectedProjectId ? (
-        <Card className="bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
-            <Smartphone className="h-16 w-16 mb-4 opacity-20" />
-            <h3 className="text-lg font-medium text-foreground mb-2">Select a project</h3>
-            <p className="text-xs max-w-md">Please select a project from the list above to view its APK releases or upload a new build.</p>
-          </CardContent>
-        </Card>
+        <DevEmptyState
+          icon={Smartphone}
+          title="Select a project"
+          description="Choose a project above to view its APK releases or upload a new build."
+        />
       ) : releasesLoading ? (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
         </div>
       ) : !releasesData || releasesData.length === 0 ? (
-        <Card className="bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center text-muted-foreground">
-            <Info className="h-16 w-16 mb-4 opacity-20" />
-            <h3 className="text-lg font-medium text-foreground mb-2">No releases found</h3>
-            <p className="text-xs max-w-md">There are no releases for this project yet. Use the "Upload Release" button to add one.</p>
-          </CardContent>
-        </Card>
+        <DevEmptyState
+          icon={Info}
+          title="No releases found"
+          description='There are no releases for this project yet. Use "Upload Release" to add one.'
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {releasesData.map((release) => (
@@ -371,6 +434,6 @@ export default function DevApk() {
           ))}
         </div>
       )}
-    </div>
+    </DevPageShell>
   );
 }

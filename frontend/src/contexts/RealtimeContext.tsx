@@ -11,7 +11,7 @@ import {
   subscribeForegroundMessages,
   isFirebaseConfigured,
 } from "../lib/firebase";
-import { startPersistentAlert, stopPersistentAlert } from "../lib/notification-alert";
+import { playNotificationAlert, stopPersistentAlert } from "../lib/notification-alert";
 import { apiUrl, getApiBaseUrl } from "../lib/api-base";
 import {
   NOTIFICATION_POLL_DISCONNECTED_MS,
@@ -53,7 +53,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     (title: string, body: string) => {
       toast.info(title, { description: body, duration: 8000 });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      startPersistentAlert();
+      playNotificationAlert();
 
       if (Notification.permission === "granted") {
         try {
@@ -66,7 +66,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     [queryClient],
   );
 
-  // Stop repeating alert when all notifications are read
+  // Cancel any pending beeps when all notifications are read
   useEffect(() => {
     if (unreadNotificationCount === 0) {
       stopPersistentAlert();
@@ -154,21 +154,37 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       handleIncomingAlertRef.current(data.title || "New notification", data.body || "");
     });
 
-    socketInstance.on("comment", (data: { comment?: { authorId?: number } }) => {
-      queryClientRef.current.invalidateQueries({ queryKey: ["/api/comments"] });
+    socketInstance.on("comment", (data: { comment?: { authorId?: number; threadId?: number } }) => {
+      const threadId = data.comment?.threadId;
+      queryClientRef.current.invalidateQueries({
+        predicate: (q) => {
+          const key = q.queryKey[0];
+          if (key !== "/api/comments") return false;
+          if (threadId == null) return true;
+          return JSON.stringify(q.queryKey).includes(String(threadId));
+        },
+      });
       const authorId = data.comment?.authorId;
       if (authorId && authorId !== userIdRef.current) {
-        queryClientRef.current.invalidateQueries({ queryKey: ["/api/notifications"] });
-        startPersistentAlert();
+        queryClientRef.current.invalidateQueries({
+          predicate: (q) => q.queryKey[0] === "/api/notifications",
+        });
+        playNotificationAlert();
       }
     });
 
     socketInstance.on("ticket_update", () => {
-      queryClientRef.current.invalidateQueries({ queryKey: ["/api/tickets"] });
+      queryClientRef.current.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "/api/tickets",
+        refetchType: "active",
+      });
     });
 
     socketInstance.on("request_update", () => {
-      queryClientRef.current.invalidateQueries({ queryKey: ["/api/requests"] });
+      queryClientRef.current.invalidateQueries({
+        predicate: (q) => q.queryKey[0] === "/api/requests",
+        refetchType: "active",
+      });
     });
 
     setSocket(socketInstance);

@@ -1,36 +1,88 @@
 import { Server } from "socket.io";
 import { logger } from "./logger.js";
+import { verifyAccessToken } from "./jwt.js";
+import {
+  initPresenceBroadcast,
+  registerSocket,
+  unregisterSocket,
+  touchPresence,
+} from "../services/presence.js";
+
 let io;
+
 function initRealtime(server) {
   io = new Server(server, {
     path: "/socket.io",
     cors: {
       origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : true,
-      credentials: true
+      credentials: true,
     },
     pingInterval: 25e3,
-    pingTimeout: 6e4
+    pingTimeout: 6e4,
   });
+
+  initPresenceBroadcast((snapshot) => {
+    io.emit("presence:update", snapshot);
+  });
+
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    const queryUserId = socket.handshake.query?.userId;
+    if (!token || !queryUserId) {
+      next(new Error("unauthorized"));
+      return;
+    }
+    try {
+      const payload = verifyAccessToken(token);
+      if (String(payload.userId) !== String(queryUserId)) {
+        next(new Error("unauthorized"));
+        return;
+      }
+      socket.data.userId = payload.userId;
+      next();
+    } catch {
+      next(new Error("unauthorized"));
+    }
+  });
+
   io.on("connection", (socket) => {
-    const userId = socket.handshake.query.userId;
+    const userId = socket.data.userId;
     if (userId) {
       socket.join(`user:${userId}`);
+      void registerSocket(userId, socket.id);
       logger.info({ userId, socketId: socket.id }, "User connected to realtime");
     }
+
+    socket.on("presence:heartbeat", (payload) => {
+      if (!socket.data.userId) return;
+      const tabVisible =
+        payload && typeof payload === "object" && "tabVisible" in payload
+          ? Boolean(payload.tabVisible)
+          : true;
+      touchPresence(socket.data.userId, { tabVisible });
+    });
+
     socket.on("disconnect", () => {
+      if (socket.data.userId) {
+        void unregisterSocket(socket.data.userId, socket.id);
+      }
       logger.info({ socketId: socket.id }, "User disconnected from realtime");
     });
   });
+
   return io;
 }
+
 function getIO() {
   if (!io) {
     throw new Error("Realtime not initialized");
   }
   return io;
 }
+
 import { getFirebaseAdmin } from "./firebase.js";
 import { usersTable } from "../models/schema/index.js";
+
 async function notifyUser(userId, event, data) {
   if (io) {
     io.to(`user:${userId}`).emit(event, data);
@@ -45,13 +97,12 @@ async function notifyUser(userId, event, data) {
             tokens: user.fcmTokens,
             notification: {
               title: data.title,
-              body: data.body
+              body: data.body,
             },
             data: {
               click_action: "FLUTTER_NOTIFICATION_CLICK",
-              // for flexibility
-              ...data
-            }
+              ...data,
+            },
           });
         }
       }
@@ -60,14 +111,16 @@ async function notifyUser(userId, event, data) {
     }
   }
 }
+
 function broadcast(event, data) {
   if (io) {
     io.emit(event, data);
   }
 }
+
 export {
   broadcast,
   getIO,
   initRealtime,
-  notifyUser
+  notifyUser,
 };

@@ -46,6 +46,12 @@ import {
 } from "@/components/dashboard/admin-dashboard-charts";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { analyticsQueryOptions } from "@/lib/list-query-options";
+import {
+  getGetCompanyAnalyticsQueryKey,
+  getGetDashboardStatsQueryKey,
+} from "@/api";
 
 type DashboardPayload = DashboardStats & {
   openTickets?: number;
@@ -74,8 +80,12 @@ function formatTrendMonth(monthKey: string) {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const { data: stats, isLoading, isError } = useGetDashboardStats();
-  const { data: companyAnalytics } = useGetCompanyAnalytics();
+  const { data: stats, isLoading, isError } = useGetDashboardStats({
+    query: analyticsQueryOptions({ queryKey: getGetDashboardStatsQueryKey() }),
+  });
+  const { data: companyAnalytics } = useGetCompanyAnalytics({
+    query: analyticsQueryOptions({ queryKey: getGetCompanyAnalyticsQueryKey() }),
+  });
   const { data: health } = useHealthCheck();
 
   if (isLoading) return <DashboardSkeleton />;
@@ -132,12 +142,13 @@ export default function AdminDashboard() {
   const companies = companyAnalytics?.companies?.slice(0, 8) ?? [];
 
   return (
-    <motion.div
-      className="space-y-4 pb-8"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.25 }}
-    >
+    <PortalPageShell>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.25 }}
+        className="space-y-4"
+      >
       <DashboardHero
         title={`${getGreeting()}, ${user?.name?.split(" ")[0] ?? "Admin"}`}
         subtitle={
@@ -213,9 +224,15 @@ export default function AdminDashboard() {
 
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         <ExecutiveStatCard
-          title="Team Online"
-          value={stats.teamMembersOnline}
-          hint="Active today"
+          title="Active Team"
+          value={stats.teamMembersActive ?? stats.teamMembersOnline ?? 0}
+          hint={
+            stats.teamMembersOnlineNow != null && stats.teamMembersOnlineNow > 0
+              ? `${stats.teamMembersOnlineNow} active now · ${stats.teamMembersOnlineToday ?? 0} logged in today`
+              : stats.teamMembersOnlineToday != null
+                ? `${stats.teamMembersOnlineToday} logged in today`
+                : "Developers & QA"
+          }
           icon={Users}
           href="/admin/employees"
           accent="green"
@@ -374,8 +391,13 @@ export default function AdminDashboard() {
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] leading-snug">
                           <span className="font-semibold text-foreground">{activity.actorName}</span>
-                          <span className="text-muted-foreground"> {activity.action} </span>
-                          <span className="font-medium text-foreground">{activity.entityName}</span>
+                          <span className="text-muted-foreground"> {activity.action}</span>
+                          {activity.entityName ? (
+                            <>
+                              {" "}
+                              <span className="font-medium text-foreground">{activity.entityName}</span>
+                            </>
+                          ) : null}
                         </p>
                         <p className="text-[10px] text-muted-foreground mt-0.5">
                           {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
@@ -496,8 +518,8 @@ export default function AdminDashboard() {
           />
           <OverviewTile
             label="Team"
-            value={stats.teamMembersOnline}
-            sublabel="Online"
+            value={stats.teamMembersActive ?? stats.teamMembersOnline ?? 0}
+            sublabel="Active"
             icon={Users}
             href="/admin/employees"
           />
@@ -524,6 +546,7 @@ export default function AdminDashboard() {
           />
         </div>
       </section>
-    </motion.div>
+      </motion.div>
+    </PortalPageShell>
   );
 }

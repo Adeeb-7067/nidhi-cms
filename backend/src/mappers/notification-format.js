@@ -6,6 +6,7 @@ const NOTIFICATION_LIST_PROJECTION = {
   body: 1,
   entityType: 1,
   entityId: 1,
+  projectId: 1,
   isRead: 1,
   readAt: 1,
   createdAt: 1
@@ -25,6 +26,7 @@ function formatNotificationRow(n) {
     body: n.body,
     entityType: n.entityType ?? null,
     entityId: n.entityId ?? null,
+    projectId: n.projectId ?? null,
     isRead: Boolean(n.isRead),
     readAt: n.readAt?.toISOString() ?? null,
     createdAt: (n.createdAt ?? /* @__PURE__ */ new Date()).toISOString()

@@ -7,7 +7,10 @@ const commentSchema = new Schema({
   projectId: { type: Number, ref: "Projects", index: true },
   threadType: { type: String, enum: threadTypes, required: true, index: true },
   threadId: { type: Number, required: true, index: true },
-  content: { type: String, required: true },
+  content: { type: String, default: "" },
+  attachmentUrl: { type: String },
+  attachmentName: { type: String },
+  attachmentMimeType: { type: String },
   parentId: { type: Number, ref: "Comments" },
   isEdited: { type: Boolean, default: false, required: true }
 }, { timestamps: true });

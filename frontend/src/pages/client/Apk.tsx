@@ -4,7 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Smartphone, Download, Calendar, ArrowDownCircle } from "lucide-react";
+import { Smartphone, Download, Calendar } from "lucide-react";
+import {
+  PortalPageShell,
+  PortalPageHero,
+  PortalEmptyState,
+} from "@/components/layout/portal-page-kit";
 
 export default function ClientApk() {
   const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 1 });
@@ -19,12 +24,12 @@ export default function ClientApk() {
 
   if (isProjectsLoading || isApksLoading) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Downloads</h1>
+      <PortalPageShell>
+        <PortalPageHero title="Releases & Downloads" subtitle="Access your app builds" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
         </div>
-      </div>
+      </PortalPageShell>
     );
   }
 
@@ -32,26 +37,22 @@ export default function ClientApk() {
   const clientApks = apks?.filter(apk => apk.audience === "client_visible") || [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Releases & Downloads</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Access your app builds</p>
-        </div>
-      </div>
+    <PortalPageShell>
+      <PortalPageHero
+        title="Releases & Downloads"
+        subtitle="Access your app builds"
+      />
 
       {clientApks.length === 0 ? (
-        <Card className="bg-card">
-          <CardContent className="flex flex-col items-center justify-center py-24 text-center p-4">
-            <Smartphone className="h-16 w-16 mb-4 text-muted-foreground/30" />
-            <h3 className="text-lg font-medium mb-2">No releases yet</h3>
-            <p className="text-xs text-muted-foreground">
-              {projectId 
-                ? "App builds will appear here once they are ready for your review."
-                : "No project found for your account. Please contact support."}
-            </p>
-          </CardContent>
-        </Card>
+        <PortalEmptyState
+          icon={Smartphone}
+          title="No releases yet"
+          description={
+            projectId
+              ? "App builds will appear here once they are ready for your review."
+              : "No project found for your account. Please contact support."
+          }
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {clientApks.map((apk, i) => (
@@ -102,6 +103,6 @@ export default function ClientApk() {
           ))}
         </div>
       )}
-    </div>
+    </PortalPageShell>
   );
 }

@@ -1,5 +1,7 @@
 import { clientsTable, usersTable, getNextSequence } from "../models/schema/index.js";
-import { formatCompanyRecord } from "../mappers/company-format.js";
+import { formatCompanyRecord, formatCompanyRecordsBatch } from "../mappers/company-format.js";
+import { attachPresenceToUser } from "../services/presence.js";
+import { toIso } from "../utils/mongo-list.js";
 import {
   createClientPortalUser,
   updateClientPortalPassword
@@ -17,8 +19,49 @@ function resolveGstNumber(body) {
   const trimmed = typeof value === "string" ? value.trim() : "";
   return trimmed || void 0;
 }
+function enrichClientPortalPresence(clientRecord, portalUser) {
+  if (!clientRecord.userId || !portalUser) {
+    return {
+      ...clientRecord,
+      portalLastLoginAt: null,
+      portalLastSeenAt: null,
+      portalPresenceStatus: "offline",
+      portalIsActiveNow: false
+    };
+  }
+  const withPresence = attachPresenceToUser({
+    id: portalUser.id,
+    lastLoginAt: toIso(portalUser.lastLoginAt),
+    lastSeenAt: toIso(portalUser.lastSeenAt)
+  });
+  return {
+    ...clientRecord,
+    portalLastLoginAt: withPresence.lastLoginAt ?? null,
+    portalLastSeenAt: withPresence.lastSeenAt ?? null,
+    portalPresenceStatus: withPresence.presenceStatus,
+    portalIsActiveNow: withPresence.isActiveNow
+  };
+}
+async function enrichClientsBatch(clients) {
+  const userIds = [...new Set(clients.map((c) => c.userId).filter((id) => id != null && id > 0))];
+  if (!userIds.length) {
+    return clients.map((c) => enrichClientPortalPresence(c, null));
+  }
+  const users = await usersTable
+    .find({ id: { $in: userIds } })
+    .select({ id: 1, lastLoginAt: 1, lastSeenAt: 1 })
+    .lean();
+  const userById = new Map(users.map((u) => [u.id, u]));
+  return clients.map((c) => enrichClientPortalPresence(c, userById.get(c.userId) ?? null));
+}
 async function formatClient(client) {
-  return formatCompanyRecord(client);
+  const base = await formatCompanyRecord(client);
+  if (!base.userId) return enrichClientPortalPresence(base, null);
+  const portalUser = await usersTable
+    .findOne({ id: base.userId })
+    .select({ id: 1, lastLoginAt: 1, lastSeenAt: 1 })
+    .lean();
+  return enrichClientPortalPresence(base, portalUser);
 }
 async function getClients(req, res) {
   const { status, search } = req.query;
@@ -32,10 +75,9 @@ async function getClients(req, res) {
     { page, limit, skip },
     { sort: { clientSince: -1 } }
   );
-  const formatted = await Promise.all(
-    items.map((c) => formatClient(c))
-  );
-  res.json({ clients: formatted, total, page: pageNum, limit: limitNum });
+  const formatted = await formatCompanyRecordsBatch(items);
+  const clients = await enrichClientsBatch(formatted);
+  res.json({ clients, total, page: pageNum, limit: limitNum });
 }
 async function postClients(req, res) {
   const body = req.body;

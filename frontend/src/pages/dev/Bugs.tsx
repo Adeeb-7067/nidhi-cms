@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import {
   useListBugs,
   useListProjects,
@@ -7,13 +8,22 @@ import {
   type Bug,
   type ListBugsParams,
 } from "@/api";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Bug as BugIcon, FileText, Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
-import { StatCard, PageKpiRow, PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import {
+  DevPageShell,
+  DevPageHero,
+  DevKpiGrid,
+  DevToolbar,
+  DevTabsList,
+  DevTabsTrigger,
+  DevContentCard,
+  devActionButtonClass,
+} from "@/components/dev/dev-page-kit";
 import { PDFService } from "@/lib/pdf-service";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +32,7 @@ import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
 import { BugTable } from "@/components/bugs/bug-table";
 import { BUG_STATUSES, bugStatsFromList, canUserModifyBug } from "@/lib/bug-workflow";
 import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
+import { clearUrlSearchParam, readBugIdFromUrl } from "@/lib/notification-navigation";
 
 type BugListScope = "all" | "mine" | "unassigned" | "created";
 
@@ -59,7 +70,9 @@ export default function DevBugs() {
   const [scope, setScope] = useState<BugListScope>(() => defaultBugListScope(role));
   const [projectFilterId, setProjectFilterId] = useState("all");
   const scopeUserId = useRef<number | undefined>(user?.id);
-  const { page, setPage, resetPage, limit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
+  const [location] = useLocation();
+  const bugIdFromUrl = readBugIdFromUrl();
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination(DEFAULT_TABLE_PAGE_SIZE);
 
   useEffect(() => {
     if (!user?.id || scopeUserId.current === user.id) return;
@@ -73,7 +86,12 @@ export default function DevBugs() {
     if (pid && !Number.isNaN(Number.parseInt(pid, 10))) {
       if (isAdmin) setProjectFilterId(pid);
     }
-  }, [isAdmin]);
+    if (bugIdFromUrl != null) {
+      setDetailBugId(bugIdFromUrl);
+      setDetailIssueKey(null);
+      clearUrlSearchParam("bug");
+    }
+  }, [location, bugIdFromUrl, isAdmin]);
 
   useEffect(() => {
     resetPage();
@@ -82,7 +100,7 @@ export default function DevBugs() {
   const listBugsParams = useMemo((): ListBugsParams => {
     const params: ListBugsParams = {
       page,
-      limit,
+      limit: apiLimit,
       scope,
     };
     if (isAdmin && projectFilterId !== "all") {
@@ -93,7 +111,7 @@ export default function DevBugs() {
     const q = search.trim();
     if (q) params.search = q;
     return params;
-  }, [scope, projectFilterId, isAdmin, page, limit, statusFilter, priorityFilter, search]);
+  }, [scope, projectFilterId, isAdmin, page, apiLimit, statusFilter, priorityFilter, search]);
 
   const { data, isLoading } = useListBugs(listBugsParams, {
     query: {
@@ -135,15 +153,12 @@ export default function DevBugs() {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Bug Tracker</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            QA · Dev · Final status per bug
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <DevPageShell>
+      <DevPageHero
+        title="Bug Tracker"
+        subtitle="QA · Dev · Final status per bug"
+        actions={
+          <div className="flex items-center gap-2">
           <Button
             variant="outline"
             onClick={handleExportPDF}
@@ -163,70 +178,33 @@ export default function DevBugs() {
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Report bugs
             </Button>
           )}
-        </div>
-      </div>
+          </div>
+        }
+      />
 
-      {isLoading && !data ? (
-        <PageKpiSkeleton />
-      ) : (
-        <PageKpiRow>
-          <StatCard
-            title="Total"
-            value={data?.total ?? bugStats.total}
-            hint="Current view"
-            icon={BugIcon}
-            accent="violet"
-            delay={0}
-          />
-          <StatCard
-            title="Active"
-            value={bugStats.open}
-            hint="Not closed / fixed"
-            icon={AlertTriangle}
-            accent="red"
-            alert={bugStats.open > 0}
-            delay={1}
-          />
-          <StatCard
-            title="In flight"
-            value={bugStats.inProgress}
-            hint="Assigned or in progress"
-            icon={Activity}
-            accent="blue"
-            delay={2}
-          />
-          <StatCard
-            title="QA queue"
-            value={bugStats.awaitingQa}
-            hint="Fixed or pending QA"
-            icon={CheckCircle2}
-            accent="violet"
-            delay={3}
-          />
-        </PageKpiRow>
-      )}
+      <DevKpiGrid
+        loading={isLoading && !data}
+        items={[
+          { title: "Total", value: data?.total ?? bugStats.total, hint: "Current view", icon: BugIcon, accent: "violet" },
+          { title: "Active", value: bugStats.open, hint: "Not closed / fixed", icon: AlertTriangle, accent: "red", alert: bugStats.open > 0 },
+          { title: "In flight", value: bugStats.inProgress, hint: "Assigned or in progress", icon: Activity, accent: "blue" },
+          { title: "QA queue", value: bugStats.awaitingQa, hint: "Fixed or pending QA", icon: CheckCircle2, accent: "violet" },
+        ]}
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <DevToolbar className="flex-wrap">
         {(isAdmin || isTesterUser || isQaUser) && (
           <Tabs value={scope} onValueChange={(v) => setScope(v as BugListScope)}>
-            <TabsList className="bg-muted/50 p-1 h-8">
+            <DevTabsList>
               {isQaUser && (
-                <TabsTrigger value="created" className="rounded-md text-xs h-7 px-3">
-                  My reports
-                </TabsTrigger>
+                <DevTabsTrigger value="created">My reports</DevTabsTrigger>
               )}
-              <TabsTrigger value="all" className="rounded-md text-xs h-7 px-3">
-                All bugs
-              </TabsTrigger>
-              <TabsTrigger value="mine" className="rounded-md text-xs h-7 px-3">
-                My queue
-              </TabsTrigger>
+              <DevTabsTrigger value="all">All bugs</DevTabsTrigger>
+              <DevTabsTrigger value="mine">My queue</DevTabsTrigger>
               {(isAdmin || isTesterUser) && (
-                <TabsTrigger value="unassigned" className="rounded-md text-xs h-7 px-3">
-                  Unassigned
-                </TabsTrigger>
+                <DevTabsTrigger value="unassigned">Unassigned</DevTabsTrigger>
               )}
-            </TabsList>
+            </DevTabsList>
           </Tabs>
         )}
         {isAdmin && (
@@ -245,21 +223,18 @@ export default function DevBugs() {
           </Select>
         )}
         <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto overflow-x-auto">
-          <TabsList className="bg-muted/50 p-1 h-8 flex-nowrap">
-            <TabsTrigger value="all" className="rounded-md text-xs h-7 px-2.5">
-              All
-            </TabsTrigger>
+          <DevTabsList className="flex-nowrap">
+            <DevTabsTrigger value="all">All</DevTabsTrigger>
             {BUG_STATUSES.map((s) => (
-              <TabsTrigger key={s} value={s} className="rounded-md text-xs h-7 px-2.5 whitespace-nowrap">
+              <DevTabsTrigger key={s} value={s} className="whitespace-nowrap">
                 {s.replace(/_/g, " ")}
-              </TabsTrigger>
+              </DevTabsTrigger>
             ))}
-          </TabsList>
+          </DevTabsList>
         </Tabs>
-      </div>
+      </DevToolbar>
 
-      <Card className="border-border/60 bg-card/70 backdrop-blur-md shadow-lg shadow-black/5">
-        <CardContent className="p-4">
+      <DevContentCard className="shadow-lg shadow-black/5">
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(6)].map((_, i) => (
@@ -278,16 +253,16 @@ export default function DevBugs() {
               pagination={{
                 page: data?.page ?? page,
                 total: data?.total ?? 0,
-                limit: data?.limit ?? limit,
+                limit,
                 onPageChange: setPage,
+                onLimitChange: setLimit,
               }}
               onRowClick={openDetail}
               onEdit={openEdit}
               canEdit={canEditBug}
             />
           )}
-        </CardContent>
-      </Card>
+        </DevContentCard>
 
       <BugFormDialog
         open={formOpen}
@@ -334,6 +309,6 @@ export default function DevBugs() {
           setDetailIssueKey(null);
         }}
       />
-    </div>
+    </DevPageShell>
   );
 }
