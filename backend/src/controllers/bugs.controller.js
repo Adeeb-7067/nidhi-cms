@@ -18,9 +18,7 @@ import {
   normalizeIssueInput,
   normalizeTrackStatus,
   rollupFromIssues,
-  canSetDevStatus,
-  canSetFinalStatus,
-  canSetQaStatus,
+  applyTrackStatusUpdates,
   defaultTrackFields,
   resolveListStatusFilter,
   normalizeBugStatus,
@@ -120,10 +118,8 @@ async function buildBugListQuery(userId, role, params) {
   if (role === "tester" || role === "qa") {
     const memberships = await projectMembersTable.find({ userId }, { projectId: 1 });
     const projectIds = memberships.map((m) => m.projectId);
-    const defaultToOwnReports =
-      role === "qa" && scope !== "all" && scope !== "mine" && scope !== "unassigned";
 
-    if (scope === "created" || defaultToOwnReports) {
+    if (scope === "created") {
       query.reporterId = userId;
       return withListableBugsOnly(query);
     }
@@ -476,7 +472,10 @@ async function patchBugsById(req, res) {
     devStatus,
     finalStatus,
     issueKey,
+    addIssues,
   } = req.body;
+
+  const MAX_BUG_ISSUES = 50;
 
   const isAssignee =
     existing.assigneeId === req.user.id ||
@@ -489,34 +488,67 @@ async function patchBugsById(req, res) {
     const idx = issues.findIndex((i) => i.key === issueKey);
     if (idx < 0) notFound("Issue");
 
-    if (qaStatus !== undefined) {
-      if (!canSetQaStatus(role)) forbidden();
-      issues[idx].qaStatus = normalizeTrackStatus(qaStatus);
-    }
-    if (devStatus !== undefined) {
-      if (!canSetDevStatus(role, isAssignee)) forbidden();
-      issues[idx].devStatus = normalizeTrackStatus(devStatus);
-    }
-    if (finalStatus !== undefined) {
-      if (!canSetFinalStatus(role)) forbidden();
-      issues[idx].finalStatus = normalizeFinalStatus(finalStatus);
+    applyTrackStatusUpdates({
+      role,
+      isAssignee,
+      target: issues[idx],
+      qaStatus,
+      devStatus,
+      finalStatus,
+      denyUnauthorizedChange: forbidden,
+    });
+    if (title !== undefined) {
+      if (!isQaOrAdmin) forbidden();
+      issues[idx].title = String(title).trim();
     }
 
     updateObj.issues = issues;
     const rollup = rollupFromIssues(issues);
     Object.assign(updateObj, buildTrackPayload({ ...existing, ...rollup }, existing.assigneeIds));
   } else {
-    if (qaStatus !== undefined) {
-      if (!canSetQaStatus(role)) forbidden();
-      updateObj.qaStatus = normalizeTrackStatus(qaStatus);
-    }
-    if (devStatus !== undefined) {
-      if (!canSetDevStatus(role, isAssignee)) forbidden();
-      updateObj.devStatus = normalizeTrackStatus(devStatus);
-    }
-    if (finalStatus !== undefined) {
-      if (!canSetFinalStatus(role)) forbidden();
-      updateObj.finalStatus = normalizeFinalStatus(finalStatus);
+    const hasEmbeddedIssues = Array.isArray(existing.issues) && existing.issues.length > 0;
+    const hasTrackUpdate =
+      qaStatus !== undefined || devStatus !== undefined || finalStatus !== undefined;
+
+    if (hasEmbeddedIssues && hasTrackUpdate) {
+      const issues = existing.issues.map((i) => ({ ...i.toObject?.() ?? i }));
+      for (let idx = 0; idx < issues.length; idx++) {
+        applyTrackStatusUpdates({
+          role,
+          isAssignee,
+          target: issues[idx],
+          qaStatus,
+          devStatus,
+          finalStatus,
+          denyUnauthorizedChange: forbidden,
+        });
+      }
+      updateObj.issues = issues;
+      const rollup = rollupFromIssues(issues);
+      Object.assign(updateObj, buildTrackPayload({ ...existing, ...rollup }, existing.assigneeIds));
+    } else if (hasTrackUpdate) {
+      const trackTarget = {
+        qaStatus: existing.qaStatus,
+        devStatus: existing.devStatus,
+        finalStatus: existing.finalStatus,
+      };
+      applyTrackStatusUpdates({
+        role,
+        isAssignee,
+        target: trackTarget,
+        qaStatus,
+        devStatus,
+        finalStatus,
+        denyUnauthorizedChange: forbidden,
+      });
+      Object.assign(updateObj, trackTarget);
+
+      const merged = {
+        ...existing.toObject?.() ?? existing,
+        ...updateObj,
+      };
+      const track = buildTrackPayload(merged, merged.assigneeIds ?? existing.assigneeIds);
+      Object.assign(updateObj, track);
     }
 
     if (!isQaOrAdmin) {
@@ -548,27 +580,51 @@ async function patchBugsById(req, res) {
         updateObj.assigneeId = resolved[0] ?? null;
       }
     }
+  }
 
-    if (attachments !== undefined || attachmentUrl !== undefined) {
-      const extra = normalizeAttachmentsInput(attachments, attachmentUrl, req.user.id);
-      if (extra.length > 0) {
-        updateObj.attachments = [...(existing.attachments ?? []), ...extra];
-        updateObj.attachmentUrl = updateObj.attachments[0]?.url ?? existing.attachmentUrl;
-      }
-    }
+  if (issueKey && isQaOrAdmin) {
+    if (description !== undefined) updateObj.description = description;
+    if (priority !== undefined) updateObj.priority = priority;
+    if (severity !== undefined) updateObj.severity = severity;
+    if (platform !== undefined) updateObj.platform = platform;
 
-    if (
-      updateObj.qaStatus !== undefined ||
-      updateObj.devStatus !== undefined ||
-      updateObj.finalStatus !== undefined
-    ) {
-      const merged = {
-        ...existing.toObject?.() ?? existing,
-        ...updateObj,
-      };
-      const track = buildTrackPayload(merged, merged.assigneeIds ?? existing.assigneeIds);
-      Object.assign(updateObj, track);
+    if (assigneeIds !== undefined || assigneeId !== undefined) {
+      const raw = Array.isArray(assigneeIds)
+        ? assigneeIds
+        : assigneeId != null
+          ? [assigneeId]
+          : [];
+      const resolved = await resolveBugAssignees(raw, existing.projectId);
+      updateObj.assigneeIds = resolved;
+      updateObj.assigneeId = resolved[0] ?? null;
     }
+  }
+
+  if (attachments !== undefined || attachmentUrl !== undefined) {
+    const extra = normalizeAttachmentsInput(attachments, attachmentUrl, req.user.id);
+    if (extra.length > 0) {
+      updateObj.attachments = [...(existing.attachments ?? []), ...extra];
+      updateObj.attachmentUrl = updateObj.attachments[0]?.url ?? existing.attachmentUrl;
+    }
+  }
+
+  if (addIssues !== undefined) {
+    if (!isQaOrAdmin) forbidden();
+    if (!Array.isArray(addIssues) || addIssues.length === 0) {
+      badRequest("addIssues must be a non-empty array.", "addIssues");
+    }
+    const existingIssues = (existing.issues ?? []).map((i) => ({ ...(i.toObject?.() ?? i) }));
+    const appended = addIssues.map(normalizeIssueInput).filter((i) => i.title);
+    if (appended.length === 0) {
+      badRequest("Each issue needs a title.", "addIssues");
+    }
+    if (existingIssues.length + appended.length > MAX_BUG_ISSUES) {
+      badRequest(`Maximum ${MAX_BUG_ISSUES} issues per report.`, "addIssues");
+    }
+    const mergedIssues = [...existingIssues, ...appended];
+    updateObj.issues = mergedIssues;
+    const rollup = rollupFromIssues(mergedIssues);
+    Object.assign(updateObj, buildTrackPayload({ ...existing, ...rollup }, existing.assigneeIds));
   }
 
   if (Object.keys(updateObj).length === 0) badRequest("No valid fields to update.");

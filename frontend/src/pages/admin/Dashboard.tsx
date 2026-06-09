@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState } from "react";
 import {
   useGetDashboardStats,
   useGetCompanyAnalytics,
@@ -25,12 +26,18 @@ import {
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
-  DashboardHero,
-  ExecutiveStatCard,
+  DashboardPageHeader,
+  DashboardFilterBar,
+  DashboardSectionLabel,
+  DashboardPipelineFlow,
+} from "@/components/dashboard/dashboard-page-kit";
+import {
   OverviewTile,
   DashboardSkeleton,
 } from "@/components/dashboard/dashboard-kit";
+import { toast } from "sonner";
 import {
   ChartPanel,
   ChartGridCell,
@@ -46,7 +53,6 @@ import {
 } from "@/components/dashboard/admin-dashboard-charts";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { analyticsQueryOptions } from "@/lib/list-query-options";
 import {
   getGetCompanyAnalyticsQueryKey,
@@ -80,6 +86,7 @@ function formatTrendMonth(monthKey: string) {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const [period, setPeriod] = useState("6m");
   const { data: stats, isLoading, isError } = useGetDashboardStats({
     query: analyticsQueryOptions({ queryKey: getGetDashboardStatsQueryKey() }),
   });
@@ -141,6 +148,15 @@ export default function AdminDashboard() {
 
   const companies = companyAnalytics?.companies?.slice(0, 8) ?? [];
 
+  const pipelineStages = [
+    { label: "Scoping", value: stats.projectPipeline.scoping, color: "bg-purple-500/15 text-purple-700 border-purple-500/30 dark:text-purple-300" },
+    { label: "In Progress", value: stats.projectPipeline.inProgress, color: "bg-blue-500/15 text-blue-700 border-blue-500/30 dark:text-blue-300" },
+    { label: "UAT", value: stats.projectPipeline.uat, color: "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300" },
+    { label: "On Hold", value: stats.projectPipeline.onHold, color: "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300" },
+    { label: "Done", value: stats.projectPipeline.completed, color: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300" },
+    { label: "Maintenance", value: stats.projectPipeline.maintenance, color: "bg-cyan-500/15 text-cyan-700 border-cyan-500/30 dark:text-cyan-300" },
+  ];
+
   return (
     <PortalPageShell>
       <motion.div
@@ -149,23 +165,23 @@ export default function AdminDashboard() {
         transition={{ duration: 0.25 }}
         className="space-y-4"
       >
-      <DashboardHero
+      <DashboardPageHeader
         title={`${getGreeting()}, ${user?.name?.split(" ")[0] ?? "Admin"}`}
-        subtitle={
+        description={
           attentionCount > 0
             ? `${attentionCount} item${attentionCount === 1 ? "" : "s"} need attention · ${today}`
-            : `Agency overview · ${today}`
+            : `Agency command center · ${today}`
         }
-        badge="Super Admin Dashboard"
+        breadcrumbs={[{ label: "Manage", href: "/admin" }, { label: "Dashboard" }]}
         actions={
           <>
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" className="h-8" asChild>
               <Link href="/admin/projects">
                 <Briefcase className="h-4 w-4 mr-2" />
                 Projects
               </Link>
             </Button>
-            <Button size="sm" asChild>
+            <Button size="sm" className="h-8" asChild>
               <Link href="/admin/analytics">
                 <BarChart3 className="h-4 w-4 mr-2" />
                 Analytics
@@ -175,97 +191,39 @@ export default function AdminDashboard() {
         }
       />
 
-      {/* KPI cards — unchanged */}
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-        <ExecutiveStatCard
-          title="Active Projects"
-          value={stats.activeProjects}
-          hint="In delivery"
-          icon={Briefcase}
-          href="/admin/projects"
-          accent="blue"
-          delay={0}
-          trend={
-            stats.overdueProjects > 0
-              ? { label: `${stats.overdueProjects} overdue`, positive: false }
-              : { label: "On track", positive: true }
-          }
-        />
-        <ExecutiveStatCard
-          title="Companies"
-          value={stats.totalClients}
-          hint="Active partners"
-          icon={Building2}
-          href="/admin/clients"
-          accent="violet"
-          delay={1}
-        />
-        <ExecutiveStatCard
-          title="Open Bugs"
-          value={stats.openBugs}
-          hint="Unresolved"
-          icon={Activity}
-          href="/dev/bugs"
-          accent="amber"
-          alert={stats.openBugs > 0}
-          delay={2}
-        />
-        <ExecutiveStatCard
-          title="Pending Requests"
-          value={stats.openRequests}
-          hint="Resource queue"
-          icon={Inbox}
-          href="/admin/requests"
-          accent="sky"
-          alert={stats.openRequests > 0}
-          delay={3}
+      <DashboardFilterBar
+        period={period}
+        onPeriodChange={setPeriod}
+        onExport={() => toast.success("Dashboard summary export started")}
+      />
+
+      <DashboardPipelineFlow title="Project pipeline" stages={pipelineStages} />
+
+      <div className="space-y-2">
+        <DashboardSectionLabel title="Operations KPIs" />
+        <PortalKpiGrid
+          columns={4}
+          count={4}
+          items={[
+            { title: "Active projects", value: stats.activeProjects, hint: stats.overdueProjects > 0 ? `${stats.overdueProjects} overdue` : "On track · in delivery", icon: Briefcase, href: "/admin/projects", accent: "blue", delay: 0, alert: stats.overdueProjects > 0 },
+            { title: "Companies", value: stats.totalClients, hint: "Active partners", icon: Building2, href: "/admin/clients", accent: "violet", delay: 1 },
+            { title: "Open bugs", value: stats.openBugs, hint: "Unresolved", icon: Activity, href: "/dev/bugs", accent: "amber", alert: stats.openBugs > 0, delay: 2 },
+            { title: "Pending requests", value: stats.openRequests, hint: "Resource queue", icon: Inbox, href: "/admin/requests", accent: "sky", alert: stats.openRequests > 0, delay: 3 },
+          ]}
         />
       </div>
 
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <ExecutiveStatCard
-          title="Active Team"
-          value={stats.teamMembersActive ?? stats.teamMembersOnline ?? 0}
-          hint={
-            stats.teamMembersOnlineNow != null && stats.teamMembersOnlineNow > 0
-              ? `${stats.teamMembersOnlineNow} active now · ${stats.teamMembersOnlineToday ?? 0} logged in today`
-              : stats.teamMembersOnlineToday != null
-                ? `${stats.teamMembersOnlineToday} logged in today`
-                : "Developers & QA"
-          }
-          icon={Users}
-          href="/admin/employees"
-          accent="green"
-          delay={4}
-        />
-        <ExecutiveStatCard
-          title="Open Tickets"
-          value={openTickets}
-          hint="Support"
-          icon={Ticket}
-          href="/admin/tickets"
-          accent="pink"
-          alert={openTickets > 0}
-          delay={5}
-        />
-        <ExecutiveStatCard
-          title="APKs Due"
-          value={stats.apksDueToday}
-          hint="Today"
-          icon={Smartphone}
-          href="/dev/apk"
-          accent="amber"
-          delay={6}
-        />
-        <ExecutiveStatCard
-          title="Overdue"
-          value={stats.overdueProjects}
-          hint="Projects"
-          icon={AlertCircle}
-          href="/admin/projects"
-          accent="red"
-          alert={stats.overdueProjects > 0}
-          delay={7}
+      <div className="space-y-2">
+        <DashboardSectionLabel title="Team & delivery" />
+        <PortalKpiGrid
+          columns={4}
+          count={4}
+          items={[
+            { title: "Active team", value: stats.teamMembersActive ?? stats.teamMembersOnline ?? 0, hint: stats.teamMembersOnlineNow != null && stats.teamMembersOnlineNow > 0 ? `${stats.teamMembersOnlineNow} online now` : "Developers & QA", icon: Users, href: "/admin/employees", accent: "green", delay: 0 },
+            { title: "Open tickets", value: openTickets, hint: "Support queue", icon: Ticket, href: "/admin/tickets", accent: "pink", alert: openTickets > 0, delay: 1 },
+            { title: "APKs due", value: stats.apksDueToday, hint: "Today", icon: Smartphone, href: "/dev/apk", accent: "amber", delay: 2 },
+            { title: "Overdue projects", value: stats.overdueProjects, hint: "Needs review", icon: AlertCircle, href: "/admin/projects", accent: "red", alert: stats.overdueProjects > 0, delay: 3 },
+          ]}
         />
       </div>
 
@@ -367,7 +325,7 @@ export default function AdminDashboard() {
             icon={ActivityIcon}
             accent="emerald"
             badge={stats.recentActivity.length}
-            viewAllHref="/admin/discussions"
+            viewAllHref="/discussions"
           >
             <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto dialog-scroll -mx-0.5 px-0.5">
               {stats.recentActivity.length === 0 ? (
@@ -498,9 +456,7 @@ export default function AdminDashboard() {
       </motion.section>
 
       <section>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">
-          Quick overview
-        </p>
+        <DashboardSectionLabel title="Quick overview" className="mb-3" />
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <OverviewTile
             label="Projects"

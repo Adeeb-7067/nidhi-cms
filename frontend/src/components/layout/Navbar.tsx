@@ -6,6 +6,8 @@ import {
   Moon,
   CheckCheck,
   PanelLeft,
+  Menu,
+  Search,
   MessageSquare,
   ChevronRight,
 } from "lucide-react";
@@ -45,12 +47,24 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 const spring = { type: "spring" as const, stiffness: 420, damping: 32 };
 
+function MobilePageTitle({ pathname, role }: { pathname: string; role?: string }) {
+  const crumbs = getRouteBreadcrumbs(pathname, role);
+  const meta = getRouteMeta(pathname);
+  const title = crumbs[crumbs.length - 1]?.label ?? meta.title;
+
+  return (
+    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground md:hidden">
+      {title}
+    </p>
+  );
+}
+
 function WayfinderTrail({ pathname, role }: { pathname: string; role?: string }) {
   const crumbs = getRouteBreadcrumbs(pathname, role);
   const meta = getRouteMeta(pathname);
 
   return (
-    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
+    <nav aria-label="Breadcrumb" className="min-w-0 hidden flex-1 md:block">
       <ol className="flex flex-wrap items-center gap-1 text-[11px] font-medium sm:text-xs">
         <AnimatePresence mode="popLayout">
           {crumbs.map((crumb, i) => {
@@ -210,10 +224,10 @@ function OrbitDock({
             <Button
               variant="outline"
               size="icon"
-              className="orbit-item relative z-10 h-9 w-9 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200"
+              className="orbit-item relative z-10 h-10 w-10 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200 md:h-9 md:w-9"
               asChild
             >
-              <Link href="/admin/discussions" title="Discussions">
+              <Link href="/discussions" title="Discussions">
                 <MessageSquare className="h-4 w-4 text-primary" />
               </Link>
             </Button>
@@ -223,7 +237,7 @@ function OrbitDock({
             <Button
               variant="outline"
               size="icon"
-              className="orbit-item relative z-20 -ml-2 h-9 w-9 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200"
+              className="orbit-item relative z-20 -ml-2 h-10 w-10 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200 md:h-9 md:w-9"
               onClick={onToggleTheme}
               title={theme === "dark" ? "Light mode" : "Dark mode"}
             >
@@ -237,7 +251,7 @@ function OrbitDock({
                 <Button
                   variant="outline"
                   size="icon"
-                  className="orbit-item relative z-30 -ml-2 h-9 w-9 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200"
+                  className="orbit-item relative z-30 -ml-2 h-10 w-10 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200 md:h-9 md:w-9"
                 >
                   <Bell className="h-4 w-4" />
                   {unreadCount > 0 && (
@@ -247,7 +261,7 @@ function OrbitDock({
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 rounded-xl">
+              <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))] rounded-xl">
                 <div className="flex items-center justify-between px-3 py-2">
                   <DropdownMenuLabel className="p-0 text-sm font-semibold">
                     Notifications
@@ -317,9 +331,10 @@ function OrbitDock({
 type NavbarProps = {
   sidebarCollapsed?: boolean;
   onToggleSidebar?: () => void;
+  onOpenMobileNav?: () => void;
 };
 
-export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
+export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: NavbarProps) {
   const queryClient = useQueryClient();
   const [location] = useLocation();
   const { user } = useAuth();
@@ -379,18 +394,29 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
     <header className="sticky top-0 z-20 shrink-0">
       <div className="app-shell-container pt-3 pb-2 sm:pt-3.5 sm:pb-2.5">
         <motion.div
-          className="nexus-bridge relative flex flex-col gap-2 p-2.5 sm:flex-row sm:items-center sm:gap-3 sm:p-3"
+          className="nexus-bridge relative flex flex-col gap-2 p-2.5 md:flex-row md:items-center md:gap-3 md:p-3"
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
         >
-        <div className="flex min-w-0 items-center gap-2 sm:min-w-[200px] sm:flex-1 lg:min-w-[240px]">
+        <div className="flex min-w-0 items-center gap-2 md:min-w-[200px] md:flex-1 lg:min-w-[240px]">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-lg md:hidden"
+            onClick={onOpenMobileNav}
+            aria-label="Open navigation menu"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className={cn(
-              "h-8 w-8 shrink-0 rounded-lg sm:h-9 sm:w-9",
+              "hidden h-9 w-9 shrink-0 rounded-lg md:inline-flex",
               sidebarCollapsed && "bg-primary/10 text-primary ring-1 ring-primary/25",
             )}
             onClick={onToggleSidebar}
@@ -399,16 +425,26 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar }: NavbarProps) {
             <PanelLeft className="h-4 w-4" />
           </Button>
 
+          <MobilePageTitle pathname={location} role={user?.role} />
           <WayfinderTrail pathname={location} role={user?.role} />
-
         </div>
 
-        <div className="flex min-w-0 items-center gap-2 sm:flex-1 sm:justify-center sm:px-1">
+        <div className="hidden min-w-0 items-center gap-2 md:flex md:flex-1 md:justify-center md:px-1">
           <OmniSlash onOpen={() => setPaletteOpen(true)} shortcut={searchShortcut} />
-          <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 sm:gap-2.5">
+        <div className="flex shrink-0 items-center justify-end gap-2 md:gap-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-lg md:hidden"
+            onClick={() => setPaletteOpen(true)}
+            aria-label="Search"
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+          <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
           <div className="hidden items-center gap-2 md:flex">
             <TimeRing now={now} />
             <span className="hidden text-xs tabular-nums text-muted-foreground xl:inline">

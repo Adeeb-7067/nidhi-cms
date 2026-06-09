@@ -356,6 +356,18 @@
   background-clip: padding-box;
 }
 
+/* Sidebar rails — scrollable but no visible scrollbar */
+.sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Accent theme presets — logo palette + custom (inline) via ThemeContext */
 .theme-brand-blue {
   --primary: 217 89% 61%;
@@ -408,7 +420,10 @@
 
 /* App shell — shared horizontal rhythm for navbar + main */
 .app-shell-container {
-  @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  @apply mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-8;
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
+  padding-bottom: max(0px, env(safe-area-inset-bottom));
 }
 
 /* App shell — soft page background */

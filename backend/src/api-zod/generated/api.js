@@ -436,6 +436,7 @@ const ListCompanyProjectsResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      logoUrl: zod.string().nullish(),
       companyId: zod.number(),
       companyName: zod.string(),
       clientId: zod.number(),
@@ -557,6 +558,7 @@ const ListProjectsResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      logoUrl: zod.string().nullish(),
       companyId: zod.number(),
       companyName: zod.string(),
       clientId: zod.number(),
@@ -596,6 +598,7 @@ const ListProjectsResponse = zod.object({
 });
 const CreateProjectBody = zod.object({
   name: zod.string(),
+  logoUrl: zod.string().optional(),
   companyId: zod.number().optional(),
   clientId: zod.number(),
   pmId: zod.number().optional(),
@@ -627,6 +630,7 @@ const GetProjectParams = zod.object({
 const GetProjectResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  logoUrl: zod.string().nullish(),
   companyId: zod.number(),
   companyName: zod.string(),
   clientId: zod.number(),
@@ -664,6 +668,7 @@ const UpdateProjectParams = zod.object({
 });
 const UpdateProjectBody = zod.object({
   name: zod.string().optional(),
+  logoUrl: zod.string().optional(),
   pmId: zod.number().optional(),
   description: zod.string().optional(),
   status: zod.enum([
@@ -691,6 +696,7 @@ const UpdateProjectBody = zod.object({
 const UpdateProjectResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
+  logoUrl: zod.string().nullish(),
   companyId: zod.number(),
   companyName: zod.string(),
   clientId: zod.number(),
@@ -912,6 +918,7 @@ const UpdateLogParams = zod.object({
   id: zod.coerce.number()
 });
 const UpdateLogBody = zod.object({
+  projectId: zod.number().optional(),
   workCategories: zod.array(zod.string()).optional(),
   taskTitle: zod.string().optional(),
   taskDescription: zod.string().optional(),
@@ -1310,6 +1317,7 @@ const GetApkReleasesResponseItem = zod.object({
   projectId: zod.number(),
   uploaderId: zod.number(),
   uploaderName: zod.string(),
+  name: zod.string(),
   version: zod.string(),
   buildNumber: zod.number(),
   releaseType: zod.enum(["alpha", "beta", "rc", "production"]),
@@ -1317,7 +1325,7 @@ const GetApkReleasesResponseItem = zod.object({
   platform: zod.enum(["android", "ios"]),
   minOsVersion: zod.string().nullish(),
   fileUrl: zod.string(),
-  audience: zod.enum(["team_only", "client_visible"]),
+  audience: zod.enum(["team_only", "client_visible", "all_visible"]),
   apkScheduleId: zod.number().nullish(),
   createdAt: zod.string()
 });
@@ -1326,6 +1334,7 @@ const CreateApkReleaseParams = zod.object({
   id: zod.coerce.number()
 });
 const CreateApkReleaseBody = zod.object({
+  name: zod.string(),
   version: zod.string(),
   buildNumber: zod.number().optional(),
   releaseType: zod.enum(["alpha", "beta", "rc", "production"]),
@@ -1333,7 +1342,7 @@ const CreateApkReleaseBody = zod.object({
   platform: zod.enum(["android", "ios"]),
   minOsVersion: zod.string().optional(),
   fileUrl: zod.string(),
-  audience: zod.enum(["team_only", "client_visible"]),
+  audience: zod.enum(["team_only", "client_visible", "all_visible"]),
   apkScheduleId: zod.number().optional()
 });
 const GetApkReleaseParams = zod.object({
@@ -1344,6 +1353,7 @@ const GetApkReleaseResponse = zod.object({
   projectId: zod.number(),
   uploaderId: zod.number(),
   uploaderName: zod.string(),
+  name: zod.string(),
   version: zod.string(),
   buildNumber: zod.number(),
   releaseType: zod.enum(["alpha", "beta", "rc", "production"]),
@@ -1351,7 +1361,7 @@ const GetApkReleaseResponse = zod.object({
   platform: zod.enum(["android", "ios"]),
   minOsVersion: zod.string().nullish(),
   fileUrl: zod.string(),
-  audience: zod.enum(["team_only", "client_visible"]),
+  audience: zod.enum(["team_only", "client_visible", "all_visible"]),
   apkScheduleId: zod.number().nullish(),
   createdAt: zod.string()
 });
@@ -1369,7 +1379,7 @@ const ListCommentsResponse = zod.object({
       authorName: zod.string(),
       authorAvatarUrl: zod.string().nullish(),
       authorRole: zod.string(),
-      threadType: zod.enum(["project", "log", "bug", "apk", "request"]),
+      threadType: zod.enum(["project", "project_internal", "company_team", "log", "bug", "apk", "request", "ticket"]),
       threadId: zod.number(),
       content: zod.string(),
       parentId: zod.number().nullish(),
@@ -1382,7 +1392,7 @@ const ListCommentsResponse = zod.object({
   total: zod.number()
 });
 const CreateCommentBody = zod.object({
-  threadType: zod.enum(["project", "log", "bug", "apk", "request"]),
+  threadType: zod.enum(["project", "project_internal", "company_team", "log", "bug", "apk", "request", "ticket"]),
   threadId: zod.number(),
   content: zod.string(),
   parentId: zod.number().optional()
@@ -1399,7 +1409,7 @@ const UpdateCommentResponse = zod.object({
   authorName: zod.string(),
   authorAvatarUrl: zod.string().nullish(),
   authorRole: zod.string(),
-  threadType: zod.enum(["project", "log", "bug", "apk", "request"]),
+  threadType: zod.enum(["project", "project_internal", "company_team", "log", "bug", "apk", "request", "ticket"]),
   threadId: zod.number(),
   content: zod.string(),
   parentId: zod.number().nullish(),
@@ -1708,6 +1718,7 @@ const GlobalSearchResponse = zod.object({
     zod.object({
       id: zod.number(),
       name: zod.string(),
+      logoUrl: zod.string().nullish(),
       companyId: zod.number(),
       companyName: zod.string(),
       clientId: zod.number(),
@@ -1822,6 +1833,8 @@ const GetSettingsResponse = zod.object({
   sealUrl: zod.string().nullish(),
   requiredDailyWorkHours: zod.number(),
   dailyLogComplianceEnabled: zod.boolean(),
+  dailyLogReminderHour: zod.number().min(0).max(23),
+  complianceTimezone: zod.string().nullish(),
   updatedAt: zod.string()
 });
 const UpdateSettingsBody = zod.object({
@@ -1830,7 +1843,9 @@ const UpdateSettingsBody = zod.object({
   address: zod.string().optional(),
   sealUrl: zod.string().optional(),
   requiredDailyWorkHours: zod.number().min(1).max(16).optional(),
-  dailyLogComplianceEnabled: zod.boolean().optional()
+  dailyLogComplianceEnabled: zod.boolean().optional(),
+  dailyLogReminderHour: zod.number().min(0).max(23).optional(),
+  complianceTimezone: zod.string().nullable().optional()
 });
 const UpdateSettingsResponse = zod.object({
   id: zod.number(),
@@ -1840,6 +1855,8 @@ const UpdateSettingsResponse = zod.object({
   sealUrl: zod.string().nullish(),
   requiredDailyWorkHours: zod.number(),
   dailyLogComplianceEnabled: zod.boolean(),
+  dailyLogReminderHour: zod.number().min(0).max(23),
+  complianceTimezone: zod.string().nullish(),
   updatedAt: zod.string()
 });
 const GetDailyLogSummaryQueryParams = zod.object({

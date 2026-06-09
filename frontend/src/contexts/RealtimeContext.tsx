@@ -3,7 +3,9 @@ import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListNotifications, getListNotificationsQueryKey } from "@/api";
+import { useListNotifications, getListNotificationsQueryKey, type Comment } from "@/api";
+import { appendCommentToListCache } from "@/lib/comment-thread-query";
+import { applyProjectCommentToCaches } from "@/lib/discussion-realtime";
 
 import {
   initFirebase,
@@ -13,6 +15,7 @@ import {
 } from "../lib/firebase";
 import { playNotificationAlert, stopPersistentAlert } from "../lib/notification-alert";
 import { apiUrl, getApiBaseUrl } from "../lib/api-base";
+import { BRAND } from "@/lib/brand";
 import {
   NOTIFICATION_POLL_DISCONNECTED_MS,
   QUERY_STALE,
@@ -57,7 +60,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
 
       if (Notification.permission === "granted") {
         try {
-          new Notification(title, { body, icon: "/favicon.ico" });
+          new Notification(title, { body, icon: BRAND.faviconSrc });
         } catch {
           /* ignore */
         }
@@ -118,10 +121,8 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
 
   const queryClientRef = useRef(queryClient);
   const handleIncomingAlertRef = useRef(handleIncomingAlert);
-  const userIdRef = useRef(user?.id);
   queryClientRef.current = queryClient;
   handleIncomingAlertRef.current = handleIncomingAlert;
-  userIdRef.current = user?.id;
 
   useEffect(() => {
     if (!user?.id || !accessToken) {
@@ -154,24 +155,41 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       handleIncomingAlertRef.current(data.title || "New notification", data.body || "");
     });
 
-    socketInstance.on("comment", (data: { comment?: { authorId?: number; threadId?: number } }) => {
-      const threadId = data.comment?.threadId;
-      queryClientRef.current.invalidateQueries({
-        predicate: (q) => {
-          const key = q.queryKey[0];
-          if (key !== "/api/comments") return false;
-          if (threadId == null) return true;
-          return JSON.stringify(q.queryKey).includes(String(threadId));
-        },
-      });
-      const authorId = data.comment?.authorId;
-      if (authorId && authorId !== userIdRef.current) {
-        queryClientRef.current.invalidateQueries({
-          predicate: (q) => q.queryKey[0] === "/api/notifications",
-        });
-        playNotificationAlert();
-      }
-    });
+    socketInstance.on(
+      "comment",
+      (data: { threadType?: string; threadId?: number; comment?: Comment }) => {
+        const { threadType, threadId, comment } = data;
+        if (threadType && threadId != null && comment?.id != null) {
+          if (
+            threadType === "project" ||
+            threadType === "project_internal" ||
+            threadType === "company_team"
+          ) {
+            applyProjectCommentToCaches(
+              queryClientRef.current,
+              threadId,
+              comment,
+              threadType,
+            );
+          } else {
+            appendCommentToListCache(
+              queryClientRef.current,
+              threadType,
+              threadId,
+              comment,
+            );
+          }
+        } else if (threadId != null) {
+          queryClientRef.current.invalidateQueries({
+            predicate: (q) => {
+              const key = q.queryKey[0];
+              if (key !== "/api/comments") return false;
+              return JSON.stringify(q.queryKey).includes(String(threadId));
+            },
+          });
+        }
+      },
+    );
 
     socketInstance.on("ticket_update", () => {
       queryClientRef.current.invalidateQueries({

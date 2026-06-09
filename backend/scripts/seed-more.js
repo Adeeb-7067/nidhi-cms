@@ -421,11 +421,11 @@ async function main() {
   const existingApk = await schema.apkReleasesTable.findOne({ version: "1.0.0-alpha" });
   if (!existingApk && carol && mobileProjects.length > 0) {
     const apkData = [
-      { version: "1.0.0-alpha", build: 1, type: "alpha", platform: "android", audience: "team_only", changelog: "Initial alpha build. Core navigation, login, and basic listing screens.", proj: 0 },
-      { version: "1.1.0-beta", build: 2, type: "beta", platform: "android", audience: "team_only", changelog: "Beta release: push notifications, offline mode, and bug fixes from alpha testing.", proj: 0 },
-      { version: "1.2.0-beta", build: 3, type: "beta", platform: "ios", audience: "team_only", changelog: "iOS beta: Face ID support, iPad layout optimizations, and Safari WebView fixes.", proj: 0 },
-      { version: "1.3.0-rc", build: 4, type: "rc", platform: "android", audience: "client_visible", changelog: "Release candidate: all P1 bugs fixed, performance improvements, ready for client UAT.", proj: 1 % mobileProjects.length },
-      { version: "2.0.0", build: 5, type: "production", platform: "android", audience: "client_visible", changelog: "Production release: payment integration, biometric auth, and 50+ UX improvements.", proj: 1 % mobileProjects.length }
+      { name: "Alpha — Core app", version: "1.0.0-alpha", build: 1, type: "alpha", platform: "android", audience: "team_only", changelog: "Initial alpha build. Core navigation, login, and basic listing screens.", proj: 0 },
+      { name: "Beta — Notifications", version: "1.1.0-beta", build: 2, type: "beta", platform: "android", audience: "team_only", changelog: "Beta release: push notifications, offline mode, and bug fixes from alpha testing.", proj: 0 },
+      { name: "Beta — iOS", version: "1.2.0-beta", build: 3, type: "beta", platform: "ios", audience: "team_only", changelog: "iOS beta: Face ID support, iPad layout optimizations, and Safari WebView fixes.", proj: 0 },
+      { name: "RC — Client UAT", version: "1.3.0-rc", build: 4, type: "rc", platform: "android", audience: "client_visible", changelog: "Release candidate: all P1 bugs fixed, performance improvements, ready for client UAT.", proj: 1 % mobileProjects.length },
+      { name: "Production release", version: "2.0.0", build: 5, type: "production", platform: "android", audience: "client_visible", changelog: "Production release: payment integration, biometric auth, and 50+ UX improvements.", proj: 1 % mobileProjects.length }
     ];
     for (const apk of apkData) {
       const proj = mobileProjects[apk.proj];
@@ -434,6 +434,7 @@ async function main() {
         id: nextApkId,
         projectId: proj.id,
         uploaderId: carol.id,
+        name: apk.name,
         version: apk.version,
         buildNumber: apk.build,
         releaseType: apk.type,

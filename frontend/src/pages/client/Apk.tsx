@@ -3,13 +3,20 @@ import { useListProjects, useGetApkReleases, getGetApkReleasesQueryKey } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { AnalyticsChartsSkeleton, PageCardGridSkeleton, PageHeroSkeleton } from "@/components/loading";
 import { Smartphone, Download, Calendar } from "lucide-react";
 import {
   PortalPageShell,
   PortalPageHero,
   PortalEmptyState,
 } from "@/components/layout/portal-page-kit";
+import {
+  getApkAudienceBadgeClass,
+  getApkAudienceLabel,
+  resolveApkDisplayName,
+  formatApkReleaseSubtitle,
+} from "@/lib/apk-audience";
+import { cn } from "@/lib/utils";
 
 export default function ClientApk() {
   const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 1 });
@@ -25,16 +32,13 @@ export default function ClientApk() {
   if (isProjectsLoading || isApksLoading) {
     return (
       <PortalPageShell>
-        <PortalPageHero title="Releases & Downloads" subtitle="Access your app builds" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
-        </div>
+        <PageHeroSkeleton withBreadcrumb={false} withActions={false} />
+        <PageCardGridSkeleton count={3} itemClassName="h-64" />
       </PortalPageShell>
     );
   }
 
-  // Filter for client-visible APKs
-  const clientApks = apks?.filter(apk => apk.audience === "client_visible") || [];
+  const clientApks = apks ?? [];
 
   return (
     <PortalPageShell>
@@ -68,16 +72,23 @@ export default function ClientApk() {
                     <Smartphone className="h-5 w-5" />
                   </div>
                   <div>
-                    <CardTitle className="text-lg">v{apk.version}</CardTitle>
-                    <CardDescription className="text-xs">
-                      Build {apk.buildNumber}
-                      {apk.platform && <span className="ml-2">• {apk.platform.toUpperCase()}</span>}
+                    <CardTitle className="text-lg leading-snug" title={resolveApkDisplayName(apk)}>
+                      <span className="line-clamp-2">{resolveApkDisplayName(apk)}</span>
+                    </CardTitle>
+                    <CardDescription className="text-xs text-foreground/80">
+                      {formatApkReleaseSubtitle(apk)}
                     </CardDescription>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0">{apk.platform}</Badge>
                   <Badge variant="outline" className="capitalize text-muted-foreground text-[10px] px-1.5 py-0">{apk.releaseType}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={cn("text-[10px] px-1.5 py-0", getApkAudienceBadgeClass(apk.audience))}
+                  >
+                    {getApkAudienceLabel(apk.audience)}
+                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="pt-4 space-y-4 p-4">

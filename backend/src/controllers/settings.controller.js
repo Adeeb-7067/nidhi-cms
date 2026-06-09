@@ -14,14 +14,44 @@ function parseRequiredDailyHours(value) {
   return Math.round(num * 2) / 2;
 }
 
+function parseReminderHour(value) {
+  if (value === undefined || value === null) return undefined;
+  const hour = Number(value);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    badRequest("dailyLogReminderHour must be an integer between 0 and 23.", "dailyLogReminderHour");
+  }
+  return hour;
+}
+
+function parseComplianceTimezone(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const tz = String(value).trim();
+  if (!tz) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: tz });
+  } catch {
+    badRequest("complianceTimezone must be a valid IANA timezone.", "complianceTimezone");
+  }
+  return tz;
+}
+
 async function getSettings(req, res) {
   const settings = await getOrCreateSettings();
   res.json(formatSettings(settings));
 }
 
 async function patchSettings(req, res) {
-  const { companyName, logoUrl, address, sealUrl, requiredDailyWorkHours, dailyLogComplianceEnabled } =
-    req.body;
+  const {
+    companyName,
+    logoUrl,
+    address,
+    sealUrl,
+    requiredDailyWorkHours,
+    dailyLogComplianceEnabled,
+    dailyLogReminderHour,
+    complianceTimezone
+  } = req.body;
   const settings = await getOrCreateSettings();
   const update = {};
   if (companyName !== undefined) update.companyName = companyName;
@@ -34,12 +64,21 @@ async function patchSettings(req, res) {
   if (dailyLogComplianceEnabled !== undefined) {
     update.dailyLogComplianceEnabled = Boolean(dailyLogComplianceEnabled);
   }
+  if (dailyLogReminderHour !== undefined) {
+    update.dailyLogReminderHour = parseReminderHour(dailyLogReminderHour);
+  }
+  if (complianceTimezone !== undefined) {
+    update.complianceTimezone = parseComplianceTimezone(complianceTimezone);
+  }
 
   const updated = await companySettingsTable.findOneAndUpdate(
     { id: settings.id },
     { $set: update },
     { new: true }
   );
+  if (!updated) {
+    badRequest("Settings could not be updated.", "settings");
+  }
   res.json(formatSettings(updated));
 }
 

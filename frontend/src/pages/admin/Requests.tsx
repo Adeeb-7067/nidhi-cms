@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useListRequests, useUpdateRequest, getListRequestsQueryKey } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageTableSkeleton } from "@/components/loading";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, X, MessageSquare, PlusCircle, Package, Clock, Inbox } from "lucide-react";
 import {
@@ -292,11 +292,7 @@ export default function AdminRequests() {
         </div>
         <div className="p-4">
           {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
+            <PageTableSkeleton rows={8} columns={6} showToolbar />
           ) : (
             <AdvancedTable
               data={tableData}

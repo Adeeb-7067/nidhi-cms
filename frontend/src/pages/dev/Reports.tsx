@@ -9,10 +9,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DAILY_LOG_VIRTUAL_PROJECTS,
+  isVirtualDailyLogProjectId,
+} from "@/lib/daily-log-project-options";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { useClientPagination } from "@/lib/table-pagination";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageTableSkeleton } from "@/components/loading";
 import { FileText, Download, Loader2, Plus, CheckCircle2, AlertCircle, Clock } from "lucide-react";
 import {
   DevPageShell,
@@ -91,9 +103,24 @@ export default function DevReports() {
     return [current - 1, current, current + 1];
   }, []);
 
+  const logReportTypes: ReportInputType[] = [
+    "developer_monthly",
+    "project_progress",
+    "raw_log_export",
+  ];
+  const showVirtualProjectOptions = logReportTypes.includes(reportType);
+
+  useEffect(() => {
+    if (showVirtualProjectOptions || !projectId) return;
+    const selectedId = Number.parseInt(projectId, 10);
+    if (Number.isFinite(selectedId) && isVirtualDailyLogProjectId(selectedId)) {
+      setProjectId("");
+    }
+  }, [showVirtualProjectOptions, projectId]);
+
   const handleGenerate = () => {
     if (!projectId) {
-      toast.error("Please select a project");
+      toast.error(showVirtualProjectOptions ? "Please select a project or activity" : "Please select a project");
       return;
     }
 
@@ -263,17 +290,42 @@ export default function DevReports() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="project">Project</Label>
+                <Label htmlFor="project">
+                  {showVirtualProjectOptions ? "Project / activity" : "Project"}
+                </Label>
                 <Select value={projectId} onValueChange={setProjectId}>
                   <SelectTrigger id="project">
-                    <SelectValue placeholder="Select a project" />
+                    <SelectValue
+                      placeholder={
+                        showVirtualProjectOptions
+                          ? "Select project or activity"
+                          : "Select a project"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {projectsData?.projects.map((p) => (
-                      <SelectItem key={p.id} value={p.id.toString()}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
+                    {showVirtualProjectOptions ? (
+                      <SelectGroup>
+                        <SelectLabel>General</SelectLabel>
+                        {DAILY_LOG_VIRTUAL_PROJECTS.map((option) => (
+                          <SelectItem key={option.id} value={String(option.id)}>
+                            {option.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
+                    {(projectsData?.projects?.length ?? 0) > 0 ? (
+                      <SelectGroup>
+                        {showVirtualProjectOptions ? (
+                          <SelectLabel>Projects</SelectLabel>
+                        ) : null}
+                        {projectsData!.projects.map((p) => (
+                          <SelectItem key={p.id} value={p.id.toString()}>
+                            {p.name}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    ) : null}
                   </SelectContent>
                 </Select>
               </div>
@@ -351,11 +403,7 @@ export default function DevReports() {
 
       {reportsLoading ? (
         <DevContentCard>
-          <div className="space-y-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
+          <PageTableSkeleton rows={6} columns={5} showToolbar />
         </DevContentCard>
       ) : !reportsData?.length ? (
         <DevEmptyState

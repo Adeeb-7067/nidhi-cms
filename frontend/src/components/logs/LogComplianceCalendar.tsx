@@ -65,15 +65,24 @@ type LogComplianceCalendarProps = {
   title?: string;
   compact?: boolean;
   /** Flat layout for side sheets — no outer card, tighter calendar */
-  variant?: "default" | "sheet";
+  variant?: "default" | "sheet" | "sidebar";
+};
+
+const TILE_LABELS: Record<string, { full: string; short: string }> = {
+  Complete: { full: "Complete", short: "Done" },
+  Incomplete: { full: "Incomplete", short: "Missed" },
+  Compliance: { full: "Compliance", short: "Rate" },
+  "Days logged": { full: "Days logged", short: "Logged" },
 };
 
 function ComplianceSummary({
   data,
   compact,
+  narrow,
 }: {
   data: LogComplianceCalendar;
   compact?: boolean;
+  narrow?: boolean;
 }) {
   const rate =
     data.trackedWeekdays > 0
@@ -110,24 +119,47 @@ function ComplianceSummary({
         },
       ];
 
+  const labelFor = (label: string) =>
+    narrow ? (TILE_LABELS[label]?.short ?? label) : (TILE_LABELS[label]?.full ?? label);
+
   return (
     <div className={cn("space-y-3", compact && "space-y-2")}>
-      <div className={cn("grid gap-2", data.complianceEnabled ? "grid-cols-3" : "grid-cols-1")}>
+      <div
+        className={cn(
+          "grid gap-2 min-w-0",
+          data.complianceEnabled
+            ? narrow
+              ? "grid-cols-3 gap-1.5"
+              : "grid-cols-3"
+            : "grid-cols-1",
+        )}
+      >
         {tiles.map((tile) => (
           <div
             key={tile.label}
             className={cn(
-              "rounded-lg border px-2.5 py-2 flex flex-col gap-0.5 min-w-0",
+              "rounded-lg border flex flex-col min-w-0 overflow-hidden",
+              narrow ? "px-2 py-1.5 gap-0.5" : "px-2.5 py-2 gap-0.5",
               tile.className,
             )}
           >
-            <div className="flex items-center gap-1.5">
-              <tile.icon className="h-3.5 w-3.5 shrink-0 opacity-80" />
-              <span className="text-[9px] font-semibold uppercase tracking-wider opacity-80 truncate">
-                {tile.label}
+            <div className="flex items-center gap-1 min-w-0">
+              <tile.icon className={cn("shrink-0 opacity-80", narrow ? "h-3 w-3" : "h-3.5 w-3.5")} />
+              <span
+                className={cn(
+                  "font-semibold uppercase tracking-wide opacity-80 leading-tight",
+                  narrow ? "text-[8px]" : "text-[9px] tracking-wider",
+                )}
+              >
+                {labelFor(tile.label)}
               </span>
             </div>
-            <span className={cn("text-lg font-bold tabular-nums leading-none", compact && "text-base")}>
+            <span
+              className={cn(
+                "font-bold tabular-nums leading-none",
+                narrow ? "text-sm" : compact ? "text-base" : "text-lg",
+              )}
+            >
               {tile.value}
             </span>
           </div>
@@ -154,28 +186,34 @@ function CalendarGrid({
   year,
   month,
   compact,
+  narrow,
 }: {
   days: LogComplianceDay[];
   year: number;
   month: number;
   compact?: boolean;
+  narrow?: boolean;
 }) {
   const grid = buildCalendarGrid(days, year, month);
+  const cellSize = narrow ? "h-9" : compact ? "h-10" : "h-11";
 
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-7 gap-1">
+    <div className="space-y-2 min-w-0">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1 min-w-0">
         {WEEKDAYS.map((wd) => (
           <div
             key={wd}
-            className="text-center text-[9px] font-semibold uppercase tracking-wider text-muted-foreground py-0.5"
+            className={cn(
+              "text-center font-semibold uppercase tracking-wider text-muted-foreground py-0.5 truncate",
+              narrow ? "text-[8px]" : "text-[9px]",
+            )}
           >
-            {wd}
+            {narrow ? wd.slice(0, 1) : wd}
           </div>
         ))}
         {grid.map((day, i) => {
           if (!day) {
-            return <div key={`pad-${i}`} className="aspect-square min-h-[52px]" />;
+            return <div key={`pad-${i}`} className={cn(cellSize, "min-w-0")} />;
           }
 
           const meta = STATUS_META[day.status];
@@ -187,19 +225,28 @@ function CalendarGrid({
               key={day.date}
               title={`${day.date}: ${day.loggedHours.toFixed(1)}h logged${day.requiredHours != null ? ` / ${day.requiredHours}h required` : ""} · ${meta.label}`}
               className={cn(
-                "aspect-square min-h-[52px] rounded-md border flex flex-col items-center justify-center gap-0.5 p-0.5 transition-colors",
+                "min-w-0 w-full rounded-md border flex flex-col items-center justify-center transition-colors overflow-hidden",
+                cellSize,
+                narrow ? "gap-0 p-0" : "gap-0.5 p-0.5",
                 meta.cell,
-                compact && "min-h-[48px]",
-                isToday && "ring-2 ring-primary/40 ring-offset-1 ring-offset-background",
+                isToday && "ring-1 ring-primary/50",
               )}
             >
-              <span className={cn("text-[11px] font-bold tabular-nums leading-none", meta.text)}>
+              <span
+                className={cn(
+                  "font-bold tabular-nums leading-none",
+                  narrow ? "text-[10px]" : "text-[11px]",
+                  meta.text,
+                )}
+              >
                 {dayNum}
               </span>
-              <span className="text-[8px] tabular-nums text-muted-foreground leading-none">
-                {day.loggedHours > 0 ? `${day.loggedHours.toFixed(1)}h` : "—"}
-              </span>
-              <span className={cn("h-1 w-1 rounded-full shrink-0", meta.dot)} />
+              {!narrow && (
+                <span className="text-[8px] tabular-nums text-muted-foreground leading-none">
+                  {day.loggedHours > 0 ? `${day.loggedHours.toFixed(1)}h` : "—"}
+                </span>
+              )}
+              <span className={cn("rounded-full shrink-0", narrow ? "h-1 w-1" : "h-1 w-1", meta.dot)} />
             </div>
           );
         })}
@@ -222,9 +269,11 @@ function CalendarGrid({
 function PanelBody({
   data,
   compact,
+  narrow,
 }: {
   data: LogComplianceCalendar;
   compact?: boolean;
+  narrow?: boolean;
 }) {
   const monthLabel = new Date(data.year, data.month - 1).toLocaleString("default", {
     month: "long",
@@ -232,29 +281,35 @@ function PanelBody({
   });
 
   return (
-    <div className={cn("space-y-4", compact && "space-y-3")}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
+    <div className={cn("space-y-4 min-w-0", compact && "space-y-3")}>
+      <div className="flex flex-wrap items-start justify-between gap-2 min-w-0">
+        <div className="min-w-0 flex-1">
           <p className={cn("font-semibold text-foreground", compact ? "text-xs" : "text-sm")}>
             {monthLabel}
           </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
             {data.complianceEnabled && data.requiredHours != null
               ? `${data.requiredHours}h required on weekdays`
               : "Compliance policy disabled — hours shown for reference"}
           </p>
         </div>
         {data.complianceEnabled && (
-          <Badge variant="outline" className="text-[9px] shrink-0">
-            {data.trackedWeekdays} weekdays
+          <Badge variant="outline" className="text-[9px] shrink-0 whitespace-nowrap">
+            {data.trackedWeekdays} wd
           </Badge>
         )}
       </div>
 
-      <ComplianceSummary data={data} compact={compact} />
+      <ComplianceSummary data={data} compact={compact} narrow={narrow} />
 
-      <div className="rounded-lg border border-border/50 bg-muted/10 p-2.5">
-        <CalendarGrid days={data.days} year={data.year} month={data.month} compact={compact} />
+      <div className={cn("rounded-lg border border-border/50 bg-muted/10 min-w-0", narrow ? "p-2" : "p-2.5")}>
+        <CalendarGrid
+          days={data.days}
+          year={data.year}
+          month={data.month}
+          compact={compact}
+          narrow={narrow}
+        />
       </div>
     </div>
   );
@@ -293,23 +348,25 @@ export function LogComplianceCalendarPanel({
 
   if (!data) return null;
 
+  const narrow = variant === "sheet" || variant === "sidebar";
+
   if (variant === "sheet") {
-    return <PanelBody data={data} compact />;
+    return <PanelBody data={data} compact narrow />;
   }
 
   return (
-    <Card className="border-border/50 shadow-sm">
-      <CardHeader className={cn("pb-2", compact && "p-3")}>
-        <CardTitle className={cn("text-sm", compact && "text-xs")}>{title}</CardTitle>
-        <CardDescription className="text-xs">
+    <Card className={cn("border-border/50 shadow-sm min-w-0", variant === "sidebar" && "overflow-hidden")}>
+      <CardHeader className={cn("pb-2 min-w-0", (compact || narrow) && "p-3")}>
+        <CardTitle className={cn("text-sm truncate", compact && "text-xs")}>{title}</CardTitle>
+        <CardDescription className="text-xs leading-snug break-words">
           {data.developerName}
           {data.complianceEnabled && data.requiredHours != null
             ? ` · Required ${data.requiredHours}h / weekday`
             : " · Compliance tracking off"}
         </CardDescription>
       </CardHeader>
-      <CardContent className={cn(compact && "p-3 pt-0")}>
-        <PanelBody data={data} compact={compact} />
+      <CardContent className={cn("min-w-0", (compact || narrow) && "p-3 pt-0")}>
+        <PanelBody data={data} compact={compact || narrow} narrow={narrow} />
       </CardContent>
     </Card>
   );

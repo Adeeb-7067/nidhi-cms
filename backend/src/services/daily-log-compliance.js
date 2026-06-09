@@ -8,50 +8,96 @@ import { notifyUser } from "../lib/realtime.js";
 import { sendDailyLogComplianceEmail } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
 import { isDatabaseConnected } from "../lib/db.js";
-import { getWorkPolicy } from "./company-settings.js";
+import { getWorkPolicy, normalizeReminderHour } from "./company-settings.js";
 
 const STAFF_LOG_ROLES = ["developer", "tester", "qa"];
 const HOUR_TOLERANCE = 0.05;
 
-function localDateString(date = new Date()) {
-  const tz = process.env.COMPLIANCE_TIMEZONE?.trim();
+function resolveTimezone(settingsTz) {
+  return settingsTz?.trim() || process.env.COMPLIANCE_TIMEZONE?.trim() || null;
+}
+
+function localDateString(date = new Date(), tz = null) {
   if (tz) {
     return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(date);
   }
   return date.toISOString().slice(0, 10);
 }
 
-function localWeekday(date = new Date()) {
-  const tz = process.env.COMPLIANCE_TIMEZONE?.trim();
+function localWeekday(date = new Date(), tz = null) {
   if (tz) {
-    const weekday = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(date);
-    return weekday;
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(date);
   }
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][date.getUTCDay()];
 }
 
-function localHour(date = new Date()) {
-  const tz = process.env.COMPLIANCE_TIMEZONE?.trim();
+function localHour(date = new Date(), tz = null) {
   if (tz) {
-    const hour = new Intl.DateTimeFormat("en-GB", {
+    const hour = new Intl.DateTimeFormat("en-US", {
       timeZone: tz,
       hour: "numeric",
-      hour12: false
+      hour12: false,
+      hourCycle: "h23"
     }).format(date);
-    return Number.parseInt(hour, 10);
+    const parsed = Number.parseInt(hour, 10);
+    return parsed === 24 ? 0 : parsed;
   }
   return date.getUTCHours();
 }
 
-/** 24-hour local time (0–23). Default 0 = 12:00 AM midnight (end of day). */
-function resolveComplianceCheckHour() {
-  const raw = process.env.COMPLIANCE_CHECK_HOUR ?? "0";
+function addDaysToDateString(dateStr, deltaDays) {
+  const [y, m, d] = String(dateStr).split("-").map((n) => Number.parseInt(n, 10));
+  const utc = new Date(Date.UTC(y, m - 1, d + deltaDays, 12, 0, 0));
+  return utc.toISOString().slice(0, 10);
+}
+
+/** Weekday label (Mon–Sun) for a YYYY-MM-DD date in the compliance timezone. */
+function weekdayForDateString(dateStr, tz = null) {
+  const anchor = new Date(`${dateStr}T12:00:00Z`);
+  if (tz) {
+    return new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short" }).format(anchor);
+  }
+  return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][anchor.getUTCDay()];
+}
+
+/**
+ * Which log date to evaluate when the reminder fires.
+ * - Morning reminder (before noon): previous calendar day.
+ * - Evening reminder (noon+): the workday ending at the configured hour.
+ *   After midnight and before that hour, still evaluate yesterday so a restart
+ *   does not flag the new day with 0 hours logged.
+ */
+export function resolveComplianceTargetDate(now, tz, checkHour) {
+  const today = localDateString(now, tz);
+  const hour = localHour(now, tz);
+
+  if (checkHour < 12) {
+    return addDaysToDateString(today, -1);
+  }
+
+  if (hour < checkHour) {
+    return addDaysToDateString(today, -1);
+  }
+
+  return today;
+}
+
+function resolveCheckHourFromEnv() {
+  const raw = process.env.COMPLIANCE_CHECK_HOUR?.trim();
+  if (!raw) return null;
   const hour = Number.parseInt(raw, 10);
   if (Number.isNaN(hour) || hour < 0 || hour > 23) {
-    logger.warn({ raw }, "Invalid COMPLIANCE_CHECK_HOUR; using 0 (12:00 AM)");
-    return 0;
+    logger.warn({ raw }, "Invalid COMPLIANCE_CHECK_HOUR; using company settings");
+    return null;
   }
   return hour;
+}
+
+async function getComplianceSchedule() {
+  const policy = await getWorkPolicy();
+  const hour = resolveCheckHourFromEnv() ?? policy.dailyLogReminderHour;
+  const tz = resolveTimezone(policy.complianceTimezone);
+  return { hour: normalizeReminderHour(hour), tz };
 }
 
 function dateKeyFromIso(dateStr) {
@@ -70,9 +116,16 @@ function daysInMonth(year, month) {
   return new Date(year, month, 0).getDate();
 }
 
-function isWeekendDate(dateStr) {
-  const d = new Date(`${dateStr}T12:00:00`);
-  const day = d.getDay();
+function isWeekendDate(dateStr, tz = null) {
+  const anchor = new Date(`${dateStr}T12:00:00Z`);
+  if (tz) {
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      weekday: "short"
+    }).format(anchor);
+    return weekday === "Sat" || weekday === "Sun";
+  }
+  const day = anchor.getUTCDay();
   return day === 0 || day === 6;
 }
 
@@ -82,7 +135,8 @@ export async function buildComplianceCalendar(developerId, month, year) {
   const m = Number(month);
   const y = Number(year);
   const lastDay = daysInMonth(y, m);
-  const today = localDateString();
+  const tz = resolveTimezone(policy.complianceTimezone);
+  const today = localDateString(new Date(), tz);
   const start = `${y}-${String(m).padStart(2, "0")}-01`;
   const end = `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
 
@@ -104,7 +158,7 @@ export async function buildComplianceCalendar(developerId, month, year) {
   for (let d = 1; d <= lastDay; d++) {
     const dateStr = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
     const loggedHours = Math.round((hoursByDate[dateStr] || 0) * 100) / 100;
-    const weekend = isWeekendDate(dateStr);
+    const weekend = isWeekendDate(dateStr, tz);
     const future = dateStr > today;
     const required =
       policy.dailyLogComplianceEnabled && !weekend ? policy.requiredDailyWorkHours : null;
@@ -245,10 +299,11 @@ export async function runDailyLogComplianceCheck(forDate) {
     return { checked: 0, notified: 0, skipped: "disabled" };
   }
 
-  const logDate = forDate ?? localDateString();
-  const weekday = localWeekday();
+  const tz = resolveTimezone(policy.complianceTimezone);
+  const logDate = forDate ?? localDateString(new Date(), tz);
+  const weekday = weekdayForDateString(logDate, tz);
   if (weekday === "Sat" || weekday === "Sun") {
-    return { checked: 0, notified: 0, skipped: "weekend" };
+    return { checked: 0, notified: 0, skipped: "weekend", date: logDate };
   }
 
   const staff = await usersTable
@@ -266,41 +321,80 @@ export async function runDailyLogComplianceCheck(forDate) {
   return { checked: staff.length, notified, date: logDate };
 }
 
-let lastComplianceRunDate = null;
+let lastComplianceRunKey = null;
+let complianceTickInFlight = false;
 
 export function startDailyLogComplianceJob() {
-  const checkHour = resolveComplianceCheckHour();
-  const tz = process.env.COMPLIANCE_TIMEZONE?.trim() || "(server local / UTC fallback)";
-  logger.info(
-    { checkHour, timezone: tz, label: formatCheckHourLabel(checkHour) },
-    "Daily log compliance reminders scheduled"
-  );
-  const intervalMs = 30 * 60 * 1000;
+  const intervalMs = 5 * 60 * 1000;
 
-  const tick = () => {
-    const now = new Date();
-    const hour = localHour(now);
-    const dateKey = localDateString(now);
-    if (hour !== checkHour || lastComplianceRunDate === dateKey) return;
+  const tick = async () => {
+    if (complianceTickInFlight) return;
+    complianceTickInFlight = true;
+    try {
+      if (!isDatabaseConnected()) return;
 
-    lastComplianceRunDate = dateKey;
-    runDailyLogComplianceCheck(dateKey)
-      .then((result) => {
-        logger.info(result, "Daily log compliance check completed");
-      })
-      .catch((err) => {
-        logger.error({ err }, "Daily log compliance job failed");
-        lastComplianceRunDate = null;
-      });
+      const { hour: checkHour, tz } = await getComplianceSchedule();
+      const now = new Date();
+      const hour = localHour(now, tz);
+      if (hour !== checkHour) return;
+
+      if (!tz) {
+        logger.warn(
+          {
+            runDateKey: localDateString(now, tz),
+            checkHour,
+            label: formatCheckHourLabel(checkHour)
+          },
+          "Skipping daily log compliance: set complianceTimezone in Organization settings or COMPLIANCE_TIMEZONE"
+        );
+        return;
+      }
+
+      const targetLogDate = resolveComplianceTargetDate(now, tz, checkHour);
+      const runKey = `${targetLogDate}:${checkHour}`;
+      if (lastComplianceRunKey === runKey) return;
+
+      lastComplianceRunKey = runKey;
+      const result = await runDailyLogComplianceCheck(targetLogDate);
+      logger.info(
+        {
+          ...result,
+          checkHour,
+          timezone: tz,
+          label: formatCheckHourLabel(checkHour),
+          targetLogDate
+        },
+        "Daily log compliance check completed"
+      );
+    } catch (err) {
+      logger.error({ err }, "Daily log compliance job failed");
+      lastComplianceRunKey = null;
+    } finally {
+      complianceTickInFlight = false;
+    }
   };
 
-  setInterval(tick, intervalMs);
+  void getComplianceSchedule().then(({ hour, tz }) => {
+    logger.info(
+      {
+        checkHour: hour,
+        timezone: tz || "UTC (set complianceTimezone in Organization settings)",
+        label: formatCheckHourLabel(hour)
+      },
+      "Daily log compliance reminders scheduled"
+    );
+  });
+
+  setInterval(() => {
+    void tick();
+  }, intervalMs);
   return tick;
 }
 
 function formatCheckHourLabel(hour24) {
   if (hour24 === 0) return "12:00 AM (midnight)";
   if (hour24 === 12) return "12:00 PM (noon)";
+  if (hour24 === 23) return "11:00 PM";
   if (hour24 < 12) return `${hour24}:00 AM`;
   return `${hour24 - 12}:00 PM`;
 }

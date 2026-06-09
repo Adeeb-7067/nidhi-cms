@@ -27,10 +27,13 @@ import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
 import {
   Table,
   TableBody,
@@ -158,20 +161,22 @@ export function AdminTeamLogsPanel() {
   const { data, isLoading, isFetching } = useListMyLogs(baseListParams);
   const { data: statsData, isLoading: statsLoading } = useListMyLogs(statsListParams);
 
-  const complianceDeveloperId = developerFilterId
-    ? Number.parseInt(developerFilterId, 10)
-    : undefined;
+  const complianceDeveloperId = useMemo(() => {
+    if (!developerFilterId) return undefined;
+    const id = Number.parseInt(developerFilterId, 10);
+    return Number.isFinite(id) ? id : undefined;
+  }, [developerFilterId]);
 
   const { data: complianceCalendar, isLoading: complianceLoading } =
     useGetLogComplianceCalendar(
-      { month, year, developerId: complianceDeveloperId! },
+      { month, year, developerId: complianceDeveloperId ?? 0 },
       {
         query: {
-          enabled: Boolean(complianceDeveloperId),
+          enabled: complianceDeveloperId != null,
           queryKey: getGetLogComplianceCalendarQueryKey({
             month,
             year,
-            developerId: complianceDeveloperId!,
+            developerId: complianceDeveloperId ?? 0,
           }),
         },
       },
@@ -317,15 +322,28 @@ export function AdminTeamLogsPanel() {
               onValueChange={(v) => setProjectFilterId(v === "all" ? "" : v)}
             >
               <SelectTrigger className="h-9 bg-muted/40">
-                <SelectValue placeholder="Project" />
+                <SelectValue placeholder="Project / activity" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All projects</SelectItem>
-                {(projectsData?.projects ?? []).map((p) => (
-                  <SelectItem key={p.id} value={p.id.toString()}>
-                    {p.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="all">All projects & activities</SelectItem>
+                <SelectGroup>
+                  <SelectLabel>General</SelectLabel>
+                  {DAILY_LOG_VIRTUAL_PROJECTS.map((option) => (
+                    <SelectItem key={option.id} value={String(option.id)}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                {(projectsData?.projects?.length ?? 0) > 0 ? (
+                  <SelectGroup>
+                    <SelectLabel>Projects</SelectLabel>
+                    {projectsData!.projects.map((p) => (
+                      <SelectItem key={p.id} value={p.id.toString()}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
               </SelectContent>
             </Select>
 
@@ -446,13 +464,8 @@ export function AdminTeamLogsPanel() {
         ]}
       />
 
-      <div
-        className={cn(
-          "grid gap-4",
-          complianceDeveloperId ? "lg:grid-cols-[1fr_minmax(280px,360px)]" : "",
-        )}
-      >
-        <PortalContentCard contentClassName="p-0">
+      <div className="flex flex-col gap-4 min-w-0">
+        <PortalContentCard contentClassName="p-0 min-w-0">
           <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-3">
             <PortalSectionMeta
               label="Log entries"
@@ -618,20 +631,19 @@ export function AdminTeamLogsPanel() {
         </PortalContentCard>
 
         {complianceDeveloperId ? (
-          <div className="lg:sticky lg:top-4 h-fit">
-            <LogComplianceCalendarPanel
-              data={complianceCalendar}
-              isLoading={complianceLoading}
-              title="Hours compliance"
-            />
-          </div>
+          <LogComplianceCalendarPanel
+            data={complianceCalendar}
+            isLoading={complianceLoading}
+            title="Hours compliance"
+          />
         ) : (
-          <Card className="border-dashed h-fit hidden lg:block">
-            <CardContent className="py-10 px-4 text-center text-sm text-muted-foreground">
+          <Card className="border-dashed">
+            <CardContent className="py-8 px-4 text-center text-sm text-muted-foreground">
               <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="font-medium text-foreground text-xs">Compliance calendar</p>
-              <p className="text-[11px] mt-1">
-                Select a developer in the filters to see their monthly hours compliance.
+              <p className="font-medium text-foreground text-xs">Hours compliance</p>
+              <p className="text-[11px] mt-1 max-w-md mx-auto">
+                Select a developer in the filters to see their monthly hours compliance below the
+                log table.
               </p>
             </CardContent>
           </Card>

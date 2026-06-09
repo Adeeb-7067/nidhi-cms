@@ -12,6 +12,10 @@ import {
 } from "../models/schema/index.js";
 import { formatProjectList } from "../mappers/project-format.js";
 import { buildOpenTicketCountFilter } from "../services/ticket-support.js";
+import {
+  isVirtualLogProjectId,
+  resolveLogProjectName,
+} from "./daily-log-virtual-projects.js";
 
 const OPEN_BUG_FILTER = {
   $or: [
@@ -180,6 +184,21 @@ export async function buildWorkspaceDashboard(user) {
   const formattedProjects = await formatProjectList(projects.slice(0, 8));
   const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
 
+  const recentLogProjectIds = [
+    ...new Set(
+      recentLogs
+        .map((l) => l.projectId)
+        .filter((id) => !isVirtualLogProjectId(id) && Number(id) > 0),
+    ),
+  ];
+  const recentLogProjectRows = recentLogProjectIds.length
+    ? await projectsTable
+        .find({ id: { $in: recentLogProjectIds } }, { id: 1, name: 1 })
+        .lean()
+        .exec()
+    : [];
+  const recentLogProjectById = new Map(recentLogProjectRows.map((p) => [p.id, p]));
+
   const recentBugs = recentBugDocs.map((b) => ({
     id: b.id,
     title: b.title,
@@ -237,7 +256,10 @@ export async function buildWorkspaceDashboard(user) {
       id: l.id,
       taskTitle: l.taskTitle,
       hoursSpent: l.hoursSpent,
-      projectName: projectNameById.get(l.projectId) ?? "Project",
+      projectName: resolveLogProjectName(
+        l.projectId,
+        recentLogProjectById.get(l.projectId) ?? projectNameById.get(l.projectId) ?? null,
+      ),
       logDate: l.logDate,
       projectId: l.projectId,
     })),

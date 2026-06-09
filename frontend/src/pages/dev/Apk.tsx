@@ -1,5 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { useListProjects, useGetApkReleases, useCreateApkRelease } from "@/api";
+import {
+  useListProjects,
+  useGetApkReleases,
+  useCreateApkRelease,
+  getGetApkReleasesQueryKey,
+  type ApkReleaseAudience,
+} from "@/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +19,7 @@ import {
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageCardGridSkeleton } from "@/components/loading";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -24,16 +31,28 @@ import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
+import { ApkAudienceField } from "@/components/apk/apk-audience-field";
+import {
+  getApkAudienceBadgeClass,
+  getApkAudienceLabel,
+  resolveApkDisplayName,
+  formatApkReleaseSubtitle,
+  toApkReleaseInput,
+} from "@/lib/apk-audience";
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { FileUploader } from "@/components/ui/file-uploader";
 
 const apkReleaseSchema = z.object({
+  name: z.string().min(1, "APK name is required"),
   version: z.string().min(1, "Version is required"),
-  buildNumber: z.coerce.number().optional(),
+  buildNumber: z
+    .union([z.coerce.number().int().positive(), z.literal(""), z.undefined()])
+    .optional()
+    .transform((v) => (v === "" || v === undefined ? undefined : v)),
   releaseType: z.enum(["alpha", "beta", "rc", "production"]),
   platform: z.enum(["android", "ios"]),
-  audience: z.enum(["team_only", "client_visible"]),
+  audience: z.enum(["team_only", "client_visible", "all_visible"]),
   changelog: z.string().optional(),
   fileUrl: z.string().url("Must be a valid URL"),
   minOsVersion: z.string().optional(),
@@ -41,49 +60,66 @@ const apkReleaseSchema = z.object({
 
 type ApkReleaseFormValues = z.infer<typeof apkReleaseSchema>;
 
+const APK_FORM_DEFAULTS: ApkReleaseFormValues = {
+  name: "",
+  version: "",
+  buildNumber: undefined,
+  releaseType: "beta",
+  platform: "android",
+  audience: "team_only",
+  changelog: "",
+  fileUrl: "",
+  minOsVersion: "",
+};
+
 export default function DevApk() {
+  const queryClient = useQueryClient();
   const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
 
   const { data: projectsData, isLoading: projectsLoading } = useListProjects({ limit: 50 });
-  const { data: releasesData, isLoading: releasesLoading, refetch: refetchReleases } = useGetApkReleases(
+  const { data: releasesData, isLoading: releasesLoading } = useGetApkReleases(
     selectedProjectId!,
     {
       query: {
         enabled: !!selectedProjectId,
-        queryKey: ["getApkReleases", selectedProjectId],
-      }
-    }
+        queryKey: getGetApkReleasesQueryKey(selectedProjectId!),
+      },
+    },
   );
 
   const createRelease = useCreateApkRelease();
 
   const form = useForm<ApkReleaseFormValues>({
     resolver: zodResolver(apkReleaseSchema),
-    defaultValues: {
-      version: "",
-      buildNumber: undefined,
-      releaseType: "beta",
-      platform: "android",
-      audience: "team_only",
-      changelog: "",
-      fileUrl: "",
-      minOsVersion: "",
-    },
+    defaultValues: APK_FORM_DEFAULTS,
   });
+
+  const handleDialogOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (!next) form.reset(APK_FORM_DEFAULTS);
+  };
 
   const onSubmit = async (values: ApkReleaseFormValues) => {
     if (!selectedProjectId) return;
     try {
-      await createRelease.mutateAsync({
+      const created = await createRelease.mutateAsync({
         id: selectedProjectId,
-        data: values,
+        data: toApkReleaseInput(values),
       });
-      toast.success("Release uploaded!");
+      toast.success(
+        created.audience === "all_visible"
+          ? "Release uploaded — visible to everyone on the project."
+          : created.audience === "client_visible"
+            ? "Release uploaded — visible to clients and team."
+            : "Release uploaded — team only.",
+      );
       setOpen(false);
-      form.reset();
-      refetchReleases();
-    } catch (error: any) {
+      form.reset(APK_FORM_DEFAULTS);
+      await queryClient.invalidateQueries({
+        queryKey: getGetApkReleasesQueryKey(selectedProjectId),
+      });
+    } catch (error: unknown) {
       toastApiError(error, "Action failed. Please try again.");
     }
   };
@@ -115,13 +151,7 @@ export default function DevApk() {
     };
   }, [projectsData?.projects, releasesData, selectedProjectId]);
 
-  const getAudienceColor = (audience: string) => {
-    switch (audience) {
-      case "team_only": return "bg-slate-500/10 text-slate-500 border-slate-500/50";
-      case "client_visible": return "bg-primary/10 text-primary border-primary/50";
-      default: return "";
-    }
-  };
+  const getAudienceColor = getApkAudienceBadgeClass;
 
   return (
     <DevPageShell>
@@ -208,8 +238,8 @@ export default function DevApk() {
         </div>
       </DevToolbar>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="sm:max-w-[600px] bg-card border-border">
+        <Dialog open={open} onOpenChange={handleDialogOpenChange}>
+          <DialogContent className="sm:max-w-[640px] max-h-[min(92dvh,900px)] overflow-y-auto bg-card border-border">
             <DialogHeader>
               <DialogTitle>Upload New Release</DialogTitle>
               <DialogDescription>
@@ -218,6 +248,22 @@ export default function DevApk() {
             </DialogHeader>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>APK name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Satya Kabir Android App" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Display name shown to team and clients on release lists
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -246,14 +292,14 @@ export default function DevApk() {
                     )}
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField
                     control={form.control}
                     name="releaseType"
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Type</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select type" />
@@ -276,7 +322,7 @@ export default function DevApk() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Platform</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select value={field.value} onValueChange={field.onChange}>
                           <FormControl>
                             <SelectTrigger>
                               <SelectValue placeholder="Select platform" />
@@ -295,21 +341,11 @@ export default function DevApk() {
                     control={form.control}
                     name="audience"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Audience</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select audience" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="team_only">Team Only</SelectItem>
-                            <SelectItem value="client_visible">Client Visible</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                      <ApkAudienceField
+                        value={field.value as ApkReleaseAudience}
+                        onChange={field.onChange}
+                        disabled={createRelease.isPending}
+                      />
                     )}
                   />
                 </div>
@@ -322,7 +358,18 @@ export default function DevApk() {
                       <FormControl>
                         <FileUploader
                           category="apk"
-                          onUploadComplete={field.onChange}
+                          onUploadComplete={(url, meta) => {
+                            field.onChange(url);
+                            if (meta?.fileName && !form.getValues("name")?.trim()) {
+                              const suggested = meta.fileName
+                                .replace(/\.(apk|ipa|aab|zip|app)$/i, "")
+                                .replace(/[-_]+/g, " ")
+                                .trim();
+                              if (suggested) {
+                                form.setValue("name", suggested, { shouldValidate: true });
+                              }
+                            }
+                          }}
                           value={field.value}
                           accept=".apk,.ipa,.zip,.aar,.app"
                           label="Drag & drop build or click to select"
@@ -363,8 +410,16 @@ export default function DevApk() {
                     </FormItem>
                   )}
                 />
-                <DialogFooter className="pt-4">
-                  <Button type="submit" disabled={createRelease.isPending}>
+                <DialogFooter className="gap-2 border-t border-border/60 pt-4 sm:justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleDialogOpenChange(false)}
+                    disabled={createRelease.isPending}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createRelease.isPending || !form.watch("fileUrl")}>
                     {createRelease.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Upload Release
                   </Button>
@@ -381,9 +436,7 @@ export default function DevApk() {
           description="Choose a project above to view its APK releases or upload a new build."
         />
       ) : releasesLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
-        </div>
+        <PageCardGridSkeleton count={3} itemClassName="h-48" />
       ) : !releasesData || releasesData.length === 0 ? (
         <DevEmptyState
           icon={Info}
@@ -400,17 +453,27 @@ export default function DevApk() {
                     {release.releaseType.toUpperCase()}
                   </Badge>
                   <Badge variant="outline" className={cn("text-[10px]", getAudienceColor(release.audience))}>
-                    {release.audience.replace('_', ' ').toUpperCase()}
+                    {getApkAudienceLabel(release.audience).toUpperCase()}
                   </Badge>
                 </div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  v{release.version}
-                  {release.buildNumber && <span className="text-xs font-normal text-muted-foreground">({release.buildNumber})</span>}
+                <CardTitle
+                  className="text-base font-semibold leading-snug sm:text-lg"
+                  title={resolveApkDisplayName(release)}
+                >
+                  <span className="line-clamp-2">{resolveApkDisplayName(release)}</span>
                 </CardTitle>
-                <CardDescription className="flex items-center gap-2 text-xs">
-                  <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0"> {release.platform}</Badge>
-                  <span>•</span>
-                  <span>{new Date(release.createdAt).toLocaleDateString()}</span>
+                <CardDescription className="space-y-1.5 text-xs">
+                  <span className="block text-foreground/80">
+                    {formatApkReleaseSubtitle(release)}
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0">
+                      {release.platform}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {new Date(release.createdAt).toLocaleDateString()}
+                    </span>
+                  </span>
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4 p-4">

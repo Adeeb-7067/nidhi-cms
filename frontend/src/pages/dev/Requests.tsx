@@ -11,7 +11,7 @@ import {
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageTableSkeleton } from "@/components/loading";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { useTablePagination } from "@/lib/table-pagination";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
@@ -318,11 +318,7 @@ export default function DevRequests() {
 
       {isLoading ? (
         <DevContentCard>
-          <div className="space-y-4">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
+          <PageTableSkeleton rows={8} columns={6} showToolbar />
         </DevContentCard>
       ) : !data?.requests?.length ? (
         <DevEmptyState

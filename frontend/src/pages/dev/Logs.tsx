@@ -22,12 +22,20 @@ import {
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
 import { PDFService } from "@/lib/pdf-service";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageLogEntriesSkeleton } from "@/components/loading";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
@@ -45,6 +53,7 @@ import {
   formatDailyLogUpdatedLabel,
   formatDailyLogWorkDate,
 } from "@/lib/daily-log-format";
+import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -192,9 +201,11 @@ function DeveloperLogsView() {
   const onSubmit = async (values: LogFormValues) => {
     try {
       if (isEditMode && editingLog) {
+        const nextProjectId = parseInt(values.projectId, 10);
         await updateLog.mutateAsync({
           id: editingLog.id,
           data: {
+            ...(nextProjectId !== editingLog.projectId ? { projectId: nextProjectId } : {}),
             taskTitle: values.taskTitle,
             workCategories: values.workCategories,
             hoursSpent: values.hoursSpent,
@@ -315,7 +326,7 @@ function DeveloperLogsView() {
                 <DialogTitle>{isEditMode ? "Edit Daily Log Entry" : "Add Daily Log Entry"}</DialogTitle>
                 {isEditMode && (
                   <p className="text-xs text-muted-foreground">
-                    You can edit today&apos;s logs only. Project and date cannot be changed.
+                    You can edit today&apos;s logs only. The log date cannot be changed.
                   </p>
                 )}
               </DialogHeader>
@@ -327,25 +338,40 @@ function DeveloperLogsView() {
                       name="projectId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Project</FormLabel>
+                          <FormLabel>Project / activity</FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
-                            disabled={isEditMode}
                           >
                             <FormControl>
-                              <SelectTrigger disabled={isEditMode}>
-                                <SelectValue placeholder="Select project" />
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select project or activity" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {projectsData?.projects.map((project) => (
-                                <SelectItem key={project.id} value={project.id.toString()}>
-                                  {project.name}
-                                </SelectItem>
-                              ))}
+                              <SelectGroup>
+                                <SelectLabel>General</SelectLabel>
+                                {DAILY_LOG_VIRTUAL_PROJECTS.map((option) => (
+                                  <SelectItem key={option.id} value={String(option.id)}>
+                                    {option.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                              {(projectsData?.projects?.length ?? 0) > 0 ? (
+                                <SelectGroup>
+                                  <SelectLabel>Projects</SelectLabel>
+                                  {projectsData!.projects.map((project) => (
+                                    <SelectItem key={project.id} value={project.id.toString()}>
+                                      {project.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectGroup>
+                              ) : null}
                             </SelectContent>
                           </Select>
+                          <FormDescription>
+                            Use Meeting or Others when the time is not tied to a specific project.
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -572,7 +598,7 @@ function DeveloperLogsView() {
 
       <div className="space-y-4">
         {isLoading ? (
-          [...Array(5)].map((_, i) => <Skeleton key={i} className="h-32 w-full" />)
+          <PageLogEntriesSkeleton count={5} />
         ) : data?.logs.length === 0 ? (
           <DevEmptyState
             icon={Clock}

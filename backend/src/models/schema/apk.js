@@ -7,6 +7,7 @@ const apkReleaseSchema = new Schema({
   companyId: { type: Number, ref: "Clients", index: true },
   projectId: { type: Number, ref: "Projects", required: true, index: true },
   uploaderId: { type: Number, ref: "Users", required: true },
+  name: { type: String, trim: true },
   version: { type: String, required: true },
   buildNumber: { type: Number, required: true },
   releaseType: { type: String, enum: apkReleaseTypes, default: "alpha", required: true },

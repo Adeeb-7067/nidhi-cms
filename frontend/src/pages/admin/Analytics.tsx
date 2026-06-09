@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageChartGridSkeleton, PageTableSkeleton } from "@/components/loading";
 import {
   Select,
   SelectContent,
@@ -35,9 +35,16 @@ import {
 } from "@/components/ui/table";
 import {
   PortalPageShell,
-  PortalPageHero,
+  PortalKpiGrid,
   PortalContentCard,
 } from "@/components/layout/portal-page-kit";
+import {
+  DashboardPageHeader,
+  DashboardFilterBar,
+  DashboardSectionLabel,
+  DashboardInsightBanner,
+} from "@/components/dashboard/dashboard-page-kit";
+import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
 import {
   AlertTriangle,
   ArrowRight,
@@ -251,62 +258,87 @@ export default function AdminAnalytics() {
 
   return (
     <PortalPageShell>
-      <PortalPageHero
-        title="Insights"
-        subtitle="Period-based analysis — workforce capacity, defect patterns, and client risk. For live operations, use the dashboard."
+      <DashboardPageHeader
+        title="Insights & analytics"
+        description="Workforce capacity, defect patterns, and client risk — compared over your selected period."
+        breadcrumbs={[{ label: "Manage", href: "/admin" }, { label: "Analytics" }]}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <PeriodPicker month={month} year={year} onMonth={setMonth} onYear={setYear} />
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/admin">
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                Dashboard
-              </Link>
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" className="h-8" asChild>
+            <Link href="/admin">
+              <LayoutDashboard className="h-4 w-4 mr-2" />
+              Dashboard
+            </Link>
+          </Button>
         }
       />
 
-      <Card className="border-dashed border-primary/25 bg-primary/[0.03]">
-        <CardContent className="py-3 px-4 flex flex-col sm:flex-row sm:items-center gap-3 text-sm">
-          <div className="flex items-start gap-2 text-muted-foreground">
-            <BarChart3 className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-            <p>
-              <span className="font-medium text-foreground">Analytics vs Dashboard — </span>
-              Dashboard shows what needs attention today. This page compares performance over{" "}
-              <span className="font-medium text-foreground">{formatMonthLabel(month, year)}</span> and
-              highlights imbalances.
-            </p>
-          </div>
-          <Button variant="ghost" size="sm" className="shrink-0 self-start sm:self-center" asChild>
+      <DashboardFilterBar onExport={() => undefined}>
+        <PeriodPicker month={month} year={year} onMonth={setMonth} onYear={setYear} />
+      </DashboardFilterBar>
+
+      <DashboardInsightBanner
+        icon={BarChart3}
+        title="Analytics vs dashboard"
+        action={
+          <Button variant="ghost" size="sm" className="shrink-0" asChild>
             <Link href="/admin/employees">
               Team drill-down
               <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Link>
           </Button>
-        </CardContent>
-      </Card>
+        }
+      >
+        <p>
+          Dashboard shows what needs attention today. This page compares performance over{" "}
+          <span className="font-medium text-foreground">{formatMonthLabel(month, year)}</span> and
+          highlights imbalances.
+        </p>
+      </DashboardInsightBanner>
+
+      {!isLoading && teamData && (
+        <div className="space-y-2">
+          <DashboardSectionLabel title={`Summary · ${formatMonthLabel(month, year)}`} />
+          <PortalKpiGrid
+            columns={4}
+            count={4}
+            items={[
+              { title: "Team members", value: developers.length, hint: "In scope", icon: Users, accent: "blue", delay: 0 },
+              { title: "Capacity used", value: `${workforceInsights.capacityUsed}%`, hint: `${workforceInsights.totalHours}h logged`, icon: Gauge, accent: workforceInsights.capacityUsed >= 70 ? "green" : "amber", delay: 1 },
+              { title: "Idle this month", value: workforceInsights.idle.length, hint: "Zero hours logged", icon: AlertTriangle, accent: "amber", alert: workforceInsights.idle.length > 0, delay: 2 },
+              { title: "Heavy load", value: workforceInsights.heavy.length, hint: "4+ projects", icon: Scale, accent: "red", alert: workforceInsights.heavy.length > 0, delay: 3 },
+            ]}
+          />
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="h-10 bg-muted/50 p-1 w-full sm:w-auto grid grid-cols-3 sm:inline-flex">
-          <TabsTrigger value="workforce" className="text-xs gap-1.5">
-            <Users className="h-3.5 w-3.5" />
-            Workforce
-          </TabsTrigger>
-          <TabsTrigger value="defects" className="text-xs gap-1.5">
-            <Bug className="h-3.5 w-3.5" />
-            Defects
-          </TabsTrigger>
-          <TabsTrigger value="clients" className="text-xs gap-1.5">
-            <Building2 className="h-3.5 w-3.5" />
-            Client risk
-          </TabsTrigger>
-        </TabsList>
+        <DashboardSectionLabel
+          title="Analysis views"
+          trailing={
+            <TabsList className="h-8 bg-muted/50 p-0.5">
+              <TabsTrigger value="workforce" className="text-[10px] gap-1 px-2.5 h-7">
+                <Users className="h-3 w-3" />
+                Workforce
+              </TabsTrigger>
+              <TabsTrigger value="defects" className="text-[10px] gap-1 px-2.5 h-7">
+                <Bug className="h-3 w-3" />
+                Defects
+              </TabsTrigger>
+              <TabsTrigger value="clients" className="text-[10px] gap-1 px-2.5 h-7">
+                <Building2 className="h-3 w-3" />
+                Client risk
+              </TabsTrigger>
+            </TabsList>
+          }
+        />
 
         {/* —— Workforce —— */}
         <TabsContent value="workforce" className="space-y-4 m-0">
           {isLoading ? (
-            <Skeleton className="h-48 w-full" />
+            <div className="space-y-4">
+              <PageChartGridSkeleton count={2} />
+              <PageTableSkeleton rows={6} columns={5} />
+            </div>
           ) : (
             <>
               <InsightStrip
@@ -433,7 +465,10 @@ export default function AdminAnalytics() {
         {/* —— Defects —— */}
         <TabsContent value="defects" className="space-y-4 m-0">
           {bugsLoading && !bugData ? (
-            <Skeleton className="h-48 w-full" />
+            <div className="space-y-4">
+              <PageChartGridSkeleton count={2} />
+              <PageTableSkeleton rows={5} columns={4} />
+            </div>
           ) : (
             <>
               <InsightStrip
@@ -580,7 +615,10 @@ export default function AdminAnalytics() {
         {/* —— Client risk —— */}
         <TabsContent value="clients" className="space-y-4 m-0">
           {companiesLoading && !companyData ? (
-            <Skeleton className="h-48 w-full" />
+            <div className="space-y-4">
+              <PageChartGridSkeleton count={2} />
+              <PageTableSkeleton rows={6} columns={5} />
+            </div>
           ) : (
             <>
               <InsightStrip

@@ -118,8 +118,17 @@ function broadcast(event, data) {
   }
 }
 
+function emitToUsers(userIds, event, data) {
+  if (!io || !userIds?.length) return;
+  const unique = [...new Set(userIds.filter((id) => id != null))];
+  for (const userId of unique) {
+    io.to(`user:${userId}`).emit(event, data);
+  }
+}
+
 export {
   broadcast,
+  emitToUsers,
   getIO,
   initRealtime,
   notifyUser,

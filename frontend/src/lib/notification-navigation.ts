@@ -53,9 +53,18 @@ export function getNotificationTarget(
     return { href: "/dev/tasks", label: "Tasks" };
   }
 
-  if (type === "comment") {
-    if (entityType === "project" && entityId != null) {
-      return { href: getDiscussionsHref(entityId), label: "Open discussion" };
+  if (type === "comment" || type === "comment_mention") {
+    if (entityType === "company_team") {
+      return {
+        href: getDiscussionsHref(null, { companyTeam: true }),
+        label: "Open team chat",
+      };
+    }
+    if ((entityType === "project" || entityType === "project_internal") && entityId != null) {
+      return {
+        href: getDiscussionsHref(entityId, { internal: entityType === "project_internal" }),
+        label: entityType === "project_internal" ? "Open internal chat" : "Open discussion",
+      };
     }
     if (entityType === "ticket" && entityId != null) {
       return { href: `/admin/tickets?ticket=${entityId}`, label: "Open ticket" };

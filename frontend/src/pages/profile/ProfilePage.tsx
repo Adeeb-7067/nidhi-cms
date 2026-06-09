@@ -4,7 +4,7 @@ import { useGetMe, useUpdateMyProfile, getGetMeQueryKey } from "@/api";
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
-import { AppLoadingScreen } from "@/components/loading";
+import { ProfilePageSkeleton } from "@/components/loading";
 import {
   Card,
   CardContent,
@@ -101,11 +101,9 @@ export default function ProfilePage() {
 
   if (isLoadingUser || !user) {
     return (
-      <AppLoadingScreen
-        variant="embedded"
-        message="Loading profile"
-        submessage="Fetching your account details…"
-      />
+      <PageShell hideHeader>
+        <ProfilePageSkeleton />
+      </PageShell>
     );
   }
 

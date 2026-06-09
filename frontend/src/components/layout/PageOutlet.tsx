@@ -12,7 +12,7 @@ const AdminClients = React.lazy(() => import("@/pages/admin/Clients"));
 const AdminTickets = React.lazy(() => import("@/pages/admin/Tickets"));
 const AdminAnalytics = React.lazy(() => import("@/pages/admin/Analytics"));
 const AdminRequests = React.lazy(() => import("@/pages/admin/Requests"));
-const AdminDiscussions = React.lazy(() => import("@/pages/admin/Discussions"));
+const DiscussionsPage = React.lazy(() => import("@/pages/admin/Discussions"));
 const DevWorkspace = React.lazy(() => import("@/pages/dev/Workspace"));
 const DevProjects = React.lazy(() => import("@/pages/dev/Projects"));
 const DevLogs = React.lazy(() => import("@/pages/dev/Logs"));
@@ -48,6 +48,18 @@ const SalesInstallmentDetail = React.lazy(() => import("@/pages/sales/Installmen
 const SalesReceiptDetail = React.lazy(() => import("@/pages/sales/ReceiptDetail"));
 const SalesSettings = React.lazy(() => import("@/pages/sales/Settings"));
 const SalesNotifications = React.lazy(() => import("@/pages/sales/SalesNotifications"));
+
+const FinanceDashboard = React.lazy(() => import("@/pages/finance/Dashboard"));
+const FinanceExpenses = React.lazy(() => import("@/pages/finance/Expenses"));
+const FinanceIncome = React.lazy(() => import("@/pages/finance/Income"));
+const FinanceInvoices = React.lazy(() => import("@/pages/finance/Invoices"));
+const FinanceInvoiceDetail = React.lazy(() => import("@/pages/finance/InvoiceDetail"));
+const FinancePayroll = React.lazy(() => import("@/pages/finance/Payroll"));
+const FinanceBudgets = React.lazy(() => import("@/pages/finance/Budgets"));
+const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
+const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
+const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
+const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
 
 /** Inner route switch — rendered inside persistent AppLayout (no layout remount on navigate). */
 export function PageOutlet() {
@@ -88,8 +100,11 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/discussions">
+        <Redirect to="/discussions" />
+      </Route>
+      <Route path="/discussions">
         <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
-          <AdminDiscussions />
+          <DiscussionsPage />
         </RoleGate>
       </Route>
       <Route path="/admin/analytics">
@@ -201,6 +216,62 @@ export function PageOutlet() {
       <Route path="/sales">
         <RoleGate allowedRoles={["super_admin"]}>
           <SalesDashboard />
+        </RoleGate>
+      </Route>
+
+      <Route path="/finance/invoices/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceInvoiceDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/expenses">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceExpenses />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/income">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceIncome />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/invoices">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceInvoices />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/payroll">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinancePayroll />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/budgets">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceBudgets />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/ledgers">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceLedgers />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/payments">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinancePayments />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/tax">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceTax />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/reports/pnl">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceReportsPnl />
+        </RoleGate>
+      </Route>
+      <Route path="/finance">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <FinanceDashboard />
         </RoleGate>
       </Route>
 

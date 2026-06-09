@@ -59,6 +59,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { PageTableSkeleton } from "@/components/loading";
 import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
 
 const taskSchema = z.object({
@@ -234,7 +235,7 @@ export default function DevTasks() {
 
       <DevContentCard contentClassName="p-0">
           {isLoading ? (
-            <p className="p-6 text-center text-sm text-muted-foreground">Loading tasks…</p>
+            <PageTableSkeleton rows={8} columns={6} showToolbar />
           ) : (
           <AdvancedTable
             data={data?.tasks ?? []}

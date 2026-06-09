@@ -48,6 +48,7 @@ export function ProjectBugsPanel({
             <TableHead className="text-[10px] font-semibold uppercase">Title</TableHead>
             <TableHead className="text-[10px] font-semibold uppercase">QA · Dev · Final</TableHead>
             <TableHead className="text-[10px] font-semibold uppercase">Reporter</TableHead>
+            {onEditBug && <TableHead className="w-10" />}
           </TableRow>
         </TableHeader>
         <TableBody>

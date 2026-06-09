@@ -105,7 +105,7 @@ export async function verifyMailer() {
     logger.error({ err, from }, "Nodemailer: SMTP verification failed");
     return { ok: false, reason: "verify_failed" };
   }
-}
+}   
 
 function wrapHtmlEmail({ title, bodyHtml, ctaLabel, ctaHref }) {
   const appName = process.env.VITE_APP_NAME?.trim() || process.env.APP_NAME?.trim() || "CMS";

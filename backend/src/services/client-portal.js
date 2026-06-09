@@ -51,6 +51,31 @@ async function createClientPortalUser(params) {
   });
   return user.id;
 }
+async function updateClientPortalEmail(params) {
+  const email = params.email.toLowerCase().trim();
+  if (!email) {
+    throw new HttpError(400, "Portal login email is required.", {
+      code: "VALIDATION_ERROR",
+      field: "portalEmail"
+    });
+  }
+  const user = await usersTable.findOne({ id: params.userId, role: "client" });
+  if (!user) {
+    throw new HttpError(404, "Portal user account not found for this company.", {
+      code: "NOT_FOUND"
+    });
+  }
+  if (user.email === email) return;
+  const taken = await usersTable.findOne({ email });
+  if (taken && taken.id !== params.userId) {
+    throw new HttpError(
+      409,
+      "This portal login email is already registered. Use a different email.",
+      { code: "CONFLICT", field: "portalEmail" }
+    );
+  }
+  await usersTable.updateOne({ id: params.userId }, { $set: { email } });
+}
 async function updateClientPortalPassword(params) {
   if (!params.password || params.password.length < 8) {
     throw new HttpError(400, "Portal password must be at least 8 characters.", {
@@ -85,5 +110,6 @@ async function updateClientPortalPassword(params) {
 }
 export {
   createClientPortalUser,
+  updateClientPortalEmail,
   updateClientPortalPassword
 };

@@ -2,10 +2,11 @@ import mongoose, { Schema } from "mongoose";
 const projectStatuses = ["scoping", "in_progress", "on_hold", "uat", "completed", "maintenance"];
 const projectPriorities = ["low", "medium", "high", "critical"];
 const milestoneStatuses = ["pending", "completed", "delayed"];
-const apkAudiences = ["team_only", "client_visible"];
+const apkAudiences = ["team_only", "client_visible", "all_visible"];
 const projectSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   name: { type: String, required: true },
+  logoUrl: { type: String },
   companyId: { type: Number, ref: "Clients", index: true },
   clientId: { type: Number, ref: "Clients", required: true, index: true },
   pmId: { type: Number, ref: "Users" },

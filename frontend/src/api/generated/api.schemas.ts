@@ -184,6 +184,8 @@ export const ProjectType = {
 export interface Project {
   id: number;
   name: string;
+  /** @nullable */
+  logoUrl?: string | null;
   companyId: number;
   companyName: string;
   clientId: number;
@@ -252,6 +254,13 @@ export interface Client {
   clientSince: string;
   /** @nullable */
   userId?: number | null;
+  /** @nullable */
+  portalEmail?: string | null;
+  /**
+   * Profile image from the linked portal user (fallback when logoUrl is unset)
+   * @nullable
+   */
+  portalAvatarUrl?: string | null;
   activeProjectCount: number;
   /** @nullable */
   portalLastLoginAt?: string | null;
@@ -482,6 +491,10 @@ export interface ClientUpdate {
   companyName?: string;
   contactPerson?: string;
   email?: string;
+  /** Portal login email (Gmail) — updates linked portal user when changed */
+  portalEmail?: string;
+  /** Reset portal login password (min 8 characters) */
+  password?: string;
   phone?: string;
   address?: string;
   gstNumber?: string;
@@ -531,6 +544,7 @@ export const ProjectInputType = {
 
 export interface ProjectInput {
   name: string;
+  logoUrl?: string;
   companyId?: number;
   clientId: number;
   pmId?: number;
@@ -582,6 +596,7 @@ export const ProjectUpdateType = {
 
 export interface ProjectUpdate {
   name?: string;
+  logoUrl?: string;
   pmId?: number;
   description?: string;
   status?: ProjectUpdateStatus;
@@ -643,6 +658,7 @@ export type ApkScheduleAudience =
 export const ApkScheduleAudience = {
   team_only: "team_only",
   client_visible: "client_visible",
+  all_visible: "all_visible",
 } as const;
 
 export interface ApkSchedule {
@@ -660,6 +676,7 @@ export type ApkScheduleInputAudience =
 export const ApkScheduleInputAudience = {
   team_only: "team_only",
   client_visible: "client_visible",
+  all_visible: "all_visible",
 } as const;
 
 export interface ApkScheduleInput {
@@ -739,6 +756,7 @@ export interface LogInput {
 }
 
 export interface LogUpdate {
+  projectId?: number;
   workCategories?: string[];
   taskTitle?: string;
   taskDescription?: string;
@@ -852,6 +870,13 @@ export const BugUpdatePlatform = {
   all: "all",
 } as const;
 
+export type BugIssueInput = {
+  title: string;
+  qaStatus?: "open" | "fixed";
+  devStatus?: "open" | "fixed";
+  finalStatus?: "open" | "resolved";
+};
+
 export interface BugUpdate {
   title?: string;
   description?: string;
@@ -861,6 +886,7 @@ export interface BugUpdate {
   devStatus?: "open" | "fixed";
   finalStatus?: "open" | "resolved";
   issueKey?: string;
+  addIssues?: BugIssueInput[];
   assigneeId?: number;
   assigneeIds?: number[];
   attachmentUrl?: string;
@@ -1074,6 +1100,7 @@ export type ApkReleaseAudience =
 export const ApkReleaseAudience = {
   team_only: "team_only",
   client_visible: "client_visible",
+  all_visible: "all_visible",
 } as const;
 
 export interface ApkRelease {
@@ -1081,6 +1108,12 @@ export interface ApkRelease {
   projectId: number;
   uploaderId: number;
   uploaderName: string;
+  /** Label for UI (resolved; never empty when version exists). */
+  displayName?: string;
+  /** User-defined APK name from upload; null on legacy releases. */
+  customName?: string | null;
+  /** @deprecated Use displayName — kept for backward compatibility. */
+  name: string;
   version: string;
   buildNumber: number;
   releaseType: ApkReleaseReleaseType;
@@ -1120,9 +1153,11 @@ export type ApkReleaseInputAudience =
 export const ApkReleaseInputAudience = {
   team_only: "team_only",
   client_visible: "client_visible",
+  all_visible: "all_visible",
 } as const;
 
 export interface ApkReleaseInput {
+  name: string;
   version: string;
   buildNumber?: number;
   releaseType: ApkReleaseInputReleaseType;
@@ -1139,6 +1174,8 @@ export type CommentThreadType =
 
 export const CommentThreadType = {
   project: "project",
+  project_internal: "project_internal",
+  company_team: "company_team",
   log: "log",
   bug: "bug",
   apk: "apk",
@@ -1164,6 +1201,7 @@ export interface Comment {
   attachmentMimeType?: string | null;
   /** @nullable */
   parentId?: number | null;
+  mentionedUserIds?: number[];
   isEdited: boolean;
   replies?: Comment[];
   createdAt: string;
@@ -1175,6 +1213,8 @@ export type CommentInputThreadType =
 
 export const CommentInputThreadType = {
   project: "project",
+  project_internal: "project_internal",
+  company_team: "company_team",
   log: "log",
   bug: "bug",
   apk: "apk",
@@ -1190,6 +1230,7 @@ export interface CommentInput {
   attachmentName?: string;
   attachmentMimeType?: string;
   parentId?: number;
+  mentionedUserIds?: number[];
 }
 
 export interface CommentUpdate {
@@ -1511,6 +1552,10 @@ export interface CompanySettings {
   requiredDailyWorkHours: number;
   /** When true, staff must meet required hours and receive alerts if not */
   dailyLogComplianceEnabled: boolean;
+  /** Local hour (0–23) for incomplete daily-log email reminders. Default 23 (11 PM). */
+  dailyLogReminderHour: number;
+  /** @nullable IANA timezone for reminder scheduling */
+  complianceTimezone?: string | null;
   updatedAt: string;
 }
 
@@ -1521,6 +1566,9 @@ export interface CompanySettingsUpdate {
   sealUrl?: string;
   requiredDailyWorkHours?: number;
   dailyLogComplianceEnabled?: boolean;
+  dailyLogReminderHour?: number;
+  /** @nullable */
+  complianceTimezone?: string | null;
 }
 
 export interface DailyLogSummary {

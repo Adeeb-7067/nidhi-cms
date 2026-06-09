@@ -10,7 +10,7 @@ export default function NotFound() {
       <div className="relative mb-8">
         <div className="text-[12rem] font-bold text-muted/20 select-none">404</div>
         <div className="absolute inset-0 flex items-center justify-center">
-          <AppLogo size="lg" className="max-w-[12rem]" />
+          <AppLogo size="xl" />
         </div>
       </div>
 

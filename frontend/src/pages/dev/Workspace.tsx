@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Briefcase,
@@ -19,13 +20,18 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGetWorkspaceDashboard } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
-  DashboardHero,
-  ExecutiveStatCard,
+  DashboardPageHeader,
+  DashboardFilterBar,
+  DashboardSectionLabel,
+  DashboardPipelineFlow,
+} from "@/components/dashboard/dashboard-page-kit";
+import {
   DashboardSkeleton,
   QuickAction,
 } from "@/components/dashboard/dashboard-kit";
+import { toast } from "sonner";
 import {
   ChartPanel,
   ChartGridCell,
@@ -34,6 +40,7 @@ import {
   DashboardPipelineChart,
   DashboardSeverityChart,
 } from "@/components/dashboard/admin-dashboard-charts";
+import { WorkspaceRecentProjectsList } from "@/components/dashboard/WorkspaceRecentProjectsList";
 import { cn } from "@/lib/utils";
 import { getProjectDetailHref } from "@/lib/project-routes";
 
@@ -53,6 +60,25 @@ function formatTrendMonth(monthKey: string) {
   });
 }
 
+function projectStatusBadgeClass(status: string) {
+  switch (status) {
+    case "in_progress":
+      return "bg-blue-500/10 text-blue-600 border-blue-500/20 dark:text-blue-400";
+    case "completed":
+      return "bg-green-500/10 text-green-600 border-green-500/20 dark:text-green-400";
+    case "on_hold":
+      return "bg-slate-500/10 text-slate-600 border-slate-500/20 dark:text-slate-400";
+    case "scoping":
+      return "bg-purple-500/10 text-purple-600 border-purple-500/20 dark:text-purple-400";
+    case "uat":
+      return "bg-amber-500/10 text-amber-600 border-amber-500/20 dark:text-amber-400";
+    case "maintenance":
+      return "bg-cyan-500/10 text-cyan-600 border-cyan-500/20 dark:text-cyan-400";
+    default:
+      return "bg-muted text-muted-foreground border-border";
+  }
+}
+
 const ROLE_LABELS: Record<string, string> = {
   developer: "Developer",
   tester: "QA / Tester",
@@ -62,6 +88,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function DevWorkspace() {
   const { user } = useAuth();
+  const [period, setPeriod] = useState("6m");
   const { data, isLoading, isError } = useGetWorkspaceDashboard();
 
   if (!user) return null;
@@ -118,7 +145,7 @@ export default function DevWorkspace() {
         { title: "Report bug", description: "Log a new defect with steps and attachments", icon: Bug, href: "/dev/bugs", accent: "red" as const },
         { title: "Bug tracker", description: "Review open and in-progress issues", icon: FlaskConical, href: "/dev/bugs", accent: "amber" as const },
         { title: "Tickets", description: "Support and client requests", icon: Ticket, href: "/admin/tickets", accent: "violet" as const },
-        { title: "Discussions", description: "Project threads and updates", icon: MessageSquare, href: "/admin/discussions", accent: "sky" as const },
+        { title: "Discussions", description: "Project threads and updates", icon: MessageSquare, href: "/discussions", accent: "sky" as const },
       ]
     : [
         { title: "My projects", description: "Ongoing assignments and deadlines", icon: Briefcase, href: "/dev/projects", accent: "sky" as const },
@@ -129,26 +156,56 @@ export default function DevWorkspace() {
         { title: "Support tickets", description: "Raise and track tickets you have submitted", icon: Ticket, href: "/admin/tickets", accent: "violet" as const },
       ];
 
+  const pipelineFlowStages = pipelineData.map((d, i) => ({
+    label: d.name,
+    value: d.value,
+    color: [
+      "bg-purple-500/15 text-purple-700 border-purple-500/30 dark:text-purple-300",
+      "bg-blue-500/15 text-blue-700 border-blue-500/30 dark:text-blue-300",
+      "bg-amber-500/15 text-amber-700 border-amber-500/30 dark:text-amber-300",
+      "bg-slate-500/15 text-slate-700 border-slate-500/30 dark:text-slate-300",
+      "bg-emerald-500/15 text-emerald-700 border-emerald-500/30 dark:text-emerald-300",
+      "bg-cyan-500/15 text-cyan-700 border-cyan-500/30 dark:text-cyan-300",
+    ][i % 6],
+  }));
+
+  const primaryKpis = [
+    { title: "My projects", value: kpis.projects, hint: `${kpis.activeDevProjects} active · ${kpis.maintenanceProjects} maintenance`, icon: Briefcase, href: "/dev/projects", accent: "blue" as const, delay: 0 },
+    { title: "Open bugs", value: kpis.openBugs, hint: isDeveloper && kpis.bugsAssigned != null ? `${kpis.bugsAssigned} assigned to you` : "Needs attention", icon: Bug, href: "/dev/bugs", accent: "red" as const, alert: kpis.openBugs > 0, delay: 1 },
+    { title: "Open tickets", value: kpis.openTickets, hint: isDeveloper ? "Tickets you raised" : "Support queue", icon: Ticket, href: "/admin/tickets", accent: "violet" as const, alert: kpis.openTickets > 0, delay: 2 },
+    { title: "Notifications", value: kpis.unreadNotifications, hint: "Unread alerts", icon: Bell, href: "/notifications", accent: "sky" as const, alert: kpis.unreadNotifications > 0, delay: 3 },
+  ];
+
+  const secondaryKpis = [
+    ...(isDeveloper && kpis.hoursThisWeek != null
+      ? [{ title: "Hours this week", value: kpis.hoursThisWeek, hint: "Logged time", icon: Clock, href: "/dev/logs", accent: "green" as const, delay: 4 }]
+      : []),
+    ...(isTester && kpis.bugsReported != null
+      ? [{ title: "Bugs reported", value: kpis.bugsReported, hint: "Issues you filed", icon: FlaskConical, href: "/dev/bugs", accent: "amber" as const, alert: kpis.bugsReported > 0, delay: 4 }]
+      : []),
+  ];
+
   return (
+    <PortalPageShell>
     <motion.div
-      className="space-y-4 pb-8"
+      className="space-y-4"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25 }}
     >
-      <DashboardHero
+      <DashboardPageHeader
         title={`${getGreeting()}, ${user.name.split(" ")[0]}`}
-        subtitle={
+        description={
           data.attentionCount > 0
             ? `${data.attentionCount} item${data.attentionCount === 1 ? "" : "s"} need attention · ${today}`
             : isTester
               ? `Quality overview · ${today}`
               : `Your delivery hub · ${today}`
         }
-        badge={ROLE_LABELS[role] ?? role}
+        breadcrumbs={[{ label: "Delivery", href: "/dev" }, { label: "Workspace" }]}
         actions={
           role === "super_admin" ? (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" className="h-8" asChild>
               <Link href="/admin">
                 <LayoutDashboard className="h-4 w-4 mr-2" />
                 Admin dashboard
@@ -158,80 +215,28 @@ export default function DevWorkspace() {
         }
       />
 
-      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
-        <ExecutiveStatCard
-          title="My Projects"
-          value={kpis.projects}
-          hint={`${kpis.activeDevProjects} active · ${kpis.maintenanceProjects} maintenance`}
-          icon={Briefcase}
-          href="/dev/projects"
-          accent="blue"
-          delay={0}
-        />
-        <ExecutiveStatCard
-          title="Open Bugs"
-          value={kpis.openBugs}
-          hint={isDeveloper && kpis.bugsAssigned != null ? `${kpis.bugsAssigned} assigned to you` : "Needs attention"}
-          icon={Bug}
-          href="/dev/bugs"
-          accent="red"
-          alert={kpis.openBugs > 0}
-          delay={1}
-        />
-        <ExecutiveStatCard
-          title="Open Tickets"
-          value={kpis.openTickets}
-          hint={isDeveloper ? "Tickets you raised" : "Support queue"}
-          icon={Ticket}
-          href="/admin/tickets"
-          accent="violet"
-          alert={kpis.openTickets > 0}
-          delay={2}
-        />
-        <ExecutiveStatCard
-          title="Notifications"
-          value={kpis.unreadNotifications}
-          hint="Unread"
-          icon={Bell}
-          href="/notifications"
-          accent="sky"
-          alert={kpis.unreadNotifications > 0}
-          delay={3}
-        />
+      <DashboardFilterBar
+        period={period}
+        onPeriodChange={setPeriod}
+        onExport={() => toast.success("Workspace summary export started")}
+      />
+
+      <DashboardPipelineFlow title="Your project pipeline" stages={pipelineFlowStages} />
+
+      <div className="space-y-2">
+        <DashboardSectionLabel title="Workspace KPIs" />
+        <PortalKpiGrid columns={4} count={4} items={primaryKpis} />
       </div>
 
-      {(isDeveloper || isTester) && (
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-          {isDeveloper && kpis.hoursThisWeek != null && (
-            <ExecutiveStatCard
-              title="Hours This Week"
-              value={kpis.hoursThisWeek}
-              hint="Logged time"
-              icon={Clock}
-              href="/dev/logs"
-              accent="green"
-              delay={4}
-            />
-          )}
-          {isTester && kpis.bugsReported != null && (
-            <ExecutiveStatCard
-              title="Bugs Reported"
-              value={kpis.bugsReported}
-              hint="Open issues you filed"
-              icon={FlaskConical}
-              href="/dev/bugs"
-              accent="amber"
-              alert={kpis.bugsReported > 0}
-              delay={4}
-            />
-          )}
+      {secondaryKpis.length > 0 && (
+        <div className="space-y-2">
+          <DashboardSectionLabel title="Activity" />
+          <PortalKpiGrid columns={4} count={secondaryKpis.length} items={secondaryKpis} />
         </div>
       )}
 
       <section>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">
-          Quick actions
-        </p>
+        <DashboardSectionLabel title="Quick actions" className="mb-3" />
         <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
           {quickActions.map((action, i) => (
             <QuickAction key={`${action.href}-${action.title}`} {...action} delay={i} />
@@ -240,56 +245,37 @@ export default function DevWorkspace() {
       </section>
 
       <motion.section
-        className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-stretch"
+        className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-start"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         aria-label="Workspace analytics"
       >
-        <ChartGridCell colSpan={8} className="min-h-[340px] lg:min-h-[380px]">
-          <ChartPanel
-            title="Recent projects"
-            description="Your latest assignments and progress"
-            icon={Briefcase}
-            accent="blue"
-            viewAllHref="/dev/projects"
-            badge={data.recentProjects.length}
-          >
-            {data.recentProjects.length > 0 ? (
-              <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
-                {data.recentProjects.map((project) => (
-                  <Link key={project.id} href={getProjectDetailHref(project.id)}>
-                    <div className="group rounded-xl border border-border/60 p-3 transition-all hover:border-primary/30 hover:bg-muted/30">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold truncate group-hover:text-primary">{project.name}</p>
-                          <p className="text-[11px] text-muted-foreground truncate">
-                            {project.companyName ?? "Project"}
-                          </p>
-                        </div>
-                        <Badge variant="secondary" className="shrink-0 text-[10px] capitalize">
-                          {project.status.replace(/_/g, " ")}
-                        </Badge>
-                      </div>
-                      <div className="mt-2 space-y-1">
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span>Progress</span>
-                          <span className="font-medium text-foreground">{project.completionPct}%</span>
-                        </div>
-                        <Progress value={project.completionPct} className="h-1.5" />
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <ChartEmptyState message="No projects assigned yet." icon={Briefcase} />
-            )}
-          </ChartPanel>
-        </ChartGridCell>
+        <div className="lg:col-span-12 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch min-h-[340px] lg:min-h-[380px]">
+          <ChartGridCell colSpan={8}>
+            <ChartPanel
+              title="Recent projects"
+              description="Your latest assignments and progress"
+              icon={Briefcase}
+              accent="blue"
+              viewAllHref="/dev/projects"
+              badge={kpis.projects}
+            >
+              {data.recentProjects.length > 0 ? (
+                <WorkspaceRecentProjectsList
+                  projects={data.recentProjects}
+                  totalCount={kpis.projects}
+                  getProjectHref={getProjectDetailHref}
+                  statusBadgeClass={projectStatusBadgeClass}
+                />
+              ) : (
+                <ChartEmptyState message="No projects assigned yet." icon={Briefcase} />
+              )}
+            </ChartPanel>
+          </ChartGridCell>
 
-        <div className="lg:col-span-4 grid grid-rows-2 gap-3 min-h-[340px] lg:min-h-[380px]">
-          <div className="flex min-h-0 flex-col">
+          <div className="lg:col-span-4 grid min-h-0 grid-rows-2 gap-3">
+            <div className="flex min-h-0 flex-col">
             <ChartPanel
               title="Project pipeline"
               description="Status across your portfolio"
@@ -302,15 +288,16 @@ export default function DevWorkspace() {
                 <ChartEmptyState message="No projects in your pipeline yet." icon={Layers} />
               )}
             </ChartPanel>
-          </div>
-          <div className="flex min-h-0 flex-col">
-            <ChartPanel title="Bug severity" description="Open issues by priority" icon={Bug} accent="rose">
+            </div>
+            <div className="flex min-h-0 flex-col">
+              <ChartPanel title="Bug severity" description="Open issues by priority" icon={Bug} accent="rose">
               {bugData.length > 0 ? (
                 <DashboardSeverityChart data={bugData} />
               ) : (
                 <ChartEmptyState message="No open bugs in your scope." icon={Bug} />
               )}
-            </ChartPanel>
+              </ChartPanel>
+            </div>
           </div>
         </div>
 
@@ -419,5 +406,6 @@ export default function DevWorkspace() {
         )}
       </motion.section>
     </motion.div>
+    </PortalPageShell>
   );
 }

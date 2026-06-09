@@ -6,6 +6,7 @@ import {
   inventorySubscriptionsTable,
   apkReleasesTable,
 } from "../../models/schema/index.js";
+import { CLIENT_PORTAL_APK_AUDIENCES } from "../../services/apk-access.js";
 import { clientVisibilityFilter } from "../../services/access/inventory-access.js";
 import { guardInventoryAccess, parseProjectIdParam } from "./guard.js";
 
@@ -25,7 +26,7 @@ export async function getProjectsByProjectIdInventorySummary(req, res) {
     inventorySubscriptionsTable.countDocuments({ projectId, ...notDeleted }),
     apkReleasesTable.countDocuments({
       projectId,
-      ...(access.isClient ? { audience: "client_visible" } : {}),
+      ...(access.isClient ? { audience: { $in: CLIENT_PORTAL_APK_AUDIENCES } } : {}),
     }),
   ]);
 

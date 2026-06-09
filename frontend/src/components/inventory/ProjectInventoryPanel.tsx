@@ -56,6 +56,7 @@ import {
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { formatDistanceToNow } from "date-fns";
+import { resolveApkDisplayName, formatApkReleaseSubtitle } from "@/lib/apk-audience";
 
 export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
   const { user } = useAuth();
@@ -563,10 +564,13 @@ function BuildsTab({ projectId }: { projectId: number }) {
               }`}
             >
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-medium truncate">
-                  v{b.version} ({b.buildNumber}) · {b.platform}
+                <p className="text-xs font-semibold truncate" title={resolveApkDisplayName(b)}>
+                  {resolveApkDisplayName(b)}
                 </p>
                 <p className="text-[10px] text-muted-foreground truncate">
+                  {formatApkReleaseSubtitle(b)}
+                </p>
+                <p className="text-[10px] text-muted-foreground/80 truncate">
                   {b.uploaderName} ·{" "}
                   {formatDistanceToNow(new Date(b.createdAt), { addSuffix: true })}
                 </p>

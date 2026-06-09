@@ -1,6 +1,9 @@
 import { reportsTable, reportTypes, getNextSequence } from "../models/schema/index.js";
 import { resolvePublicFileUrl } from "../lib/file-storage.js";
 import { badRequest, notFound } from "../utils/route-errors.js";
+import { assertValidLogProjectId } from "../services/daily-log-virtual-projects.js";
+
+const LOG_REPORT_TYPES = new Set(["developer_monthly", "project_progress", "raw_log_export"]);
 
 function formatReportRow(r, req) {
   return {
@@ -31,7 +34,15 @@ async function postReports(req, res) {
       "type",
     );
   }
-  if (!projectId) badRequest("projectId is required.", "projectId");
+  if (projectId == null || projectId === "") badRequest("projectId is required.", "projectId");
+  const projectIdNum = Number(projectId);
+  if (LOG_REPORT_TYPES.has(type)) {
+    if (!assertValidLogProjectId(projectIdNum)) {
+      badRequest("Invalid project or activity selection.", "projectId");
+    }
+  } else if (!Number.isFinite(projectIdNum) || projectIdNum <= 0) {
+    badRequest("A valid project is required.", "projectId");
+  }
   const nextId = await getNextSequence("reports");
   const report = await reportsTable.create({
     id: nextId,

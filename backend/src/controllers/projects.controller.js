@@ -9,10 +9,13 @@ import {
   getNextSequence
 } from "../models/schema/index.js";
 import { formatProject, formatProjectList } from "../mappers/project-format.js";
+import { validateStoredFileUrl } from "../lib/file-storage.js";
 import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
 import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
+import { assertProjectAccess } from "../services/access/access-helpers.js";
 import { paginateModel } from "../utils/mongo-list.js";
+import { resolveLogProjectName } from "../services/daily-log-virtual-projects.js";
 import {
   badRequest,
   conflict,
@@ -82,10 +85,13 @@ async function postProjects(req, res) {
   if (!priority) badRequest("Priority is required.", "priority");
   if (!startDate) badRequest("Start date is required.", "startDate");
   if (!deadline) badRequest("Deadline is required.", "deadline");
+  const logoUrl = optionalString(body.logoUrl);
+  if (logoUrl) validateStoredFileUrl(logoUrl, "logoUrl");
   const nextId = await getNextSequence("projects");
   const project = await projectsTable.create({
     id: nextId,
     name,
+    logoUrl: logoUrl ?? null,
     companyId: resolvedCompanyId,
     clientId: resolvedCompanyId,
     pmId: body.pmId != null ? Number(body.pmId) : null,
@@ -116,12 +122,17 @@ async function getProjectsById(req, res) {
 }
 async function patchProjectsById(req, res) {
   const id = parseInt(req.params["id"]);
-  const { name, pmId, description, status, type, priority, startDate, deadline, techStack, figmaUrl, repoUrl, stagingUrl, productionUrl, completionOverride, adminUrl, websiteUrl, postmanJson } = req.body;
+  const { name, pmId, description, status, type, priority, startDate, deadline, techStack, figmaUrl, repoUrl, stagingUrl, productionUrl, completionOverride, adminUrl, websiteUrl, postmanJson, logoUrl } = req.body;
+  if (logoUrl !== void 0) {
+    const normalized = optionalString(logoUrl);
+    if (normalized) validateStoredFileUrl(normalized, "logoUrl");
+  }
   const project = await projectsTable.findOneAndUpdate(
     { id },
     {
       $set: {
         ...name !== void 0 && { name },
+        ...logoUrl !== void 0 && { logoUrl: optionalString(logoUrl) ?? null },
         ...pmId !== void 0 && { pmId },
         ...description !== void 0 && { description },
         ...status !== void 0 && { status },
@@ -395,6 +406,7 @@ async function postProjectsByIdMilestones(req, res) {
 }
 async function getProjectsByIdLogs(req, res) {
   const projectId = parseInt(req.params["id"]);
+  const project = await projectsTable.findOne({ id: projectId }, { id: 1, name: 1 }).lean();
   const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: -1 }).lean();
   const isClient = req.user?.role === "client";
   const developerIds = [...new Set(logs.map((l) => l.developerId).filter(Boolean))];
@@ -423,7 +435,7 @@ async function getProjectsByIdLogs(req, res) {
       updatedAt: l.updatedAt.toISOString(),
       developerName: user?.name ?? "Unknown",
       developerEmployeeId: user?.employeeId ?? null,
-      projectName: "",
+      projectName: resolveLogProjectName(projectId, project),
     };
   });
   res.json({
@@ -450,23 +462,25 @@ async function getProjectsByIdBugs(req, res) {
 }
 async function getProjectsByIdApkReleases(req, res) {
   const { apkReleasesTable } = await import("../models/schema/index.js");
+  const { buildApkReleaseListFilter, formatApkReleaseRow } = await import("../services/apk-access.js");
+  const { IdLookupCache } = await import("../lib/lookup-cache.js");
+  const { usersTable } = await import("../models/schema/index.js");
   const projectId = parseInt(req.params["id"]);
-  const releases = await apkReleasesTable.find({ projectId }).sort({ createdAt: -1 });
-  res.json(releases.map((r) => ({
-    id: r.id,
-    projectId: r.projectId,
-    uploaderId: r.uploaderId,
-    version: r.version,
-    buildNumber: r.buildNumber,
-    releaseType: r.releaseType,
-    changelog: r.changelog,
-    platform: r.platform,
-    minOsVersion: r.minOsVersion,
-    fileUrl: r.fileUrl,
-    audience: r.audience,
-    apkScheduleId: r.apkScheduleId,
-    createdAt: r.createdAt.toISOString()
-  })));
+  await assertProjectAccess(req, projectId);
+  const releases = await apkReleasesTable
+    .find({ projectId, ...buildApkReleaseListFilter(req.user) })
+    .sort({ createdAt: -1 })
+    .lean()
+    .exec();
+  const uploaders = new IdLookupCache(async (ids) =>
+    usersTable.find({ id: { $in: ids } }, { id: 1, name: 1 }).lean().exec(),
+  );
+  await uploaders.preload(releases.map((r) => r.uploaderId));
+  res.json(
+    releases.map((r) =>
+      formatApkReleaseRow(r, uploaders.get(r.uploaderId)?.name ?? "Unknown"),
+    ),
+  );
 }
 async function getProjectsByIdHistory(req, res) {
   const { auditLogsTable } = await import("../models/schema/index.js");

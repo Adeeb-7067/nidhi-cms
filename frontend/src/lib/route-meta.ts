@@ -36,9 +36,10 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     title: "Support tickets",
     description: "Track and resolve client and internal support issues.",
   },
-  "/admin/discussions": {
+  "/discussions": {
     title: "Discussions",
     description: "Team and client conversation threads.",
+    hideHeader: true,
   },
   "/admin/analytics": {
     title: "Analytics",
@@ -112,6 +113,56 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
   "/sales/settings": {
     title: "Automation & settings",
     description: "Lead assignment, status flow, notifications, and tax rules.",
+    hideHeader: true,
+  },
+  "/finance": {
+    title: "Finance dashboard",
+    description: "Company-wide financial overview — income, expenses, budgets, and cash flow.",
+    hideHeader: true,
+  },
+  "/finance/expenses": {
+    title: "Expenses",
+    description: "Track, approve, and analyse company spending.",
+    hideHeader: true,
+  },
+  "/finance/income": {
+    title: "Income",
+    description: "Track client payments and revenue collections.",
+    hideHeader: true,
+  },
+  "/finance/invoices": {
+    title: "Invoices",
+    description: "Create, track, and manage client billing documents.",
+    hideHeader: true,
+  },
+  "/finance/payroll": {
+    title: "Payroll",
+    description: "Salary structures, monthly processing, and salary slips.",
+    hideHeader: true,
+  },
+  "/finance/budgets": {
+    title: "Budgets",
+    description: "Annual and project budgets with variance tracking.",
+    hideHeader: true,
+  },
+  "/finance/ledgers": {
+    title: "Ledgers",
+    description: "Client, vendor, expense, and bank account ledgers.",
+    hideHeader: true,
+  },
+  "/finance/payments": {
+    title: "Payments",
+    description: "Incoming and outgoing payments, receipts, and due reminders.",
+    hideHeader: true,
+  },
+  "/finance/tax": {
+    title: "Tax",
+    description: "GST dashboard, TDS summaries, and compliance reports.",
+    hideHeader: true,
+  },
+  "/finance/reports/pnl": {
+    title: "Financial reports",
+    description: "Profit & loss, profitability analysis, and revenue analytics.",
     hideHeader: true,
   },
   "/settings": {
@@ -206,10 +257,12 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
   const zones: Record<string, { label: string; home: string }> = {
     admin: { label: "Admin", home: "/admin" },
     sales: { label: "Sales", home: "/sales" },
+    finance: { label: "Finance", home: "/finance" },
     dev: { label: "Dev", home: "/dev" },
     client: { label: "Client", home: "/client" },
     settings: { label: "Settings", home: "/settings" },
     notifications: { label: "Alerts", home: "/notifications" },
+    discussions: { label: "Discussions", home: "/discussions" },
     profile: { label: "Account", home: "/profile" },
   };
 
@@ -276,6 +329,9 @@ export function getRouteMeta(pathname: string): RouteMeta {
   }
   if (/^\/sales\/customers\/\d+/.test(pathname)) {
     return { title: "Customer profile", hideHeader: true };
+  }
+  if (/^\/finance\/invoices\/\d+/.test(pathname)) {
+    return { title: "Invoice details", hideHeader: true };
   }
 
   return { title: "CMS", description: undefined };

@@ -50,6 +50,25 @@ const fadeUp = {
   }),
 };
 
+const logoReveal = {
+  hidden: { opacity: 0, scale: 0.82, rotate: -8 },
+  show: {
+    opacity: 1,
+    scale: 1,
+    rotate: 0,
+    transition: { delay: 0.06, duration: 0.65, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
+
+const brandNameReveal = {
+  hidden: { opacity: 0, x: 16 },
+  show: {
+    opacity: 1,
+    x: 0,
+    transition: { delay: 0.18, duration: 0.6, ease: [0.22, 1, 0.36, 1] as const },
+  },
+};
+
 const tabMotion = {
   initial: { opacity: 0, x: 20, filter: "blur(4px)" },
   animate: { opacity: 1, x: 0, filter: "blur(0px)" },
@@ -273,7 +292,6 @@ export default function Login() {
       },
     );
   };
-
   return (
     <div className="fixed inset-0 h-dvh w-full overflow-hidden text-slate-900">
       <LoginBackground />
@@ -286,12 +304,33 @@ export default function Login() {
           transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
           className="hidden h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-r border-white/50 bg-white/30 px-8 py-8 backdrop-blur-md lg:flex xl:px-14"
         >
-          <div className="flex min-h-0 flex-1 flex-col justify-center gap-5 overflow-hidden">
-            <motion.div custom={0} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
-              <AppLogo size="lg" className="drop-shadow-md" />
-            </motion.div>
+          <div className="flex min-h-0 flex-1 flex-col justify-center gap-5">
+            <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+              <motion.div
+                variants={logoReveal}
+                initial="hidden"
+                animate="show"
+                className="shrink-0"
+                whileHover={{ scale: 1.05, rotate: 2, transition: spring }}
+              >
+                <motion.div
+                  animate={{ y: [0, -3, 0] }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                >
+                  <AppLogo size="lg" className="drop-shadow-md" />
+                </motion.div>
+              </motion.div>
+              <motion.p
+                variants={brandNameReveal}
+                initial="hidden"
+                animate="show"
+                className="whitespace-nowrap text-sm font-bold leading-normal tracking-tight text-slate-900 sm:text-base xl:text-lg"
+              >
+                Satya Kabir E Solutions Private Limited
+              </motion.p>
+            </div>
 
-            <motion.div custom={1} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
+            <motion.div custom={2} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
               <motion.span
                 className="inline-flex items-center gap-1.5 rounded-full border border-blue-200/80 bg-blue-50/90 px-3 py-1 text-[11px] font-medium text-blue-700 shadow-sm"
                 animate={{ boxShadow: ["0 0 0 0 rgba(59,130,246,0)", "0 0 0 8px rgba(59,130,246,0)", "0 0 0 0 rgba(59,130,246,0)"] }}
@@ -303,7 +342,7 @@ export default function Login() {
             </motion.div>
 
             <motion.h1
-              custom={2}
+              custom={3}
               variants={fadeUp}
               initial="hidden"
               animate="show"
@@ -312,11 +351,11 @@ export default function Login() {
               Your agency command center
             </motion.h1>
 
-            <motion.p custom={3} variants={fadeUp} initial="hidden" animate="show" className="max-w-md shrink-0 text-sm leading-relaxed text-slate-600">
+            <motion.p custom={4} variants={fadeUp} initial="hidden" animate="show" className="max-w-md shrink-0 text-sm leading-relaxed text-slate-600">
               {BRAND.description}
             </motion.p>
 
-            <motion.div custom={4} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
+            <motion.div custom={5} variants={fadeUp} initial="hidden" animate="show" className="shrink-0">
               <LoginLottie className="h-[160px] w-full max-w-[300px] xl:h-[180px]" />
             </motion.div>
 
@@ -324,7 +363,7 @@ export default function Login() {
               {FEATURES.map((feature, i) => (
                 <motion.li
                   key={feature.label}
-                  custom={i + 5}
+                  custom={i + 6}
                   variants={fadeUp}
                   initial="hidden"
                   animate="show"

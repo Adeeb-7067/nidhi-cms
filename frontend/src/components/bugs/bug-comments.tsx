@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { useRealtime } from "@/contexts/RealtimeContext";
+import { appendCommentToListCache } from "@/lib/comment-thread-query";
 import { formatUserRole } from "@/lib/bug-workflow";
 
 function roleLabel(role: string) {
@@ -97,9 +98,17 @@ export function BugCommentsSection({
 
   useEffect(() => {
     if (!socket || !bugId) return undefined;
-    const handler = (payload: { threadType?: string; threadId?: number }) => {
+    const handler = (payload: {
+      threadType?: string;
+      threadId?: number;
+      comment?: Comment;
+    }) => {
       if (payload.threadType === "bug" && payload.threadId === bugId) {
-        queryClient.invalidateQueries({ queryKey: getListCommentsQueryKey(params) });
+        if (payload.comment) {
+          appendCommentToListCache(queryClient, "bug", bugId, payload.comment);
+        } else {
+          queryClient.invalidateQueries({ queryKey: getListCommentsQueryKey(params) });
+        }
         queryClient.invalidateQueries({ queryKey: ["/api/bugs"] });
       }
     };

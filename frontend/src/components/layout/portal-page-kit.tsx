@@ -76,8 +76,9 @@ export function PortalToolbar({
   );
 }
 
-export const portalTabsListClass = "h-9 bg-muted/50 p-1";
-export const portalTabsTriggerClass = "h-7 rounded-md px-3 text-xs";
+export const portalTabsListClass =
+  "h-9 w-full justify-start overflow-x-auto bg-muted/50 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+export const portalTabsTriggerClass = "h-7 shrink-0 rounded-md px-3 text-xs";
 
 export function PortalTabsList({
   className,

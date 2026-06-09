@@ -11,7 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageCardGridSkeleton } from "@/components/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -345,11 +345,7 @@ export default function DevProjects() {
       />
 
       {isLoadingTab ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-72 rounded-xl" />
-          ))}
-        </div>
+        <PageCardGridSkeleton count={6} itemClassName="h-72" className="sm:grid-cols-2 xl:grid-cols-3" />
       ) : filteredProjects.length === 0 ? (
         <DevEmptyState
           icon={Briefcase}

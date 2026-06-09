@@ -59,6 +59,7 @@ function mapProjectRow(project, ctx) {
   return {
     id: project.id,
     name: project.name,
+    logoUrl: project.logoUrl ?? null,
     companyId,
     companyName,
     clientId: project.clientId,

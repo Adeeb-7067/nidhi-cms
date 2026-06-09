@@ -50,8 +50,9 @@ import {
 } from "@/components/layout/portal-page-kit";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FileUploader } from "@/components/ui/file-uploader";
 import { Link } from "wouter";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageTableSkeleton } from "@/components/loading";
 import {
   Dialog,
   DialogContent,
@@ -120,6 +121,7 @@ type ProjectListItem = Project & {
 const projectSchema = z
   .object({
     name: z.string().min(1, "Project name is required"),
+    logoUrl: z.string().optional(),
     clientId: z.string().min(1, "Company is required"),
     priority: z.enum(["low", "medium", "high", "critical"]),
     type: z.enum(["development", "maintenance"]),
@@ -221,6 +223,7 @@ export default function AdminProjects() {
     resolver: zodResolver(projectSchema),
     defaultValues: {
       name: "",
+      logoUrl: "",
       clientId: "",
       priority: "medium",
       type: activeTab,
@@ -241,6 +244,7 @@ export default function AdminProjects() {
     if (editProject) {
       form.reset({
         name: editProject.name,
+        logoUrl: editProject.logoUrl || "",
         clientId: editProject.clientId.toString(),
         priority: editProject.priority as any,
         type: editProject.type as any,
@@ -258,6 +262,7 @@ export default function AdminProjects() {
     } else {
       form.reset({
         name: "",
+        logoUrl: "",
         clientId: "",
         priority: "medium",
         type: activeTab,
@@ -347,6 +352,14 @@ export default function AdminProjects() {
       cell: (project) => (
         <div className="flex flex-col gap-1 min-w-[140px]">
           <div className="flex items-center gap-2 flex-wrap">
+            <Avatar className="h-7 w-7 shrink-0 rounded-md border border-border/60">
+              {project.logoUrl ? (
+                <AvatarImage src={project.logoUrl} alt={project.name} className="object-cover" />
+              ) : null}
+              <AvatarFallback className="rounded-md bg-primary/10 text-[10px] font-semibold text-primary">
+                {project.name.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
             <Link href={`/admin/projects/${project.id}`} className="font-semibold hover:underline text-xs">
               {project.name}
             </Link>
@@ -681,6 +694,33 @@ export default function AdminProjects() {
                               {...field}
                             />
                           </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="logoUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Project logo / image</FormLabel>
+                          <FormControl>
+                            <FileUploader
+                              category="misc"
+                              accept="image/*"
+                              label="Upload project logo"
+                              value={field.value}
+                              maxSizeMB={5}
+                              onUploadComplete={(url) => field.onChange(url)}
+                            />
+                          </FormControl>
+                          {field.value ? (
+                            <img
+                              src={field.value}
+                              alt="Project logo preview"
+                              className="h-12 object-contain rounded border border-border p-2 bg-muted/30"
+                            />
+                          ) : null}
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1099,8 +1139,8 @@ export default function AdminProjects() {
 
       <div className="mt-4 bg-card rounded-md border border-border">
         {isLoading ? (
-          <div className="p-4 space-y-4">
-            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+          <div className="p-4">
+            <PageTableSkeleton rows={8} columns={7} showToolbar />
           </div>
         ) : (
           <div className="p-4">

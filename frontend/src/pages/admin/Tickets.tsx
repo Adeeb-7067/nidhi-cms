@@ -42,7 +42,7 @@ import { cn } from "@/lib/utils";
 import { DataViewToggle } from "@/components/ui/data-view-toggle";
 import { useDataViewMode } from "@/lib/data-view";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageCardSkeleton, PageTableSkeleton } from "@/components/loading";
 import { useQueryClient } from "@tanstack/react-query";
 import { listQueryOptions } from "@/lib/list-query-options";
 import { QUERY_STALE } from "@/lib/query-config";
@@ -549,6 +549,9 @@ export default function AdminTickets() {
       </PortalToolbar>
 
       {viewMode === "table" ? (
+        isLoading ? (
+          <PageTableSkeleton rows={6} columns={6} />
+        ) : (
         <div
           key={isAdmin ? `tickets-${audienceTab}` : "tickets-mine"}
           className="rounded-md border bg-card overflow-hidden"
@@ -565,15 +568,7 @@ export default function AdminTickets() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
-                [...Array(3)].map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell colSpan={6}>
-                      <Skeleton className="h-8 w-full" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : !data?.tickets?.length ? (
+              {!data?.tickets?.length ? (
                 <TableRow>
                   <TableCell
                     colSpan={6}
@@ -620,12 +615,11 @@ export default function AdminTickets() {
             </TableBody>
           </Table>
         </div>
+        )
       ) : (
         <div className="grid gap-4">
           {isLoading ? (
-            Array(3)
-              .fill(0)
-              .map((_, i) => <div key={i} className="h-32 animate-pulse rounded-lg bg-muted" />)
+            [...Array(3)].map((_, i) => <PageCardSkeleton key={i} lines={3} />)
           ) : !data?.tickets?.length ? (
             <p className="text-center text-sm text-muted-foreground py-12">No tickets found</p>
           ) : (

@@ -10,6 +10,10 @@ import {
 } from "../models/schema/index.js";
 import { logger } from "../lib/logger.js";
 import { storeGeneratedFile } from "../lib/file-storage.js";
+import {
+  isVirtualLogProjectId,
+  resolveLogProjectName,
+} from "./daily-log-virtual-projects.js";
 
 async function persistGeneratedFile(localPath, fileName, mimetype) {
   const { url } = await storeGeneratedFile(localPath, fileName, mimetype, "reports");
@@ -30,6 +34,14 @@ async function loadProjectLogs(projectId, month, year) {
   return dailyLogsTable.find(query).sort({ logDate: 1 }).lean();
 }
 
+async function resolveReportProjectLabel(projectId) {
+  if (isVirtualLogProjectId(projectId)) {
+    return resolveLogProjectName(projectId, null);
+  }
+  const project = await projectsTable.findOne({ id: projectId }).lean();
+  return project?.name ?? "Project";
+}
+
 function escapeHtml(value) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -37,6 +49,26 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+const REPORT_PRINT_CSS = `
+  @page { size: A4; margin: 15mm; }
+  html, body { height: auto; margin: 0; padding: 0; }
+  body { font-family: sans-serif; padding: 0; color: #1e293b; }
+  h1 { color: #1e40af; font-size: 22px; margin: 0 0 8px; }
+  h2 { font-size: 16px; margin: 20px 0 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 11px; table-layout: fixed; }
+  th, td {
+    border: 1px solid #e2e8f0;
+    padding: 8px;
+    text-align: left;
+    vertical-align: top;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+  th { background-color: #f1f5f9; }
+  thead { display: table-header-group; }
+  tr { page-break-inside: avoid; }
+`;
 
 async function generatePdfReport(reportId, type, params) {
   const fileName = `report_${reportId}_${Date.now()}.pdf`;
@@ -52,28 +84,28 @@ async function generatePdfReport(reportId, type, params) {
     const { projectId, month, year } = params;
 
     if (projectId && (type === "project_progress" || type === "developer_monthly")) {
-      const project = await projectsTable.findOne({ id: projectId }).lean();
+      const project = isVirtualLogProjectId(projectId)
+        ? null
+        : await projectsTable.findOne({ id: projectId }).lean();
+      const projectLabel = await resolveReportProjectLabel(projectId);
       const logs = await loadProjectLogs(projectId, month, year);
       const title =
         type === "developer_monthly"
-          ? `Timesheet — ${project?.name ?? "Project"}`
-          : `Project Progress — ${project?.name ?? "Project"}`;
+          ? `Timesheet — ${projectLabel}`
+          : `Project Progress — ${projectLabel}`;
       const period =
         month && year ? `<p><strong>Period:</strong> ${month}/${year}</p>` : "";
+      const statusLine = project?.status
+        ? `<p><strong>Status:</strong> ${escapeHtml(project.status)}</p>`
+        : "";
       htmlContent = `
         <html>
           <head>
-            <style>
-              body { font-family: sans-serif; padding: 40px; color: #1e293b; }
-              h1 { color: #1e40af; font-size: 22px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
-              th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-              th { background-color: #f1f5f9; }
-            </style>
+            <style>${REPORT_PRINT_CSS}</style>
           </head>
           <body>
             <h1>${escapeHtml(title)}</h1>
-            <p><strong>Status:</strong> ${escapeHtml(project?.status)}</p>
+            ${statusLine}
             ${period}
             <h2>Daily logs</h2>
             <table>
@@ -113,12 +145,7 @@ async function generatePdfReport(reportId, type, params) {
       htmlContent = `
         <html>
           <head>
-            <style>
-              body { font-family: sans-serif; padding: 40px; }
-              table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
-              th, td { border: 1px solid #ddd; padding: 8px; }
-              th { background: #f8fafc; }
-            </style>
+            <style>${REPORT_PRINT_CSS}</style>
           </head>
           <body>
             <h1>Bug Report — ${escapeHtml(project?.name)}</h1>
@@ -145,8 +172,15 @@ async function generatePdfReport(reportId, type, params) {
     } else {
       htmlContent = `<h1>${escapeHtml(type)} Report</h1><p>Project ${escapeHtml(projectId)} — ${escapeHtml(JSON.stringify({ month, year }))}</p>`;
     }
+    await page.setViewport({ width: 794, height: 1123 });
     await page.setContent(htmlContent, { waitUntil: "networkidle0" });
-    await page.pdf({ path: filePath, format: "A4", printBackground: true });
+    await page.emulateMediaType("print");
+    await page.pdf({
+      path: filePath,
+      format: "A4",
+      printBackground: true,
+      margin: { top: "15mm", right: "12mm", bottom: "15mm", left: "12mm" }
+    });
     return persistGeneratedFile(filePath, fileName, "application/pdf");
   } catch (err) {
     logger.error({ err }, "Error generating PDF report");

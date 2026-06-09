@@ -14,11 +14,11 @@ import {
   MessageSquare,
   Ticket,
   Bell,
-  LayoutGrid,
   Shield,
   UserCircle,
   ListTodo,
   TrendingUp,
+  TrendingDown,
   Target,
   Handshake,
   FileSpreadsheet,
@@ -28,6 +28,10 @@ import {
   Wallet,
   Package,
   Layers,
+  Landmark,
+  PiggyBank,
+  BookOpen,
+  Percent,
 } from "lucide-react";
 
 export type UserRole = "super_admin" | "developer" | "tester" | "qa" | "client";
@@ -47,6 +51,8 @@ export type NavItem = {
   icon: LucideIcon;
   roles: UserRole[];
   badgeKey?: "requests" | "bugs" | "notifications";
+  /** Optional subgroup label shown in the submenu (e.g. "Pipeline", "Billing"). */
+  group?: string;
 };
 
 export type NavSection = {
@@ -75,18 +81,19 @@ export function getNavSections(role: UserRole): NavSection[] {
       icon: Shield,
       roles: ["super_admin"],
       items: [
-        { title: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["super_admin"] },
-        { title: "Companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"] },
-        { title: "Projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"] },
-        { title: "Team", href: "/admin/employees", icon: Users, roles: ["super_admin"] },
+        { title: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"], group: "Overview" },
+        { title: "Companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
+        { title: "Projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
+        { title: "Team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
         {
           title: "Requests",
           href: "/admin/requests",
           icon: Inbox,
           roles: ["super_admin"],
           badgeKey: "requests",
+          group: "Operations",
         },
-        { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"] },
       ],
     },
 
@@ -99,19 +106,41 @@ export function getNavSections(role: UserRole): NavSection[] {
       icon: TrendingUp,
       roles: ["super_admin"],
       items: [
-        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: ["super_admin"] },
-        { title: "Lead management", href: "/sales/leads", icon: Target, roles: ["super_admin"] },
-        { title: "Follow-ups & activities", href: "/sales/follow-ups", icon: CalendarClock, roles: ["super_admin"] },
-        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: ["super_admin"] },
-        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: ["super_admin"] },
-        { title: "Installments", href: "/sales/installments", icon: Layers, roles: ["super_admin"] },
-        { title: "Products & services", href: "/sales/products", icon: Package, roles: ["super_admin"] },
-        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: ["super_admin"] },
-        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: ["super_admin"] },
-        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: ["super_admin"] },
-        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: ["super_admin"] },
-        { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin"] },
-        { title: "Automation & settings", href: "/sales/settings", icon: Settings, roles: ["super_admin"] },
+        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Lead management", href: "/sales/leads", icon: Target, roles: ["super_admin"], group: "Pipeline" },
+        { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: ["super_admin"], group: "Pipeline" },
+        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: ["super_admin"], group: "Pipeline" },
+        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: ["super_admin"], group: "Pipeline" },
+        { title: "Installments", href: "/sales/installments", icon: Layers, roles: ["super_admin"], group: "Billing" },
+        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: ["super_admin"], group: "Billing" },
+        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: ["super_admin"], group: "Billing" },
+        { title: "Products", href: "/sales/products", icon: Package, roles: ["super_admin"], group: "Catalog" },
+        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: ["super_admin"], group: "Insights" },
+        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: ["super_admin"], group: "Insights" },
+        { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin"], group: "Team" },
+        { title: "Automation", href: "/sales/settings", icon: Settings, roles: ["super_admin"], group: "Team" },
+      ],
+    },
+
+    // =========================
+    // FINANCE
+    // =========================
+    {
+      label: "Finance",
+      railLabel: "Finance",
+      icon: Landmark,
+      roles: ["super_admin"],
+      items: [
+        { title: "Dashboard", href: "/finance", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: ["super_admin"], group: "Transactions" },
+        { title: "Income", href: "/finance/income", icon: TrendingUp, roles: ["super_admin"], group: "Transactions" },
+        { title: "Payments", href: "/finance/payments", icon: Wallet, roles: ["super_admin"], group: "Transactions" },
+        { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: ["super_admin"], group: "Billing" },
+        { title: "Payroll", href: "/finance/payroll", icon: Users, roles: ["super_admin"], group: "Billing" },
+        { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: ["super_admin"], group: "Planning" },
+        { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: ["super_admin"], group: "Planning" },
+        { title: "Tax", href: "/finance/tax", icon: Percent, roles: ["super_admin"], group: "Planning" },
+        { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: ["super_admin"], group: "Reports" },
       ],
     },
 
@@ -129,24 +158,28 @@ export function getNavSections(role: UserRole): NavSection[] {
           href: "/dev",
           icon: LayoutDashboard,
           roles: ["developer", "tester", "qa"],
+          group: "Overview",
         },
         {
           title: "My projects",
           href: "/dev/projects",
           icon: Briefcase,
           roles: ["developer", "tester", "qa"],
+          group: "Overview",
         },
         {
           title: "Tasks",
           href: "/dev/tasks",
           icon: ListTodo,
           roles: ["super_admin", "developer", "tester", "qa"],
+          group: "Work",
         },
         {
           title: "Daily logs",
           href: "/dev/logs",
           icon: Clock,
           roles: ["super_admin", "developer", "tester", "qa"],
+          group: "Work",
         },
         {
           title: "Bugs",
@@ -154,24 +187,28 @@ export function getNavSections(role: UserRole): NavSection[] {
           icon: Bug,
           roles: ["super_admin", "developer", "tester", "qa"],
           badgeKey: "bugs",
+          group: "Work",
         },
         {
           title: "Releases",
           href: "/dev/apk",
           icon: Smartphone,
           roles: ["super_admin", "developer", "tester", "qa"],
+          group: "Output",
         },
         {
           title: "Reports",
           href: "/dev/reports",
           icon: FileText,
           roles: ["super_admin", "developer"],
+          group: "Output",
         },
         {
           title: "My requests",
           href: "/dev/requests",
           icon: Inbox,
           roles: ["developer"],
+          group: "Output",
         },
       ],
     },
@@ -186,15 +223,15 @@ export function getNavSections(role: UserRole): NavSection[] {
       roles: ["super_admin", "developer", "tester", "qa", "client"],
       items: [
         {
-          title: "Tickets",
-          href: "/admin/tickets",
-          icon: Ticket,
+          title: "Discussions",
+          href: "/discussions",
+          icon: MessageSquare,
           roles: ["super_admin", "developer", "tester", "qa", "client"],
         },
         {
-          title: "Discussions",
-          href: "/admin/discussions",
-          icon: MessageSquare,
+          title: "Tickets",
+          href: "/admin/tickets",
+          icon: Ticket,
           roles: ["super_admin", "developer", "tester", "qa", "client"],
         },
       ],
@@ -240,6 +277,12 @@ export function getNavSections(role: UserRole): NavSection[] {
       roles: ["super_admin", "developer", "tester", "qa", "client"],
       items: [
         {
+          title: "Profile",
+          href: "/profile",
+          icon: UserCircle,
+          roles: ["super_admin", "developer", "tester", "qa", "client"],
+        },
+        {
           title: "Notifications",
           href: "/notifications",
           icon: Bell,
@@ -267,7 +310,16 @@ export function getNavSections(role: UserRole): NavSection[] {
 
 export function isNavActive(pathname: string, href: string): boolean {
   if (pathname === href) return true;
-  if (href === "/admin" || href === "/dev" || href === "/client" || href === "/sales") return false;
+  if (
+    href === "/admin" ||
+    href === "/dev" ||
+    href === "/client" ||
+    href === "/sales" ||
+    href === "/finance" ||
+    href === "/discussions"
+  ) {
+    return false;
+  }
   return pathname.startsWith(href + "/") || pathname.startsWith(href);
 }
 

@@ -17,13 +17,13 @@ initRealtime(server);
 initFirebaseAdmin();
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
-const runDailyLogComplianceCheck = startDailyLogComplianceJob();
+startDailyLogComplianceJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
   backgroundJobsBootstrapped = true;
   runInventoryExpiryCheck();
-  runDailyLogComplianceCheck();
+  // Daily log compliance only runs on the 5-minute interval (respects reminder hour/timezone).
   logger.info("Background jobs started (inventory expiry, daily log compliance)");
 };
 void whenDatabaseReady().then(bootstrapBackgroundJobs).catch((err) => {

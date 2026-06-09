@@ -1,23 +1,20 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { createExportPdf, reserveFooterY, runAutoTableExport } from '@/lib/pdf-export';
 
 export class PDFService {
   /**
    * Generates a highly branded and formatted QA Bug Audit Report
    */
   static generateBugReportPDF(projectName: string, clientName: string, bugs: any[]) {
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    const columnCount = 6;
+    const doc = createExportPdf(columnCount);
+    const pageWidth = doc.internal.pageSize.getWidth();
 
     // 1. Header Branding Banner
     doc.setFillColor(31, 41, 55); // Slate 800
-    doc.rect(0, 0, 210, 40, 'F');
+    doc.rect(0, 0, pageWidth, 40, 'F');
     
     doc.setFillColor(59, 130, 246); // Primary Blue Ribbon
-    doc.rect(0, 40, 210, 1.5, 'F');
+    doc.rect(0, 40, pageWidth, 1.5, 'F');
 
     // 2. Corporate Title Typography
     doc.setTextColor(255, 255, 255);
@@ -41,7 +38,7 @@ export class PDFService {
 
     // Info cards background
     doc.setFillColor(243, 244, 246); // Slate 100
-    doc.roundedRect(15, 60, 180, 25, 2, 2, 'F');
+    doc.roundedRect(15, 60, pageWidth - 30, 25, 2, 2, 'F');
 
     doc.setFontSize(10);
     doc.setTextColor(75, 85, 99);
@@ -75,7 +72,8 @@ export class PDFService {
       bug.assigneeName || 'Unassigned',
     ]);
 
-    autoTable(doc, {
+    runAutoTableExport(doc, {
+      columnCount,
       startY: 95,
       head: [['ID', 'Bug Overview & Title', 'Severity', 'Platform', 'Status', 'Assignee']],
       body: tableRows,
@@ -84,19 +82,19 @@ export class PDFService {
         fillColor: [31, 41, 55],
         textColor: [255, 255, 255],
         fontSize: 9,
-        fontStyle: 'bold'
+        fontStyle: 'bold',
       },
       bodyStyles: {
         fontSize: 8,
-        textColor: [55, 65, 81]
+        textColor: [55, 65, 81],
       },
       columnStyles: {
-        0: { cellWidth: 20, fontStyle: 'bold' },
-        1: { cellWidth: 70 },
-        2: { cellWidth: 22 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 25 },
-        5: { cellWidth: 23 }
+        0: { cellWidth: 22 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 24 },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 28 },
+        5: { cellWidth: 'auto' },
       },
       didParseCell: (data) => {
         if (data.section === 'body' && data.column.index === 2) {
@@ -108,31 +106,28 @@ export class PDFService {
             data.cell.styles.textColor = [217, 119, 6];
           }
         }
-      }
+      },
     });
 
     // 5. Footer Sign-Off Seals & Signature Area
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    if (finalY < 270) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(107, 114, 128);
-      doc.text('___________________________________', 15, finalY);
-      doc.text('Quality Control Officer Sign-off', 15, finalY + 5);
+    const finalY = reserveFooterY(doc, 20);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('___________________________________', 15, finalY);
+    doc.text('Quality Control Officer Sign-off', 15, finalY + 5);
 
-      doc.text('___________________________________', 130, finalY);
-      doc.text('System Audit Cryptographic Hash', 130, finalY + 5);
+    doc.text('___________________________________', 130, finalY);
+    doc.text('System Audit Cryptographic Hash', 130, finalY + 5);
 
-      // Circular placeholder for seal
-      doc.setDrawColor(209, 213, 219);
-      doc.setLineWidth(0.5);
-      doc.circle(185, finalY - 5, 12, 'D');
-      doc.setFontSize(6);
-      doc.setTextColor(156, 163, 175);
-      doc.text('AUDITED', 178, finalY - 6);
-      doc.text('SYSTEM', 179, finalY - 3);
-      doc.text('SEAL', 182, finalY);
-    }
+    doc.setDrawColor(209, 213, 219);
+    doc.setLineWidth(0.5);
+    doc.circle(185, finalY - 5, 12, 'D');
+    doc.setFontSize(6);
+    doc.setTextColor(156, 163, 175);
+    doc.text('AUDITED', 178, finalY - 6);
+    doc.text('SYSTEM', 179, finalY - 3);
+    doc.text('SEAL', 182, finalY);
 
     doc.save(`QA-Audit-Report-${projectName.replace(/\s+/g, '-')}-${Date.now()}.pdf`);
   }
@@ -141,11 +136,8 @@ export class PDFService {
    * Generates developer's chronological workloads and monthly output metrics.
    */
   static generateDeveloperLogsPDF(devName: string, monthName: string, logs: any[]) {
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4'
-    });
+    const columnCount = 5;
+    const doc = createExportPdf(columnCount);
 
     // Header Banner
     doc.setFillColor(17, 24, 39); // Darker Slate 900
@@ -193,7 +185,6 @@ export class PDFService {
     doc.setFont('helvetica', 'bold');
     doc.text(monthName || 'Total Cumulative History', 55, 78);
 
-    // Total Hours Calculation
     const totalHours = logs.reduce((sum, log) => sum + (parseFloat(log.hoursSpent) || 0), 0);
     
     doc.setFont('helvetica', 'normal');
@@ -204,16 +195,16 @@ export class PDFService {
     doc.setTextColor(5, 150, 105); // Emerald 600
     doc.text(`${totalHours.toFixed(1)} hrs`, 162, 75);
 
-    // Table Columns
-    const rows = logs.map((log, idx) => [
+    const rows = logs.map((log) => [
       new Date(log.logDate).toLocaleDateString(),
       log.projectName || 'N/A',
       log.taskTitle || 'Generic Development',
       `${log.hoursSpent} hrs`,
-      `${log.completionPct || 0}%`
+      `${log.completionPct || 0}%`,
     ]);
 
-    autoTable(doc, {
+    runAutoTableExport(doc, {
+      columnCount,
       startY: 95,
       head: [['Date Logged', 'Project', 'Task Description', 'Duration', 'Complete %']],
       body: rows,
@@ -222,36 +213,33 @@ export class PDFService {
         fillColor: [17, 24, 39],
         textColor: [255, 255, 255],
         fontSize: 9,
-        fontStyle: 'bold'
+        fontStyle: 'bold',
       },
       bodyStyles: {
         fontSize: 8,
-        textColor: [55, 65, 81]
+        textColor: [55, 65, 81],
       },
       columnStyles: {
-        0: { cellWidth: 25 },
-        1: { cellWidth: 35 },
-        2: { cellWidth: 85 },
-        3: { cellWidth: 18 },
-        4: { cellWidth: 17 }
-      }
+        0: { cellWidth: 28 },
+        1: { cellWidth: 38 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 22 },
+      },
     });
 
-    // Signatures
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    if (finalY < 270) {
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(107, 114, 128);
-      doc.text('I hereby declare these hours represent genuine project efforts.', 15, finalY);
-      
-      doc.setFontSize(9);
-      doc.text('_______________________________', 15, finalY + 12);
-      doc.text('Developer Electronic Attestation', 15, finalY + 17);
+    const finalY = reserveFooterY(doc, 20);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 114, 128);
+    doc.text('I hereby declare these hours represent genuine project efforts.', 15, finalY);
+    
+    doc.setFontSize(9);
+    doc.text('_______________________________', 15, finalY + 12);
+    doc.text('Developer Electronic Attestation', 15, finalY + 17);
 
-      doc.text('_______________________________', 130, finalY + 12);
-      doc.text('Authorized Supervisor Signature', 130, finalY + 17);
-    }
+    doc.text('_______________________________', 130, finalY + 12);
+    doc.text('Authorized Supervisor Signature', 130, finalY + 17);
 
     doc.save(`Timesheet-${devName.replace(/\s+/g, '-')}-${Date.now()}.pdf`);
   }

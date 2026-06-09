@@ -38,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, MapPin } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
 import { ProjectHubNav, type ProjectHubTab } from "@/components/project/ProjectHubNav";
@@ -45,7 +46,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { KpiSimpleCard } from "@/components/dashboard/dashboard-kit";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Skeleton } from "@/components/ui/skeleton";
+import { ProjectDetailPageSkeleton } from "@/components/loading";
+import { FormattedText } from "@/components/ui/formatted-text";
+import { getApkAudienceLabel, resolveApkDisplayName } from "@/lib/apk-audience";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { 
@@ -221,7 +224,7 @@ export default function AdminProjectDetail() {
   }
 
   if (isLoading) {
-    return <div className="space-y-4"><Skeleton className="h-10 w-1/3" /><Skeleton className="h-64 w-full" /></div>;
+    return <ProjectDetailPageSkeleton />;
   }
 
   if (!project) return <div className="py-16 text-center text-sm text-muted-foreground">Project not found</div>;
@@ -241,6 +244,14 @@ export default function AdminProjectDetail() {
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
+          <Avatar className="h-12 w-12 shrink-0 rounded-lg border border-border/60">
+            {project.logoUrl ? (
+              <AvatarImage src={project.logoUrl} alt={project.name} className="object-cover" />
+            ) : null}
+            <AvatarFallback className="rounded-lg bg-primary/10 text-lg font-semibold text-primary">
+              {project.name.charAt(0)}
+            </AvatarFallback>
+          </Avatar>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
             <p className="text-sm text-muted-foreground mt-1">
@@ -268,8 +279,16 @@ export default function AdminProjectDetail() {
               </CardHeader>
               <CardContent className="p-3 space-y-3">
                 <div>
-                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1 uppercase tracking-wider">Description</h4>
-                  <p className="text-xs">{project.description || "No description provided."}</p>
+                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Description</h4>
+                  <FormattedText
+                    panel
+                    className="text-xs sm:text-sm"
+                    fallback={
+                      <p className="text-xs text-muted-foreground italic">No description provided.</p>
+                    }
+                  >
+                    {project.description}
+                  </FormattedText>
                 </div>
                 <div>
                   <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Tech Stack</h4>
@@ -311,13 +330,16 @@ export default function AdminProjectDetail() {
                           Approved
                         </Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                      <FormattedText panel className="text-xs mt-2 text-muted-foreground">
                         {req.description}
-                      </p>
+                      </FormattedText>
                       {req.adminNote && (
-                        <p className="text-[10px] mt-2 text-foreground/80 border-t border-border/50 pt-2">
-                          <span className="font-medium">Admin note:</span> {req.adminNote}
-                        </p>
+                        <div className="mt-2 border-t border-border/50 pt-2">
+                          <p className="text-[10px] font-medium text-foreground/90 mb-1">Admin note</p>
+                          <FormattedText className="text-[10px] text-foreground/80">
+                            {req.adminNote}
+                          </FormattedText>
+                        </div>
                       )}
                     </div>
                   ))}
@@ -409,9 +431,11 @@ export default function AdminProjectDetail() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Name</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Version</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Type</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Platform</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Audience</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Uploaded By</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
                     <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Action</TableHead>
@@ -420,20 +444,30 @@ export default function AdminProjectDetail() {
                 <TableBody>
                   {apkRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground h-20 text-xs">No APK releases yet</TableCell>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground h-20 text-xs">No APK releases yet</TableCell>
                     </TableRow>
                   ) : (
                     apkRows.map((apk) => (
                       <TableRow key={apk.id} className="text-xs">
-                        <TableCell className="font-medium">v{apk.version} ({apk.buildNumber})</TableCell>
+                        <TableCell className="font-medium">{resolveApkDisplayName(apk)}</TableCell>
+                        <TableCell className="text-muted-foreground">v{apk.version} ({apk.buildNumber})</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{apk.releaseType}</Badge>
                         </TableCell>
                         <TableCell className="capitalize">{apk.platform}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+                            {getApkAudienceLabel(apk.audience)}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{apk.uploaderName}</TableCell>
                         <TableCell className="text-muted-foreground">{new Date(apk.createdAt).toLocaleDateString()}</TableCell>
                         <TableCell className="text-right">
-                          <Button size="sm" variant="ghost" className="h-7 text-xs"><Download className="h-3 w-3 mr-1.5" /> Download</Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
+                            <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
+                              <Download className="h-3 w-3 mr-1.5" /> Download
+                            </a>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))

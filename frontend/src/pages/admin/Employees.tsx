@@ -46,6 +46,7 @@ import {
   PortalContentCard,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
+import { PageTableSkeleton } from "@/components/loading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -961,9 +962,7 @@ export default function AdminEmployees() {
         <TabsContent value="list" className="space-y-4 m-0">
           <PortalContentCard>
               {isLoading ? (
-                <div className="space-y-4">
-                  {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-                </div>
+                <PageTableSkeleton rows={8} columns={6} showToolbar />
               ) : (
                 <AdvancedTable 
                   data={data?.users || []} 
@@ -1200,7 +1199,15 @@ export default function AdminEmployees() {
                     </TableHeader>
                     <TableBody>
                       {isLoadingCredentials ? (
-                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">Loading vault history...</TableCell></TableRow>
+                        [...Array(3)].map((_, i) => (
+                          <TableRow key={i}>
+                            {[...Array(4)].map((_, j) => (
+                              <TableCell key={j} className="py-2">
+                                <Skeleton className="h-3.5 w-full" />
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
                       ) : credentialRows.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No historical logs recorded.</TableCell></TableRow>
                       ) : (

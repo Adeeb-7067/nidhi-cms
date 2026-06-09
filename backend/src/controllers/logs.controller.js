@@ -5,6 +5,11 @@ import { buildDailyLogSummary, buildComplianceCalendar } from "../services/daily
 import { parsePagination, badRequest, forbidden, notFound } from "../utils/route-errors.js";
 import { paginateModel, toIso } from "../utils/mongo-list.js";
 import { IdLookupCache } from "../lib/lookup-cache.js";
+import {
+  isVirtualLogProjectId,
+  resolveLogProjectName,
+  assertValidLogProjectId,
+} from "../services/daily-log-virtual-projects.js";
 function formatLog(log, developerName, developerEmployeeId, projectName) {
   return {
     id: log.id,
@@ -74,12 +79,14 @@ async function getLogs(req, res) {
   ]);
   const formattedLogs = logs.map((log) => {
     const developer = users.get(log.developerId);
-    const project = projects.get(log.projectId);
+    const project = isVirtualLogProjectId(log.projectId)
+      ? null
+      : projects.get(log.projectId);
     return formatLog(
       log,
       developer?.name ?? "Unknown",
       developer?.employeeId ?? null,
-      project?.name ?? "Unknown"
+      resolveLogProjectName(log.projectId, project),
     );
   });
   res.json({ logs: formattedLogs, total, page, limit });
@@ -127,17 +134,33 @@ async function postLogs(req, res) {
     forbidden("Only developers and testers can submit daily logs.");
   }
   const { projectId, logDate, workCategories, taskTitle, taskDescription, hoursSpent, completionPct, blockers, nextDayPlan } = req.body;
-  if (!projectId || !logDate || !taskTitle || hoursSpent === void 0 || completionPct === void 0) {
+  if (
+    projectId == null ||
+    projectId === "" ||
+    !logDate ||
+    !taskTitle ||
+    hoursSpent === void 0 ||
+    completionPct === void 0
+  ) {
     badRequest("projectId, logDate, taskTitle, hoursSpent, and completionPct are required.");
   }
-  const projectForLog = await projectsTable.findOne({ id: projectId });
+  const normalizedProjectId = Number(projectId);
+  if (!assertValidLogProjectId(normalizedProjectId)) {
+    badRequest("Invalid project selection.", "projectId");
+  }
+  const projectForLog = isVirtualLogProjectId(normalizedProjectId)
+    ? null
+    : await projectsTable.findOne({ id: normalizedProjectId });
+  if (!isVirtualLogProjectId(normalizedProjectId) && !projectForLog) {
+    notFound("Project");
+  }
   const companyId = projectForLog ? projectCompanyId(projectForLog) : null;
   const nextId = await getNextSequence("daily_logs");
   const log = await dailyLogsTable.create({
     id: nextId,
     developerId: req.user.id,
     companyId,
-    projectId,
+    projectId: normalizedProjectId,
     logDate,
     workCategories: workCategories ?? [],
     taskTitle,
@@ -147,26 +170,29 @@ async function postLogs(req, res) {
     blockers: blockers ?? null,
     nextDayPlan: nextDayPlan ?? null
   });
-  await projectMembersTable.updateOne(
-    { projectId, userId: req.user.id },
-    { $set: { completionPct } }
-  );
+  if (!isVirtualLogProjectId(normalizedProjectId)) {
+    await projectMembersTable.updateOne(
+      { projectId: normalizedProjectId, userId: req.user.id },
+      { $set: { completionPct } },
+    );
+  }
   const user = await usersTable.findOne({ id: req.user.id });
-  const project = await projectsTable.findOne({ id: projectId });
+  const projectName = resolveLogProjectName(normalizedProjectId, projectForLog);
   try {
-    const pmId = project?.pmId;
+    const pmId = projectForLog?.pmId;
     const targetIds = pmId ? [pmId] : (await usersTable.find({ role: "super_admin" })).map((u) => u.id);
     for (const targetId of targetIds) {
       if (targetId === req.user.id) continue;
       const notifId = await getNextSequence("notifications");
+      const notifBody = `${user?.name || "A developer"} submitted a log for: ${projectName}`;
       await notificationsTable.create({
         id: notifId,
         userId: targetId,
         title: "New Daily Log",
-        body: `${user?.name || "A developer"} submitted a log for project: ${project?.name || "Unknown"}`,
+        body: notifBody,
         type: "log",
-        companyId: project ? projectCompanyId(project) : null,
-        projectId,
+        companyId: projectForLog ? projectCompanyId(projectForLog) : null,
+        projectId: isVirtualLogProjectId(normalizedProjectId) ? null : normalizedProjectId,
         entityType: "log",
         entityId: log.id,
         relatedId: log.id
@@ -174,10 +200,10 @@ async function postLogs(req, res) {
       notifyUser(targetId, "notification", {
         id: notifId,
         title: "New Daily Log",
-        body: `${user?.name || "A developer"} submitted a log for project: ${project?.name || "Unknown"}`,
+        body: notifBody,
         type: "log",
-        companyId: project ? projectCompanyId(project) : null,
-        projectId
+        companyId: projectForLog ? projectCompanyId(projectForLog) : null,
+        projectId: isVirtualLogProjectId(normalizedProjectId) ? null : normalizedProjectId,
       });
     }
   } catch (err) {
@@ -185,7 +211,7 @@ async function postLogs(req, res) {
   }
   const dailySummary = await buildDailyLogSummary(req.user.id, logDate);
   res.status(201).json({
-    ...formatLog(log, user.name, user.employeeId, project.name),
+    ...formatLog(log, user?.name ?? "Unknown", user?.employeeId ?? null, projectName),
     dailySummary
   });
 }
@@ -219,17 +245,53 @@ async function getLogsById(req, res) {
   if (!log) notFound("Log");
   if (!canAccessLog(req.user.role, req.user.id, log.developerId)) forbidden();
   const user = await usersTable.findOne({ id: log.developerId });
-  const project = await projectsTable.findOne({ id: log.projectId });
-  res.json(formatLog(log, user?.name ?? "Unknown", user?.employeeId ?? null, project?.name ?? "Unknown"));
+  const project = isVirtualLogProjectId(log.projectId)
+    ? null
+    : await projectsTable.findOne({ id: log.projectId });
+  res.json(
+    formatLog(
+      log,
+      user?.name ?? "Unknown",
+      user?.employeeId ?? null,
+      resolveLogProjectName(log.projectId, project),
+    ),
+  );
 }
 async function patchLogsById(req, res) {
   const id = parseInt(req.params["id"], 10);
-  const { workCategories, taskTitle, taskDescription, hoursSpent, completionPct, blockers, nextDayPlan } = req.body;
+  const {
+    projectId: projectIdRaw,
+    workCategories,
+    taskTitle,
+    taskDescription,
+    hoursSpent,
+    completionPct,
+    blockers,
+    nextDayPlan
+  } = req.body;
   const existing = await dailyLogsTable.findOne({ id });
   if (!existing) notFound("Log");
   if (!canAccessLog(req.user.role, req.user.id, existing.developerId)) forbidden();
   assertCanEditLog(req.user, existing);
+  let projectPatch = {};
+  if (projectIdRaw !== void 0) {
+    const nextProjectId = Number(projectIdRaw);
+    if (!assertValidLogProjectId(nextProjectId)) {
+      badRequest("Invalid project selection.", "projectId");
+    }
+    if (nextProjectId !== existing.projectId) {
+      const projectForLog = isVirtualLogProjectId(nextProjectId)
+        ? null
+        : await projectsTable.findOne({ id: nextProjectId });
+      if (!isVirtualLogProjectId(nextProjectId) && !projectForLog) notFound("Project");
+      projectPatch = {
+        projectId: nextProjectId,
+        companyId: projectForLog ? projectCompanyId(projectForLog) : null,
+      };
+    }
+  }
   if (
+    !Object.keys(projectPatch).length &&
     taskTitle === void 0 &&
     workCategories === void 0 &&
     taskDescription === void 0 &&
@@ -244,6 +306,7 @@ async function patchLogsById(req, res) {
     { id },
     {
       $set: {
+        ...projectPatch,
         ...workCategories !== void 0 && { workCategories },
         ...taskTitle !== void 0 && { taskTitle },
         ...taskDescription !== void 0 && { taskDescription },
@@ -256,17 +319,27 @@ async function patchLogsById(req, res) {
     { new: true }
   );
   if (!log) notFound("Log");
-  if (completionPct !== void 0) {
+  if (
+    !isVirtualLogProjectId(log.projectId) &&
+    (completionPct !== void 0 || Object.keys(projectPatch).length)
+  ) {
     await projectMembersTable.updateOne(
       { projectId: log.projectId, userId: log.developerId },
       { $set: { completionPct: log.completionPct } },
     );
   }
   const user = await usersTable.findOne({ id: log.developerId });
-  const project = await projectsTable.findOne({ id: log.projectId });
+  const project = isVirtualLogProjectId(log.projectId)
+    ? null
+    : await projectsTable.findOne({ id: log.projectId });
   const dailySummary = await buildDailyLogSummary(log.developerId, log.logDate);
   res.json({
-    ...formatLog(log, user?.name ?? "Unknown", user?.employeeId ?? null, project?.name ?? "Unknown"),
+    ...formatLog(
+      log,
+      user?.name ?? "Unknown",
+      user?.employeeId ?? null,
+      resolveLogProjectName(log.projectId, project),
+    ),
     dailySummary
   });
 }

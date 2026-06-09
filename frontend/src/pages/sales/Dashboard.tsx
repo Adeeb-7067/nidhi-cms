@@ -111,7 +111,7 @@ export default function SalesDashboard() {
           </Tabs>
         </div>
         <PortalKpiGrid
-          columns={3}
+          columns={4}
           count={6}
           items={[
             { title: "Total leads", value: leadCount.toLocaleString(), hint: `↑ ${kpis.trends.totalLeads}% vs prior period`, icon: Users, accent: "blue", href: "/sales/leads", delay: 0 },
@@ -129,7 +129,7 @@ export default function SalesDashboard() {
       <motion.div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financial KPIs</p>
         <PortalKpiGrid
-          columns={3}
+          columns={4}
           count={6}
           items={[
             { title: "Total revenue", value: formatCompactCurrency(financialDashboardKpis.totalRevenue), hint: `↑ ${financialDashboardKpis.trends.totalRevenue}%`, icon: IndianRupee, accent: "green", href: "/sales/reports", delay: 0 },

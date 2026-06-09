@@ -19,7 +19,7 @@ const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
 };
 
 interface FileUploaderProps {
-  onUploadComplete: (url: string) => void;
+  onUploadComplete: (url: string, meta?: { fileName: string }) => void;
   accept?: string;
   label?: string;
   value?: string | null;
@@ -110,7 +110,7 @@ export function FileUploader({
       
       setProgress(100);
       setCurrentFileUrl(response.url);
-      onUploadComplete(response.url);
+      onUploadComplete(response.url, { fileName: file.name });
       toast.success("File uploaded successfully!");
     } catch (err: any) {
       toastApiError(err, "Failed to upload file.");

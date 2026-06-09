@@ -11,7 +11,10 @@ import {
   useListRequests,
   useCreateRequest,
   useGetClientHubDashboard,
+  useGetProjectMembers,
+  getGetProjectMembersQueryKey,
   getListCommentsQueryKey,
+  getGetApkReleasesQueryKey,
   getGetProjectLogsQueryKey,
   getGetProjectAnalyticsQueryKey,
   getListRequestsQueryKey
@@ -32,11 +35,13 @@ import {
 } from "recharts";
 import { 
   Smartphone, CheckCircle, Clock, Download, ExternalLink, Lock, Globe, Layout, 
-  Github, FileJson, Send, MessageSquare, Activity, FileText, User, 
+  Github, FileJson, Send, MessageSquare, Activity, FileText,
   TrendingUp, BarChart3, PieChart as PieChartIcon, Award, PlusCircle
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
+import { resolveApkDisplayName } from "@/lib/apk-audience";
+import { FormattedText } from "@/components/ui/formatted-text";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-kit";
 import {
   PortalPageShell,
@@ -59,9 +64,14 @@ import {
   flattenCommentThread,
 } from "@/lib/comment-thread-query";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
+import { ClientRecentActivityPanel } from "@/components/client/ClientRecentActivityPanel";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { CommentBody } from "@/components/chat/comment-body";
 import { ChatComposer } from "@/components/chat/chat-composer";
+import {
+  buildMentionCandidatesFromMessages,
+  projectMembersToMentionCandidates,
+} from "@/lib/chat-mentions";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -93,10 +103,11 @@ export default function ClientPortal() {
   }, [projects, selectedProjectId]);
 
   const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
+  const projectId = project?.id;
   const queryClient = useQueryClient();
 
-  const commentsQueryParams = project?.id
-    ? commentThreadQueryParams("project", project.id)
+  const commentsQueryParams = projectId
+    ? commentThreadQueryParams("project", projectId)
     : null;
 
   useEffect(() => {
@@ -119,41 +130,41 @@ export default function ClientPortal() {
     return undefined;
   }, [socket, project?.id, queryClient]);
 
-  const { data: releases, isLoading: isLoadingReleases } = useGetApkReleases(
-    project?.id as number,
-    { 
-      query: { 
-        enabled: !!project?.id,
-        queryKey: ["getApkReleases", project?.id],
-      } 
-    }
-  );
+  const { data: releases, isLoading: isLoadingReleases } = useGetApkReleases(projectId ?? 0, {
+    query: {
+      enabled: projectId != null,
+      queryKey: getGetApkReleasesQueryKey(projectId ?? 0),
+    },
+  });
 
   const { data: milestones, isLoading: isLoadingMilestones } = useGetProjectMilestones(
-    project?.id as number,
-    { 
-      query: { 
-        enabled: !!project?.id,
-        queryKey: ["getProjectMilestones", project?.id],
-      } 
-    }
+    projectId ?? 0,
+    {
+      query: {
+        enabled: projectId != null,
+        queryKey: ["getProjectMilestones", projectId],
+      },
+    },
   );
 
   const [commentText, setCommentText] = useState("");
   const discussionScrollRef = useRef<HTMLDivElement>(null);
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [addonForm, setAddonForm] = useState({ title: "", description: "" });
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
 
-  const { data: logs, isLoading: isLoadingLogs } = useGetProjectLogs(
-    project?.id as number,
-    { query: { enabled: !!project?.id, queryKey: getGetProjectLogsQueryKey(project?.id as number) } }
-  );
+  const { data: logs, isLoading: isLoadingLogs } = useGetProjectLogs(projectId ?? 0, {
+    query: {
+      enabled: projectId != null,
+      queryKey: getGetProjectLogsQueryKey(projectId ?? 0),
+    },
+  });
 
   const { data: commentsData, isLoading: isLoadingComments } = useListComments(
     commentsQueryParams ?? { threadType: "project", threadId: 0 },
     {
       query: {
-        enabled: !!project?.id,
+        enabled: projectId != null,
         queryKey: commentsQueryParams
           ? getListCommentsQueryKey(commentsQueryParams)
           : getListCommentsQueryKey({ threadType: "project", threadId: 0 }),
@@ -162,14 +173,22 @@ export default function ClientPortal() {
   );
 
   const { data: projectAnalytics, isLoading: isLoadingAnalytics } = useGetProjectAnalytics(
-    project?.id as number,
-    { query: { enabled: !!project?.id, queryKey: getGetProjectAnalyticsQueryKey(project?.id as number) } }
+    projectId ?? 0,
+    {
+      query: {
+        enabled: projectId != null,
+        queryKey: getGetProjectAnalyticsQueryKey(projectId ?? 0),
+      },
+    },
   );
 
   const channelMessages = useMemo(
     () => flattenCommentThread(commentsData?.comments ?? []),
     [commentsData?.comments],
   );
+
+  const activityLogs = useMemo(() => logs?.logs?.slice(0, 12) ?? [], [logs?.logs]);
+  const activityLogTotal = logs?.total ?? logs?.logs?.length ?? 0;
 
   useEffect(() => {
     const el = discussionScrollRef.current;
@@ -180,21 +199,44 @@ export default function ClientPortal() {
   const createRequestMutation = useCreateRequest();
 
   const { data: requestsData, isLoading: isLoadingRequests } = useListRequests(
-    { projectId: project?.id as number },
-    { query: { enabled: !!project?.id, queryKey: getListRequestsQueryKey({ projectId: project?.id as number }) } }
+    { projectId: projectId ?? 0 },
+    {
+      query: {
+        enabled: projectId != null,
+        queryKey: getListRequestsQueryKey({ projectId: projectId ?? 0 }),
+      },
+    },
   );
 
   const { data: resourcesData, isLoading: isLoadingResources } = useQuery({
-    queryKey: ["inventory-resources", project?.id],
-    queryFn: () => listInventoryResources(project!.id),
-    enabled: !!project?.id,
+    queryKey: ["inventory-resources", projectId],
+    queryFn: () => listInventoryResources(projectId!),
+    enabled: projectId != null,
   });
+
+  const { data: projectMembers } = useGetProjectMembers(projectId ?? 0, {
+    query: {
+      enabled: projectId != null,
+      queryKey: getGetProjectMembersQueryKey(projectId ?? 0),
+    },
+  });
+
+  const mentionCandidates = useMemo(() => {
+    const fromMembers = projectMembersToMentionCandidates(projectMembers, user?.id);
+    const fromMessages = buildMentionCandidatesFromMessages(channelMessages);
+    const map = new Map(fromMembers.map((c) => [c.id, c]));
+    for (const c of fromMessages) map.set(c.id, c);
+    return [...map.values()].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+  }, [projectMembers, channelMessages, user?.id]);
 
   const handlePostComment = async (payload: {
     content?: string;
     attachmentUrl?: string;
     attachmentName?: string;
     attachmentMimeType?: string;
+    mentionedUserIds?: number[];
   }) => {
     if (!project?.id) return;
     if (!payload.content?.trim() && !payload.attachmentUrl) return;
@@ -208,6 +250,9 @@ export default function ClientPortal() {
           attachmentUrl: payload.attachmentUrl,
           attachmentName: payload.attachmentName,
           attachmentMimeType: payload.attachmentMimeType,
+          ...(payload.mentionedUserIds?.length
+            ? { mentionedUserIds: payload.mentionedUserIds }
+            : {}),
         },
       });
       appendCommentToListCache(queryClient, "project", project.id, created);
@@ -253,7 +298,7 @@ export default function ClientPortal() {
     return <DashboardSkeleton />;
   }
 
-  if (!projects.length) {
+  if (!projects.length || !project) {
     return (
       <PortalPageShell>
         <PortalPageHero
@@ -271,7 +316,7 @@ export default function ClientPortal() {
   }
 
   const completionData = [
-    { name: "Progress", value: project.completionPct, fill: "hsl(var(--primary))" }
+    { name: "Progress", value: project.completionPct ?? 0, fill: "hsl(var(--primary))" },
   ];
 
   const latestRelease = releases && releases.length > 0 ? releases[0] : null;
@@ -331,19 +376,35 @@ export default function ClientPortal() {
           { title: "Projects", value: hub?.projectCount ?? projects.length, hint: "In your portfolio", icon: Layout, accent: "blue", href: "/client" },
           { title: "Avg completion", value: `${hub?.avgCompletionPct ?? project.completionPct}%`, hint: projects.length > 1 ? "Across all projects" : "This project", icon: TrendingUp, accent: "violet", href: "/client/analytics" },
           { title: "Milestones", value: `${hub?.milestones.completed ?? completedMilestones}/${(hub?.milestones.total ?? totalMilestones) || "—"}`, hint: "Completed", icon: Award, accent: "green" },
-          { title: "Releases", value: releaseKpiCount, hint: latestRelease ? `Latest v${latestRelease.version}` : "APK builds", icon: Smartphone, accent: "sky", href: "/client/apk" },
+          { title: "Releases", value: releaseKpiCount, hint: latestRelease ? `Latest ${resolveApkDisplayName(latestRelease)}` : "APK builds", icon: Smartphone, accent: "sky", href: "/client/apk" },
         ]}
       />
 
-      <div className="dashboard-panel bg-gradient-to-br from-primary/15 via-card to-violet-500/10 rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="flex-1 space-y-3">
+      <div className="dashboard-panel bg-gradient-to-br from-primary/15 via-card to-violet-500/10 rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-6">
+        <div className="min-w-0 flex-1 space-y-3">
           <Badge variant="outline" className="bg-background/50 backdrop-blur-sm px-2 py-0.5 text-xs border-primary/50 text-primary">
             {project.status.replace('_', ' ').toUpperCase()}
           </Badge>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground">{project.name}</h2>
-          <p className="text-sm text-muted-foreground max-w-xl leading-relaxed">
-            {project.description || "Development is proceeding according to schedule."}
-          </p>
+          <h2 className="text-2xl font-bold tracking-tight text-foreground line-clamp-2">{project.name}</h2>
+          {project.description?.trim() ? (
+            <div className="space-y-1.5 max-w-2xl">
+              <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere] line-clamp-3">
+                {project.description}
+              </p>
+              <button
+                type="button"
+                onClick={() => setDescriptionOpen(true)}
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
+              >
+                Read more
+                <ExternalLink className="h-3 w-3" />
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
+              Development is proceeding according to schedule.
+            </p>
+          )}
           <div className="flex items-center gap-6 pt-1">
             <div className="flex items-center text-xs font-medium">
               <Clock className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
@@ -513,23 +574,22 @@ export default function ClientPortal() {
             <Send className="h-3 w-3 text-purple-500" /> Last deployment
           </p>
           <p className="text-[11px] font-semibold mt-2 text-muted-foreground leading-tight line-clamp-1">
-            {latestRelease ? `${latestRelease.version} (${latestRelease.releaseType})` : "No builds released"}
+            {latestRelease ? `${resolveApkDisplayName(latestRelease)} · v${latestRelease.version}` : "No builds released"}
           </p>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Primary Dashboard Section */}
-        <div className="lg:col-span-2 space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card className="bg-card">
-              <CardHeader className="pb-2 p-4">
+      <section className="grid gap-4 lg:grid-cols-12" aria-label="Project workspace">
+        {/* Row 1: release + milestones | team */}
+        <div className="grid gap-4 md:grid-cols-2 lg:col-span-8 md:items-stretch">
+            <Card className="flex flex-col bg-card">
+              <CardHeader className="pb-2 p-4 shrink-0">
                 <CardTitle className="flex items-center text-sm font-semibold">
                   <Smartphone className="mr-2 h-4 w-4 text-primary" />
                   Latest Release
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 p-4">
+              <CardContent className="flex flex-1 flex-col space-y-4 p-4">
                 {isLoadingReleases ? (
                   <div className="space-y-4">
                     <Skeleton className="h-24 w-full" />
@@ -539,16 +599,17 @@ export default function ClientPortal() {
                   <>
                     <div className="border border-border rounded-lg p-4 text-center bg-muted/20">
                       <div className="flex items-center justify-center gap-2 mb-1">
-                        <h3 className="text-xl font-bold">{latestRelease.version}</h3>
+                        <h3 className="text-xl font-bold">{resolveApkDisplayName(latestRelease)}</h3>
                         <Badge variant="secondary" className="capitalize text-[10px]">
                           {latestRelease.releaseType}
                         </Badge>
                       </div>
-                      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-4">
-                        <span>{latestRelease.platform.toUpperCase()}</span>
-                        <span>•</span>
-                        <span>Released {latestRelease.createdAt ? formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true }) : 'N/A'}</span>
-                      </div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        v{latestRelease.version} · {latestRelease.platform.toUpperCase()}
+                      </p>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        Released {latestRelease.createdAt ? formatDistanceToNow(new Date(latestRelease.createdAt), { addSuffix: true }) : 'N/A'}
+                      </p>
                       <a 
                         href={latestRelease.fileUrl} 
                         target="_blank" 
@@ -574,14 +635,14 @@ export default function ClientPortal() {
               </CardContent>
             </Card>
 
-            <Card className="bg-card">
-              <CardHeader className="pb-2 p-4">
+            <Card className="flex flex-col bg-card">
+              <CardHeader className="pb-2 p-4 shrink-0">
                 <CardTitle className="flex items-center text-sm font-semibold">
                   <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
                   Project Milestones
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-4 max-h-[300px] overflow-y-auto scrollbar-thin">
+              <CardContent className="min-h-0 flex-1 overflow-y-auto overscroll-y-auto dialog-scroll p-4 max-h-[280px] md:max-h-[320px]">
                 {isLoadingMilestones ? (
                   <div className="space-y-4">
                     <Skeleton className="h-16 w-full" />
@@ -621,71 +682,30 @@ export default function ClientPortal() {
                 )}
               </CardContent>
             </Card>
-          </div>
-
-          {/* Expanded Section: Recent Dev Logs Feed */}
-          <Card className="bg-card overflow-hidden shadow-sm">
-            <CardHeader className="pb-2 p-4 border-b bg-muted/10 flex flex-row items-center justify-between space-y-0">
-              <CardTitle className="flex items-center text-sm font-semibold">
-                <Activity className="mr-2 h-4 w-4 text-cyan-500" />
-                Recent Development Activity
-              </CardTitle>
-              <Badge variant="outline" className="text-[9px] font-mono bg-background text-cyan-600 border-cyan-500/20">Safe Portal Sync</Badge>
-            </CardHeader>
-            <CardContent className="p-0">
-              {isLoadingLogs ? (
-                <div className="p-4 space-y-3">
-                  <Skeleton className="h-12 w-full" />
-                  <Skeleton className="h-12 w-full" />
-                </div>
-              ) : logs && logs.logs && logs.logs.length > 0 ? (
-                <div className="divide-y divide-border max-h-[260px] overflow-y-auto scrollbar-thin">
-                  {logs.logs.slice(0, 6).map((log: any) => (
-                    <div key={log.id} className="p-3 hover:bg-muted/10 transition-colors flex items-start gap-3 text-xs">
-                      <div className="bg-cyan-500/10 p-1.5 rounded-md text-cyan-600 shrink-0 mt-0.5">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <span className="text-[11px] font-bold text-foreground truncate">{log.taskTitle}</span>
-                          <span className="text-[9px] text-muted-foreground shrink-0">{new Date(log.date).toLocaleDateString()}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-[9px]">
-                          <span className="font-medium bg-primary/5 text-primary px-1 rounded capitalize">{log.category}</span>
-                          <span className="text-muted-foreground flex items-center">
-                            <User className="h-2.5 w-2.5 mr-0.5 text-muted-foreground/70" /> {log.developerName || "Developer"}
-                          </span>
-                          <span className="text-muted-foreground font-mono ml-auto">{log.hoursSpent} hrs</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/70 italic border-l-2 border-muted pl-2.5 py-0.5 mt-1.5 leading-relaxed font-serif bg-muted/5 rounded-r">
-                          "{log.taskDescription}"
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-12 text-center text-xs text-muted-foreground">
-                  No recent daily logs tracked for this project.
-                </div>
-              )}
-            </CardContent>
-          </Card>
         </div>
 
-        {/* Sidebar Content: Links and Live Chat Widget */}
-        <div className="space-y-4">
-          <ClientProjectTeamCard projectId={project?.id} />
+        <ClientProjectTeamCard projectId={project?.id} className="lg:col-span-4 lg:row-start-1" />
 
-          {/* Shared Assets Panel */}
-          <Card className="bg-card shadow-sm">
+        {/* Row 2: activity feed | assets + discussion — matched height */}
+        <div className="flex h-[460px] flex-col lg:col-span-8 lg:row-start-2 lg:h-[520px]">
+          <ClientRecentActivityPanel
+            logs={activityLogs}
+            loading={isLoadingLogs}
+            totalCount={activityLogTotal}
+            className="h-full min-h-0 flex-1"
+          />
+        </div>
+
+        <div className="flex h-[460px] flex-col gap-4 lg:col-span-4 lg:row-start-2 lg:h-[520px]">
+
+          <Card className="shrink-0 bg-card shadow-sm">
             <CardHeader className="pb-2 p-4 border-b">
               <CardTitle className="flex items-center text-sm font-semibold">
                 <ExternalLink className="mr-2 h-4 w-4 text-indigo-500" />
                 Assets & Deliverables
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-3 space-y-2.5">
+            <CardContent className="max-h-[180px] overflow-y-auto overscroll-y-auto dialog-scroll p-3 space-y-2.5">
               {isLoadingResources ? (
                 <Skeleton className="h-16 w-full" />
               ) : resourcesData?.resources?.length ? (
@@ -778,8 +798,7 @@ export default function ClientPortal() {
             </CardContent>
           </Card>
 
-          {/* Live Discussions Feed */}
-          <Card className="bg-card flex flex-col shadow-sm h-[350px]">
+          <Card className="flex min-h-0 flex-1 flex-col bg-card shadow-sm">
             <CardHeader className="pb-2 p-4 border-b flex flex-row items-center justify-between space-y-0 shrink-0">
               <CardTitle className="flex items-center text-sm font-semibold">
                 <MessageSquare className="mr-2 h-4 w-4 text-emerald-500" />
@@ -789,7 +808,7 @@ export default function ClientPortal() {
             <CardContent className="p-0 flex-1 flex flex-col overflow-hidden relative">
               <div
                 ref={discussionScrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin"
+                className="flex-1 min-h-0 overflow-y-auto overscroll-y-auto dialog-scroll p-4 space-y-3"
               >
                 {isLoadingComments ? (
                   <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
@@ -809,7 +828,10 @@ export default function ClientPortal() {
                         </div>
                         <CommentBody
                           comment={c}
-                          bubbleClassName="border-0 bg-transparent p-0 shadow-none text-[11px] text-muted-foreground"
+                          isSent={c.authorId === user?.id}
+                          mentionCandidates={mentionCandidates}
+                          compact
+                          bubbleClassName="border-0 bg-transparent p-0 shadow-none"
                           onImageLoad={() => {
                             const el = discussionScrollRef.current;
                             if (el) el.scrollTop = el.scrollHeight;
@@ -827,7 +849,7 @@ export default function ClientPortal() {
                 )}
               </div>
               
-              <div className="p-3 bg-muted/20 border-t border-border shrink-0">
+              <div className="shrink-0 bg-[#f0f2f5] px-3 py-2 dark:bg-[#202c33]">
                 <ChatComposer
                   value={commentText}
                   onChange={setCommentText}
@@ -836,14 +858,17 @@ export default function ClientPortal() {
                     setCommentText("");
                   }}
                   isSubmitting={createCommentMutation.isPending}
-                  placeholder="Type message to devs..."
-                  textareaClassName="min-h-[32px] h-8 text-[11px] py-1.5"
+                  placeholder="Type a message"
+                  mentionCandidates={mentionCandidates}
+                  enableEmojiPicker
+                  enableVoice
+                  size="compact"
                 />
               </div>
             </CardContent>
           </Card>
         </div>
-      </div>
+      </section>
 
       {/* Add-on Work / Scope Creep Management */}
       <div className="mt-4">
@@ -932,6 +957,81 @@ export default function ClientPortal() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={descriptionOpen} onOpenChange={setDescriptionOpen}>
+        <DialogContent className="sm:max-w-[640px] max-h-[min(90dvh,720px)] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-start gap-3 pr-6">
+              <span className="line-clamp-2 text-base font-semibold leading-snug">
+                {project.name}
+              </span>
+              <Badge variant="outline" className="shrink-0 mt-0.5 border-primary/40 bg-primary/5 text-primary text-[10px]">
+                {project.status.replace("_", " ").toUpperCase()}
+              </Badge>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Project overview, scope, and key milestones.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-y-auto dialog-scroll space-y-4 pr-1">
+            <section className="space-y-2">
+              <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Description
+              </h3>
+              <FormattedText
+                className="text-sm text-foreground/90"
+                fallback={
+                  <p className="text-sm text-muted-foreground">No description provided yet.</p>
+                }
+              >
+                {project.description}
+              </FormattedText>
+            </section>
+
+            <section className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Completion
+                </p>
+                <p className="mt-1 text-lg font-bold">{project.completionPct}%</p>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Target deadline
+                </p>
+                <p className="mt-1 text-sm font-medium">
+                  {project.deadline ? new Date(project.deadline).toLocaleDateString() : "Not set"}
+                </p>
+              </div>
+            </section>
+
+            {project.techStack?.length ? (
+              <section className="space-y-2">
+                <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Tech stack
+                </h3>
+                <div className="flex flex-wrap gap-1.5">
+                  {project.techStack.map((tech: string) => (
+                    <Badge key={tech} variant="secondary" className="text-[10px] px-2 py-0">
+                      {tech}
+                    </Badge>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="text-xs"
+              onClick={() => setDescriptionOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </PortalPageShell>
   );

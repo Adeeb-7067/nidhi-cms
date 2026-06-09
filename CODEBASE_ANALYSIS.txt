@@ -1,0 +1,1561 @@
+================================================================================
+                    CONTENT MANAGEMENT HUB (CMS)
+              COMPREHENSIVE CODEBASE ANALYSIS & DOCUMENTATION
+================================================================================
+
+Generated: June 5, 2026
+Repository: D:\Content-Management-Hub
+Analysis scope: Full monorepo (backend + frontend + docs)
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  Executive Summary
+  2.  What This Project Is
+  3.  High-Level Architecture
+  4.  Technology Stack
+  5.  Project Structure
+  6.  User Roles & Access Model
+  7.  Authentication & Security
+  8.  Database Design (MongoDB)
+  9.  Backend API — Complete Reference
+ 10.  Backend Services & Business Logic
+ 11.  Frontend Application
+ 12.  Feature Modules (Detailed)
+ 13.  Realtime, Notifications & Presence
+ 14.  File Storage & Uploads
+ 15.  Email System
+ 16.  Background Jobs & Scheduled Tasks
+ 17.  Reports & PDF Generation
+ 18.  Sales/CRM Module (Mock UI)
+ 19.  Data Flow Diagrams
+ 20.  Development & Deployment
+ 21.  Seed Data & Test Credentials
+ 22.  API Contract & Code Generation
+ 23.  Known Gaps & Technical Notes
+ 24.  File Index (Key Paths)
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+Content Management Hub (CMS) is a full-stack client and project management
+platform built for software agencies. It helps teams manage client projects,
+track bugs, log daily work, distribute APK/IPA builds, maintain project
+inventory (credentials, assets, subscriptions), communicate via discussions,
+handle support tickets, and generate analytics reports.
+
+The system is split into two independently deployable applications:
+
+  • Backend  — Express 5 REST API + Socket.IO realtime (port 8080)
+  • Frontend — React 19 SPA built with Vite (port 5173)
+
+Typical production deployment uses two domains:
+  app.example.com  (static frontend)
+  api.example.com  (Node.js API + WebSockets)
+
+Five user roles drive the entire permission model:
+  super_admin, developer, tester, qa, client
+
+The codebase contains ~470 source files, ~182K words of code/docs, with
+3114 graph nodes and 9399 edges (per graphify analysis).
+
+Core live features (backend-integrated):
+  Projects, Bugs, Daily Logs, Tasks, APK Releases, Discussions/Comments,
+  Tickets, Resource Requests, Inventory Vault, Analytics, Reports,
+  Notifications, Presence, Client Portal, Employee Management.
+
+Sales/CRM module exists as a UI prototype with mock data only (super_admin).
+
+================================================================================
+2. WHAT THIS PROJECT IS
+================================================================================
+
+PURPOSE
+-------
+CMS is an internal operations platform for a software development agency.
+It centralizes everything needed to deliver client projects:
+
+  • Project lifecycle management (scoping → UAT → completed → maintenance)
+  • Quality assurance (bug tracking with dual QA/dev workflow)
+  • Developer accountability (daily work logs with compliance enforcement)
+  • Client transparency (portal, visible discussions, APK downloads)
+  • Asset management (encrypted credentials, environments, subscriptions)
+  • Team coordination (tasks, tickets, resource requests, realtime chat)
+  • Business intelligence (dashboards, PDF/Excel reports)
+
+TARGET USERS
+------------
+  Super Admin  — Agency owner/manager; full system control
+  Developer    — Builds software; logs work, fixes bugs, manages inventory
+  Tester/QA    — Reports and triages bugs; QA status workflow
+  Client       — Views project progress, downloads APKs, raises tickets
+
+BUSINESS DOMAIN
+---------------
+Software agency delivering mobile/web apps to client companies.
+Each client company has multiple projects. Each project has a team,
+bugs, logs, releases, inventory, and discussion channels.
+
+================================================================================
+3. HIGH-LEVEL ARCHITECTURE
+================================================================================
+
+                    ┌─────────────────────────────────────┐
+                    │         BROWSER (React SPA)         │
+                    │  Vite + React 19 + TanStack Query   │
+                    │  Wouter routing + Socket.io client  │
+                    └──────────────┬──────────────────────┘
+                                   │
+                    HTTPS REST     │    WebSocket (/socket.io)
+                    /api/*         │
+                                   ▼
+                    ┌─────────────────────────────────────┐
+                    │      EXPRESS 5 API (Node.js)        │
+                    │  Routes → Controllers → Services    │
+                    │  JWT Auth + Role-based access       │
+                    │  Socket.IO on same HTTP server      │
+                    └──────────────┬──────────────────────┘
+                                   │
+              ┌────────────────────┼────────────────────┐
+              ▼                    ▼                    ▼
+     ┌─────────────┐     ┌──────────────┐    ┌──────────────┐
+     │   MongoDB   │     │ Object Store │    │  SMTP Email  │
+     │  (Mongoose) │     │ S3-compatible│    │ (Nodemailer) │
+     └─────────────┘     │ or local     │    └──────────────┘
+                         └──────────────┘
+                                   │
+                                   ▼
+                         ┌──────────────┐
+                         │ Firebase FCM │
+                         │ (push, opt.) │
+                         └──────────────┘
+
+REQUEST FLOW (Backend)
+----------------------
+  HTTP Request
+    → app.js (helmet, cors, compression, json parser, static uploads)
+    → routes/index.js (global auth gate)
+    → routes/<feature>.routes.js (middleware + asyncHandler)
+    → controllers/<feature>.controller.js (parse input, call services)
+    → services/ (business rules, access checks)
+    → models/schema/ (Mongoose queries)
+    → mappers/ (DB document → API JSON)
+    → JSON response
+
+FRONTEND FLOW
+-------------
+  main.tsx
+    → configureApiClient() (Orval base URL)
+    → App.tsx
+        ThemeProvider
+        QueryClientProvider (TanStack Query)
+        WouterRouter
+          AuthProvider (token refresh, user profile)
+            RealtimeProvider (Socket.io + FCM)
+              PresenceProvider (heartbeat)
+                AuthenticatedShell
+                  AppLayout (Sidebar + Navbar)
+                    PageOutlet (lazy routes + RoleGate)
+
+================================================================================
+4. TECHNOLOGY STACK
+================================================================================
+
+BACKEND
+-------
+  Runtime       : Node.js (ES Modules)
+  Framework     : Express 5.1
+  Database      : MongoDB via Mongoose 8.12
+  Realtime      : Socket.IO 4.8
+  Auth          : JWT (jsonwebtoken) + bcryptjs
+  Validation    : Zod 3.25 (generated from OpenAPI)
+  Logging       : Pino + pino-http
+  Build         : esbuild → dist/index.mjs
+  Dev           : nodemon
+  Email         : Nodemailer
+  Push          : Firebase Admin SDK (optional)
+  Storage       : Local filesystem OR AWS S3-compatible (DigitalOcean Spaces)
+  PDF Reports   : Puppeteer
+  Excel Reports : ExcelJS
+  File Upload   : Multer (memory storage)
+  Security      : Helmet, CORS, express-rate-limit
+
+FRONTEND
+--------
+  Build         : Vite 7
+  Framework     : React 19.1
+  Language      : TypeScript 5.9
+  Routing       : Wouter 3
+  Server State  : TanStack React Query v5
+  Styling       : Tailwind CSS v4
+  UI Components : shadcn/ui (Radix UI primitives)
+  Forms         : react-hook-form + Zod
+  Charts        : Recharts
+  Animation     : Framer Motion, Lottie
+  Realtime      : socket.io-client 4
+  Push          : Firebase Cloud Messaging (optional)
+  PDF Export    : jsPDF + jspdf-autotable
+  API Codegen   : Orval 8.5 (OpenAPI → React Query hooks)
+
+INFRASTRUCTURE
+--------------
+  Production    : PM2 (ecosystem.config.cjs), nginx/Plesk proxy
+  Database IDs  : Numeric auto-increment via Counter collection (not ObjectIds)
+  API Contract  : openapi.yaml (source of truth for REST endpoints)
+
+================================================================================
+5. PROJECT STRUCTURE
+================================================================================
+
+Content-Management-Hub/
+├── README.md                    # Root quick start
+├── LOCAL_RUNNING.md             # Local dev guide + seed credentials
+├── CODEBASE_ANALYSIS.txt        # This document
+│
+├── backend/
+│   ├── index.js                 # Entry: HTTP server + Socket.IO + jobs
+│   ├── load-env.js              # dotenv bootstrap
+│   ├── openapi.yaml             # REST API contract (~all endpoints)
+│   ├── ARCHITECTURE.md          # Backend MVC guide
+│   ├── DEPLOYMENT.md            # Production hosting
+│   ├── ecosystem.config.cjs     # PM2 config
+│   ├── build.mjs                # esbuild bundler
+│   ├── scripts/
+│   │   ├── seed.js              # Database seeding
+│   │   └── seed-more.js         # Extended seed data
+│   └── src/
+│       ├── app.js               # Express app + middleware stack
+│       ├── config/              # Env, public API paths
+│       ├── routes/              # 22 feature routers
+│       ├── controllers/         # HTTP handlers (thin)
+│       │   └── inventory/       # Sub-resource controllers
+│       ├── services/            # Business logic + background jobs
+│       │   ├── access/          # Permission helpers
+│       │   ├── bugs/            # Bug workflow
+│       │   └── inventory/       # Inventory jobs
+│       ├── mappers/             # DB → API JSON formatters
+│       ├── models/schema/       # 30+ Mongoose schemas
+│       ├── middlewares/         # Auth, audit, errors
+│       ├── lib/                 # DB, JWT, storage, realtime, email
+│       ├── utils/               # HTTP errors, pagination
+│       └── api-zod/generated/   # Auto-generated Zod types
+│
+├── frontend/
+│   ├── vite.config.ts           # Dev proxy, code splitting
+│   ├── components.json          # shadcn/ui config
+│   └── src/
+│       ├── main.tsx             # App bootstrap
+│       ├── App.tsx              # Providers + routing shell
+│       ├── api/                 # Orval generated + custom fetch
+│       │   └── generated/       # api.ts, api.schemas.ts
+│       ├── contexts/            # Auth, Theme, Realtime, Presence
+│       ├── hooks/               # Custom React hooks
+│       ├── lib/                 # 43+ utility modules
+│       ├── modules/sales/       # Sales CRM (mock data)
+│       ├── pages/               # Route-level components
+│       │   ├── admin/           # Super admin pages
+│       │   ├── dev/             # Developer/QA workspace
+│       │   ├── client/          # Client portal
+│       │   ├── sales/           # Sales CRM pages
+│       │   ├── settings/        # Settings
+│       │   └── auth/            # Login, forgot password
+│       └── components/          # Feature + UI components
+│           ├── ui/              # ~60 shadcn primitives
+│           ├── layout/          # App shell, sidebar, navbar
+│           ├── bugs/            # Bug tracker UI
+│           ├── logs/            # Daily log UI
+│           ├── discussions/     # Chat-style discussions
+│           ├── chat/            # Shared comment/composer primitives
+│           ├── inventory/       # Project inventory panel
+│           ├── tickets/         # Support tickets
+│           ├── presence/        # Online status UI
+│           └── dashboard/       # Charts and KPI widgets
+│
+└── graphify-out/                # Knowledge graph analysis artifacts
+    ├── graph.json
+    ├── graph.html
+    └── GRAPH_REPORT.md
+
+================================================================================
+6. USER ROLES & ACCESS MODEL
+================================================================================
+
+ROLES (5 total)
+---------------
+  super_admin  — Full system access; manages users, clients, all projects
+  developer    — Project team member; builds, logs work, fixes assigned bugs
+  tester       — QA staff; creates bugs, sets QA track statuses
+  qa           — QA staff (same as tester for most permissions)
+  client       — External client; portal access to their company's projects
+
+LOGIN METHODS
+-------------
+  super_admin, client  → Login with EMAIL + password
+  developer, tester, qa → Login with EMPLOYEE ID (e.g. AL001) + password
+
+USER STATUSES: active | inactive | suspended
+
+ROLE CAPABILITY MATRIX
+----------------------
+Capability                    | super | dev | tester | qa | client
+------------------------------|-------|-----|--------|----|-------
+Full user/client/project CRUD |   ✓   |     |        |    |
+Project membership mgmt       |   ✓   |     |        |    |
+View scoped projects          |   ✓   |  ✓* |   ✓*   | ✓* |  ✓**
+Manage inventory              |   ✓   |  ✓* |        |    |
+Create bugs                   |   ✓   |  ✓  |   ✓    | ✓  |
+Assign bugs                   |   ✓   |     |   ✓    | ✓  |
+Set dev bug status            |   ✓   |  ✓† |        |    |
+Set QA/final bug status       |   ✓   |     |   ✓    | ✓  |
+Daily logs                    |   ✓   |  ✓  |   ✓    | ✓  |
+Create tasks                  |   ✓   |     |        |    |
+Client portal / tickets       |       |     |        |    |  ✓
+Internal discussions          |   ✓   |  ✓  |   ✓    | ✓  |
+Client-visible discussions    |   ✓   |  ✓  |   ✓    | ✓  |  ✓
+APK (filtered by audience)    |   ✓   |  ✓  |   ✓    | ✓  |  ✓‡
+Impersonation                 |   ✓   |     |        |    |
+Admin analytics               |   ✓   |     |        |    |
+Workspace dashboard           |   ✓   |  ✓  |   ✓    | ✓  |
+Client hub dashboard          |       |     |        |    |  ✓
+
+  * Must be project member. Developer gets canManage on their projects.
+  ** Must be linked client company user.
+  † Only when assigned to the bug.
+  ‡ Filtered to client_visible / all_visible APK audiences.
+
+ACCESS SCOPING LOGIC (services/access/)
+---------------------------------------
+  super_admin  → Full access everywhere
+  client       → Only their linked company (clients.userId) and its projects
+  developer/tester/qa → Access if member of any project under the company
+                        Developers get canManage: true on their projects
+  Inventory    → Clients see only client_visible resources
+
+FRONTEND NAVIGATION ZONES
+-------------------------
+  /admin/*   → super_admin (Manage section)
+  /dev/*     → developer, tester, qa (+ super_admin)
+  /client/*  → client only
+  /sales/*   → super_admin only (mock CRM, not a separate role)
+  /settings, /profile, /notifications → all authenticated users
+
+ROLE-BASED HOME REDIRECT AFTER LOGIN
+------------------------------------
+  super_admin → /admin
+  developer, tester, qa → /dev
+  client → /client
+
+================================================================================
+7. AUTHENTICATION & SECURITY
+================================================================================
+
+AUTH FLOW
+---------
+  1. POST /api/auth/login
+     → Validates credentials (email OR employee ID)
+     → Returns access token (15 min) + refresh token (30 days)
+     → Creates session row in Sessions collection
+
+  2. Protected requests
+     → Authorization: Bearer <accessToken> OR X-Access-Token header
+     → requireAuth middleware verifies JWT, loads user, rejects inactive
+
+  3. Token refresh
+     → POST /api/auth/refresh with refresh token
+     → Validates refresh JWT + session row
+     → Issues new access token
+
+  4. Logout
+     → POST /api/auth/logout
+     → Deletes session by refresh token
+
+  5. Frontend auto-refresh
+     → custom-fetch.ts transparently refreshes on 401
+     → Queued refresh prevents thundering herd
+     → Events: cms:auth-token-refreshed, cms:auth-session-expired
+
+PASSWORD MANAGEMENT
+-------------------
+  Forgot password  → OTP email (10 min TTL, attempt limits)
+  Change password  → In-app OTP request + verification
+  Admin reset      → super_admin can reset any user's password
+  Credential history → Encrypted password storage for admin-managed accounts
+
+IMPERSONATION
+-------------
+  super_admin can "view as" another user via POST /api/auth/impersonate/:userId
+  Frontend stores impersonation tokens separately (lib/impersonation-storage.ts)
+  Banner shown during impersonation; stop restores admin tokens
+
+RATE LIMITING (auth routes)
+---------------------------
+  Login          : 10 requests / 15 min
+  Forgot password: 5 requests / hour
+  Verify OTP     : 30 requests / 15 min
+  Reset password : 10 requests / 15 min
+  Refresh token  : 30 requests / 5 min
+
+SECURITY MIDDLEWARE
+-------------------
+  helmet         → Security headers
+  cors           → ALLOWED_ORIGINS whitelist
+  express-rate-limit → Auth brute-force protection
+  audit middleware → Logs POST/PUT/PATCH/DELETE mutations
+
+PUBLIC API PATHS (no auth required)
+------------------------------------
+  GET  /api/healthz
+  POST /api/auth/login
+  POST /api/auth/refresh
+  POST /api/auth/forgot-password
+  POST /api/auth/verify-reset-otp
+  POST /api/auth/reset-password
+
+ERROR FORMAT (consistent across API)
+------------------------------------
+  { "error": "Human message", "code": "NOT_FOUND", "field": "email" }
+
+================================================================================
+8. DATABASE DESIGN (MongoDB)
+================================================================================
+
+CONNECTION
+----------
+  DATABASE_URL env var → mongoose.connect on import
+  isDatabaseConnected() / whenDatabaseReady() gate background jobs
+
+ID GENERATION
+-------------
+  All business entities use numeric IDs from Counter collection sequences
+  getNextSequence("users"), getNextSequence("projects"), etc.
+  Enables predictable cross-collection references
+
+COLLECTIONS (30+ models)
+------------------------
+
+USERS & AUTH
+  users                  — Accounts (roles, employeeId, profile, FCM tokens)
+  sessions               — Refresh token sessions (30d, IP, user-agent)
+  passwordresettokens    — OTP tokens (10min TTL)
+  credentialhistories    — Encrypted password history
+
+CLIENTS / COMPANIES
+  clients                — Client companies (also exported as companiesTable)
+                           Fields: company name/code, contacts, documents,
+                           portal login flag, linked userId
+
+PROJECTS
+  projects               — Metadata, status, dates, URLs, tech stack
+  projectmembers         — Team membership, completion %
+  apkschedules           — Scheduled APK release dates with audience
+  milestones             — Project milestones
+
+  Project statuses: scoping, in_progress, on_hold, uat, completed, maintenance
+
+WORK TRACKING
+  dailylogs              — Per-developer daily work (date as YYYY-MM-DD string)
+  bugs                   — Bug reports with QA/dev/final track statuses
+                           Embedded issues[] array for batch reports
+  tasks                  — Kanban-style work tasks
+  resourcerequests       — Developer resource requests (license, hardware)
+  tickets                — Support tickets (client vs staff audience)
+
+APK
+  apkreleases            — APK/IPA builds with audience visibility
+  apkdownloadlogs        — Download audit trail
+  APK audiences: team_only, client_visible, all_visible
+
+COMMUNICATION
+  comments               — Threaded comments across entities
+  notifications          — In-app notifications per user
+
+  Comment thread types:
+    project, project_internal, log, bug, apk, request, ticket
+
+REPORTS & SETTINGS
+  reports                — Async-generated PDF/Excel reports
+  companysettings        — Org name, logo, daily log policy, timezone
+
+  Report types:
+    developer_monthly, project_progress, bug_report, team_utilisation,
+    client_dossier, apk_release_history, raw_log_export
+
+INVENTORY (per-project asset vault)
+  inventoryfolders              — Folder tree
+  inventoryresources            — Files, links, docs (versioned, soft-delete)
+  inventorycredentials          — Encrypted secrets (AES-256-GCM)
+  inventorycredentialaccesslogs — Credential reveal audit
+  inventoryenvironments         — Dev/staging/prod environment records
+  inventorydevices              — Test devices
+  inventorysubscriptions        — Domain/hosting/license renewals
+  inventoryactivities           — Inventory change log
+
+SYSTEM
+  auditlogs              — API mutation audit trail
+  counters               — Auto-increment sequences
+
+VIRTUAL LOG PROJECTS
+--------------------
+  Daily logs support non-project entries via reserved negative IDs:
+    -1 → "Others"
+    -2 → "Meeting"
+
+================================================================================
+9. BACKEND API — COMPLETE REFERENCE
+================================================================================
+
+All routes mount under /api. Global auth gate in routes/index.js.
+
+HEALTH
+  GET  /healthz                              Public liveness check
+
+AUTH (/auth/*)
+  POST /auth/login                           Public — email or employee ID
+  POST /auth/logout                          Invalidate refresh session
+  POST /auth/refresh                         Public — new access token
+  POST /auth/forgot-password                 Public — send OTP email
+  POST /auth/verify-reset-otp                Public — validate OTP
+  POST /auth/reset-password                  Public — reset with OTP
+  POST /auth/change-password/request-otp     Request in-app password change OTP
+  POST /auth/fcm-token                       Register FCM device token
+  GET  /auth/me                              Current user profile
+  PATCH /auth/me                             Update profile
+  POST /auth/impersonate/:userId             super_admin impersonation
+  POST /auth/stop-impersonate                End impersonation
+
+USERS (/users/*)
+  GET    /users                              super_admin — list all
+  GET    /users/preview-employee-id          super_admin — preview next ID
+  POST   /users                              super_admin — create user
+  GET    /users/:id                          Get user (scoped)
+  PATCH  /users/:id                          super_admin — update
+  DELETE /users/:id                          super_admin — deactivate
+  PATCH  /users/me/password                  Change own password (OTP)
+  PATCH  /users/:id/password                 super_admin reset
+  GET    /users/:id/credentials              super_admin — password history
+  POST   /users/:id/credentials/:credId/reveal super_admin — decrypt password
+
+CLIENTS (/clients/*)
+  GET    /clients                            List (role-scoped)
+  POST   /clients                            super_admin — create (+ portal user)
+  GET    /clients/:id                        Client detail
+  PATCH  /clients/:id                        super_admin — update
+
+COMPANIES (/companies/*)
+  Same underlying Clients model; company-centric API
+  GET    /companies                          List companies
+  POST   /companies                          super_admin — create
+  GET/PATCH /companies/:id                   Detail / update
+  GET    /companies/:id/projects             Projects under company
+  GET    /companies/:id/tickets              Company tickets
+  GET    /companies/:id/activity             Company activity feed
+
+PROJECTS (/projects/*)
+  GET    /projects                           List (membership scoped)
+  POST   /projects                           super_admin — create
+  GET/PATCH/DELETE /projects/:id             CRUD
+  GET    /projects/:id/members               Team members
+  POST   /projects/:id/members               super_admin — add member
+  POST   /projects/:id/members/batch         super_admin — batch add
+  DELETE /projects/:id/members/:userId       super_admin — remove
+  GET/POST /projects/:id/apk-schedules       APK release schedule
+  GET/POST /projects/:id/milestones          Milestones
+  GET    /projects/:id/logs                  Project daily logs
+  GET    /projects/:id/bugs                  Project bugs
+  GET    /projects/:id/apk-releases          APK releases (audience filtered)
+  GET    /projects/:id/history               Change history
+  GET    /projects/:id/assignable-members    Eligible assignees
+  POST   /projects/:id/apk-releases        Upload/register APK release
+
+DAILY LOGS (/logs/*)
+  GET  /logs/compliance-calendar             Monthly compliance calendar
+  GET  /logs/daily-summary                   Hours vs required for a date
+  GET  /logs                                 List daily log entries
+  POST /logs                                 Create log entry
+  GET/PATCH /logs/:id                        Read / update log
+
+BUGS (/bugs/*)
+  GET    /bugs                               List (project/assignee scoped)
+  POST   /bugs                               dev, tester, qa, super_admin
+  POST   /bugs/batch                         Batch bug report with issues
+  GET/PATCH /bugs/:id                        Detail / update (role-gated)
+  PATCH  /bugs/:id/assign                    tester, qa, super_admin
+
+TASKS (/tasks/*)
+  GET    /tasks                              List tasks
+  POST   /tasks                              super_admin — create
+  GET/PATCH /tasks/:id                       Detail / update
+
+APK RELEASES
+  GET  /apk-releases/:id                     Release detail + download
+
+COMMENTS / DISCUSSIONS (/comments/*)
+  GET  /comments/project-previews            Latest message per project channel
+  GET  /comments                             List for thread (threadType + threadId)
+  POST /comments                             Post (mentions, attachments, voice)
+  PATCH /comments/:id                        Edit comment
+
+  Two project channels:
+    project          — Client-visible discussion
+    project_internal — Staff-only discussion
+
+NOTIFICATIONS (/notifications/*)
+  GET  /notifications                        User's notifications
+  POST /notifications/mark-all-read          Mark all read
+  POST /notifications/:id/read               Mark one read
+  POST /notifications/broadcast              super_admin broadcast
+
+RESOURCE REQUESTS (/requests/*)
+  GET/POST /requests                         List / submit
+  GET    /requests/:id                       Detail
+  PATCH  /requests/:id                       super_admin approve/reject
+
+TICKETS (/tickets/*)
+  GET    /tickets                            List (role-scoped)
+  POST   /tickets                            Create (auto audience)
+  PATCH  /tickets/:id                        Update status/assignment
+
+ANALYTICS (/analytics/*)
+  GET /analytics/dashboard                   super_admin KPIs
+  GET /analytics/workspace                   dev workspace dashboard
+  GET /analytics/client-hub                  client portal dashboard
+  GET /analytics/projects/:id                Project analytics
+  GET /analytics/team                        super_admin team utilization
+  GET /analytics/bugs                        Bug analytics
+  GET /analytics/companies                   super_admin company analytics
+
+REPORTS (/reports/*)
+  GET  /reports                              List generated reports
+  POST /reports                              Queue async generation
+  GET  /reports/:id/download                 Download completed report
+
+SETTINGS
+  GET   /settings                            Company settings (all roles read)
+  PATCH /settings                            super_admin update
+
+SEARCH
+  GET /search?q=                             Cross-entity search (min 2 chars)
+               Projects, clients, developers, bugs
+
+UPLOADS
+  POST /upload?category=                     Multipart upload
+               Categories: bugs, apk, inventory, avatars, reports, misc
+               Max: 500MB (APK), 50MB default
+
+PRESENCE (/presence/*)
+  GET  /presence                             All users' presence snapshot
+  GET  /presence/me                          Current user's presence
+  POST /presence/heartbeat                   HTTP heartbeat (90s TTL fallback)
+
+INVENTORY (/projects/:projectId/inventory/*)
+  NOT in OpenAPI — manual frontend integration
+  GET    .../summary                         Dashboard counts
+  GET    .../activities                      Activity feed
+  GET/POST .../folders                       Folder CRUD
+  GET/POST/PATCH/DELETE .../resources        Files, links, assets
+  GET/POST/DELETE .../credentials            Encrypted secrets
+  POST   .../credentials/:id/reveal          Decrypt and reveal
+  GET/POST/PATCH .../environments              Deployment environments
+  GET/POST .../devices                       Test devices
+  GET/POST .../subscriptions                 Renewal tracking
+  GET    .../builds                          APK releases as inventory builds
+
+================================================================================
+10. BACKEND SERVICES & BUSINESS LOGIC
+================================================================================
+
+ACCESS CONTROL (services/access/)
+  company-access.js    — Company and project permission checks
+  inventory-access.js  — Inventory access + client visibility filter
+  access-helpers.js    — assertCompanyAccess throws on denial
+
+AUTH & IDENTITY
+  password-otp.js      — OTP generation, verification, email delivery
+  employeeId.js        — Employee ID from name prefix + counter (DE001)
+  client-portal.js     — Create/update client portal user accounts
+
+WORK & ASSIGNMENTS
+  work-assignments.js  — Validate assignees are project members; notifications
+  bugs/bug-workflow.js — Dual-track QA/dev + final status; role-gated PATCH;
+                         batch issue rollup
+
+DAILY LOGS
+  daily-log-compliance.js      — Calendar, summary, compliance job, alerts
+  daily-log-virtual-projects.js — "Others" and "Meeting" pseudo-projects
+  company-settings.js          — Org settings, work policy, timezone
+
+DISCUSSIONS & COMMENTS
+  discussion-project-access.js       — Thread access (client vs internal)
+  discussion-previews.js             — Latest message per project for chat list
+  project-discussion-channels.js     — Auto-provision staff on project create
+  comment-mentions.js                — Parse @Name mentions, sanitize
+  comment-notification-recipients.js — Resolve notification targets
+  comment-chat-resource.js           — Mirror client discussion images to inventory
+
+DASHBOARDS & ANALYTICS
+  workspace-dashboard.js — Dev portal KPIs
+  dashboard-activity.js  — Recent activity aggregation
+  reporting.js           — PDF (Puppeteer) and Excel (ExcelJS) generators
+
+APK
+  apk-access.js — Audience filters, display name formatting
+
+INVENTORY
+  inventory/helpers.js  — Activity logging, member notifications
+  inventory/expiry-job.js — Subscription renewal alerts (30d, 7d, expired)
+  lib/inventory-crypto.js — AES-256-GCM encrypt/decrypt for credentials
+
+TICKETS
+  ticket-support.js — Audience (client/staff), list filters, open counts
+
+NOTIFICATION PATTERN
+  Controllers create Notifications rows, then:
+    notifyUser(userId, "notification", payload)
+      → Socket.IO emit to user:{userId} room
+      → FCM multicast if tokens exist and Firebase configured
+
+OTHER REALTIME EVENTS
+  inventory updates → broadcast
+  discussion comments → emitToUsers
+
+================================================================================
+11. FRONTEND APPLICATION
+================================================================================
+
+ROUTING ARCHITECTURE
+--------------------
+  Public routes:
+    /login              pages/login.tsx
+    /forgot-password    pages/auth/forgot-password.tsx
+
+  Authenticated (ProtectedRoute + AppLayout + PageOutlet):
+    /admin/*            Admin zone (super_admin primary)
+    /dev/*              Developer/QA workspace
+    /client/*           Client portal
+    /sales/*            Sales CRM (super_admin, mock data)
+    /settings           All roles
+    /profile            All roles
+    /notifications      All roles
+
+  Auth gate: ProtectedRoute redirects unauthenticated to /login
+  Role gate: RoleGate in PageOutlet shows "Unauthorized" if role mismatch
+
+LAZY LOADING
+------------
+  All authenticated pages use React.lazy() with Suspense fallbacks
+  Vite manual chunks: vendor-charts-motion, vendor-utils, vendor-firebase
+
+STATE MANAGEMENT
+----------------
+  Server data     → TanStack Query (Orval hooks + custom hooks)
+  Auth session    → AuthContext + localStorage tokens
+  Theme/UI prefs  → ThemeContext + localStorage (nexus-* keys)
+  Realtime        → RealtimeContext (Socket.io + FCM)
+  Presence        → PresenceContext (REST heartbeat + socket)
+  Form state      → react-hook-form
+  URL state       → Wouter useLocation/useParams
+
+Query defaults: 60s stale time, 10min GC, no refetch on focus, no 4xx retry
+
+API INTEGRATION
+---------------
+  Primary: Orval-generated React Query hooks from openapi.yaml
+    Pattern: useXxx, useCreateXxx, getXxxQueryKey, getXxxQueryOptions
+
+  Custom fetch (not in OpenAPI):
+    lib/inventory-api.ts        → /api/projects/:id/inventory/*
+    api/workspace-dashboard.ts  → /api/analytics/workspace, client-hub
+    api/discussion-previews.ts  → /api/comments/project-previews
+    api/presence.ts             → presence REST
+    Auth impersonation          → direct fetch in AuthContext
+
+  custom-fetch.ts:
+    Attaches Authorization: Bearer header
+    Transparent 401 refresh with queued retry
+    Throws ApiError with .status, .data, .response
+
+LAYOUT SYSTEM
+-------------
+  AuthenticatedShell  — Auth wrapper
+  AppLayout           — Sidebar (icon rail) + Navbar + animated page area
+  PageOutlet          — Route switch with RoleGate
+  PageShell           — Optional header from route-meta.ts
+  portal-page-kit     — Executive chrome (admin dashboard, sales)
+  dev-page-kit        — Dev zone chrome (bugs, logs, tasks, workspace)
+
+THEMING
+-------
+  Dark/light mode, accent color presets, custom hex, font size
+  Persisted in localStorage (nexus-* prefix)
+  Brand constants in lib/brand.ts, lib/brand-colors.ts
+
+COMMAND PALETTE
+---------------
+  components/CommandPalette.tsx
+  Global search (useGlobalSearch) for projects, clients, bugs
+  Keyboard shortcut from Navbar
+
+================================================================================
+12. FEATURE MODULES (DETAILED)
+================================================================================
+
+12.1 PROJECT HUB (/admin/projects/:id)
+--------------------------------------
+Central integration point for all project-scoped features.
+
+Tabs: Overview | Inventory | Timeline | Releases (APK) | Bugs | Logs |
+      Team | Comments | Requests | Analytics | History
+
+Accessible by: super_admin, developer, tester, qa (API enforces membership)
+Clients use /client portal instead.
+
+Key components: pages/admin/ProjectDetail.tsx, components/project/*
+Data: useGetProject, useGetProjectBugs, useGetProjectLogs, useListComments
+Realtime: socket 'comment' events for live updates
+
+12.2 BUG TRACKING
+-----------------
+Purpose: QA-driven bug lifecycle from report to resolution.
+
+Workflow tracks:
+  QA status    — tester/qa sets (open, confirmed, rejected, etc.)
+  Dev status   — assigned developer sets (in_progress, fixed, etc.)
+  Final status — tester/qa verifies fix (closed, reopened, etc.)
+
+Frontend:
+  Global list: pages/dev/Bugs.tsx (scopes: all/mine/unassigned/created)
+  Project panel: components/bugs/project-bugs-panel.tsx
+  Detail: components/bugs/bug-detail-sheet.tsx
+  Create: components/bugs/bug-form-dialog.tsx, bug-add-issues-form.tsx
+  Batch create: lib/bug-batch.ts
+  PDF export: lib/pdf-export.ts
+  Permissions: lib/bug-workflow.ts (canUserModifyBug)
+
+Backend:
+  services/bugs/bug-workflow.js — role-gated status transitions
+  POST /bugs/batch — batch report with embedded issues[]
+
+12.3 DAILY LOGS
+---------------
+Purpose: Track developer hours per project per day; enforce compliance.
+
+Features:
+  Personal log CRUD (pages/dev/Logs.tsx)
+  Compliance calendar (components/logs/LogComplianceCalendar.tsx)
+  Admin team view (components/logs/AdminTeamLogsPanel.tsx)
+  Daily summary KPIs (useGetDailyLogSummary)
+  Virtual projects: "Others" (-1), "Meeting" (-2)
+
+Compliance enforcement:
+  Background job checks hours vs requiredDailyWorkHours
+  Sends in-app notification + email if incomplete
+  Skips weekends; configurable reminder hour and timezone
+
+12.4 DISCUSSIONS (WhatsApp-style chat)
+--------------------------------------
+Purpose: Real-time project communication with client visibility control.
+
+Two channels per project:
+  project          — Visible to clients and staff
+  project_internal — Staff only
+
+Features:
+  Channel list with unread state (discussion-chat-list.tsx)
+  Active thread panel (discussion-chat-panel.tsx)
+  @mentions with autocomplete (chat/mention-autocomplete.tsx)
+  Emoji picker (chat/emoji-picker-button.tsx)
+  Voice messages (voice-recording-bar, voice-message-player)
+  File attachments and drag-drop (lib/file-drag.ts)
+  Read state persistence (lib/discussions-read-state.ts)
+  Realtime cache updates (lib/discussion-realtime.ts)
+  Preview API for chat list (api/discussion-previews.ts)
+
+Page: pages/admin/Discussions.tsx
+Accessible by all roles including clients
+
+12.5 PROJECT INVENTORY VAULT
+------------------------------
+Purpose: Secure storage for project assets, credentials, environments.
+
+Sub-resources:
+  Folders       — Tree structure for organization
+  Resources     — Files, links, documents (versioned, soft-delete)
+  Credentials   — AES-256-GCM encrypted secrets with reveal audit
+  Environments  — Dev/staging/prod deployment records
+  Devices       — Test device inventory
+  Subscriptions — Domain/hosting/license renewal tracking
+  Builds        — APK releases viewed as inventory builds
+  Activities    — Change audit feed
+
+Frontend: components/inventory/ProjectInventoryPanel.tsx
+API: lib/inventory-api.ts (manual fetch, not Orval)
+Access: Developers can manage on their projects; clients see client_visible only
+Expiry alerts: Background job at 30d, 7d, and expiry thresholds
+
+12.6 APK / RELEASES
+-------------------
+Purpose: Distribute mobile app builds to team and clients.
+
+Audiences:
+  team_only      — Internal team only
+  client_visible — Clients can download
+  all_visible    — Everyone with project access
+
+Features:
+  Upload APK/IPA (dev/Apk.tsx, client/Apk.tsx)
+  APK schedules (planned release dates)
+  Download logging (audit trail)
+  Audience field component (components/apk/apk-audience-field.tsx)
+
+12.7 TASKS
+----------
+Purpose: Kanban-style work task management.
+
+Pages: pages/dev/Tasks.tsx, pages/dev/TaskDetail.tsx
+CRUD via useListTasks, useCreateTask, useUpdateTask
+Assignable members picker (useListAssignableMembers)
+super_admin creates; all staff can view/update assigned
+
+12.8 SUPPORT TICKETS
+--------------------
+Purpose: Client and staff support request tracking.
+
+Page: pages/admin/Tickets.tsx
+All roles including clients can create/view
+Auto audience: client tickets vs staff tickets
+Components: components/tickets/ticket-detail-sheet.tsx
+Realtime: socket 'ticket_update' invalidates cache
+
+12.9 RESOURCE REQUESTS
+----------------------
+Purpose: Developers request licenses, hardware, tools.
+
+Admin view: pages/admin/Requests.tsx (approval queue)
+Dev view: pages/dev/Requests.tsx (submission)
+Workflow: submit → super_admin approve/reject with admin note
+Realtime: socket 'request_update' invalidates cache
+
+12.10 ANALYTICS & DASHBOARDS
+----------------------------
+Admin Dashboard (pages/admin/Dashboard.tsx):
+  useGetDashboardStats, useGetCompanyAnalytics, useHealthCheck
+  Charts: components/dashboard/admin-dashboard-charts.tsx
+
+Dev Workspace (pages/dev/Workspace.tsx):
+  useGetWorkspaceDashboard — projects, bugs, tickets, logs, milestones
+
+Client Portal (pages/client/Portal.tsx):
+  useGetClientHubDashboard — project overview, recent activity
+
+Client Analytics (pages/client/Analytics.tsx):
+  Project-level analytics for client view
+
+Admin Analytics (pages/admin/Analytics.tsx):
+  Team utilization, bug trends, company metrics
+
+12.11 REPORTS
+-------------
+Purpose: Generate downloadable PDF/Excel reports.
+
+Page: pages/dev/Reports.tsx
+Types: developer_monthly, project_progress, bug_report, team_utilisation,
+       client_dossier, apk_release_history, raw_log_export
+Flow: POST /reports → async generation → download when ready
+Backend: Puppeteer (PDF), ExcelJS (Excel)
+
+12.12 EMPLOYEE & CLIENT MANAGEMENT
+----------------------------------
+Employees (pages/admin/Employees.tsx):
+  User CRUD, employee ID preview, credential reveal
+
+Clients (pages/admin/Clients.tsx):
+  Company accounts, portal user creation, contact management
+
+Projects (pages/admin/Projects.tsx):
+  Full project admin CRUD, member management
+
+12.13 NOTIFICATIONS
+-------------------
+Page: pages/Notifications.tsx
+In-app notification center with mark read/all read
+Realtime: socket 'notification' → toast + sound + browser notification
+Fallback polling every 25s when socket disconnected
+Deep linking: lib/notification-navigation.ts
+
+12.14 PRESENCE (Online Status)
+------------------------------
+Shows who is online/away/offline across the app.
+Heartbeat every 30s via socket + REST fallback
+Components: AvatarWithPresence, PresenceTableCell, TeamMemberPresenceRow
+Context: PresenceContext
+
+12.15 SETTINGS & PROFILE
+--------------------------
+Settings (pages/settings/SettingsPage.tsx):
+  Company name, logo, daily log policy (super_admin edit)
+  Theme preferences (all users)
+
+Profile (pages/profile/ProfilePage.tsx):
+  Update name, avatar, change password
+
+12.16 IMPERSONATION
+-------------------
+super_admin can view the app as any user
+Banner: ImpersonationBanner.tsx
+Storage: lib/impersonation-storage.ts
+
+================================================================================
+13. REALTIME, NOTIFICATIONS & PRESENCE
+================================================================================
+
+SOCKET.IO (backend/src/lib/realtime.js)
+---------------------------------------
+  Path: /socket.io on same port as HTTP
+  Auth: Client sends auth.token (access JWT) + query.userId
+  Rooms: user:{userId} for targeted delivery
+
+Events (server → client):
+  notification     — New in-app notification (+ FCM push)
+  comment          — New/updated comment in subscribed threads
+  ticket_update    — Ticket status/assignment change
+  request_update   — Resource request status change
+  presence:update  — User online/away/offline change
+  inventory:*      — Inventory changes (broadcast)
+
+Events (client → server):
+  presence:heartbeat — Tab visibility + activity ping
+
+Helper functions:
+  notifyUser(userId, event, data)   — Targeted emit + FCM
+  emitToUsers(userIds, event, data) — Multi-user emit
+  broadcast(event, data)            — All connected clients
+
+FRONTEND REALTIME (contexts/RealtimeContext.tsx)
+------------------------------------------------
+  Connects on auth with access token
+  Handles notification toasts, sounds, browser notifications
+  Updates TanStack Query caches for comments, tickets, requests
+  Discussion-specific: lib/discussion-realtime.ts
+
+FCM PUSH (optional)
+-------------------
+  Env-gated Firebase Cloud Messaging
+  Token registration: POST /api/auth/fcm-token
+  Service worker: /firebase-messaging-sw.js
+  Foreground handler in lib/firebase.ts
+
+PRESENCE SYSTEM
+---------------
+  HTTP fallback: POST /api/presence/heartbeat (90s TTL)
+  Socket: presence:heartbeat every 30s
+  Sweep timer: 30s interval marks stale sessions offline
+  DB persistence: lastSeenAt debounced every 2 min
+
+================================================================================
+14. FILE STORAGE & UPLOADS
+================================================================================
+
+DUAL BACKEND (lib/file-storage.js + lib/object-storage.js)
+-----------------------------------------------------------
+  Local mode    — When object storage env vars missing
+                  Files in uploads/ directory, served at /uploads/*
+  Object mode   — When LINODE_OBJECT_BUCKET + keys + endpoint set
+                  S3-compatible via @aws-sdk/client-s3 (DigitalOcean Spaces)
+
+UPLOAD CATEGORIES
+  bugs, apk, inventory, avatars, reports, misc
+
+SIZE LIMITS
+  APK: 500 MB
+  Default: 50 MB
+
+ENDPOINT
+  POST /api/upload?category=<category>
+  Multipart via Multer (memory storage)
+  Returns public URL (local or object storage)
+
+VALIDATION
+  When object storage enabled, URLs must be public HTTPS (not localhost)
+
+GENERATED FILES
+  Reports written locally first, optionally uploaded via storeGeneratedFile
+
+INVENTORY CREDENTIALS
+  Encrypted at rest: AES-256-GCM
+  Key: INVENTORY_ENCRYPTION_KEY or SESSION_SECRET fallback
+  Reveal logged in InventoryCredentialAccessLogs
+
+================================================================================
+15. EMAIL SYSTEM
+================================================================================
+
+PROVIDER: Nodemailer (lib/email.js)
+
+CONFIG OPTIONS:
+  SMTP_URL, or SMTP_HOST/SMTP_PORT, or SMTP_SERVICE (gmail) + credentials
+
+STARTUP: verifyMailer() — non-fatal SMTP verification
+
+TEMPLATES:
+  sendPasswordOtpEmail        — Branded HTML OTP for reset/change password
+  sendDailyLogComplianceEmail   — Incomplete hours reminder with CTA
+
+GRACEFUL DEGRADATION:
+  If SMTP not configured, emails skipped with warning logs
+  OTP flows check isEmailConfigured()
+
+LINKS IN EMAILS:
+  APP_URL / FRONTEND_URL env vars for CTA links
+
+================================================================================
+16. BACKGROUND JOBS & SCHEDULED TASKS
+================================================================================
+
+Both start after MongoDB connects (index.js → whenDatabaseReady).
+
+1. INVENTORY SUBSCRIPTION EXPIRY JOB
+   File: src/services/inventory/expiry-job.js
+   Interval: Every 6 hours (+ immediate run on bootstrap)
+   Logic:
+     - Scan active InventorySubscriptions
+     - Notify at 30 days, 7 days, and expiry
+     - Update alertSent30, alertSent7, alertSentExpired flags
+     - Mark expired as status: "expired"
+     - Notify project members + super_admins
+
+2. DAILY LOG COMPLIANCE JOB
+   File: src/services/daily-log-compliance.js
+   Interval: Every 5 minutes (checks if hour matches reminder)
+   Schedule:
+     - Reminder hour from CompanySettings (default 23 = 11 PM)
+     - Timezone from settings or COMPLIANCE_TIMEZONE env
+     - Skips weekends; deduplicates via lastComplianceRunKey
+   Logic:
+     - Find active staff (developer, tester, qa)
+     - Sum hours vs requiredDailyWorkHours
+     - If incomplete: notification + realtime + email
+
+3. REPORT GENERATION (on-demand, async)
+   Triggered by POST /api/reports
+   Creates row with status: generating
+   Fire-and-forget async IIFE
+   Updates to ready (with fileUrl) or failed
+
+4. PRESENCE SWEEP (in-process)
+   File: services/presence.js
+   Interval: 30 seconds
+   Marks stale HTTP-only sessions offline
+   Persists lastSeenAt to DB (debounced 2 min)
+
+================================================================================
+17. REPORTS & PDF GENERATION
+================================================================================
+
+BACKEND (services/reporting.js)
+  PDF: Puppeteer headless browser rendering
+  Excel: ExcelJS workbook generation
+  Async: POST creates job, poll GET /reports/:id/download
+
+REPORT TYPES:
+  developer_monthly   — Individual developer activity summary
+  project_progress    — Project status and milestone progress
+  bug_report          — Bug statistics and trends
+  team_utilisation    — Team capacity and allocation
+  client_dossier      — Client-facing project summary
+  apk_release_history — APK release timeline
+  raw_log_export      — Raw daily log data export
+
+FRONTEND PDF (client-side)
+  lib/pdf-service.ts  — Bug report PDF generation
+  lib/pdf-export.ts   — Generic PDF export utilities
+  Uses jsPDF + jspdf-autotable
+
+================================================================================
+18. SALES/CRM MODULE (MOCK UI)
+================================================================================
+
+IMPORTANT: This is a UI PROTOTYPE only — uses mock data, NOT live API.
+
+Location: frontend/src/modules/sales/
+Access: super_admin only (/sales/*)
+
+Pages:
+  /sales                    Dashboard
+  /sales/leads              Lead management
+  /sales/leads/:id          Lead detail
+  /sales/follow-ups         Follow-up tracking
+  /sales/proposals          Proposals list
+  /sales/proposals/create   Create proposal
+  /sales/proposals/:id      Proposal detail
+  /sales/customers          Customer management
+  /sales/customers/:id      Customer detail
+  /sales/installments       Installment plans
+  /sales/installments/:id   Installment detail
+  /sales/invoices           Invoices
+  /sales/invoices/:id       Invoice detail
+  /sales/payments           Payments
+  /sales/receipts/:id       Receipt detail
+  /sales/products           Product catalog
+  /sales/team               Sales team
+  /sales/reports            Sales reports
+  /sales/notifications      Sales notifications
+  /sales/settings           Sales settings (demo toasts)
+
+Shared components in modules/sales/components/:
+  SalesPageHeader, SalesFilterBar, SalesPipelineFlow, SalesDonutPanel,
+  SalesCharts, ActivityTimeline, financial-kit
+
+Data source: modules/sales/mock-data (hardcoded, no backend integration)
+
+================================================================================
+19. DATA FLOW DIAGRAMS
+================================================================================
+
+LOGIN FLOW
+----------
+  User → /login page
+    → POST /api/auth/login (email or employee ID + password)
+    → Returns { accessToken, refreshToken, user }
+    → AuthContext stores tokens in localStorage
+    → useGetMe fetches profile
+    → Redirect to role home (/admin, /dev, or /client)
+    → RealtimeProvider connects Socket.io
+    → PresenceProvider starts heartbeat
+
+BUG REPORT FLOW
+---------------
+  QA/Tester → Dev Bugs page or Project Hub Bugs tab
+    → bug-form-dialog.tsx (title, description, severity, attachments)
+    → POST /api/bugs (or POST /api/bugs/batch for multiple issues)
+    → bug-workflow.js validates creator role
+    → Creates Bugs document + optional issues[]
+    → notifyUser to project members
+    → Socket.io 'notification' to relevant users
+    → TanStack Query cache invalidated
+
+  Assignment:
+    QA → PATCH /api/bugs/:id/assign { assigneeId }
+    → work-assignments.js validates assignee is project member
+    → Notification to assigned developer
+
+  Resolution:
+    Developer → PATCH /api/bugs/:id { devStatus: "fixed" }
+    QA → PATCH /api/bugs/:id { qaStatus, finalStatus }
+    → Role-gated in bug-workflow.js
+
+DISCUSSION MESSAGE FLOW
+-----------------------
+  User → Discussions page or Project Hub Comments tab
+    → discussion-chat-panel.tsx → chat-composer.tsx
+    → Optional: @mention, emoji, voice, file attachment
+    → POST /api/comments { threadType, threadId, body, attachments }
+    → comment-mentions.js parses @mentions
+    → comment-notification-recipients.js resolves targets
+    → Creates Comments document
+    → emitToUsers with 'comment' event
+    → Frontend: discussion-realtime.ts updates query cache
+    → Unread state tracked in discussions-read-state.ts
+
+DAILY LOG COMPLIANCE FLOW
+-------------------------
+  Developer → /dev/logs → create/edit log entries
+    → POST/PATCH /api/logs { projectId, date, hours, description }
+
+  Background (every 5 min at configured hour):
+    → daily-log-compliance.js runs
+    → For each active staff member:
+        Sum today's log hours vs requiredDailyWorkHours
+    → If incomplete:
+        Create log_compliance notification
+        emitToUsers via Socket.io
+        sendDailyLogComplianceEmail via SMTP
+
+APK RELEASE FLOW
+----------------
+  Developer → /dev/apk or Project Hub Releases tab
+    → Upload file via POST /api/upload?category=apk
+    → POST /api/projects/:id/apk-releases { version, audience, fileUrl }
+    → apk-access.js applies audience rules
+    → Client downloads via GET /api/apk-releases/:id (filtered by role)
+
+INVENTORY CREDENTIAL REVEAL FLOW
+--------------------------------
+  Developer/Admin → Project Hub Inventory → Credentials
+    → POST /api/projects/:id/inventory/credentials/:id/reveal
+    → guardInventoryAccess checks permissions
+    → inventory-crypto.js decrypts AES-256-GCM secret
+    → Logs reveal in InventoryCredentialAccessLogs
+    → Returns plaintext (one-time view in UI)
+
+================================================================================
+20. DEVELOPMENT & DEPLOYMENT
+================================================================================
+
+LOCAL DEVELOPMENT
+-----------------
+  Prerequisites: Node.js, MongoDB running locally
+
+  1. Backend setup:
+     cd backend
+     copy .env.example .env
+     npm install
+     # Edit .env: DATABASE_URL, SESSION_SECRET, PORT=8080, ALLOWED_ORIGINS
+     npm run seed        # Optional: npm run seed-more
+     npm run dev         # Port 8080
+
+  2. Frontend setup:
+     cd frontend
+     copy .env.example .env
+     npm install
+     # Edit .env: VITE_API_BASE_URL=http://localhost:8080
+     npm run dev         # Port 5173
+
+  3. Open http://localhost:5173
+
+PRODUCTION BUILD
+----------------
+  Backend:
+    cd backend && npm run build && npm run start
+    Output: backend/dist/index.mjs
+
+  Frontend:
+    cd frontend && npm run build
+    Output: frontend/dist/public/
+
+TWO-DOMAIN DEPLOYMENT
+---------------------
+  1. Deploy backend → api.yourdomain.com
+     Set ALLOWED_ORIGINS=https://app.yourdomain.com
+     Proxy /socket.io for WebSockets
+
+  2. Set VITE_API_BASE_URL=https://api.yourdomain.com
+     npm run build in frontend
+
+  3. Deploy frontend static files → app.yourdomain.com
+
+  4. Optional: serve frontend from API via FRONTEND_DIST env var
+
+PM2 PRODUCTION
+--------------
+  ecosystem.config.cjs — single instance, 512MB restart limit
+  See backend/DEPLOYMENT.md for nginx/Plesk details
+
+ENVIRONMENT VARIABLES (key)
+---------------------------
+  Backend:
+    DATABASE_URL, PORT, SESSION_SECRET, ALLOWED_ORIGINS
+    JWT_ACCESS_SECRET, JWT_REFRESH_SECRET
+    INVENTORY_ENCRYPTION_KEY
+    LINODE_OBJECT_* (object storage)
+    FIREBASE_* (FCM push)
+    SMTP_* / EMAIL_* (email)
+    APP_URL / FRONTEND_URL
+    COMPLIANCE_CHECK_HOUR, COMPLIANCE_TIMEZONE
+    FRONTEND_DIST (optional SPA serving)
+
+  Frontend:
+    VITE_API_BASE_URL (required for production build)
+    VITE_APP_NAME, VITE_APP_SHORT_NAME, VITE_APP_LOGO
+    Firebase env vars (optional, for push)
+
+NPM SCRIPTS
+-----------
+  Backend:
+    npm run dev          Dev server with nodemon
+    npm run build        esbuild bundle
+    npm run start        Production server
+    npm run seed         Seed database
+    npm run seed-more    Extended seed data
+    npm run migrate-company  Company hierarchy migration
+    npm run clean-db     Database cleanup
+
+  Frontend:
+    npm run dev          Vite dev server
+    npm run build        Production static build
+    npm run serve        Preview production build
+    npm run typecheck    TypeScript check
+
+================================================================================
+21. SEED DATA & TEST CREDENTIALS
+================================================================================
+
+Run: cd backend && npm run seed
+
+| Role          | Email              | Employee ID | Password    |
+|---------------|--------------------|-------------|-------------|
+| Super Admin   | admin@agency.com   | —           | Admin@123   |
+| Developer     | alice@agency.com   | AL001       | Dev@123     |
+| Developer     | bob@agency.com     | BO002       | Dev@123     |
+| Tester        | david@agency.com   | —           | Dev@123     |
+| Client        | client@example.com | —           | Client@123  |
+
+Staff login: use Employee ID (e.g. AL001), not email.
+Client/Admin login: use email.
+
+================================================================================
+22. API CONTRACT & CODE GENERATION
+================================================================================
+
+OPENAPI SPEC
+  Source: backend/openapi.yaml
+  Covers most REST endpoints (not inventory, upload, impersonation, broadcast)
+
+ZOD GENERATION (backend)
+  openapi.yaml → src/api-zod/generated/api.js
+  Used for request validation in backend
+
+ORVAL GENERATION (frontend)
+  openapi.yaml → frontend/src/api/generated/api.ts + api.schemas.ts
+  Generates React Query hooks: useXxx, useCreateXxx, etc.
+  Regenerate when openapi.yaml changes
+
+CUSTOM API MODULES (not in OpenAPI)
+  lib/inventory-api.ts
+  api/workspace-dashboard.ts
+  api/discussion-previews.ts
+  api/presence.ts
+  api/bugs-batch.ts
+  api/project-members-batch.ts
+  api/password-auth.ts
+
+GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
+
+================================================================================
+23. KNOWN GAPS & TECHNICAL NOTES
+================================================================================
+
+1. SALES CRM IS MOCK ONLY
+   All /sales/* pages use hardcoded mock data from modules/sales/mock-data.
+   No backend API exists for leads, proposals, invoices, etc.
+
+2. OPENAPI GAPS
+   Missing from openapi.yaml:
+   - All /projects/:id/inventory/* routes
+   - POST /upload
+   - POST /auth/impersonate, /auth/stop-impersonate
+   - POST /notifications/broadcast
+   - GET /analytics/workspace, /analytics/client-hub
+   - GET /users/preview-employee-id
+   - POST /projects/:id/members/batch
+
+3. COMPANIES VS CLIENTS
+   clientsTable and companiesTable are the SAME Mongoose model.
+   API exposes both naming conventions for UI flexibility.
+   Projects reference via companyId and/or clientId.
+
+4. DUAL API PATTERN ON FRONTEND
+   Most endpoints use Orval-generated hooks.
+   Inventory, workspace dashboard, presence, discussion previews use
+   hand-written fetch wrappers.
+
+5. NUMERIC IDs
+   All entities use Counter collection sequences, not MongoDB ObjectIds.
+   Enables predictable references but requires getNextSequence() on create.
+
+6. GRAPH STALENESS
+   graphify-out/ knowledge graph built from commit ec0d3c12.
+   Run graphify update after significant code changes.
+
+7. TESTER VS QA
+   Both roles share identical permissions in most of the system.
+   Frontend treats them as QA staff (isQaStaffRole helper).
+
+8. PROJECT DETAIL SHARED ROUTE
+   /admin/projects/:id accessible by dev/tester/qa (not just super_admin).
+   API enforces project membership; clients use /client portal instead.
+
+9. OPTIONAL FEATURES (env-gated)
+   - Firebase FCM push notifications
+   - S3-compatible object storage (falls back to local uploads/)
+   - SMTP email (gracefully skipped if not configured)
+
+10. RECENT FEATURE ADDITIONS (from git status)
+    - Discussion channels with mentions, voice messages, emoji
+    - APK audience targeting (team_only, client_visible, all_visible)
+    - Daily log virtual projects (Others, Meeting)
+    - Comment notification recipients and mention parsing
+    - Discussion previews API for chat list
+    - Client recent activity panel
+    - Workspace recent projects list
+    - PDF export utilities
+
+================================================================================
+24. FILE INDEX (KEY PATHS)
+================================================================================
+
+ENTRY POINTS
+  backend/index.js                          Server bootstrap
+  backend/src/app.js                        Express app
+  frontend/src/main.tsx                     React bootstrap
+  frontend/src/App.tsx                      App shell + routing
+
+AUTH
+  backend/src/middlewares/auth.js           requireAuth, requireRole
+  backend/src/lib/jwt.js                    Token sign/verify
+  frontend/src/contexts/AuthContext.tsx     Session management
+  frontend/src/lib/auth-storage.ts          Token localStorage
+
+ROUTING
+  backend/src/routes/index.js               API router + auth gate
+  frontend/src/components/layout/PageOutlet.tsx  Frontend routes
+  frontend/src/lib/navigation.ts            Sidebar nav by role
+  frontend/src/lib/route-meta.ts            Page titles/breadcrumbs
+
+CORE FEATURES
+  backend/src/controllers/bugs.controller.js
+  backend/src/services/bugs/bug-workflow.js
+  frontend/src/pages/dev/Bugs.tsx
+  frontend/src/lib/bug-workflow.ts
+
+  backend/src/controllers/logs.controller.js
+  backend/src/services/daily-log-compliance.js
+  frontend/src/pages/dev/Logs.tsx
+
+  backend/src/controllers/comments.controller.js
+  backend/src/services/discussion-previews.js
+  frontend/src/pages/admin/Discussions.tsx
+
+  backend/src/controllers/inventory/
+  frontend/src/components/inventory/ProjectInventoryPanel.tsx
+  frontend/src/lib/inventory-api.ts
+
+  backend/src/controllers/apk.controller.js
+  frontend/src/pages/dev/Apk.tsx
+
+REALTIME
+  backend/src/lib/realtime.js               Socket.IO server
+  frontend/src/contexts/RealtimeContext.tsx   Socket client
+  frontend/src/contexts/PresenceContext.tsx Presence heartbeat
+
+INFRASTRUCTURE
+  backend/src/lib/db.js                     MongoDB connection
+  backend/src/lib/file-storage.js           Upload handling
+  backend/src/lib/email.js                  SMTP mailer
+  backend/src/lib/object-storage.js         S3 client
+  backend/openapi.yaml                      API contract
+
+CONFIG
+  backend/.env.example                      Backend env template
+  frontend/.env.example                     Frontend env template
+  backend/ecosystem.config.cjs              PM2 config
+  frontend/vite.config.ts                   Vite + proxy config
+
+DOCUMENTATION
+  README.md                                 Root overview
+  LOCAL_RUNNING.md                          Dev setup + seeds
+  backend/README.md                         Backend setup
+  backend/ARCHITECTURE.md                   MVC guide
+  backend/DEPLOYMENT.md                     Production deploy
+  frontend/README.md                        Frontend setup
+  graphify-out/GRAPH_REPORT.md              Code knowledge graph
+
+================================================================================
+                              END OF DOCUMENT
+================================================================================
+
+This analysis covers the Content Management Hub codebase as of June 2026.
+For the latest API contract, see backend/openapi.yaml.
+For local setup, see LOCAL_RUNNING.md.
+For architecture patterns, see backend/ARCHITECTURE.md.

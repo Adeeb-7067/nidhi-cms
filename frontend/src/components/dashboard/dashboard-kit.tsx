@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PortalDashboardSkeleton } from "@/components/loading/page-skeletons";
 
 const fadeUp = {
   initial: { opacity: 0, y: 12 },
@@ -143,15 +144,23 @@ export function PageKpiRow({
   className?: string;
 }) {
   const colClass =
-    columns === 2 ? "lg:grid-cols-2" : columns === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4";
-  return <div className={cn("grid gap-2 grid-cols-2", colClass, className)}>{children}</div>;
+    columns === 2
+      ? "sm:grid-cols-2 lg:grid-cols-2"
+      : columns === 3
+        ? "sm:grid-cols-2 lg:grid-cols-3"
+        : "sm:grid-cols-2 lg:grid-cols-4";
+  return <div className={cn("grid grid-cols-1 gap-2", colClass, className)}>{children}</div>;
 }
 
 export function PageKpiSkeleton({ count = 4, columns = 4 }: { count?: number; columns?: 2 | 3 | 4 }) {
   const colClass =
-    columns === 2 ? "lg:grid-cols-2" : columns === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4";
+    columns === 2
+      ? "sm:grid-cols-2 lg:grid-cols-2"
+      : columns === 3
+        ? "sm:grid-cols-2 lg:grid-cols-3"
+        : "sm:grid-cols-2 lg:grid-cols-4";
   return (
-    <div className={cn("grid gap-2 grid-cols-2", colClass)}>
+    <div className={cn("grid grid-cols-1 gap-2", colClass)}>
       {[...Array(count)].map((_, i) => (
         <Skeleton key={i} className="h-[4.5rem] rounded-xl" />
       ))}
@@ -378,24 +387,7 @@ export const chartTooltipStyle = {
 };
 
 export function DashboardSkeleton() {
-  return (
-    <motion.div
-      className="space-y-6"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-    >
-      <div className="h-32 rounded-2xl bg-muted/50 animate-pulse" />
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
-        {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-[4.5rem] rounded-xl bg-muted/50 animate-pulse" />
-        ))}
-      </div>
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8 h-80 rounded-xl bg-muted/50 animate-pulse" />
-        <div className="lg:col-span-4 h-80 rounded-xl bg-muted/50 animate-pulse" />
-      </div>
-    </motion.div>
-  );
+  return <PortalDashboardSkeleton />;
 }
 
 /** Premium KPI — icon left, large metric (executive dashboard style). */

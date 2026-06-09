@@ -95,6 +95,40 @@ export function canSetFinalStatus(role) {
   return role === "qa" || role === "tester" || role === "super_admin";
 }
 
+/**
+ * Apply track-field PATCH values. Skips read-only tracks when unchanged;
+ * rejects attempts to change tracks the caller cannot set.
+ */
+export function applyTrackStatusUpdates({
+  role,
+  isAssignee,
+  target,
+  qaStatus,
+  devStatus,
+  finalStatus,
+  denyUnauthorizedChange,
+}) {
+  if (qaStatus !== undefined) {
+    if (!canSetQaStatus(role)) denyUnauthorizedChange();
+    target.qaStatus = normalizeTrackStatus(qaStatus);
+  }
+
+  if (devStatus !== undefined) {
+    const next = normalizeTrackStatus(devStatus);
+    const current = normalizeTrackStatus(target.devStatus);
+    if (canSetDevStatus(role, isAssignee)) {
+      target.devStatus = next;
+    } else if (current !== next) {
+      denyUnauthorizedChange();
+    }
+  }
+
+  if (finalStatus !== undefined) {
+    if (!canSetFinalStatus(role)) denyUnauthorizedChange();
+    target.finalStatus = normalizeFinalStatus(finalStatus);
+  }
+}
+
 /** @deprecated — use track fields */
 export function canSetStatus() {
   return true;

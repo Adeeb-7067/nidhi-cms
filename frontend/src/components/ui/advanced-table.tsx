@@ -21,11 +21,11 @@ import {
 } from "./dropdown-menu";
 import { ChevronDown, ChevronRight, Download, SlidersHorizontal, Search, FileText, Table as TableIcon } from "lucide-react";
 import { TableDetailPanel, getColumnDetailContent } from "./table-detail-panel";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { createExportPdf, getColumnExportValue, runAutoTableExport } from "@/lib/pdf-export";
 import { DataViewToggle } from "./data-view-toggle";
 import { DataPagination } from "./data-pagination";
 import { useDataViewMode, type DataViewMode } from "@/lib/data-view";
+import { useMobileViewport } from "@/hooks/use-mobile-viewport";
 import { cn } from "@/lib/utils";
 import { effectivePageSize, type TablePaginationProps } from "@/lib/table-pagination";
 
@@ -36,6 +36,8 @@ export interface Column<T> {
   cell?: (item: T) => React.ReactNode;
   /** Plain rendering for expanded detail / export when cell is compact */
   detailCell?: (item: T) => React.ReactNode;
+  /** Plain text for CSV/PDF when cell/detailCell is React-only */
+  exportValue?: (item: T) => string;
   /** Hide this field from the default grid card body */
   hideInGrid?: boolean;
   /** Hide from expanded detail panel */
@@ -158,6 +160,8 @@ export function AdvancedTable<T>({
   clientPagination,
 }: AdvancedTableProps<T>) {
   const [viewMode, setViewMode] = useDataViewMode(viewStorageKey, defaultViewMode);
+  const isMobile = useMobileViewport();
+  const effectiveViewMode: DataViewMode = isMobile ? "grid" : viewMode;
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
@@ -218,19 +222,15 @@ export function AdvancedTable<T>({
   const detailColumns = columns.filter((col) => !col.hideInDetail);
   const gridColumns = columns.filter((col) => visibleColumns[col.id]);
   const tableColSpan =
-    activeColumns.length + (showRowDetails && viewMode === "table" ? 1 : 0);
+    activeColumns.length + (showRowDetails && effectiveViewMode === "table" ? 1 : 0);
 
   const exportCSV = () => {
     if (filteredData.length === 0) return;
-    const headers = activeColumns.map((c) => c.header).join(",");
+    const exportColumns = activeColumns.filter((col) => col.id !== "actions");
+    const headers = exportColumns.map((c) => c.header).join(",");
     const rows = filteredData.map((item) => {
-      return activeColumns
-        .map((col) => {
-          if (col.accessorKey) {
-            return `"${String(item[col.accessorKey] ?? "").replace(/"/g, '""')}"`;
-          }
-          return `""`;
-        })
+      return exportColumns
+        .map((col) => `"${getColumnExportValue(col, item).replace(/"/g, '""')}"`)
         .join(",");
     });
 
@@ -246,20 +246,19 @@ export function AdvancedTable<T>({
 
   const exportPDF = () => {
     if (filteredData.length === 0) return;
-    const doc = new jsPDF();
-    const head = [activeColumns.map((c) => c.header)];
-    const body = filteredData.map((item) => {
-      return activeColumns.map((col) => {
-        if (col.accessorKey) return String(item[col.accessorKey] ?? "");
-        return "";
-      });
-    });
+    const exportColumns = activeColumns.filter((col) => col.id !== "actions");
+    const columnCount = exportColumns.length;
+    const doc = createExportPdf(columnCount);
+    const head = [exportColumns.map((c) => c.header)];
+    const body = filteredData.map((item) =>
+      exportColumns.map((col) => getColumnExportValue(col, item)),
+    );
 
-    autoTable(doc, {
+    runAutoTableExport(doc, {
+      columnCount,
       head,
       body,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [41, 128, 185] },
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
     });
     doc.save(`${filename}.pdf`);
   };
@@ -283,9 +282,9 @@ export function AdvancedTable<T>({
         )}
 
         <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
-          {showViewToggle && (
+          {showViewToggle && !isMobile ? (
             <DataViewToggle value={viewMode} onChange={setViewMode} />
-          )}
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -306,7 +305,7 @@ export function AdvancedTable<T>({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {viewMode === "table" && (
+          {effectiveViewMode === "table" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9 gap-1 text-foreground">
@@ -335,7 +334,7 @@ export function AdvancedTable<T>({
         </div>
       </div>
 
-      {viewMode === "grid" ? (
+      {effectiveViewMode === "grid" ? (
         displayData.length > 0 ? (
           <div className={gridClassName}>
             {displayData.map((item, index) => (

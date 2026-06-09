@@ -1,6 +1,9 @@
 import type { Comment } from "@/api";
-import { FileText } from "lucide-react";
-import { LinkifiedText } from "@/components/chat/linkified-text";
+import { FileText, Smartphone } from "lucide-react";
+import { MessageContent } from "@/components/chat/message-content";
+import { VoiceMessagePlayer } from "@/components/chat/voice-message-player";
+import { isChatVoiceAttachment } from "@/lib/chat-file-upload";
+import type { MentionCandidate } from "@/lib/chat-mentions";
 import { cn } from "@/lib/utils";
 
 function isPdfAttachment(comment: Pick<Comment, "attachmentMimeType" | "attachmentName">) {
@@ -10,12 +13,34 @@ function isPdfAttachment(comment: Pick<Comment, "attachmentMimeType" | "attachme
   );
 }
 
+function isApkAttachment(comment: Pick<Comment, "attachmentMimeType" | "attachmentName">) {
+  const name = comment.attachmentName ?? "";
+  if (comment.attachmentMimeType === "application/vnd.android.package-archive") return true;
+  return name.toLowerCase().endsWith(".apk");
+}
+
+function isImageAttachment(comment: Pick<Comment, "attachmentMimeType" | "attachmentName">) {
+  if (isPdfAttachment(comment)) return false;
+  if (isApkAttachment(comment)) return false;
+  if (isChatVoiceAttachment(comment.attachmentMimeType, comment.attachmentName)) return false;
+  return (
+    comment.attachmentMimeType?.startsWith("image/") ||
+    /\.(png|jpe?g|gif|webp)$/i.test(comment.attachmentName ?? "")
+  );
+}
+
+const bubbleBase =
+  "rounded-2xl rounded-tl-md border px-3 py-2 text-sm shadow-sm";
+
 export function CommentBody({
   comment,
   className,
   bubbleClassName,
   linkClassName,
+  mentionCandidates,
   onImageLoad,
+  compact,
+  isSent,
 }: {
   comment: Pick<
     Comment,
@@ -24,17 +49,24 @@ export function CommentBody({
   className?: string;
   bubbleClassName?: string;
   linkClassName?: string;
+  mentionCandidates?: MentionCandidate[];
   onImageLoad?: () => void;
+  compact?: boolean;
+  isSent?: boolean;
 }) {
   const hasText = Boolean(comment.content?.trim());
   const hasAttachment = Boolean(comment.attachmentUrl);
   const isPdf = hasAttachment && isPdfAttachment(comment);
-  const isImage = hasAttachment && !isPdf;
+  const isApk = hasAttachment && isApkAttachment(comment);
+  const isVoice = hasAttachment && isChatVoiceAttachment(comment.attachmentMimeType, comment.attachmentName);
+  const isImage = hasAttachment && isImageAttachment(comment);
 
   if (!hasText && !hasAttachment) return null;
 
+  const voiceVariant = isSent ? "sent" : "received";
+
   return (
-    <div className={cn("space-y-2", className)}>
+    <div className={cn("space-y-1.5", className)}>
       {isImage && (
         <a
           href={comment.attachmentUrl!}
@@ -51,6 +83,22 @@ export function CommentBody({
           />
         </a>
       )}
+      {isVoice && (
+        <div
+          className={cn(
+            bubbleBase,
+            "border-border/40 bg-muted/40 py-2.5",
+            bubbleClassName,
+            compact && "px-2 py-2",
+          )}
+        >
+          <VoiceMessagePlayer
+            src={comment.attachmentUrl!}
+            compact={compact}
+            variant={voiceVariant}
+          />
+        </div>
+      )}
       {isPdf && (
         <a
           href={comment.attachmentUrl!}
@@ -64,14 +112,33 @@ export function CommentBody({
           </span>
         </a>
       )}
+      {isApk && (
+        <a
+          href={comment.attachmentUrl!}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={comment.attachmentName ?? undefined}
+          className="inline-flex max-w-[min(100%,280px)] items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50"
+        >
+          <Smartphone className="h-4 w-4 shrink-0 text-primary" />
+          <span className="truncate font-medium">
+            {comment.attachmentName ?? "Attached APK"}
+          </span>
+        </a>
+      )}
       {hasText && (
         <div
           className={cn(
-            "rounded-2xl rounded-tl-md bg-muted/40 border border-border/40 px-3 py-2 text-sm whitespace-pre-wrap shadow-sm",
+            bubbleBase,
+            "border-border/40 bg-muted/40 whitespace-pre-wrap",
             bubbleClassName,
           )}
         >
-          <LinkifiedText text={comment.content!} linkClassName={linkClassName} />
+          <MessageContent
+            text={comment.content!}
+            mentionCandidates={mentionCandidates}
+            linkClassName={linkClassName}
+          />
         </div>
       )}
     </div>

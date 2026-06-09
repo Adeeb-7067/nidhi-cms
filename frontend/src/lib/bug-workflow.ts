@@ -124,6 +124,10 @@ export function bugStatsFromList(bugs: { finalStatus?: string; status: BugStatus
   };
 }
 
+export function canAddBugIssues(role?: string) {
+  return role === "qa" || role === "tester" || role === "super_admin";
+}
+
 export function canUserModifyBug(
   role: string | undefined,
   userId: number | undefined,

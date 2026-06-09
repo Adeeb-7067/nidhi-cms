@@ -95,6 +95,19 @@ export const BugTableRow = React.memo(function BugTableRow({
           />
         </TableCell>
         <TableCell className="py-2 text-muted-foreground">{bug.reporterName}</TableCell>
+        {editable && (
+          <TableCell className="py-2 w-10" onClick={(e) => e.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => onEdit!(bug)}
+              aria-label="Edit bug"
+            >
+              <Edit className="h-3.5 w-3.5" />
+            </Button>
+          </TableCell>
+        )}
       </TableRow>
     );
   }

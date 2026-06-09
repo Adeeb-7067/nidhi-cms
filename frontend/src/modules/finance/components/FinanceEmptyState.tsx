@@ -1,0 +1,70 @@
+import { LucideIcon, Inbox } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+export function FinanceEmptyState({
+  icon: Icon = Inbox,
+  title,
+  description,
+  actionLabel,
+  onAction,
+  className,
+}: {
+  icon?: LucideIcon;
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 px-6 py-16 text-center",
+        className,
+      )}
+    >
+      <div className="rounded-full bg-muted p-4 mb-4">
+        <Icon className="h-8 w-8 text-muted-foreground" />
+      </div>
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {description && (
+        <p className="text-xs text-muted-foreground mt-1 max-w-sm">{description}</p>
+      )}
+      {actionLabel && onAction && (
+        <Button size="sm" className="mt-4" onClick={onAction}>
+          {actionLabel}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function FinancePageLoader({ label = "Loading…" }: { label?: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border bg-muted/10 px-6 py-20">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
+      <p className="text-xs text-muted-foreground">{label}</p>
+    </div>
+  );
+}
+
+export function FinanceErrorState({
+  message = "Something went wrong loading data.",
+  onRetry,
+}: {
+  message?: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-destructive/30 bg-destructive/5 px-6 py-16 text-center">
+      <p className="text-sm font-semibold text-destructive">Error</p>
+      <p className="text-xs text-muted-foreground mt-1 max-w-sm">{message}</p>
+      {onRetry && (
+        <Button size="sm" variant="outline" className="mt-4" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
+    </div>
+  );
+}

@@ -22,7 +22,7 @@ import {
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
 import { PDFService } from "@/lib/pdf-service";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageTableSkeleton } from "@/components/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -37,8 +37,7 @@ import { clearUrlSearchParam, readBugIdFromUrl } from "@/lib/notification-naviga
 type BugListScope = "all" | "mine" | "unassigned" | "created";
 
 function defaultBugListScope(role: string | undefined): BugListScope {
-  if (role === "super_admin" || role === "tester") return "all";
-  if (role === "qa") return "created";
+  if (role === "super_admin" || role === "tester" || role === "qa") return "all";
   return "mine";
 }
 
@@ -57,8 +56,7 @@ export default function DevBugs() {
   const canEditBug = (bug: Bug) => canUserModifyBug(role, user?.id, bug);
   const canComment = !!user;
   const isAdmin = role === "super_admin";
-  const isQaUser = role === "qa";
-  const isTesterUser = role === "tester";
+  const isQaStaff = role === "qa" || role === "tester";
 
   const [formOpen, setFormOpen] = useState(false);
   const [editBug, setEditBug] = useState<Bug | null>(null);
@@ -193,15 +191,15 @@ export default function DevBugs() {
       />
 
       <DevToolbar className="flex-wrap">
-        {(isAdmin || isTesterUser || isQaUser) && (
+        {(isAdmin || isQaStaff) && (
           <Tabs value={scope} onValueChange={(v) => setScope(v as BugListScope)}>
             <DevTabsList>
-              {isQaUser && (
+              {isQaStaff && (
                 <DevTabsTrigger value="created">My reports</DevTabsTrigger>
               )}
               <DevTabsTrigger value="all">All bugs</DevTabsTrigger>
               <DevTabsTrigger value="mine">My queue</DevTabsTrigger>
-              {(isAdmin || isTesterUser) && (
+              {(isAdmin || isQaStaff) && (
                 <DevTabsTrigger value="unassigned">Unassigned</DevTabsTrigger>
               )}
             </DevTabsList>
@@ -236,11 +234,7 @@ export default function DevBugs() {
 
       <DevContentCard className="shadow-lg shadow-black/5">
           {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full rounded-lg" />
-              ))}
-            </div>
+            <PageTableSkeleton rows={8} columns={6} showToolbar />
           ) : (
             <BugTable
               bugs={bugs}

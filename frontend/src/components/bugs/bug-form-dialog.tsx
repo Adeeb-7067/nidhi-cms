@@ -50,6 +50,9 @@ import {
   PRIORITY_LABELS,
   formatUserRole,
   isBugReporter,
+  canSetDevStatus,
+  canSetFinalStatus,
+  canSetQaStatus,
 } from "@/lib/bug-workflow";
 import { BugTrackStatusRow } from "./bug-track-status";
 import { BugBatchCreate } from "./bug-batch-create";
@@ -272,21 +275,28 @@ export function BugFormDialog({
     const assigneeIds = canAssign
       ? (values.assigneeIds ?? []).map((id) => Number.parseInt(id, 10)).filter(Boolean)
       : undefined;
+    const issueKey = editBug.issueKey;
+    const isAssignee =
+      !!userId &&
+      (editBug.assigneeId === userId ||
+        (editBug.assigneeIds?.includes(userId) ?? false));
 
     try {
       if (canFullEdit) {
+        const data: Record<string, unknown> = {
+          title: values.title,
+          description: values.description || undefined,
+          priority: values.priority,
+          assigneeIds,
+          attachments: attachments.length ? attachments : undefined,
+        };
+        if (canSetQaStatus(userRole)) data.qaStatus = values.qaStatus;
+        if (canSetDevStatus(userRole, isAssignee)) data.devStatus = values.devStatus;
+        if (canSetFinalStatus(userRole)) data.finalStatus = values.finalStatus;
+        if (issueKey) data.issueKey = issueKey;
         await updateMutation.mutateAsync({
           id: editBug.id,
-          data: {
-            title: values.title,
-            description: values.description || undefined,
-            priority: values.priority,
-            qaStatus: values.qaStatus,
-            devStatus: values.devStatus,
-            finalStatus: values.finalStatus,
-            assigneeIds,
-            attachments: attachments.length ? attachments : undefined,
-          },
+          data,
         });
       } else {
         await updateMutation.mutateAsync({
@@ -384,7 +394,13 @@ export function BugFormDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {editBug ? (canFullEdit ? "Edit bug" : "Update bug") : "Report bugs"}
+            {editBug
+              ? editBug.issueKey
+                ? "Edit issue"
+                : canFullEdit
+                  ? "Edit bug"
+                  : "Update bug"
+              : "Report bugs"}
           </DialogTitle>
           <DialogDescription>
             {editBug

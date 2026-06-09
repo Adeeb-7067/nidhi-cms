@@ -1,5 +1,5 @@
 import mongoose, { Schema } from "mongoose";
-const threadTypes = ["project", "log", "bug", "apk", "request", "ticket"];
+const threadTypes = ["project", "project_internal", "company_team", "log", "bug", "apk", "request", "ticket"];
 const commentSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   authorId: { type: Number, ref: "Users", required: true, index: true },
@@ -12,6 +12,7 @@ const commentSchema = new Schema({
   attachmentName: { type: String },
   attachmentMimeType: { type: String },
   parentId: { type: Number, ref: "Comments" },
+  mentionedUserIds: { type: [Number], default: [] },
   isEdited: { type: Boolean, default: false, required: true }
 }, { timestamps: true });
 const Comments = mongoose.models.Comments || mongoose.model("Comments", commentSchema);

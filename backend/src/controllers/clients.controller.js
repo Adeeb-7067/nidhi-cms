@@ -4,6 +4,7 @@ import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
 import {
   createClientPortalUser,
+  updateClientPortalEmail,
   updateClientPortalPassword
 } from "../services/client-portal.js";
 import { paginateModel } from "../utils/mongo-list.js";
@@ -19,14 +20,20 @@ function resolveGstNumber(body) {
   const trimmed = typeof value === "string" ? value.trim() : "";
   return trimmed || void 0;
 }
+function portalAvatarFromUser(portalUser) {
+  const url = typeof portalUser?.avatarUrl === "string" ? portalUser.avatarUrl.trim() : "";
+  return url || null;
+}
 function enrichClientPortalPresence(clientRecord, portalUser) {
   if (!clientRecord.userId || !portalUser) {
     return {
       ...clientRecord,
+      portalEmail: null,
       portalLastLoginAt: null,
       portalLastSeenAt: null,
       portalPresenceStatus: "offline",
-      portalIsActiveNow: false
+      portalIsActiveNow: false,
+      portalAvatarUrl: null
     };
   }
   const withPresence = attachPresenceToUser({
@@ -36,10 +43,12 @@ function enrichClientPortalPresence(clientRecord, portalUser) {
   });
   return {
     ...clientRecord,
+    portalEmail: portalUser.email ?? null,
     portalLastLoginAt: withPresence.lastLoginAt ?? null,
     portalLastSeenAt: withPresence.lastSeenAt ?? null,
     portalPresenceStatus: withPresence.presenceStatus,
-    portalIsActiveNow: withPresence.isActiveNow
+    portalIsActiveNow: withPresence.isActiveNow,
+    portalAvatarUrl: portalAvatarFromUser(portalUser)
   };
 }
 async function enrichClientsBatch(clients) {
@@ -49,7 +58,7 @@ async function enrichClientsBatch(clients) {
   }
   const users = await usersTable
     .find({ id: { $in: userIds } })
-    .select({ id: 1, lastLoginAt: 1, lastSeenAt: 1 })
+    .select({ id: 1, email: 1, lastLoginAt: 1, lastSeenAt: 1, avatarUrl: 1 })
     .lean();
   const userById = new Map(users.map((u) => [u.id, u]));
   return clients.map((c) => enrichClientPortalPresence(c, userById.get(c.userId) ?? null));
@@ -59,7 +68,7 @@ async function formatClient(client) {
   if (!base.userId) return enrichClientPortalPresence(base, null);
   const portalUser = await usersTable
     .findOne({ id: base.userId })
-    .select({ id: 1, lastLoginAt: 1, lastSeenAt: 1 })
+    .select({ id: 1, email: 1, lastLoginAt: 1, lastSeenAt: 1, avatarUrl: 1 })
     .lean();
   return enrichClientPortalPresence(base, portalUser);
 }
@@ -142,7 +151,11 @@ async function patchClientsById(req, res) {
     gstNumber: optionalString(body.gstNumber),
     businessId: optionalString(body.businessId)
   }) : void 0;
+  const portalEmail = optionalString(body.portalEmail);
   const password = optionalString(body.password);
+  if (portalEmail && existing.userId) {
+    await updateClientPortalEmail({ userId: existing.userId, email: portalEmail });
+  }
   if (password) {
     if (existing.userId) {
       await updateClientPortalPassword({
@@ -152,7 +165,6 @@ async function patchClientsById(req, res) {
         setByLabel: req.user.name
       });
     } else {
-      const portalEmail = optionalString(body.portalEmail);
       const email = optionalString(body.email);
       const loginEmail = (portalEmail ?? email ?? existing.email).toLowerCase();
       const userId = await createClientPortalUser({

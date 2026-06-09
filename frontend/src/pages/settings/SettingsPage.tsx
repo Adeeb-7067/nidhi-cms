@@ -45,6 +45,7 @@ import { cn } from "@/lib/utils";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
+import { SettingsFormSkeleton } from "@/components/loading";
 import {
   Palette,
   Bell,
@@ -163,6 +164,8 @@ export default function SettingsPage() {
     sealUrl: "",
     requiredDailyWorkHours: "7.5",
     dailyLogComplianceEnabled: true,
+    dailyLogReminderHour: "23",
+    complianceTimezone: "",
   });
 
   const userSections: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
@@ -203,6 +206,8 @@ export default function SettingsPage() {
         sealUrl: orgSettings.sealUrl || "",
         requiredDailyWorkHours: String(orgSettings.requiredDailyWorkHours ?? 7.5),
         dailyLogComplianceEnabled: orgSettings.dailyLogComplianceEnabled !== false,
+        dailyLogReminderHour: String(orgSettings.dailyLogReminderHour ?? 23),
+        complianceTimezone: orgSettings.complianceTimezone ?? "",
       });
     }
   }, [orgSettings]);
@@ -221,6 +226,36 @@ export default function SettingsPage() {
 
   const handleUpdateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
+    const reminderHour = Number.parseInt(companyForm.dailyLogReminderHour, 10);
+    const tzRaw = companyForm.complianceTimezone.trim();
+    if (companyForm.dailyLogComplianceEnabled) {
+      if (!Number.isInteger(reminderHour) || reminderHour < 0 || reminderHour > 23) {
+        toast({
+          title: "Invalid reminder time",
+          description: "Choose a reminder hour between 12:00 AM and 11:00 PM.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!tzRaw) {
+        toast({
+          title: "Timezone required",
+          description: "Set an IANA timezone (e.g. Asia/Kolkata) so reminders run at the correct local time.",
+          variant: "destructive",
+        });
+        return;
+      }
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: tzRaw });
+      } catch {
+        toast({
+          title: "Invalid timezone",
+          description: "Use an IANA timezone such as Asia/Kolkata.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
     try {
       await updateSettings({
         data: {
@@ -230,6 +265,8 @@ export default function SettingsPage() {
           sealUrl: companyForm.sealUrl || undefined,
           requiredDailyWorkHours: Number.parseFloat(companyForm.requiredDailyWorkHours),
           dailyLogComplianceEnabled: companyForm.dailyLogComplianceEnabled,
+          dailyLogReminderHour: Number.isInteger(reminderHour) ? reminderHour : 23,
+          complianceTimezone: tzRaw || null,
         },
       });
       toast({ title: "Organization updated", description: "Branding saved for all users." });
@@ -630,11 +667,7 @@ export default function SettingsPage() {
           {section === "organization" && isAdmin && (
             <div className="space-y-6">
             {loadingOrg ? (
-              <Card>
-                <CardContent className="flex justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                </CardContent>
-              </Card>
+              <SettingsFormSkeleton />
             ) : (
               <form onSubmit={handleUpdateCompany} className="space-y-6">
                 <Card>
@@ -754,6 +787,59 @@ export default function SettingsPage() {
                       />
                       <p className="text-xs text-muted-foreground">
                         Example: 7.5 means daily logs must total 7.5 hours (multiple entries allowed).
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="dailyLogReminderHour">Reminder email time</Label>
+                      <Select
+                        value={companyForm.dailyLogReminderHour}
+                        disabled={!companyForm.dailyLogComplianceEnabled}
+                        onValueChange={(value) =>
+                          setCompanyForm({ ...companyForm, dailyLogReminderHour: value })
+                        }
+                      >
+                        <SelectTrigger id="dailyLogReminderHour">
+                          <SelectValue placeholder="Select time" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 24 }, (_, hour) => {
+                            const label =
+                              hour === 0
+                                ? "12:00 AM"
+                                : hour === 12
+                                  ? "12:00 PM"
+                                  : hour < 12
+                                    ? `${hour}:00 AM`
+                                    : hour === 23
+                                      ? "11:00 PM"
+                                      : `${hour - 12}:00 PM`;
+                            return (
+                              <SelectItem key={hour} value={String(hour)}>
+                                {label}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Alerts run once per day at this time in your timezone. Use{" "}
+                        <strong>11:00 PM</strong> for an end-of-day reminder (not 12:00 AM, which is midnight).
+                        Morning times check yesterday&apos;s hours; afternoon/evening times check the same day.
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="complianceTimezone">Reminder timezone</Label>
+                      <Input
+                        id="complianceTimezone"
+                        placeholder="Asia/Kolkata"
+                        disabled={!companyForm.dailyLogComplianceEnabled}
+                        value={companyForm.complianceTimezone}
+                        onChange={(e) =>
+                          setCompanyForm({ ...companyForm, complianceTimezone: e.target.value })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Required for correct local time (e.g. Asia/Kolkata). Reminders are not sent until a timezone is set.
                       </p>
                     </div>
                   </CardContent>

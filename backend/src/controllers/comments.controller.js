@@ -1,6 +1,6 @@
-import { commentsTable, usersTable, projectMembersTable, notificationsTable, ticketsTable, getNextSequence } from "../models/schema/index.js";
+import { commentsTable, usersTable, notificationsTable, ticketsTable, getNextSequence } from "../models/schema/index.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
-import { broadcast, notifyUser } from "../lib/realtime.js";
+import { broadcast, emitToUsers, notifyUser } from "../lib/realtime.js";
 import { parsePagination, badRequest, notFound, forbidden, parseIdParam } from "../utils/route-errors.js";
 import { toIso } from "../utils/mongo-list.js";
 import {
@@ -9,6 +9,22 @@ import {
   nextStatusAfterReply,
 } from "../services/ticket-support.js";
 import { syncClientDiscussionImageToResource } from "../services/comment-chat-resource.js";
+import {
+  resolveCompanyTeamMentionCandidates,
+  resolveCompanyTeamMentionIds,
+  resolveProjectMentionIds,
+} from "../services/comment-mentions.js";
+import { getProjectDiscussionPreviews } from "../services/discussion-previews.js";
+import {
+  canAccessDiscussionThread,
+  canAccessCompanyTeamDiscussion,
+  COMPANY_TEAM_THREAD,
+  getDiscussionParticipantIds,
+} from "../services/discussion-project-access.js";
+
+function isProjectDiscussionThread(threadType) {
+  return threadType === "project" || threadType === "project_internal" || threadType === COMPANY_TEAM_THREAD;
+}
 
 function mapCommentRow(c, authorMap, repliesByParent) {
   const author = authorMap.get(c.authorId);
@@ -25,6 +41,7 @@ function mapCommentRow(c, authorMap, repliesByParent) {
     attachmentName: c.attachmentName ?? null,
     attachmentMimeType: c.attachmentMimeType ?? null,
     parentId: c.parentId,
+    mentionedUserIds: c.mentionedUserIds ?? [],
     isEdited: c.isEdited,
     replies: (repliesByParent.get(c.id) ?? []).map((r) => mapCommentRow(r, authorMap, repliesByParent)),
     createdAt: toIso(c.createdAt) ?? new Date().toISOString(),
@@ -73,6 +90,15 @@ async function formatCommentsPage(threadType, threadIdNum, topLevel) {
   }
   return topLevel.map((c) => mapCommentRow(c, authorMap, repliesByParent));
 }
+async function getProjectCommentPreviews(req, res) {
+  const result = await getProjectDiscussionPreviews(req.user);
+  res.json(result);
+}
+async function getCompanyTeamMentionCandidates(req, res) {
+  if (!canAccessCompanyTeamDiscussion(req.user.role)) forbidden();
+  const candidates = await resolveCompanyTeamMentionCandidates();
+  res.json({ candidates });
+}
 async function getComments(req, res) {
   const q = req.query;
   const { threadType, threadId } = q;
@@ -80,6 +106,9 @@ async function getComments(req, res) {
     badRequest("Discussion thread type and id are required.", "threadType");
   }
   const threadIdNum = parseIdParam(threadId, "threadId");
+  if (isProjectDiscussionThread(threadType)) {
+    if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+  }
   if (threadType === "ticket") {
     await assertTicketAccess(req.user, threadIdNum);
   }
@@ -104,7 +133,16 @@ async function getComments(req, res) {
   res.json({ comments: formatted, total });
 }
 async function postComments(req, res) {
-  const { threadType, threadId, content, parentId, attachmentUrl, attachmentName, attachmentMimeType } = req.body;
+  const {
+    threadType,
+    threadId,
+    content,
+    parentId,
+    attachmentUrl,
+    attachmentName,
+    attachmentMimeType,
+    mentionedUserIds: requestedMentionIds,
+  } = req.body;
   const text = typeof content === "string" ? content.trim() : "";
   if (!threadType || threadId == null) {
     badRequest("threadType and threadId are required.", !threadType ? "threadType" : "threadId");
@@ -116,10 +154,26 @@ async function postComments(req, res) {
     validateStoredFileUrl(attachmentUrl, "attachmentUrl");
   }
   const threadIdNum = parseIdParam(threadId, "threadId");
+  if (isProjectDiscussionThread(threadType)) {
+    if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+  }
   let ticketForThread = null;
   if (threadType === "ticket") {
     ticketForThread = await assertTicketAccess(req.user, threadIdNum);
   }
+  let mentionIds = [];
+  if (threadType === COMPANY_TEAM_THREAD) {
+    mentionIds = await resolveCompanyTeamMentionIds(req.user.id, requestedMentionIds, text);
+  } else if (isProjectDiscussionThread(threadType)) {
+    mentionIds = await resolveProjectMentionIds(
+      threadIdNum,
+      req.user.id,
+      requestedMentionIds,
+      text,
+      threadType,
+    );
+  }
+
   const nextId = await getNextSequence("comments");
   const comment = await commentsTable.create({
     id: nextId,
@@ -130,7 +184,8 @@ async function postComments(req, res) {
     attachmentUrl: attachmentUrl ?? null,
     attachmentName: attachmentName ?? null,
     attachmentMimeType: attachmentMimeType ?? null,
-    parentId: parentId ?? null
+    parentId: parentId ?? null,
+    mentionedUserIds: mentionIds,
   });
   if (threadType === "project" && attachmentUrl) {
     try {
@@ -154,48 +209,69 @@ async function postComments(req, res) {
     }
   }
   const formattedComment = await formatComment(comment);
-  broadcast("comment", {
-    threadType: comment.threadType,
-    threadId: comment.threadId,
-    comment: formattedComment
-  });
   try {
     const recipientIds = /* @__PURE__ */ new Set();
-    if (threadType === "project") {
-      const members = await projectMembersTable.find({ projectId: threadIdNum });
-      members.forEach((m) => recipientIds.add(m.userId));
+    let participantIds = null;
+    if (isProjectDiscussionThread(threadType)) {
+      participantIds = await getDiscussionParticipantIds(threadIdNum, threadType);
+      participantIds.forEach((id) => recipientIds.add(id));
     } else if (threadType === "ticket" && ticketForThread) {
-      const ids = await getTicketParticipantIds(ticketForThread, req.user.id);
+      const ids = await getTicketParticipantIds(ticketForThread, null);
+      participantIds = new Set(ids);
       ids.forEach((id) => recipientIds.add(id));
     }
     const threadComments = await commentsTable
       .find({ threadType, threadId: threadIdNum })
       .select("authorId")
       .lean();
-    threadComments.forEach((c) => recipientIds.add(c.authorId));
+    for (const c of threadComments) {
+      if (participantIds?.has(c.authorId)) recipientIds.add(c.authorId);
+    }
+    for (const id of mentionIds) {
+      if (!participantIds || participantIds.has(id)) recipientIds.add(id);
+    }
     recipientIds.delete(req.user.id);
+
+    emitToUsers(Array.from(recipientIds), "comment", {
+      threadType: comment.threadType,
+      threadId: comment.threadId,
+      comment: formattedComment,
+    });
     const authorName = req.user.name;
     const isPdf =
       attachmentMimeType === "application/pdf" ||
       (typeof attachmentName === "string" && attachmentName.toLowerCase().endsWith(".pdf"));
+    const isAudio =
+      (typeof attachmentMimeType === "string" && attachmentMimeType.startsWith("audio/")) ||
+      (typeof attachmentName === "string" && /\.(webm|ogg|mp3|m4a|wav)$/i.test(attachmentName));
     const notifBody = text
       ? (text.length > 80 ? text.slice(0, 77) + "..." : text)
-      : isPdf
+      : isAudio
+        ? "Sent a voice message"
+        : isPdf
         ? "Sent a PDF"
         : attachmentUrl
           ? "Sent an attachment"
           : "New message";
+    const mentionSet = new Set(mentionIds);
     await Promise.all(Array.from(recipientIds).map(async (userId) => {
       const notifId = await getNextSequence("notifications");
       const notifProjectId =
-        threadType === "project"
-          ? threadIdNum
-          : ticketForThread?.projectId ?? null;
+        threadType === COMPANY_TEAM_THREAD
+          ? null
+          : isProjectDiscussionThread(threadType)
+            ? threadIdNum
+            : ticketForThread?.projectId ?? null;
+      const isMention = mentionSet.has(userId);
+      const notifType = isMention ? "comment_mention" : "comment";
+      const notifTitle = isMention
+        ? `${authorName} mentioned you`
+        : `${authorName} commented`;
       await notificationsTable.create({
         id: notifId,
         userId,
-        type: "comment",
-        title: `${authorName} commented`,
+        type: notifType,
+        title: notifTitle,
         body: notifBody,
         entityType: threadType === "ticket" ? "ticket" : threadType,
         entityId: threadIdNum,
@@ -204,8 +280,8 @@ async function postComments(req, res) {
         createdAt: /* @__PURE__ */ new Date()
       });
       notifyUser(userId, "notification", {
-        type: "comment",
-        title: `${authorName} commented`,
+        type: notifType,
+        title: notifTitle,
         body: notifBody,
         entityType: threadType === "ticket" ? "ticket" : threadType,
         entityId: threadIdNum,
@@ -230,6 +306,8 @@ async function patchCommentsById(req, res) {
 }
 export {
   getComments,
+  getCompanyTeamMentionCandidates,
+  getProjectCommentPreviews,
   patchCommentsById,
   postComments
 };

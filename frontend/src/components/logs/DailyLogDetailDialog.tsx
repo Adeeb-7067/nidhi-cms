@@ -159,7 +159,7 @@ export function DailyLogDetailDialog({
             />
             <MetaItem
               icon={Briefcase}
-              label="Project"
+              label="Project / activity"
               value={<span className="text-primary">{log.projectName}</span>}
             />
             <MetaItem icon={Calendar} label="Log date" value={formatLogDateLong(log.logDate)} />

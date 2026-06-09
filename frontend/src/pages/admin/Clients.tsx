@@ -20,8 +20,10 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { Badge } from "@/components/ui/badge";
+import { PageTableSkeleton } from "@/components/loading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { FileUploader } from "@/components/ui/file-uploader";
 import {
   Dialog,
   DialogContent,
@@ -77,6 +79,7 @@ const clientSchema = z.object({
   email: z.string().email("Invalid company email"),
   portalEmail: z.string().email("Invalid portal login email").optional().or(z.literal("")),
   password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal("")),
+  logoUrl: z.string().optional(),
   phone: z.string().optional(),
   address: z.string().optional(),
   gstNumber: z.string().optional(),
@@ -90,6 +93,14 @@ type ClientFormValues = z.infer<typeof clientSchema>;
 
 function canViewAsClient(client: Client): boolean {
   return client.status === "active" && client.userId != null && client.userId > 0;
+}
+
+/** Company logo from admin record, else portal user's profile avatar. */
+function clientDisplayImageUrl(client: Client): string | undefined {
+  const logo = client.logoUrl?.trim();
+  if (logo) return logo;
+  const avatar = client.portalAvatarUrl?.trim();
+  return avatar || undefined;
 }
 
 function clientPortalPresenceUser(client: Client): PresenceUserFields | null {
@@ -291,6 +302,7 @@ export default function AdminClients() {
       email: "",
       portalEmail: "",
       password: "",
+      logoUrl: "",
       phone: "",
       address: "",
       gstNumber: "",
@@ -307,8 +319,9 @@ export default function AdminClients() {
         companyName: editClient.companyName,
         contactPerson: editClient.contactPerson,
         email: editClient.email,
-        portalEmail: "",
+        portalEmail: editClient.portalEmail ?? "",
         password: "",
+        logoUrl: editClient.logoUrl || "",
         phone: editClient.phone || "",
         address: editClient.address || "",
         gstNumber: editClient.gstNumber || "",
@@ -324,6 +337,7 @@ export default function AdminClients() {
         email: "",
         portalEmail: "",
         password: "",
+        logoUrl: "",
         phone: "",
         address: "",
         gstNumber: "",
@@ -340,7 +354,10 @@ export default function AdminClients() {
       if (editClient) {
         const { portalEmail, password, ...rest } = values;
         const payload: Record<string, unknown> = { ...rest };
-        if (portalEmail?.trim()) payload.portalEmail = portalEmail.trim();
+        const trimmedPortal = portalEmail?.trim();
+        if (trimmedPortal && trimmedPortal !== (editClient.portalEmail ?? "").toLowerCase()) {
+          payload.portalEmail = trimmedPortal;
+        }
         if (password?.trim()) payload.password = password;
         await updateClientMutation.mutateAsync({ id: editClient.id, data: payload as any });
         toast.success("Client updated successfully");
@@ -403,7 +420,7 @@ export default function AdminClients() {
       cell: (client) => (
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedClient(client)}>
           <Avatar className="h-8 w-8 rounded-md">
-            <AvatarImage src={client.logoUrl || undefined} />
+            <AvatarImage src={clientDisplayImageUrl(client)} />
             <AvatarFallback className="bg-secondary/20 text-secondary rounded-md text-[10px]">
               <Building className="h-3 w-3" />
             </AvatarFallback>
@@ -577,6 +594,7 @@ export default function AdminClients() {
                 email: "",
                 portalEmail: "",
                 password: "",
+                logoUrl: "",
                 phone: "",
                 address: "",
                 gstNumber: "",
@@ -614,6 +632,37 @@ export default function AdminClients() {
                 />
                 <FormField
                   control={form.control}
+                  name="logoUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Company logo</FormLabel>
+                      <FormControl>
+                        <FileUploader
+                          category="misc"
+                          accept="image/*"
+                          label="Upload company logo"
+                          value={field.value}
+                          maxSizeMB={5}
+                          onUploadComplete={(url) => field.onChange(url)}
+                        />
+                      </FormControl>
+                      {field.value ? (
+                        <img
+                          src={field.value}
+                          alt="Company logo preview"
+                          className="h-12 object-contain rounded border border-border p-2 bg-muted/30"
+                        />
+                      ) : editClient && clientDisplayImageUrl(editClient) ? (
+                        <p className="text-[10px] text-muted-foreground">
+                          No company logo saved yet. The table currently shows the portal user&apos;s profile photo.
+                        </p>
+                      ) : null}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
                   name="contactPerson"
                   render={({ field }) => (
                     <FormItem>
@@ -640,7 +689,7 @@ export default function AdminClients() {
                 />
                 <div className="rounded-md border border-border/60 bg-muted/20 p-3 space-y-3">
                   <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Portal login {editClient ? "(optional reset)" : "(required)"}
+                    Portal login {editClient ? "(edit email or reset password)" : "(required)"}
                   </p>
                   <FormField
                     control={form.control}
@@ -653,7 +702,6 @@ export default function AdminClients() {
                             placeholder="client@gmail.com"
                             type="email"
                             {...field}
-                            disabled={!!editClient && !!editClient.userId}
                           />
                         </FormControl>
                         <FormMessage />
@@ -835,9 +883,7 @@ export default function AdminClients() {
 
       <PortalContentCard>
           {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
-            </div>
+            <PageTableSkeleton rows={8} columns={6} showToolbar />
           ) : (
             <AdvancedTable 
               data={data?.clients || []} 
@@ -864,7 +910,7 @@ export default function AdminClients() {
           <SheetHeader className="space-y-3">
             <div className="flex items-center gap-4">
               <Avatar className="h-12 w-12 border-2 border-primary/10">
-                <AvatarImage src={selectedClient?.logoUrl || undefined} />
+                <AvatarImage src={selectedClient ? clientDisplayImageUrl(selectedClient) : undefined} />
                 <AvatarFallback className="text-lg bg-primary/10 text-primary font-bold">{selectedClient?.companyName?.charAt(0)}</AvatarFallback>
               </Avatar>
               <div>
@@ -924,6 +970,14 @@ export default function AdminClients() {
                   <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Account Email</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all"><Mail className="h-3.5 w-3.5 text-primary shrink-0" /> {selectedClient?.email}</p>
                 </div>
+                {selectedClient?.portalEmail ? (
+                  <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Portal login email</p>
+                    <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all">
+                      <LogIn className="h-3.5 w-3.5 text-amber-500 shrink-0" /> {selectedClient.portalEmail}
+                    </p>
+                  </div>
+                ) : null}
                 {selectedClient?.userId ? (
                   <div className="col-span-2 rounded-md border border-border/50 bg-muted/30 p-3">
                     <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Portal activity</p>
@@ -992,7 +1046,15 @@ export default function AdminClients() {
                     </TableHeader>
                     <TableBody>
                       {isLoadingCredentials ? (
-                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">Loading vault records...</TableCell></TableRow>
+                        [...Array(3)].map((_, i) => (
+                          <TableRow key={i}>
+                            {[...Array(4)].map((_, j) => (
+                              <TableCell key={j} className="py-2">
+                                <Skeleton className="h-3.5 w-full" />
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))
                       ) : credentialRows.length === 0 ? (
                         <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No credential snapshots captured.</TableCell></TableRow>
                       ) : (

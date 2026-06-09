@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
 
 const sizeClass = {
-  sm: "h-7 max-w-[4.75rem]",
-  md: "h-9 max-w-[5.75rem]",
-  lg: "h-12 max-w-[14rem]",
-  xl: "h-16 max-w-[18rem]",
+  sm: "h-8 w-8",
+  md: "h-10 w-10",
+  lg: "h-14 w-14",
+  xl: "h-20 w-20",
 } as const;
 
 type AppLogoProps = {
@@ -21,7 +21,7 @@ export function AppLogo({ size = "md", className, title = BRAND.shortName }: App
       src={BRAND.logoSrc}
       alt={BRAND.shortName}
       title={title}
-      className={cn("object-contain object-left", sizeClass[size], className)}
+      className={cn("shrink-0 object-contain", sizeClass[size], className)}
       draggable={false}
     />
   );

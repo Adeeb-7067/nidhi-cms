@@ -22,10 +22,12 @@ import { BugTrackStatusRow, BugTrackStatusBadges } from "./bug-track-status";
 import {
   PRIORITY_LABELS,
   formatUserRole,
+  canAddBugIssues,
   canUserModifyBug,
   type FinalStatus,
   type TrackStatus,
 } from "@/lib/bug-workflow";
+import { BugAddIssuesForm } from "./bug-add-issues-form";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -120,6 +122,19 @@ export function BugDetailSheet({
   const displayFinal = activeIssue?.finalStatus ?? bug?.finalStatus;
   const displayTitle = activeIssue?.title ?? bug?.title;
 
+  const editTarget: Bug | null = bug
+    ? activeIssue
+      ? ({
+          ...bug,
+          issueKey: activeIssue.issueKey,
+          title: activeIssue.title,
+          qaStatus: activeIssue.qaStatus,
+          devStatus: activeIssue.devStatus,
+          finalStatus: activeIssue.finalStatus,
+        } as Bug)
+      : bug
+    : null;
+
   return (
     <Sheet
       open={open}
@@ -190,13 +205,13 @@ export function BugDetailSheet({
 
                 <div className="flex items-center justify-between gap-2">
                   <AssigneeAvatars assignees={bug.assignees} size="sm" />
-                  {canModify && !activeIssue && (
+                  {canModify && editTarget && (
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 text-xs"
-                      onClick={() => onEdit(bug)}
+                      onClick={() => onEdit(editTarget)}
                     >
                       <Pencil className="h-3.5 w-3.5 mr-1" />
                       Edit
@@ -206,7 +221,7 @@ export function BugDetailSheet({
               </SheetHeader>
 
               <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-                {canModify && !isBatch && (
+                {canModify && !activeIssue && (
                   <BugTrackStatusRow
                     qaStatus={displayQa}
                     devStatus={displayDev}
@@ -214,9 +229,15 @@ export function BugDetailSheet({
                     userRole={userRole}
                     isAssignee={isAssignee}
                     disabled={updateMutation.isPending}
-                    onQaChange={(v: TrackStatus) => void patchStatus({ qaStatus: v })}
-                    onDevChange={(v: TrackStatus) => void patchStatus({ devStatus: v })}
-                    onFinalChange={(v: FinalStatus) => void patchStatus({ finalStatus: v })}
+                    onQaChange={(v: TrackStatus) =>
+                      void patchStatus({ qaStatus: v })
+                    }
+                    onDevChange={(v: TrackStatus) =>
+                      void patchStatus({ devStatus: v })
+                    }
+                    onFinalChange={(v: FinalStatus) =>
+                      void patchStatus({ finalStatus: v })
+                    }
                   />
                 )}
 
@@ -260,6 +281,15 @@ export function BugDetailSheet({
                 {isBatch && !activeIssue && (
                   <section>
                     <p className="text-xs font-medium text-muted-foreground mb-2">Issues</p>
+                    {canAddBugIssues(userRole) && (
+                      <div className="mb-3">
+                        <BugAddIssuesForm
+                          bugId={bug.id}
+                          existingCount={issues.length}
+                          onAdded={() => invalidate(bug.id)}
+                        />
+                      </div>
+                    )}
                     <ul className="rounded-lg border border-border/60 divide-y divide-border/50">
                       {issues.map((issue: IssueView) => (
                         <li key={issue.issueKey ?? issue.title}>
@@ -287,6 +317,22 @@ export function BugDetailSheet({
                         {bug.description.trim()}
                       </p>
                     )}
+                  </section>
+                )}
+
+                {!isBatch && canAddBugIssues(userRole) && !activeIssue && (
+                  <section>
+                    <p className="text-xs font-medium text-muted-foreground mb-2">
+                      Multiple issues in one report
+                    </p>
+                    <p className="text-[10px] text-muted-foreground mb-2">
+                      Group related bugs under this report without creating a new one.
+                    </p>
+                    <BugAddIssuesForm
+                      bugId={bug.id}
+                      existingCount={0}
+                      onAdded={() => invalidate(bug.id)}
+                    />
                   </section>
                 )}
 

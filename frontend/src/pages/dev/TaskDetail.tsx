@@ -14,7 +14,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { TaskDetailPageSkeleton } from "@/components/loading";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -96,19 +96,6 @@ function MetaRow({
         {label}
       </p>
       <div className="text-sm">{children}</div>
-    </div>
-  );
-}
-
-function TaskDetailSkeleton() {
-  return (
-    <div className="space-y-6">
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-10 w-full max-w-2xl" />
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Skeleton className="h-[min(60vh,520px)] w-full rounded-xl" />
-        <Skeleton className="h-80 w-full rounded-xl" />
-      </div>
     </div>
   );
 }
@@ -215,7 +202,7 @@ export default function TaskDetailPage() {
     );
   }
 
-  if (isLoading) return <TaskDetailSkeleton />;
+  if (isLoading) return <TaskDetailPageSkeleton />;
 
   if (isError || !task) {
     return (

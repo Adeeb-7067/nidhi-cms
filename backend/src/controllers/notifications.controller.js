@@ -9,7 +9,7 @@ import {
 async function getNotifications(req, res) {
   const q = req.query;
   const { page, limit, skip } = parsePagination(q);
-  const unreadOnly = q.unreadOnly === "true";
+  const unreadOnly = q.unreadOnly === "true" || q.unreadOnly === true;
   const userId = req.user.id;
   const unreadFilter = unreadNotificationFilter(userId);
   const query = unreadOnly ? unreadFilter : { userId };

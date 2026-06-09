@@ -11,7 +11,7 @@ import { canNavigateNotification } from "@/lib/notification-navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { PageNotificationListSkeleton } from "@/components/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { Bell, CheckCheck, ChevronRight, Mail, MailOpen } from "lucide-react";
 import {
@@ -131,11 +131,7 @@ export default function NotificationsPage() {
 
       {isLoading ? (
         <PortalContentCard contentClassName="p-4">
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
+          <PageNotificationListSkeleton count={6} />
         </PortalContentCard>
       ) : notifications.length === 0 ? (
         <PortalEmptyState
