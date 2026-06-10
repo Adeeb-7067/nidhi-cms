@@ -18,6 +18,10 @@ import { useRealtime } from "@/contexts/RealtimeContext";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { DiscussionChatList } from "@/components/discussions/discussion-chat-list";
 import { DiscussionChatPanel } from "@/components/discussions/discussion-chat-panel";
+import {
+  DiscussionSectionRail,
+  type DiscussionAdminSection,
+} from "@/components/discussions/discussion-section-rail";
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -579,25 +583,72 @@ export default function DiscussionsPage() {
     });
   }, [channels, debouncedSearch]);
 
+  const isAdminView = user?.role === "super_admin";
+
+  const [adminSection, setAdminSection] = useState<DiscussionAdminSection>("team");
+
+  // Per-section unread + size, used for the rail badges (computed off the full
+  // channel list so badges stay accurate while the chat list is filtered).
+  const sectionSummary = useMemo(() => {
+    const summary = {
+      teamUnread: 0,
+      clientsUnread: 0,
+      internalUnread: 0,
+      clientsCount: 0,
+      internalCount: 0,
+    };
+    for (const c of channels) {
+      const unread = channelActivity[c.key]?.unreadCount ?? 0;
+      if (c.threadType === "company_team") {
+        summary.teamUnread += unread;
+      } else if (c.threadType === "project") {
+        summary.clientsCount += 1;
+        summary.clientsUnread += unread;
+      } else if (c.threadType === "project_internal") {
+        summary.internalCount += 1;
+        summary.internalUnread += unread;
+      }
+    }
+    return summary;
+  }, [channels, channelActivity]);
+
   const sortedChannels = useMemo(() => {
     let list = filteredChannels;
+
+    // Admin view: the rail is the source of truth for thread-type grouping.
+    if (isAdminView) {
+      if (adminSection === "team") {
+        list = list.filter((c) => c.threadType === "company_team");
+      } else if (adminSection === "clients") {
+        list = list.filter((c) => c.threadType === "project");
+      } else if (adminSection === "internal") {
+        list = list.filter((c) => c.threadType === "project_internal");
+      }
+    }
+
     if (channelFilter === "unread") {
       list = list.filter((c) => (channelActivity[c.key]?.unreadCount ?? 0) > 0);
-    } else if (channelFilter === "client") {
+    } else if (!isAdminView && channelFilter === "client") {
       list = list.filter((c) => c.threadType === "project");
-    } else if (channelFilter === "internal") {
+    } else if (!isAdminView && channelFilter === "internal") {
       list = list.filter(
         (c) => c.threadType === "project_internal" || c.threadType === "company_team",
       );
     }
 
     return [...list].sort((a, b) => compareChannelsForChatList(a, b, channelActivity));
-  }, [filteredChannels, channelActivity, channelFilter]);
+  }, [filteredChannels, channelActivity, channelFilter, isAdminView, adminSection]);
 
-  const unreadChannelCount = useMemo(
-    () => channels.filter((c) => (channelActivity[c.key]?.unreadCount ?? 0) > 0).length,
-    [channels, channelActivity],
-  );
+  const unreadChannelCount = useMemo(() => {
+    const pool = isAdminView
+      ? channels.filter((c) => {
+          if (adminSection === "team") return c.threadType === "company_team";
+          if (adminSection === "clients") return c.threadType === "project";
+          return c.threadType === "project_internal";
+        })
+      : channels;
+    return pool.filter((c) => (channelActivity[c.key]?.unreadCount ?? 0) > 0).length;
+  }, [channels, channelActivity, isAdminView, adminSection]);
 
   const canFilterByThreadType = canAccessInternalDiscussion(user?.role);
   useEffect(() => {
@@ -606,15 +657,39 @@ export default function DiscussionsPage() {
     }
   }, [canFilterByThreadType, channelFilter]);
 
+  // Reset the in-list pill back to "All" whenever the admin switches sections;
+  // a stale "client"/"internal" pill would otherwise hide every row.
+  useEffect(() => {
+    if (!isAdminView) return;
+    if (channelFilter === "client" || channelFilter === "internal") {
+      setChannelFilter("all");
+    }
+  }, [isAdminView, adminSection, channelFilter]);
+
+  // When the admin selects a channel that lives in another section, jump the
+  // rail there so the list keeps the selected channel visible.
+  useEffect(() => {
+    if (!isAdminView || !selectedChannelKey) return;
+    const channel = channels.find((c) => c.key === selectedChannelKey);
+    if (!channel) return;
+    const target: DiscussionAdminSection =
+      channel.threadType === "company_team"
+        ? "team"
+        : channel.threadType === "project_internal"
+          ? "internal"
+          : "clients";
+    setAdminSection((current) => (current === target ? current : target));
+  }, [isAdminView, selectedChannelKey, channels]);
+
   // Keep list selection aligned with Client / Internal filters (no overlap with hidden channels).
   useEffect(() => {
-    if (channelFilter === "all" || channelFilter === "unread") return;
+    if (!isAdminView && (channelFilter === "all" || channelFilter === "unread")) return;
     if (sortedChannels.length === 0) return;
     if (selectedChannelKey && sortedChannels.some((c) => c.key === selectedChannelKey)) {
       return;
     }
     setSelectedChannelKey(sortedChannels[0]!.key);
-  }, [channelFilter, sortedChannels, selectedChannelKey]);
+  }, [channelFilter, sortedChannels, selectedChannelKey, isAdminView]);
 
   const handleSelectChannel = useCallback((channelKey: string) => {
     setSelectedChannelKey(channelKey);
@@ -642,6 +717,22 @@ export default function DiscussionsPage() {
         )}
       >
       <div className="flex h-full min-h-0 flex-1 overflow-hidden rounded-none border-y border-border/70 bg-background shadow-md sm:rounded-2xl sm:border ring-1 ring-black/[0.03] dark:ring-white/[0.04]">
+        {isAdminView ? (
+          <DiscussionSectionRail
+            activeSection={adminSection}
+            onSectionChange={(section) => {
+              setAdminSection(section);
+              setSelectedChannelKey(null);
+              setMobileChatOpen(false);
+            }}
+            teamUnread={sectionSummary.teamUnread}
+            clientsUnread={sectionSummary.clientsUnread}
+            internalUnread={sectionSummary.internalUnread}
+            clientsCount={sectionSummary.clientsCount}
+            internalCount={sectionSummary.internalCount}
+            className={mobileChatOpen ? "hidden md:flex" : "flex"}
+          />
+        ) : null}
         <DiscussionChatList
           channels={channels}
           sortedChannels={sortedChannels}
@@ -654,6 +745,45 @@ export default function DiscussionsPage() {
           onChannelFilterChange={setChannelFilter}
           unreadChannelCount={unreadChannelCount}
           showInternalFilter={canAccessInternalDiscussion(user?.role)}
+          availableFilters={isAdminView ? ["all", "unread"] : undefined}
+          headerLabel={
+            isAdminView
+              ? adminSection === "team"
+                ? "Team chat"
+                : adminSection === "clients"
+                  ? "Client channels"
+                  : "Internal channels"
+              : undefined
+          }
+          headerSubtitle={
+            isAdminView
+              ? adminSection === "team"
+                ? "Everyone on the company team"
+                : adminSection === "clients"
+                  ? `${sectionSummary.clientsCount} project${sectionSummary.clientsCount === 1 ? "" : "s"} · visible to clients`
+                  : `${sectionSummary.internalCount} project${sectionSummary.internalCount === 1 ? "" : "s"} · staff only`
+              : undefined
+          }
+          emptyStateTitle={
+            isAdminView && channels.length > 0 && sortedChannels.length === 0
+              ? adminSection === "team"
+                ? channelFilter === "unread"
+                  ? "Team chat is up to date"
+                  : "No team chat yet"
+                : adminSection === "clients"
+                  ? channelFilter === "unread"
+                    ? "All client channels read"
+                    : "No client channels"
+                  : channelFilter === "unread"
+                    ? "All internal channels read"
+                    : "No internal channels"
+              : undefined
+          }
+          emptyStateDescription={
+            isAdminView && adminSection === "team" && channelFilter !== "unread"
+              ? "Start the conversation — your message is visible to every admin, developer, tester and QA."
+              : undefined
+          }
           isLoading={isLoadingProjects}
           onSelectChannel={handleSelectChannel}
           hiddenOnMobile={mobileChatOpen}

@@ -19,11 +19,26 @@ import {
   canAccessDiscussionThread,
   canAccessCompanyTeamDiscussion,
   COMPANY_TEAM_THREAD,
+  COMPANY_TEAM_THREAD_ID,
   getDiscussionParticipantIds,
 } from "../services/discussion-project-access.js";
 
 function isProjectDiscussionThread(threadType) {
   return threadType === "project" || threadType === "project_internal" || threadType === COMPANY_TEAM_THREAD;
+}
+
+// company_team uses a fixed sentinel id (0), which `parseIdParam` rejects.
+// Validate manually for that thread type so the team chat is reachable.
+function parseDiscussionThreadId(rawThreadId, threadType) {
+  if (threadType === COMPANY_TEAM_THREAD) {
+    const value = Array.isArray(rawThreadId) ? rawThreadId[0] : rawThreadId;
+    const id = Number.parseInt(String(value ?? ""), 10);
+    if (!Number.isFinite(id) || id !== COMPANY_TEAM_THREAD_ID) {
+      badRequest(`Invalid threadId for company_team. Expected ${COMPANY_TEAM_THREAD_ID}.`, "threadId");
+    }
+    return id;
+  }
+  return parseIdParam(rawThreadId, "threadId");
 }
 
 function mapCommentRow(c, authorMap, repliesByParent) {
@@ -102,10 +117,10 @@ async function getCompanyTeamMentionCandidates(req, res) {
 async function getComments(req, res) {
   const q = req.query;
   const { threadType, threadId } = q;
-  if (!threadType || !threadId) {
+  if (!threadType || threadId == null || threadId === "") {
     badRequest("Discussion thread type and id are required.", "threadType");
   }
-  const threadIdNum = parseIdParam(threadId, "threadId");
+  const threadIdNum = parseDiscussionThreadId(threadId, threadType);
   if (isProjectDiscussionThread(threadType)) {
     if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
   }
@@ -153,7 +168,7 @@ async function postComments(req, res) {
   if (attachmentUrl) {
     validateStoredFileUrl(attachmentUrl, "attachmentUrl");
   }
-  const threadIdNum = parseIdParam(threadId, "threadId");
+  const threadIdNum = parseDiscussionThreadId(threadId, threadType);
   if (isProjectDiscussionThread(threadType)) {
     if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
   }

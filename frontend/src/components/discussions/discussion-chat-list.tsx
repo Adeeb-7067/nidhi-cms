@@ -139,11 +139,31 @@ type DiscussionChatListProps = {
   onChannelFilterChange: (filter: DiscussionChannelFilter) => void;
   unreadChannelCount: number;
   showInternalFilter?: boolean;
+  /**
+   * Restrict which filter pills are rendered. Defaults to all four filters.
+   * When the admin section rail is shown we only want "All" + "Unread"
+   * because the rail handles client/internal/team segmentation.
+   */
+  availableFilters?: ReadonlyArray<DiscussionChannelFilter>;
+  /** Optional header label rendered in place of generic "Chats" (e.g. "Client channels"). */
+  headerLabel?: string;
+  /** Optional header subtitle (e.g. project count for the current section). */
+  headerSubtitle?: string;
+  /** Custom empty-state copy (shown when no channels match the section + filter). */
+  emptyStateTitle?: string;
+  emptyStateDescription?: string;
   isLoading: boolean;
   onSelectChannel: (channelKey: string) => void;
   className?: string;
   hiddenOnMobile?: boolean;
 };
+
+const DEFAULT_FILTERS: ReadonlyArray<DiscussionChannelFilter> = [
+  "all",
+  "unread",
+  "client",
+  "internal",
+];
 
 export function DiscussionChatList({
   channels,
@@ -157,11 +177,22 @@ export function DiscussionChatList({
   onChannelFilterChange,
   unreadChannelCount,
   showInternalFilter = false,
+  availableFilters,
+  headerLabel,
+  headerSubtitle,
+  emptyStateTitle,
+  emptyStateDescription,
   isLoading,
   onSelectChannel,
   className,
   hiddenOnMobile,
 }: DiscussionChatListProps) {
+  const filters: ReadonlyArray<DiscussionChannelFilter> =
+    availableFilters ?? DEFAULT_FILTERS;
+  const showClientFilter = filters.includes("client") && showInternalFilter;
+  const showInternalPill = filters.includes("internal") && showInternalFilter;
+  const showAllFilter = filters.includes("all");
+  const showUnreadFilter = filters.includes("unread");
   const queryClient = useQueryClient();
 
   const prefetchThread = (channel: DiscussionChannel) => {
@@ -181,7 +212,16 @@ export function DiscussionChatList({
     >
       <header className="shrink-0 border-b border-border/70 bg-muted/30 px-4 py-3.5 sm:py-4">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold tracking-tight">Chats</h2>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold tracking-tight">
+              {headerLabel ?? "Chats"}
+            </h2>
+            {headerSubtitle ? (
+              <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+                {headerSubtitle}
+              </p>
+            ) : null}
+          </div>
           {unreadChannelCount > 0 && (
             <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-white">
               {unreadChannelCount} unread
@@ -197,33 +237,37 @@ export function DiscussionChatList({
             onChange={(e) => onSearchChange(e.target.value)}
           />
         </div>
-        <div className="mt-2.5 flex flex-wrap gap-1.5">
-          <button
-            type="button"
-            onClick={() => onChannelFilterChange("all")}
-            className={cn(
-              "rounded-full px-3 py-2 text-[11px] font-medium transition-colors md:py-1.5",
-              channelFilter === "all"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
+        {(showAllFilter || showUnreadFilter || showClientFilter || showInternalPill) && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {showAllFilter && (
+              <button
+                type="button"
+                onClick={() => onChannelFilterChange("all")}
+                className={cn(
+                  "rounded-full px-3 py-2 text-[11px] font-medium transition-colors md:py-1.5",
+                  channelFilter === "all"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                All
+              </button>
             )}
-          >
-            All
-          </button>
-          <button
-            type="button"
-            onClick={() => onChannelFilterChange("unread")}
-            className={cn(
-              "rounded-full px-3 py-2 text-[11px] font-medium transition-colors md:py-1.5",
-              channelFilter === "unread"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:bg-muted",
+            {showUnreadFilter && (
+              <button
+                type="button"
+                onClick={() => onChannelFilterChange("unread")}
+                className={cn(
+                  "rounded-full px-3 py-2 text-[11px] font-medium transition-colors md:py-1.5",
+                  channelFilter === "unread"
+                    ? "bg-foreground text-background"
+                    : "text-muted-foreground hover:bg-muted",
+                )}
+              >
+                Unread{unreadChannelCount > 0 ? ` · ${unreadChannelCount}` : ""}
+              </button>
             )}
-          >
-            Unread{unreadChannelCount > 0 ? ` · ${unreadChannelCount}` : ""}
-          </button>
-          {showInternalFilter ? (
-            <>
+            {showClientFilter && (
               <button
                 type="button"
                 onClick={() => onChannelFilterChange("client")}
@@ -236,6 +280,8 @@ export function DiscussionChatList({
               >
                 Client
               </button>
+            )}
+            {showInternalPill && (
               <button
                 type="button"
                 onClick={() => onChannelFilterChange("internal")}
@@ -248,9 +294,9 @@ export function DiscussionChatList({
               >
                 Internal
               </button>
-            </>
-          ) : null}
-        </div>
+            )}
+          </div>
+        )}
       </header>
 
       <div className="dialog-scroll h-0 min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain">
@@ -285,16 +331,22 @@ export function DiscussionChatList({
           <div className="flex flex-col items-center justify-center px-6 py-16 text-center text-muted-foreground">
             <MessageCircle className="mb-2 h-10 w-10 opacity-25" />
             <p className="text-xs font-medium">
-              {channelFilter === "unread"
-                ? "No unread chats"
-                : channelFilter === "client"
-                  ? "No client chats"
-                  : channelFilter === "internal"
-                    ? "No internal chats"
-                    : channels.length === 0
-                      ? "No projects found"
-                      : "No chats match your search"}
+              {emptyStateTitle ??
+                (channelFilter === "unread"
+                  ? "No unread chats"
+                  : channelFilter === "client"
+                    ? "No client chats"
+                    : channelFilter === "internal"
+                      ? "No internal chats"
+                      : channels.length === 0
+                        ? "No projects found"
+                        : "No chats match your search")}
             </p>
+            {emptyStateDescription ? (
+              <p className="mt-1 max-w-[220px] text-[11px] leading-relaxed text-muted-foreground/80">
+                {emptyStateDescription}
+              </p>
+            ) : null}
           </div>
         )}
       </div>
