@@ -18,6 +18,8 @@ import {
 } from "../services/password-otp.js";
 import { generateEmployeeId, previewEmployeeId } from "../services/employeeId.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
+import { evictUserFromAuthCache } from "../middlewares/auth.js";
+import { notifyUser } from "../lib/realtime.js";
 import { formatUser } from "../mappers/user-format.js";
 import { paginateModel, toIso } from "../utils/mongo-list.js";
 import {
@@ -230,12 +232,17 @@ async function patchUsersById(req, res) {
     { new: true }
   );
   if (!user) notFound("User");
+  evictUserFromAuthCache(id); // role, name, email, or status may have changed
+  if (body.status === "inactive") notifyUser(id, "user_deactivated", { userId: id });
+  if (body.role !== undefined) notifyUser(id, "role_updated", { userId: id, role: user.role });
   res.json(formatUser(user, { withPresence: true }));
 }
 async function deleteUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const result = await usersTable.updateOne({ id }, { $set: { status: "inactive" } });
   if (result.matchedCount === 0) notFound("User");
+  evictUserFromAuthCache(id); // force immediate revocation
+  notifyUser(id, "user_deactivated", { userId: id });
   res.json({ message: "User deactivated" });
 }
 async function patchUsersByIdPassword(req, res) {

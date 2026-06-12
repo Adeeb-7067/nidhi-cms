@@ -3,14 +3,34 @@ import { useLocation } from "wouter";
 import {
   useListBugs,
   useListProjects,
+  fetchBugsExport,
+  deleteBug,
   getListBugsQueryKey,
   getListProjectsQueryKey,
   type Bug,
   type ListBugsParams,
 } from "@/api";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, Bug as BugIcon, FileText, Activity, AlertTriangle, CheckCircle2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Bug as BugIcon, FileText, Activity, AlertTriangle, CheckCircle2, Download, ChevronDown, Loader2 } from "lucide-react";
 import {
   DevPageShell,
   DevPageHero,
@@ -21,7 +41,7 @@ import {
   DevContentCard,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { PDFService } from "@/lib/pdf-service";
+import { buildBugsCSV, generateBugPDF } from "@/lib/bug-report";
 import { PageTableSkeleton } from "@/components/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,6 +53,7 @@ import { BugTable } from "@/components/bugs/bug-table";
 import { BUG_STATUSES, bugStatsFromList, canUserModifyBug } from "@/lib/bug-workflow";
 import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
 import { clearUrlSearchParam, readBugIdFromUrl } from "@/lib/notification-navigation";
+import { getLocationSearch } from "@/lib/electron-bridge";
 
 type BugListScope = "all" | "mine" | "unassigned" | "created";
 
@@ -58,10 +79,14 @@ export default function DevBugs() {
   const isAdmin = role === "super_admin";
   const isQaStaff = role === "qa" || role === "tester";
 
+  const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);
+  const [isExportingCSV, setIsExportingCSV] = useState(false);
   const [editBug, setEditBug] = useState<Bug | null>(null);
   const [detailBugId, setDetailBugId] = useState<number | null>(null);
   const [detailIssueKey, setDetailIssueKey] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Bug | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -79,7 +104,7 @@ export default function DevBugs() {
   }, [user?.id, user?.role]);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = new URLSearchParams(getLocationSearch());
     const pid = params.get("projectId");
     if (pid && !Number.isNaN(Number.parseInt(pid, 10))) {
       if (isAdmin) setProjectFilterId(pid);
@@ -135,8 +160,44 @@ export default function DevBugs() {
       return;
     }
     const projectName = bugs[0]?.projectName ?? "All projects";
-    PDFService.generateBugReportPDF(projectName, "QA Audit", bugs);
+    generateBugPDF(bugs, projectName);
     toast.success("Generating PDF report…");
+  };
+
+  const handleExportCSV = async () => {
+    if (isExportingCSV) return;
+    setIsExportingCSV(true);
+    try {
+      const exportParams: ListBugsParams = { ...listBugsParams };
+      delete exportParams.page;
+      delete exportParams.limit;
+      const result = await fetchBugsExport(exportParams);
+      if (result.bugs.length === 0) {
+        toast.error("No bugs to export in the current view.");
+        return;
+      }
+      if (result.truncated) {
+        toast.warning("Export limited to 1,000 bugs. Narrow your filters for a complete set.");
+      }
+      const csv = buildBugsCSV(result.bugs);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const selectedProject =
+        projectFilterId !== "all"
+          ? (projectsData?.projects.find((p) => p.id.toString() === projectFilterId)?.name ?? "project")
+          : "all-bugs";
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.download = `${selectedProject.toLowerCase().replace(/\s+/g, "-")}-bugs-${dateStr}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.bugs.length} bug${result.bugs.length !== 1 ? "s" : ""} as CSV`);
+    } catch {
+      toast.error("CSV export failed. Please try again.");
+    } finally {
+      setIsExportingCSV(false);
+    }
   };
 
   const openEdit = (bug: Bug) => {
@@ -150,6 +211,25 @@ export default function DevBugs() {
     setDetailIssueKey(bug.issueKey ?? null);
   };
 
+  const canDeleteBug = (bug: Bug) =>
+    role === "super_admin" || ((role === "tester" || role === "qa") && bug.reporterId === user?.id);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteBug(deleteTarget.id);
+      queryClient.invalidateQueries({ queryKey: ["/api/bugs"] });
+      if (detailBugId === deleteTarget.id) setDetailBugId(null);
+      toast.success("Bug deleted");
+    } catch {
+      toast.error("Failed to delete bug");
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
     <DevPageShell>
       <DevPageHero
@@ -157,13 +237,43 @@ export default function DevBugs() {
         subtitle="QA · Dev · Final status per bug"
         actions={
           <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={handleExportPDF}
-            className="h-9 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs"
-          >
-            <FileText className="mr-1.5 h-3.5 w-3.5" /> Export audit (PDF)
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-9 border-primary/30 text-primary bg-primary/5 hover:bg-primary/10 text-xs"
+                disabled={isExportingCSV}
+              >
+                {isExportingCSV ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Download
+                <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem
+                onClick={() => void handleExportCSV()}
+                disabled={isExportingCSV}
+              >
+                <Download className="mr-2 h-3.5 w-3.5" />
+                <div className="flex flex-col">
+                  <span>Download CSV</span>
+                  <span className="text-[10px] text-muted-foreground">All matching bugs (up to 1,000)</span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleExportPDF}>
+                <FileText className="mr-2 h-3.5 w-3.5" />
+                <div className="flex flex-col">
+                  <span>Export PDF</span>
+                  <span className="text-[10px] text-muted-foreground">Current page only — QA audit</span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {canCreateBug && (
             <Button
               type="button"
@@ -253,6 +363,7 @@ export default function DevBugs() {
               }}
               onRowClick={openDetail}
               onEdit={openEdit}
+              onDelete={(bug) => canDeleteBug(bug) ? setDeleteTarget(bug) : toast.error("You can only delete bugs you reported.")}
               canEdit={canEditBug}
             />
           )}
@@ -303,6 +414,29 @@ export default function DevBugs() {
           setDetailIssueKey(null);
         }}
       />
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete bug?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium">{deleteTarget?.bugNumber} — {deleteTarget?.title}</span>
+              <br />
+              This will permanently delete the bug and all its comments. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmDelete()}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DevPageShell>
   );
 }

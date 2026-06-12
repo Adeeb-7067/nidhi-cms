@@ -34,6 +34,7 @@ export function BugTable({
   bugs,
   onRowClick,
   onEdit,
+  onDelete,
   canEdit,
   search,
   onSearchChange,
@@ -46,6 +47,7 @@ export function BugTable({
   bugs: Bug[];
   onRowClick: (bug: Bug) => void;
   onEdit?: (bug: Bug) => void;
+  onDelete?: (bug: Bug) => void;
   canEdit?: boolean | ((bug: Bug) => boolean);
   search: string;
   onSearchChange: (v: string) => void;
@@ -200,6 +202,7 @@ export function BugTable({
                       }}
                       onRowClick={onRowClick}
                       onEdit={onEdit}
+                      onDelete={onDelete}
                       canEdit={canEdit}
                     />,
                   ];

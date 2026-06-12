@@ -32,6 +32,9 @@ import {
   PiggyBank,
   BookOpen,
   Percent,
+  Monitor,
+  Camera,
+  ClipboardList,
 } from "lucide-react";
 
 export type UserRole = "super_admin" | "developer" | "tester" | "qa" | "client";
@@ -93,6 +96,32 @@ export function getNavSections(role: UserRole): NavSection[] {
           roles: ["super_admin"],
           badgeKey: "requests",
           group: "Operations",
+        },
+      ],
+    },
+
+    // =========================
+    // MONITORING
+    // =========================
+    {
+      label: "Monitoring",
+      railLabel: "Monitor",
+      icon: Monitor,
+      roles: ["super_admin"],
+      items: [
+        {
+          title: "Screenshots",
+          href: "/admin/screenshots",
+          icon: Camera,
+          roles: ["super_admin"],
+          group: "Activity",
+        },
+        {
+          title: "Attendance",
+          href: "/admin/attendance",
+          icon: ClipboardList,
+          roles: ["super_admin"],
+          group: "Activity",
         },
       ],
     },

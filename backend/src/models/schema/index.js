@@ -14,3 +14,6 @@ export * from "./audit.js";
 export * from "./counter.js";
 export * from "./tickets.js";
 export * from "./inventory.js";
+export * from "./EmployeeScreenshot.js";
+export * from "./MonitoringConsent.js";
+export * from "./WorkSession.js";

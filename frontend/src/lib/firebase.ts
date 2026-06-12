@@ -35,6 +35,11 @@ export const initFirebase = async (): Promise<Messaging | null> => {
     return null;
   }
 
+  // FCM requires HTTPS — degrade gracefully in Electron (file:// context)
+  if (typeof window !== 'undefined' && typeof window.electron !== 'undefined') {
+    return null;
+  }
+
   try {
     const supported = await isSupported();
     if (!supported) return null;

@@ -17,7 +17,15 @@ function getRequiredPort() {
 function getAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS;
   if (!raw) return true;
-  return raw.split(",").map((o) => o.trim());
+  const origins = raw.split(",").map((o) => o.trim());
+  // Accept requests from Electron desktop clients: the file:// protocol sends Origin: null
+  return (origin, callback) => {
+    if (!origin || origin === "null" || origins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, false);
+    }
+  };
 }
 
 /** Resolved path to built frontend (`index.html`), or null if not configured / missing. */

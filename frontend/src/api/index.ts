@@ -1,6 +1,6 @@
 export * from "./generated/api";
 export * from "./generated/api.schemas";
-export { createBugBatch, type BugBatchInput, type BugBatchItem } from "./bugs-batch";
+export { createBugBatch, deleteBug, deleteBugIssue, fetchBugsExport, type BugBatchInput, type BugBatchItem, type BugsExportResult } from "./bugs-batch";
 export {
   forgotPasswordOtp,
   verifyResetOtp,

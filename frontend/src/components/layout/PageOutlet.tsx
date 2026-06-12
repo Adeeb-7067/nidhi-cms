@@ -4,6 +4,8 @@ import { RoleGate } from "./RoleGate";
 import NotFound from "@/pages/not-found";
 
 const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
+const AdminScreenshots = React.lazy(() => import("@/pages/admin/Screenshots"));
+const AdminAttendance = React.lazy(() => import("@/pages/admin/Attendance"));
 const SettingsPage = React.lazy(() => import("@/pages/settings/SettingsPage"));
 const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
 const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
@@ -87,6 +89,20 @@ export function PageOutlet() {
       <Route path="/admin/employees">
         <RoleGate allowedRoles={["super_admin"]}>
           <AdminEmployees />
+        </RoleGate>
+      </Route>
+      <Route path="/admin/screenshots">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <React.Suspense fallback={null}>
+            <AdminScreenshots />
+          </React.Suspense>
+        </RoleGate>
+      </Route>
+      <Route path="/admin/attendance">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <React.Suspense fallback={null}>
+            <AdminAttendance />
+          </React.Suspense>
         </RoleGate>
       </Route>
       <Route path="/admin/clients">

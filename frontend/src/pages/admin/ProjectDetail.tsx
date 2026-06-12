@@ -27,17 +27,20 @@ import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-d
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
 import { ProjectBugsPanel } from "@/components/bugs/project-bugs-panel";
 import { canUserModifyBug } from "@/lib/bug-workflow";
+import { buildBugsCSV, generateBugPDF } from "@/lib/bug-report";
+import { fetchBugsExport } from "@/api";
 import { getListBugsQueryKey, type Bug as BugRecord } from "@/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, MapPin } from "lucide-react";
+import { Loader2, Plus, MapPin, ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
@@ -100,6 +103,7 @@ export default function AdminProjectDetail() {
   const [detailBugId, setDetailBugId] = useState<number | null>(null);
   const [detailIssueKey, setDetailIssueKey] = useState<string | null>(null);
   const [editBug, setEditBug] = useState<BugRecord | null>(null);
+  const [isExportingProjectBugs, setIsExportingProjectBugs] = useState(false);
   const projectsListHref = getProjectsListHref(user?.role);
   const { socket } = useRealtime();
   const queryClient = useQueryClient();
@@ -197,9 +201,10 @@ export default function AdminProjectDetail() {
 
   const onMilestoneSubmit = async (values: MilestoneFormValues) => {
     try {
+      const { targetDate, description: _desc, ...rest } = values;
       await createMilestoneMutation.mutateAsync({
         id: projectId,
-        data: values as any
+        data: { ...rest, plannedDate: targetDate },
       });
       toast.success("Milestone registered successfully!");
       setMilestoneOpen(false);
@@ -207,6 +212,56 @@ export default function AdminProjectDetail() {
       queryClient.invalidateQueries({ queryKey: getGetProjectMilestonesQueryKey(projectId) });
     } catch (err: any) {
       toastApiError(err, "Failed to submit milestone.");
+    }
+  };
+
+  const handleExportProjectCSV = async () => {
+    if (isExportingProjectBugs) return;
+    setIsExportingProjectBugs(true);
+    try {
+      const result = await fetchBugsExport({ projectId });
+      if (result.bugs.length === 0) {
+        toast.error("No bugs to export for this project.");
+        return;
+      }
+      if (result.truncated) {
+        toast.warning("Export limited to 1,000 bugs.");
+      }
+      const csv = buildBugsCSV(result.bugs);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const name = (project?.name ?? "project").toLowerCase().replace(/\s+/g, "-");
+      a.download = `${name}-bugs-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.bugs.length} bug${result.bugs.length !== 1 ? "s" : ""} as CSV`);
+    } catch {
+      toast.error("CSV export failed. Please try again.");
+    } finally {
+      setIsExportingProjectBugs(false);
+    }
+  };
+
+  const handleExportProjectPDF = async () => {
+    if (isExportingProjectBugs) return;
+    setIsExportingProjectBugs(true);
+    try {
+      const result = await fetchBugsExport({ projectId });
+      if (result.bugs.length === 0) {
+        toast.error("No bugs to export for this project.");
+        return;
+      }
+      if (result.truncated) {
+        toast.warning("Export limited to 1,000 bugs.");
+      }
+      generateBugPDF(result.bugs, project?.name ?? "Project");
+      toast.success("Generating PDF report…");
+    } catch {
+      toast.error("PDF export failed. Please try again.");
+    } finally {
+      setIsExportingProjectBugs(false);
     }
   };
 
@@ -485,6 +540,47 @@ export default function AdminProjectDetail() {
               Report multiple bugs at once or open the full tracker.
             </p>
             <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs border-primary/30 text-primary bg-primary/5 hover:bg-primary/10"
+                    disabled={isExportingProjectBugs}
+                  >
+                    {isExportingProjectBugs ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    Download
+                    <ChevronDown className="ml-1 h-3 w-3 opacity-60" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuItem
+                    onClick={() => void handleExportProjectCSV()}
+                    disabled={isExportingProjectBugs}
+                  >
+                    <Download className="mr-2 h-3.5 w-3.5" />
+                    <div className="flex flex-col">
+                      <span>Download CSV</span>
+                      <span className="text-[10px] text-muted-foreground">All fields — Excel compatible</span>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => void handleExportProjectPDF()}
+                    disabled={isExportingProjectBugs}
+                  >
+                    <FileText className="mr-2 h-3.5 w-3.5" />
+                    <div className="flex flex-col">
+                      <span>Export PDF</span>
+                      <span className="text-[10px] text-muted-foreground">Full report with details</span>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               {canReportBugs && (
                 <Button
                   type="button"
@@ -517,6 +613,10 @@ export default function AdminProjectDetail() {
                   openBugFormDeferred(() => setBugFormOpen(true));
                 }}
                 canEdit={(bug) => canUserModifyBug(role, user?.id, bug)}
+                canDelete={(bug) =>
+                  role === "super_admin" ||
+                  ((role === "tester" || role === "qa") && bug.reporterId === user?.id)
+                }
               />
             </CardContent>
           </Card>

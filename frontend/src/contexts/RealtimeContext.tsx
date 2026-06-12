@@ -6,6 +6,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useListNotifications, getListNotificationsQueryKey, type Comment } from "@/api";
 import { appendCommentToListCache } from "@/lib/comment-thread-query";
 import { applyProjectCommentToCaches } from "@/lib/discussion-realtime";
+import { isElectron } from "@/lib/electron-bridge";
+import { monitoringStatusQueryKey, consentStatusQueryKey } from "@/api/monitoring";
 
 import {
   initFirebase,
@@ -31,7 +33,7 @@ interface RealtimeContextType {
 const RealtimeContext = createContext<RealtimeContextType | undefined>(undefined);
 
 export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
-  const { user, accessToken } = useAuth();
+  const { user, accessToken, logout } = useAuth();
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [firebasePushEnabled, setFirebasePushEnabled] = useState(false);
@@ -121,8 +123,10 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
 
   const queryClientRef = useRef(queryClient);
   const handleIncomingAlertRef = useRef(handleIncomingAlert);
+  const logoutRef = useRef(logout);
   queryClientRef.current = queryClient;
   handleIncomingAlertRef.current = handleIncomingAlert;
+  logoutRef.current = logout;
 
   useEffect(() => {
     if (!user?.id || !accessToken) {
@@ -203,6 +207,33 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         predicate: (q) => q.queryKey[0] === "/api/requests",
         refetchType: "active",
       });
+    });
+
+    socketInstance.on("session_terminated", () => {
+      if (isElectron() && window.electron) {
+        window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
+      }
+      queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions", "active"] });
+      toast.warning("Your work session was ended by an administrator.", { duration: 10_000 });
+    });
+
+    socketInstance.on("monitoring:config-updated", (data: Record<string, unknown>) => {
+      queryClientRef.current.setQueryData(monitoringStatusQueryKey(), data);
+      queryClientRef.current.invalidateQueries({ queryKey: consentStatusQueryKey() });
+    });
+
+    socketInstance.on("user_deactivated", () => {
+      toast.error("Your account has been deactivated. Logging out…", { duration: 6_000 });
+      setTimeout(() => logoutRef.current(), 3_000);
+    });
+
+    socketInstance.on("role_updated", () => {
+      toast.info("Your role has been updated. Please log in again.", { duration: 8_000 });
+      setTimeout(() => logoutRef.current(), 4_000);
+    });
+
+    socketInstance.on("consent_version_changed", () => {
+      queryClientRef.current.invalidateQueries({ queryKey: consentStatusQueryKey() });
     });
 
     setSocket(socketInstance);

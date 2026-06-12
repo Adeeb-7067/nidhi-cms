@@ -61,7 +61,9 @@ import {
   Sun,
   Sparkles,
   ExternalLink,
+  Monitor,
 } from "lucide-react";
+import { ScreenshotMonitoringCard } from "@/components/monitoring/ScreenshotMonitoringCard";
 
 type SettingsSection =
   | "appearance"
@@ -71,7 +73,8 @@ type SettingsSection =
   | "organization"
   // | "billing"
   | "integrations"
-  | "security";
+  | "security"
+  | "monitoring";
 
 function SectionNav({
   sections,
@@ -178,6 +181,7 @@ export default function SettingsPage() {
 
   const adminSections: { id: SettingsSection; label: string; icon: React.ElementType }[] = [
     { id: "organization", label: "Organization", icon: Building2 },
+    { id: "monitoring", label: "Monitoring", icon: Monitor },
     // { id: "billing", label: "Billing & plan", icon: CreditCard },
     { id: "integrations", label: "Integrations", icon: Plug },
   ];
@@ -186,13 +190,19 @@ export default function SettingsPage() {
 
   const goToSection = (id: SettingsSection) => {
     setSection(id);
-    window.history.replaceState(null, "", `${window.location.pathname}#${id}`);
+    // In hash routing (Electron) the entire route lives in the hash already —
+    // don't overwrite it with a section fragment.
+    if (!window.location.hash.startsWith("#/")) {
+      window.history.replaceState(null, "", `${window.location.pathname}#${id}`);
+    }
   };
 
   useEffect(() => {
+    // In hash routing the hash is "#/admin/settings", not a section name — skip.
+    if (window.location.hash.startsWith("#/")) return;
     const hash = window.location.hash.replace("#", "") as SettingsSection;
     const allowed: SettingsSection[] = isAdmin
-      ? ["appearance", "notifications", "workspace", "account", "security", "organization", "integrations"]
+      ? ["appearance", "notifications", "workspace", "account", "security", "organization", "monitoring", "integrations"]
       : ["appearance", "notifications", "workspace", "account", "security"];
     if (allowed.includes(hash)) setSection(hash);
   }, [isAdmin]);
@@ -854,6 +864,10 @@ export default function SettingsPage() {
             </div>
           )}
 
+
+          {section === "monitoring" && isAdmin && (
+            <ScreenshotMonitoringCard />
+          )}
 
           {section === "integrations" && isAdmin && (
             <Card>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import {
   Bell,
@@ -26,6 +26,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { QUERY_STALE } from "@/lib/query-config";
 import { CommandPalette } from "@/components/CommandPalette";
+import { ClockInButton } from "@/components/ClockInButton";
 import { useQueryClient } from "@tanstack/react-query";
 import { stopPersistentAlert } from "@/lib/notification-alert";
 import { getRouteBreadcrumbs, getRouteMeta } from "@/lib/route-meta";
@@ -338,7 +339,7 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
   const queryClient = useQueryClient();
   const [location] = useLocation();
   const { user } = useAuth();
-  const { unreadNotificationCount } = useRealtime();
+  const { unreadNotificationCount, isConnected } = useRealtime();
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
   const { data: notificationsData, isLoading: notifListLoading } = useListNotifications(
     { unreadOnly: true, limit: 10 },
@@ -453,17 +454,28 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
           </div>
 
           <div className="hidden items-center gap-2 border-l border-border/50 pl-2 sm:flex">
-            <Avatar className="h-8 w-8 border border-border/60">
-              <AvatarImage src={user?.avatarUrl || undefined} />
-              <AvatarFallback className="bg-primary/15 text-[10px] font-bold text-primary">
-                {user?.name?.charAt(0) ?? "?"}
-              </AvatarFallback>
-            </Avatar>
+            <div className="relative">
+              <Avatar className="h-8 w-8 border border-border/60">
+                <AvatarImage src={user?.avatarUrl || undefined} />
+                <AvatarFallback className="bg-primary/15 text-[10px] font-bold text-primary">
+                  {user?.name?.charAt(0) ?? "?"}
+                </AvatarFallback>
+              </Avatar>
+              <span
+                title={isConnected ? "Real-time connected" : "Reconnecting…"}
+                className={cn(
+                  "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-card",
+                  isConnected ? "bg-emerald-500" : "bg-amber-400",
+                )}
+              />
+            </div>
             <div className="hidden min-w-0 text-right lg:block">
               <p className="truncate text-[10px] text-muted-foreground">{greeting}</p>
               <p className="truncate text-xs font-semibold">{firstName ?? "there"}</p>
             </div>
           </div>
+
+          <ClockInButton />
 
           <OrbitDock
             unreadCount={unreadCount}

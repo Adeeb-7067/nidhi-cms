@@ -25,8 +25,6 @@ export function BugBatchCreate({
   rows,
   onRowsChange,
   userRole,
-  sharedDescription,
-  onSharedDescriptionChange,
 }: {
   mode: BatchInputMode;
   onModeChange: (mode: BatchInputMode) => void;
@@ -35,8 +33,6 @@ export function BugBatchCreate({
   rows: DraftBugRow[];
   onRowsChange: (rows: DraftBugRow[]) => void;
   userRole?: string;
-  sharedDescription?: string;
-  onSharedDescriptionChange?: (v: string) => void;
 }) {
   const applyLines = () => {
     const parsed = parseLinesToRows(lineText);
@@ -117,19 +113,6 @@ export function BugBatchCreate({
           >
             <Plus className="h-3.5 w-3.5 mr-1" /> Add bug
           </Button>
-        </div>
-      )}
-
-      {onSharedDescriptionChange && (
-        <div className="space-y-2">
-          <Label htmlFor="shared-desc">Shared description (optional)</Label>
-          <Textarea
-            id="shared-desc"
-            value={sharedDescription ?? ""}
-            onChange={(e) => onSharedDescriptionChange(e.target.value)}
-            placeholder="Context applied to every bug in this batch…"
-            className="min-h-[72px] text-sm"
-          />
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { logger } from "./logger.js";
 import { HttpError } from "./http-error.js";
 const UPLOAD_CATEGORIES = [
@@ -10,8 +10,11 @@ const UPLOAD_CATEGORIES = [
   "inventory",
   "avatars",
   "reports",
-  "misc"
+  "misc",
+  "screenshots",
 ];
+// Screenshots are access-controlled via backend proxy — never serve directly from S3.
+const PRIVATE_CATEGORIES = new Set(["screenshots"]);
 function normalizeFolderPrefix(raw) {
   const base = (raw ?? "ClientManagement-CMS/").trim().replace(/^\/+/, "");
   return base.endsWith("/") ? base : `${base}/`;
@@ -32,18 +35,23 @@ function isObjectStorageEnabled() {
     process.env.LINODE_OBJECT_BUCKET && process.env.LINODE_OBJECT_STORAGE_ACCESS_KEY_ID && process.env.LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY && process.env.LINODE_OBJECT_STORAGE_ENDPOINT
   );
 }
+// Singleton S3 client — avoid building a new client on every upload/read.
+let _s3Client = null;
 function getS3Client() {
-  const region = process.env.LINODE_OBJECT_STORAGE_REGION || "sgp1";
-  const endpoint = process.env.LINODE_OBJECT_STORAGE_ENDPOINT.replace(/\/$/, "");
-  return new S3Client({
-    region,
-    endpoint,
-    forcePathStyle: false,
-    credentials: {
-      accessKeyId: process.env.LINODE_OBJECT_STORAGE_ACCESS_KEY_ID,
-      secretAccessKey: process.env.LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY
-    }
-  });
+  if (!_s3Client) {
+    const region = process.env.LINODE_OBJECT_STORAGE_REGION || "sgp1";
+    const endpoint = process.env.LINODE_OBJECT_STORAGE_ENDPOINT.replace(/\/$/, "");
+    _s3Client = new S3Client({
+      region,
+      endpoint,
+      forcePathStyle: false,
+      credentials: {
+        accessKeyId: process.env.LINODE_OBJECT_STORAGE_ACCESS_KEY_ID,
+        secretAccessKey: process.env.LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY,
+      },
+    });
+  }
+  return _s3Client;
 }
 function getPublicUrl(objectKey) {
   const bucket = process.env.LINODE_OBJECT_BUCKET;
@@ -80,14 +88,15 @@ function assertValidStoredFileUrl(url, fieldName = "fileUrl") {
 async function uploadBufferToObjectStorage(buffer, originalName, mimetype, category) {
   const key = buildObjectKey(originalName, category);
   const client = getS3Client();
+  const isPrivate = PRIVATE_CATEGORIES.has(category);
   await client.send(
     new PutObjectCommand({
       Bucket: process.env.LINODE_OBJECT_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: mimetype || "application/octet-stream",
-      ACL: "public-read",
-      CacheControl: "public, max-age=31536000, immutable"
+      ACL: isPrivate ? "private" : "public-read",
+      CacheControl: isPrivate ? "no-store" : "public, max-age=31536000, immutable",
     })
   );
   const url = getPublicUrl(key);
@@ -107,10 +116,12 @@ async function uploadLocalFileToObjectStorage(localPath, originalName, mimetype,
   return result;
 }
 export {
+  GetObjectCommand,
   UPLOAD_CATEGORIES,
   assertValidStoredFileUrl,
   buildObjectKey,
   getPublicUrl,
+  getS3Client,
   isObjectStorageEnabled,
   uploadBufferToObjectStorage,
   uploadLocalFileToObjectStorage,

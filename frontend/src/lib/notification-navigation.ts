@@ -1,6 +1,7 @@
 import type { Notification } from "@/api";
 import type { UserRole } from "@/lib/navigation";
 import { getDiscussionsHref } from "@/lib/discussions-navigation";
+import { getLocationSearch, clearLocationParam } from "@/lib/electron-bridge";
 
 export type NotificationNavTarget = {
   href: string;
@@ -117,7 +118,7 @@ export function canNavigateNotification(
 
 function readPositiveIntParam(key: string): number | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get(key);
+  const raw = new URLSearchParams(getLocationSearch()).get(key);
   if (!raw) return null;
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
@@ -135,10 +136,5 @@ export function readBugIdFromUrl(): number | null {
 
 /** Remove a query param without reloading the page. */
 export function clearUrlSearchParam(key: string): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has(key)) return;
-  url.searchParams.delete(key);
-  const next = url.pathname + (url.search ? url.search : "");
-  window.history.replaceState({}, "", next);
+  clearLocationParam(key);
 }

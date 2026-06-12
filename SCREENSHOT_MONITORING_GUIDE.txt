@@ -1,0 +1,748 @@
+================================================================================
+  CMS DESKTOP — SCREENSHOT MONITORING & ATTENDANCE SYSTEM
+  Updated June 2026 — reflects all security hardening, performance fixes,
+  and feature additions applied in the June 2026 audit patch.
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 1 — ARCHITECTURE OVERVIEW
+────────────────────────────────────────────────────────────────────────────────
+
+COMPONENTS AND THEIR RESPONSIBILITIES
+
+  Frontend (React)
+  ├── AuthContext            Token management, login, logout, impersonation.
+  │                          Clocks out session before clearing tokens on
+  │                          logout. stopImpersonation() clocks out the
+  │                          impersonated employee before restoring the
+  │                          admin session.
+  ├── WorkSessionProvider    Single source of truth for session state; drives
+  │                          the Electron scheduler via IPC. Polls
+  │                          monitoring status every 60 s so config changes
+  │                          (interval, enable/disable) propagate without
+  │                          a manual refresh or app restart.
+  ├── ClockInButton          Navbar button (developer/tester/qa only); shows
+  │                          elapsed timer while clocked in.
+  └── ConsentDialog          Bottom-right notification card (Electron only;
+                             developer/tester/qa only); non-blocking.
+                             Declined state persists for the session via
+                             sessionStorage so the card does not reappear
+                             on navigation.
+
+  Electron (main process)
+  ├── main.js                BrowserWindow, tray, screenshot scheduler,
+  │                          graceful-quit orchestration. Includes a null-
+  │                          check on mainWindow inside the upload retry
+  │                          loop — aborts remaining retries if the window
+  │                          was closed while waiting between attempts.
+  └── preload.js             contextBridge API exposed as window.electron.
+                             Includes pauseScreenshotMonitoring(durationMs)
+                             for a future "pause" tray menu item.
+
+  Backend (Express + MongoDB)
+  ├── work-sessions.*        Clock-in/out, active session query, session
+  │                          history, force-terminate (super_admin).
+  ├── screenshots.*          Upload (with image validation), list, delete
+  │                          (admin only), bulk-delete, authenticated
+  │                          content proxy.
+  ├── monitoring.*           Monitoring status, consent CRUD with full
+  │                          GDPR audit history.
+  └── screenshot-purge-job   Runs every 24 h: purges expired screenshots
+                             in batches of 200 AND closes abandoned
+                             sessions (> 24 h open, no endedAt).
+
+DATABASES / MODELS
+
+  WorkSession          id, userId, startedAt, endedAt, isActive,
+                       deviceInfo, stopReason ∈ {clock_out | app_quit |
+                       logout | session_expired | admin_terminated},
+                       timestamps.
+                       INDEX: unique partial {userId: 1} WHERE isActive=true
+                       — prevents two simultaneous sessions at the DB level.
+
+  EmployeeScreenshot   id, userId, sessionId (nullable FK), projectId
+                       (nullable FK), fileUrl (stores the raw S3/local
+                       URL — never returned directly to clients), fileSize,
+                       takenAt.
+                       INDEXES: {userId,takenAt}, {projectId,takenAt desc}
+
+  MonitoringConsent    id, userId (unique), consentGivenAt, consentVersion,
+                       ipAddress, userAgent, history[] — append-only array
+                       of past consent events for GDPR Article 7 compliance.
+                       Each re-consent pushes the previous record to history
+                       before overwriting the current values.
+
+  CompanySettings      screenshotEnabled, screenshotIntervalMinutes,
+                       screenshotRetentionDays, screenshotBlurEnabled,
+                       screenshotConsentVersion. Singleton document.
+                       Cached in-process for 60 s; cache is busted
+                       immediately when an admin saves new settings.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 2 — ROLE MATRIX
+────────────────────────────────────────────────────────────────────────────────
+
+  Action                               super_admin   admin   developer/tester/qa
+  ──────────────────────────────────────────────────────────────────────────────
+  Configure monitoring settings        ✓             ✗       ✗
+  View all screenshots (any employee)  ✓             ✓       ✗
+  View own screenshots (via API)       ✗             ✗       ✓ (read-only)
+  Delete screenshots                   ✓             ✓       ✗
+  View consent audit log               ✓             ✗       ✗
+  View all active sessions             ✓             ✗       ✗
+  View session history (any employee)  ✓             ✗       ✗
+  Force-terminate a specific session   ✓             ✗       ✗
+  Clock In / Clock Out                 ✗             ✗       ✓
+  Upload screenshots                   ✗             ✗       ✓ (Electron only)
+  See consent dialog                   ✗             ✗       ✓ (Electron only)
+  Attendance page                      ✓             ✗       ✗
+  Screenshots page                     ✓             ✓       ✗
+
+  NOTE: The web app never captures or uploads screenshots regardless of role.
+  Screenshot upload is rate-limited to 60 requests/minute per user.
+  Clock-in is rate-limited to 5 requests/minute per user.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 3 — SUPER ADMIN WORKFLOWS
+────────────────────────────────────────────────────────────────────────────────
+
+3.1  ENABLE SCREENSHOT MONITORING
+
+  1. Log in as super_admin.
+  2. Settings → Monitoring tab.
+  3. Toggle "Screenshot Monitoring" ON.
+  4. Set:
+       Interval    — capture frequency in minutes (1–60, e.g. 10).
+       Retention   — days before auto-deletion (e.g. 30).
+       Blur        — blur screenshots for partial privacy.
+       Consent Version — bump this string (e.g. "v2") whenever the policy
+                         changes to force all employees to re-consent.
+  5. Save. The in-process cache is busted immediately. Running Electron
+     clients pick up the change within 60 s (polling interval).
+
+3.2  REVIEW SCREENSHOTS
+
+  Sidebar → Monitor → Screenshots
+  • Opens on today's date showing all employees.
+  • Each employee row displays 1-hour timeline blocks.
+  • Click any block → slide viewer (← / → keys, thumbnail filmstrip).
+  • Employee filter dropdown to narrow to one person.
+  • Date navigator (← / →) to browse past days.
+  • Delete individual screenshots or use trash icon in slide viewer.
+    Only admins and super admins can delete screenshots — employees
+    cannot delete their own.
+
+  IMPORTANT — Screenshot URL Security:
+  Screenshot images are never served directly from S3 or the /uploads/
+  folder. The API returns a short-lived authenticated proxy URL:
+
+    https://your-backend.com/api/screenshots/{id}/content?token=<bearer>
+
+  The token embedded in the URL is the same bearer token the requesting
+  admin already holds. Images are streamed through the backend, which
+  verifies auth and ownership on every request. S3 objects for screenshots
+  are uploaded with ACL: private — they are inaccessible via the direct
+  S3 URL even if someone discovers it.
+
+3.3  MONITOR ATTENDANCE & ACTIVE SESSIONS
+
+  Sidebar → Monitor → Attendance
+  • "Currently clocked in" panel — live list with elapsed time (refreshes
+    every 30 s).
+  • Sessions tab — full history across all employees; filters by employee,
+    shows stopReason column so you can see WHY each session ended.
+  • Consent Audit tab — every employee's consent record: version, timestamp,
+    IP address, user agent, AND full history of prior consents.
+
+3.4  FORCE-TERMINATE A SESSION (new)
+
+  When an account is suspected compromised or an employee leaves
+  mid-session without clocking out:
+
+  POST /api/work-sessions/:sessionId/terminate   (super_admin only)
+
+  • Sets isActive = false, endedAt = now, stopReason = "admin_terminated".
+  • The session appears in history with that stop reason.
+  • The employee's Electron scheduler will stop within 60 s (next
+    monitoring-status poll detects the ended session).
+
+3.5  CONSENT VERSION UPDATE (policy change)
+
+  1. Change screenshotConsentVersion in Settings → Monitoring.
+  2. All employees who consented to the old version will see the "Policy
+     updated" badge on the consent banner the next time they open the
+     desktop app.
+  3. Screenshots stop until they re-consent and clock in.
+  4. Each re-consent is appended to the history[] array in MonitoringConsent
+     (GDPR Article 7 — full audit trail is preserved, never overwritten).
+
+3.6  CONSENT HISTORY (GDPR)
+
+  The Consent Audit tab shows both the current consent and all prior
+  consent events in the history[] array. This satisfies GDPR Article 7
+  (demonstrable consent) and Article 5(2) (accountability).
+
+  Example history entry:
+    { consentGivenAt: "2026-03-01T09:14:22Z", consentVersion: "1.0",
+      ipAddress: "203.0.113.5", userAgent: "CMS Desktop/1.2.0 win32" }
+
+3.7  ABANDONED / STALE SESSIONS
+
+  If an employee's app was force-killed (Task Manager, OS shutdown, crash)
+  the graceful-quit clock-out cannot fire. A backend job runs every 24 h
+  and closes any session open longer than 24 h by setting
+  stopReason = "session_expired". These appear in the Attendance → Sessions
+  tab with that stop reason.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 4 — DEVELOPER / TESTER / QA WORKFLOWS
+────────────────────────────────────────────────────────────────────────────────
+
+4.1  FIRST-TIME CONSENT (Electron only)
+
+  When an admin enables monitoring, a consent notification card appears in
+  the bottom-right corner of the desktop app. It does NOT block usage.
+  • "Allow monitoring" — records consent with the current policy version;
+    screenshots will start on next clock-in.
+  • "Decline" (or X) — hides the card for the session; screenshots will
+    NOT be taken until consent is recorded.
+  • The declined state is stored in sessionStorage so the card does not
+    reappear while the same app session is open (disappears after restart).
+  • The card reappears if the admin bumps the Consent Version (policy change).
+  • Consent is NOT required on the web — screenshots never run in a browser.
+
+4.2  CLOCK IN
+
+  • Click the green "Clock In" button in the top navigation bar.
+  • A work session is created in the database (POST /api/work-sessions/clock-in).
+  • The database enforces that only ONE active session per user can exist
+    at a time (unique partial index). If a stale session somehow exists,
+    clockIn() closes it first.
+  • The button turns red and shows your elapsed time ("1h 23m", "45m 10s", …).
+  • If in Electron AND monitoring is enabled AND consent is current → the
+    screenshot scheduler starts automatically in the main process.
+
+4.3  WORKING — SCREENSHOT CAPTURE
+
+  IMMEDIATE CAPTURE ON SESSION START
+  When monitoring transitions from off → on (clock-in, consent just
+  granted, or monitoring re-enabled by an admin), one screenshot is
+  captured immediately — before the interval timer fires for the first
+  time. This ensures every work session has a starting screenshot at the
+  exact moment the session begins.
+
+  Example (10-minute interval):
+    10:00  Clock In → immediate screenshot taken
+    10:10  Interval screenshot
+    10:20  Interval screenshot
+    10:30  Interval screenshot
+    ...
+
+  The immediate capture is skipped if the scheduler was already running
+  for the same session (e.g. a 60-second config poll with nothing changed).
+  This prevents duplicate captures when monitoring settings are refreshed.
+
+  ONGOING CAPTURES
+  • Screenshots are captured at the configured interval in the Electron main
+    process (desktopCapturer) — never in the browser.
+  • Only PNG and JPEG files pass server-side magic-byte validation. Any
+    other payload is rejected with HTTP 400.
+  • Each upload is associated with the current sessionId — the server
+    verifies the session belongs to the uploading user.
+  • If the system has been idle for ≥ 5 minutes, that scheduled capture
+    is skipped. The immediate start-of-session capture is NOT subject to
+    the idle check (employee just clocked in, so they are clearly active).
+  • Captures are uploaded with a 3-attempt retry (exponential backoff:
+    1 s, 2 s). If the window is closed while waiting between retries,
+    the remaining attempts are aborted cleanly.
+  • The tray tooltip changes to "CMS Desktop · Screen monitoring active".
+  • The monitoring config (interval, enabled state) is re-fetched from
+    the server every 60 s so changes made by an admin take effect within
+    one minute without restarting the app.
+
+4.4  CLOCK OUT
+
+  • Click the red elapsed-timer button in the navbar.
+  • Electron scheduler stops immediately (before the API call).
+  • POST /api/work-sessions/clock-out   body: { stopReason: "clock_out" }
+  • Only accepted stopReason values from clients: clock_out, app_quit,
+    logout. Internal codes (session_expired, admin_terminated) cannot be
+    submitted by clients.
+  • Button returns to green "Clock In".
+
+4.5  LOGOUT WHILE CLOCKED IN
+
+  • AuthContext.logout() calls clock-out BEFORE clearing tokens.
+  • stopReason = "logout" is written to the session.
+  • Electron scheduler is stopped in the same step.
+  • Safe even if the clock-out call fails (network down): the backend
+    purge job will close the session within 24 h.
+
+4.6  SESSION RECOVERY AFTER APP RESTART
+
+  • App opens → WorkSessionProvider fetches GET /api/work-sessions/active.
+  • If an active session is found AND monitoring is enabled AND consent is
+    current → Electron scheduler resumes automatically.
+  • The Clock In button immediately shows elapsed time from the original
+    start time.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 5 — ELECTRON LIFECYCLE
+────────────────────────────────────────────────────────────────────────────────
+
+5.1  WINDOW CLOSE vs QUIT
+
+  • Closing the window (✕) hides it to the system tray. The session and
+    screenshot scheduler remain active.
+  • "Quit" from the tray context menu triggers the graceful-quit sequence.
+
+5.2  GRACEFUL QUIT SEQUENCE
+
+  1. before-quit fires → preventDefault → initiateGracefulQuit().
+  2. Guard flag (isGracefulQuitInitiated) prevents double-execution if
+     quit is triggered from multiple sources simultaneously.
+  3. Screenshot scheduler stops immediately in main process.
+  4. Main sends cms:pre-quit IPC to renderer.
+  5. WorkSessionProvider receives it → calls clock-out API (stopReason =
+     "app_quit") → sends cms:clock-out-done IPC.
+  6. Main receives cms:clock-out-done → isQuitReady = true → app.quit().
+  7. Safety timeout: if cms:clock-out-done is not received within 4 seconds,
+     main force-quits anyway.
+
+5.3  FORCE KILL (Task Manager / OS shutdown)
+
+  Graceful-quit cannot run. The session stays isActive = true in the
+  database. The stale-session cleanup job (runs every 24 h) will close it
+  with stopReason = "session_expired".
+
+5.4  SINGLE-INSTANCE LOCK
+
+  If the user double-clicks the icon when the app is already running,
+  the second instance quits immediately and the first instance's window
+  is brought to the foreground.
+
+5.5  AUTO UPDATER
+
+  Packaged builds check GitHub Releases on startup. When an update is
+  downloaded, an "Update available" banner appears in the app. Clicking
+  "Restart to update" calls quitAndInstall() which triggers the graceful-quit
+  sequence before installing.
+
+5.6  PLATFORM SUPPORT
+
+  Windows   NSIS installer (.exe)
+  macOS     DMG with hardened runtime + screen-capture entitlement
+            (entitlements.mac.plist)
+  Linux     AppImage and .deb (x64)
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 6 — SECURITY MODEL
+────────────────────────────────────────────────────────────────────────────────
+
+6.1  SCREENSHOT URL PROTECTION
+
+  Problem: S3 "public-read" URLs are permanent and cannot be revoked.
+           Anyone who intercepts the URL can view the screenshot forever.
+
+  Solution implemented:
+  • New screenshots are uploaded with ACL: "private" — the S3 URL is
+    never publicly accessible.
+  • The API never returns the raw S3/local URL. All list and create
+    endpoints return a proxy URL:
+      GET /api/screenshots/:id/content?token=<bearer-token>
+    The bearer token embedded in the URL is the same one the requesting
+    user already holds; it expires with the session.
+  • The proxy endpoint verifies auth and ownership on every request, then
+    streams the file from S3 (via GetObjectCommand) or local disk.
+  • Cache-Control on proxy responses is "private, max-age=3600" — the
+    browser caches the image for one hour but CDNs/proxies cannot cache it.
+
+6.2  FILE TYPE VALIDATION
+
+  • The screenshot upload endpoint validates PNG and JPEG magic bytes
+    before accepting the file, regardless of the declared mimetype.
+  • PNG header: bytes 0–3 = 0x89 0x50 0x4E 0x47
+  • JPEG header: bytes 0–2 = 0xFF 0xD8 0xFF
+  • Any other payload is rejected with HTTP 400.
+
+6.3  RATE LIMITING
+
+  • Clock-in:          5 requests / minute per user
+  • Screenshot upload: 60 requests / minute per user
+  • Keys are based on authenticated user ID (not IP) so rate limits
+    apply per user even behind a NAT or shared IP.
+
+6.4  STOPREAASON WHITELIST
+
+  Clients may only submit: clock_out, app_quit, logout.
+  Internal values (session_expired, admin_terminated) are rejected with
+  HTTP 400 if submitted by a client.
+
+6.5  TRUST PROXY
+
+  app.set("trust proxy", 1) is configured so req.ip reflects the real
+  client IP behind Nginx/load balancers. This ensures rate-limit keys
+  and audit log IP addresses are accurate.
+
+6.6  UPLOAD OWNERSHIP
+
+  The server verifies that the submitted sessionId (if provided) belongs
+  to the uploading user. A developer cannot associate a screenshot with
+  another employee's session.
+
+6.7  ADMIN-ONLY DELETIONS
+
+  Employees cannot delete their own screenshots. Only super_admin and
+  admin roles can call DELETE /api/screenshots/:id or the bulk-delete
+  endpoint.
+
+6.8  AUTHENTICATION CACHE
+
+  requireAuth uses a 30-second in-process TTL cache for user lookups.
+  When an admin deactivates or changes a user's role via the Users page,
+  the cache entry is evicted immediately so the change takes effect
+  on the next request — not after the 30 s TTL expires.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 7 — PERFORMANCE NOTES
+────────────────────────────────────────────────────────────────────────────────
+
+  Bottleneck                    Solution
+  ──────────────────────────────────────────────────────────────────────────────
+  DB query on every request     requireAuth caches user lookups for 30 s.
+  (auth middleware)             Cache evicted immediately on user
+                                deactivation or role change.
+
+  Settings fetched repeatedly   getOrCreateSettings() caches the singleton
+  (monitoring, work-policy,     settings document for 60 s. Busted
+  consent, purge job)           immediately on patchSettings save.
+
+  Consent status = 2 serial     getConsentStatus() runs findOne(consent)
+  DB queries                    and getOrCreateSettings() in parallel
+                                via Promise.all.
+
+  No connection pool config     mongoose.connect: maxPoolSize=10,
+                                minPoolSize=2, socketTimeoutMS=45s.
+
+  Purge job loads all expired   Processes 200 documents per batch in a
+  screenshots into memory       while-loop. Safe at any dataset size.
+
+  S3Client created per upload   getS3Client() is a module-level singleton
+                                in object-storage.js. One client for the
+                                lifetime of the process.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 8 — EDGE CASE BEHAVIOUR
+────────────────────────────────────────────────────────────────────────────────
+
+  Scenario                             Behaviour
+  ──────────────────────────────────────────────────────────────────────────────
+  Clock In clicked twice rapidly       isClockingInRef guard in
+                                       WorkSessionContext rejects the second
+                                       call. MongoDB unique partial index
+                                       blocks a duplicate at the DB level
+                                       even under concurrent requests.
+
+  Page refresh while clocked in        useActiveSession re-fetches on mount;
+                                       session restored; Electron scheduler
+                                       restarts via WorkSessionContext effect.
+
+  Electron closed to tray              Session continues. Monitoring stays active.
+
+  Electron quit via tray               Graceful-quit: clock-out with "app_quit".
+
+  Task Manager / OS kill               Session marked session_expired by purge
+                                       job within 24 h.
+
+  Monitoring off → on (clock-in,        One screenshot is taken immediately,
+  consent granted, admin enables)       then the normal interval begins.
+                                        Ensures every session has a t=0 capture.
+
+  60-second config poll, no change      Scheduler already running for the same
+                                        session — no duplicate immediate capture.
+
+  Network lost after clock-in          Screenshot uploads retry 3×, then skip.
+                                       Session stays active. Clock-out will be
+                                       retried when network restores.
+
+  Window closed during retry wait      Retry loop checks mainWindow null/
+                                       destroyed state after each sleep and
+                                       aborts remaining attempts cleanly.
+
+  Backend unreachable at clock-in      Clock-in fails with toast error. No
+                                       session created. User can retry.
+
+  Backend unreachable at clock-out     Clock-out API call fails. Toast error
+                                       shown. Session stays open — purge job
+                                       closes it within 24 h.
+
+  Token expires while clocked in       AUTH_SESSION_EXPIRED_EVENT fires.
+                                       Electron scheduler stops. Session left
+                                       open (can't call API without token).
+                                       Purge job closes it within 24 h.
+
+  Admin revokes access                 Auth cache entry evicted immediately.
+                                       Next API call returns 401. Electron
+                                       scheduler stops on the next monitoring
+                                       status poll (≤ 60 s).
+
+  User never consented                 shouldCapture = false. Scheduler never
+                                       starts even if clocked in.
+
+  Consent version changes              isCurrentVersion = false. shouldCapture
+                                       = false. Screenshots pause. Consent
+                                       banner reappears. Resumes after consent.
+                                       Prior consent archived in history[].
+
+  System goes to sleep                 powerMonitor.getSystemIdleTime() > 300 s.
+                                       Next scheduled capture is skipped.
+
+  System wakes                         Idle timer resets. Normal captures resume
+                                       at next scheduled interval.
+
+  Multiple monitors                    desktopCapturer captures sources[0]
+                                       (primary monitor only).
+
+  Screen capture permission denied     getSources() returns []. Capture skipped
+                                       with console.warn. No crash.
+
+  Admin stops impersonating            stopImpersonation() clocks out the
+  a developer/tester/qa               impersonated employee before revoking
+                                       their token and restoring the admin
+                                       session.
+
+  Admin force-terminates session       POST /api/work-sessions/:id/terminate.
+                                       stopReason = "admin_terminated".
+                                       Employee's Electron scheduler stops
+                                       within 60 s (next monitoring poll).
+
+  Invalid file uploaded as             Magic-byte check rejects non-PNG/JPEG
+  screenshot                           with HTTP 400. No file is stored.
+
+  Client submits internal              HTTP 400. Only clock_out, app_quit,
+  stopReason (session_expired, …)      logout are accepted from clients.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 9 — API REFERENCE
+────────────────────────────────────────────────────────────────────────────────
+
+  Work Sessions
+  ─────────────────────────────────────────────────────────────────────────────
+  POST   /api/work-sessions/clock-in            dev/tester/qa
+           body: { deviceInfo? }
+           Rate-limited: 5 req/min per user.
+
+  POST   /api/work-sessions/clock-out           dev/tester/qa
+           body: { stopReason?: "clock_out"|"app_quit"|"logout" }
+
+  GET    /api/work-sessions/active              authenticated
+           ?userId=X  (super_admin only)
+
+  GET    /api/work-sessions/active-all          super_admin
+
+  GET    /api/work-sessions                     authenticated
+           ?userId ?page ?limit
+
+  POST   /api/work-sessions/:sessionId/terminate   super_admin
+           Sets stopReason = "admin_terminated".
+
+  Screenshots
+  ─────────────────────────────────────────────────────────────────────────────
+  POST   /api/screenshots                       dev/tester/qa
+           multipart: file (PNG/JPEG only), sessionId?, projectId?
+           Rate-limited: 60 req/min per user.
+           Server validates magic bytes. Server validates sessionId
+           ownership. File stored with ACL: private.
+
+  GET    /api/screenshots                       authenticated
+           ?userId ?projectId ?startDate ?endDate ?page ?limit
+           fileUrl in response is the authenticated proxy URL.
+
+  DELETE /api/screenshots/:id                   admin | super_admin
+  POST   /api/screenshots/bulk-delete           admin | super_admin
+           body: { ids: number[] }
+
+  GET    /api/screenshots/:id/content           authenticated
+           Streams the screenshot file. Accepts Authorization header
+           OR ?token= query param (so <img src> tags work).
+           Cache-Control: private, max-age=3600.
+
+  Monitoring
+  ─────────────────────────────────────────────────────────────────────────────
+  GET    /api/monitoring/status                 authenticated
+           Returns current monitoring config. Polled every 60 s by
+           the Electron frontend.
+
+  GET    /api/monitoring/consent-status         authenticated
+           Runs consent + settings queries in parallel.
+
+  POST   /api/monitoring/consent                authenticated
+           Records consent. Archives previous consent to history[].
+
+  GET    /api/monitoring/consents               super_admin
+           Paginated list of all employee consent records including
+           full history[].
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 10 — RUNNING THE SYSTEM
+────────────────────────────────────────────────────────────────────────────────
+
+  Backend (web + API)
+    cd backend
+    npm run dev
+
+  Electron desktop app
+    cd frontend && npm run build:electron   (rebuild after frontend changes)
+    cd ../electron && node launch.js
+
+  Web frontend only (without Electron)
+    cd frontend && npm run dev
+
+  Required backend .env:
+    DATABASE_URL=<mongodb connection string>
+    JWT_SECRET=<secret>
+    PORT=15000                           (default)
+    CMS_API_URL=http://localhost:15000   (read by launch.js → main.js)
+
+  Optional object storage (Linode / DigitalOcean Spaces):
+    LINODE_OBJECT_BUCKET=<bucket name>
+    LINODE_OBJECT_STORAGE_ACCESS_KEY_ID=<key>
+    LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY=<secret>
+    LINODE_OBJECT_STORAGE_ENDPOINT=<endpoint url>
+    LINODE_OBJECT_STORAGE_REGION=sgp1
+    OBJECT_STORAGE_PUBLIC_URL=<cdn url>   (optional; overrides default URL)
+    BUCKET_FOLDER_PATH=ClientManagement-CMS/
+
+  If object storage env vars are absent, all uploads go to /uploads/
+  on the local filesystem (suitable for development).
+
+  NOTE: Screenshots uploaded before the June 2026 patch had ACL:
+  public-read. Existing S3 records still have the raw public URL stored
+  in fileUrl, but the API never returns that URL — it always returns the
+  /api/screenshots/:id/content proxy URL. Old direct S3 links will still
+  resolve if anyone saved them externally; to fully revoke them, change
+  the S3 object ACLs manually or re-upload through the new pipeline.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 11 — FILES CHANGED (June 2026 audit patch)
+────────────────────────────────────────────────────────────────────────────────
+
+  Backend
+  ──────────────────────────────────────────────────────────────────────────────
+  backend/src/lib/object-storage.js
+    - "screenshots" added to UPLOAD_CATEGORIES.
+    - getS3Client() is now a singleton (module-level _s3Client).
+    - GetObjectCommand exported for use by the proxy endpoint.
+    - Screenshots uploaded with ACL: "private", CacheControl: "no-store".
+    - Other categories unchanged (public-read).
+
+  backend/src/models/schema/WorkSession.js
+    - Unique partial index: {userId: 1} WHERE isActive=true.
+      Prevents two simultaneous sessions at the MongoDB level.
+
+  backend/src/models/schema/EmployeeScreenshot.js
+    - Compound index: {projectId: 1, takenAt: -1} added.
+
+  backend/src/models/schema/MonitoringConsent.js
+    - history[] field added (array of past consent events, _id: false).
+      GDPR Article 7 compliance.
+
+  backend/src/services/screenshots.service.js
+    - validateImageMagicBytes(): PNG/JPEG magic-byte check before upload.
+    - sessionId ownership verified against workSessionsTable.
+    - deleteScreenshot() / bulkDeleteScreenshots(): employees can no
+      longer delete screenshots; admin/super_admin only.
+
+  backend/src/controllers/screenshots.controller.js
+    - serveContent(): new authenticated streaming proxy handler.
+    - formatScreenshot(): returns proxy URL with bearer token embedded
+      (token extracted from Authorization header at response time).
+    - Removed resolvePublicFileUrl dependency.
+
+  backend/src/routes/screenshots.routes.js
+    - GET /api/screenshots/:id/content route added.
+      Accepts ?token= query param as fallback for <img src> usage.
+    - Upload route wrapped with uploadLimiter (60 req/min).
+
+  backend/src/services/work-sessions.service.js
+    - terminateSession(sessionId): new function for admin force-terminate.
+
+  backend/src/controllers/work-sessions.controller.js
+    - handleClockOut(): stopReason validated against whitelist.
+    - handleForceTerminate(): new handler.
+    - ALLOWED_STOP_REASONS constant: ["clock_out","app_quit","logout"].
+
+  backend/src/routes/work-sessions.routes.js
+    - POST /api/work-sessions/:sessionId/terminate added (super_admin).
+    - Clock-in wrapped with clockInLimiter (5 req/min).
+
+  backend/src/services/monitoring.service.js
+    - getConsentStatus(): runs consent + settings queries in parallel.
+    - recordConsent(): archives previous consent to history[] before
+      overwriting (GDPR append-only history).
+
+  backend/src/services/company-settings.js
+    - getOrCreateSettings(): 60-second in-process TTL cache.
+    - invalidateSettingsCache(): exported for settings controller.
+
+  backend/src/controllers/settings.controller.js
+    - patchSettings(): calls invalidateSettingsCache() after saving.
+
+  backend/src/services/screenshot-purge-job.js
+    - runScreenshotPurge(): processes expired records in batches of 200
+      instead of loading all into memory (prevents OOM at scale).
+
+  backend/src/middlewares/auth.js
+    - requireAuth(): 30-second TTL in-process user cache (one DB query
+      per user per 30 s instead of one per request).
+    - evictUserFromAuthCache(userId): exported for immediate invalidation.
+
+  backend/src/controllers/users.controller.js
+    - patchUsersById() / deleteUsersById(): calls evictUserFromAuthCache
+      so role/status changes take effect immediately.
+
+  backend/src/lib/db.js
+    - Connection options: maxPoolSize=10, minPoolSize=2,
+      socketTimeoutMS=45000, connectTimeoutMS=10000.
+
+  backend/src/app.js
+    - app.set("trust proxy", 1) for accurate req.ip behind reverse proxy.
+
+  backend/src/routes/auth.routes.js   (NEW — was accidentally missing)
+    - Recreated from auth.controller.js exports.
+    - Public: login, logout, refresh, forgot-password, verify-reset-otp,
+      reset-password.
+    - Authenticated: me (GET/PATCH), fcm-token, request-change-password-otp,
+      stop-impersonate.
+    - super_admin only: impersonate/:userId.
+
+  Frontend
+  ──────────────────────────────────────────────────────────────────────────────
+  frontend/src/contexts/AuthContext.tsx
+    - logout(): clocks out before clearing tokens; role-gated.
+    - stopImpersonation(): clocks out impersonated developer/tester/qa
+      before restoring admin session.
+
+  frontend/src/api/monitoring.ts
+    - useMonitoringStatus(): refetchInterval: 60_000 added so config
+      changes propagate to running Electron clients within 60 s.
+
+  Electron
+  ──────────────────────────────────────────────────────────────────────────────
+  electron/main.js
+    - startScreenshotScheduler(): accepts captureImmediately flag; fires
+      captureAndUpload() before the first interval tick when true.
+    - cms:screenshot-config IPC handler: sets captureImmediately=true
+      when the scheduler transitions from off→on or the sessionId changes.
+      Skips it when the scheduler was already running for the same session
+      (60-second config poll with no change).
+    - captureAndUpload(): mainWindow null/destroyed check added inside
+      the retry loop — aborts cleanly if window closes mid-retry.
+
+  electron/package.json
+    - build:linux script and Linux targets (AppImage, deb) added.
+
+  electron/assets/entitlements.mac.plist   (NEW)
+    - macOS hardened-runtime entitlements including device.screen-capture.
+
+================================================================================

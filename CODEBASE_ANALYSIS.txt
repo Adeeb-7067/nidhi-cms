@@ -3,9 +3,9 @@
               COMPREHENSIVE CODEBASE ANALYSIS & DOCUMENTATION
 ================================================================================
 
-Generated: June 5, 2026
+Generated: June 10, 2026
 Repository: D:\Content-Management-Hub
-Analysis scope: Full monorepo (backend + frontend + docs)
+Analysis scope: Full monorepo (backend + frontend + electron + docs)
 
 ================================================================================
 TABLE OF CONTENTS
@@ -34,7 +34,8 @@ TABLE OF CONTENTS
  21.  Seed Data & Test Credentials
  22.  API Contract & Code Generation
  23.  Known Gaps & Technical Notes
- 24.  File Index (Key Paths)
+ 24.  Electron Desktop App
+ 25.  File Index (Key Paths)
 
 ================================================================================
 1. EXECUTIVE SUMMARY
@@ -46,14 +47,18 @@ track bugs, log daily work, distribute APK/IPA builds, maintain project
 inventory (credentials, assets, subscriptions), communicate via discussions,
 handle support tickets, and generate analytics reports.
 
-The system is split into two independently deployable applications:
+The system is split into three independently deployable applications:
 
   • Backend  — Express 5 REST API + Socket.IO realtime (port 8080)
   • Frontend — React 19 SPA built with Vite (port 5173)
+  • Electron — Native desktop wrapper (Windows + macOS) for the frontend
 
 Typical production deployment uses two domains:
   app.example.com  (static frontend)
   api.example.com  (Node.js API + WebSockets)
+
+The Electron desktop app connects to the same remote backend — it wraps only
+the frontend in a native shell (shell architecture, no embedded backend).
 
 Five user roles drive the entire permission model:
   super_admin, developer, tester, qa, client
@@ -102,15 +107,17 @@ bugs, logs, releases, inventory, and discussion channels.
 3. HIGH-LEVEL ARCHITECTURE
 ================================================================================
 
-                    ┌─────────────────────────────────────┐
-                    │         BROWSER (React SPA)         │
-                    │  Vite + React 19 + TanStack Query   │
-                    │  Wouter routing + Socket.io client  │
-                    └──────────────┬──────────────────────┘
-                                   │
-                    HTTPS REST     │    WebSocket (/socket.io)
-                    /api/*         │
-                                   ▼
+          ┌───────────────────┐   ┌──────────────────────────────────┐
+          │  ELECTRON SHELL   │   │        BROWSER (React SPA)       │
+          │  (Windows/macOS)  │   │  Vite + React 19 + TanStack Qry  │
+          │  BrowserWindow    │   │  Wouter routing + Socket.io      │
+          │  file:// context  │   └────────────────┬─────────────────┘
+          │  Hash routing     │                    │
+          └────────┬──────────┘                    │
+                   │  HTTP/WS to remote API        │ HTTPS REST + WebSocket
+                   │  (same as browser)            │ /api/*  /socket.io
+                   └──────────────┬────────────────┘
+                                  ▼
                     ┌─────────────────────────────────────┐
                     │      EXPRESS 5 API (Node.js)        │
                     │  Routes → Controllers → Services    │
@@ -199,6 +206,16 @@ FRONTEND
   PDF Export    : jsPDF + jspdf-autotable
   API Codegen   : Orval 8.5 (OpenAPI → React Query hooks)
 
+ELECTRON DESKTOP
+----------------
+  Shell         : Electron 32 (Chromium renderer + Node.js main)
+  Packaging     : electron-builder 25 (NSIS installer / DMG)
+  Auto-update   : electron-updater 6 (GitHub Releases)
+  Architecture  : Shell-only — wraps frontend, backend stays remote
+  Routing       : Wouter hash routing (file:// context requires #/path)
+  IPC           : contextBridge (contextIsolation + sandbox, no nodeIntegration)
+  Build output  : frontend/dist/electron/ (separate from web dist/public/)
+
 INFRASTRUCTURE
 --------------
   Production    : PM2 (ecosystem.config.cjs), nginx/Plesk proxy
@@ -213,6 +230,13 @@ Content-Management-Hub/
 ├── README.md                    # Root quick start
 ├── LOCAL_RUNNING.md             # Local dev guide + seed credentials
 ├── CODEBASE_ANALYSIS.txt        # This document
+│
+├── electron/                    # Electron desktop app
+│   ├── main.js                  # Main process (window, tray, IPC, CSP, updater)
+│   ├── preload.js               # contextBridge — exposes window.electron API
+│   ├── launch.js                # Dev launcher (strips ELECTRON_RUN_AS_NODE)
+│   ├── package.json             # Electron deps + electron-builder config
+│   └── assets/                  # App icons (icon.ico, icon.icns, icon.png)
 │
 ├── backend/
 │   ├── index.js                 # Entry: HTTP server + Socket.IO + jobs
@@ -243,7 +267,8 @@ Content-Management-Hub/
 │       └── api-zod/generated/   # Auto-generated Zod types
 │
 ├── frontend/
-│   ├── vite.config.ts           # Dev proxy, code splitting
+│   ├── vite.config.ts           # Dev proxy, code splitting (web build)
+│   ├── electron.vite.config.ts  # Electron-specific Vite build (base: './')
 │   ├── components.json          # shadcn/ui config
 │   └── src/
 │       ├── main.tsx             # App bootstrap
@@ -252,7 +277,7 @@ Content-Management-Hub/
 │       │   └── generated/       # api.ts, api.schemas.ts
 │       ├── contexts/            # Auth, Theme, Realtime, Presence
 │       ├── hooks/               # Custom React hooks
-│       ├── lib/                 # 43+ utility modules
+│       ├── lib/                 # 43+ utility modules (incl. electron-bridge.ts)
 │       ├── modules/sales/       # Sales CRM (mock data)
 │       ├── pages/               # Route-level components
 │       │   ├── admin/           # Super admin pages
@@ -262,7 +287,7 @@ Content-Management-Hub/
 │       │   ├── settings/        # Settings
 │       │   └── auth/            # Login, forgot password
 │       └── components/          # Feature + UI components
-│           ├── ui/              # ~60 shadcn primitives
+│           ├── ui/              # ~60 shadcn primitives (sidebar uses localStorage)
 │           ├── layout/          # App shell, sidebar, navbar
 │           ├── bugs/            # Bug tracker UI
 │           ├── logs/            # Daily log UI
@@ -1373,9 +1398,15 @@ NPM SCRIPTS
 
   Frontend:
     npm run dev          Vite dev server
-    npm run build        Production static build
+    npm run build        Production static build → dist/public/
+    npm run build:electron  Electron static build → dist/electron/
     npm run serve        Preview production build
     npm run typecheck    TypeScript check
+
+  Electron (cd electron first):
+    npm run dev          Launch desktop app (dev, connects to local backend)
+    npm run build:win    Build Windows NSIS installer → dist-electron/*.exe
+    npm run build:mac    Build macOS DMG → dist-electron/*.dmg
 
 ================================================================================
 21. SEED DATA & TEST CREDENTIALS
@@ -1480,9 +1511,242 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
     - Client recent activity panel
     - Workspace recent projects list
     - PDF export utilities
+    - Electron desktop app (Windows + macOS, shell architecture)
+
+11. ELECTRON FUTURE WORK (not yet implemented)
+    - Window size/position persistence across restarts (electron-store)
+    - DevTools keyboard shortcut (F12) in development mode
+    - Production logging to file (electron-log)
+    - Custom protocol handler (cms://) for email notification deep-links
+    - macOS notarization (required for distribution outside personal machine)
+    - App icon assets (icon.ico / icon.icns) — currently skips tray gracefully
 
 ================================================================================
-24. FILE INDEX (KEY PATHS)
+24. ELECTRON DESKTOP APP
+================================================================================
+
+ARCHITECTURE DECISION: SHELL MODE
+-----------------------------------
+The Electron app wraps only the React frontend in a native window. The backend
+remains deployed remotely and is NOT embedded in the desktop package.
+
+Rationale:
+  • App is multi-user — MongoDB Atlas and background jobs must run 24/7 on server
+  • Socket.IO presence requires a shared server
+  • Embedding backend adds complexity with zero offline benefit
+  • Shell architecture keeps the packaged binary small (~150 MB)
+
+MAIN PROCESS (electron/main.js)
+---------------------------------
+Responsibilities:
+  • Single-instance lock (prevents duplicate windows)
+  • BrowserWindow: 1280×800, min 900×600, show:false until ready-to-show
+  • Security: contextIsolation=true, nodeIntegration=false, sandbox=true
+  • Menu bar removed: Menu.setApplicationMenu(null)
+  • CSP injected via session.defaultSession.webRequest.onHeadersReceived
+  • Media redirect: file:///uploads/* → {API_URL}/uploads/* via onBeforeRequest
+  • External link handling: setWindowOpenHandler + will-navigate → shell.openExternal
+    (URL scheme validated: only http/https pass through to OS browser)
+  • Tray icon with context menu (Open / Quit); close button hides, doesn't quit
+  • Second-instance handler re-focuses existing window
+  • Auto-updater (electron-updater, lazy-loaded after app.whenReady)
+  • Error dialog if frontend build is missing (did-fail-load handler)
+
+KEY PATH CONSTANTS
+  API_URL       CMS_API_URL env var (set by launch.js from frontend/.env)
+  FRONTEND_DIST dev:       ../frontend/dist/electron/
+                packaged:  {resourcesPath}/frontend/dist/electron/
+  PRELOAD_PATH  __dirname/preload.js (works in both dev and ASAR)
+  ASSETS_DIR    dev:       ./assets/
+                packaged:  {resourcesPath}/electron/assets/
+
+PRELOAD SCRIPT (electron/preload.js)
+--------------------------------------
+Exposes window.electron via contextBridge (renderer cannot access Node APIs).
+
+  window.electron = {
+    platform          — process.platform ('win32' | 'darwin' | 'linux')
+    openExternal(url) — open URL in OS browser (validated http/https only)
+    getAppVersion()   — returns packaged app version string
+    showOpenDialog()  — native file picker dialog
+    checkForUpdates() — manually trigger update check
+    quitAndInstall()  — apply downloaded update
+    onUpdateAvailable(cb) → returns unsubscribe fn
+    onUpdateDownloaded(cb) → returns unsubscribe fn
+  }
+
+DEV LAUNCHER (electron/launch.js)
+-----------------------------------
+Problem: VS Code is itself Electron. It sets ELECTRON_RUN_AS_NODE=1, which
+causes child Electron processes to run in Node.js mode (require('electron')
+returns binary path string, not Electron APIs).
+
+Fix: launch.js deletes ELECTRON_RUN_AS_NODE from env before spawning Electron,
+and reads VITE_API_BASE_URL from frontend/.env to pass as CMS_API_URL.
+
+  node launch.js
+    → delete env.ELECTRON_RUN_AS_NODE
+    → read frontend/.env → CMS_API_URL
+    → spawn electron . with clean env
+
+FRONTEND ELECTRON BUILD (frontend/electron.vite.config.ts)
+------------------------------------------------------------
+Separate Vite config — does NOT affect npm run build (web):
+  base: './'              Assets use relative paths (required for file://)
+  outDir: dist/electron/  Separate from web dist/public/ (no overwrite risk)
+  VITE_ELECTRON=true      Baked in — activates hash routing in App.tsx
+  VITE_APP_LOGO=./logo.png  Overrides /logo.png (absolute path breaks file://)
+  VITE_API_BASE_URL       Set at build time for production Electron builds
+
+FRONTEND ADAPTATIONS FOR ELECTRON
+------------------------------------
+All changes are runtime-gated on window.electron — zero effect on web browser.
+
+  App.tsx
+    isElectron() → useHashLocation hook + base="" for WouterRouter
+    Hash routing is required: file:// context has no history API for path routing
+
+  lib/electron-bridge.ts
+    isElectron()            — window.electron !== undefined
+    openExternal(url)       — IPC or window.open fallback
+    getLocationSearch()     — reads ?params from hash fragment in Electron,
+                              from window.location.search in browser
+    clearLocationParam(key) — removes param from hash (Electron) or search (web)
+
+  lib/firebase.ts
+    Returns null in Electron — FCM requires HTTPS, file:// context unsupported
+    Native window.Notification() still works for in-app alerts
+
+  contexts/AuthContext.tsx
+    bootstrap() wrapped in try/catch — network error on startup clears stale
+    session and navigates to login (prevents infinite loading screen)
+
+  lib/notification-navigation.ts + discussions-navigation.ts
+    readTicketIdFromUrl / readBugIdFromUrl / readDiscussionsProjectIdFromUrl
+    All use getLocationSearch() — deep-links from notifications work correctly
+    with hash routing (#/dev/bugs?bug=5 instead of /dev/bugs?bug=5)
+
+  pages/settings/SettingsPage.tsx
+    goToSection() skips replaceState when hash starts with #/ (would overwrite
+    the route fragment with a section name)
+
+  components/ui/sidebar.tsx
+    Sidebar state reads from cookie first (web), then localStorage (Electron).
+    Writes to both on every toggle. Sidebar open/collapsed state now persists
+    across restarts in both web and Electron.
+
+  components/UpdateNotificationBanner.tsx
+    Registers onUpdateAvailable / onUpdateDownloaded listeners.
+    Shows Sonner toast with "Restart now" button calling quitAndInstall().
+    Returns null — no DOM output.
+
+BACKEND CORS FIX (backend/src/config/env.js)
+----------------------------------------------
+Electron's file:// renderer sends Origin: null on all API requests.
+getAllowedOrigins() was updated to accept null origin:
+
+  return (origin, callback) => {
+    if (!origin || origin === "null" || origins.includes(origin)) {
+      callback(null, true);   // allow Electron + configured origins
+    } else {
+      callback(null, false);  // clean rejection (no error propagation)
+    }
+  };
+
+CONTENT SECURITY POLICY (in main.js)
+--------------------------------------
+Applied only to HTML responses via onHeadersReceived.
+  default-src  'self' https: data: blob:
+  script-src   'self' 'unsafe-inline'   (Vite injects inline init scripts)
+  style-src    'self' 'unsafe-inline' fonts.googleapis.com
+  font-src     'self' fonts.gstatic.com data:
+  img-src      'self' data: blob: https: http://localhost:* http://127.0.0.1:*
+  connect-src  'self' http: https: ws: wss:   (allows local dev + production)
+  worker-src   'self' blob:
+  frame-src    'none'
+  object-src   'none'
+
+MEDIA / IMAGE LOADING
+-----------------------
+Backend stores upload URLs as relative paths: /uploads/photo.jpg
+In file:// context these become file:///uploads/photo.jpg (doesn't exist).
+
+Fix: onBeforeRequest intercepts file:///uploads/* and redirects to
+{API_URL}/uploads/* before the renderer fetches the resource.
+
+App logo uses ./logo.png (relative) baked in at Electron build time so it
+resolves to file:///path/to/dist/electron/logo.png correctly.
+
+ELECTRON-BUILDER PACKAGING
+----------------------------
+Config in electron/package.json (build key):
+  appId           com.contentmanagementhub.cms
+  productName     CMS Desktop
+  files           main.js, preload.js, package.json  (into ASAR)
+  extraResources  frontend/dist/electron/ → resources/frontend/dist/electron/
+                  assets/ → resources/electron/assets/
+  win             NSIS installer, x64, custom install dir, desktop shortcut
+  mac             DMG, x64 + arm64, hardened runtime
+  publish         GitHub Releases provider (owner: Adeeb-7067)
+
+AUTO-UPDATER
+------------
+  electron-updater reads GitHub Releases
+  checkForUpdatesAndNotify() called on app.whenReady() (packaged builds only)
+  Update events forwarded to renderer via webContents.send()
+  UpdateNotificationBanner.tsx shows download progress + restart prompt
+
+WHAT WORKS IDENTICALLY IN ELECTRON vs WEB
+-------------------------------------------
+  ✓ All API calls (absolute URL via VITE_API_BASE_URL)
+  ✓ Socket.io realtime (connects to remote backend)
+  ✓ JWT auth + token refresh
+  ✓ localStorage (tokens, theme, sidebar state)
+  ✓ All feature pages (bugs, logs, discussions, inventory, etc.)
+  ✓ File uploads (XHR via apiUrl() — absolute URL)
+  ✓ navigator.clipboard (fully supported in Electron)
+  ✓ navigator.mediaDevices.getUserMedia (voice recording)
+  ✓ Native window.Notification() (OS-level toasts)
+  ✓ jsPDF client-side reports
+  ✓ Lottie animations, charts, all UI components
+  ✓ Notification deep-links (?bug=5, ?ticket=3, ?project=2)
+  ✓ Discussions channel pre-selection from notifications
+
+WHAT BEHAVES DIFFERENTLY
+--------------------------
+  • Firebase FCM push         — Disabled (file:// unsupported). Native
+                                window.Notification still fires for in-app alerts
+  • External links            — Open in OS browser (Chrome/Edge/Safari)
+                                via shell.openExternal, not a new Electron window
+  • Report file downloads     — Open in OS browser (intercepted same way)
+  • Settings section URL hash — Skipped in Electron (hash is the route itself)
+  • Service worker            — Not registered (Firebase SW guard prevents it)
+
+LOCAL DEV WORKFLOW
+-------------------
+  # Terminal A — backend
+  cd backend && npm run dev
+
+  # Terminal B — build frontend for Electron (once; re-run after UI changes)
+  cd frontend
+  set VITE_API_BASE_URL=http://localhost:15000
+  npm run build:electron
+
+  # Terminal C — launch Electron
+  cd electron && npm run dev
+
+PRODUCTION INSTALLER BUILD
+----------------------------
+  # Windows (.exe NSIS installer)
+  cd electron
+  set VITE_API_BASE_URL=https://api.yourdomain.com
+  npm run build:win     → dist-electron/CMS Desktop Setup 1.0.0.exe
+
+  # macOS (.dmg)
+  npm run build:mac     → dist-electron/CMS Desktop-1.0.0.dmg
+
+================================================================================
+25. FILE INDEX (KEY PATHS)
 ================================================================================
 
 ENTRY POINTS
@@ -1490,6 +1754,9 @@ ENTRY POINTS
   backend/src/app.js                        Express app
   frontend/src/main.tsx                     React bootstrap
   frontend/src/App.tsx                      App shell + routing
+  electron/main.js                          Electron main process
+  electron/preload.js                       contextBridge IPC surface
+  electron/launch.js                        Dev launcher (env fix)
 
 AUTH
   backend/src/middlewares/auth.js           requireAuth, requireRole
@@ -1502,6 +1769,8 @@ ROUTING
   frontend/src/components/layout/PageOutlet.tsx  Frontend routes
   frontend/src/lib/navigation.ts            Sidebar nav by role
   frontend/src/lib/route-meta.ts            Page titles/breadcrumbs
+  frontend/src/lib/electron-bridge.ts       isElectron, getLocationSearch,
+                                            clearLocationParam, openExternal
 
 CORE FEATURES
   backend/src/controllers/bugs.controller.js
@@ -1540,7 +1809,9 @@ CONFIG
   backend/.env.example                      Backend env template
   frontend/.env.example                     Frontend env template
   backend/ecosystem.config.cjs              PM2 config
-  frontend/vite.config.ts                   Vite + proxy config
+  frontend/vite.config.ts                   Vite + proxy config (web)
+  frontend/electron.vite.config.ts          Vite config (Electron build)
+  electron/package.json                     Electron + electron-builder config
 
 DOCUMENTATION
   README.md                                 Root overview
@@ -1555,7 +1826,8 @@ DOCUMENTATION
                               END OF DOCUMENT
 ================================================================================
 
-This analysis covers the Content Management Hub codebase as of June 2026.
+This analysis covers the Content Management Hub codebase as of June 10, 2026.
 For the latest API contract, see backend/openapi.yaml.
-For local setup, see LOCAL_RUNNING.md.
+For local setup (web + Electron), see LOCAL_RUNNING.md.
 For architecture patterns, see backend/ARCHITECTURE.md.
+For Electron desktop details, see Section 24 of this document.

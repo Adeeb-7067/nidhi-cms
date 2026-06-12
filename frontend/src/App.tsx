@@ -1,5 +1,8 @@
 import React from "react";
 import { Switch, Route, Router as WouterRouter, Redirect } from "wouter";
+import { useHashLocation } from "wouter/use-hash-location";
+import { isElectron } from "@/lib/electron-bridge";
+import { UpdateNotificationBanner } from "@/components/UpdateNotificationBanner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster as AppToaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
@@ -69,7 +72,10 @@ function App() {
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+          <WouterRouter
+            base={isElectron() ? "" : import.meta.env.BASE_URL.replace(/\/$/, "")}
+            hook={isElectron() ? useHashLocation : undefined}
+          >
             <AuthProvider>
               <RealtimeProvider>
                 <PresenceProvider>
@@ -78,6 +84,7 @@ function App() {
               </RealtimeProvider>
             </AuthProvider>
           </WouterRouter>
+          <UpdateNotificationBanner />
           <AppToaster />
           <SonnerToaster position="top-right" />
         </TooltipProvider>

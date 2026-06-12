@@ -23,7 +23,22 @@ import uploadsRoutes from "./uploads.routes.js";
 import ticketsRoutes from "./tickets.routes.js";
 import inventoryRoutes from "./inventory.routes.js";
 import presenceRoutes from "./presence.routes.js";
+import screenshotsRoutes from "./screenshots.routes.js";
+import monitoringRoutes from "./monitoring.routes.js";
+import workSessionsRoutes from "./work-sessions.routes.js";
 const router = Router();
+
+// Normalize ?token= query param to the Authorization header.
+// Browser <img src> tags cannot send custom headers, so the screenshot
+// content proxy embeds the bearer token in the query string instead.
+// This must run before requireAuth so the token is visible to the auth check.
+router.use((req, _res, next) => {
+  if (!req.headers.authorization && typeof req.query.token === "string" && req.query.token) {
+    req.headers.authorization = `Bearer ${req.query.token}`;
+  }
+  next();
+});
+
 router.use((req, res, next) => {
   if (req.method === "OPTIONS" || PUBLIC_API_PATHS.has(req.path)) {
     next();
@@ -53,6 +68,9 @@ const featureRouters = [
   ticketsRoutes,
   inventoryRoutes,
   presenceRoutes,
+  screenshotsRoutes,
+  monitoringRoutes,
+  workSessionsRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

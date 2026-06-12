@@ -8,7 +8,7 @@ import { AssigneeAvatars } from "./assignee-avatars";
 import { BugAttachmentThumb } from "./bug-attachments";
 import { PRIORITY_LABELS } from "@/lib/bug-workflow";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Eye, Edit } from "lucide-react";
+import { ChevronRight, Eye, Edit, Trash2 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 function descPreview(text?: string | null, max = 72) {
@@ -30,6 +30,7 @@ export const BugTableRow = React.memo(function BugTableRow({
   onToggleExpand,
   onRowClick,
   onEdit,
+  onDelete,
   canEdit,
   variant = "full",
 }: {
@@ -40,6 +41,7 @@ export const BugTableRow = React.memo(function BugTableRow({
   onToggleExpand?: () => void;
   onRowClick: (bug: Bug) => void;
   onEdit?: (bug: Bug) => void;
+  onDelete?: (bug: Bug) => void;
   canEdit?: boolean | ((bug: Bug) => boolean);
   /** `project` = fewer columns for project hub tab */
   variant?: "full" | "project";
@@ -95,17 +97,32 @@ export const BugTableRow = React.memo(function BugTableRow({
           />
         </TableCell>
         <TableCell className="py-2 text-muted-foreground">{bug.reporterName}</TableCell>
-        {editable && (
+        {(editable || onDelete) && (
           <TableCell className="py-2 w-10" onClick={(e) => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => onEdit!(bug)}
-              aria-label="Edit bug"
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </Button>
+            <div className="flex items-center gap-0.5">
+              {editable && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onEdit!(bug)}
+                  aria-label="Edit bug"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => onDelete(bug)}
+                  aria-label="Delete bug"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
           </TableCell>
         )}
       </TableRow>
@@ -198,6 +215,17 @@ export const BugTableRow = React.memo(function BugTableRow({
           {editable && (
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(bug)}>
               <Edit className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => onDelete(bug)}
+              aria-label="Delete bug"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>

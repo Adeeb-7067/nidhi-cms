@@ -14,7 +14,16 @@ function initRealtime(server) {
   io = new Server(server, {
     path: "/socket.io",
     cors: {
-      origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : true,
+      // Mirror the Express CORS logic: accept null origin from Electron (file:// sends Origin: null)
+      origin: (origin, callback) => {
+        if (!process.env.ALLOWED_ORIGINS) { callback(null, true); return; }
+        const allowed = process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
+        if (!origin || origin === "null" || allowed.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(null, false);
+        }
+      },
       credentials: true,
     },
     pingInterval: 25e3,

@@ -12,6 +12,9 @@ import { errorHandler, notFoundHandler } from "./middlewares/error-handler.js";
 import { responseCompression } from "./middlewares/compression.js";
 import { registerFrontendServing } from "./middlewares/serve-frontend.js";
 const app = express();
+// Trust the first reverse-proxy hop (Nginx/load balancer) so that req.ip and
+// rate-limit key generators see the real client IP, not the proxy's internal IP.
+app.set("trust proxy", 1);
 app.use(
   pinoHttp({
     logger,

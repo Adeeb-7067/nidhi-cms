@@ -11,8 +11,11 @@ if (process.env.DATABASE_URL) {
   mongoose.connection.on("disconnected", () => console.warn("[DB] MongoDB disconnected!"));
   if (mongoose.connection.readyState === 0) {
     mongoose.connect(url, {
-      serverSelectionTimeoutMS: 5e3
-      // Fail faster if server can't be selected
+      serverSelectionTimeoutMS: 5_000,
+      connectTimeoutMS: 10_000,
+      socketTimeoutMS: 45_000,
+      maxPoolSize: 10,   // max concurrent DB connections
+      minPoolSize: 2,    // keep at least 2 warm connections in the pool
     }).then(() => {
       console.log("[DB] Mongoose connect call resolved.");
     }).catch((err) => {

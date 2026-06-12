@@ -6,6 +6,7 @@ Frontend and backend are **separate npm projects** so you can deploy them on dif
 |-----|--------|------|
 | API | [`backend/`](backend/) | 8080 |
 | UI | [`frontend/`](frontend/) | 5173 |
+| Desktop | [`electron/`](electron/) | — (wraps built frontend) |
 
 ## 1. Install dependencies
 
@@ -14,6 +15,9 @@ cd backend
 npm install
 
 cd ..\frontend
+npm install
+
+cd ..\electron
 npm install
 ```
 
@@ -79,7 +83,39 @@ npm run dev
 
 Open **http://localhost:5173**. With `VITE_API_BASE_URL` set, API calls go to **http://localhost:8080**.
 
-## 5. Production build
+## 5. Run the Electron desktop app (local dev)
+
+The Electron app loads a **pre-built** copy of the frontend — it does not use the Vite dev server.
+
+**Step 1 — Build the frontend for Electron** (run once; re-run after UI changes):
+
+```powershell
+cd frontend
+$env:VITE_API_BASE_URL = "http://localhost:8080"
+npm run build:electron
+```
+
+This creates `frontend/dist/electron/` (separate from the web build at `dist/public/`) using `base: './'` so assets resolve correctly under `file://`.
+
+**Step 2 — Make sure the backend is running** (Terminal A):
+
+```powershell
+cd backend
+npm run dev
+```x
+
+**Step 3 — Launch Electron** (Terminal C):
+
+```powershell
+cd electron
+npm run dev
+```
+
+The desktop window opens and connects to your local backend at `http://localhost:8080`.
+
+> **Hot-reload tip:** Electron does not hot-reload like the web dev server. After changing frontend code, re-run `npm run build:electron` in the `frontend/` folder, then press `Ctrl+R` inside the Electron window (or restart it).
+
+## 6. Production build
 
 ```powershell
 cd backend
@@ -91,7 +127,21 @@ npm run build
 ```
 
 - API output: `backend/dist/index.mjs`
-- UI static files: `frontend/dist/public/`
+- UI static files (web): `frontend/dist/public/`
+- UI static files (Electron): `frontend/dist/electron/`
+
+### Build Electron installer (Windows / macOS)
+
+```powershell
+# Set your production API URL first
+$env:VITE_API_BASE_URL = "https://api.yourdomain.com"
+
+cd electron
+npm run build:win   # → dist-electron/*.exe  (Windows NSIS installer)
+npm run build:mac   # → dist-electron/*.dmg  (macOS, must run on Mac)
+```
+
+Installers are written to `electron/dist-electron/`.
 
 ## Two-domain deployment checklist
 

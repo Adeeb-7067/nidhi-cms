@@ -75,7 +75,6 @@ const sharedSchema = z.object({
 
 const editSchema = sharedSchema.extend({
   title: z.string().min(1, "Title is required"),
-  description: z.string().optional(),
   qaStatus: z.enum(["open", "fixed"]).optional(),
   devStatus: z.enum(["open", "fixed"]).optional(),
   finalStatus: z.enum(["open", "resolved"]).optional(),
@@ -119,7 +118,6 @@ export function BugFormDialog({
   const [batchMode, setBatchMode] = useState<BatchInputMode>("lines");
   const [lineText, setLineText] = useState("");
   const [batchRows, setBatchRows] = useState<DraftBugRow[]>([]);
-  const [sharedDescription, setSharedDescription] = useState("");
   const [sharedComment, setSharedComment] = useState("");
   const [batchSubmitting, setBatchSubmitting] = useState(false);
 
@@ -135,7 +133,6 @@ export function BugFormDialog({
     defaultValues: {
       projectId: "",
       title: "",
-      description: "",
       priority: "p3",
       qaStatus: "open",
       devStatus: "open",
@@ -160,12 +157,12 @@ export function BugFormDialog({
   const projectId = projectIdStr ? Number.parseInt(projectIdStr, 10) : 0;
 
   const { data: assignableData } = useListAssignableMembers(
-    editBug?.projectId ?? projectId,
+    projectId,
     { for: "bug" },
     {
       query: {
-        enabled: (editBug?.projectId ?? projectId) > 0,
-        queryKey: getListAssignableMembersQueryKey(editBug?.projectId ?? projectId, { for: "bug" }),
+        enabled: projectId > 0,
+        queryKey: getListAssignableMembersQueryKey(projectId, { for: "bug" }),
       },
     },
   );
@@ -181,7 +178,6 @@ export function BugFormDialog({
       editForm.reset({
         projectId: String(editBug.projectId),
         title: editBug.title,
-        description: editBug.description ?? "",
         priority: editBug.priority as EditFormValues["priority"],
         qaStatus: (editBug.qaStatus ?? "open") as EditFormValues["qaStatus"],
         devStatus: (editBug.devStatus ?? "open") as EditFormValues["devStatus"],
@@ -199,7 +195,6 @@ export function BugFormDialog({
       setAttachments([]);
       setLineText("");
       setBatchRows([]);
-      setSharedDescription("");
       setSharedComment("");
       setBatchMode("lines");
     }
@@ -233,7 +228,6 @@ export function BugFormDialog({
           data: {
             projectId: projectIdNum,
             title: row.title.trim(),
-            description: sharedDescription.trim() || undefined,
             priority: values.priority,
             qaStatus: row.qaStatus,
             devStatus: row.devStatus,
@@ -253,7 +247,6 @@ export function BugFormDialog({
         projectId: projectIdNum,
         priority: values.priority,
         parentTitle: buildBatchParentTitle(rows),
-        description: sharedDescription.trim() || undefined,
         assigneeIds: assigneeIds.length ? assigneeIds : undefined,
         attachments: attachments.length ? attachments : undefined,
         initialComment: sharedComment.trim() || undefined,
@@ -284,8 +277,8 @@ export function BugFormDialog({
     try {
       if (canFullEdit) {
         const data: Record<string, unknown> = {
+          projectId: Number.parseInt(values.projectId, 10),
           title: values.title,
-          description: values.description || undefined,
           priority: values.priority,
           assigneeIds,
           attachments: attachments.length ? attachments : undefined,
@@ -484,8 +477,6 @@ export function BugFormDialog({
                 rows={batchRows}
                 onRowsChange={setBatchRows}
                 userRole={userRole}
-                sharedDescription={sharedDescription}
-                onSharedDescriptionChange={setSharedDescription}
               />
 
               <div className="space-y-2">
@@ -536,9 +527,11 @@ export function BugFormDialog({
                         <FormItem>
                           <FormLabel>Project</FormLabel>
                           <Select
-                            onValueChange={field.onChange}
+                            onValueChange={(v) => {
+                              field.onChange(v);
+                              editForm.setValue("assigneeIds", []);
+                            }}
                             value={field.value || undefined}
-                            disabled
                           >
                             <FormControl>
                               <SelectTrigger>
@@ -603,24 +596,6 @@ export function BugFormDialog({
                         editForm.watch("assigneeIds") ?? [],
                       )}
                   </div>
-
-                  <FormField
-                    control={editForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Steps, environment, expected vs actual…"
-                            className="min-h-[100px]"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
 
                   <div>
                     <Label className="mb-2 block">Files / photos</Label>

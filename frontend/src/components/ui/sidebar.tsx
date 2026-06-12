@@ -71,7 +71,20 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen)
+  // Read persisted state: cookie (web) or localStorage (Electron file:// context).
+  const [_open, _setOpen] = React.useState(() => {
+    try {
+      const cookie = typeof document !== "undefined"
+        ? document.cookie.split("; ").find((r) => r.startsWith(`${SIDEBAR_COOKIE_NAME}=`))
+        : undefined;
+      if (cookie) return cookie.split("=")[1] === "true";
+      const stored = typeof localStorage !== "undefined"
+        ? localStorage.getItem(SIDEBAR_COOKIE_NAME)
+        : null;
+      if (stored !== null) return stored === "true";
+    } catch {}
+    return defaultOpen;
+  })
   const open = openProp ?? _open
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -82,8 +95,9 @@ function SidebarProvider({
         _setOpen(openState)
       }
 
-      // This sets the cookie to keep the sidebar state.
+      // Persist sidebar state — cookie for web, localStorage for Electron (file:// blocks cookies).
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`
+      try { localStorage.setItem(SIDEBAR_COOKIE_NAME, String(openState)) } catch {}
     },
     [setOpenProp, open]
   )

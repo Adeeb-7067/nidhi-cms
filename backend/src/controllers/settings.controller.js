@@ -1,9 +1,11 @@
 import { companySettingsTable } from "../models/schema/index.js";
 import {
   getOrCreateSettings,
-  formatSettings
+  formatSettings,
+  invalidateSettingsCache,
 } from "../services/company-settings.js";
 import { badRequest } from "../utils/route-errors.js";
+import { broadcast } from "../lib/realtime.js";
 
 function parseRequiredDailyHours(value) {
   if (value === undefined || value === null) return undefined;
@@ -41,6 +43,24 @@ async function getSettings(req, res) {
   res.json(formatSettings(settings));
 }
 
+function parseScreenshotInterval(value) {
+  if (value === undefined || value === null) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 60) {
+    badRequest("screenshotIntervalMinutes must be an integer between 1 and 60.", "screenshotIntervalMinutes");
+  }
+  return n;
+}
+
+function parseScreenshotRetention(value) {
+  if (value === undefined || value === null) return undefined;
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) {
+    badRequest("screenshotRetentionDays must be a positive integer.", "screenshotRetentionDays");
+  }
+  return n;
+}
+
 async function patchSettings(req, res) {
   const {
     companyName,
@@ -50,9 +70,15 @@ async function patchSettings(req, res) {
     requiredDailyWorkHours,
     dailyLogComplianceEnabled,
     dailyLogReminderHour,
-    complianceTimezone
+    complianceTimezone,
+    screenshotEnabled,
+    screenshotIntervalMinutes,
+    screenshotRetentionDays,
+    screenshotBlurEnabled,
+    screenshotConsentVersion
   } = req.body;
   const settings = await getOrCreateSettings();
+  const oldConsentVersion = settings.screenshotConsentVersion;
   const update = {};
   if (companyName !== undefined) update.companyName = companyName;
   if (logoUrl !== undefined) update.logoUrl = logoUrl;
@@ -70,6 +96,17 @@ async function patchSettings(req, res) {
   if (complianceTimezone !== undefined) {
     update.complianceTimezone = parseComplianceTimezone(complianceTimezone);
   }
+  if (screenshotEnabled !== undefined) update.screenshotEnabled = Boolean(screenshotEnabled);
+  if (screenshotIntervalMinutes !== undefined) {
+    update.screenshotIntervalMinutes = parseScreenshotInterval(screenshotIntervalMinutes);
+  }
+  if (screenshotRetentionDays !== undefined) {
+    update.screenshotRetentionDays = parseScreenshotRetention(screenshotRetentionDays);
+  }
+  if (screenshotBlurEnabled !== undefined) update.screenshotBlurEnabled = Boolean(screenshotBlurEnabled);
+  if (screenshotConsentVersion !== undefined) {
+    update.screenshotConsentVersion = String(screenshotConsentVersion).trim();
+  }
 
   const updated = await companySettingsTable.findOneAndUpdate(
     { id: settings.id },
@@ -79,6 +116,30 @@ async function patchSettings(req, res) {
   if (!updated) {
     badRequest("Settings could not be updated.", "settings");
   }
+
+  // Bust the in-process cache so subsequent reads return the new values immediately.
+  invalidateSettingsCache();
+
+  const monitoringFields = ["screenshotEnabled", "screenshotIntervalMinutes", "screenshotRetentionDays", "screenshotBlurEnabled", "screenshotConsentVersion"];
+  if (monitoringFields.some((f) => update[f] !== undefined)) {
+    broadcast("monitoring:config-updated", {
+      screenshotEnabled: updated.screenshotEnabled,
+      screenshotIntervalMinutes: updated.screenshotIntervalMinutes,
+      screenshotRetentionDays: updated.screenshotRetentionDays,
+      screenshotBlurEnabled: updated.screenshotBlurEnabled,
+      screenshotConsentVersion: updated.screenshotConsentVersion
+    });
+    if (
+      update.screenshotConsentVersion !== undefined &&
+      update.screenshotConsentVersion !== oldConsentVersion
+    ) {
+      broadcast("consent_version_changed", {
+        oldVersion: oldConsentVersion,
+        newVersion: updated.screenshotConsentVersion,
+      });
+    }
+  }
+
   res.json(formatSettings(updated));
 }
 

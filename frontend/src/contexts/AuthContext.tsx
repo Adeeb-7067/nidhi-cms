@@ -1,4 +1,4 @@
-import React, {
+import {
   createContext,
   useCallback,
   useContext,
@@ -103,21 +103,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      let token = getAccessToken();
-      if (!token) {
-        token = await refreshAccessToken();
-        if (cancelled) return;
-        if (token) {
-          setAccessToken(token);
-        } else {
+      try {
+        let token = getAccessToken();
+        if (!token) {
+          token = await refreshAccessToken();
+          if (cancelled) return;
+          if (token) {
+            setAccessToken(token);
+          } else {
+            clearTokens();
+            clearImpersonationMeta();
+            setImpersonation(null);
+            setAccessToken(null);
+          }
+        }
+      } catch {
+        // Network unavailable (e.g. Electron app opened offline) — clear the
+        // stale session so the user is taken to the login screen immediately.
+        if (!cancelled) {
           clearTokens();
           clearImpersonationMeta();
           setImpersonation(null);
           setAccessToken(null);
         }
+      } finally {
+        if (!cancelled) setIsInitializing(false);
       }
-
-      setIsInitializing(false);
     }
 
     void bootstrap();
@@ -202,9 +213,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     setIsStoppingImpersonation(true);
     const impersonationRefresh = getRefreshToken();
+    const token = getAccessToken();
+
+    // Clock out the impersonated employee (if their role can have a session)
+    // before revoking their token. Best-effort — don't block admin restoration.
+    const targetCanHaveSession = ["developer", "tester", "qa"].includes(meta.targetUser.role);
+    if (targetCanHaveSession && token) {
+      try {
+        await fetch(apiUrl("/api/work-sessions/clock-out"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ stopReason: "logout" }),
+        });
+      } catch { /* network unavailable — stale session purge will clean up */ }
+    }
 
     try {
-      const token = getAccessToken();
       if (token && impersonationRefresh) {
         await fetch(apiUrl("/api/auth/stop-impersonate"), {
           method: "POST",
@@ -283,9 +307,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
+    // Capture token NOW — before anything is cleared.
+    const token = getAccessToken();
+
+    if (token) {
+      // Stop Electron screenshot scheduler immediately (before API calls).
+      if (typeof window !== "undefined" && window.electron) {
+        window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
+      }
+      // Clock out only if this role can have an active session (developer/tester/qa).
+      // Admins and clients never clock in, so calling clock-out for them would hit a 403.
+      const canHaveSession = ["developer", "tester", "qa"].includes(user?.role ?? "");
+      if (canHaveSession) {
+        try {
+          await fetch(apiUrl("/api/work-sessions/clock-out"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ stopReason: "logout" }),
+          });
+        } catch { /* network unavailable — stale-session purge job will clean up */ }
+      }
+    }
+
     const refreshToken = getRefreshToken();
     try {
-      if (getAccessToken()) {
+      if (token) {
         await apiLogout({
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -302,7 +348,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       queryClient.clear();
       setLocation("/login");
     }
-  }, [isImpersonating, stopImpersonation, queryClient, setLocation]);
+  }, [isImpersonating, stopImpersonation, queryClient, setLocation, user]);
 
   const isLoading = Boolean(accessToken && !isInitializing && isUserLoading);
 

@@ -1,3 +1,5 @@
+import { getLocationSearch, clearLocationParam } from "@/lib/electron-bridge";
+
 /** Build discussions page URL with optional project pre-selection. */
 export function getDiscussionsHref(
   projectId?: number | null,
@@ -13,7 +15,7 @@ export function getDiscussionsHref(
 /** Read `?project=` from the current URL (discussions deep-link). */
 export function readDiscussionsProjectIdFromUrl(): number | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("project");
+  const raw = new URLSearchParams(getLocationSearch()).get("project");
   if (!raw) return null;
   const id = Number.parseInt(raw, 10);
   return Number.isFinite(id) && id > 0 ? id : null;
@@ -25,7 +27,7 @@ export function readDiscussionsChannelFromUrl():
   | "company_team"
   | null {
   if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("channel");
+  const raw = new URLSearchParams(getLocationSearch()).get("channel");
   if (raw === "internal") return "project_internal";
   if (raw === "team") return "company_team";
   return null;
@@ -33,12 +35,7 @@ export function readDiscussionsChannelFromUrl():
 
 /** Remove `?project=` after the deep-link channel has been opened. */
 export function clearDiscussionsProjectFromUrl(): void {
-  if (typeof window === "undefined") return;
-  const url = new URL(window.location.href);
-  if (!url.searchParams.has("project")) return;
-  url.searchParams.delete("project");
-  const next = url.pathname + (url.search ? url.search : "");
-  window.history.replaceState({}, "", next);
+  clearLocationParam("project");
 }
 
 /** Select a project channel in state (sidebar click). */

@@ -8,6 +8,7 @@ import { initFirebaseAdmin } from "./src/lib/firebase.js";
 import { verifyMailer } from "./src/lib/email.js";
 import { startInventoryExpiryJob } from "./src/services/inventory/expiry-job.js";
 import { startDailyLogComplianceJob } from "./src/services/daily-log-compliance.js";
+import { startScreenshotPurgeJob } from "./src/services/screenshot-purge-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -17,14 +18,16 @@ initRealtime(server);
 initFirebaseAdmin();
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
+const runScreenshotPurge = startScreenshotPurgeJob();
 startDailyLogComplianceJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
   backgroundJobsBootstrapped = true;
   runInventoryExpiryCheck();
+  runScreenshotPurge();
   // Daily log compliance only runs on the 5-minute interval (respects reminder hour/timezone).
-  logger.info("Background jobs started (inventory expiry, daily log compliance)");
+  logger.info("Background jobs started (inventory expiry, screenshot purge, daily log compliance)");
 };
 void whenDatabaseReady().then(bootstrapBackgroundJobs).catch((err) => {
   logger.warn(

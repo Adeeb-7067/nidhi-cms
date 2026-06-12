@@ -473,6 +473,7 @@ async function patchBugsById(req, res) {
     finalStatus,
     issueKey,
     addIssues,
+    projectId: newProjectId,
   } = req.body;
 
   const MAX_BUG_ISSUES = 50;
@@ -569,15 +570,26 @@ async function patchBugsById(req, res) {
       if (severity !== undefined) updateObj.severity = severity;
       if (platform !== undefined) updateObj.platform = platform;
 
+      if (newProjectId !== undefined) {
+        const targetProject = await projectsTable.findOne({ id: Number(newProjectId) });
+        if (!targetProject) badRequest("Project not found.");
+        updateObj.projectId = targetProject.id;
+      }
+
+      const effectiveProjectId = updateObj.projectId ?? existing.projectId;
+
       if (assigneeIds !== undefined || assigneeId !== undefined) {
         const raw = Array.isArray(assigneeIds)
           ? assigneeIds
           : assigneeId != null
             ? [assigneeId]
             : [];
-        const resolved = await resolveBugAssignees(raw, existing.projectId);
+        const resolved = await resolveBugAssignees(raw, effectiveProjectId);
         updateObj.assigneeIds = resolved;
         updateObj.assigneeId = resolved[0] ?? null;
+      } else if (updateObj.projectId !== undefined) {
+        updateObj.assigneeIds = [];
+        updateObj.assigneeId = null;
       }
     }
   }
@@ -689,7 +701,66 @@ async function patchBugsByIdAssign(req, res) {
   res.json(await formatBugRow(updated));
 }
 
+async function deleteBugById(req, res) {
+  const id = Number.parseInt(req.params.id, 10);
+  const bug = await bugsTable.findOne({ id });
+  if (!bug) notFound("Bug");
+
+  const role = req.user.role;
+  const isQaOrAdmin = role === "super_admin" || role === "tester" || role === "qa";
+  if (!isQaOrAdmin) forbidden();
+  if (role !== "super_admin" && bug.reporterId !== req.user.id) forbidden();
+
+  await bugsTable.deleteOne({ id });
+  await commentsTable.deleteMany({ threadType: "bug", threadId: id });
+
+  res.status(204).end();
+}
+
+async function deleteIssueFromBug(req, res) {
+  const id = Number.parseInt(req.params.id, 10);
+  const { issueKey } = req.params;
+  const bug = await bugsTable.findOne({ id });
+  if (!bug) notFound("Bug");
+  if (!Array.isArray(bug.issues) || bug.issues.length === 0) notFound("Issue");
+
+  const role = req.user.role;
+  const isQaOrAdmin = role === "super_admin" || role === "tester" || role === "qa";
+  if (!isQaOrAdmin) forbidden();
+  if (role !== "super_admin" && bug.reporterId !== req.user.id) forbidden();
+
+  const remaining = bug.issues.filter((i) => i.key !== issueKey);
+  if (remaining.length === bug.issues.length) notFound("Issue");
+
+  const updateObj = { issues: remaining };
+  if (remaining.length > 0) {
+    Object.assign(updateObj, rollupFromIssues(remaining));
+  }
+
+  const updated = await bugsTable.findOneAndUpdate({ id }, { $set: updateObj }, { new: true });
+  res.json(await formatBugRow(updated));
+}
+
+const EXPORT_LIMIT = 1000;
+
+async function exportBugs(req, res) {
+  const params = req.query;
+  const query = await buildBugListQuery(req.user.id, req.user.role, params);
+  const docs = await bugsTable
+    .find(query)
+    .sort({ createdAt: -1 })
+    .limit(EXPORT_LIMIT + 1)
+    .lean();
+  const truncated = docs.length > EXPORT_LIMIT;
+  if (truncated) docs.pop();
+  const bugs = await formatBugList(docs);
+  res.json({ bugs, total: bugs.length, truncated });
+}
+
 export {
+  deleteBugById,
+  deleteIssueFromBug,
+  exportBugs,
   getBugs,
   getBugsById,
   patchBugsById,

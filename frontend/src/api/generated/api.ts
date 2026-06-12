@@ -3642,7 +3642,7 @@ export function useGetProjectHistory<
  * @summary Create a milestone
  */
 export const getCreateMilestoneUrl = (id: number) => {
-  return `/api/projects/${id}/history`;
+  return `/api/projects/${id}/milestones`;
 };
 
 export const createMilestone = async (

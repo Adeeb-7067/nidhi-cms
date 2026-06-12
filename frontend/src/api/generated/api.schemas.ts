@@ -878,6 +878,7 @@ export type BugIssueInput = {
 };
 
 export interface BugUpdate {
+  projectId?: number;
   title?: string;
   description?: string;
   priority?: BugUpdatePriority;

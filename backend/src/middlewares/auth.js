@@ -1,6 +1,38 @@
 import { verifyAccessToken } from "../lib/jwt.js";
 import { usersTable } from "../models/schema/index.js";
 import { HttpError } from "../lib/http-error.js";
+
+// In-process TTL cache: eliminates one DB query per authenticated request.
+// Trade-off: a deactivated or role-changed user has up to 30 s before the
+// change is reflected. Acceptable for this app's team size and threat model.
+const AUTH_CACHE_TTL_MS = 30_000;
+const _authCache = new Map(); // userId → { data: UserDoc, expiresAt: number }
+
+async function getCachedUser(userId) {
+  const now = Date.now();
+  const entry = _authCache.get(userId);
+  if (entry && entry.expiresAt > now) return entry.data;
+
+  const user = await usersTable.findOne(
+    { id: userId },
+    { id: 1, role: 1, name: 1, email: 1, status: 1 }
+  );
+
+  if (user?.status === "active") {
+    _authCache.set(userId, { data: user, expiresAt: now + AUTH_CACHE_TTL_MS });
+  } else {
+    // Never cache inactive or missing users — they must pass a fresh DB check.
+    _authCache.delete(userId);
+  }
+  return user;
+}
+
+// Call after deactivating or changing a user's role so the next request sees
+// the updated state immediately rather than waiting for the TTL to expire.
+function evictUserFromAuthCache(userId) {
+  _authCache.delete(userId);
+}
+
 function extractBearerToken(req) {
   const authHeader = req.headers.authorization;
   if (authHeader?.startsWith("Bearer ")) {
@@ -27,10 +59,7 @@ async function requireAuth(req, _res, next) {
       code: "TOKEN_INVALID"
     });
   }
-  const user = await usersTable.findOne(
-    { id: payload.userId },
-    { id: 1, role: 1, name: 1, email: 1, status: 1 }
-  );
+  const user = await getCachedUser(payload.userId);
   if (!user || user.status !== "active") {
     throw new HttpError(
       401,
@@ -61,6 +90,7 @@ function requireRole(...roles) {
   };
 }
 export {
+  evictUserFromAuthCache,
   requireAuth,
   requireRole
 };
