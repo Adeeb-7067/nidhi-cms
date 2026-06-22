@@ -8,7 +8,7 @@ export function useHrmPermission(module: string, action: CmsAction): boolean {
 
 /** @deprecated Prefer usePermissions from @/modules/permissions/usePermission */
 export function useHrmPermissions() {
-  return useCmsPermissions();
+  return useCmsPermissions();    
 }
 
 /** @deprecated */

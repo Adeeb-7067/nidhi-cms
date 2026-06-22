@@ -23,6 +23,11 @@ export interface ForgotPasswordInput {
   email: string;
 }
 
+export interface VerifyResetOtpInput {
+  email: string;
+  otp: string;
+}
+
 export interface ResetPasswordInput {
   email?: string;
   otp?: string;
@@ -34,22 +39,34 @@ export interface FcmTokenInput {
   token: string;
 }
 
-export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+export type UserRole = typeof UserRole[keyof typeof UserRole];
+
 
 export const UserRole = {
-  super_admin: "super_admin",
-  developer: "developer",
-  tester: "tester",
-  qa: "qa",
-  client: "client",
+  super_admin: 'super_admin',
+  developer: 'developer',
+  tester: 'tester',
+  qa: 'qa',
+  client: 'client',
+  freelancer: 'freelancer',
 } as const;
 
-export type UserStatus = (typeof UserStatus)[keyof typeof UserStatus];
+export type UserStatus = typeof UserStatus[keyof typeof UserStatus];
+
 
 export const UserStatus = {
-  active: "active",
-  inactive: "inactive",
-  suspended: "suspended",
+  active: 'active',
+  inactive: 'inactive',
+  suspended: 'suspended',
+} as const;
+
+export type UserPresenceStatus = typeof UserPresenceStatus[keyof typeof UserPresenceStatus];
+
+
+export const UserPresenceStatus = {
+  online: 'online',
+  away: 'away',
+  offline: 'offline',
 } as const;
 
 export interface User {
@@ -77,7 +94,7 @@ export interface User {
   lastLoginAt?: string | null;
   /** @nullable */
   lastSeenAt?: string | null;
-  presenceStatus?: "online" | "away" | "offline";
+  presenceStatus?: UserPresenceStatus;
   isActiveNow?: boolean;
   /** @nullable */
   lastActivityAt?: string | null;
@@ -90,14 +107,41 @@ export interface AuthResult {
   user: User;
 }
 
-export type UserInputRole = (typeof UserInputRole)[keyof typeof UserInputRole];
+export type PresenceStatus = typeof PresenceStatus[keyof typeof PresenceStatus];
+
+
+export const PresenceStatus = {
+  online: 'online',
+  away: 'away',
+  offline: 'offline',
+} as const;
+
+export interface UserPresence {
+  userId: number;
+  status: PresenceStatus;
+  isActiveNow: boolean;
+  /** @nullable */
+  lastSeenAt?: string | null;
+  /** @nullable */
+  lastActivityAt?: string | null;
+}
+
+export type PresenceMapResultPresence = {[key: string]: UserPresence};
+
+export interface PresenceMapResult {
+  presence: PresenceMapResultPresence;
+}
+
+export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
+
 
 export const UserInputRole = {
-  super_admin: "super_admin",
-  developer: "developer",
-  tester: "tester",
-  qa: "qa",
-  client: "client",
+  super_admin: 'super_admin',
+  developer: 'developer',
+  tester: 'tester',
+  qa: 'qa',
+  client: 'client',
+  freelancer: 'freelancer',
 } as const;
 
 export interface UserInput {
@@ -114,21 +158,33 @@ export interface UserInput {
   linkedinUrl?: string;
 }
 
-export type UserUpdateStatus =
-  (typeof UserUpdateStatus)[keyof typeof UserUpdateStatus];
+export type UserUpdateRole = typeof UserUpdateRole[keyof typeof UserUpdateRole];
+
+
+export const UserUpdateRole = {
+  super_admin: 'super_admin',
+  developer: 'developer',
+  tester: 'tester',
+  qa: 'qa',
+  client: 'client',
+  freelancer: 'freelancer',
+} as const;
+
+export type UserUpdateStatus = typeof UserUpdateStatus[keyof typeof UserUpdateStatus];
+
 
 export const UserUpdateStatus = {
-  active: "active",
-  inactive: "inactive",
-  suspended: "suspended",
+  active: 'active',
+  inactive: 'inactive',
+  suspended: 'suspended',
 } as const;
 
 export interface UserUpdate {
   name?: string;
   email?: string;
-  /** Super admin only — min 8 chars; omit to keep current password */
+  /** New login password (super_admin only, min 8 chars). Omit to keep current password. */
   password?: string;
-  role?: string;
+  role?: UserUpdateRole;
   subType?: string;
   designation?: string;
   avatarUrl?: string;
@@ -153,38 +209,43 @@ export interface UserListResult {
   limit: number;
 }
 
-export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
+export type ProjectStatus = typeof ProjectStatus[keyof typeof ProjectStatus];
+
 
 export const ProjectStatus = {
-  scoping: "scoping",
-  in_progress: "in_progress",
-  on_hold: "on_hold",
-  uat: "uat",
-  completed: "completed",
-  maintenance: "maintenance",
+  scoping: 'scoping',
+  in_progress: 'in_progress',
+  on_hold: 'on_hold',
+  uat: 'uat',
+  completed: 'completed',
+  maintenance: 'maintenance',
 } as const;
 
-export type ProjectPriority =
-  (typeof ProjectPriority)[keyof typeof ProjectPriority];
+export type ProjectPriority = typeof ProjectPriority[keyof typeof ProjectPriority];
+
 
 export const ProjectPriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  critical: "critical",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
 } as const;
 
-export type ProjectType = (typeof ProjectType)[keyof typeof ProjectType];
+export type ProjectType = typeof ProjectType[keyof typeof ProjectType];
+
 
 export const ProjectType = {
-  development: "development",
-  maintenance: "maintenance",
+  development: 'development',
+  maintenance: 'maintenance',
 } as const;
 
 export interface Project {
   id: number;
   name: string;
-  /** @nullable */
+  /**
+   * Project logo or branding image
+   * @nullable
+   */
   logoUrl?: string | null;
   companyId: number;
   companyName: string;
@@ -223,12 +284,22 @@ export interface Project {
   createdAt: string;
 }
 
-export type ClientStatus = (typeof ClientStatus)[keyof typeof ClientStatus];
+export type ClientStatus = typeof ClientStatus[keyof typeof ClientStatus];
+
 
 export const ClientStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
+  active: 'active',
+  inactive: 'inactive',
+  on_hold: 'on_hold',
+} as const;
+
+export type ClientPortalPresenceStatus = typeof ClientPortalPresenceStatus[keyof typeof ClientPortalPresenceStatus];
+
+
+export const ClientPortalPresenceStatus = {
+  online: 'online',
+  away: 'away',
+  offline: 'offline',
 } as const;
 
 export interface Client {
@@ -254,7 +325,10 @@ export interface Client {
   clientSince: string;
   /** @nullable */
   userId?: number | null;
-  /** @nullable */
+  /**
+   * Portal login email for the linked portal user
+   * @nullable
+   */
   portalEmail?: string | null;
   /**
    * Profile image from the linked portal user (fallback when logoUrl is unset)
@@ -266,53 +340,104 @@ export interface Client {
   portalLastLoginAt?: string | null;
   /** @nullable */
   portalLastSeenAt?: string | null;
-  portalPresenceStatus?: "online" | "away" | "offline";
+  portalPresenceStatus?: ClientPortalPresenceStatus;
   portalIsActiveNow?: boolean;
 }
 
-export type BugSeverity = (typeof BugSeverity)[keyof typeof BugSeverity];
+export type BugSeverity = typeof BugSeverity[keyof typeof BugSeverity];
+
 
 export const BugSeverity = {
-  critical: "critical",
-  high: "high",
-  medium: "medium",
-  low: "low",
+  critical: 'critical',
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
-export type BugPriority = (typeof BugPriority)[keyof typeof BugPriority];
+export type BugPriority = typeof BugPriority[keyof typeof BugPriority];
+
 
 export const BugPriority = {
-  p1: "p1",
-  p2: "p2",
-  p3: "p3",
-  p4: "p4",
+  p1: 'p1',
+  p2: 'p2',
+  p3: 'p3',
+  p4: 'p4',
 } as const;
 
-export type BugStatus = (typeof BugStatus)[keyof typeof BugStatus];
+export type BugStatus = typeof BugStatus[keyof typeof BugStatus];
+
 
 export const BugStatus = {
-  reported: "reported",
-  assigned: "assigned",
-  in_progress: "in_progress",
-  fixed: "fixed",
-  pending_qa_verification: "pending_qa_verification",
-  reopened: "reopened",
-  closed: "closed",
+  reported: 'reported',
+  assigned: 'assigned',
+  in_progress: 'in_progress',
+  fixed: 'fixed',
+  pending_qa_verification: 'pending_qa_verification',
+  reopened: 'reopened',
+  closed: 'closed',
 } as const;
 
-export interface BugAssignee {
-  id: number;
-  name: string;
-  /** @nullable */
-  role?: string | null;
-  /** @nullable */
-  avatarUrl?: string | null;
-  /** @nullable */
-  employeeId?: string | null;
-}
+export type BugQaStatus = typeof BugQaStatus[keyof typeof BugQaStatus];
+
+
+export const BugQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugDevStatus = typeof BugDevStatus[keyof typeof BugDevStatus];
+
+
+export const BugDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugFinalStatus = typeof BugFinalStatus[keyof typeof BugFinalStatus];
+
+
+export const BugFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugIssuesItemQaStatus = typeof BugIssuesItemQaStatus[keyof typeof BugIssuesItemQaStatus];
+
+
+export const BugIssuesItemQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugIssuesItemDevStatus = typeof BugIssuesItemDevStatus[keyof typeof BugIssuesItemDevStatus];
+
+
+export const BugIssuesItemDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugIssuesItemFinalStatus = typeof BugIssuesItemFinalStatus[keyof typeof BugIssuesItemFinalStatus];
+
+
+export const BugIssuesItemFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugPlatform = typeof BugPlatform[keyof typeof BugPlatform];
+
+
+export const BugPlatform = {
+  android: 'android',
+  ios: 'ios',
+  web: 'web',
+  api: 'api',
+  all: 'all',
+} as const;
 
 export interface BugAttachment {
-  url: string;
+  url?: string;
   /** @nullable */
   name?: string | null;
   /** @nullable */
@@ -323,15 +448,13 @@ export interface BugAttachment {
   createdAt?: string | null;
 }
 
-export type BugPlatform = (typeof BugPlatform)[keyof typeof BugPlatform];
-
-export const BugPlatform = {
-  android: "android",
-  ios: "ios",
-  web: "web",
-  api: "api",
-  all: "all",
-} as const;
+export type BugIssuesItem = {
+  issueKey?: string;
+  title?: string;
+  qaStatus?: BugIssuesItemQaStatus;
+  devStatus?: BugIssuesItemDevStatus;
+  finalStatus?: BugIssuesItemFinalStatus;
+};
 
 export interface Bug {
   id: number;
@@ -341,17 +464,11 @@ export interface Bug {
   reporterId: number;
   reporterName: string;
   /** @nullable */
-  reporterRole?: string | null;
-  /** @nullable */
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
   /** @nullable */
   assigneeRole?: string | null;
-  assigneeIds?: number[];
-  assignees?: BugAssignee[];
-  /** @nullable */
-  latestComment?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -364,24 +481,22 @@ export interface Bug {
   severity: BugSeverity;
   priority: BugPriority;
   status: BugStatus;
-  qaStatus?: "open" | "fixed";
-  devStatus?: "open" | "fixed";
-  finalStatus?: "open" | "resolved";
-  issueKey?: string;
-  issues?: Bug[];
+  qaStatus?: BugQaStatus;
+  devStatus?: BugDevStatus;
+  finalStatus?: BugFinalStatus;
+  issues?: BugIssuesItem[];
   /** @nullable */
   buildVersion?: string | null;
   platform: BugPlatform;
   createdAt: string;
-  updatedAt?: string;
+  updatedAt: string;
   /** @nullable */
   resolvedAt?: string | null;
   /** @nullable */
   attachmentUrl?: string | null;
   attachments?: BugAttachment[];
-  /** @nullable — set on child issues in a batch */
+  /** @nullable */
   parentBugId?: number | null;
-  /** Child issues when this row is a batch parent */
   childCount?: number;
   children?: Bug[];
 }
@@ -399,16 +514,17 @@ export interface PasswordResetInput {
 
 export interface ChangePasswordInput {
   currentPassword?: string;
+  /** Email verification code (alternative to current password) */
   otp?: string;
   newPassword: string;
 }
 
-export type CredentialHistoryStatus =
-  (typeof CredentialHistoryStatus)[keyof typeof CredentialHistoryStatus];
+export type CredentialHistoryStatus = typeof CredentialHistoryStatus[keyof typeof CredentialHistoryStatus];
+
 
 export const CredentialHistoryStatus = {
-  active: "active",
-  expired: "expired",
+  active: 'active',
+  expired: 'expired',
 } as const;
 
 export interface CredentialHistory {
@@ -422,13 +538,13 @@ export interface CredentialHistory {
   trigger: string;
 }
 
-export type Company = Client & {
+export type Company = Client & ({
   companyId?: number;
   /** @nullable */
   companyCode?: string | null;
   totalProjects?: number;
   openTickets?: number;
-};
+});
 
 export interface CompanyListResult {
   companies: Company[];
@@ -455,19 +571,27 @@ export interface CompanyAnalyticsResult {
   companies: CompanyAnalyticsCard[];
 }
 
-export type ClientInputStatus =
-  (typeof ClientInputStatus)[keyof typeof ClientInputStatus];
+export type ClientInputStatus = typeof ClientInputStatus[keyof typeof ClientInputStatus];
+
 
 export const ClientInputStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
+  active: 'active',
+  inactive: 'inactive',
+  on_hold: 'on_hold',
 } as const;
 
 export interface ClientInput {
   companyName: string;
   contactPerson: string;
+  /** Company contact email */
   email: string;
+  /** Portal login email (Gmail). Defaults to company email if omitted. */
+  portalEmail?: string;
+  /**
+   * Initial portal login password (required when creating a company)
+   * @minLength 8
+   */
+  password: string;
   phone?: string;
   address?: string;
   gstNumber?: string;
@@ -478,22 +602,25 @@ export interface ClientInput {
   status?: ClientInputStatus;
 }
 
-export type ClientUpdateStatus =
-  (typeof ClientUpdateStatus)[keyof typeof ClientUpdateStatus];
+export type ClientUpdateStatus = typeof ClientUpdateStatus[keyof typeof ClientUpdateStatus];
+
 
 export const ClientUpdateStatus = {
-  active: "active",
-  inactive: "inactive",
-  on_hold: "on_hold",
+  active: 'active',
+  inactive: 'inactive',
+  on_hold: 'on_hold',
 } as const;
 
 export interface ClientUpdate {
   companyName?: string;
   contactPerson?: string;
   email?: string;
-  /** Portal login email (Gmail) — updates linked portal user when changed */
+  /** Update portal login email when a portal user is linked */
   portalEmail?: string;
-  /** Reset portal login password (min 8 characters) */
+  /**
+   * Reset portal login password
+   * @minLength 8
+   */
   password?: string;
   phone?: string;
   address?: string;
@@ -512,34 +639,34 @@ export interface ClientListResult {
   limit: number;
 }
 
-export type ProjectInputStatus =
-  (typeof ProjectInputStatus)[keyof typeof ProjectInputStatus];
+export type ProjectInputStatus = typeof ProjectInputStatus[keyof typeof ProjectInputStatus];
+
 
 export const ProjectInputStatus = {
-  scoping: "scoping",
-  in_progress: "in_progress",
-  on_hold: "on_hold",
-  uat: "uat",
-  completed: "completed",
-  maintenance: "maintenance",
+  scoping: 'scoping',
+  in_progress: 'in_progress',
+  on_hold: 'on_hold',
+  uat: 'uat',
+  completed: 'completed',
+  maintenance: 'maintenance',
 } as const;
 
-export type ProjectInputPriority =
-  (typeof ProjectInputPriority)[keyof typeof ProjectInputPriority];
+export type ProjectInputPriority = typeof ProjectInputPriority[keyof typeof ProjectInputPriority];
+
 
 export const ProjectInputPriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  critical: "critical",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
 } as const;
 
-export type ProjectInputType =
-  (typeof ProjectInputType)[keyof typeof ProjectInputType];
+export type ProjectInputType = typeof ProjectInputType[keyof typeof ProjectInputType];
+
 
 export const ProjectInputType = {
-  development: "development",
-  maintenance: "maintenance",
+  development: 'development',
+  maintenance: 'maintenance',
 } as const;
 
 export interface ProjectInput {
@@ -564,34 +691,34 @@ export interface ProjectInput {
   postmanJson?: string;
 }
 
-export type ProjectUpdateStatus =
-  (typeof ProjectUpdateStatus)[keyof typeof ProjectUpdateStatus];
+export type ProjectUpdateStatus = typeof ProjectUpdateStatus[keyof typeof ProjectUpdateStatus];
+
 
 export const ProjectUpdateStatus = {
-  scoping: "scoping",
-  in_progress: "in_progress",
-  on_hold: "on_hold",
-  uat: "uat",
-  completed: "completed",
-  maintenance: "maintenance",
+  scoping: 'scoping',
+  in_progress: 'in_progress',
+  on_hold: 'on_hold',
+  uat: 'uat',
+  completed: 'completed',
+  maintenance: 'maintenance',
 } as const;
 
-export type ProjectUpdatePriority =
-  (typeof ProjectUpdatePriority)[keyof typeof ProjectUpdatePriority];
+export type ProjectUpdatePriority = typeof ProjectUpdatePriority[keyof typeof ProjectUpdatePriority];
+
 
 export const ProjectUpdatePriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  critical: "critical",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
 } as const;
 
-export type ProjectUpdateType =
-  (typeof ProjectUpdateType)[keyof typeof ProjectUpdateType];
+export type ProjectUpdateType = typeof ProjectUpdateType[keyof typeof ProjectUpdateType];
+
 
 export const ProjectUpdateType = {
-  development: "development",
-  maintenance: "maintenance",
+  development: 'development',
+  maintenance: 'maintenance',
 } as const;
 
 export interface ProjectUpdate {
@@ -622,6 +749,15 @@ export interface ProjectListResult {
   limit: number;
 }
 
+export type ProjectMemberPresenceStatus = typeof ProjectMemberPresenceStatus[keyof typeof ProjectMemberPresenceStatus];
+
+
+export const ProjectMemberPresenceStatus = {
+  online: 'online',
+  away: 'away',
+  offline: 'offline',
+} as const;
+
 export interface ProjectMember {
   userId: number;
   name: string;
@@ -641,7 +777,7 @@ export interface ProjectMember {
   lastLoginAt?: string | null;
   /** @nullable */
   lastSeenAt?: string | null;
-  presenceStatus?: "online" | "away" | "offline";
+  presenceStatus?: ProjectMemberPresenceStatus;
   isActiveNow?: boolean;
   /** @nullable */
   lastActivityAt?: string | null;
@@ -652,13 +788,13 @@ export interface ProjectMemberInput {
   subType?: string;
 }
 
-export type ApkScheduleAudience =
-  (typeof ApkScheduleAudience)[keyof typeof ApkScheduleAudience];
+export type ApkScheduleAudience = typeof ApkScheduleAudience[keyof typeof ApkScheduleAudience];
+
 
 export const ApkScheduleAudience = {
-  team_only: "team_only",
-  client_visible: "client_visible",
-  all_visible: "all_visible",
+  team_only: 'team_only',
+  client_visible: 'client_visible',
+  all_visible: 'all_visible',
 } as const;
 
 export interface ApkSchedule {
@@ -670,13 +806,13 @@ export interface ApkSchedule {
   createdAt: string;
 }
 
-export type ApkScheduleInputAudience =
-  (typeof ApkScheduleInputAudience)[keyof typeof ApkScheduleInputAudience];
+export type ApkScheduleInputAudience = typeof ApkScheduleInputAudience[keyof typeof ApkScheduleInputAudience];
+
 
 export const ApkScheduleInputAudience = {
-  team_only: "team_only",
-  client_visible: "client_visible",
-  all_visible: "all_visible",
+  team_only: 'team_only',
+  client_visible: 'client_visible',
+  all_visible: 'all_visible',
 } as const;
 
 export interface ApkScheduleInput {
@@ -685,13 +821,13 @@ export interface ApkScheduleInput {
   audience: ApkScheduleInputAudience;
 }
 
-export type MilestoneStatus =
-  (typeof MilestoneStatus)[keyof typeof MilestoneStatus];
+export type MilestoneStatus = typeof MilestoneStatus[keyof typeof MilestoneStatus];
+
 
 export const MilestoneStatus = {
-  pending: "pending",
-  completed: "completed",
-  delayed: "delayed",
+  pending: 'pending',
+  completed: 'completed',
+  delayed: 'delayed',
 } as const;
 
 export interface Milestone {
@@ -702,22 +838,52 @@ export interface Milestone {
   /** @nullable */
   actualDate?: string | null;
   status: MilestoneStatus;
+  /** @nullable */
+  assigneeId?: number | null;
+  /** @nullable */
+  assigneeName?: string | null;
+  /** @nullable */
+  assigneeAvatarUrl?: string | null;
+  /** @nullable */
+  assigneeRole?: string | null;
   createdAt: string;
 }
 
-export type MilestoneInputStatus =
-  (typeof MilestoneInputStatus)[keyof typeof MilestoneInputStatus];
+export type MilestoneInputStatus = typeof MilestoneInputStatus[keyof typeof MilestoneInputStatus];
+
 
 export const MilestoneInputStatus = {
-  pending: "pending",
-  completed: "completed",
-  delayed: "delayed",
+  pending: 'pending',
+  completed: 'completed',
+  delayed: 'delayed',
 } as const;
 
 export interface MilestoneInput {
   title: string;
   plannedDate: string;
   status?: MilestoneInputStatus;
+  /** Project team member user id (must be on the project roster) */
+  assigneeId?: number;
+}
+
+export type MilestoneUpdateStatus = typeof MilestoneUpdateStatus[keyof typeof MilestoneUpdateStatus];
+
+
+export const MilestoneUpdateStatus = {
+  pending: 'pending',
+  completed: 'completed',
+  delayed: 'delayed',
+} as const;
+
+export interface MilestoneUpdate {
+  title?: string;
+  plannedDate?: string;
+  status?: MilestoneUpdateStatus;
+  /**
+   * Project team member user id, or null to unassign
+   * @nullable
+   */
+  assigneeId?: number | null;
 }
 
 export interface DailyLog {
@@ -756,6 +922,7 @@ export interface LogInput {
 }
 
 export interface LogUpdate {
+  /** Move log entry to another project (same-day edits only for staff) */
   projectId?: number;
   workCategories?: string[];
   taskTitle?: string;
@@ -773,163 +940,321 @@ export interface LogListResult {
   limit: number;
 }
 
-export type BugInputSeverity =
-  (typeof BugInputSeverity)[keyof typeof BugInputSeverity];
+export type BugBatchInputPriority = typeof BugBatchInputPriority[keyof typeof BugBatchInputPriority];
+
+
+export const BugBatchInputPriority = {
+  p1: 'p1',
+  p2: 'p2',
+  p3: 'p3',
+  p4: 'p4',
+} as const;
+
+export type BugBatchInputItemsItemQaStatus = typeof BugBatchInputItemsItemQaStatus[keyof typeof BugBatchInputItemsItemQaStatus];
+
+
+export const BugBatchInputItemsItemQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugBatchInputItemsItemDevStatus = typeof BugBatchInputItemsItemDevStatus[keyof typeof BugBatchInputItemsItemDevStatus];
+
+
+export const BugBatchInputItemsItemDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugBatchInputItemsItemFinalStatus = typeof BugBatchInputItemsItemFinalStatus[keyof typeof BugBatchInputItemsItemFinalStatus];
+
+
+export const BugBatchInputItemsItemFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugBatchInputItemsItem = {
+  title: string;
+  qaStatus?: BugBatchInputItemsItemQaStatus;
+  devStatus?: BugBatchInputItemsItemDevStatus;
+  finalStatus?: BugBatchInputItemsItemFinalStatus;
+};
+
+export interface BugBatchInput {
+  projectId: number;
+  priority: BugBatchInputPriority;
+  parentTitle?: string;
+  description?: string;
+  assigneeIds?: number[];
+  attachments?: BugAttachment[];
+  initialComment?: string;
+  /** @minItems 2 */
+  items: BugBatchInputItemsItem[];
+}
+
+export interface BugAssignee {
+  id?: number;
+  name?: string;
+  /** @nullable */
+  role?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  /** @nullable */
+  employeeId?: string | null;
+}
+
+export type BugInputSeverity = typeof BugInputSeverity[keyof typeof BugInputSeverity];
+
 
 export const BugInputSeverity = {
-  critical: "critical",
-  high: "high",
-  medium: "medium",
-  low: "low",
+  critical: 'critical',
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
-export type BugInputPriority =
-  (typeof BugInputPriority)[keyof typeof BugInputPriority];
+export type BugInputPriority = typeof BugInputPriority[keyof typeof BugInputPriority];
+
 
 export const BugInputPriority = {
-  p1: "p1",
-  p2: "p2",
-  p3: "p3",
-  p4: "p4",
+  p1: 'p1',
+  p2: 'p2',
+  p3: 'p3',
+  p4: 'p4',
 } as const;
 
-export type BugInputPlatform =
-  (typeof BugInputPlatform)[keyof typeof BugInputPlatform];
+export type BugInputPlatform = typeof BugInputPlatform[keyof typeof BugInputPlatform];
+
 
 export const BugInputPlatform = {
-  android: "android",
-  ios: "ios",
-  web: "web",
-  api: "api",
-  all: "all",
+  android: 'android',
+  ios: 'ios',
+  web: 'web',
+  api: 'api',
+  all: 'all',
+} as const;
+
+export type BugInputStatus = typeof BugInputStatus[keyof typeof BugInputStatus];
+
+
+export const BugInputStatus = {
+  reported: 'reported',
+  assigned: 'assigned',
+  in_progress: 'in_progress',
+  fixed: 'fixed',
+  pending_qa_verification: 'pending_qa_verification',
+  reopened: 'reopened',
+  closed: 'closed',
 } as const;
 
 export interface BugInput {
   projectId: number;
   title: string;
   description?: string;
+  stepsToReproduce?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  severity?: BugInputSeverity;
   priority: BugInputPriority;
-  status?: BugStatus;
-  qaStatus?: "open" | "fixed";
-  devStatus?: "open" | "fixed";
-  finalStatus?: "open" | "resolved";
+  buildVersion?: string;
+  platform?: BugInputPlatform;
   assigneeId?: number;
   assigneeIds?: number[];
   attachmentUrl?: string;
   attachments?: BugAttachment[];
   initialComment?: string;
-  severity?: BugInputSeverity;
-  platform?: BugInputPlatform;
-  stepsToReproduce?: string;
-  expectedBehavior?: string;
-  actualBehavior?: string;
-  buildVersion?: string;
+  status?: BugInputStatus;
 }
 
-export type BugUpdateSeverity =
-  (typeof BugUpdateSeverity)[keyof typeof BugUpdateSeverity];
+export type BugUpdateSeverity = typeof BugUpdateSeverity[keyof typeof BugUpdateSeverity];
+
 
 export const BugUpdateSeverity = {
-  critical: "critical",
-  high: "high",
-  medium: "medium",
-  low: "low",
+  critical: 'critical',
+  high: 'high',
+  medium: 'medium',
+  low: 'low',
 } as const;
 
-export type BugUpdatePriority =
-  (typeof BugUpdatePriority)[keyof typeof BugUpdatePriority];
+export type BugUpdatePriority = typeof BugUpdatePriority[keyof typeof BugUpdatePriority];
+
 
 export const BugUpdatePriority = {
-  p1: "p1",
-  p2: "p2",
-  p3: "p3",
-  p4: "p4",
+  p1: 'p1',
+  p2: 'p2',
+  p3: 'p3',
+  p4: 'p4',
 } as const;
 
-export type BugUpdateStatus =
-  (typeof BugUpdateStatus)[keyof typeof BugUpdateStatus];
+export type BugUpdateStatus = typeof BugUpdateStatus[keyof typeof BugUpdateStatus];
+
 
 export const BugUpdateStatus = {
-  reported: "reported",
-  assigned: "assigned",
-  in_progress: "in_progress",
-  fixed: "fixed",
-  pending_qa_verification: "pending_qa_verification",
-  reopened: "reopened",
-  closed: "closed",
+  reported: 'reported',
+  assigned: 'assigned',
+  in_progress: 'in_progress',
+  fixed: 'fixed',
+  pending_qa_verification: 'pending_qa_verification',
+  reopened: 'reopened',
+  closed: 'closed',
 } as const;
 
-export type BugUpdatePlatform =
-  (typeof BugUpdatePlatform)[keyof typeof BugUpdatePlatform];
+export type BugUpdateQaStatus = typeof BugUpdateQaStatus[keyof typeof BugUpdateQaStatus];
+
+
+export const BugUpdateQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateDevStatus = typeof BugUpdateDevStatus[keyof typeof BugUpdateDevStatus];
+
+
+export const BugUpdateDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateFinalStatus = typeof BugUpdateFinalStatus[keyof typeof BugUpdateFinalStatus];
+
+
+export const BugUpdateFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugUpdateIssuesItemQaStatus = typeof BugUpdateIssuesItemQaStatus[keyof typeof BugUpdateIssuesItemQaStatus];
+
+
+export const BugUpdateIssuesItemQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateIssuesItemDevStatus = typeof BugUpdateIssuesItemDevStatus[keyof typeof BugUpdateIssuesItemDevStatus];
+
+
+export const BugUpdateIssuesItemDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateIssuesItemFinalStatus = typeof BugUpdateIssuesItemFinalStatus[keyof typeof BugUpdateIssuesItemFinalStatus];
+
+
+export const BugUpdateIssuesItemFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugUpdateIssuesItem = {
+  issueKey?: string;
+  title?: string;
+  qaStatus?: BugUpdateIssuesItemQaStatus;
+  devStatus?: BugUpdateIssuesItemDevStatus;
+  finalStatus?: BugUpdateIssuesItemFinalStatus;
+};
+
+export type BugUpdatePlatform = typeof BugUpdatePlatform[keyof typeof BugUpdatePlatform];
+
 
 export const BugUpdatePlatform = {
-  android: "android",
-  ios: "ios",
-  web: "web",
-  api: "api",
-  all: "all",
+  android: 'android',
+  ios: 'ios',
+  web: 'web',
+  api: 'api',
+  all: 'all',
 } as const;
 
-export type BugIssueInput = {
+export type BugUpdateAddIssuesItemQaStatus = typeof BugUpdateAddIssuesItemQaStatus[keyof typeof BugUpdateAddIssuesItemQaStatus];
+
+
+export const BugUpdateAddIssuesItemQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateAddIssuesItemDevStatus = typeof BugUpdateAddIssuesItemDevStatus[keyof typeof BugUpdateAddIssuesItemDevStatus];
+
+
+export const BugUpdateAddIssuesItemDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugUpdateAddIssuesItemFinalStatus = typeof BugUpdateAddIssuesItemFinalStatus[keyof typeof BugUpdateAddIssuesItemFinalStatus];
+
+
+export const BugUpdateAddIssuesItemFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
+export type BugUpdateAddIssuesItem = {
   title: string;
-  qaStatus?: "open" | "fixed";
-  devStatus?: "open" | "fixed";
-  finalStatus?: "open" | "resolved";
+  qaStatus?: BugUpdateAddIssuesItemQaStatus;
+  devStatus?: BugUpdateAddIssuesItemDevStatus;
+  finalStatus?: BugUpdateAddIssuesItemFinalStatus;
 };
 
 export interface BugUpdate {
-  projectId?: number;
   title?: string;
   description?: string;
+  stepsToReproduce?: string;
+  expectedBehavior?: string;
+  actualBehavior?: string;
+  severity?: BugUpdateSeverity;
   priority?: BugUpdatePriority;
   status?: BugUpdateStatus;
-  qaStatus?: "open" | "fixed";
-  devStatus?: "open" | "fixed";
-  finalStatus?: "open" | "resolved";
-  issueKey?: string;
-  addIssues?: BugIssueInput[];
+  qaStatus?: BugUpdateQaStatus;
+  devStatus?: BugUpdateDevStatus;
+  finalStatus?: BugUpdateFinalStatus;
+  issues?: BugUpdateIssuesItem[];
+  buildVersion?: string;
+  platform?: BugUpdatePlatform;
   assigneeId?: number;
   assigneeIds?: number[];
   attachmentUrl?: string;
   attachments?: BugAttachment[];
-  severity?: BugUpdateSeverity;
-  platform?: BugUpdatePlatform;
-  stepsToReproduce?: string;
-  expectedBehavior?: string;
-  actualBehavior?: string;
-  buildVersion?: string;
+  /**
+   * Append new issues to an existing batch report (QA/admin only)
+   * @minItems 1
+   */
+  addIssues?: BugUpdateAddIssuesItem[];
 }
 
-export type WorkTaskStatus =
-  (typeof WorkTaskStatus)[keyof typeof WorkTaskStatus];
+export type WorkTaskStatus = typeof WorkTaskStatus[keyof typeof WorkTaskStatus];
+
 
 export const WorkTaskStatus = {
-  backlog: "backlog",
-  todo: "todo",
-  in_progress: "in_progress",
-  in_review: "in_review",
-  done: "done",
-  blocked: "blocked",
+  backlog: 'backlog',
+  todo: 'todo',
+  in_progress: 'in_progress',
+  in_review: 'in_review',
+  done: 'done',
+  blocked: 'blocked',
 } as const;
 
-export type WorkTaskPriority =
-  (typeof WorkTaskPriority)[keyof typeof WorkTaskPriority];
+export type WorkTaskPriority = typeof WorkTaskPriority[keyof typeof WorkTaskPriority];
+
 
 export const WorkTaskPriority = {
-  urgent: "urgent",
-  high: "high",
-  normal: "normal",
-  low: "low",
+  urgent: 'urgent',
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
 } as const;
 
-export type WorkTaskType = (typeof WorkTaskType)[keyof typeof WorkTaskType];
+export type WorkTaskType = typeof WorkTaskType[keyof typeof WorkTaskType];
+
 
 export const WorkTaskType = {
-  task: "task",
-  feature: "feature",
-  bug_fix: "bug_fix",
-  qa: "qa",
-  chore: "chore",
+  task: 'task',
+  feature: 'feature',
+  bug_fix: 'bug_fix',
+  qa: 'qa',
+  chore: 'chore',
 } as const;
 
 export interface WorkTask {
@@ -960,36 +1285,37 @@ export interface WorkTask {
   completedAt?: string | null;
 }
 
-export type TaskInputStatus =
-  (typeof TaskInputStatus)[keyof typeof TaskInputStatus];
+export type TaskInputStatus = typeof TaskInputStatus[keyof typeof TaskInputStatus];
+
 
 export const TaskInputStatus = {
-  backlog: "backlog",
-  todo: "todo",
-  in_progress: "in_progress",
-  in_review: "in_review",
-  done: "done",
-  blocked: "blocked",
+  backlog: 'backlog',
+  todo: 'todo',
+  in_progress: 'in_progress',
+  in_review: 'in_review',
+  done: 'done',
+  blocked: 'blocked',
 } as const;
 
-export type TaskInputPriority =
-  (typeof TaskInputPriority)[keyof typeof TaskInputPriority];
+export type TaskInputPriority = typeof TaskInputPriority[keyof typeof TaskInputPriority];
+
 
 export const TaskInputPriority = {
-  urgent: "urgent",
-  high: "high",
-  normal: "normal",
-  low: "low",
+  urgent: 'urgent',
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
 } as const;
 
-export type TaskInputType = (typeof TaskInputType)[keyof typeof TaskInputType];
+export type TaskInputType = typeof TaskInputType[keyof typeof TaskInputType];
+
 
 export const TaskInputType = {
-  task: "task",
-  feature: "feature",
-  bug_fix: "bug_fix",
-  qa: "qa",
-  chore: "chore",
+  task: 'task',
+  feature: 'feature',
+  bug_fix: 'bug_fix',
+  qa: 'qa',
+  chore: 'chore',
 } as const;
 
 export interface TaskInput {
@@ -1004,37 +1330,37 @@ export interface TaskInput {
   labels?: string[];
 }
 
-export type TaskUpdateStatus =
-  (typeof TaskUpdateStatus)[keyof typeof TaskUpdateStatus];
+export type TaskUpdateStatus = typeof TaskUpdateStatus[keyof typeof TaskUpdateStatus];
+
 
 export const TaskUpdateStatus = {
-  backlog: "backlog",
-  todo: "todo",
-  in_progress: "in_progress",
-  in_review: "in_review",
-  done: "done",
-  blocked: "blocked",
+  backlog: 'backlog',
+  todo: 'todo',
+  in_progress: 'in_progress',
+  in_review: 'in_review',
+  done: 'done',
+  blocked: 'blocked',
 } as const;
 
-export type TaskUpdatePriority =
-  (typeof TaskUpdatePriority)[keyof typeof TaskUpdatePriority];
+export type TaskUpdatePriority = typeof TaskUpdatePriority[keyof typeof TaskUpdatePriority];
+
 
 export const TaskUpdatePriority = {
-  urgent: "urgent",
-  high: "high",
-  normal: "normal",
-  low: "low",
+  urgent: 'urgent',
+  high: 'high',
+  normal: 'normal',
+  low: 'low',
 } as const;
 
-export type TaskUpdateType =
-  (typeof TaskUpdateType)[keyof typeof TaskUpdateType];
+export type TaskUpdateType = typeof TaskUpdateType[keyof typeof TaskUpdateType];
+
 
 export const TaskUpdateType = {
-  task: "task",
-  feature: "feature",
-  bug_fix: "bug_fix",
-  qa: "qa",
-  chore: "chore",
+  task: 'task',
+  feature: 'feature',
+  bug_fix: 'bug_fix',
+  qa: 'qa',
+  chore: 'chore',
 } as const;
 
 export interface TaskUpdate {
@@ -1077,31 +1403,31 @@ export interface BugListResult {
   limit: number;
 }
 
-export type ApkReleaseReleaseType =
-  (typeof ApkReleaseReleaseType)[keyof typeof ApkReleaseReleaseType];
+export type ApkReleaseReleaseType = typeof ApkReleaseReleaseType[keyof typeof ApkReleaseReleaseType];
+
 
 export const ApkReleaseReleaseType = {
-  alpha: "alpha",
-  beta: "beta",
-  rc: "rc",
-  production: "production",
+  alpha: 'alpha',
+  beta: 'beta',
+  rc: 'rc',
+  production: 'production',
 } as const;
 
-export type ApkReleasePlatform =
-  (typeof ApkReleasePlatform)[keyof typeof ApkReleasePlatform];
+export type ApkReleasePlatform = typeof ApkReleasePlatform[keyof typeof ApkReleasePlatform];
+
 
 export const ApkReleasePlatform = {
-  android: "android",
-  ios: "ios",
+  android: 'android',
+  ios: 'ios',
 } as const;
 
-export type ApkReleaseAudience =
-  (typeof ApkReleaseAudience)[keyof typeof ApkReleaseAudience];
+export type ApkReleaseAudience = typeof ApkReleaseAudience[keyof typeof ApkReleaseAudience];
+
 
 export const ApkReleaseAudience = {
-  team_only: "team_only",
-  client_visible: "client_visible",
-  all_visible: "all_visible",
+  team_only: 'team_only',
+  client_visible: 'client_visible',
+  all_visible: 'all_visible',
 } as const;
 
 export interface ApkRelease {
@@ -1109,11 +1435,14 @@ export interface ApkRelease {
   projectId: number;
   uploaderId: number;
   uploaderName: string;
-  /** Label for UI (resolved; never empty when version exists). */
-  displayName?: string;
-  /** User-defined APK name from upload; null on legacy releases. */
+  /** Resolved label for UI (custom name or Build v{version}) */
+  displayName: string;
+  /**
+   * User-defined APK name from upload form
+   * @nullable
+   */
   customName?: string | null;
-  /** @deprecated Use displayName — kept for backward compatibility. */
+  /** Same as displayName for backward compatibility */
   name: string;
   version: string;
   buildNumber: number;
@@ -1130,31 +1459,31 @@ export interface ApkRelease {
   createdAt: string;
 }
 
-export type ApkReleaseInputReleaseType =
-  (typeof ApkReleaseInputReleaseType)[keyof typeof ApkReleaseInputReleaseType];
+export type ApkReleaseInputReleaseType = typeof ApkReleaseInputReleaseType[keyof typeof ApkReleaseInputReleaseType];
+
 
 export const ApkReleaseInputReleaseType = {
-  alpha: "alpha",
-  beta: "beta",
-  rc: "rc",
-  production: "production",
+  alpha: 'alpha',
+  beta: 'beta',
+  rc: 'rc',
+  production: 'production',
 } as const;
 
-export type ApkReleaseInputPlatform =
-  (typeof ApkReleaseInputPlatform)[keyof typeof ApkReleaseInputPlatform];
+export type ApkReleaseInputPlatform = typeof ApkReleaseInputPlatform[keyof typeof ApkReleaseInputPlatform];
+
 
 export const ApkReleaseInputPlatform = {
-  android: "android",
-  ios: "ios",
+  android: 'android',
+  ios: 'ios',
 } as const;
 
-export type ApkReleaseInputAudience =
-  (typeof ApkReleaseInputAudience)[keyof typeof ApkReleaseInputAudience];
+export type ApkReleaseInputAudience = typeof ApkReleaseInputAudience[keyof typeof ApkReleaseInputAudience];
+
 
 export const ApkReleaseInputAudience = {
-  team_only: "team_only",
-  client_visible: "client_visible",
-  all_visible: "all_visible",
+  team_only: 'team_only',
+  client_visible: 'client_visible',
+  all_visible: 'all_visible',
 } as const;
 
 export interface ApkReleaseInput {
@@ -1170,18 +1499,20 @@ export interface ApkReleaseInput {
   apkScheduleId?: number;
 }
 
-export type CommentThreadType =
-  (typeof CommentThreadType)[keyof typeof CommentThreadType];
+export type CommentThreadType = typeof CommentThreadType[keyof typeof CommentThreadType];
+
 
 export const CommentThreadType = {
-  project: "project",
-  project_internal: "project_internal",
-  company_team: "company_team",
-  log: "log",
-  bug: "bug",
-  apk: "apk",
-  request: "request",
-  ticket: "ticket",
+  project: 'project',
+  project_internal: 'project_internal',
+  company_team: 'company_team',
+  company_team_unofficial: 'company_team_unofficial',
+  direct: 'direct',
+  log: 'log',
+  bug: 'bug',
+  apk: 'apk',
+  request: 'request',
+  ticket: 'ticket',
 } as const;
 
 export interface Comment {
@@ -1209,18 +1540,20 @@ export interface Comment {
   updatedAt: string;
 }
 
-export type CommentInputThreadType =
-  (typeof CommentInputThreadType)[keyof typeof CommentInputThreadType];
+export type CommentInputThreadType = typeof CommentInputThreadType[keyof typeof CommentInputThreadType];
+
 
 export const CommentInputThreadType = {
-  project: "project",
-  project_internal: "project_internal",
-  company_team: "company_team",
-  log: "log",
-  bug: "bug",
-  apk: "apk",
-  request: "request",
-  ticket: "ticket",
+  project: 'project',
+  project_internal: 'project_internal',
+  company_team: 'company_team',
+  company_team_unofficial: 'company_team_unofficial',
+  direct: 'direct',
+  log: 'log',
+  bug: 'bug',
+  apk: 'apk',
+  request: 'request',
+  ticket: 'ticket',
 } as const;
 
 export interface CommentInput {
@@ -1243,6 +1576,55 @@ export interface CommentListResult {
   total: number;
 }
 
+export type DirectConversationPeerCategory = typeof DirectConversationPeerCategory[keyof typeof DirectConversationPeerCategory];
+
+
+export const DirectConversationPeerCategory = {
+  client: 'client',
+  staff: 'staff',
+  other: 'other',
+} as const;
+
+export interface DirectConversationPeer {
+  id: number;
+  name: string;
+  /** @nullable */
+  email?: string | null;
+  /** @nullable */
+  avatarUrl?: string | null;
+  role: string;
+  /** @nullable */
+  subtitle?: string | null;
+  category: DirectConversationPeerCategory;
+}
+
+export interface DirectConversation {
+  id: number;
+  peerUser: DirectConversationPeer;
+  /** @nullable */
+  lastMessageAt?: string | null;
+  /** @nullable */
+  lastPreview?: string | null;
+  /** @nullable */
+  lastAuthorName?: string | null;
+  /** @nullable */
+  lastAuthorId?: number | null;
+  updatedAt: string;
+}
+
+export interface DirectConversationListResult {
+  conversations: DirectConversation[];
+}
+
+export interface DirectConversationContactsResult {
+  clientContacts: DirectConversationPeer[];
+  staffContacts: DirectConversationPeer[];
+}
+
+export interface DirectConversationCreateInput {
+  participantUserId: number;
+}
+
 export interface Notification {
   id: number;
   type: string;
@@ -1252,7 +1634,10 @@ export interface Notification {
   entityType?: string | null;
   /** @nullable */
   entityId?: number | null;
-  /** @nullable */
+  /**
+   * Related project for deep links (discussions, logs, bugs)
+   * @nullable
+   */
   projectId?: number | null;
   /** @nullable */
   readAt?: string | null;
@@ -1263,38 +1648,36 @@ export interface NotificationListResult {
   notifications: Notification[];
   unreadCount: number;
   total: number;
-  page?: number;
-  limit?: number;
 }
 
-export type ResourceRequestType =
-  (typeof ResourceRequestType)[keyof typeof ResourceRequestType];
+export type ResourceRequestType = typeof ResourceRequestType[keyof typeof ResourceRequestType];
+
 
 export const ResourceRequestType = {
-  software_license: "software_license",
-  hardware: "hardware",
-  api_access: "api_access",
-  server_hosting: "server_hosting",
-  design_asset: "design_asset",
-  other: "other",
+  software_license: 'software_license',
+  hardware: 'hardware',
+  api_access: 'api_access',
+  server_hosting: 'server_hosting',
+  design_asset: 'design_asset',
+  other: 'other',
 } as const;
 
-export type ResourceRequestUrgency =
-  (typeof ResourceRequestUrgency)[keyof typeof ResourceRequestUrgency];
+export type ResourceRequestUrgency = typeof ResourceRequestUrgency[keyof typeof ResourceRequestUrgency];
+
 
 export const ResourceRequestUrgency = {
-  low: "low",
-  medium: "medium",
-  high: "high",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
 } as const;
 
-export type ResourceRequestStatus =
-  (typeof ResourceRequestStatus)[keyof typeof ResourceRequestStatus];
+export type ResourceRequestStatus = typeof ResourceRequestStatus[keyof typeof ResourceRequestStatus];
+
 
 export const ResourceRequestStatus = {
-  pending: "pending",
-  approved: "approved",
-  rejected: "rejected",
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 
 export interface ResourceRequest {
@@ -1314,25 +1697,25 @@ export interface ResourceRequest {
   updatedAt: string;
 }
 
-export type ResourceRequestInputType =
-  (typeof ResourceRequestInputType)[keyof typeof ResourceRequestInputType];
+export type ResourceRequestInputType = typeof ResourceRequestInputType[keyof typeof ResourceRequestInputType];
+
 
 export const ResourceRequestInputType = {
-  software_license: "software_license",
-  hardware: "hardware",
-  api_access: "api_access",
-  server_hosting: "server_hosting",
-  design_asset: "design_asset",
-  other: "other",
+  software_license: 'software_license',
+  hardware: 'hardware',
+  api_access: 'api_access',
+  server_hosting: 'server_hosting',
+  design_asset: 'design_asset',
+  other: 'other',
 } as const;
 
-export type ResourceRequestInputUrgency =
-  (typeof ResourceRequestInputUrgency)[keyof typeof ResourceRequestInputUrgency];
+export type ResourceRequestInputUrgency = typeof ResourceRequestInputUrgency[keyof typeof ResourceRequestInputUrgency];
+
 
 export const ResourceRequestInputUrgency = {
-  low: "low",
-  medium: "medium",
-  high: "high",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
 } as const;
 
 export interface ResourceRequestInput {
@@ -1343,13 +1726,13 @@ export interface ResourceRequestInput {
   urgency: ResourceRequestInputUrgency;
 }
 
-export type ResourceRequestUpdateStatus =
-  (typeof ResourceRequestUpdateStatus)[keyof typeof ResourceRequestUpdateStatus];
+export type ResourceRequestUpdateStatus = typeof ResourceRequestUpdateStatus[keyof typeof ResourceRequestUpdateStatus];
+
 
 export const ResourceRequestUpdateStatus = {
-  pending: "pending",
-  approved: "approved",
-  rejected: "rejected",
+  pending: 'pending',
+  approved: 'approved',
+  rejected: 'rejected',
 } as const;
 
 export interface ResourceRequestUpdate {
@@ -1394,13 +1777,16 @@ export interface BugSeverityBreakdown {
 export interface DashboardStats {
   activeProjects: number;
   totalClients: number;
-  /** Active developers, testers, and QA (matches Team page). */
+  /** Active developers, testers, and QA (matches Team page) */
   teamMembersActive: number;
-  /** Active staff who logged in today. */
+  /** Active staff who logged in today */
   teamMembersOnlineToday: number;
-  /** Staff with live presence (active now). */
+  /** Staff with live presence (green / active now) */
   teamMembersOnlineNow?: number;
-  /** @deprecated Use teamMembersActive */
+  /**
+   * Same as teamMembersActive (legacy field)
+   * @deprecated
+   */
   teamMembersOnline?: number;
   overdueProjects: number;
   apksDueToday: number;
@@ -1475,25 +1861,27 @@ export interface BugAnalytics {
   platformDistribution: CategoryCount[];
 }
 
-export type ReportType = (typeof ReportType)[keyof typeof ReportType];
+export type ReportType = typeof ReportType[keyof typeof ReportType];
+
 
 export const ReportType = {
-  developer_monthly: "developer_monthly",
-  project_progress: "project_progress",
-  bug_report: "bug_report",
-  team_utilisation: "team_utilisation",
-  client_dossier: "client_dossier",
-  apk_release_history: "apk_release_history",
-  raw_log_export: "raw_log_export",
+  developer_monthly: 'developer_monthly',
+  project_progress: 'project_progress',
+  bug_report: 'bug_report',
+  team_utilisation: 'team_utilisation',
+  client_dossier: 'client_dossier',
+  apk_release_history: 'apk_release_history',
+  raw_log_export: 'raw_log_export',
 } as const;
 
-export type ReportStatus = (typeof ReportStatus)[keyof typeof ReportStatus];
+export type ReportStatus = typeof ReportStatus[keyof typeof ReportStatus];
+
 
 export const ReportStatus = {
-  queued: "queued",
-  generating: "generating",
-  ready: "ready",
-  failed: "failed",
+  queued: 'queued',
+  generating: 'generating',
+  ready: 'ready',
+  failed: 'failed',
 } as const;
 
 export interface Report {
@@ -1514,17 +1902,17 @@ export interface Report {
   completedAt?: string | null;
 }
 
-export type ReportInputType =
-  (typeof ReportInputType)[keyof typeof ReportInputType];
+export type ReportInputType = typeof ReportInputType[keyof typeof ReportInputType];
+
 
 export const ReportInputType = {
-  developer_monthly: "developer_monthly",
-  project_progress: "project_progress",
-  bug_report: "bug_report",
-  team_utilisation: "team_utilisation",
-  client_dossier: "client_dossier",
-  apk_release_history: "apk_release_history",
-  raw_log_export: "raw_log_export",
+  developer_monthly: 'developer_monthly',
+  project_progress: 'project_progress',
+  bug_report: 'bug_report',
+  team_utilisation: 'team_utilisation',
+  client_dossier: 'client_dossier',
+  apk_release_history: 'apk_release_history',
+  raw_log_export: 'raw_log_export',
 } as const;
 
 export interface ReportInput {
@@ -1551,12 +1939,35 @@ export interface CompanySettings {
   sealUrl?: string | null;
   /** Required logged hours per working day for developers */
   requiredDailyWorkHours: number;
-  /** When true, staff must meet required hours and receive alerts if not */
+  /** When true, staff must meet requiredDailyWorkHours and get alerts if not */
   dailyLogComplianceEnabled: boolean;
-  /** Local hour (0–23) for incomplete daily-log email reminders. Default 23 (11 PM). */
+  /**
+   * Local hour (0–23) when incomplete daily-log email reminders are sent. Default 23 (11 PM).
+   * @minimum 0
+   * @maximum 23
+   */
   dailyLogReminderHour: number;
-  /** @nullable IANA timezone for reminder scheduling */
+  /**
+   * IANA timezone for reminder scheduling (e.g. Asia/Kolkata). Required for correct local time.
+   * @nullable
+   */
   complianceTimezone?: string | null;
+  /** Enable periodic screenshot capture for clocked-in staff (Electron desktop) */
+  screenshotEnabled?: boolean;
+  /**
+   * Minutes between screenshots while clocked in
+   * @minimum 1
+   * @maximum 60
+   */
+  screenshotIntervalMinutes?: number;
+  /**
+   * Days before screenshots are purged
+   * @minimum 1
+   */
+  screenshotRetentionDays?: number;
+  screenshotBlurEnabled?: boolean;
+  /** Policy version; bump to force employee re-consent */
+  screenshotConsentVersion?: string;
   updatedAt: string;
 }
 
@@ -1565,11 +1976,29 @@ export interface CompanySettingsUpdate {
   logoUrl?: string;
   address?: string;
   sealUrl?: string;
+  /**
+   * @minimum 1
+   * @maximum 16
+   */
   requiredDailyWorkHours?: number;
   dailyLogComplianceEnabled?: boolean;
+  /**
+   * @minimum 0
+   * @maximum 23
+   */
   dailyLogReminderHour?: number;
   /** @nullable */
   complianceTimezone?: string | null;
+  screenshotEnabled?: boolean;
+  /**
+   * @minimum 1
+   * @maximum 60
+   */
+  screenshotIntervalMinutes?: number;
+  /** @minimum 1 */
+  screenshotRetentionDays?: number;
+  screenshotBlurEnabled?: boolean;
+  screenshotConsentVersion?: string;
 }
 
 export interface DailyLogSummary {
@@ -1582,18 +2011,17 @@ export interface DailyLogSummary {
   isComplete: boolean;
 }
 
-export type GetDailyLogSummaryParams = {
-  date?: string;
-  developerId?: number;
-};
+export type LogComplianceDayStatus = typeof LogComplianceDayStatus[keyof typeof LogComplianceDayStatus];
 
-export type LogComplianceDayStatus =
-  | "complete"
-  | "incomplete"
-  | "weekend"
-  | "future"
-  | "no_logs"
-  | "logged";
+
+export const LogComplianceDayStatus = {
+  complete: 'complete',
+  incomplete: 'incomplete',
+  weekend: 'weekend',
+  future: 'future',
+  no_logs: 'no_logs',
+  logged: 'logged',
+} as const;
 
 export interface LogComplianceDay {
   date: string;
@@ -1619,41 +2047,36 @@ export interface LogComplianceCalendar {
   days: LogComplianceDay[];
 }
 
-export type GetLogComplianceCalendarParams = {
-  month: number;
-  year: number;
-  developerId?: number;
-};
-
 export interface CredentialRevealResult {
   password: string;
 }
 
-export type TicketStatus = (typeof TicketStatus)[keyof typeof TicketStatus];
+export type TicketAudience = typeof TicketAudience[keyof typeof TicketAudience];
 
-export const TicketStatus = {
-  open: "open",
-  pending: "pending",
-  resolved: "resolved",
-  closed: "closed",
-} as const;
-
-export type TicketPriority =
-  (typeof TicketPriority)[keyof typeof TicketPriority];
-
-export const TicketPriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  urgent: "urgent",
-} as const;
-
-export type TicketAudience =
-  (typeof TicketAudience)[keyof typeof TicketAudience];
 
 export const TicketAudience = {
-  client: "client",
-  staff: "staff",
+  client: 'client',
+  staff: 'staff',
+} as const;
+
+export type TicketStatus = typeof TicketStatus[keyof typeof TicketStatus];
+
+
+export const TicketStatus = {
+  open: 'open',
+  pending: 'pending',
+  resolved: 'resolved',
+  closed: 'closed',
+} as const;
+
+export type TicketPriority = typeof TicketPriority[keyof typeof TicketPriority];
+
+
+export const TicketPriority = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'urgent',
 } as const;
 
 export interface Ticket {
@@ -1680,14 +2103,14 @@ export interface Ticket {
   updatedAt: string;
 }
 
-export type TicketInputPriority =
-  (typeof TicketInputPriority)[keyof typeof TicketInputPriority];
+export type TicketInputPriority = typeof TicketInputPriority[keyof typeof TicketInputPriority];
+
 
 export const TicketInputPriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  urgent: "urgent",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'urgent',
 } as const;
 
 export interface TicketInput {
@@ -1698,24 +2121,24 @@ export interface TicketInput {
   assignedTo?: number;
 }
 
-export type TicketUpdateStatus =
-  (typeof TicketUpdateStatus)[keyof typeof TicketUpdateStatus];
+export type TicketUpdateStatus = typeof TicketUpdateStatus[keyof typeof TicketUpdateStatus];
+
 
 export const TicketUpdateStatus = {
-  open: "open",
-  pending: "pending",
-  resolved: "resolved",
-  closed: "closed",
+  open: 'open',
+  pending: 'pending',
+  resolved: 'resolved',
+  closed: 'closed',
 } as const;
 
-export type TicketUpdatePriority =
-  (typeof TicketUpdatePriority)[keyof typeof TicketUpdatePriority];
+export type TicketUpdatePriority = typeof TicketUpdatePriority[keyof typeof TicketUpdatePriority];
+
 
 export const TicketUpdatePriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  urgent: "urgent",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  urgent: 'urgent',
 } as const;
 
 export interface TicketUpdate {
@@ -1756,37 +2179,54 @@ export interface AuditLog {
 }
 
 export type ListTicketsParams = {
-  status?: string;
-  priority?: string;
-  projectId?: number;
-  search?: string;
-  audience?: "client" | "staff" | "all";
-  page?: number;
-  limit?: number;
+status?: string;
+priority?: string;
+projectId?: number;
+search?: string;
+/**
+ * Filter by ticket audience (super_admin only). Omit or use `all` for every ticket.
+ */
+audience?: ListTicketsAudience;
+page?: number;
+limit?: number;
 };
 
+export type ListTicketsAudience = typeof ListTicketsAudience[keyof typeof ListTicketsAudience];
+
+
+export const ListTicketsAudience = {
+  all: 'all',
+  client: 'client',
+  staff: 'staff',
+} as const;
+
 export type ListUsersParams = {
-  role?: string;
-  /** When "1" or "true", returns internal staff (developer, tester, qa, super_admin). */
-  staff?: string;
-  subType?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
+role?: string;
+subType?: string;
+search?: string;
+page?: number;
+limit?: number;
+};
+
+export type GetPresenceParams = {
+/**
+ * Comma-separated user IDs (max 200). Omit for all live users.
+ */
+ids?: string;
 };
 
 export type ListClientsParams = {
-  status?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
+status?: string;
+search?: string;
+page?: number;
+limit?: number;
 };
 
 export type ListCompaniesParams = {
-  status?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
+status?: string;
+search?: string;
+page?: number;
+limit?: number;
 };
 
 export type ListCompanyProjects200 = {
@@ -1795,65 +2235,81 @@ export type ListCompanyProjects200 = {
 };
 
 export type ListProjectsParams = {
-  status?: string;
-  clientId?: number;
-  companyId?: number;
-  search?: string;
-  type?: ListProjectsType;
-  priority?: ListProjectsPriority;
-  page?: number;
-  limit?: number;
+status?: string;
+clientId?: number;
+companyId?: number;
+search?: string;
+type?: ListProjectsType;
+priority?: ListProjectsPriority;
+page?: number;
+limit?: number;
 };
 
-export type ListProjectsType =
-  (typeof ListProjectsType)[keyof typeof ListProjectsType];
+export type ListProjectsType = typeof ListProjectsType[keyof typeof ListProjectsType];
+
 
 export const ListProjectsType = {
-  development: "development",
-  maintenance: "maintenance",
+  development: 'development',
+  maintenance: 'maintenance',
 } as const;
 
-export type ListProjectsPriority =
-  (typeof ListProjectsPriority)[keyof typeof ListProjectsPriority];
+export type ListProjectsPriority = typeof ListProjectsPriority[keyof typeof ListProjectsPriority];
+
 
 export const ListProjectsPriority = {
-  low: "low",
-  medium: "medium",
-  high: "high",
-  critical: "critical",
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  critical: 'critical',
 } as const;
 
+export type GetLogComplianceCalendarParams = {
+month: number;
+year: number;
+/**
+ * Required for super_admin
+ */
+developerId?: number;
+};
+
+export type GetDailyLogSummaryParams = {
+date?: string;
+/**
+ * Super admin only — summary for another user
+ */
+developerId?: number;
+};
+
 export type ListMyLogsParams = {
-  projectId?: number;
-  /**
-   * Filter by employee (super admin only)
-   */
-  developerId?: number;
-  month?: number;
-  year?: number;
-  page?: number;
-  limit?: number;
+projectId?: number;
+/**
+ * Filter by employee (super admin only)
+ */
+developerId?: number;
+month?: number;
+year?: number;
+page?: number;
+limit?: number;
 };
 
 export type ListBugsParams = {
-  projectId?: number;
-  status?: string;
-  severity?: string;
-  priority?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
-  assigneeId?: number;
-  scope?: ListBugsScope;
+projectId?: number;
+status?: string;
+severity?: string;
+page?: number;
+limit?: number;
+assigneeId?: number;
+scope?: ListBugsScope;
 };
 
-export type ListBugsScope = (typeof ListBugsScope)[keyof typeof ListBugsScope];
+export type ListBugsScope = typeof ListBugsScope[keyof typeof ListBugsScope];
+
 
 export const ListBugsScope = {
-  all: "all",
-  mine: "mine",
-  unassigned: "unassigned",
-  created: "created",
+  all: 'all',
+  mine: 'mine',
+  unassigned: 'unassigned',
+  created: 'created',
 } as const;
 
 export type AssignBugBody = {
@@ -1862,67 +2318,107 @@ export type AssignBugBody = {
 };
 
 export type ListTasksParams = {
-  projectId?: number;
-  status?: string;
-  assigneeId?: number;
-  scope?: ListTasksScope;
-  page?: number;
-  limit?: number;
+projectId?: number;
+status?: string;
+assigneeId?: number;
+scope?: ListTasksScope;
+page?: number;
+limit?: number;
 };
 
-export type ListTasksScope =
-  (typeof ListTasksScope)[keyof typeof ListTasksScope];
+export type ListTasksScope = typeof ListTasksScope[keyof typeof ListTasksScope];
+
 
 export const ListTasksScope = {
-  all: "all",
-  mine: "mine",
-  unassigned: "unassigned",
-  created: "created",
+  all: 'all',
+  mine: 'mine',
+  unassigned: 'unassigned',
+  created: 'created',
 } as const;
 
 export type ListAssignableMembersParams = {
-  for?: ListAssignableMembersFor;
+for?: ListAssignableMembersFor;
 };
 
-export type ListAssignableMembersFor =
-  (typeof ListAssignableMembersFor)[keyof typeof ListAssignableMembersFor];
+export type ListAssignableMembersFor = typeof ListAssignableMembersFor[keyof typeof ListAssignableMembersFor];
+
 
 export const ListAssignableMembersFor = {
-  bug: "bug",
-  task: "task",
+  bug: 'bug',
+  task: 'task',
 } as const;
 
+export type ListProjectCommentPreviews200PreviewsItemThreadType = typeof ListProjectCommentPreviews200PreviewsItemThreadType[keyof typeof ListProjectCommentPreviews200PreviewsItemThreadType];
+
+
+export const ListProjectCommentPreviews200PreviewsItemThreadType = {
+  project: 'project',
+  project_internal: 'project_internal',
+  company_team: 'company_team',
+  company_team_unofficial: 'company_team_unofficial',
+} as const;
+
+export type ListProjectCommentPreviews200PreviewsItem = {
+  projectId: number;
+  threadType: ListProjectCommentPreviews200PreviewsItemThreadType;
+  lastMessageAt: string;
+  lastPreview: string;
+  lastAuthorName: string;
+  lastAuthorId: number;
+};
+
+export type ListProjectCommentPreviews200 = {
+  previews: ListProjectCommentPreviews200PreviewsItem[];
+};
+
+export type ListCompanyTeamMentionCandidates200CandidatesItem = {
+  id: number;
+  name: string;
+};
+
+export type ListCompanyTeamMentionCandidates200 = {
+  candidates: ListCompanyTeamMentionCandidates200CandidatesItem[];
+};
+
 export type ListCommentsParams = {
-  threadType: string;
-  threadId: number;
-  page?: number;
-  limit?: number;
-  recent?: boolean;
+threadType: string;
+threadId: number;
+page?: number;
+limit?: number;
+/**
+ * When true, returns the most recent comments up to limit.
+ */
+recent?: boolean;
+};
+
+export type CreateDirectConversation201 = {
+  conversation: DirectConversation;
 };
 
 export type ListNotificationsParams = {
-  unreadOnly?: boolean;
-  page?: number;
-  limit?: number;
+unreadOnly?: boolean;
+page?: number;
+limit?: number;
 };
 
 export type ListRequestsParams = {
-  status?: string;
-  projectId?: number;
-  page?: number;
-  limit?: number;
+status?: string;
+projectId?: number;
+page?: number;
+limit?: number;
 };
 
 export type GetTeamAnalyticsParams = {
-  month?: number;
-  year?: number;
+month?: number;
+year?: number;
 };
 
 export type GetBugAnalyticsParams = {
-  projectId?: number;
+projectId?: number;
 };
 
 export type GlobalSearchParams = {
-  q: string;
-  limit?: number;
+q: string;
+limit?: number;
 };
+
