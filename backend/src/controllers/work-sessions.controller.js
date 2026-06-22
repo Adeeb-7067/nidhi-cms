@@ -1,12 +1,30 @@
-import { clockIn, clockOut, getActiveSession, listSessions, listActiveSessions, terminateSession } from "../services/work-sessions.service.js";
+import {
+  clockIn,
+  clockOut,
+  computeSessionDurations,
+  getActiveSession,
+  listSessions,
+  listActiveSessions,
+  listDailySessionTotals,
+  terminateSession,
+  touchHeartbeat,
+} from "../services/work-sessions.service.js";
+import { broadcastWorkSessionSync } from "../services/work-session-sync.js";
 import { badRequest, parseIdParam } from "../utils/route-errors.js";
-import { notifyUser } from "../lib/realtime.js";
 
 // Only these values are accepted from external callers — prevents injection of internal codes.
-const ALLOWED_STOP_REASONS = ["clock_out", "app_quit", "logout"];
+const ALLOWED_STOP_REASONS = [
+  "clock_out",
+  "app_quit",
+  "logout",
+  "system_sleep",
+  "system_shutdown",
+  "network_lost",
+];
 
 function formatSession(session) {
   if (!session) return null;
+  const { totalDurationMs, activeDurationMs, pauseDurationMs } = computeSessionDurations(session);
   return {
     id: session.id,
     userId: session.userId,
@@ -15,15 +33,40 @@ function formatSession(session) {
     isActive: session.isActive,
     deviceInfo: session.deviceInfo ?? null,
     stopReason: session.stopReason ?? null,
-    durationMs: session.endedAt
-      ? new Date(session.endedAt) - new Date(session.startedAt)
-      : Date.now() - new Date(session.startedAt),
+    lastHeartbeatAt: session.lastHeartbeatAt ?? null,
+    pausePeriods: session.pausePeriods ?? [],
+    /** Active work time — excludes recorded pause periods between clock-out/in. */
+    durationMs: activeDurationMs,
+    totalDurationMs,
+    pauseDurationMs,
   };
 }
 
 export async function handleClockIn(req, res) {
-  const session = await clockIn(req.user.id, req.body.deviceInfo ?? req.headers["user-agent"]);
-  res.status(201).json({ session: formatSession(session) });
+  const forceNew = req.body.forceNew === true;
+  const { session, resumed } = await clockIn(
+    req.user.id,
+    req.body.deviceInfo ?? req.headers["user-agent"],
+    { forceNew },
+  );
+  const formatted = formatSession(session);
+  broadcastWorkSessionSync(req.user.id, {
+    action: resumed ? "resume" : "clock_in",
+    session: formatted,
+  });
+  res.status(201).json({ session: formatted, resumed });
+}
+
+export async function handleHeartbeat(req, res) {
+  const { session, stopReason } = await touchHeartbeat(req.user.id);
+  if (!session) {
+    return res.status(200).json({
+      session: null,
+      stopReason: stopReason ?? undefined,
+      message: "No active session found",
+    });
+  }
+  res.json({ session: formatSession(session) });
 }
 
 export async function handleClockOut(req, res) {
@@ -33,9 +76,12 @@ export async function handleClockOut(req, res) {
   }
   const session = await clockOut(req.user.id, reason);
   if (!session) {
+    broadcastWorkSessionSync(req.user.id, { action: "clock_out", session: null });
     return res.status(200).json({ session: null, message: "No active session found" });
   }
-  res.json({ session: formatSession(session) });
+  const formatted = formatSession(session);
+  broadcastWorkSessionSync(req.user.id, { action: "clock_out", session: formatted });
+  res.json({ session: formatted });
 }
 
 export async function handleGetActive(req, res) {
@@ -44,8 +90,8 @@ export async function handleGetActive(req, res) {
   const userId = isAdmin && req.query.userId
     ? parseIdParam(req.query.userId, "userId")
     : req.user.id;
-  const session = await getActiveSession(userId);
-  res.json({ session: formatSession(session) });
+  const { session, stopReason } = await getActiveSession(userId);
+  res.json({ session: formatSession(session), stopReason: stopReason ?? undefined });
 }
 
 export async function handleListActiveSessions(req, res) {
@@ -60,13 +106,7 @@ export async function handleForceTerminate(req, res) {
   if (!session) {
     return res.status(200).json({ session: null, message: "Session not found or already ended" });
   }
-  // Notify the affected user in real-time so their Electron client stops immediately
-  notifyUser(session.userId, "session_terminated", {
-    sessionId: session.id,
-    reason: "admin_terminated",
-    terminatedBy: req.user.id,
-    terminatedAt: new Date().toISOString(),
-  });
+  // Realtime + notification handled in terminateSession → notifyWorkSessionEnded
   res.json({ session: formatSession(session) });
 }
 
@@ -91,4 +131,30 @@ export async function handleListSessions(req, res) {
     page: result.page,
     limit: result.limit,
   });
+}
+
+export async function handleListDailyTotals(req, res) {
+  const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 30));
+  const isAdmin = req.user.role === "super_admin";
+
+  let userId;
+  if (isAdmin) {
+    userId = req.query.userId ? parseIdParam(req.query.userId, "userId") : null;
+  } else {
+    userId = req.user.id;
+  }
+
+  try {
+    const result = await listDailySessionTotals({
+      userId,
+      fromDate: req.query.fromDate,
+      toDate: req.query.toDate,
+      page,
+      limit,
+    });
+    res.json(result);
+  } catch (err) {
+    badRequest(err.message ?? "Invalid date range", "dateRange");
+  }
 }

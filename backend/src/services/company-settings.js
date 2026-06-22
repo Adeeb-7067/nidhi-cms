@@ -3,6 +3,9 @@ import { companySettingsTable, getNextSequence } from "../models/schema/index.js
 const DEFAULT_REQUIRED_DAILY_HOURS = 7.5;
 const DEFAULT_DAILY_LOG_REMINDER_HOUR = 23;
 
+/** Sensitive-app screenshot blur is mandatory — not admin-configurable. */
+export const SCREENSHOT_BLUR_ALWAYS_ENABLED = true;
+
 // Settings are a singleton document that changes rarely (only when an admin
 // explicitly updates them). Cache them in-process for 60 s to avoid a DB
 // round-trip on every monitoring/consent/work-policy request.
@@ -61,8 +64,17 @@ export function formatSettings(settings) {
     screenshotEnabled: settings.screenshotEnabled ?? false,
     screenshotIntervalMinutes: settings.screenshotIntervalMinutes ?? 10,
     screenshotRetentionDays: settings.screenshotRetentionDays ?? 30,
-    screenshotBlurEnabled: settings.screenshotBlurEnabled ?? false,
+    screenshotBlurEnabled: SCREENSHOT_BLUR_ALWAYS_ENABLED,
     screenshotConsentVersion: settings.screenshotConsentVersion ?? "1.0",
+    hrmLeaveYearStartMonth: settings.hrmLeaveYearStartMonth ?? 1,
+    hrmDefaultShiftTemplateId: settings.hrmDefaultShiftTemplateId ?? null,
+    hrmAttendanceShortfallThresholdMinutes: settings.hrmAttendanceShortfallThresholdMinutes ?? 0,
+    hrmWeekendDays: settings.hrmWeekendDays ?? [0, 6],
+    hrmGlobalWfhMode: settings.hrmGlobalWfhMode ?? false,
+    hrmPaidLeavesPerMonth: settings.hrmPaidLeavesPerMonth ?? 1,
+    hrmMaxFreeLates: settings.hrmMaxFreeLates ?? 3,
+    hrmElectronOnlyClock: settings.hrmElectronOnlyClock ?? false,
+    hrmLeaveCarryForwardStartYear: settings.hrmLeaveCarryForwardStartYear ?? 2026,
     updatedAt: settings.updatedAt.toISOString()
   };
 }

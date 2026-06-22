@@ -31,6 +31,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatUserRole } from "@/lib/bug-workflow";
+import { isStaffEmployeeRole } from "@/lib/user-roles";
 import {
   Loader2,
   Trash2,
@@ -81,7 +82,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
   const assignedIds = new Set((members ?? []).map((m) => m.userId));
   const availableUsers = (usersData?.users ?? []).filter(
     (u) =>
-      (u.role === "developer" || u.role === "tester" || u.role === "qa") &&
+      isStaffEmployeeRole(u.role) &&
       u.status === "active" &&
       !assignedIds.has(u.id),
   );

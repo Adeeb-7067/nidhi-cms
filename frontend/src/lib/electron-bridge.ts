@@ -14,11 +14,19 @@ declare global {
       quitAndInstall: () => void;
       onUpdateAvailable: (cb: (info: { version: string }) => void) => () => void;
       onUpdateDownloaded: (cb: (info: { version: string }) => void) => () => void;
-      setScreenshotConfig: (cfg: { enabled: boolean; intervalMs: number; sessionId?: number }) => void;
+      setScreenshotConfig: (cfg: {
+        enabled: boolean;
+        intervalMs: number;
+        sessionId?: number;
+        apiBaseUrl?: string;
+        blurSensitiveApps?: boolean;
+        accessToken?: string;
+      }) => void;
       pauseScreenshotMonitoring: (durationMs: number) => void;
       onMonitoringStateChange: (cb: (state: string) => void) => () => void;
       notifyClockOutDone: () => void;
       onPreQuit: (cb: () => Promise<void>) => () => void;
+      onSessionEnded: (cb: (payload: { stopReason: string; silent?: boolean }) => void) => () => void;
     };
   }
 }

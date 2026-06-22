@@ -45,6 +45,7 @@ import * as z from "zod";
 import { Loader2, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
+import { isDeveloperRole } from "@/lib/user-roles";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   PRIORITY_LABELS,
@@ -166,7 +167,7 @@ export function BugFormDialog({
       },
     },
   );
-  const developers = (assignableData?.members ?? []).filter((m) => m.role === "developer");
+  const developers = (assignableData?.members ?? []).filter((m) => isDeveloperRole(m.role));
 
   useEffect(() => {
     if (!open) return;

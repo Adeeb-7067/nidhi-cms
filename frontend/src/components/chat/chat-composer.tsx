@@ -144,6 +144,7 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const voiceSendInFlightRef = useRef(false);
   const autoMaxSentRef = useRef(false);
+  const pendingTextareaRefocusRef = useRef(false);
   const { isRecording, seconds, start, stop, cancel } = useVoiceRecorder();
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -183,6 +184,16 @@ export function ChatComposer({
   useLayoutEffect(() => {
     syncTextareaHeight(textareaRef.current);
   }, [value, compact]);
+
+  const scheduleTextareaRefocus = useCallback(() => {
+    pendingTextareaRefocusRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!pendingTextareaRefocusRef.current || isUploading || isSubmitting) return;
+    pendingTextareaRefocusRef.current = false;
+    textareaRef.current?.focus();
+  }, [isUploading, isSubmitting]);
 
   const clearPendingAttachment = useCallback(() => {
     setPendingAttachment((prev) => {
@@ -329,9 +340,10 @@ export function ChatComposer({
       toastApiError(err, "Failed to send voice message");
     } finally {
       voiceSendInFlightRef.current = false;
+      scheduleTextareaRefocus();
       setIsUploading(false);
     }
-  }, [isRecording, isUploading, seconds, stop, onSubmit]);
+  }, [isRecording, isUploading, seconds, stop, onSubmit, scheduleTextareaRefocus]);
 
   const handleVoiceCancel = () => {
     if (isUploading) return;
@@ -386,6 +398,7 @@ export function ChatComposer({
     } catch (err) {
       toastApiError(err, "Failed to send message");
     } finally {
+      scheduleTextareaRefocus();
       setIsUploading(false);
     }
   };

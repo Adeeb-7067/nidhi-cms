@@ -40,7 +40,7 @@ import {
   DevEmptyState,
 } from "@/components/dev/dev-page-kit";
 import { PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
-import { isQaStaffRole } from "@/lib/navigation";
+import { isDeveloperRole, isQaStaffRole } from "@/lib/navigation";
 
 const ONGOING_STATUSES = "in_progress,scoping,uat,on_hold";
 
@@ -250,7 +250,7 @@ export default function DevProjects() {
   const { user } = useAuth();
   const role = user?.role ?? "developer";
   const isQa = isQaStaffRole(role);
-  const isDeveloper = role === "developer";
+  const isDeveloper = isDeveloperRole(role);
 
   const [tab, setTab] = useState<"ongoing" | "maintenance" | "all">("ongoing");
   const [searchQuery, setSearchQuery] = useState("");

@@ -42,6 +42,8 @@ import { formatLastLogin } from "@/lib/presence";
 const ROLE_STYLES: Record<string, string> = {
   super_admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25",
   developer: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  freelancer: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/25",
+  qa: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
   tester: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
   client: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
 };

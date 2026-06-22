@@ -1,5 +1,5 @@
 import { monitoringConsentsTable, getNextSequence } from "../models/schema/index.js";
-import { getOrCreateSettings } from "./company-settings.js";
+import { getOrCreateSettings, SCREENSHOT_BLUR_ALWAYS_ENABLED } from "./company-settings.js";
 
 export async function getConsentStatus(userId) {
   const [consent, settings] = await Promise.all([
@@ -56,12 +56,12 @@ export async function recordConsent({ userId, ipAddress, userAgent }) {
 export async function getMonitoringStatus() {
   const settings = await getOrCreateSettings();
   return {
-    screenshotEnabled: settings.screenshotEnabled,
-    screenshotIntervalMinutes: settings.screenshotIntervalMinutes,
-    screenshotRetentionDays: settings.screenshotRetentionDays,
-    screenshotBlurEnabled: settings.screenshotBlurEnabled,
-    screenshotConsentVersion: settings.screenshotConsentVersion
-  }; 
+    screenshotEnabled: settings.screenshotEnabled ?? false,
+    screenshotIntervalMinutes: settings.screenshotIntervalMinutes ?? 10,
+    screenshotRetentionDays: settings.screenshotRetentionDays ?? 30,
+    screenshotBlurEnabled: SCREENSHOT_BLUR_ALWAYS_ENABLED,
+    screenshotConsentVersion: settings.screenshotConsentVersion ?? "1.0",
+  };
 }
 
 export async function listAllConsents({ page = 1, limit = 50 } = {}) {

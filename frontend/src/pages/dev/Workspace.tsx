@@ -15,8 +15,10 @@ import {
   Layers,
   TrendingUp,
   Activity,
+  MapPin,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { isDeveloperRole } from "@/lib/navigation";
 import { useGetWorkspaceDashboard } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,10 +83,33 @@ function projectStatusBadgeClass(status: string) {
 
 const ROLE_LABELS: Record<string, string> = {
   developer: "Developer",
+  freelancer: "Freelancer",
   tester: "QA / Tester",
   qa: "QA / Tester",
   super_admin: "Super Admin",
 };
+
+function milestoneStatusClass(status: string) {
+  switch (status) {
+    case "completed":
+      return "border-green-500/40 text-green-600 dark:text-green-400";
+    case "delayed":
+      return "border-rose-500/40 text-rose-600 dark:text-rose-400";
+    default:
+      return "border-blue-500/40 text-blue-600 dark:text-blue-400";
+  }
+}
+
+function formatMilestoneDue(plannedDate: string) {
+  const date = new Date(plannedDate);
+  if (Number.isNaN(date.getTime())) return "—";
+  const daysLeft = Math.ceil((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const label = date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (daysLeft < 0) return `${label} · ${Math.abs(daysLeft)}d overdue`;
+  if (daysLeft === 0) return `${label} · due today`;
+  if (daysLeft <= 7) return `${label} · ${daysLeft}d left`;
+  return label;
+}
 
 export default function DevWorkspace() {
   const { user } = useAuth();
@@ -103,7 +128,8 @@ export default function DevWorkspace() {
 
   const role = data.role ?? user.role ?? "developer";
   const isTester = role === "tester" || role === "qa";
-  const isDeveloper = role === "developer";
+  const isDeveloper = isDeveloperRole(role);
+  const isPortalStaff = isDeveloper || isTester;
   const canReportBugs = isTester || role === "super_admin";
   const kpis = data.kpis;
 
@@ -138,6 +164,8 @@ export default function DevWorkspace() {
     month: "long",
     day: "numeric",
   });
+
+  const myMilestones = data.myMilestones ?? [];
 
   const quickActions = isTester
     ? [
@@ -179,6 +207,18 @@ export default function DevWorkspace() {
   const secondaryKpis = [
     ...(isDeveloper && kpis.hoursThisWeek != null
       ? [{ title: "Hours this week", value: kpis.hoursThisWeek, hint: "Logged time", icon: Clock, href: "/dev/logs", accent: "green" as const, delay: 4 }]
+      : []),
+    ...(isPortalStaff && kpis.milestonesAssigned != null
+      ? [{
+          title: "My milestones",
+          value: kpis.milestonesAssigned,
+          hint: kpis.milestonesAssigned === 1 ? "Assigned to you" : "Assigned to you",
+          icon: MapPin,
+          href: "/dev/projects",
+          accent: "violet" as const,
+          alert: kpis.milestonesAssigned > 0,
+          delay: 5,
+        }]
       : []),
     ...(isTester && kpis.bugsReported != null
       ? [{ title: "Bugs reported", value: kpis.bugsReported, hint: "Issues you filed", icon: FlaskConical, href: "/dev/bugs", accent: "amber" as const, alert: kpis.bugsReported > 0, delay: 4 }]
@@ -233,6 +273,49 @@ export default function DevWorkspace() {
           <DashboardSectionLabel title="Activity" />
           <PortalKpiGrid columns={4} count={secondaryKpis.length} items={secondaryKpis} />
         </div>
+      )}
+
+      {isPortalStaff && (
+        <section>
+          <ChartPanel
+            title="My milestones"
+            description="Phases assigned to you across your projects"
+            icon={MapPin}
+            accent="violet"
+            badge={myMilestones.length}
+          >
+            {myMilestones.length > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                {myMilestones.map((milestone) => (
+                  <Link key={milestone.id} href={getProjectDetailHref(milestone.projectId)}>
+                    <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5 hover:bg-muted/40 transition-colors h-full">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-medium line-clamp-2 leading-snug">{milestone.title}</p>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[8px] shrink-0 capitalize h-4 px-1", milestoneStatusClass(milestone.status))}
+                        >
+                          {milestone.status}
+                        </Badge>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mt-1.5 truncate">{milestone.projectName}</p>
+                      <p className={cn(
+                        "text-[10px] mt-0.5 font-medium",
+                        milestone.status === "delayed" || new Date(milestone.plannedDate).getTime() < Date.now()
+                          ? "text-rose-500"
+                          : "text-muted-foreground",
+                      )}>
+                        {formatMilestoneDue(milestone.plannedDate)}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <ChartEmptyState message="No milestones assigned to you yet." icon={MapPin} />
+            )}
+          </ChartPanel>
+        </section>
       )}
 
       <section>

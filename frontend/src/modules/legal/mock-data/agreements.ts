@@ -1,0 +1,75 @@
+import type { AgreementRecord } from "../types";
+import { counsel } from "./counsel";
+
+export const mockAgreements: AgreementRecord[] = [
+  {
+    id: 501,
+    title: "Master Services Agreement",
+    counterparty: "Paytm Payments Bank",
+    type: "msa",
+    status: "active",
+    effectiveFrom: "2024-01-01",
+    renewalDate: "2027-01-01",
+    risk: "low",
+    assignedTo: counsel(1),
+  },
+  {
+    id: 502,
+    title: "Cloud Infrastructure SLA",
+    counterparty: "CloudHost India Pvt. Ltd.",
+    type: "sla",
+    status: "renewal_due",
+    effectiveFrom: "2023-04-01",
+    renewalDate: "2026-07-01",
+    risk: "medium",
+    assignedTo: counsel(2),
+  },
+  {
+    id: 503,
+    title: "Employment Agreement — Senior Dev",
+    counterparty: "Mohammed Farooq",
+    type: "employment",
+    status: "active",
+    effectiveFrom: "2024-08-15",
+    renewalDate: "2027-08-14",
+    risk: "low",
+    assignedTo: counsel(2),
+  },
+  {
+    id: 504,
+    title: "Software License Agreement",
+    counterparty: "DevTools Licensing AB",
+    type: "license",
+    status: "renewal_due",
+    effectiveFrom: "2024-02-01",
+    renewalDate: "2026-06-30",
+    risk: "high",
+    assignedTo: counsel(1),
+  },
+  {
+    id: 505,
+    title: "Vendor Supply Agreement",
+    counterparty: "PrintMax Solutions",
+    type: "vendor",
+    status: "active",
+    effectiveFrom: "2025-01-01",
+    renewalDate: "2026-12-31",
+    risk: "low",
+    assignedTo: counsel(2),
+  },
+  {
+    id: 506,
+    title: "Consulting MSA",
+    counterparty: "LexCorp Associates",
+    type: "msa",
+    status: "expired",
+    effectiveFrom: "2023-01-01",
+    renewalDate: "2025-12-31",
+    risk: "medium",
+    assignedTo: counsel(1),
+  },
+];
+
+export const agreementRenewalReminders = mockAgreements.filter(
+  (a) => a.status === "renewal_due" || a.status === "expired",
+);

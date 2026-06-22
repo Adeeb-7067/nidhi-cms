@@ -3,7 +3,23 @@ import { customFetch } from "./custom-fetch";
 import { apiUrl } from "@/lib/api-base";
 import { useRealtime } from "@/contexts/RealtimeContext";
 
-export type StopReason = "clock_out" | "app_quit" | "logout" | "session_expired" | "admin_terminated";
+export type StopReason =
+  | "clock_out"
+  | "app_quit"
+  | "logout"
+  | "session_expired"
+  | "day_ended"
+  | "admin_terminated"
+  | "system_sleep"
+  | "system_shutdown"
+  | "network_lost"
+  | "client_disconnected";
+
+export interface WorkSessionPausePeriod {
+  pausedAt: string;
+  resumedAt: string | null;
+  stopReason: StopReason | null;
+}
 
 export interface WorkSession {
   id: number;
@@ -13,7 +29,17 @@ export interface WorkSession {
   isActive: boolean;
   deviceInfo: string | null;
   stopReason: StopReason | null;
+  lastHeartbeatAt?: string | null;
+  pausePeriods?: WorkSessionPausePeriod[];
+  /** Active work time (excludes pause periods). */
   durationMs: number;
+  totalDurationMs?: number;
+  pauseDurationMs?: number;
+}
+
+export interface ClockInResponse {
+  session: WorkSession;
+  resumed?: boolean;
 }
 
 export const activeSessionQueryKey = () => ["work-sessions", "active"] as const;
@@ -23,10 +49,26 @@ export function useActiveSession(enabled = true) {
   const { isConnected } = useRealtime();
   return useQuery({
     queryKey: activeSessionQueryKey(),
-    queryFn: () => customFetch<{ session: WorkSession | null }>(apiUrl("/api/work-sessions/active")),
+    queryFn: () =>
+      customFetch<{ session: WorkSession | null; stopReason?: string }>(
+        apiUrl("/api/work-sessions/active"),
+      ),
+    select: (data) => ({
+      ...data,
+      // Clock-out API returns an ended session; /active only ever returns isActive sessions.
+      session: data.session?.isActive ? data.session : null,
+    }),
     enabled,
-    refetchInterval: isConnected ? false : 30_000,
+    refetchInterval: (query) => {
+      const session = query.state.data?.session;
+      if (session?.isActive) return 60_000;
+      if (isConnected) return false;
+      return 30_000;
+    },
     staleTime: 15_000,
+    retry: 2,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   });
 }
 
@@ -34,12 +76,13 @@ export function useClockIn() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (deviceInfo?: string) =>
-      customFetch<{ session: WorkSession }>(apiUrl("/api/work-sessions/clock-in"), {
+      customFetch<ClockInResponse>(apiUrl("/api/work-sessions/clock-in"), {
         method: "POST",
         body: JSON.stringify({ deviceInfo }),
         headers: { "Content-Type": "application/json" },
       }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      qc.setQueryData(activeSessionQueryKey(), { session: data.session });
       qc.invalidateQueries({ queryKey: ["work-sessions"] });
     },
   });
@@ -68,6 +111,24 @@ export interface ConsentListResponse {
   limit: number;
 }
 
+export interface DailySessionTotal {
+  userId: number;
+  date: string;
+  totalMs: number;
+  sessionCount: number;
+  hasActiveSession: boolean;
+}
+
+export interface DailySessionTotalsResponse {
+  data: DailySessionTotal[];
+  total: number;
+  page: number;
+  limit: number;
+  from: string;
+  to: string;
+  timezone: string;
+}
+
 export function useAdminWorkSessions(params: { userId?: number; page?: number; limit?: number } = {}) {
   const sp = new URLSearchParams();
   if (params.userId) sp.set("userId", String(params.userId));
@@ -86,7 +147,28 @@ export function useAdminActiveAll() {
     queryKey: ["work-sessions", "active-all"],
     queryFn: () =>
       customFetch<{ data: WorkSession[]; total: number }>(apiUrl("/api/work-sessions/active-all")),
-    refetchInterval: 30_000,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useDailySessionTotals(
+  params: { userId?: number; fromDate?: string; toDate?: string; page?: number; limit?: number } = {},
+  options?: { refetchInterval?: number | false },
+) {
+  const sp = new URLSearchParams();
+  if (params.userId) sp.set("userId", String(params.userId));
+  if (params.fromDate) sp.set("fromDate", params.fromDate);
+  if (params.toDate) sp.set("toDate", params.toDate);
+  if (params.page) sp.set("page", String(params.page));
+  if (params.limit) sp.set("limit", String(params.limit));
+  const qs = sp.toString();
+  return useQuery({
+    queryKey: ["work-sessions", "daily-totals", params],
+    queryFn: () =>
+      customFetch<DailySessionTotalsResponse>(
+        apiUrl(`/api/work-sessions/daily-totals${qs ? `?${qs}` : ""}`),
+      ),
+    refetchInterval: options?.refetchInterval,
   });
 }
 
@@ -112,6 +194,7 @@ export function useClockOut() {
         headers: { "Content-Type": "application/json" },
       }),
     onSuccess: () => {
+      qc.setQueryData(activeSessionQueryKey(), { session: null });
       qc.invalidateQueries({ queryKey: ["work-sessions"] });
     },
   });

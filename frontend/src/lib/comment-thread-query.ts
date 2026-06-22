@@ -245,12 +245,14 @@ export function patchDiscussionPreviewFromComment(
   queryClient: QueryClient,
   projectId: number,
   comment: Comment,
-  threadType: "project" | "project_internal" | "company_team" =
+  threadType: "project" | "project_internal" | "company_team" | "company_team_unofficial" =
     comment.threadType === "company_team"
       ? "company_team"
-      : comment.threadType === "project_internal"
-        ? "project_internal"
-        : "project",
+      : comment.threadType === "company_team_unofficial"
+        ? "company_team_unofficial"
+        : comment.threadType === "project_internal"
+          ? "project_internal"
+          : "project",
 ) {
   const at = comment.createdAt ?? new Date().toISOString();
   const entry = {

@@ -7,7 +7,7 @@ router.get("/analytics/dashboard", requireAuth, requireRole("super_admin"), asyn
 router.get(
   "/analytics/workspace",
   requireAuth,
-  requireRole("developer", "tester", "qa", "super_admin"),
+  requireRole("developer", "tester", "qa", "freelancer", "super_admin"),
   asyncHandler(analyticsController.getAnalyticsWorkspace),
 );
 router.get(

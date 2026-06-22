@@ -1,7 +1,9 @@
 import type { Notification } from "@/api";
 import type { ProjectDiscussionPreview } from "@/api/discussion-previews";
+import type { DirectConversation } from "@/api/direct-conversations";
 import {
   discussionChannelKey,
+  isCompanyTeamChannel,
   type DiscussionChannel,
   type ProjectDiscussionThreadType,
 } from "@/lib/discussion-channels";
@@ -81,7 +83,10 @@ function isUnreadDiscussionNotification(n: NotificationRow): boolean {
   const type = (n.type ?? "").toLowerCase();
   if (type !== "comment" && type !== "comment_mention") return false;
   const entity = (n.entityType ?? "").toLowerCase();
-  if (entity === "company_team") {
+  if (entity === "direct") {
+    return n.entityId != null && n.entityId > 0;
+  }
+  if (entity === "company_team" || entity === "company_team_unofficial") {
     return n.entityId != null && n.entityId === 0;
   }
   return (
@@ -94,7 +99,9 @@ function isUnreadDiscussionNotification(n: NotificationRow): boolean {
 function authorFromNotificationTitle(title: string): string {
   const commentedSuffix = " commented";
   const mentionSuffix = " mentioned you";
+  const messageSuffix = " sent you a message";
   if (title.endsWith(mentionSuffix)) return title.slice(0, -mentionSuffix.length);
+  if (title.endsWith(messageSuffix)) return title.slice(0, -messageSuffix.length);
   if (title.endsWith(commentedSuffix)) return title.slice(0, -commentedSuffix.length);
   return title;
 }
@@ -121,6 +128,26 @@ export function buildChannelActivityFromPreviews(
       lastAuthorName: p.lastAuthorName ?? undefined,
       lastAuthorId: p.lastAuthorId ?? undefined,
       unreadCount: 0,
+    };
+  }
+  return out;
+}
+
+export function buildChannelActivityFromDirectConversations(
+  conversations: DirectConversation[],
+  lastRead: Record<string, string>,
+): Record<string, ChannelActivity> {
+  const out: Record<string, ChannelActivity> = {};
+  for (const conversation of conversations) {
+    const key = discussionChannelKey("direct", conversation.id);
+    const lastMessageAt = conversation.lastMessageAt ?? conversation.updatedAt;
+    const alreadyRead = !isActivityAfterLastRead(lastMessageAt, lastRead[key]);
+    out[key] = {
+      lastMessageAt,
+      lastPreview: conversation.lastPreview ?? undefined,
+      lastAuthorName: conversation.lastAuthorName ?? undefined,
+      lastAuthorId: conversation.lastAuthorId ?? undefined,
+      unreadCount: alreadyRead ? 0 : 1,
     };
   }
   return out;
@@ -162,9 +189,13 @@ export function buildChannelActivityFromNotifications(
     const threadType = (
       entity === "company_team"
         ? "company_team"
-        : entity === "project_internal"
-          ? "project_internal"
-          : "project"
+        : entity === "company_team_unofficial"
+          ? "company_team_unofficial"
+          : entity === "project_internal"
+            ? "project_internal"
+            : entity === "direct"
+              ? "direct"
+              : "project"
     ) as ProjectDiscussionThreadType;
     const projectId = n.entityId!;
     const channelKey = discussionChannelKey(threadType, projectId);
@@ -234,8 +265,15 @@ export function compareChannelsForChatList(
   b: DiscussionChannel,
   channelActivity: Record<string, ChannelActivity>,
 ): number {
-  if (a.threadType === "company_team" && b.threadType !== "company_team") return -1;
-  if (b.threadType === "company_team" && a.threadType !== "company_team") return 1;
+  const aOffice = isCompanyTeamChannel(a.threadType);
+  const bOffice = isCompanyTeamChannel(b.threadType);
+  if (aOffice && bOffice) {
+    if (a.threadType !== b.threadType) {
+      if (a.threadType === "company_team") return -1;
+      if (b.threadType === "company_team") return 1;
+    }
+  } else if (aOffice && !bOffice) return -1;
+  else if (bOffice && !aOffice) return 1;
 
   const aUnread = channelActivity[a.key]?.unreadCount ?? 0;
   const bUnread = channelActivity[b.key]?.unreadCount ?? 0;
@@ -270,9 +308,13 @@ export function filterUnreadCommentNotifications(
     const normalizedType =
       entity === "company_team"
         ? "company_team"
-        : entity === "project_internal"
-          ? "project_internal"
-          : "project";
+        : entity === "company_team_unofficial"
+          ? "company_team_unofficial"
+          : entity === "project_internal"
+            ? "project_internal"
+            : entity === "direct"
+              ? "direct"
+              : "project";
     return n.entityId === projectId && normalizedType === threadType;
   });
 }

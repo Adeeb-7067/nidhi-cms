@@ -1,19 +1,20 @@
 import { verifyAccessToken } from "../lib/jwt.js";
 import { usersTable } from "../models/schema/index.js";
 import { HttpError } from "../lib/http-error.js";
+import { loadClientContext } from "../services/client-team.js";
 
 // In-process TTL cache: eliminates one DB query per authenticated request.
 // Trade-off: a deactivated or role-changed user has up to 30 s before the
 // change is reflected. Acceptable for this app's team size and threat model.
 const AUTH_CACHE_TTL_MS = 30_000;
 const _authCache = new Map(); // userId → { data: UserDoc, expiresAt: number }
-
+ 
 async function getCachedUser(userId) {
   const now = Date.now();
   const entry = _authCache.get(userId);
   if (entry && entry.expiresAt > now) return entry.data;
 
-  const user = await usersTable.findOne(
+  const user = await usersTable.findOne( 
     { id: userId },
     { id: 1, role: 1, name: 1, email: 1, status: 1 }
   );
@@ -89,8 +90,36 @@ function requireRole(...roles) {
     next();
   };
 }
+/**
+ * Restricts the route to the primary client contact for a given company.
+ * Team members and other roles are rejected with 403. For per-section
+ * checks against an authenticated client team member, use
+ * `assertClientPermission(req, section, level)` from
+ * services/client-team.js inside the controller body.
+ */
+async function requireClientAdmin(req, _res, next) {
+  if (!req.user) {
+    throw new HttpError(401, "Please sign in to continue.", { code: "UNAUTHORIZED" });
+  }
+  if (req.user.role !== "client") {
+    throw new HttpError(403, "This action is only available to client accounts.", {
+      code: "FORBIDDEN",
+    });
+  }
+  const ctx = await loadClientContext(req);
+  if (!ctx || !ctx.isAdmin) {
+    throw new HttpError(
+      403,
+      "Only the Client Admin for this company can manage team members.",
+      { code: "FORBIDDEN" },
+    );
+  }
+  next();
+}
+
 export {
   evictUserFromAuthCache,
   requireAuth,
+  requireClientAdmin,
   requireRole
 };

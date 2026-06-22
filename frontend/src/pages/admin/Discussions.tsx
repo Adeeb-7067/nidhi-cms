@@ -8,6 +8,11 @@ import {
   useListNotifications,
   useMarkNotificationRead,
   useDiscussionPreviews,
+  useDirectConversations,
+  useDirectConversationContacts,
+  useCreateDirectConversation,
+  directConversationsQueryKey,
+  patchDirectConversationFromComment,
   getListCommentsQueryKey,
   getListNotificationsQueryKey,
   type Comment,
@@ -22,18 +27,30 @@ import {
   DiscussionSectionRail,
   type DiscussionAdminSection,
 } from "@/components/discussions/discussion-section-rail";
+import { NewConversationPicker } from "@/components/discussions/new-conversation-picker";
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   buildDiscussionChannels,
+  buildDirectChannelFromContact,
+  buildDirectDiscussionChannels,
+  adminSectionForDirectPeer,
+  parsePendingDirectPeerId,
+  parseDiscussionChannelKey,
+  pendingDirectChannelKey,
+  resolveDirectConversationIdFromKey,
+  isAdminDirectSelectionKey,
+  isDirectChannelRowSelected,
   canAccessInternalDiscussion,
   COMPANY_TEAM_THREAD_ID,
+  COMPANY_TEAM_UNOFFICIAL_THREAD_ID,
   discussionChannelKey,
   discussionChannelSubtitle,
   discussionChannelTitle,
   isCompanyTeamChannel,
+  isDirectChannel,
   type DiscussionChannel,
   type DiscussionChannelFilter,
   type ProjectDiscussionThreadType,
@@ -42,6 +59,7 @@ import {
   clearDiscussionsProjectFromUrl,
   readDiscussionsChannelFromUrl,
   readDiscussionsProjectIdFromUrl,
+  readDiscussionsDirectConversationIdFromUrl,
 } from "@/lib/discussions-navigation";
 import { useLocation } from "wouter";
 import {
@@ -65,13 +83,27 @@ import {
   mergePreviewSnapshot,
   reconcileChannelActivity,
   saveChannelLastRead,
+  buildChannelActivityFromDirectConversations,
   type ChannelActivity,
 } from "@/lib/discussions-read-state";
+import type { DirectConversationPeer, DirectConversation } from "@/api/direct-conversations";
 import {
   applyProjectCommentToCaches,
   channelActivityPatchFromComment,
   discussionCommentPreview,
 } from "@/lib/discussion-realtime";
+function channelMatchesSearch(channel: DiscussionChannel, q: string): boolean {
+  if (!q) return true;
+  const title = discussionChannelTitle(channel.project.name, channel.threadType, channel.peerUser).toLowerCase();
+  const subtitle = discussionChannelSubtitle(channel.threadType, channel.peerUser).toLowerCase();
+  return (
+    channel.project.name.toLowerCase().includes(q) ||
+    (channel.peerUser?.name.toLowerCase().includes(q) ?? false) ||
+    (channel.peerUser?.subtitle?.toLowerCase().includes(q) ?? false) ||
+    title.includes(q) ||
+    subtitle.includes(q)
+  );
+}
 
 function upsertChannelActivity(
   prev: Record<string, ChannelActivity>,
@@ -103,26 +135,39 @@ export default function DiscussionsPage() {
   const debouncedSearch = useDebouncedValue(searchInput, 300);
   const [channelActivity, setChannelActivity] = useState<Record<string, ChannelActivity>>({});
   const [channelFilter, setChannelFilter] = useState<DiscussionChannelFilter>("all");
+  const [adminSection, setAdminSection] = useState<DiscussionAdminSection>("team");
+  const [showNewConversationPicker, setShowNewConversationPicker] = useState(false);
+  const isAdminView = user?.role === "super_admin";
+  const isClientView = user?.role === "client";
 
   const selectedChannelKeyRef = useRef<string | null>(null);
   const userIdRef = useRef<number | undefined>(undefined);
   const channelsRef = useRef<DiscussionChannel[]>([]);
+  const directConversationsRef = useRef<DirectConversation[]>([]);
+  const openingDirectPeerRef = useRef<number | null>(null);
   const markedNotificationIdsRef = useRef(new Set<number>());
   const markReadInFlightRef = useRef(false);
   const markReadMutateRef = useRef<
     (vars: { id: number }) => Promise<void> | undefined
   >(undefined);
   const previewHydrateSigRef = useRef("");
+  const directHydrateSigRef = useRef("");
   const notificationHydrateSigRef = useRef("");
   const lastReadSavedSigRef = useRef("");
   const onDiscussionsPage = location.startsWith("/discussions");
 
   const { data: projectsData, isLoading: isLoadingProjects } = useListProjects({
     limit: 100,
-    ...(debouncedSearch ? { search: debouncedSearch } : {}),
   });
 
   const { data: previewData } = useDiscussionPreviews(!!user?.id);
+
+  const { data: directData, isLoading: isLoadingDirectConversations } = useDirectConversations(
+    !!user?.id,
+  );
+  const { data: directContactsData, isLoading: isLoadingDirectContacts } =
+    useDirectConversationContacts(isAdminView);
+  const createDirectConversation = useCreateDirectConversation();
 
   const { data: unreadNotificationsData } = useListNotifications(
     { unreadOnly: true, limit: 100 },
@@ -143,20 +188,69 @@ export default function DiscussionsPage() {
     [projectsData?.projects],
   );
 
-  const channels = useMemo(
-    () => buildDiscussionChannels(projects, user?.role),
-    [projects, user?.role],
+  const directConversations = useMemo(
+    () => directData?.conversations ?? [],
+    [directData?.conversations],
   );
 
-  const selectedChannel = useMemo(
-    () => channels.find((c) => c.key === selectedChannelKey) ?? null,
-    [channels, selectedChannelKey],
+  const channels = useMemo(
+    () =>
+      buildDiscussionChannels(
+        projects,
+        user?.role,
+        isAdminView ? [] : directConversations,
+      ),
+    [projects, user?.role, directConversations, isAdminView],
   );
+
+  const selectedChannel = useMemo(() => {
+    if (!selectedChannelKey) return null;
+
+    const fromChannels = channels.find((c) => c.key === selectedChannelKey);
+    if (fromChannels) return fromChannels;
+
+    const pendingPeerId = parsePendingDirectPeerId(selectedChannelKey);
+    if (pendingPeerId != null) {
+      const existing = directConversations.find((c) => c.peerUser.id === pendingPeerId);
+      if (existing) {
+        return buildDirectChannelFromContact(existing.peerUser, existing);
+      }
+      const contact =
+        directContactsData?.staffContacts.find((c) => c.id === pendingPeerId) ??
+        directContactsData?.clientContacts.find((c) => c.id === pendingPeerId);
+      if (contact) return buildDirectChannelFromContact(contact);
+      return null;
+    }
+
+    const parsed = parseDiscussionChannelKey(selectedChannelKey);
+    if (parsed?.threadType === "direct") {
+      const existing = directConversations.find((c) => c.id === parsed.projectId);
+      if (existing) {
+        return buildDirectChannelFromContact(existing.peerUser, existing);
+      }
+    }
+
+    return null;
+  }, [
+    channels,
+    selectedChannelKey,
+    directConversations,
+    directContactsData?.staffContacts,
+    directContactsData?.clientContacts,
+  ]);
 
   const selectedThreadType: ProjectDiscussionThreadType =
     selectedChannel?.threadType ?? "project";
-  const selectedThreadId = selectedChannel?.projectId ?? null;
-  const hasActiveChannel = selectedChannel != null && selectedThreadId != null;
+  const selectedThreadId =
+    selectedChannel?.threadType === "direct" &&
+    selectedChannelKey &&
+    parsePendingDirectPeerId(selectedChannelKey) != null
+      ? null
+      : selectedChannel?.projectId ?? null;
+  const hasActiveChannel =
+    selectedChannel != null &&
+    selectedThreadId != null &&
+    (selectedChannel.threadType !== "direct" || selectedThreadId > 0);
 
   const selectedProjectUnreadNotifSig = useMemo(() => {
     if (!hasActiveChannel || selectedThreadId == null) return "";
@@ -199,6 +293,19 @@ export default function DiscussionsPage() {
   channelsRef.current = channels;
   selectedChannelKeyRef.current = selectedChannelKey;
   userIdRef.current = user?.id;
+  directConversationsRef.current = directConversations;
+
+  useEffect(() => {
+    if (!user?.id || !directConversations.length) return;
+    const sig = directConversations
+      .map((c) => `${c.id}:${c.lastMessageAt ?? ""}:${c.updatedAt}`)
+      .join("|");
+    if (sig === directHydrateSigRef.current) return;
+    directHydrateSigRef.current = sig;
+    const lastRead = loadLastReadByChannel(user.id);
+    const fromDirect = buildChannelActivityFromDirectConversations(directConversations, lastRead);
+    setChannelActivity((prev) => mergePreviewSnapshot(prev, fromDirect));
+  }, [user?.id, directConversations]);
 
   useEffect(() => {
     if (!previewData?.previews?.length) return;
@@ -238,7 +345,9 @@ export default function DiscussionsPage() {
       if (
         (threadType !== "project" &&
           threadType !== "project_internal" &&
-          threadType !== "company_team") ||
+          threadType !== "company_team" &&
+          threadType !== "company_team_unofficial" &&
+          threadType !== "direct") ||
         data.threadId == null ||
         !data.comment
       ) {
@@ -251,6 +360,22 @@ export default function DiscussionsPage() {
         threadType as ProjectDiscussionThreadType,
         threadId,
       );
+
+      applyProjectCommentToCaches(
+        queryClient,
+        threadId,
+        comment,
+        threadType as ProjectDiscussionThreadType,
+      );
+
+      if (threadType === "direct") {
+        patchDirectConversationFromComment(queryClient, threadId, {
+          lastMessageAt: comment.createdAt ?? new Date().toISOString(),
+          lastPreview: discussionCommentPreview(comment),
+          lastAuthorName: comment.authorName,
+          lastAuthorId: comment.authorId,
+        });
+      }
 
       const isActiveChannel = channelKey === selectedChannelKeyRef.current;
       const isOwnMessage = comment.authorId === userIdRef.current;
@@ -284,11 +409,22 @@ export default function DiscussionsPage() {
         const channel =
           channelsRef.current.find((c) => c.key === channelKey) ??
           channelsRef.current.find((c) => c.projectId === threadId);
-        const label = channel
-          ? isCompanyTeamChannel(threadType)
-            ? "Team"
-            : `${channel.project.name}${threadType === "project_internal" ? " (Internal)" : ""}`
-          : "Discussion channel";
+        const directConv =
+          threadType === "direct"
+            ? directConversationsRef.current.find((c) => c.id === threadId)
+            : undefined;
+        const label =
+          threadType === "direct" && directConv
+            ? directConv.peerUser.name
+            : channel
+              ? isDirectChannel(threadType)
+                ? channel.peerUser?.name ?? "Direct message"
+                : isCompanyTeamChannel(threadType)
+                  ? threadType === "company_team_unofficial"
+                    ? "Unofficial"
+                    : "Official"
+                  : `${channel.project.name}${threadType === "project_internal" ? " (Internal)" : ""}`
+              : "Discussion channel";
         toast.info(`${comment.authorName} · ${label}`, {
           description: discussionCommentPreview(comment),
           duration: 6000,
@@ -367,19 +503,55 @@ export default function DiscussionsPage() {
   ]);
 
   useEffect(() => {
-    if (channels.length === 0) {
+    if (channels.length === 0 && !isAdminView && !isLoadingDirectConversations) {
       setSelectedChannelKey(null);
       setMobileChatOpen(false);
       return;
     }
 
     const fromUrl = readDiscussionsProjectIdFromUrl();
+    const fromDirect = readDiscussionsDirectConversationIdFromUrl();
     const fromChannel = readDiscussionsChannelFromUrl();
+    if (fromDirect) {
+      const directKey = discussionChannelKey("direct", fromDirect);
+      const conversation = directConversations.find((c) => c.id === fromDirect);
+      if (conversation) {
+        setSelectedChannelKey(directKey);
+        setMobileChatOpen(true);
+        if (isAdminView) {
+          setAdminSection(adminSectionForDirectPeer(conversation.peerUser.category));
+        }
+        clearDiscussionsProjectFromUrl();
+        return;
+      }
+      if (isLoadingDirectConversations) {
+        setSelectedChannelKey(directKey);
+        setMobileChatOpen(true);
+        return;
+      }
+      clearDiscussionsProjectFromUrl();
+      toast.error("Conversation not found or you don't have access.");
+      return;
+    }
     if (fromChannel === "company_team") {
       const teamKey = discussionChannelKey("company_team", COMPANY_TEAM_THREAD_ID);
       if (channels.some((c) => c.key === teamKey)) {
         setSelectedChannelKey(teamKey);
         setMobileChatOpen(true);
+        if (isAdminView) setAdminSection("team");
+        clearDiscussionsProjectFromUrl();
+        return;
+      }
+    }
+    if (fromChannel === "company_team_unofficial") {
+      const unofficialKey = discussionChannelKey(
+        "company_team_unofficial",
+        COMPANY_TEAM_UNOFFICIAL_THREAD_ID,
+      );
+      if (channels.some((c) => c.key === unofficialKey)) {
+        setSelectedChannelKey(unofficialKey);
+        setMobileChatOpen(true);
+        if (isAdminView) setAdminSection("team");
         clearDiscussionsProjectFromUrl();
         return;
       }
@@ -406,9 +578,27 @@ export default function DiscussionsPage() {
 
     setSelectedChannelKey((current) => {
       if (current && channels.some((c) => c.key === current)) return current;
+      if (current && isAdminDirectSelectionKey(current, directConversations)) {
+        return current;
+      }
+      // Admin section switches clear selection intentionally — don't auto-open Team.
+      if (isAdminView && current === null) return null;
       return channels[0]?.key ?? null;
     });
-  }, [channels, location]);
+  }, [channels, location, isAdminView, directConversations, isLoadingDirectConversations]);
+
+  // Normalize pending 1:1 selection to conversation id once the server row exists.
+  useEffect(() => {
+    if (!isAdminView || !selectedChannelKey) return;
+    const pendingPeer = parsePendingDirectPeerId(selectedChannelKey);
+    if (pendingPeer == null) return;
+    const conv = directConversations.find((c) => c.peerUser.id === pendingPeer);
+    if (!conv) return;
+    const resolved = discussionChannelKey("direct", conv.id);
+    if (resolved !== selectedChannelKey) {
+      setSelectedChannelKey(resolved);
+    }
+  }, [isAdminView, selectedChannelKey, directConversations]);
 
   useEffect(() => {
     lastReadSavedSigRef.current = "";
@@ -526,6 +716,14 @@ export default function DiscussionsPage() {
           }),
         ),
       );
+      if (selectedThreadType === "direct") {
+        patchDirectConversationFromComment(queryClient, selectedThreadId, {
+          lastMessageAt: created.createdAt ?? new Date().toISOString(),
+          lastPreview: discussionCommentPreview(created),
+          lastAuthorName: created.authorName,
+          lastAuthorId: created.authorId,
+        });
+      }
     } catch (error) {
       removeCommentFromListCache(
         queryClient,
@@ -573,33 +771,79 @@ export default function DiscussionsPage() {
     const q = debouncedSearch.trim().toLowerCase();
     if (!q) return channels;
     return channels.filter((c) => {
-      const title = discussionChannelTitle(c.project.name, c.threadType).toLowerCase();
-      const subtitle = discussionChannelSubtitle(c.threadType).toLowerCase();
+      const title = discussionChannelTitle(c.project.name, c.threadType, c.peerUser).toLowerCase();
+      const subtitle = discussionChannelSubtitle(c.threadType, c.peerUser).toLowerCase();
       return (
         c.project.name.toLowerCase().includes(q) ||
+        c.peerUser?.name.toLowerCase().includes(q) ||
+        c.peerUser?.subtitle?.toLowerCase().includes(q) ||
         title.includes(q) ||
         subtitle.includes(q)
       );
     });
   }, [channels, debouncedSearch]);
 
-  const isAdminView = user?.role === "super_admin";
+  const clientDirectContacts = useMemo(
+    () => directContactsData?.clientContacts ?? [],
+    [directContactsData?.clientContacts],
+  );
 
-  const [adminSection, setAdminSection] = useState<DiscussionAdminSection>("team");
+  const staffDirectContacts = useMemo(
+    () => directContactsData?.staffContacts ?? [],
+    [directContactsData?.staffContacts],
+  );
 
-  // Per-section unread + size, used for the rail badges (computed off the full
-  // channel list so badges stay accurate while the chat list is filtered).
+  const teamDirectChannels = useMemo(
+    () =>
+      buildDirectDiscussionChannels(
+        directConversations.filter((c) => c.peerUser.category !== "client"),
+      ),
+    [directConversations],
+  );
+
+  const clientDirectChannels = useMemo(
+    () =>
+      buildDirectDiscussionChannels(
+        directConversations.filter((c) => c.peerUser.category === "client"),
+      ),
+    [directConversations],
+  );
+
+  const directPeerActivity = useMemo(() => {
+    const out: Record<number, ChannelActivity | undefined> = {};
+    for (const conversation of directConversations) {
+      const key = discussionChannelKey("direct", conversation.id);
+      out[conversation.peerUser.id] = channelActivity[key];
+    }
+    return out;
+  }, [directConversations, channelActivity]);
+
+  const mergedChannelActivity = useMemo(() => {
+    const out: Record<string, ChannelActivity> = { ...channelActivity };
+    for (const conversation of directConversations) {
+      const activity = channelActivity[discussionChannelKey("direct", conversation.id)];
+      if (!activity) continue;
+      out[pendingDirectChannelKey(conversation.peerUser.id)] = activity;
+    }
+    for (const [peerId, activity] of Object.entries(directPeerActivity)) {
+      if (activity) out[pendingDirectChannelKey(Number(peerId))] = activity;
+    }
+    return out;
+  }, [channelActivity, directConversations, directPeerActivity]);
+  // Per-section unread + size, used for the rail badges.
   const sectionSummary = useMemo(() => {
     const summary = {
       teamUnread: 0,
+      teamDirectUnread: 0,
       clientsUnread: 0,
+      clientsDirectUnread: 0,
       internalUnread: 0,
       clientsCount: 0,
       internalCount: 0,
     };
     for (const c of channels) {
       const unread = channelActivity[c.key]?.unreadCount ?? 0;
-      if (c.threadType === "company_team") {
+      if (isCompanyTeamChannel(c.threadType)) {
         summary.teamUnread += unread;
       } else if (c.threadType === "project") {
         summary.clientsCount += 1;
@@ -609,46 +853,88 @@ export default function DiscussionsPage() {
         summary.internalUnread += unread;
       }
     }
+    for (const conversation of directConversations) {
+      const unread =
+        channelActivity[discussionChannelKey("direct", conversation.id)]?.unreadCount ?? 0;
+      if (conversation.peerUser.category === "client") {
+        summary.clientsDirectUnread += unread;
+      } else {
+        summary.teamDirectUnread += unread;
+      }
+    }
     return summary;
-  }, [channels, channelActivity]);
+  }, [channels, channelActivity, directConversations]);
+
+  const listChannelActivity = isAdminView ? mergedChannelActivity : channelActivity;
 
   const sortedChannels = useMemo(() => {
-    let list = filteredChannels;
+    const q = debouncedSearch.trim().toLowerCase();
+    let list: DiscussionChannel[];
 
-    // Admin view: the rail is the source of truth for thread-type grouping.
     if (isAdminView) {
       if (adminSection === "team") {
-        list = list.filter((c) => c.threadType === "company_team");
+        list = filteredChannels.filter((c) => isCompanyTeamChannel(c.threadType));
+      } else if (adminSection === "team_direct") {
+        list = teamDirectChannels;
       } else if (adminSection === "clients") {
-        list = list.filter((c) => c.threadType === "project");
-      } else if (adminSection === "internal") {
-        list = list.filter((c) => c.threadType === "project_internal");
+        list = filteredChannels.filter((c) => c.threadType === "project");
+      } else if (adminSection === "clients_direct") {
+        list = clientDirectChannels;
+      } else {
+        list = filteredChannels.filter((c) => c.threadType === "project_internal");
       }
+    } else {
+      list = filteredChannels;
     }
 
     if (channelFilter === "unread") {
-      list = list.filter((c) => (channelActivity[c.key]?.unreadCount ?? 0) > 0);
+      list = list.filter((c) => (listChannelActivity[c.key]?.unreadCount ?? 0) > 0);
     } else if (!isAdminView && channelFilter === "client") {
       list = list.filter((c) => c.threadType === "project");
     } else if (!isAdminView && channelFilter === "internal") {
       list = list.filter(
-        (c) => c.threadType === "project_internal" || c.threadType === "company_team",
+        (c) => c.threadType === "project_internal" || isCompanyTeamChannel(c.threadType),
       );
     }
 
-    return [...list].sort((a, b) => compareChannelsForChatList(a, b, channelActivity));
-  }, [filteredChannels, channelActivity, channelFilter, isAdminView, adminSection]);
+    if (q) {
+      list = list.filter((c) => channelMatchesSearch(c, q));
+    }
+
+    return [...list].sort((a, b) => compareChannelsForChatList(a, b, listChannelActivity));
+  }, [
+    filteredChannels,
+    listChannelActivity,
+    channelFilter,
+    isAdminView,
+    adminSection,
+    teamDirectChannels,
+    clientDirectChannels,
+    debouncedSearch,
+  ]);
+
+  const pickerContacts = useMemo(() => {
+    if (adminSection === "clients_direct") return clientDirectContacts;
+    if (adminSection === "team_direct") return staffDirectContacts;
+    return [];
+  }, [adminSection, clientDirectContacts, staffDirectContacts]);
+
+  const existingDirectPeerIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of directConversations) {
+      if (adminSection === "team_direct" && c.peerUser.category === "client") continue;
+      if (adminSection === "clients_direct" && c.peerUser.category !== "client") continue;
+      if (adminSection !== "team_direct" && adminSection !== "clients_direct") continue;
+      ids.add(c.peerUser.id);
+    }
+    return ids;
+  }, [directConversations, adminSection]);
 
   const unreadChannelCount = useMemo(() => {
-    const pool = isAdminView
-      ? channels.filter((c) => {
-          if (adminSection === "team") return c.threadType === "company_team";
-          if (adminSection === "clients") return c.threadType === "project";
-          return c.threadType === "project_internal";
-        })
-      : channels;
-    return pool.filter((c) => (channelActivity[c.key]?.unreadCount ?? 0) > 0).length;
-  }, [channels, channelActivity, isAdminView, adminSection]);
+    return sortedChannels.filter(
+      (c) => (listChannelActivity[c.key]?.unreadCount ?? 0) > 0,
+    ).length;
+  }, [sortedChannels, listChannelActivity]);
 
   const canFilterByThreadType = canAccessInternalDiscussion(user?.role);
   useEffect(() => {
@@ -657,8 +943,7 @@ export default function DiscussionsPage() {
     }
   }, [canFilterByThreadType, channelFilter]);
 
-  // Reset the in-list pill back to "All" whenever the admin switches sections;
-  // a stale "client"/"internal" pill would otherwise hide every row.
+  // Reset the in-list pill back to "All" whenever the tabbed section changes.
   useEffect(() => {
     if (!isAdminView) return;
     if (channelFilter === "client" || channelFilter === "internal") {
@@ -666,24 +951,43 @@ export default function DiscussionsPage() {
     }
   }, [isAdminView, adminSection, channelFilter]);
 
-  // When the admin selects a channel that lives in another section, jump the
-  // rail there so the list keeps the selected channel visible.
+  useEffect(() => {
+    if (!isAdminView) return;
+    setSearchInput("");
+  }, [isAdminView, adminSection]);
+
+  // When the selected channel lives in another section, switch tabs so it stays visible.
   useEffect(() => {
     if (!isAdminView || !selectedChannelKey) return;
-    const channel = channels.find((c) => c.key === selectedChannelKey);
+    const channel =
+      channels.find((c) => c.key === selectedChannelKey) ??
+      teamDirectChannels.find((c) => isDirectChannelRowSelected(selectedChannelKey, c, directConversations)) ??
+      clientDirectChannels.find((c) => isDirectChannelRowSelected(selectedChannelKey, c, directConversations));
     if (!channel) return;
     const target: DiscussionAdminSection =
-      channel.threadType === "company_team"
-        ? "team"
-        : channel.threadType === "project_internal"
-          ? "internal"
-          : "clients";
+      channel.threadType === "direct" && channel.peerUser
+        ? adminSectionForDirectPeer(channel.peerUser.category)
+        : channel.threadType === "company_team" || channel.threadType === "company_team_unofficial"
+          ? "team"
+          : channel.threadType === "project_internal"
+            ? "internal"
+            : channel.threadType === "project"
+              ? "clients"
+              : adminSection;
     setAdminSection((current) => (current === target ? current : target));
-  }, [isAdminView, selectedChannelKey, channels]);
+  }, [
+    isAdminView,
+    selectedChannelKey,
+    channels,
+    teamDirectChannels,
+    clientDirectChannels,
+    directConversations,
+  ]);
 
-  // Keep list selection aligned with Client / Internal filters (no overlap with hidden channels).
+  // Keep list selection aligned with Client / Internal filters (client flat list only).
   useEffect(() => {
-    if (!isAdminView && (channelFilter === "all" || channelFilter === "unread")) return;
+    if (isAdminView) return;
+    if (channelFilter === "all" || channelFilter === "unread") return;
     if (sortedChannels.length === 0) return;
     if (selectedChannelKey && sortedChannels.some((c) => c.key === selectedChannelKey)) {
       return;
@@ -691,11 +995,105 @@ export default function DiscussionsPage() {
     setSelectedChannelKey(sortedChannels[0]!.key);
   }, [channelFilter, sortedChannels, selectedChannelKey, isAdminView]);
 
-  const handleSelectChannel = useCallback((channelKey: string) => {
-    setSelectedChannelKey(channelKey);
-    clearDiscussionsProjectFromUrl();
-    setMobileChatOpen(true);
-  }, []);
+  const handleStartDirectChat = useCallback(
+    async (contact: DirectConversationPeer) => {
+      if (openingDirectPeerRef.current === contact.id) return;
+      openingDirectPeerRef.current = contact.id;
+      try {
+        const result = await createDirectConversation.mutateAsync(contact.id);
+        const channelKey = discussionChannelKey("direct", result.conversation.id);
+        setAdminSection(adminSectionForDirectPeer(contact.category));
+        setSelectedChannelKey(channelKey);
+        setMobileChatOpen(true);
+        setShowNewConversationPicker(false);
+        clearDiscussionsProjectFromUrl();
+      } catch (error) {
+        const status =
+          error && typeof error === "object" && "status" in error
+            ? (error as { status?: number }).status
+            : undefined;
+        if (status === 409) {
+          await queryClient.refetchQueries({ queryKey: directConversationsQueryKey });
+          const fresh = queryClient.getQueryData<{ conversations: DirectConversation[] }>(
+            directConversationsQueryKey,
+          );
+          const existing = fresh?.conversations.find((c) => c.peerUser.id === contact.id);
+          if (existing) {
+            setAdminSection(adminSectionForDirectPeer(contact.category));
+            setSelectedChannelKey(discussionChannelKey("direct", existing.id));
+            setMobileChatOpen(true);
+            setShowNewConversationPicker(false);
+            clearDiscussionsProjectFromUrl();
+            return;
+          }
+        }
+        toastApiError(error, "Could not start conversation");
+      } finally {
+        openingDirectPeerRef.current = null;
+      }
+    },
+    [createDirectConversation, queryClient],
+  );
+
+  const handleSelectDirectMember = useCallback(
+    async (contact: DirectConversationPeer) => {
+      let existing = directConversations.find((c) => c.peerUser.id === contact.id);
+      if (!existing) {
+        await queryClient.refetchQueries({ queryKey: directConversationsQueryKey });
+        const fresh = queryClient.getQueryData<{ conversations: typeof directConversations }>(
+          directConversationsQueryKey,
+        );
+        existing = fresh?.conversations.find((c) => c.peerUser.id === contact.id);
+      }
+      if (existing) {
+        setAdminSection(adminSectionForDirectPeer(contact.category));
+        setSelectedChannelKey(discussionChannelKey("direct", existing.id));
+        setMobileChatOpen(true);
+        clearDiscussionsProjectFromUrl();
+        return;
+      }
+      await handleStartDirectChat(contact);
+    },
+    [directConversations, handleStartDirectChat, queryClient],
+  );
+
+  const handleSelectChannel = useCallback(
+    (channelKey: string) => {
+      const resolvedConvId = resolveDirectConversationIdFromKey(channelKey, directConversations);
+      if (resolvedConvId != null) {
+        setSelectedChannelKey(discussionChannelKey("direct", resolvedConvId));
+        clearDiscussionsProjectFromUrl();
+        setMobileChatOpen(true);
+        return;
+      }
+
+      const pendingPeerId = parsePendingDirectPeerId(channelKey);
+      if (pendingPeerId != null) {
+        const contact =
+          staffDirectContacts.find((c) => c.id === pendingPeerId) ??
+          clientDirectContacts.find((c) => c.id === pendingPeerId);
+        if (contact) {
+          void handleSelectDirectMember(contact);
+          return;
+        }
+      }
+      setSelectedChannelKey(channelKey);
+      clearDiscussionsProjectFromUrl();
+      setMobileChatOpen(true);
+    },
+    [
+      directConversations,
+      staffDirectContacts,
+      clientDirectContacts,
+      handleSelectDirectMember,
+    ],
+  );
+
+  const isChannelSelected = useCallback(
+    (channel: DiscussionChannel) =>
+      isDirectChannelRowSelected(selectedChannelKey, channel, directConversations),
+    [selectedChannelKey, directConversations],
+  );
 
   const handleBackToList = useCallback(() => {
     setMobileChatOpen(false);
@@ -726,7 +1124,9 @@ export default function DiscussionsPage() {
               setMobileChatOpen(false);
             }}
             teamUnread={sectionSummary.teamUnread}
+            teamDirectUnread={sectionSummary.teamDirectUnread}
             clientsUnread={sectionSummary.clientsUnread}
+            clientsDirectUnread={sectionSummary.clientsDirectUnread}
             internalUnread={sectionSummary.internalUnread}
             clientsCount={sectionSummary.clientsCount}
             internalCount={sectionSummary.internalCount}
@@ -736,57 +1136,113 @@ export default function DiscussionsPage() {
         <DiscussionChatList
           channels={channels}
           sortedChannels={sortedChannels}
-          channelActivity={channelActivity}
+          channelActivity={listChannelActivity}
           selectedChannelKey={selectedChannelKey}
+          isChannelSelected={isAdminView ? isChannelSelected : undefined}
           currentUserId={user?.id}
           searchQuery={searchInput}
           onSearchChange={setSearchInput}
           channelFilter={channelFilter}
           onChannelFilterChange={setChannelFilter}
           unreadChannelCount={unreadChannelCount}
-          showInternalFilter={canAccessInternalDiscussion(user?.role)}
+          showInternalFilter={!isAdminView && canAccessInternalDiscussion(user?.role)}
           availableFilters={isAdminView ? ["all", "unread"] : undefined}
           headerLabel={
             isAdminView
               ? adminSection === "team"
-                ? "Team chat"
-                : adminSection === "clients"
-                  ? "Client channels"
-                  : "Internal channels"
+                ? "Office chat"
+                : adminSection === "team_direct"
+                  ? "Staff messages"
+                  : adminSection === "clients"
+                    ? "Client channels"
+                    : adminSection === "clients_direct"
+                      ? "Client messages"
+                      : "Internal channels"
               : undefined
           }
           headerSubtitle={
             isAdminView
               ? adminSection === "team"
-                ? "Everyone on the company team"
-                : adminSection === "clients"
-                  ? `${sectionSummary.clientsCount} project${sectionSummary.clientsCount === 1 ? "" : "s"} · visible to clients`
-                  : `${sectionSummary.internalCount} project${sectionSummary.internalCount === 1 ? "" : "s"} · staff only`
+                ? "Everyone in the office"
+                : adminSection === "team_direct"
+                  ? "One-to-one with staff members"
+                  : adminSection === "clients"
+                    ? `${sectionSummary.clientsCount} project${sectionSummary.clientsCount === 1 ? "" : "s"} · visible to clients`
+                    : adminSection === "clients_direct"
+                      ? "One-to-one with clients"
+                      : `${sectionSummary.internalCount} project${sectionSummary.internalCount === 1 ? "" : "s"} · staff only`
               : undefined
           }
+          searchPlaceholder={isAdminView ? "Search or start new chat" : undefined}
           emptyStateTitle={
-            isAdminView && channels.length > 0 && sortedChannels.length === 0
+            isAdminView && sortedChannels.length === 0
               ? adminSection === "team"
                 ? channelFilter === "unread"
-                  ? "Team chat is up to date"
-                  : "No team chat yet"
-                : adminSection === "clients"
+                  ? "Office chat is up to date"
+                  : "No office chats yet"
+                : adminSection === "team_direct"
                   ? channelFilter === "unread"
-                    ? "All client channels read"
-                    : "No client channels"
-                  : channelFilter === "unread"
-                    ? "All internal channels read"
-                    : "No internal channels"
-              : undefined
+                    ? "All caught up"
+                    : "No staff conversations yet"
+                  : adminSection === "clients"
+                    ? channelFilter === "unread"
+                      ? "All client channels read"
+                      : "No client channels"
+                    : adminSection === "clients_direct"
+                      ? channelFilter === "unread"
+                        ? "All caught up"
+                        : "No client conversations yet"
+                      : channelFilter === "unread"
+                        ? "All internal channels read"
+                        : "No internal channels"
+              : isClientView && sortedChannels.length === 0
+                ? channelFilter === "unread"
+                  ? "All caught up"
+                  : "No conversations yet"
+                : undefined
           }
           emptyStateDescription={
-            isAdminView && adminSection === "team" && channelFilter !== "unread"
-              ? "Start the conversation — your message is visible to every admin, developer, tester and QA."
+            isAdminView && channelFilter !== "unread"
+              ? adminSection === "team"
+                ? "Start the conversation — pick Official or Unofficial. Messages go to everyone in the office."
+                : adminSection === "team_direct"
+                  ? "Start a new conversation with a team member."
+                  : adminSection === "clients_direct"
+                    ? "Start a new conversation with a client."
+                    : undefined
+              : isClientView && channelFilter !== "unread"
+                ? "Messages from your project team and admins appear here."
+                : undefined
+          }
+          isLoading={
+            isLoadingProjects ||
+            isLoadingDirectConversations ||
+            (isAdminView &&
+              isLoadingDirectContacts &&
+              (adminSection === "team_direct" || adminSection === "clients_direct"))
+          }
+          onSelectChannel={handleSelectChannel}
+          onNewConversation={
+            isAdminView &&
+            (adminSection === "team_direct" || adminSection === "clients_direct")
+              ? () => setShowNewConversationPicker(true)
               : undefined
           }
-          isLoading={isLoadingProjects}
-          onSelectChannel={handleSelectChannel}
           hiddenOnMobile={mobileChatOpen}
+        />
+
+        <NewConversationPicker
+          open={showNewConversationPicker}
+          onClose={() => setShowNewConversationPicker(false)}
+          contacts={pickerContacts}
+          existingPeerIds={existingDirectPeerIds}
+          isLoading={isLoadingDirectContacts}
+          onSelectContact={(contact) => {
+            void handleSelectDirectMember(contact);
+          }}
+          title={
+            adminSection === "clients_direct" ? "Message a client" : "Message a team member"
+          }
         />
 
         {selectedProject ? (
@@ -809,6 +1265,7 @@ export default function DiscussionsPage() {
             }}
             isSubmitting={createCommentMutation.isPending}
             currentUserId={user?.id}
+            peerUser={selectedChannel?.peerUser}
             showBackButton
             onBack={handleBackToList}
           />
@@ -819,7 +1276,17 @@ export default function DiscussionsPage() {
             </div>
             <h2 className="text-lg font-medium text-foreground/80">Discussions</h2>
             <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Select a project chat on the left to send and receive messages with your team.
+              {isAdminView && adminSection === "team"
+                ? "Select Official or Unofficial to message everyone in the office."
+                : isAdminView && adminSection === "team_direct"
+                  ? "Select a staff member or start a new conversation."
+                  : isAdminView && adminSection === "clients"
+                    ? "Select a project channel to open the client chat."
+                    : isAdminView && adminSection === "clients_direct"
+                      ? "Select a client or start a new conversation."
+                      : isClientView
+                        ? "Select a project chat or a message from your team."
+                        : "Select a chat on the left to send and receive messages."}
             </p>
           </div>
         )}

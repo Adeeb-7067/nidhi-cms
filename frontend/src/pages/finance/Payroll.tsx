@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Users, FileDown, Play, IndianRupee } from "lucide-react";
@@ -60,13 +61,12 @@ export default function PayrollPage() {
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="Payroll"
-        description="Salary structures, monthly processing, and salary slips."
+        title="Payroll (demo)"
+        description="Mock data for Finance demos. Live payroll is managed in HRM."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Payroll" }]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => toast.success("June payroll processing started (demo)")}>
-            <Play className="h-3.5 w-3.5" />
-            Process payroll
+          <Button asChild size="sm" className="h-8 gap-1.5">
+            <Link href="/hrm/payroll">Open HRM payroll</Link>
           </Button>
         }
       />

@@ -63,6 +63,17 @@ Thumbs.db
 .cache/
 .local/
 
+# Local MongoDB data (dev)
+.mongo-data/
+.mongo-log/
+
+# Electron build output
+electron/dist-electron/
+electron/graphify-out/
+
+# Nested reference repo (separate git checkout)
+HRM Satyakabir/
+
 # Graphify — repo root graph only; per-app copies are local noise
 frontend/graphify-out/
 backend/graphify-out/

@@ -75,12 +75,22 @@ function humanizeField(key) {
   return key.replace(/([A-Z])/g, " $1").replace(/[_-]/g, " ").replace(/^\w/, (c) => c.toUpperCase()).trim();
 }
 function toApiErrorBody(err) {
-  return {
+  const body = {
     error: err.message,
     code: err.code,
     ...err.field ? { field: err.field } : {},
-    ...err.details ? { details: err.details } : {}
   };
+  if (err.details) {
+    body.details = err.details;
+    const checklist = err.details.checklist;
+    if (checklist && typeof checklist === "object") {
+      body.checklist = checklist;
+      if (Array.isArray(checklist.blockers)) {
+        body.blockers = checklist.blockers;
+      }
+    }
+  }
+  return body;
 }
 export {
   badRequest,

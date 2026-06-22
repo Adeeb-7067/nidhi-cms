@@ -202,6 +202,109 @@ export async function sendDailyLogComplianceEmail({ to, name, date, loggedHours,
 }
 
 /**
+ * Invitation email for a newly-added client team member. Includes their
+ * email + temporary password and a link to the portal sign-in page.
+ */
+export async function sendClientTeamInvitationEmail({
+  to,
+  memberName,
+  companyName,
+  inviterName,
+  loginEmail,
+  temporaryPassword,
+  resend = false,
+}) {
+  const appUrl = resolveAppUrl().replace(/\/$/, "");
+  const subject = resend
+    ? `Reminder: your invitation to ${companyName}'s client portal`
+    : `You've been invited to ${companyName}'s client portal`;
+  const text = [
+    `Hi ${memberName},`,
+    "",
+    `${inviterName} has invited you to join ${companyName}'s client portal.`,
+    "",
+    "Sign in with the credentials below and change your password from your profile.",
+    `Sign-in URL: ${appUrl}/login`,
+    `Email: ${loginEmail}`,
+    `Temporary password: ${temporaryPassword}`,
+    "",
+    "If you weren't expecting this email, ignore it.",
+  ].join("\n");
+
+  const html = wrapHtmlEmail({
+    title: resend ? "Invitation reminder" : "You've been invited",
+    bodyHtml: `
+      <p style="margin:0 0 12px">Hi <strong>${memberName}</strong>,</p>
+      <p style="margin:0 0 12px"><strong>${inviterName}</strong> has invited you to join <strong>${companyName}</strong>'s client portal.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#71717a">Email</td><td style="padding:8px 0;text-align:right;font-weight:600">${loginEmail}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Temporary password</td><td style="padding:8px 0;text-align:right;font-family:monospace;font-weight:600">${temporaryPassword}</td></tr>
+      </table>
+      <p style="margin:0 0 16px;color:#71717a;font-size:13px">For security, change your password immediately after signing in.</p>
+    `,
+    ctaLabel: "Sign in to portal",
+    ctaHref: `${appUrl}/login`,
+  });
+
+  return sendEmail({ to, subject, text, html });
+}
+
+/**
+ * Login credentials for a newly onboarded or reset HRM employee.
+ * Staff sign in with Employee ID (not email) on the dev portal.
+ */
+export async function sendHrmEmployeeCredentialsEmail({
+  to,
+  employeeName,
+  companyName,
+  sentByName,
+  loginEmployeeId,
+  loginEmail,
+  temporaryPassword,
+  resend = false,
+}) {
+  const appUrl = resolveAppUrl().replace(/\/$/, "");
+  const subject = resend
+    ? `Reminder: your ${companyName} employee portal login`
+    : `Your ${companyName} employee portal login`;
+  const text = [
+    `Hi ${employeeName},`,
+    "",
+    resend
+      ? `${sentByName} has reset your employee portal credentials for ${companyName}.`
+      : `${sentByName} has set up your employee portal access for ${companyName}.`,
+    "",
+    "Sign in with the credentials below and change your password from your profile.",
+    `Sign-in URL: ${appUrl}/login`,
+    `Employee ID: ${loginEmployeeId}`,
+    `Email (for notifications): ${loginEmail}`,
+    `Temporary password: ${temporaryPassword}`,
+    "",
+    "Use your Employee ID (not email) on the login page.",
+    "",
+    "If you weren't expecting this email, contact HR.",
+  ].join("\n");
+
+  const html = wrapHtmlEmail({
+    title: resend ? "Login credentials reminder" : "Your employee portal login",
+    bodyHtml: `
+      <p style="margin:0 0 12px">Hi <strong>${employeeName}</strong>,</p>
+      <p style="margin:0 0 12px"><strong>${sentByName}</strong> has ${resend ? "reset" : "set up"} your employee portal access for <strong>${companyName}</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#71717a">Employee ID (login)</td><td style="padding:8px 0;text-align:right;font-family:monospace;font-weight:600">${loginEmployeeId}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Email</td><td style="padding:8px 0;text-align:right;font-weight:600">${loginEmail}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Temporary password</td><td style="padding:8px 0;text-align:right;font-family:monospace;font-weight:600">${temporaryPassword}</td></tr>
+      </table>
+      <p style="margin:0 0 16px;color:#71717a;font-size:13px">Sign in with your <strong>Employee ID</strong>, not your email. Change your password immediately after signing in.</p>
+    `,
+    ctaLabel: "Sign in to portal",
+    ctaHref: `${appUrl}/login`,
+  });
+
+  return sendEmail({ to, subject, text, html });
+}
+
+/**
  * Password reset / change verification OTP.
  */
 export async function sendPasswordOtpEmail({ to, name, otp, purpose }) {

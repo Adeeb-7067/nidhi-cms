@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { isDeveloperRole } from "../../constants/user-roles.js";
 
 /** Bug tracking: QA fixed?, Dev fixed?, Final resolved? */
 
@@ -87,7 +88,7 @@ export function canSetQaStatus(role) {
 
 export function canSetDevStatus(role, isAssignee) {
   if (role === "super_admin") return true;
-  if (role === "developer") return isAssignee;
+  if (isDeveloperRole(role)) return isAssignee;
   return false;
 }
 

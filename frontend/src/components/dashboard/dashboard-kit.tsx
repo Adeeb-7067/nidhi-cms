@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { LucideIcon } from "lucide-react";
+import { LucideIcon, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -395,7 +395,7 @@ export function ExecutiveStatCard({
   title,
   value,
   hint,
-  icon: Icon,
+  icon: Icon = BarChart3,
   href,
   accent = "default",
   alert,

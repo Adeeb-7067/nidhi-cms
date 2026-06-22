@@ -1,3 +1,4 @@
+import { bugAssigneeRoles, devPortalStaffRoles } from "../constants/user-roles.js";
 import {
   usersTable,
   projectMembersTable,
@@ -47,7 +48,7 @@ async function assertAssigneeRole(assigneeId, allowedRoles) {
 }
 async function resolveBugAssignee(assigneeId, projectId) {
   if (assigneeId == null || assigneeId === 0) return null;
-  const assignee = await assertAssigneeRole(assigneeId, ["developer"]);
+  const assignee = await assertAssigneeRole(assigneeId, bugAssigneeRoles);
   await assertProjectMember(assignee.id, projectId);
   return assignee.id;
 }
@@ -64,7 +65,7 @@ async function resolveBugAssignees(assigneeIds, projectId) {
 }
 async function resolveTaskAssignee(assigneeId, projectId) {
   if (assigneeId == null || assigneeId === 0) return null;
-  const assignee = await assertAssigneeRole(assigneeId, ["developer", "tester", "qa"]);
+  const assignee = await assertAssigneeRole(assigneeId, devPortalStaffRoles);
   await assertProjectMember(assignee.id, projectId);
   return assignee.id;
 }

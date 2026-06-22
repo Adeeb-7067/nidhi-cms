@@ -11,7 +11,10 @@
     "seed": "node ./scripts/run-bundled.mjs seed",
     "seed-more": "node ./scripts/run-bundled.mjs seed-more",
     "migrate-company": "node ./scripts/run-bundled.mjs migrate-company-hierarchy",
-    "clean-db": "node --env-file=.env ./scripts/clean-db.js"
+    "clean-db": "node --env-file=.env ./scripts/clean-db.js",
+    "sync-prod-local": "node --env-file=.env ./scripts/sync-prod-to-local.mjs --confirm",
+    "test": "node --test --experimental-test-module-mocks tests/unit/**/*.test.js",
+    "test:watch": "node --test --watch --experimental-test-module-mocks tests/unit/**/*.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",

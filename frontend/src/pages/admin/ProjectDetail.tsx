@@ -20,8 +20,10 @@ import {
   useGetProjectMilestones,
   getGetProjectMilestonesQueryKey,
   useCreateMilestone,
+  useUpdateMilestone,
   useGetProjectHistory,
-  getGetProjectHistoryQueryKey
+  getGetProjectHistoryQueryKey,
+  type Milestone,
 } from "@/api";
 import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-dialog";
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
@@ -33,14 +35,14 @@ import { getListBugsQueryKey, type Bug as BugRecord } from "@/api";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, MapPin, ChevronDown } from "lucide-react";
+import { Loader2, Plus, MapPin, ChevronDown, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
@@ -68,6 +70,7 @@ import {
 } from "recharts";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { isDeveloperRole } from "@/lib/navigation";
 import { getProjectsListHref } from "@/lib/project-routes";
 import { ProjectPriorityBanner } from "@/components/project/ProjectPriorityBanner";
 import { ProjectTeamPanel } from "@/components/project/ProjectTeamPanel";
@@ -79,9 +82,14 @@ const milestoneSchema = z.object({
   description: z.string().optional(),
   targetDate: z.string().min(1, "Target date is required"),
   status: z.enum(["pending", "completed", "delayed"]),
+  assigneeId: z.string().optional(),
 });
 
 type MilestoneFormValues = z.infer<typeof milestoneSchema>;
+
+function milestoneDateInput(iso: string) {
+  return iso.split("T")[0];
+}
 
 export default function AdminProjectDetail() {
   const { id } = useParams();
@@ -93,12 +101,13 @@ export default function AdminProjectDetail() {
   const { user } = useAuth();
   const role = user?.role;
   const canReportBugs =
-    role === "developer" ||
+    isDeveloperRole(role) ||
     role === "tester" ||
     role === "qa" ||
     role === "super_admin";
   const canAssignBugs =
     role === "tester" || role === "qa" || role === "super_admin";
+  const canManageMilestones = role === "super_admin";
   const [bugFormOpen, setBugFormOpen] = useState(false);
   const [detailBugId, setDetailBugId] = useState<number | null>(null);
   const [detailIssueKey, setDetailIssueKey] = useState<string | null>(null);
@@ -172,7 +181,9 @@ export default function AdminProjectDetail() {
 
   const [activeTab, setActiveTab] = useState<ProjectHubTab>("overview");
   const [milestoneOpen, setMilestoneOpen] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
   const createMilestoneMutation = useCreateMilestone();
+  const updateMilestoneMutation = useUpdateMilestone();
 
   const sortedMilestones = useMemo(() => {
     const list = [...(milestones ?? [])];
@@ -196,24 +207,74 @@ export default function AdminProjectDetail() {
       description: "",
       targetDate: new Date().toISOString().split('T')[0],
       status: "pending",
+      assigneeId: "none",
     },
   });
 
+  const openAddMilestone = () => {
+    setEditingMilestone(null);
+    form.reset({
+      title: "",
+      description: "",
+      targetDate: new Date().toISOString().split("T")[0],
+      status: "pending",
+      assigneeId: "none",
+    });
+    setMilestoneOpen(true);
+  };
+
+  const openEditMilestone = (milestone: Milestone) => {
+    setEditingMilestone(milestone);
+    form.reset({
+      title: milestone.title,
+      description: "",
+      targetDate: milestoneDateInput(milestone.plannedDate),
+      status: milestone.status,
+      assigneeId: milestone.assigneeId ? String(milestone.assigneeId) : "none",
+    });
+    setMilestoneOpen(true);
+  };
+
   const onMilestoneSubmit = async (values: MilestoneFormValues) => {
     try {
-      const { targetDate, description: _desc, ...rest } = values;
-      await createMilestoneMutation.mutateAsync({
-        id: projectId,
-        data: { ...rest, plannedDate: targetDate },
-      });
-      toast.success("Milestone registered successfully!");
+      const { targetDate, description: _desc, assigneeId, ...rest } = values;
+      const assigneePayload =
+        assigneeId && assigneeId !== "none" ? Number(assigneeId) : null;
+
+      if (editingMilestone) {
+        await updateMilestoneMutation.mutateAsync({
+          id: projectId,
+          milestoneId: editingMilestone.id,
+          data: {
+            title: rest.title,
+            plannedDate: targetDate,
+            status: rest.status,
+            assigneeId: assigneePayload,
+          },
+        });
+        toast.success("Milestone updated");
+      } else {
+        await createMilestoneMutation.mutateAsync({
+          id: projectId,
+          data: {
+            ...rest,
+            plannedDate: targetDate,
+            ...(assigneePayload != null ? { assigneeId: assigneePayload } : {}),
+          },
+        });
+        toast.success("Milestone registered successfully!");
+      }
       setMilestoneOpen(false);
+      setEditingMilestone(null);
       form.reset();
       queryClient.invalidateQueries({ queryKey: getGetProjectMilestonesQueryKey(projectId) });
     } catch (err: any) {
-      toastApiError(err, "Failed to submit milestone.");
+      toastApiError(err, editingMilestone ? "Failed to update milestone." : "Failed to submit milestone.");
     }
   };
+
+  const milestoneSaving =
+    createMilestoneMutation.isPending || updateMilestoneMutation.isPending;
 
   const handleExportProjectCSV = async () => {
     if (isExportingProjectBugs) return;
@@ -766,16 +827,33 @@ export default function AdminProjectDetail() {
               <p className="text-[10px] text-muted-foreground">Chronological map tracking target phases and completion thresholds.</p>
             </div>
             
-            <Dialog open={milestoneOpen} onOpenChange={setMilestoneOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="h-8 text-xs bg-primary text-primary-foreground">
-                  <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Milestone
-                </Button>
-              </DialogTrigger>
+            {canManageMilestones && (
+              <Button
+                size="sm"
+                className="h-8 text-xs bg-primary text-primary-foreground"
+                onClick={openAddMilestone}
+              >
+                <Plus className="h-3.5 w-3.5 mr-1.5" /> Add Milestone
+              </Button>
+            )}
+
+            <Dialog
+              open={milestoneOpen}
+              onOpenChange={(open) => {
+                setMilestoneOpen(open);
+                if (!open) setEditingMilestone(null);
+              }}
+            >
               <DialogContent className="sm:max-w-[450px] bg-card border-border">
                 <DialogHeader>
-                  <DialogTitle className="text-sm">Add Phase Milestone</DialogTitle>
-                  <DialogDescription className="text-[10px]">Deploy a specific targeted checklist element directly to the timeline tracker.</DialogDescription>
+                  <DialogTitle className="text-sm">
+                    {editingMilestone ? "Edit Milestone" : "Add Phase Milestone"}
+                  </DialogTitle>
+                  <DialogDescription className="text-[10px]">
+                    {editingMilestone
+                      ? "Update phase details, target date, status, or assigned team member."
+                      : "Deploy a specific targeted checklist element directly to the timeline tracker."}
+                  </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onMilestoneSubmit)} className="space-y-3.5 pt-3">
@@ -814,7 +892,7 @@ export default function AdminProjectDetail() {
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">Status</FormLabel>
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <Select onValueChange={field.onChange} value={field.value}>
                               <FormControl>
                                 <SelectTrigger className="h-8 text-xs">
                                   <SelectValue placeholder="Status" />
@@ -834,6 +912,42 @@ export default function AdminProjectDetail() {
 
                     <FormField
                       control={form.control}
+                      name="assigneeId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">Assigned team member</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value ?? "none"}>
+                            <FormControl>
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Select employee (optional)" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="none">Unassigned</SelectItem>
+                              {(members ?? []).map((member) => (
+                                <SelectItem key={member.userId} value={String(member.userId)}>
+                                  <div className="flex items-center gap-2">
+                                    <span>{member.name}</span>
+                                    {member.subType ? (
+                                      <span className="text-muted-foreground text-[10px]">
+                                        · {member.subType}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <p className="text-[10px] text-muted-foreground">
+                            e.g. assign your Figma designer to a design milestone
+                          </p>
+                          <FormMessage className="text-[10px]" />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
                       name="description"
                       render={({ field }) => (
                         <FormItem>
@@ -847,9 +961,18 @@ export default function AdminProjectDetail() {
                     />
 
                     <DialogFooter className="pt-2">
-                      <Button type="submit" disabled={createMilestoneMutation.isPending} size="sm" className="h-8 text-xs">
-                        {createMilestoneMutation.isPending && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
-                        Save Milestone
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs"
+                        onClick={() => setMilestoneOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={milestoneSaving} size="sm" className="h-8 text-xs">
+                        {milestoneSaving && <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />}
+                        {editingMilestone ? "Save changes" : "Save Milestone"}
                       </Button>
                     </DialogFooter>
                   </form>
@@ -874,26 +997,48 @@ export default function AdminProjectDetail() {
                   <TableRow>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Phase / Milestone</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Due Date</TableHead>
+                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Assigned To</TableHead>
                     <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Delivered Actions</TableHead>
+                    {canManageMilestones && (
+                      <TableHead className="text-[10px] font-semibold uppercase tracking-wider w-[72px]">Actions</TableHead>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {milestoneRows.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-muted-foreground h-16 text-[11px]">No timeline milestones recorded.</TableCell>
+                      <TableCell colSpan={canManageMilestones ? 5 : 4} className="text-center text-muted-foreground h-16 text-[11px]">No timeline milestones recorded.</TableCell>
                     </TableRow>
                   ) : (
-                    milestoneRows.map((m: any) => (
+                    milestoneRows.map((m: Milestone) => (
                       <TableRow key={m.id} className="text-[11px]">
                         <TableCell className="font-medium flex items-center gap-1.5 py-2.5">
                           <MapPin className="h-3 w-3 text-primary/70" />
                           <div>
                             <div>{m.title}</div>
-                            {m.description && <div className="text-[9px] text-muted-foreground font-normal">{m.description}</div>}
                           </div>
                         </TableCell>
                         <TableCell className="py-2.5">{new Date(m.plannedDate).toLocaleDateString()}</TableCell>
+                        <TableCell className="py-2.5">
+                          {m.assigneeName ? (
+                            <div className="flex items-center gap-1.5">
+                              <Avatar className="h-5 w-5 shrink-0">
+                                {m.assigneeAvatarUrl && <AvatarImage src={m.assigneeAvatarUrl} />}
+                                <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
+                                  {m.assigneeName.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="truncate">{m.assigneeName}</p>
+                                {m.assigneeRole && (
+                                  <p className="text-[9px] text-muted-foreground truncate">{m.assigneeRole}</p>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="py-2.5">
                           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
                             m.status === 'completed' ? 'text-green-500 border-green-500/20 bg-green-500/10' :
@@ -903,7 +1048,20 @@ export default function AdminProjectDetail() {
                             {m.status.toUpperCase()}
                           </Badge>
                         </TableCell>
-                        <TableCell className="py-2.5 text-muted-foreground">{m.status === 'completed' ? "Attestation Confirmed" : "Pending Deployment"}</TableCell>
+                        {canManageMilestones && (
+                          <TableCell className="py-2.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Edit milestone"
+                              onClick={() => openEditMilestone(m)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))
                   )}

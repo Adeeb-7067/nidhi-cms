@@ -8,7 +8,9 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "build:electron": "vite build --config electron.vite.config.ts"
+    "build:electron": "vite build --config electron.vite.config.ts",
+    "codegen": "orval --config ./orval.config.ts",
+    "codegen:watch": "orval --config ./orval.config.ts --watch"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.11",
@@ -64,6 +66,7 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.545.0",
     "next-themes": "^0.4.6",
+    "orval": "8.5.3",
     "react-day-picker": "^9.11.1",
     "react-hook-form": "^7.55.0",
     "react-icons": "^5.4.0",

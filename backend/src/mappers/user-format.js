@@ -1,7 +1,8 @@
 import { toIso } from "../utils/mongo-list.js";
 import { attachPresenceToUser } from "../services/presence.js";
+import { formatUserProfileFields } from "../utils/user-profile-fields.js";
 
-function formatUser(user, { withPresence = false } = {}) {
+function formatUser(user, { withPresence = false, includeSensitive = false } = {}) {
   const base = {
     id: user.id,
     employeeId: user.employeeId ?? null,
@@ -12,6 +13,12 @@ function formatUser(user, { withPresence = false } = {}) {
     designation: user.designation ?? null,
     avatarUrl: user.avatarUrl ?? null,
     department: user.department ?? null,
+    departmentId: user.departmentId ?? null,
+    reportingManagerId: user.reportingManagerId ?? null,
+    hrmRoleTemplateId: user.hrmRoleTemplateId ?? user.roleTemplateId ?? null,
+    roleTemplateId: user.roleTemplateId ?? user.hrmRoleTemplateId ?? null,
+    wfhMonthlyLimit: user.wfhMonthlyLimit ?? null,
+    leaveAccrualDaysPerMonth: user.leaveAccrualDaysPerMonth ?? null,
     phoneNumber: user.phoneNumber ?? null,
     joiningDate: toIso(user.joiningDate),
     linkedinUrl: user.linkedinUrl ?? null,
@@ -19,6 +26,7 @@ function formatUser(user, { withPresence = false } = {}) {
     lastLoginAt: toIso(user.lastLoginAt),
     lastSeenAt: toIso(user.lastSeenAt),
     createdAt: toIso(user.createdAt) ?? (/* @__PURE__ */ new Date()).toISOString(),
+    ...formatUserProfileFields(user, { includeSensitive }),
   };
   return withPresence ? attachPresenceToUser(base) : base;
 }

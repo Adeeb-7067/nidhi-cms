@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   useGetSettings,
   useUpdateSettings,
@@ -65,16 +65,16 @@ import {
 } from "lucide-react";
 import { ScreenshotMonitoringCard } from "@/components/monitoring/ScreenshotMonitoringCard";
 
-type SettingsSection =
-  | "appearance"
-  | "notifications"
-  | "workspace"
-  | "account"
-  | "organization"
-  // | "billing"
-  | "integrations"
-  | "security"
-  | "monitoring";
+import {
+  ADMIN_SETTINGS_SECTIONS,
+  USER_SETTINGS_SECTIONS,
+  persistSettingsSection,
+  resolveSettingsSection,
+  settingsSectionPath,
+  type SettingsSectionId,
+} from "@/lib/settings-section";
+
+type SettingsSection = SettingsSectionId;
 
 function SectionNav({
   sections,
@@ -145,6 +145,7 @@ function ThemePreview() {
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const [location, setLocation] = useLocation();
   const isAdmin = user?.role === "super_admin";
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -152,7 +153,7 @@ export default function SettingsPage() {
   const { theme, setTheme, primaryColor, setPrimaryColor, customColor, setCustomColor, fontSize, setFontSize } =
     useTheme();
 
-  const { data: orgSettings, isLoading: loadingOrg } = useGetSettings({
+  const { data: orgSettings, isLoading: loadingOrg, isError: orgSettingsError, error: orgSettingsErr } = useGetSettings({
     query: { enabled: isAdmin, queryKey: getGetSettingsQueryKey() },
   });
   const { mutateAsync: updateSettings, isPending: savingOrg } = useUpdateSettings();
@@ -190,22 +191,17 @@ export default function SettingsPage() {
 
   const goToSection = (id: SettingsSection) => {
     setSection(id);
-    // In hash routing (Electron) the entire route lives in the hash already —
-    // don't overwrite it with a section fragment.
-    if (!window.location.hash.startsWith("#/")) {
-      window.history.replaceState(null, "", `${window.location.pathname}#${id}`);
-    }
+    persistSettingsSection(id);
+    setLocation(settingsSectionPath(id));
   };
 
   useEffect(() => {
-    // In hash routing the hash is "#/admin/settings", not a section name — skip.
-    if (window.location.hash.startsWith("#/")) return;
-    const hash = window.location.hash.replace("#", "") as SettingsSection;
-    const allowed: SettingsSection[] = isAdmin
-      ? ["appearance", "notifications", "workspace", "account", "security", "organization", "monitoring", "integrations"]
-      : ["appearance", "notifications", "workspace", "account", "security"];
-    if (allowed.includes(hash)) setSection(hash);
-  }, [isAdmin]);
+    if (location === "/settings") {
+      setLocation(settingsSectionPath("appearance"), { replace: true });
+      return;
+    }
+    setSection(resolveSettingsSection(location, isAdmin));
+  }, [isAdmin, location, setLocation]);
 
   useEffect(() => {
     if (orgSettings) {
@@ -866,7 +862,26 @@ export default function SettingsPage() {
 
 
           {section === "monitoring" && isAdmin && (
-            <ScreenshotMonitoringCard />
+            loadingOrg ? (
+              <SettingsFormSkeleton />
+            ) : orgSettingsError ? (
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+                <p className="text-sm font-medium text-destructive">Could not load settings from API</p>
+                <p className="text-xs text-muted-foreground mt-2 max-w-md mx-auto">
+                  {getApiErrorMessage(orgSettingsErr, "Check that the backend is deployed and you are signed in as super admin.")}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => queryClient.invalidateQueries({ queryKey: getGetSettingsQueryKey() })}
+                >
+                  Retry
+                </Button>
+              </div>
+            ) : (
+              <ScreenshotMonitoringCard settings={orgSettings ?? null} />
+            )
           )}
 
           {section === "integrations" && isAdmin && (

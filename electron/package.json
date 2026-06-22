@@ -5,14 +5,17 @@
   "main": "main.js",
   "scripts": {
     "dev": "node launch.js",
-    "build:frontend": "npm run build:electron --prefix ../frontend",
-    "build": "npm run build:frontend && electron-builder",
-    "build:win": "npm run build:frontend && electron-builder --win",
-    "build:mac": "npm run build:frontend && electron-builder --mac",
-    "build:linux": "npm run build:frontend && electron-builder --linux"
+    "build:frontend": "node scripts/write-api-config.js && npm run build:electron --prefix ../frontend",
+    "build": "node scripts/write-api-config.js && npm run build:frontend && electron-builder",
+    "build:win": "node scripts/write-api-config.js && npm run build:frontend && electron-builder --win",
+    "build:mac": "node scripts/write-api-config.js && npm run build:frontend && electron-builder --mac",
+    "build:linux": "node scripts/write-api-config.js && npm run build:frontend && electron-builder --linux",
+    "write-api-config": "node scripts/write-api-config.js",
+    "test:blur": "node sensitive-apps.test.js"
   },
   "dependencies": {
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "electron": "^32.3.3",
@@ -29,37 +32,65 @@
     "files": [
       "main.js",
       "preload.js",
+      "sensitive-apps.js",
+      "screenshot-blur.js",
       "package.json"
     ],
     "extraResources": [
       {
         "from": "../frontend/dist/electron",
         "to": "frontend/dist/electron",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       },
       {
         "from": "assets",
         "to": "electron/assets",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.png",
+      "signAndEditExecutable": false
     },
     "linux": {
       "target": [
-        { "target": "AppImage", "arch": ["x64"] },
-        { "target": "deb", "arch": ["x64"] }
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "assets/icon.png",
       "category": "Office"
     },
     "mac": {
       "target": [
-        { "target": "dmg", "arch": ["x64", "arm64"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
       ],
       "icon": "assets/icon.icns",
       "hardenedRuntime": true,
@@ -70,8 +101,6 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/icon.ico",
-      "uninstallerIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },

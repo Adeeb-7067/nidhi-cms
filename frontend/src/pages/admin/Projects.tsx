@@ -51,6 +51,11 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
+import { ProjectDescriptionResourcesField } from "@/components/project/ProjectDescriptionResourcesField";
+import {
+  syncProjectDescriptionResources,
+  type DescriptionResourceAttachment,
+} from "@/lib/inventory-api";
 import { Link } from "wouter";
 import { PageTableSkeleton } from "@/components/loading";
 import {
@@ -183,6 +188,10 @@ export default function AdminProjects() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [descriptionResources, setDescriptionResources] = useState<DescriptionResourceAttachment[]>([]);
+  const [descriptionResourceBaseline, setDescriptionResourceBaseline] = useState<Map<string, number>>(
+    () => new Map(),
+  );
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [activeTab, setActiveTab] = useState<ListProjectsType>(
     ListProjectsType.development,
@@ -280,6 +289,13 @@ export default function AdminProjects() {
     }
   }, [editProject, form]);
 
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setDescriptionResources([]);
+      setDescriptionResourceBaseline(new Map());
+    }
+  }, [isDialogOpen]);
+
   const onSubmit = async (values: ProjectFormValues) => {
     try {
       if (editProject) {
@@ -291,10 +307,17 @@ export default function AdminProjects() {
             techStack: values.techStack || [],
           },
         });
+        if (descriptionResources.length || descriptionResourceBaseline.size) {
+          await syncProjectDescriptionResources(
+            editProject.id,
+            descriptionResources,
+            descriptionResourceBaseline,
+          );
+        }
         toast.success("Project updated");
         setEditProject(null);
       } else {
-        await createProjectMutation.mutateAsync({
+        const created = await createProjectMutation.mutateAsync({
           data: {
             ...values,
             clientId: parseInt(values.clientId),
@@ -302,6 +325,9 @@ export default function AdminProjects() {
             techStack: values.techStack || [],
           },
         });
+        if (descriptionResources.length && created?.id) {
+          await syncProjectDescriptionResources(created.id, descriptionResources, new Map());
+        }
         toast.success("Project created");
         setIsDialogOpen(false);
       }
@@ -893,6 +919,12 @@ export default function AdminProjects() {
                         <FormMessage />
                       </FormItem>
                     )}
+                  />
+                  <ProjectDescriptionResourcesField
+                    projectId={editProject?.id}
+                    value={descriptionResources}
+                    onChange={setDescriptionResources}
+                    onBaselineChange={setDescriptionResourceBaseline}
                   />
                   <FormField
                     control={form.control}

@@ -1,4 +1,5 @@
 import React from "react";
+import { useClientTeam } from "@/contexts/ClientTeamContext";
 import { useListProjects, useGetApkReleases, getGetApkReleasesQueryKey } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,8 +20,20 @@ import {
 import { cn } from "@/lib/utils";
 
 export default function ClientApk() {
+  const team = useClientTeam();
   const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 1 });
   const projectId = projectsData?.projects[0]?.id;
+
+  if (team.isClientUser && !team.isAdmin && !team.can("documents")) {
+    return (
+      <PortalPageShell>
+        <PortalPageHero
+          title="Releases & Downloads"
+          subtitle="You don't have access to this section. Ask your Client Admin to enable it."
+        />
+      </PortalPageShell>
+    );
+  }
 
   const { data: apks, isLoading: isApksLoading } = useGetApkReleases(projectId!, {
     query: { 

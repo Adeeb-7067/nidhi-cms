@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
+import { isDeveloperRole } from "@/lib/user-roles";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -30,6 +32,7 @@ import {
   getInventorySummary,
   listInventoryResources,
   createInventoryResource,
+  updateInventoryResource,
   listInventoryCredentials,
   createInventoryCredential,
   revealCredential,
@@ -50,6 +53,8 @@ import {
   Activity,
   Plus,
   Eye,
+  EyeOff,
+  Users,
   Copy,
   Download,
 } from "lucide-react";
@@ -57,13 +62,14 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { formatDistanceToNow } from "date-fns";
 import { resolveApkDisplayName, formatApkReleaseSubtitle } from "@/lib/apk-audience";
+import { cn } from "@/lib/utils";
 
 export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
   const { user } = useAuth();
   const { socket } = useRealtime();
   const qc = useQueryClient();
   const isClient = user?.role === "client";
-  const canManage = user?.role === "super_admin" || user?.role === "developer";
+  const canManage = user?.role === "super_admin" || isDeveloperRole(user?.role);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["inventory-summary", projectId] });
@@ -176,6 +182,12 @@ export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
   );
 }
 
+function resourceVisibilityLabel(visibility: string) {
+  if (visibility === "client_visible") return "Team + Client";
+  if (visibility === "team_only") return "Team only";
+  return visibility;
+}
+
 function ResourcesTab({
   projectId,
   canManage,
@@ -191,6 +203,9 @@ function ResourcesTab({
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [fileUrl, setFileUrl] = useState("");
+  const [shareWithClient, setShareWithClient] = useState(true);
+  const [updatingId, setUpdatingId] = useState<number | null>(null);
+  const [sharingAll, setSharingAll] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["inventory-resources", projectId],
@@ -201,6 +216,7 @@ function ResourcesTab({
     setName("");
     setUrl("");
     setFileUrl("");
+    setShareWithClient(true);
   };
 
   const handleAdd = async () => {
@@ -210,7 +226,7 @@ function ResourcesTab({
         type: fileUrl ? "file" : url ? "link" : "document",
         fileUrl: fileUrl || undefined,
         url: url || undefined,
-        visibility: isClient ? "client_visible" : "team_only",
+        visibility: isClient || shareWithClient ? "client_visible" : "team_only",
       });
       toast.success("Resource added");
       setAddOpen(false);
@@ -221,16 +237,71 @@ function ResourcesTab({
     }
   };
 
+  const toggleVisibility = async (resource: { id: number; visibility: string; name: string }) => {
+    const next = resource.visibility === "client_visible" ? "team_only" : "client_visible";
+    setUpdatingId(resource.id);
+    try {
+      await updateInventoryResource(projectId, resource.id, { visibility: next });
+      toast.success(
+        next === "client_visible"
+          ? `"${resource.name}" is visible to team and client`
+          : `"${resource.name}" is team-only (hidden from client)`,
+      );
+      onChange();
+    } catch (error) {
+      toastApiError(error, "Failed to update visibility");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const teamOnlyCount = (data?.resources ?? []).filter(
+    (r: { visibility: string }) => r.visibility === "team_only",
+  ).length;
+
+  const shareAllWithClient = async () => {
+    const teamOnly = (data?.resources ?? []).filter((r: { visibility: string }) => r.visibility === "team_only");
+    if (!teamOnly.length) return;
+    setSharingAll(true);
+    try {
+      await Promise.all(
+        teamOnly.map((r: { id: number }) =>
+          updateInventoryResource(projectId, r.id, { visibility: "client_visible" }),
+        ),
+      );
+      toast.success(`${teamOnly.length} resource${teamOnly.length !== 1 ? "s" : ""} shared with client`);
+      onChange();
+    } catch (error) {
+      toastApiError(error, "Failed to share resources");
+    } finally {
+      setSharingAll(false);
+    }
+  };
+
   return (
     <>
       <Card className="min-w-0">
         <CardHeader className="p-3 flex-row items-center justify-between gap-2">
           <CardTitle className="text-sm shrink-0">Resource library</CardTitle>
-          {canManage && (
-            <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => setAddOpen(true)}>
-              <Plus className="h-3 w-3 mr-1" /> Add
-            </Button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {canManage && !isClient && teamOnlyCount > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                disabled={sharingAll}
+                onClick={shareAllWithClient}
+              >
+                <Users className="h-3 w-3 mr-1" />
+                {sharingAll ? "Sharing…" : `Share all with client (${teamOnlyCount})`}
+              </Button>
+            )}
+            {canManage && (
+              <Button size="sm" className="h-7 text-xs shrink-0" onClick={() => setAddOpen(true)}>
+                <Plus className="h-3 w-3 mr-1" /> Add
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-3 space-y-2">
           {isLoading ? (
@@ -276,9 +347,43 @@ function ResourcesTab({
                           chat
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-[9px]">
-                        {r.visibility}
-                      </Badge>
+                      {canManage && !isClient ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            "h-6 text-[9px] px-1.5 gap-1",
+                            r.visibility === "client_visible"
+                              ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                              : "text-muted-foreground",
+                          )}
+                          disabled={updatingId === r.id}
+                          onClick={() => toggleVisibility(r)}
+                          title={
+                            r.visibility === "client_visible"
+                              ? "Team + Client — click to hide from client portal"
+                              : "Team only — click to share with client too"
+                          }
+                        >
+                          {r.visibility === "client_visible" ? (
+                            <Eye className="h-3 w-3" />
+                          ) : (
+                            <EyeOff className="h-3 w-3" />
+                          )}
+                          {resourceVisibilityLabel(r.visibility)}
+                        </Button>
+                      ) : (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px]",
+                            r.visibility === "client_visible" && "border-emerald-500/40 text-emerald-600",
+                          )}
+                        >
+                          {resourceVisibilityLabel(r.visibility)}
+                        </Badge>
+                      )}
                       {(r.fileUrl || r.url) && (
                         <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
                           <a href={r.fileUrl || r.url} target="_blank" rel="noreferrer">
@@ -332,6 +437,17 @@ function ResourcesTab({
               <Label className="text-xs">File upload (optional)</Label>
               <FileUploader category="inventory" label="Drag & drop or click" onUploadComplete={setFileUrl} />
             </div>
+            {!isClient && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={shareWithClient}
+                  onCheckedChange={(v) => setShareWithClient(v === true)}
+                />
+                <span className="text-xs text-muted-foreground">
+                  Visible to team and client (recommended for deliverables)
+                </span>
+              </label>
+            )}
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" size="sm" onClick={() => setAddOpen(false)}>

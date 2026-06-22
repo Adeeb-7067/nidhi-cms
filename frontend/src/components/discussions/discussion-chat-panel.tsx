@@ -3,7 +3,9 @@ import {
   discussionChannelSubtitle,
   discussionChannelTitle,
   isCompanyTeamChannel,
+  isDirectChannel,
   type ProjectDiscussionThreadType,
+  type DiscussionPeerUser,
 } from "@/lib/discussion-channels";
 import { useCompanyTeamMentionCandidates } from "@/api/company-team-mentions";
 import { useGetProjectMembers, getGetProjectMembersQueryKey } from "@/api";
@@ -23,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { isChatAttachmentFile } from "@/lib/chat-file-upload";
 import { dataTransferHasFiles } from "@/lib/file-drag";
 import { ArrowLeft, ChevronDown, MessageSquare, Upload, Users } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -39,6 +42,7 @@ type DiscussionChatPanelProps = {
   showBackButton?: boolean;
   onBack?: () => void;
   className?: string;
+  peerUser?: DiscussionPeerUser;
 };
 
 export function DiscussionChatPanel({
@@ -54,6 +58,7 @@ export function DiscussionChatPanel({
   showBackButton,
   onBack,
   className,
+  peerUser,
 }: DiscussionChatPanelProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -63,10 +68,11 @@ export function DiscussionChatPanel({
   const panelDragDepthRef = useRef(0);
 
   const isCompanyTeam = isCompanyTeamChannel(threadType);
+  const isDirect = isDirectChannel(threadType);
 
   const { data: projectMembers } = useGetProjectMembers(project.id, {
     query: {
-      enabled: !isCompanyTeam && project.id > 0,
+      enabled: !isCompanyTeam && !isDirect && project.id > 0,
       queryKey: getGetProjectMembersQueryKey(project.id),
     },
   });
@@ -215,6 +221,15 @@ export function DiscussionChatPanel({
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
             <Users className="h-5 w-5" />
           </div>
+        ) : isDirect && peerUser ? (
+          <Avatar className="h-11 w-11 shrink-0">
+            {peerUser.avatarUrl ? (
+              <AvatarImage src={peerUser.avatarUrl} alt={peerUser.name} />
+            ) : null}
+            <AvatarFallback className="bg-primary/15 text-primary">
+              {peerUser.name.slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
         ) : (
           <ProjectDiscussionAvatar
             project={project}
@@ -224,10 +239,10 @@ export function DiscussionChatPanel({
         )}
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold">
-            {discussionChannelTitle(project.name, threadType)}
+            {discussionChannelTitle(project.name, threadType, peerUser)}
           </h1>
           <p className="truncate text-[11px] text-muted-foreground">
-            {discussionChannelSubtitle(threadType)}
+            {discussionChannelSubtitle(threadType, peerUser)}
             {messages.length > 0 && (
               <span className="text-muted-foreground/80">
                 {" "}
@@ -236,7 +251,7 @@ export function DiscussionChatPanel({
             )}
           </p>
         </div>
-        {participantIds.length > 0 && (
+        {!isDirect && participantIds.length > 0 && (
           <div className="hidden shrink-0 items-center -space-x-2 sm:flex">
             {participantIds.map((id) => {
               const msg = messages.find((m) => m.authorId === id);
@@ -285,7 +300,9 @@ export function DiscussionChatPanel({
               <MessageSquare className="mb-2 h-10 w-10 text-muted-foreground/40" />
               <h3 className="text-sm font-semibold">No messages yet</h3>
               <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-                Send a message to start the conversation. Everyone on this project can see it.
+                {isDirect
+                  ? "Send a private message. Only you and this person can see this chat."
+                  : "Send a message to start the conversation. Everyone on this project can see it."}
               </p>
             </div>
           )}

@@ -1,0 +1,111 @@
+import { Router } from "express";
+import asyncHandler from "express-async-handler";
+import { requireAuth } from "../middlewares/auth.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permission.js";
+import { requireHrmAccess } from "../middlewares/hrm-permission.js";
+import * as hrm from "../controllers/hrm.controller.js";
+
+const router = Router();
+router.use(requireAuth, requireHrmAccess);
+const perm = requirePermission;
+
+router.get("/hrm/departments", perm("hrm_departments", "view"), asyncHandler(hrm.getDepartments));
+router.post("/hrm/departments", perm("hrm_departments", "create"), asyncHandler(hrm.postDepartment));
+router.patch("/hrm/departments/:id", perm("hrm_departments", "edit"), asyncHandler(hrm.patchDepartment));
+router.delete("/hrm/departments/:id", perm("hrm_departments", "delete"), asyncHandler(hrm.deleteDepartment));
+
+router.get(
+  "/hrm/leave/types",
+  requireAnyPermission(["hrm_leave", "view"], ["hrm_my_leave", "view"]),
+  asyncHandler(hrm.getLeaveTypes),
+);
+router.get("/hrm/leave/balances", asyncHandler(hrm.getLeaveBalances));
+router.get("/hrm/leave/requests", asyncHandler(hrm.getLeaveRequests));
+router.post("/hrm/leave/requests", asyncHandler(hrm.postLeaveRequest));
+router.patch("/hrm/leave/requests/:id", perm("hrm_leave", "approve"), asyncHandler(hrm.patchLeaveRequest));
+router.post("/hrm/leave/requests/:id/cancel", asyncHandler(hrm.cancelLeaveRequest));
+
+router.get("/hrm/wfh/requests", asyncHandler(hrm.getWfhRequests));
+router.post("/hrm/wfh/requests", asyncHandler(hrm.postWfhRequest));
+router.patch("/hrm/wfh/requests/:id", perm("hrm_wfh", "approve"), asyncHandler(hrm.patchWfhRequest));
+router.post("/hrm/wfh/requests/:id/cancel", asyncHandler(hrm.cancelWfhRequest));
+
+router.get("/hrm/shifts/templates", perm("hrm_shifts", "view"), asyncHandler(hrm.getShiftTemplates));
+router.post("/hrm/shifts/templates", perm("hrm_shifts", "create"), asyncHandler(hrm.postShiftTemplate));
+router.patch("/hrm/shifts/templates/:id", perm("hrm_shifts", "edit"), asyncHandler(hrm.patchShiftTemplate));
+router.get("/hrm/shifts/assignments", perm("hrm_shifts", "view"), asyncHandler(hrm.getShiftAssignments));
+router.post("/hrm/shifts/assignments", perm("hrm_shifts", "edit"), asyncHandler(hrm.postShiftAssignment));
+
+router.get("/hrm/holidays", asyncHandler(hrm.getHolidays));
+router.post("/hrm/holidays", perm("hrm_holidays", "create"), asyncHandler(hrm.postHoliday));
+router.patch("/hrm/holidays/:id", perm("hrm_holidays", "edit"), asyncHandler(hrm.patchHoliday));
+router.delete("/hrm/holidays/:id", perm("hrm_holidays", "delete"), asyncHandler(hrm.deleteHoliday));
+
+router.get("/hrm/calendar", asyncHandler(hrm.getCalendar));
+router.post(
+  "/hrm/calendar/generate-sundays",
+  perm("hrm_holidays", "create"),
+  asyncHandler(hrm.postGenerateSundayHolidays),
+);
+
+router.get("/hrm/dashboard", perm("hrm_dashboard", "view"), asyncHandler(hrm.getDashboard));
+router.get("/hrm/attendance/daily", asyncHandler(hrm.getAttendanceDaily));
+router.get("/hrm/attendance/variance", perm("hrm_attendance", "view"), asyncHandler(hrm.getAttendanceVariance));
+router.get("/hrm/attendance/corrections", asyncHandler(hrm.getAttendanceCorrections));
+router.post("/hrm/attendance/corrections", asyncHandler(hrm.postAttendanceCorrection));
+router.patch("/hrm/attendance/corrections/:id", perm("hrm_attendance", "approve"), asyncHandler(hrm.patchAttendanceCorrection));
+router.post(
+  "/hrm/attendance/daily/:userId/:date/excuse-late",
+  requireAnyPermission(["hrm_attendance", "edit"], ["hrm_attendance", "approve"]),
+  asyncHandler(hrm.postAttendanceLateExcuse),
+);
+router.patch(
+  "/hrm/attendance/daily/:userId/:date",
+  requireAnyPermission(["hrm_attendance", "edit"], ["hrm_attendance", "approve"]),
+  asyncHandler(hrm.patchAttendanceDailyOverride),
+);
+
+router.get("/hrm/payroll/structures", perm("hrm_payroll", "view"), asyncHandler(hrm.getSalaryStructures));
+router.put("/hrm/payroll/structures/:userId", perm("hrm_payroll", "edit"), asyncHandler(hrm.putSalaryStructure));
+router.get("/hrm/payroll/runs", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollRuns));
+router.get("/hrm/payroll/checklist", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollChecklistByPeriod));
+router.post("/hrm/payroll/runs", perm("hrm_payroll", "create"), asyncHandler(hrm.postPayrollRun));
+router.get("/hrm/payroll/runs/:id/lines", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollRunLines));
+router.get("/hrm/payroll/runs/:id/checklist", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollChecklist));
+router.patch("/hrm/payroll/lines/:lineId", perm("hrm_payroll", "edit"), asyncHandler(hrm.patchPayrollLine));
+router.post("/hrm/payroll/runs/:id/review", perm("hrm_payroll", "edit"), asyncHandler(hrm.postPayrollReview));
+router.post("/hrm/payroll/runs/:id/finalize", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollFinalize));
+router.post("/hrm/payroll/runs/:id/paid", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollPaid));
+router.get("/hrm/payroll/runs/:id/export", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollExport));
+router.get("/hrm/payroll/runs/:id/export/bank", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollBankExport));
+router.get("/hrm/my-payslips", perm("hrm_my_payslips", "view"), asyncHandler(hrm.getMyPayslips));
+router.get("/hrm/payslips/:id", perm("hrm_my_payslips", "view"), asyncHandler(hrm.getPayslipById));
+
+router.get("/hrm/recruitment/candidates", perm("hrm_recruitment", "view"), asyncHandler(hrm.getCandidates));
+router.post("/hrm/recruitment/candidates", perm("hrm_recruitment", "create"), asyncHandler(hrm.postCandidate));
+router.patch("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchCandidate));
+router.post("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_recruitment", "edit"), asyncHandler(hrm.postOnboarding));
+router.get("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_recruitment", "view"), asyncHandler(hrm.getOnboardingTasks));
+router.patch("/hrm/recruitment/onboarding/:taskId", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchOnboardingTask));
+
+router.get("/hrm/documents", asyncHandler(hrm.getDocuments));
+router.post("/hrm/documents", asyncHandler(hrm.postDocument));
+router.patch("/hrm/documents/:id", perm("hrm_documents", "approve"), asyncHandler(hrm.patchDocument));
+
+router.get("/hrm/policies", asyncHandler(hrm.getPolicies));
+router.post("/hrm/policies", perm("hrm_policies", "create"), asyncHandler(hrm.postPolicy));
+router.patch("/hrm/policies/:id", perm("hrm_policies", "edit"), asyncHandler(hrm.patchPolicy));
+router.delete("/hrm/policies/:id", perm("hrm_policies", "delete"), asyncHandler(hrm.deletePolicy));
+router.post("/hrm/policies/:id/acknowledge", asyncHandler(hrm.postPolicyAck));
+router.get("/hrm/policies/my-acknowledgements", asyncHandler(hrm.getMyPolicyAcks));
+
+router.get("/hrm/settings", perm("hrm_settings", "view"), asyncHandler(hrm.getHrmSettings));
+router.patch("/hrm/settings", perm("hrm_settings", "edit"), asyncHandler(hrm.patchHrmSettings));
+router.get("/hrm/employees", asyncHandler(hrm.getHrmEmployees));
+router.get("/hrm/employees/:id", asyncHandler(hrm.getHrmEmployee));
+router.post("/hrm/employees/:id/send-credentials", perm("hrm_employees", "edit"), asyncHandler(hrm.postEmployeeCredentials));
+router.patch("/hrm/users/:userId/profile", perm("hrm_employees", "edit"), asyncHandler(hrm.patchUserHrmProfile));
+
+router.get("/hrm/audit", perm("hrm_audit", "view"), asyncHandler(hrm.getAuditLogs));
+
+export default router;

@@ -1,13 +1,20 @@
 import {
   projectsTable,
-  projectMembersTable,
-  clientsTable
+  projectMembersTable
 } from "../../models/schema/index.js";
+import { isDevPortalStaffRole, isDeveloperRole } from "../../constants/user-roles.js";
+import { findClientCompanyForUser } from "../client-team.js";
 function projectCompanyId(project) {
   return project.companyId ?? project.clientId;
 }
+/**
+ * Resolves the client company for a given user. Recognises both the primary
+ * client contact (Clients.userId) and active members of the Client Team
+ * Management feature (ClientTeamMembers.userId), so all existing access
+ * checks transparently extend to invited team members.
+ */
 async function getClientCompanyForUser(userId) {
-  return clientsTable.findOne({ userId });
+  return findClientCompanyForUser(userId);
 }
 async function getCompanyAccess(req, companyId) {
   if (!req.user) return { allowed: false, canManage: false, isClient: false };
@@ -20,7 +27,7 @@ async function getCompanyAccess(req, companyId) {
     const allowed = !!company && company.id === companyId;
     return { allowed, canManage: false, isClient: true };
   }
-  if (role === "developer" || role === "tester" || role === "qa") {
+  if (isDevPortalStaffRole(role)) {
     const projects = await projectsTable.find({ $or: [{ companyId }, { clientId: companyId }] }).select("id").lean();
     const projectIds = projects.map((p) => p.id);
     if (!projectIds.length) {
@@ -32,7 +39,7 @@ async function getCompanyAccess(req, companyId) {
     });
     return {
       allowed: !!member,
-      canManage: role === "developer",
+      canManage: isDeveloperRole(role),
       isClient: false
     };
   }
@@ -56,11 +63,11 @@ async function getProjectAccess(req, projectId) {
     const allowed = !!company && company.id === companyId;
     return { allowed, canManage: false, isClient: true, companyId };
   }
-  if (role === "developer" || role === "tester" || role === "qa") {
+  if (isDevPortalStaffRole(role)) {
     const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
     return {
       allowed: !!member,
-      canManage: role === "developer",
+      canManage: isDeveloperRole(role),
       isClient: false,
       companyId
     };

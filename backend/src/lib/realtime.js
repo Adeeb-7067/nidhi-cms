@@ -91,15 +91,36 @@ function getIO() {
 
 import { getFirebaseAdmin } from "./firebase.js";
 import { usersTable } from "../models/schema/index.js";
+import {
+  isUserAccountActive,
+  REALTIME_EVENTS_WHEN_INACTIVE,
+} from "../services/user-access.js";
+
+function stringifyFcmData(data) {
+  const out = {};
+  for (const [key, value] of Object.entries(data ?? {})) {
+    if (value == null) continue;
+    out[key] = typeof value === "string" ? value : String(value);
+  }
+  return out;
+}
 
 async function notifyUser(userId, event, data) {
+  const user = await usersTable
+    .findOne({ id: userId }, { status: 1, fcmTokens: 1 })
+    .lean();
+  const active = isUserAccountActive(user);
+
+  if (!active && !REALTIME_EVENTS_WHEN_INACTIVE.has(event)) {
+    return;
+  }
+
   if (io) {
     io.to(`user:${userId}`).emit(event, data);
   }
-  if (event === "notification" && data.title && data.body) {
+  if (event === "notification" && data.title && data.body && active) {
     try {
-      const user = await usersTable.findOne({ id: userId });
-      if (user && user.fcmTokens && user.fcmTokens.length > 0) {
+      if (user?.fcmTokens?.length > 0) {
         const admin = getFirebaseAdmin();
         if (admin.apps.length > 0) {
           await admin.messaging().sendEachForMulticast({
@@ -108,10 +129,10 @@ async function notifyUser(userId, event, data) {
               title: data.title,
               body: data.body,
             },
-            data: {
+            data: stringifyFcmData({
               click_action: "FLUTTER_NOTIFICATION_CLICK",
               ...data,
-            },
+            }),
           });
         }
       }

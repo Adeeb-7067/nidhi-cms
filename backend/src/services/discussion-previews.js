@@ -5,7 +5,10 @@ import {
   discussionThreadTypesForRole,
   canAccessCompanyTeamDiscussion,
   COMPANY_TEAM_THREAD,
+  COMPANY_TEAM_UNOFFICIAL_THREAD,
   COMPANY_TEAM_THREAD_ID,
+  COMPANY_TEAM_UNOFFICIAL_THREAD_ID,
+  isCompanyTeamDiscussionThread,
 } from "./discussion-project-access.js";
 
 function commentPreviewText(row) {
@@ -83,34 +86,39 @@ export async function getProjectDiscussionPreviews(user) {
   const previews = [];
 
   if (includeCompanyTeam) {
-    const row = latestRows.find(
-      (r) => r._id.threadId === COMPANY_TEAM_THREAD_ID && r._id.threadType === COMPANY_TEAM_THREAD,
-    );
-    if (!row) {
-      previews.push({
-        projectId: COMPANY_TEAM_THREAD_ID,
-        threadType: COMPANY_TEAM_THREAD,
-        lastMessageAt: null,
-        lastPreview: null,
-        lastAuthorName: null,
-        lastAuthorId: null,
-      });
-    } else {
-      const createdAt = toIso(row.createdAt) ?? new Date().toISOString();
-      previews.push({
-        projectId: COMPANY_TEAM_THREAD_ID,
-        threadType: COMPANY_TEAM_THREAD,
-        lastMessageAt: createdAt,
-        lastPreview: commentPreviewText(row),
-        lastAuthorName: authorMap.get(row.authorId) ?? "Unknown",
-        lastAuthorId: row.authorId,
-      });
+    for (const [threadType, threadId] of [
+      [COMPANY_TEAM_THREAD, COMPANY_TEAM_THREAD_ID],
+      [COMPANY_TEAM_UNOFFICIAL_THREAD, COMPANY_TEAM_UNOFFICIAL_THREAD_ID],
+    ]) {
+      const row = latestRows.find(
+        (r) => r._id.threadId === threadId && r._id.threadType === threadType,
+      );
+      if (!row) {
+        previews.push({
+          projectId: threadId,
+          threadType,
+          lastMessageAt: null,
+          lastPreview: null,
+          lastAuthorName: null,
+          lastAuthorId: null,
+        });
+      } else {
+        const createdAt = toIso(row.createdAt) ?? new Date().toISOString();
+        previews.push({
+          projectId: threadId,
+          threadType,
+          lastMessageAt: createdAt,
+          lastPreview: commentPreviewText(row),
+          lastAuthorName: authorMap.get(row.authorId) ?? "Unknown",
+          lastAuthorId: row.authorId,
+        });
+      }
     }
   }
 
   for (const projectId of projectIds) {
     for (const threadType of threadTypes) {
-      if (threadType === COMPANY_TEAM_THREAD) continue;
+      if (isCompanyTeamDiscussionThread(threadType)) continue;
       const row = latestRows.find(
         (r) => r._id.threadId === projectId && r._id.threadType === threadType,
       );

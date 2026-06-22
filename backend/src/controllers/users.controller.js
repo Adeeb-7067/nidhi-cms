@@ -4,7 +4,8 @@ import {
   auditLogsTable,
   getNextSequence,
   staffEmployeeRoles,
-  adminStaffRoles
+  adminStaffRoles,
+  userRoles
 } from "../models/schema/index.js";
 import {
   hashPassword,
@@ -20,15 +21,23 @@ import { generateEmployeeId, previewEmployeeId } from "../services/employeeId.js
 import { validateStoredFileUrl } from "../lib/file-storage.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
 import { notifyUser } from "../lib/realtime.js";
+import { isUserAccountActive, revokeUserAccess } from "../services/user-access.js";
 import { formatUser } from "../mappers/user-format.js";
 import { paginateModel, toIso } from "../utils/mongo-list.js";
+import {
+  syncUserRoleTemplate,
+} from "../services/permissions.service.js";
+import {
+  buildUserProfileCreateFields,
+  buildUserProfilePatchSet,
+} from "../utils/user-profile-fields.js";
 import {
   badRequest,
   conflict,
   notFound,
   parseIdParam,
   parsePagination,
-  optionalString
+  optionalString,
 } from "../utils/route-errors.js";
 const USER_LIST_PROJECTION = {
   id: 1,
@@ -40,6 +49,11 @@ const USER_LIST_PROJECTION = {
   designation: 1,
   avatarUrl: 1,
   department: 1,
+  departmentId: 1,
+  reportingManagerId: 1,
+  hrmRoleTemplateId: 1,
+  roleTemplateId: 1,
+  wfhMonthlyLimit: 1,
   phoneNumber: 1,
   joiningDate: 1,
   linkedinUrl: 1,
@@ -95,6 +109,7 @@ async function postUsers(req, res) {
     badRequest("Password is required (at least 8 characters).", "password");
   }
   if (!role) badRequest("Role is required.", "role");
+  if (!userRoles.includes(role)) badRequest("Invalid role.", "role");
   validateStoredFileUrl(avatarUrl, "avatarUrl");
   const existing = await usersTable.findOne({ email: email.toLowerCase() }).lean();
   if (existing) conflict("This email is already registered.", "email");
@@ -103,20 +118,27 @@ async function postUsers(req, res) {
     ? await generateEmployeeId(name)
     : null;
   const userId = await getNextSequence("users");
+  const explicitTemplateId =
+    body.roleTemplateId !== undefined || body.hrmRoleTemplateId !== undefined
+      ? (body.roleTemplateId ?? body.hrmRoleTemplateId ?? null)
+      : undefined;
+  const profileFields = buildUserProfileCreateFields(body);
   const user = await usersTable.create({
     id: userId,
-    name,
     email: email.toLowerCase(),
     passwordHash,
     role,
-    subType: optionalString(body.subType) ?? null,
-    designation: optionalString(body.designation) ?? null,
-    avatarUrl: avatarUrl ?? null,
-    department: optionalString(body.department) || "Engineering",
-    phoneNumber: optionalString(body.phoneNumber) ?? null,
-    joiningDate: body.joiningDate ? new Date(String(body.joiningDate)) : null,
-    linkedinUrl: optionalString(body.linkedinUrl) ?? null,
-    employeeId
+    employeeId,
+    roleTemplateId: explicitTemplateId !== undefined ? explicitTemplateId : null,
+    hrmRoleTemplateId: explicitTemplateId !== undefined ? explicitTemplateId : null,
+    ...profileFields,
+    name: profileFields.name ?? name,
+    avatarUrl: profileFields.avatarUrl ?? avatarUrl ?? null,
+    department: optionalString(body.department) || profileFields.department || "Engineering",
+  });
+  await syncUserRoleTemplate(user.id, role, {
+    roleChanged: true,
+    ...(explicitTemplateId !== undefined ? { explicitTemplateId } : {}),
   });
   const credId = await getNextSequence("credential_history");
   await credentialHistoryTable.create({
@@ -129,7 +151,7 @@ async function postUsers(req, res) {
     trigger: "initial_setup",
     status: "active"
   });
-  res.status(201).json(formatUser(user));
+  res.status(201).json(formatUser(user, { includeSensitive: true }));
 }
 async function patchUsersMePassword(req, res) {
   const currentPassword = optionalString(req.body.currentPassword);
@@ -170,7 +192,9 @@ async function getUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const user = await usersTable.findOne({ id }).lean();
   if (!user) notFound("User");
-  res.json(formatUser(user, { withPresence: true }));
+  const includeSensitive =
+    req.user.role === "super_admin" || req.user.id === id;
+  res.json(formatUser(user, { withPresence: true, includeSensitive }));
 }
 async function adminSetUserPassword(userId, newPassword, adminUser) {
   if (!newPassword || newPassword.length < 8) {
@@ -203,6 +227,8 @@ async function adminSetUserPassword(userId, newPassword, adminUser) {
 }
 async function patchUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
+  const existing = await usersTable.findOne({ id }, { status: 1, role: 1 }).lean();
+  if (!existing) notFound("User");
   const body = req.body;
   const avatarUrl = body.avatarUrl !== void 0 ? optionalString(body.avatarUrl) : void 0;
   validateStoredFileUrl(avatarUrl, "avatarUrl");
@@ -210,38 +236,57 @@ async function patchUsersById(req, res) {
   if (password) {
     await adminSetUserPassword(id, password, req.user);
   }
+  if (body.role !== void 0) {
+    const nextRole = optionalString(body.role);
+    if (!nextRole || !userRoles.includes(nextRole)) badRequest("Invalid role.", "role");
+  }
+  const roleChanged = body.role !== void 0 && optionalString(body.role) !== existing.role;
+  const explicitTemplate =
+    body.roleTemplateId !== void 0 || body.hrmRoleTemplateId !== void 0;
+  const templateCleared =
+    explicitTemplate &&
+    (body.roleTemplateId ?? body.hrmRoleTemplateId) == null;
+  const profilePatch = buildUserProfilePatchSet(body);
   const user = await usersTable.findOneAndUpdate(
     { id },
     {
       $set: {
-        ...body.name !== void 0 && { name: optionalString(body.name) },
+        ...profilePatch,
+        ...body.name !== void 0 && !profilePatch.name && { name: optionalString(body.name) },
         ...body.email !== void 0 && { email: optionalString(body.email)?.toLowerCase() },
         ...body.role !== void 0 && { role: optionalString(body.role) },
-        ...body.subType !== void 0 && { subType: optionalString(body.subType) ?? null },
-        ...body.designation !== void 0 && { designation: optionalString(body.designation) ?? null },
         ...body.avatarUrl !== void 0 && { avatarUrl: avatarUrl ?? null },
-        ...body.status !== void 0 && { status: body.status },
         ...body.department !== void 0 && { department: optionalString(body.department) },
-        ...body.phoneNumber !== void 0 && { phoneNumber: optionalString(body.phoneNumber) ?? null },
-        ...body.joiningDate !== void 0 && {
-          joiningDate: body.joiningDate ? new Date(String(body.joiningDate)) : null
-        },
-        ...body.linkedinUrl !== void 0 && { linkedinUrl: optionalString(body.linkedinUrl) ?? null }
-      }
+      },
     },
     { new: true }
   );
   if (!user) notFound("User");
+  await syncUserRoleTemplate(id, user.role, {
+    explicitTemplateId:
+      explicitTemplate && !templateCleared
+        ? (body.roleTemplateId ?? body.hrmRoleTemplateId)
+        : undefined,
+    roleChanged: roleChanged || templateCleared,
+  });
   evictUserFromAuthCache(id); // role, name, email, or status may have changed
-  if (body.status === "inactive") notifyUser(id, "user_deactivated", { userId: id });
+
+  const becameInactive = isUserAccountActive(existing) && !isUserAccountActive(user);
+  if (becameInactive) {
+    await revokeUserAccess(id);
+    notifyUser(id, "user_deactivated", { userId: id });
+  }
+
   if (body.role !== undefined) notifyUser(id, "role_updated", { userId: id, role: user.role });
-  res.json(formatUser(user, { withPresence: true }));
+  res.json(formatUser(user, { withPresence: true, includeSensitive: true }));
 }
 async function deleteUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
-  const result = await usersTable.updateOne({ id }, { $set: { status: "inactive" } });
-  if (result.matchedCount === 0) notFound("User");
-  evictUserFromAuthCache(id); // force immediate revocation
+  const existing = await usersTable.findOne({ id }, { status: 1 }).lean();
+  if (!existing) notFound("User");
+
+  await usersTable.updateOne({ id }, { $set: { status: "inactive" } });
+  await revokeUserAccess(id);
   notifyUser(id, "user_deactivated", { userId: id });
   res.json({ message: "User deactivated" });
 }

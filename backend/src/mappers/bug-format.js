@@ -1,3 +1,4 @@
+import { isDeveloperRole } from "../constants/user-roles.js";
 import { usersTable, projectsTable, commentsTable, bugsTable } from "../models/schema/index.js";
 import { IdLookupCache } from "../lib/lookup-cache.js";
 import { toIso } from "../utils/mongo-list.js";
@@ -109,7 +110,7 @@ async function formatBugRows(bugs) {
 
   return bugs.map((bug) => {
     const rawAssigneeIds = collectAssigneeIds(bug);
-    const assigneeIdList = rawAssigneeIds.filter((id) => users.get(id)?.role === "developer");
+    const assigneeIdList = rawAssigneeIds.filter((id) => isDeveloperRole(users.get(id)?.role));
     const primaryAssignee = assigneeIdList[0] ?? null;
     const assignee = primaryAssignee ? users.get(primaryAssignee) : null;
     const reporter = users.get(bug.reporterId);

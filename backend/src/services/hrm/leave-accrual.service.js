@@ -1,0 +1,385 @@
+import {
+  leaveTypesTable,
+  leaveBalancesTable,
+  usersTable,
+  getNextSequence,
+} from "../../models/schema/index.js";
+import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { getOrCreateSettings } from "../company-settings.js";
+import { resolveWorkDayTimezone } from "../work-session-policy.js";
+import { withJobLock } from "../jobs/withJobLock.js";
+import { runInTx } from "../../lib/db-tx.js";
+import { logHrmAudit } from "./hrm-audit.service.js";
+import { logger } from "../../lib/logger.js";
+import { isDatabaseConnected } from "../../lib/db.js";
+
+/** Local hour (0–23) when the monthly accrual / carry-forward job fires. */
+export const LEAVE_ACCRUAL_RUN_HOUR = 2;
+
+const ACCRUAL_LEAVE_CODE = "EL";
+const JOB_TICK_MS = 5 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// Pure helpers (unit-tested without DB)
+// ---------------------------------------------------------------------------
+
+/** Remaining paid leave days on a balance row. */
+export function computeAvailableBalance({ allocated = 0, carriedForward = 0, used = 0, pending = 0 }) {
+  return Math.max(0, allocated + carriedForward - used - pending);
+}
+
+/**
+ * Leave-year label for balance rows when the year does not start in January.
+ * Example: startMonth=4 → dates in Apr–Dec 2026 map to 2026; Jan–Mar 2026 map to 2025.
+ */
+export function getLeaveYearForDate(year, month, startMonth = 1) {
+  const sm = Math.min(12, Math.max(1, startMonth));
+  return month >= sm ? year : year - 1;
+}
+
+/** Days to credit this employee for the monthly accrual run. */
+export function resolveAccrualDaysPerMonth(user, settings) {
+  const perUser = user?.leaveAccrualDaysPerMonth;
+  if (perUser != null && Number.isFinite(Number(perUser))) {
+    return Math.max(0, Number(perUser));
+  }
+  const global = settings?.hrmPaidLeavesPerMonth;
+  if (global != null && Number.isFinite(Number(global))) {
+    return Math.max(0, Number(global));
+  }
+  return 1;
+}
+
+/**
+ * Unused days eligible for carry-forward from a prior-year balance.
+ * Returns 0 when the leave type disallows carry-forward.
+ */
+export function computeCarryForwardAmount(priorBalance, leaveType) {
+  if (!leaveType?.carryForwardAllowed) return 0;
+  if (!priorBalance) return 0;
+  return computeAvailableBalance(priorBalance);
+}
+
+/**
+ * Oldest-accrued-first consumption plan across leave types (lower fifoPriority first).
+ * Returns per-type deductions and any unpaid overflow (LOP days).
+ */
+export function allocateOldestFirst(leaveTypes, balanceByTypeId, daysToConsume) {
+  const sorted = [...leaveTypes]
+    .filter((t) => t.status !== "inactive" && t.isPaid !== false)
+    .sort((a, b) => (a.fifoPriority ?? 0) - (b.fifoPriority ?? 0));
+
+  let remaining = Math.max(0, daysToConsume);
+  const allocations = [];
+
+  for (const type of sorted) {
+    if (remaining <= 0) break;
+    const bal = balanceByTypeId.get(type.id) ?? {
+      allocated: 0,
+      carriedForward: 0,
+      used: 0,
+      pending: 0,
+    };
+    const available = computeAvailableBalance(bal);
+    const take = Math.min(remaining, available);
+    if (take > 0) {
+      allocations.push({ leaveTypeId: type.id, code: type.code, days: take });
+      remaining -= take;
+    }
+  }
+
+  return {
+    allocations,
+    unpaidDays: Math.max(0, remaining),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Timezone helpers (mirrors daily-log-compliance.js)
+// ---------------------------------------------------------------------------
+
+function localDateParts(date, tz) {
+  if (tz) {
+    const fmt = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+    const [y, m, d] = fmt.format(date).split("-").map(Number);
+    return { year: y, month: m, day: d };
+  }
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  };
+}
+
+function localHour(date, tz) {
+  if (tz) {
+    const hour = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hour: "numeric",
+      hour12: false,
+      hourCycle: "h23",
+    }).format(date);
+    const parsed = Number.parseInt(hour, 10);
+    return parsed === 24 ? 0 : parsed;
+  }
+  return date.getUTCHours();
+}
+
+function parsePeriodKey(periodKey) {
+  const [y, m] = String(periodKey).split("-").map(Number);
+  if (!y || !m || m < 1 || m > 12) {
+    throw new Error(`Invalid accrual period key: ${periodKey}`);
+  }
+  return { year: y, month: m };
+}
+
+async function findAccrualLeaveType() {
+  let type = await leaveTypesTable.findOne({ code: ACCRUAL_LEAVE_CODE, status: "active" }).lean();
+  if (type) return type;
+  type = await leaveTypesTable
+    .findOne({ status: "active", isPaid: { $ne: false } })
+    .sort({ fifoPriority: 1 })
+    .lean();
+  return type;
+}
+
+async function ensureBalanceRow(userId, leaveTypeId, leaveYear, session) {
+  let query = leaveBalancesTable.findOne({ userId, leaveTypeId, year: leaveYear });
+  if (session) query = query.session(session);
+  let bal = await query;
+  if (bal) return bal;
+
+  const id = await getNextSequence("leave_balances");
+  const doc = {
+    id,
+    userId,
+    leaveTypeId,
+    year: leaveYear,
+    allocated: 0,
+    used: 0,
+    pending: 0,
+    carriedForward: 0,
+    version: 0,
+  };
+  if (session) {
+    const created = await leaveBalancesTable.create([doc], { session });
+    return created[0];
+  }
+  return leaveBalancesTable.create(doc);
+}
+
+// ---------------------------------------------------------------------------
+// Carry-forward (runs once per leave-year, deduped per target year)
+// ---------------------------------------------------------------------------
+
+export async function runLeaveCarryForward(targetLeaveYear) {
+  const periodKey = String(targetLeaveYear);
+  const outcome = await withJobLock("hrm_carry_forward", periodKey, async () => {
+    const settings = await getOrCreateSettings();
+    const cfStartYear = settings.hrmLeaveCarryForwardStartYear ?? 2026;
+    if (targetLeaveYear < cfStartYear) {
+      return { skipped: "before_carry_forward_start_year", targetLeaveYear };
+    }
+
+    const priorYear = targetLeaveYear - 1;
+    const types = await leaveTypesTable.find({ status: "active" }).lean();
+    const cfTypes = types.filter((t) => t.carryForwardAllowed);
+    if (!cfTypes.length) return { carried: 0, employees: 0 };
+
+    const staff = await usersTable
+      .find({ role: { $in: staffEmployeeRoles }, status: "active" })
+      .lean();
+
+    let carriedTotal = 0;
+    let employeeCount = 0;
+
+    await runInTx(async (session) => {
+      const sessOpts = session ? { session } : {};
+      for (const user of staff) {
+        let userCarried = 0;
+        for (const type of cfTypes) {
+          const prior = await leaveBalancesTable
+            .findOne({ userId: user.id, leaveTypeId: type.id, year: priorYear })
+            .session(session ?? null)
+            .lean();
+          const amount = computeCarryForwardAmount(prior, type);
+          if (amount <= 0) continue;
+
+          const current = await ensureBalanceRow(user.id, type.id, targetLeaveYear, session);
+          const updated = await leaveBalancesTable.updateOne(
+            { id: current.id, version: current.version },
+            { $inc: { carriedForward: amount, version: 1 } },
+            sessOpts,
+          );
+          if (updated.modifiedCount !== 1) {
+            throw new Error(`Carry-forward conflict for user ${user.id} type ${type.id}`);
+          }
+          userCarried += amount;
+        }
+        if (userCarried > 0) {
+          employeeCount += 1;
+          carriedTotal += userCarried;
+        }
+      }
+    });
+
+    await logHrmAudit({
+      actorId: null,
+      action: "leave_carry_forward",
+      entityType: "leave_balance",
+      entityId: null,
+      severity: "info",
+      metadata: { targetLeaveYear, priorYear, carriedTotal, employeeCount },
+    });
+
+    return { targetLeaveYear, priorYear, carriedTotal, employeeCount };
+  });
+
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// Monthly accrual (deduped per YYYY-MM)
+// ---------------------------------------------------------------------------
+
+export async function runMonthlyLeaveAccrual(periodKey) {
+  const outcome = await withJobLock("hrm_accrual", periodKey, async () => {
+    const { year, month } = parsePeriodKey(periodKey);
+    const settings = await getOrCreateSettings();
+    const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+    const leaveYear = getLeaveYearForDate(year, month, startMonth);
+
+    const accrualType = await findAccrualLeaveType();
+    if (!accrualType) {
+      return { skipped: "no_accrual_leave_type", periodKey };
+    }
+
+    const staff = await usersTable
+      .find({ role: { $in: staffEmployeeRoles }, status: "active" })
+      .lean();
+
+    let creditedTotal = 0;
+    let employeeCount = 0;
+
+    await runInTx(async (session) => {
+      const sessOpts = session ? { session } : {};
+      for (const user of staff) {
+        const days = resolveAccrualDaysPerMonth(user, settings);
+        if (days <= 0) continue;
+
+        const bal = await ensureBalanceRow(user.id, accrualType.id, leaveYear, session);
+        const updated = await leaveBalancesTable.updateOne(
+          { id: bal.id, version: bal.version },
+          { $inc: { allocated: days, version: 1 } },
+          sessOpts,
+        );
+        if (updated.modifiedCount !== 1) {
+          throw new Error(`Accrual conflict for user ${user.id}`);
+        }
+        creditedTotal += days;
+        employeeCount += 1;
+      }
+    });
+
+    await logHrmAudit({
+      actorId: null,
+      action: "leave_accrual",
+      entityType: "leave_balance",
+      entityId: null,
+      severity: "info",
+      metadata: { periodKey, leaveYear, creditedTotal, employeeCount, leaveTypeCode: accrualType.code },
+    });
+
+    return { periodKey, leaveYear, creditedTotal, employeeCount, leaveTypeId: accrualType.id };
+  });
+
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled job — 1st of each month at 02:00 in compliance timezone
+// ---------------------------------------------------------------------------
+
+let lastAccrualRunKey = null;
+let accrualTickInFlight = false;
+
+export async function runLeaveAccrualTick(now = new Date()) {
+  if (!isDatabaseConnected()) {
+    return { skipped: "database_unavailable" };
+  }
+
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const { year, month, day } = localDateParts(now, tz);
+  const hour = localHour(now, tz);
+
+  if (day !== 1 || hour !== LEAVE_ACCRUAL_RUN_HOUR) {
+    return { skipped: "outside_schedule", day, hour, timezone: tz };
+  }
+
+  const periodKey = `${year}-${String(month).padStart(2, "0")}`;
+  const runKey = `${periodKey}:${LEAVE_ACCRUAL_RUN_HOUR}`;
+  if (lastAccrualRunKey === runKey) {
+    return { skipped: "already_ran_in_process", runKey };
+  }
+  lastAccrualRunKey = runKey;
+
+  const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+  let carryOutcome = null;
+
+  if (month === startMonth) {
+    const targetLeaveYear = getLeaveYearForDate(year, month, startMonth);
+    carryOutcome = await runLeaveCarryForward(targetLeaveYear);
+  }
+
+  const accrualOutcome = await runMonthlyLeaveAccrual(periodKey);
+
+  const summary = { periodKey, timezone: tz, carryOutcome, accrualOutcome };
+  logger.info(summary, "Leave accrual tick completed");
+  return summary;
+}
+
+/** Reset in-process dedup guard (tests only). */
+export function _resetAccrualTickStateForTests() {
+  lastAccrualRunKey = null;
+  accrualTickInFlight = false;
+}
+
+export function startLeaveAccrualJob() {
+  const tick = async () => {
+    if (accrualTickInFlight) return;
+    accrualTickInFlight = true;
+    try {
+      await runLeaveAccrualTick();
+    } catch (err) {
+      logger.error({ err }, "Leave accrual job tick failed");
+      lastAccrualRunKey = null;
+    } finally {
+      accrualTickInFlight = false;
+    }
+  };
+
+  void getOrCreateSettings().then((settings) => {
+    const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+    logger.info(
+      {
+        runHour: LEAVE_ACCRUAL_RUN_HOUR,
+        timezone: tz,
+        leaveYearStartMonth: settings.hrmLeaveYearStartMonth ?? 1,
+        paidLeavesPerMonth: settings.hrmPaidLeavesPerMonth ?? 1,
+      },
+      "Leave accrual / carry-forward job scheduled (1st of month)",
+    );
+  });
+
+  setInterval(() => {
+    void tick();
+  }, JOB_TICK_MS);
+
+  return tick;
+}

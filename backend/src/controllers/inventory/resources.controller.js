@@ -10,7 +10,7 @@ export async function getProjectsByProjectIdInventoryResources(req, res) {
   const projectId = parseProjectIdParam(req);
   const access = await guardInventoryAccess(req, projectId);
 
-  const { search, folderId, type, page = "1", limit = "30" } = req.query;
+  const { search, folderId, type, category, page = "1", limit = "30" } = req.query;
   const p = parseInt(page, 10);
   const l = parseInt(limit, 10);
   const query = {
@@ -21,6 +21,7 @@ export async function getProjectsByProjectIdInventoryResources(req, res) {
   if (folderId === "null") query.folderId = null;
   else if (folderId) query.folderId = parseInt(folderId, 10);
   if (type) query.type = type;
+  if (category) query.category = category;
   if (search) query.name = { $regex: search, $options: "i" };
 
   const [items, total] = await Promise.all([

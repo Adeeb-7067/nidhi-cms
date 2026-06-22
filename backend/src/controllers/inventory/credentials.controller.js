@@ -8,6 +8,7 @@ import {
 import { encryptSecret, decryptSecret } from "../../lib/inventory-crypto.js";
 import { logInventoryActivity, notifyProjectMembers } from "../../services/inventory/helpers.js";
 import { guardInventoryAccess, parseProjectIdParam, parseInventoryEntityId } from "./guard.js";
+import { isDeveloperRole } from "../../constants/user-roles.js";
 import { badRequest, forbidden, notFound, unauthorized } from "../../utils/route-errors.js";
 
 /** GET /api/projects/:projectId/inventory/credentials */
@@ -51,7 +52,7 @@ export async function postProjectsByProjectIdInventoryCredentials(req, res) {
   await guardInventoryAccess(req, projectId, true);
 
   const role = req.user?.role;
-  if (role !== "super_admin" && role !== "developer") forbidden();
+  if (!isDeveloperRole(role) && role !== "super_admin") forbidden();
 
   const { type, label, value, username, url, notes, expiresAt, visibility, allowedRoles } =
     req.body ?? {};
@@ -74,7 +75,7 @@ export async function postProjectsByProjectIdInventoryCredentials(req, res) {
     notes: notes ?? null,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
     visibility: visibility ?? "restricted",
-    allowedRoles: allowedRoles ?? ["super_admin", "developer"],
+    allowedRoles: allowedRoles ?? ["super_admin", "developer", "freelancer"],
     createdBy: req.user.id,
   });
 

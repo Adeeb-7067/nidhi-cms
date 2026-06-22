@@ -17,7 +17,6 @@ import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalen
 import { TeamAnalyticsPanel } from "@/components/team/TeamAnalyticsPanel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
@@ -59,11 +58,6 @@ import {
 } from "@/components/ui/dialog";
 import {
   Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
 } from "@/components/ui/form";
 import {
   Select,
@@ -85,62 +79,48 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
-import { listQueryOptions } from "@/lib/list-query-options";
+import { listQueryOptions, referenceQueryOptions } from "@/lib/list-query-options";
 import { LIST_LIMIT, QUERY_STALE } from "@/lib/query-config";
 import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  formatStaffRoleLabel,
+  isStaffEmployeeRole,
+  staffRoleBadgeClass,
+} from "@/lib/user-roles";
+import { useHrmDepartments, useHrmShiftTemplates } from "@/api/hrm";
+import { useRoleTemplates } from "@/api/permissions";
 import { User } from "@/api";
 import { cn } from "@/lib/utils";
+import {
+  teamEmployeeSchema,
+  defaultTeamEmployeeFormValues,
+  mapUserToTeamEmployeeForm,
+  buildTeamEmployeePayload,
+  type TeamEmployeeFormValues,
+} from "@/modules/admin/employee-form-shared";
+import {
+  EmployeeFormTabs,
+  EMPLOYEE_FORM_TAB_META,
+  nextEmployeeFormTab,
+  prevEmployeeFormTab,
+  type EmployeeFormTab,
+} from "@/components/admin/EmployeeFormTabs";
 
-const employeeSchema = z
-  .object({
-  name: z.string().min(1, "Name is required"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().optional().or(z.literal("")),
-  role: z.enum(["developer", "qa", "super_admin"]),
-  status: z.enum(["active", "inactive"]).optional(),
-  designation: z.string().optional(),
-  subType: z.string().optional(),
-  department: z.string().min(1, "Department is required"),
-  phoneNumber: z.string().optional(),
-  joiningDate: z.string().optional(),
-  linkedinUrl: z.string().optional(),
-})
-  .superRefine((data, ctx) => {
-    const pwd = data.password?.trim() ?? "";
-    if (pwd.length > 0 && pwd.length < 8) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Password must be at least 8 characters",
-        path: ["password"],
-      });
-    }
-  });
-
-type EmployeeFormValues = z.infer<typeof employeeSchema>;
+type EmployeeFormValues = TeamEmployeeFormValues;
 
 function canViewAsEmployee(user: User): boolean {
-  return (
-    user.status === "active" &&
-    (user.role === "developer" || user.role === "tester" || user.role === "qa")
-  );
+  return user.status === "active" && isStaffEmployeeRole(user.role);
 }
 
 function employeeRoleLabel(role: string): string {
-  if (role === "super_admin") return "Admin";
-  if (role === "qa") return "QA";
-  if (role === "tester") return "Tester";
-  return "Developer";
+  return formatStaffRoleLabel(role);
 }
 
 function employeeRoleBadgeClass(role: string): string {
-  if (role === "super_admin") return "bg-purple-500/10 text-purple-500";
-  if (role === "qa") return "bg-amber-500/10 text-amber-700";
-  if (role === "tester") return "bg-cyan-500/10 text-cyan-700";
-  return "bg-blue-500/10 text-blue-500";
+  return staffRoleBadgeClass(role);
 }
 
 function EmployeePresenceCell({ user }: { user: User }) {
@@ -202,6 +182,7 @@ export default function AdminEmployees() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("list");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [employeeFormTab, setEmployeeFormTab] = useState<EmployeeFormTab>("personal");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
@@ -253,7 +234,7 @@ export default function AdminEmployees() {
 
   const teamStats = useMemo(() => {
     const users = (staffSummary?.users ?? []).filter(
-      (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
+      (u) => isStaffEmployeeRole(u.role),
     );
     const active = users.filter((u) => u.status === "active").length;
     const inactive = users.filter((u) => u.status !== "active").length;
@@ -273,6 +254,41 @@ export default function AdminEmployees() {
   const createUserMutation = useCreateUser();
   const updateUserMutation = useUpdateUser();
   const deleteUserMutation = useDeleteUser();
+  const { data: hrmDepartmentsData } = useHrmDepartments();
+  const { data: shiftTemplatesData } = useHrmShiftTemplates();
+  const { data: roleTemplatesData } = useRoleTemplates();
+  const { data: managerPoolData } = useListUsers(
+    { staff: "1", limit: 200 },
+    {
+      query: referenceQueryOptions({
+        queryKey: getListUsersQueryKey({ staff: "1", limit: 200 }),
+        enabled: isDialogOpen,
+      }),
+    },
+  );
+  const roleTemplateOptions = useMemo(
+    () => roleTemplatesData?.templates ?? [],
+    [roleTemplatesData?.templates],
+  );
+  const shiftTemplates = useMemo(
+    () => shiftTemplatesData?.templates ?? [],
+    [shiftTemplatesData?.templates],
+  );
+  const hrmDepartments = useMemo(
+    () => hrmDepartmentsData?.departments ?? [],
+    [hrmDepartmentsData?.departments],
+  );
+  const departmentNameById = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const d of hrmDepartments) map.set(d.id, d.name);
+    return map;
+  }, [hrmDepartments]);
+  const defaultDepartmentId = hrmDepartments[0]?.id ?? null;
+  const managerOptions = useMemo(() => {
+    const rows = (managerPoolData?.users ?? []).filter((u) => u.status === "active");
+    if (!editUser) return rows;
+    return rows.filter((u) => u.id !== editUser.id);
+  }, [managerPoolData?.users, editUser]);
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -301,7 +317,7 @@ export default function AdminEmployees() {
 
   const showLogCompliance =
     selectedUser &&
-    (selectedUser.role === "developer" || selectedUser.role === "tester" || selectedUser.role === "qa");
+    isStaffEmployeeRole(selectedUser.role);
 
   const { data: employeeCompliance, isLoading: employeeComplianceLoading } =
     useGetLogComplianceCalendar(
@@ -367,53 +383,36 @@ export default function AdminEmployees() {
   };
 
   const form = useForm<EmployeeFormValues>({
-    resolver: zodResolver(employeeSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      role: "developer",
-      status: "active",
-      designation: "",
-      subType: "",
-      department: "Engineering",
-      phoneNumber: "",
-      joiningDate: new Date().toISOString().split("T")[0],
-      linkedinUrl: "",
-    },
+    resolver: zodResolver(teamEmployeeSchema),
+    defaultValues: defaultTeamEmployeeFormValues(defaultDepartmentId),
   });
 
+  const employeeDialogOpen = isDialogOpen || !!editUser;
+
   useEffect(() => {
+    if (!employeeDialogOpen) return;
     if (editUser) {
-      form.reset({
-        name: editUser.name,
-        email: editUser.email,
-        password: "",
-        role: editUser.role as any,
-        status: editUser.status as any,
-        designation: editUser.designation || "",
-        subType: editUser.subType || "",
-        department: (editUser as any).department || "Engineering",
-        phoneNumber: (editUser as any).phoneNumber || "",
-        joiningDate: (editUser as any).joiningDate ? new Date((editUser as any).joiningDate).toISOString().split("T")[0] : "",
-        linkedinUrl: (editUser as any).linkedinUrl || "",
-      });
+      form.reset(
+        mapUserToTeamEmployeeForm(
+          editUser as User & Record<string, unknown>,
+          defaultDepartmentId,
+          hrmDepartments,
+        ),
+      );
     } else {
-      form.reset({
-        name: "",
-        email: "",
-        password: "",
-        role: "developer",
-        status: "active",
-        designation: "",
-        subType: "",
-        department: "Engineering",
-        phoneNumber: "",
-        joiningDate: new Date().toISOString().split("T")[0],
-        linkedinUrl: "",
-      });
+      form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
     }
-  }, [editUser, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when dialog opens or target employee changes
+  }, [employeeDialogOpen, editUser?.id, defaultDepartmentId, hrmDepartments]);
+
+  const syncDisplayNameFromParts = () => {
+    const fn = form.getValues("firstName")?.trim() ?? "";
+    const ln = form.getValues("lastName")?.trim() ?? "";
+    const combined = `${fn} ${ln}`.trim();
+    if (combined) {
+      form.setValue("name", combined, { shouldValidate: false, shouldDirty: true });
+    }
+  };
 
   const watchedName = form.watch("name");
 
@@ -447,32 +446,36 @@ export default function AdminEmployees() {
 
   const onSubmit = async (values: EmployeeFormValues) => {
     try {
+      const payload = buildTeamEmployeePayload(values, departmentNameById);
       if (editUser) {
-        const { password, ...updateData } = values;
-        const trimmedPassword = password?.trim() ?? "";
+        const trimmedPassword = values.password?.trim() ?? "";
         await updateUserMutation.mutateAsync({
           id: editUser.id,
           data: trimmedPassword
-            ? ({ ...updateData, password: trimmedPassword } as any)
-            : (updateData as any),
+            ? ({ ...payload, password: trimmedPassword } as any)
+            : (payload as any),
         });
         toast.success(trimmedPassword ? "Employee and password updated!" : "Employee updated!");
         setEditUser(null);
         setIsDialogOpen(false);
+        setEmployeeFormTab("personal");
       } else {
         if (!values.password?.trim()) {
           form.setError("password", { message: "Login password is required for new employees" });
+          setEmployeeFormTab("personal");
           return;
         }
         const result = await createUserMutation.mutateAsync({
-          data: { ...values, password: values.password.trim() } as any,
+          data: { ...payload, password: values.password!.trim() } as any,
         });
         toast.success(`Employee created! ID: ${result.employeeId}`);
         setIsDialogOpen(false);
+        setEmployeeFormTab("personal");
       }
-      form.reset();
+      form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
-    } catch (error: any) {
+      queryClient.invalidateQueries({ queryKey: ["hrm", "employees"] });
+    } catch (error: unknown) {
       toastApiError(error, "Failed to save employee");
     }
   };
@@ -642,7 +645,7 @@ export default function AdminEmployees() {
               View as
             </Button>
           )}
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditUser(user); }}>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditUser(user); }}>
             <Edit className="h-3 w-3" />
           </Button>
           <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}>
@@ -673,6 +676,7 @@ export default function AdminEmployees() {
                 setIsDialogOpen(false);
                 setEditUser(null);
                 setPreviewEmployeeId("");
+                setEmployeeFormTab("personal");
               } else {
                 setIsDialogOpen(true);
               }
@@ -684,245 +688,98 @@ export default function AdminEmployees() {
             onClick={() => {
               setEditUser(null);
               setPreviewEmployeeId("");
-              form.reset({
-                name: "",
-                email: "",
-                password: "",
-                role: "developer",
-                status: "active",
-                designation: "",
-                subType: "",
-                department: "Engineering",
-                phoneNumber: "",
-                joiningDate: new Date().toISOString().split("T")[0],
-                linkedinUrl: "",
-              });
+              setEmployeeFormTab("personal");
+              form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
               setIsDialogOpen(true);
             }}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Employee
           </Button>
-          <DialogContent className="sm:max-w-[520px] bg-card border-border">
-            <DialogHeader>
-              <DialogTitle>{editUser ? "Edit Employee" : "Add Employee"}</DialogTitle>
-              <DialogDescription>
-                {editUser ? "Update team member details." : "Create a new team member account."}
+          <DialogContent className="sm:max-w-[768px] max-h-[min(92dvh,880px)] p-0 gap-0 overflow-hidden flex flex-col bg-card border-border">
+            <DialogHeader className="px-6 pt-6 pb-4 shrink-0 border-b border-border/60 space-y-1">
+              <DialogTitle className="text-lg">{editUser ? "Edit employee" : "Add employee"}</DialogTitle>
+              <DialogDescription className="text-xs">
+                {editUser
+                  ? `Update ${editUser.name}'s profile across personal, work, and compensation settings.`
+                  : "Complete all four steps to onboard a new team member."}
               </DialogDescription>
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground pt-1">
+                Step {EMPLOYEE_FORM_TAB_META[employeeFormTab].step} of 4 · {EMPLOYEE_FORM_TAB_META[employeeFormTab].label}
+              </p>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="John Doe" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="space-y-2">
-                  <Label>Employee ID</Label>
-                  <Input
-                    readOnly
-                    value={
-                      editUser
-                        ? editUser.employeeId ?? "-"
-                        : previewEmployeeId || "Enter name to preview ID"
-                    }
-                    className="bg-muted/50 font-mono text-sm"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    {editUser
-                      ? "Assigned employee identifier"
-                      : "Auto-generated when you save (preview updates as you type)"}
-                  </p>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="john@example.com" type="email" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{editUser ? "New login password (optional)" : "Login password"}</FormLabel>
-                      <FormControl>
-                        <PasswordInput
-                          placeholder="Min. 8 characters"
-                          autoComplete="new-password"
-                          {...field}
-                        />
-                      </FormControl>
-                      <p className="text-[10px] text-muted-foreground">
-                        {editUser
-                          ? "Leave blank to keep the current password"
-                          : "Set the password the employee will use to sign in"}
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Role</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select a role" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="developer">Developer</SelectItem>
-                            <SelectItem value="qa">QA</SelectItem>
-                            <SelectItem value="super_admin">Super Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  {editUser && (
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="active">Active</SelectItem>
-                              <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="designation"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Designation</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Senior Developer" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="subType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Team/Specialty</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Mobile" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+                <div className="flex-1 overflow-y-auto px-6 py-4 dialog-scroll">
+                  <EmployeeFormTabs
+                    form={form}
+                    tab={employeeFormTab}
+                    onTabChange={setEmployeeFormTab}
+                    editUser={editUser}
+                    previewEmployeeId={previewEmployeeId}
+                    roleTemplateOptions={roleTemplateOptions}
+                    hrmDepartments={hrmDepartments}
+                    managerOptions={managerOptions}
+                    shiftTemplates={shiftTemplates}
+                    onSyncDisplayName={syncDisplayNameFromParts}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="department"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Department</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select department" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="Engineering">Engineering</SelectItem>
-                            <SelectItem value="Design">Design</SelectItem>
-                            <SelectItem value="QA">QA</SelectItem>
-                            <SelectItem value="Product">Product</SelectItem>
-                            <SelectItem value="Operations">Operations</SelectItem>
-                            <SelectItem value="HR">HR</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="joiningDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Joining Date</FormLabel>
-                        <FormControl>
-                          <Input type="date" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="phoneNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
-                        <FormControl>
-                          <Input placeholder="+1 555-0100" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="linkedinUrl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>LinkedIn Profile</FormLabel>
-                        <FormControl>
-                          <Input placeholder="https://linkedin.com/in/..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <DialogFooter className="pt-4">
-                  <Button type="submit" disabled={createUserMutation.isPending || updateUserMutation.isPending}>
-                    {(createUserMutation.isPending || updateUserMutation.isPending) ? (editUser ? "Saving..." : "Creating...") : (editUser ? "Update Employee" : "Create Employee")}
-                  </Button>
+                <DialogFooter className="shrink-0 px-6 py-4 border-t border-border/60 bg-muted/20 sm:justify-between gap-3">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-9"
+                      onClick={() => {
+                        setIsDialogOpen(false);
+                        setEditUser(null);
+                        setPreviewEmployeeId("");
+                        setEmployeeFormTab("personal");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    {prevEmployeeFormTab(employeeFormTab) ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9"
+                        onClick={() => setEmployeeFormTab(prevEmployeeFormTab(employeeFormTab)!)}
+                      >
+                        Back
+                      </Button>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-2 w-full sm:w-auto sm:justify-end">
+                    {nextEmployeeFormTab(employeeFormTab) ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="h-9"
+                        onClick={() => setEmployeeFormTab(nextEmployeeFormTab(employeeFormTab)!)}
+                      >
+                        Continue
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="h-9 min-w-[120px]"
+                      disabled={createUserMutation.isPending || updateUserMutation.isPending}
+                    >
+                      {(createUserMutation.isPending || updateUserMutation.isPending)
+                        ? editUser
+                          ? "Saving…"
+                          : "Creating…"
+                        : editUser
+                          ? "Save changes"
+                          : nextEmployeeFormTab(employeeFormTab)
+                            ? "Save employee"
+                            : "Create employee"}
+                    </Button>
+                  </div>
                 </DialogFooter>
               </form>
             </Form>

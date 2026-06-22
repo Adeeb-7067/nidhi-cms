@@ -14,8 +14,17 @@ const companySettingsSchema = new Schema({
   screenshotEnabled: { type: Boolean, default: false },
   screenshotIntervalMinutes: { type: Number, default: 10, min: 1, max: 60 },
   screenshotRetentionDays: { type: Number, default: 30 },
-  screenshotBlurEnabled: { type: Boolean, default: false },
-  screenshotConsentVersion: { type: String, default: "1.0" }
+  screenshotBlurEnabled: { type: Boolean, default: true },
+  screenshotConsentVersion: { type: String, default: "1.0" },
+  hrmLeaveYearStartMonth: { type: Number, default: 1, min: 1, max: 12 },
+  hrmDefaultShiftTemplateId: { type: Number, default: null },
+  hrmAttendanceShortfallThresholdMinutes: { type: Number, default: 0, min: 0 },
+  hrmWeekendDays: { type: [Number], default: [0, 6] },
+  hrmGlobalWfhMode: { type: Boolean, default: false },
+  hrmPaidLeavesPerMonth: { type: Number, default: 1, min: 0 },
+  hrmMaxFreeLates: { type: Number, default: 3, min: 0 },
+  hrmElectronOnlyClock: { type: Boolean, default: false },
+  hrmLeaveCarryForwardStartYear: { type: Number, default: 2026 },
 }, { timestamps: { createdAt: false, updatedAt: true } });
 const CompanySettings = mongoose.models.CompanySettings || mongoose.model("CompanySettings", companySettingsSchema);
 const companySettingsTable = CompanySettings;

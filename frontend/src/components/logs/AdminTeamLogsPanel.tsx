@@ -11,6 +11,7 @@ import {
 } from "@/api";
 import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { DailyLogDetailDialog } from "@/components/logs/DailyLogDetailDialog";
+import { isStaffEmployeeRole } from "@/lib/user-roles";
 import { QUERY_STALE } from "@/lib/query-config";
 import {
   PortalPageShell,
@@ -126,7 +127,7 @@ export function AdminTeamLogsPanel() {
   const staffDevs = useMemo(
     () =>
       (staffData?.users ?? []).filter(
-        (u) => u.role === "developer" || u.role === "tester" || u.role === "qa",
+        (u) => isStaffEmployeeRole(u.role),
       ),
     [staffData?.users],
   );

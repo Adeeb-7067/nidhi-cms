@@ -17,6 +17,11 @@ import {
 } from "../services/password-otp.js";
 import { badRequest, unauthorized, notFound, parseIdParam, optionalString } from "../utils/route-errors.js";
 import { formatUser } from "../mappers/user-format.js";
+import {
+  getClientContextForUser,
+  recordClientTeamActivity,
+} from "../services/client-team.js";
+import { clientTeamMembersTable } from "../models/schema/index.js";
 async function postAuthLogin(req, res) {
   const identifier = optionalString(req.body.identifier);
   const password = optionalString(req.body.password);
@@ -73,6 +78,34 @@ async function postAuthLogin(req, res) {
     });
   } catch {
     /* non-blocking */
+  }
+  // Record login on the company-scoped activity log AND auto-promote a
+  // pending team member to "active" the first time they sign in.
+  if (user.role === "client") {
+    try {
+      const ctx = await getClientContextForUser({ id: user.id, role: user.role });
+      if (ctx) {
+        if (!ctx.isAdmin && ctx.memberId) {
+          await clientTeamMembersTable.updateOne(
+            { id: ctx.memberId, status: "pending" },
+            { $set: { status: "active", activatedAt: new Date() } },
+          );
+        }
+        await recordClientTeamActivity({
+          clientCompanyId: ctx.companyId,
+          actor: { id: user.id, name: user.name },
+          isAdmin: ctx.isAdmin,
+          action: "login",
+          entityType: "session",
+          entityId: sessionId,
+          summary: `${user.name} signed in.`,
+          ipAddress: req.ip ?? null,
+          metadata: { userAgent: req.headers["user-agent"] ?? null },
+        });
+      }
+    } catch (err) {
+      req.log?.warn?.({ err }, "Failed to record client login activity");
+    }
   }
   res.json({
     accessToken,
@@ -261,10 +294,10 @@ async function postAuthImpersonateByUserId(req, res) {
   if (!target || target.status !== "active") {
     notFound("User (must be active)");
   }
-  const allowedRoles = ["developer", "tester", "qa", "client"];
+  const allowedRoles = ["developer", "tester", "qa", "freelancer", "client"];
   if (!allowedRoles.includes(target.role)) {
     badRequest(
-      "View-as only works for developer, tester, QA, or client portal accounts.",
+      "View-as only works for developer, tester, QA, freelancer, or client portal accounts.",
       "userId"
     );
   }

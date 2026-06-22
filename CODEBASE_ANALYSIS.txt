@@ -3,7 +3,7 @@
               COMPREHENSIVE CODEBASE ANALYSIS & DOCUMENTATION
 ================================================================================
 
-Generated: June 10, 2026
+Generated: June 12, 2026
 Repository: D:\Content-Management-Hub
 Analysis scope: Full monorepo (backend + frontend + electron + docs)
 
@@ -28,7 +28,7 @@ TABLE OF CONTENTS
  15.  Email System
  16.  Background Jobs & Scheduled Tasks
  17.  Reports & PDF Generation
- 18.  Sales/CRM Module (Mock UI)
+ 18.  Mock UI Modules (Sales, Finance, Legal, CA)
  19.  Data Flow Diagrams
  20.  Development & Deployment
  21.  Seed Data & Test Credentials
@@ -60,18 +60,25 @@ Typical production deployment uses two domains:
 The Electron desktop app connects to the same remote backend — it wraps only
 the frontend in a native shell (shell architecture, no embedded backend).
 
-Five user roles drive the entire permission model:
-  super_admin, developer, tester, qa, client
+Six primary user roles drive the permission model (plus a planned CA role
+for frontend-only mock access):
 
-The codebase contains ~470 source files, ~182K words of code/docs, with
-3114 graph nodes and 9399 edges (per graphify analysis).
+  super_admin, developer, tester, qa, client, freelancer
+
+The codebase contains ~575+ frontend/backend source files with graphify
+knowledge graph auto-updated on code changes (graphify-out/).
 
 Core live features (backend-integrated):
   Projects, Bugs, Daily Logs, Tasks, APK Releases, Discussions/Comments,
   Tickets, Resource Requests, Inventory Vault, Analytics, Reports,
-  Notifications, Presence, Client Portal, Employee Management.
+  Notifications, Presence, Client Portal, Employee Management,
+  Screenshot Monitoring, Attendance tracking.
 
-Sales/CRM module exists as a UI prototype with mock data only (super_admin).
+Mock UI modules (frontend only, no backend API yet):
+  Sales/CRM (/sales/*)     — super_admin
+  Finance (/finance/*)     — super_admin
+  Legal (/legal/*)         — super_admin
+  CA Panel (/ca/*)         — super_admin (+ planned ca role in routes/nav)
 
 ================================================================================
 2. WHAT THIS PROJECT IS
@@ -89,13 +96,17 @@ It centralizes everything needed to deliver client projects:
   • Asset management (encrypted credentials, environments, subscriptions)
   • Team coordination (tasks, tickets, resource requests, realtime chat)
   • Business intelligence (dashboards, PDF/Excel reports)
+  • Staff monitoring (screenshot capture, attendance — Electron + admin views)
+  • Business ops prototypes (Sales, Finance, Legal, CA mock UI panels)
 
 TARGET USERS
 ------------
   Super Admin  — Agency owner/manager; full system control
   Developer    — Builds software; logs work, fixes bugs, manages inventory
+  Freelancer   — External contractor; same dev-portal access as developer
   Tester/QA    — Reports and triages bugs; QA status workflow
   Client       — Views project progress, downloads APKs, raises tickets
+  CA (planned) — Chartered accountant; /ca/* mock panel (routes ready)
 
 BUSINESS DOMAIN
 ---------------
@@ -278,13 +289,20 @@ Content-Management-Hub/
 │       ├── contexts/            # Auth, Theme, Realtime, Presence
 │       ├── hooks/               # Custom React hooks
 │       ├── lib/                 # 43+ utility modules (incl. electron-bridge.ts)
-│       ├── modules/sales/       # Sales CRM (mock data)
+│       ├── modules/
+│       │   ├── sales/           # Sales CRM (mock data)
+│       │   ├── finance/         # Finance panel (mock data)
+│       │   ├── legal/           # Legal department panel (mock data)
+│       │   └── ca/              # CA management panel (mock data)
 │       ├── pages/               # Route-level components
-│       │   ├── admin/           # Super admin pages
-│       │   ├── dev/             # Developer/QA workspace
+│       │   ├── admin/           # Super admin pages (+ screenshots, attendance)
+│       │   ├── dev/             # Developer/QA/freelancer workspace
 │       │   ├── client/          # Client portal
 │       │   ├── sales/           # Sales CRM pages
-│       │   ├── settings/        # Settings
+│       │   ├── finance/         # Finance panel pages
+│       │   ├── legal/           # Legal panel pages
+│       │   ├── ca/              # CA panel pages
+│       │   ├── settings/        # Settings (path-based sections)
 │       │   └── auth/            # Login, forgot password
 │       └── components/          # Feature + UI components
 │           ├── ui/              # ~60 shadcn primitives (sidebar uses localStorage)
@@ -307,18 +325,20 @@ Content-Management-Hub/
 6. USER ROLES & ACCESS MODEL
 ================================================================================
 
-ROLES (5 total)
----------------
+ROLES (6 live + 1 planned frontend role)
+-----------------------------------------
   super_admin  — Full system access; manages users, clients, all projects
   developer    — Project team member; builds, logs work, fixes assigned bugs
+  freelancer   — External contractor; dev-portal access (same as developer)
   tester       — QA staff; creates bugs, sets QA track statuses
   qa           — QA staff (same as tester for most permissions)
   client       — External client; portal access to their company's projects
+  ca (planned) — Referenced in /ca/* routes/nav; not yet in backend UserRole
 
 LOGIN METHODS
 -------------
   super_admin, client  → Login with EMAIL + password
-  developer, tester, qa → Login with EMPLOYEE ID (e.g. AL001) + password
+  developer, tester, qa, freelancer → Login with EMPLOYEE ID (e.g. AL001) + password
 
 USER STATUSES: active | inactive | suspended
 
@@ -361,16 +381,23 @@ ACCESS SCOPING LOGIC (services/access/)
 FRONTEND NAVIGATION ZONES
 -------------------------
   /admin/*   → super_admin (Manage section)
-  /dev/*     → developer, tester, qa (+ super_admin)
+  /admin/screenshots, /admin/attendance → super_admin (Monitoring section)
+  /dev/*     → developer, tester, qa, freelancer (+ super_admin)
   /client/*  → client only
-  /sales/*   → super_admin only (mock CRM, not a separate role)
-  /settings, /profile, /notifications → all authenticated users
+  /sales/*   → super_admin only (mock CRM)
+  /finance/* → super_admin only (mock finance)
+  /legal/*   → super_admin only (mock legal department)
+  /ca/*      → super_admin (+ ca role planned; mock CA panel)
+  /settings/*, /profile, /notifications → all authenticated users
+
+Settings uses path-based sections (/settings/monitoring) not query strings.
 
 ROLE-BASED HOME REDIRECT AFTER LOGIN
 ------------------------------------
   super_admin → /admin
-  developer, tester, qa → /dev
+  developer, tester, qa, freelancer → /dev
   client → /client
+  ca (when backend adds role) → /ca (not yet wired in getHomeHref)
 
 ================================================================================
 7. AUTHENTICATION & SECURITY
@@ -757,10 +784,13 @@ ROUTING ARCHITECTURE
 
   Authenticated (ProtectedRoute + AppLayout + PageOutlet):
     /admin/*            Admin zone (super_admin primary)
-    /dev/*              Developer/QA workspace
+    /dev/*              Developer/QA/freelancer workspace
     /client/*           Client portal
     /sales/*            Sales CRM (super_admin, mock data)
-    /settings           All roles
+    /finance/*          Finance panel (super_admin, mock data)
+    /legal/*            Legal department panel (super_admin, mock data)
+    /ca/*               CA management panel (super_admin + planned ca role)
+    /settings/*         All roles (path-based sections, e.g. /settings/monitoring)
     /profile            All roles
     /notifications      All roles
 
@@ -807,7 +837,7 @@ LAYOUT SYSTEM
   AppLayout           — Sidebar (icon rail) + Navbar + animated page area
   PageOutlet          — Route switch with RoleGate
   PageShell           — Optional header from route-meta.ts
-  portal-page-kit     — Executive chrome (admin dashboard, sales)
+  portal-page-kit     — Executive chrome (admin dashboard, sales, finance, legal, ca)
   dev-page-kit        — Dev zone chrome (bugs, logs, tasks, workspace)
 
 THEMING
@@ -1031,6 +1061,28 @@ super_admin can view the app as any user
 Banner: ImpersonationBanner.tsx
 Storage: lib/impersonation-storage.ts
 
+12.17 SCREENSHOT MONITORING & ATTENDANCE
+----------------------------------------
+Purpose: Track staff activity via periodic desktop screenshots and attendance.
+
+Pages:
+  /admin/screenshots   — Admin gallery of captured screenshots (super_admin)
+  /admin/attendance    — Attendance records and compliance view
+  /settings/monitoring — Monitoring policy toggles (path: /settings/monitoring)
+
+Frontend:
+  components/monitoring/ScreenshotMonitoringCard.tsx
+  Electron desktop agent uploads screenshots via main process IPC
+
+Backend:
+  Screenshot upload endpoints + monitoring policy settings
+  MONITORABLE_STAFF_ROLES: developer, tester, qa, freelancer
+
+Electron:
+  main.js screenshot capture loop; API URL from bundled api-config.json
+  + runtime sync from renderer (WorkSessionContext → setScreenshotConfig)
+  Build: electron/scripts/write-api-config.js writes api-config.json at pack time
+
 ================================================================================
 13. REALTIME, NOTIFICATIONS & PRESENCE
 ================================================================================
@@ -1198,16 +1250,29 @@ FRONTEND PDF (client-side)
   Uses jsPDF + jspdf-autotable
 
 ================================================================================
-18. SALES/CRM MODULE (MOCK UI)
+18. MOCK UI MODULES (SALES, FINANCE, LEGAL, CA)
 ================================================================================
 
-IMPORTANT: This is a UI PROTOTYPE only — uses mock data, NOT live API.
+IMPORTANT: These are UI PROTOTYPES only — mock data, NOT live API integration.
+All follow the same pattern: modules/<name>/ + pages/<name>/ + PageOutlet routes.
 
+COMMON PATTERN
+--------------
+  modules/<module>/
+    types.ts, constants.ts, index.ts
+    mock-data/          — Hardcoded realistic records
+    components/         — PageHeader, FilterBar, StatusBadge, EmptyState, etc.
+  pages/<module>/       — One file per route (PortalPageShell wrapper)
+  lib/navigation.ts     — Sidebar section with role-gated nav items
+  components/layout/PageOutlet.tsx — React.lazy routes + RoleGate
+
+18.1 SALES/CRM (/sales/*)
+---------------------------
+Access: super_admin only
 Location: frontend/src/modules/sales/
-Access: super_admin only (/sales/*)
 
-Pages:
-  /sales                    Dashboard
+Pages (17 routes):
+  /sales                    Dashboard (KPIs, pipeline, financial timeline)
   /sales/leads              Lead management
   /sales/leads/:id          Lead detail
   /sales/follow-ups         Follow-up tracking
@@ -1225,14 +1290,98 @@ Pages:
   /sales/products           Product catalog
   /sales/team               Sales team
   /sales/reports            Sales reports
-  /sales/notifications      Sales notifications
-  /sales/settings           Sales settings (demo toasts)
+  /sales/notifications      Financial alerts
+  /sales/settings           Automation settings (demo toasts)
 
-Shared components in modules/sales/components/:
-  SalesPageHeader, SalesFilterBar, SalesPipelineFlow, SalesDonutPanel,
-  SalesCharts, ActivityTimeline, financial-kit
+Components: SalesPageHeader, SalesFilterBar, SalesPipelineFlow, SalesDonutPanel,
+  SalesCharts, ActivityTimeline, financial-kit, SalesStatusBadge
 
-Data source: modules/sales/mock-data (hardcoded, no backend integration)
+Data: modules/sales/mock-data.ts, billing-mock-data.ts
+
+18.2 FINANCE (/finance/*)
+--------------------------
+Access: super_admin only
+Location: frontend/src/modules/finance/
+
+Pages (11 routes):
+  /finance                  Dashboard
+  /finance/expenses         Expense tracking
+  /finance/income           Income records
+  /finance/payments         Payment management
+  /finance/invoices         Invoice list
+  /finance/invoices/:id     Invoice detail
+  /finance/payroll          Payroll
+  /finance/budgets          Budget planning
+  /finance/ledgers          General ledgers
+  /finance/tax              Tax management
+  /finance/reports/pnl      P&L reports
+
+Components: FinancePageHeader, FinanceFilterBar, FinanceStatusBadge,
+  FinanceDonutPanel, FinanceCharts, finance-kit, FinanceFormDrawers
+
+Data: modules/finance/mock-data.ts
+
+18.3 LEGAL DEPARTMENT (/legal/*)
+---------------------------------
+Access: super_admin only
+Location: frontend/src/modules/legal/
+
+Pages (11 routes):
+  /legal                    Legal dashboard (KPIs, NDA alerts, risk indicators)
+  /legal/cases              Employee legal cases
+  /legal/cases/:id          Case detail
+  /legal/vendor-disputes    Vendor dispute management
+  /legal/client-matters     Client legal matters
+  /legal/nda                NDA repository with expiry alerts
+  /legal/agreements         Agreement management + renewal reminders
+  /legal/notices            Legal notice tracking (incoming/outgoing)
+  /legal/court-cases        Court case management
+  /legal/compliance         Compliance tracker
+  /legal/expenses           Legal expense tracking
+
+Components: LegalPageHeader, LegalFilterBar, LegalStatusBadge, LegalRiskBadge
+  (Low/Medium/High), LegalEmptyState, CounselAvatar
+
+Compliance color coding: completed (green) / upcoming (amber) / overdue (red)
+Data: modules/legal/mock-data/ (cases, nda, agreements, court-cases, etc.)
+
+18.4 CA MANAGEMENT PANEL (/ca/*)
+--------------------------------
+Access: super_admin + planned ca role (CA_ACCESS_ROLES in modules/ca/constants)
+Location: frontend/src/modules/ca/
+
+Pages (18 routes):
+  /ca                       CA master dashboard (CEO widgets, alert box)
+  /ca/client-payments       Client payments (GST / Non-GST classification)
+  /ca/vendors               Vendor ledger + GST input credit
+  /ca/expenses              Expense management by category
+  /ca/bank-reconciliation   Bank reconciliation (NEFT/RTGS/UPI)
+  /ca/suspense              Suspense account (unidentified payments)
+  /ca/gst                   GST management (GSTR-1/3B, notices, penalties)
+  /ca/tds                   TDS management (returns, Form 16/16A)
+  /ca/company-itr           Company ITR module
+  /ca/director-itr          Director ITR (PAN, filing status)
+  /ca/roc                   ROC compliance (AOC-4, MGT-7, ADT-1, DIR-3 KYC)
+  /ca/din-dsc               DIN/DSC management (90/60/30-day alerts)
+  /ca/documents             Document management (GST cert, MOA, AOA, etc.)
+  /ca/audit                 Audit management (internal + statutory)
+  /ca/notices               Notice workflow (GST/IT/MCA/PF/ESIC)
+  /ca/compliance-calendar   Compliance calendar with color-coded due dates
+  /ca/tasks                 CA task chain (CEO → CA → Accountant)
+  /ca/compliance-score      CEO compliance score dashboard
+
+Components: CAPageHeader, CAFilterBar, ComplianceStatusBadge, CAAlertBox
+  (dismissible banners), CAScoreWidget, ReconciliationTable, CAEmptyState
+
+Mock data: Realistic Indian IT company figures (INR ₹, GSTIN, PAN, TAN formats)
+Compliance badges: Completed / Upcoming / Overdue (consistent across all pages)
+
+CEO dashboard widgets: Total Revenue, Total Expenses, GST Liability,
+  Pending GST Filings, Pending ROC Filings, Suspense Amount, Audit Status,
+  Overall Compliance Score
+
+Note: ca role referenced in routes/nav via type assertion; backend UserRole
+does not yet include "ca" — only super_admin can access until backend adds role.
 
 ================================================================================
 19. DATA FLOW DIAGRAMS
@@ -1457,9 +1606,10 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
 23. KNOWN GAPS & TECHNICAL NOTES
 ================================================================================
 
-1. SALES CRM IS MOCK ONLY
-   All /sales/* pages use hardcoded mock data from modules/sales/mock-data.
-   No backend API exists for leads, proposals, invoices, etc.
+1. MOCK UI MODULES (NO BACKEND)
+   All /sales/*, /finance/*, /legal/*, /ca/* pages use hardcoded mock data.
+   No backend API exists for CRM, finance, legal, or CA workflows yet.
+   CA module routes reference a planned "ca" role not yet in backend UserRole.
 
 2. OPENAPI GAPS
    Missing from openapi.yaml:
@@ -1486,8 +1636,8 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
    Enables predictable references but requires getNextSequence() on create.
 
 6. GRAPH STALENESS
-   graphify-out/ knowledge graph built from commit ec0d3c12.
-   Run graphify update after significant code changes.
+   graphify-out/ knowledge graph is updated via `graphify update .` after
+   significant code changes (AST-only, no API cost). Run after module additions.
 
 7. TESTER VS QA
    Both roles share identical permissions in most of the system.
@@ -1502,7 +1652,14 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
    - S3-compatible object storage (falls back to local uploads/)
    - SMTP email (gracefully skipped if not configured)
 
-10. RECENT FEATURE ADDITIONS (from git status)
+10. RECENT FEATURE ADDITIONS (2026)
+    - Freelancer role (dev-portal access, monitoring-eligible)
+    - Screenshot monitoring + attendance tracking (admin + Electron agent)
+    - Settings path-based sections (/settings/monitoring)
+    - Finance mock UI module (/finance/*)
+    - Legal department mock UI module (/legal/*)
+    - CA management mock UI module (/ca/*, 18 pages)
+    - Electron api-config.json bundling for packaged screenshot uploads
     - Discussion channels with mentions, voice messages, emoji
     - APK audience targeting (team_only, client_visible, all_visible)
     - Daily log virtual projects (Others, Meeting)
@@ -1583,6 +1740,10 @@ returns binary path string, not Electron APIs).
 
 Fix: launch.js deletes ELECTRON_RUN_AS_NODE from env before spawning Electron,
 and reads VITE_API_BASE_URL from frontend/.env to pass as CMS_API_URL.
+
+Packaged builds: electron/scripts/write-api-config.js writes
+electron/assets/api-config.json at build time so screenshot uploads and
+API calls use the production URL (not localhost default in main.js).
 
   node launch.js
     → delete env.ELECTRON_RUN_AS_NODE
@@ -1737,13 +1898,16 @@ LOCAL DEV WORKFLOW
 
 PRODUCTION INSTALLER BUILD
 ----------------------------
-  # Windows (.exe NSIS installer)
+  # Set API URL before building (required for screenshot uploads on other PCs)
   cd electron
   set VITE_API_BASE_URL=https://api.yourdomain.com
   npm run build:win     → dist-electron/CMS Desktop Setup 1.0.0.exe
 
   # macOS (.dmg)
   npm run build:mac     → dist-electron/CMS Desktop-1.0.0.dmg
+
+  write-api-config.js runs automatically via npm run build:win — embeds
+  api-config.json into extraResources for packaged main process.
 
 ================================================================================
 25. FILE INDEX (KEY PATHS)
@@ -1771,6 +1935,22 @@ ROUTING
   frontend/src/lib/route-meta.ts            Page titles/breadcrumbs
   frontend/src/lib/electron-bridge.ts       isElectron, getLocationSearch,
                                             clearLocationParam, openExternal
+
+MOCK UI MODULES
+  frontend/src/modules/sales/               Sales CRM mock module
+  frontend/src/modules/finance/             Finance mock module
+  frontend/src/modules/legal/                 Legal department mock module
+  frontend/src/modules/ca/                    CA management mock module
+  frontend/src/pages/sales/                   Sales pages
+  frontend/src/pages/finance/                 Finance pages
+  frontend/src/pages/legal/                   Legal pages
+  frontend/src/pages/ca/                      CA pages (18 routes)
+
+MONITORING
+  frontend/src/pages/admin/Screenshots.tsx
+  frontend/src/pages/admin/Attendance.tsx
+  frontend/src/components/monitoring/
+  electron/scripts/write-api-config.js      Bundled API URL for packaged app
 
 CORE FEATURES
   backend/src/controllers/bugs.controller.js
@@ -1813,9 +1993,10 @@ CONFIG
   frontend/electron.vite.config.ts          Vite config (Electron build)
   electron/package.json                     Electron + electron-builder config
 
-DOCUMENTATION
+  DOCUMENTATION
   README.md                                 Root overview
   LOCAL_RUNNING.md                          Dev setup + seeds
+  ELECTRON_INSTALL_GUIDE.md                 Electron build + API config guide
   backend/README.md                         Backend setup
   backend/ARCHITECTURE.md                   MVC guide
   backend/DEPLOYMENT.md                     Production deploy
@@ -1826,8 +2007,8 @@ DOCUMENTATION
                               END OF DOCUMENT
 ================================================================================
 
-This analysis covers the Content Management Hub codebase as of June 10, 2026.
+This analysis covers the Content Management Hub codebase as of June 12, 2026.
 For the latest API contract, see backend/openapi.yaml.
-For local setup (web + Electron), see LOCAL_RUNNING.md.
+For local setup (web + Electron), see LOCAL_RUNNING.md and ELECTRON_INSTALL_GUIDE.md.
 For architecture patterns, see backend/ARCHITECTURE.md.
 For Electron desktop details, see Section 24 of this document.

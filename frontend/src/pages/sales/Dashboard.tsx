@@ -75,7 +75,7 @@ export default function SalesDashboard() {
   return (
     <PortalPageShell>
       <SalesPageHeader
-        title="Admin dashboard"
+        title="CRM & Sales Dashboard"
         description="Super admin control center — real-time snapshot of sales operations"
         breadcrumbs={[{ label: "Sales", href: "/sales" }, { label: "Dashboard" }]}
         actions={

@@ -31,6 +31,10 @@ import {
   type ImpersonationMeta,
 } from "@/lib/impersonation-storage";
 import { apiUrl } from "@/lib/api-base";
+import { isDevPortalRole, isMonitorableStaffRole, isStaffEmployeeRole } from "@/lib/user-roles";
+import { permissionsQueryKey } from "@/api/permissions";
+import { customFetch } from "@/api/custom-fetch";
+import type { PermissionsResponse } from "@/api/permissions";
 
 interface AuthContextType {
   user: User | null;
@@ -50,9 +54,19 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 function getHomePath(role: string): string {
   if (role === "super_admin") return "/admin";
-  if (role === "developer" || role === "tester" || role === "qa") return "/dev";
+  if (role === "hr") return "/hrm";
+  if (isDevPortalRole(role)) return "/dev";
   if (role === "client") return "/client";
   return "/login";
+}
+
+function prefetchPermissions(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.prefetchQuery({
+    queryKey: permissionsQueryKey(),
+    queryFn: () =>
+      customFetch<PermissionsResponse>(apiUrl("/api/permissions/me")),
+    staleTime: 5 * 60_000,
+  });
 }
 
 async function refreshAccessToken(): Promise<string | null> {
@@ -195,6 +209,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [isError, error, queryClient]);
 
+  useEffect(() => {
+    if (user && accessToken) prefetchPermissions(queryClient);
+  }, [user?.id, accessToken, queryClient]);
+
   const login = useCallback(
     (token: string, refreshToken: string, userData: User) => {
       clearImpersonationMeta();
@@ -202,6 +220,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setTokens(token, refreshToken);
       setAccessToken(token);
       void queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      prefetchPermissions(queryClient);
       setLocation(getHomePath(userData.role));
     },
     [queryClient, setLocation],
@@ -217,7 +236,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Clock out the impersonated employee (if their role can have a session)
     // before revoking their token. Best-effort — don't block admin restoration.
-    const targetCanHaveSession = ["developer", "tester", "qa"].includes(meta.targetUser.role);
+    const targetCanHaveSession = isMonitorableStaffRole(meta.targetUser.role);
     if (targetCanHaveSession && token) {
       try {
         await fetch(apiUrl("/api/work-sessions/clock-out"), {
@@ -315,9 +334,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== "undefined" && window.electron) {
         window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
       }
-      // Clock out only if this role can have an active session (developer/tester/qa).
+      // Clock out only if this role can have an active session (monitorable staff).
       // Admins and clients never clock in, so calling clock-out for them would hit a 403.
-      const canHaveSession = ["developer", "tester", "qa"].includes(user?.role ?? "");
+      const canHaveSession = isMonitorableStaffRole(user?.role ?? "");
       if (canHaveSession) {
         try {
           await fetch(apiUrl("/api/work-sessions/clock-out"), {

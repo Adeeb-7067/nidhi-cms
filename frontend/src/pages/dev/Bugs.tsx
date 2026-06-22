@@ -47,6 +47,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { isDevPortalRole, isQaStaffRole } from "@/lib/navigation";
 import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-dialog";
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
 import { BugTable } from "@/components/bugs/bug-table";
@@ -66,18 +67,14 @@ export default function DevBugs() {
   const { user } = useAuth();
   const role = user?.role;
 
-  const canCreateBug =
-    role === "developer" ||
-    role === "tester" ||
-    role === "qa" ||
-    role === "super_admin";
+  const canCreateBug = isDevPortalRole(role) || role === "super_admin";
   const canAssignBugs =
     role === "tester" || role === "qa" || role === "super_admin";
   const canFullEdit = canAssignBugs;
   const canEditBug = (bug: Bug) => canUserModifyBug(role, user?.id, bug);
   const canComment = !!user;
   const isAdmin = role === "super_admin";
-  const isQaStaff = role === "qa" || role === "tester";
+  const isQaStaff = isQaStaffRole(role);
 
   const queryClient = useQueryClient();
   const [formOpen, setFormOpen] = useState(false);

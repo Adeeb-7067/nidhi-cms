@@ -1,3 +1,4 @@
+import { staffEmployeeRoles } from "../constants/user-roles.js";
 import {
   dailyLogsTable,
   usersTable,
@@ -9,8 +10,9 @@ import { sendDailyLogComplianceEmail } from "../lib/email.js";
 import { logger } from "../lib/logger.js";
 import { isDatabaseConnected } from "../lib/db.js";
 import { getWorkPolicy, normalizeReminderHour } from "./company-settings.js";
+import { isUserAccountActive } from "./user-access.js";
 
-const STAFF_LOG_ROLES = ["developer", "tester", "qa"];
+const STAFF_LOG_ROLES = staffEmployeeRoles;
 const HOUR_TOLERANCE = 0.05;
 
 function resolveTimezone(settingsTz) {
@@ -243,6 +245,8 @@ async function complianceAlertAlreadySent(userId, logDate) {
 }
 
 async function notifyIncompleteHours(user, summary) {
+  if (!isUserAccountActive(user)) return false;
+
   const dateKey = dateKeyFromIso(summary.date);
   if (await complianceAlertAlreadySent(user.id, summary.date)) return false;
 

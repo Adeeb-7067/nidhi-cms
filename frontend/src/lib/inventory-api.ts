@@ -43,6 +43,65 @@ export function createInventoryResource(projectId: number, data: Record<string, 
   return inv<any>(`${projectId}/inventory/resources`, { method: "POST", body: JSON.stringify(data) });
 }
 
+export function updateInventoryResource(
+  projectId: number,
+  id: number,
+  data: Record<string, unknown>,
+) {
+  return inv<any>(`${projectId}/inventory/resources/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteInventoryResource(projectId: number, id: number) {
+  return inv<{ message: string }>(`${projectId}/inventory/resources/${id}`, { method: "DELETE" });
+}
+
+export const PROJECT_DESCRIPTION_CATEGORY = "project_description";
+
+export type DescriptionResourceAttachment = {
+  url: string;
+  name: string;
+  mimeType?: string | null;
+  resourceId?: number;
+};
+
+export async function listProjectDescriptionResources(projectId: number) {
+  const { resources } = await listInventoryResources(projectId, {
+    category: PROJECT_DESCRIPTION_CATEGORY,
+    limit: "50",
+  });
+  return resources;
+}
+
+export async function syncProjectDescriptionResources(
+  projectId: number,
+  attachments: DescriptionResourceAttachment[],
+  baselineByUrl: Map<string, number>,
+) {
+  const currentUrls = new Set(attachments.map((a) => a.url).filter(Boolean));
+
+  for (const att of attachments) {
+    if (!att.url || baselineByUrl.has(att.url)) continue;
+    await createInventoryResource(projectId, {
+      name: att.name || "Project document",
+      type: "document",
+      fileUrl: att.url,
+      mimeType: att.mimeType ?? undefined,
+      category: PROJECT_DESCRIPTION_CATEGORY,
+      visibility: "client_visible",
+      tags: [PROJECT_DESCRIPTION_CATEGORY],
+    });
+  }
+
+  for (const [url, id] of baselineByUrl.entries()) {
+    if (!currentUrls.has(url)) {
+      await deleteInventoryResource(projectId, id);
+    }
+  }
+}
+
 export function listInventoryCredentials(projectId: number) {
   return inv<any[]>(`${projectId}/inventory/credentials`);
 }

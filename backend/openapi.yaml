@@ -957,27 +957,6 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Milestone"
-
-  /projects/{id}/history:
-    get:
-      operationId: getProjectHistory
-      tags: [projects]
-      summary: Get audit history for a project
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: List of audit logs
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/AuditLog"
     post:
       operationId: createMilestone
       tags: [projects]
@@ -1001,6 +980,57 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Milestone"
+
+  /projects/{id}/milestones/{milestoneId}:
+    patch:
+      operationId: updateMilestone
+      tags: [projects]
+      summary: Update a milestone
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: milestoneId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MilestoneUpdate"
+      responses:
+        "200":
+          description: Milestone updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Milestone"
+
+  /projects/{id}/history:
+    get:
+      operationId: getProjectHistory
+      tags: [projects]
+      summary: Get audit history for a project
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of audit logs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AuditLog"
 
   # ── DAILY LOGS ────────────────────────────────────────────────────────────
   /projects/{id}/logs:
@@ -1559,7 +1589,7 @@ paths:
                           type: integer
                         threadType:
                           type: string
-                          enum: [project, project_internal, company_team]
+                          enum: [project, project_internal, company_team, company_team_unofficial]
                         lastMessageAt:
                           type: string
                           format: date-time
@@ -1673,6 +1703,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Comment"
+
+  # ── DIRECT CONVERSATIONS ─────────────────────────────────────────────────
+  /direct-conversations:
+    get:
+      operationId: listDirectConversations
+      tags: [comments]
+      summary: List 1:1 conversations for the current user
+      responses:
+        "200":
+          description: Direct conversations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectConversationListResult"
+    post:
+      operationId: createDirectConversation
+      tags: [comments]
+      summary: Start or open a 1:1 conversation (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DirectConversationCreateInput"
+      responses:
+        "201":
+          description: Conversation created or returned
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conversation]
+                properties:
+                  conversation:
+                    $ref: "#/components/schemas/DirectConversation"
+
+  /direct-conversations/contacts:
+    get:
+      operationId: listDirectConversationContacts
+      tags: [comments]
+      summary: Users an admin can start a 1:1 chat with
+      responses:
+        "200":
+          description: Eligible contacts grouped by client vs staff
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DirectConversationContactsResult"
 
   # ── NOTIFICATIONS ─────────────────────────────────────────────────────────
   /notifications:
@@ -2083,7 +2161,7 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, tester, client]
+          enum: [super_admin, developer, tester, qa, client, freelancer]
         subType:
           type: ["string", "null"]
         designation:
@@ -2155,7 +2233,7 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, tester, client]
+          enum: [super_admin, developer, tester, qa, client, freelancer]
         subType:
           type: string
         designation:
@@ -2184,7 +2262,7 @@ components:
           description: New login password (super_admin only, min 8 chars). Omit to keep current password.
         role:
           type: string
-          enum: [super_admin, developer, tester, qa, client]
+          enum: [super_admin, developer, tester, qa, client, freelancer]
         subType:
           type: string
         designation:
@@ -2764,6 +2842,14 @@ components:
         status:
           type: string
           enum: [pending, completed, delayed]
+        assigneeId:
+          type: ["integer", "null"]
+        assigneeName:
+          type: ["string", "null"]
+        assigneeAvatarUrl:
+          type: ["string", "null"]
+        assigneeRole:
+          type: ["string", "null"]
         createdAt:
           type: string
       required: [id, projectId, title, plannedDate, status, createdAt]
@@ -2778,7 +2864,24 @@ components:
         status:
           type: string
           enum: [pending, completed, delayed]
+        assigneeId:
+          type: integer
+          description: Project team member user id (must be on the project roster)
       required: [title, plannedDate]
+
+    MilestoneUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        plannedDate:
+          type: string
+        status:
+          type: string
+          enum: [pending, completed, delayed]
+        assigneeId:
+          type: ["integer", "null"]
+          description: Project team member user id, or null to unassign
 
     # ── LOG SCHEMAS ──────────────────────────────────────────────────────────
     DailyLog:
@@ -3424,7 +3527,7 @@ components:
           type: string
         threadType:
           type: string
-          enum: [project, project_internal, company_team, log, bug, apk, request, ticket]
+          enum: [project, project_internal, company_team, company_team_unofficial, direct, log, bug, apk, request, ticket]
         threadId:
           type: integer
         content:
@@ -3458,7 +3561,7 @@ components:
       properties:
         threadType:
           type: string
-          enum: [project, project_internal, company_team, log, bug, apk, request, ticket]
+          enum: [project, project_internal, company_team, company_team_unofficial, direct, log, bug, apk, request, ticket]
         threadId:
           type: integer
         content:
@@ -3494,6 +3597,76 @@ components:
         total:
           type: integer
       required: [comments, total]
+
+    DirectConversationPeer:
+      type: object
+      required: [id, name, role, category]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: ["string", "null"]
+        avatarUrl:
+          type: ["string", "null"]
+        role:
+          type: string
+        subtitle:
+          type: ["string", "null"]
+        category:
+          type: string
+          enum: [client, staff, other]
+
+    DirectConversation:
+      type: object
+      required: [id, peerUser, updatedAt]
+      properties:
+        id:
+          type: integer
+        peerUser:
+          $ref: "#/components/schemas/DirectConversationPeer"
+        lastMessageAt:
+          type: ["string", "null"]
+          format: date-time
+        lastPreview:
+          type: ["string", "null"]
+        lastAuthorName:
+          type: ["string", "null"]
+        lastAuthorId:
+          type: ["integer", "null"]
+        updatedAt:
+          type: string
+          format: date-time
+
+    DirectConversationListResult:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectConversation"
+
+    DirectConversationContactsResult:
+      type: object
+      required: [clientContacts, staffContacts]
+      properties:
+        clientContacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectConversationPeer"
+        staffContacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/DirectConversationPeer"
+
+    DirectConversationCreateInput:
+      type: object
+      required: [participantUserId]
+      properties:
+        participantUserId:
+          type: integer
 
     # ── NOTIFICATION SCHEMAS ─────────────────────────────────────────────────
     Notification:
@@ -3911,6 +4084,23 @@ components:
           type: ["string", "null"]
           description: IANA timezone for reminder scheduling (e.g. Asia/Kolkata). Required for correct local time.
           example: Asia/Kolkata
+        screenshotEnabled:
+          type: boolean
+          description: Enable periodic screenshot capture for clocked-in staff (Electron desktop)
+        screenshotIntervalMinutes:
+          type: integer
+          minimum: 1
+          maximum: 60
+          description: Minutes between screenshots while clocked in
+        screenshotRetentionDays:
+          type: integer
+          minimum: 1
+          description: Days before screenshots are purged
+        screenshotBlurEnabled:
+          type: boolean
+        screenshotConsentVersion:
+          type: string
+          description: Policy version; bump to force employee re-consent
         updatedAt:
           type: string
       required:
@@ -3939,6 +4129,19 @@ components:
           maximum: 23
         complianceTimezone:
           type: ["string", "null"]
+        screenshotEnabled:
+          type: boolean
+        screenshotIntervalMinutes:
+          type: integer
+          minimum: 1
+          maximum: 60
+        screenshotRetentionDays:
+          type: integer
+          minimum: 1
+        screenshotBlurEnabled:
+          type: boolean
+        screenshotConsentVersion:
+          type: string
 
     DailyLogSummary:
       type: object

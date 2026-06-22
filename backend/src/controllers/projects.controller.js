@@ -1,3 +1,4 @@
+import { isDevPortalStaffRole } from "../constants/user-roles.js";
 import {
   projectsTable,
   projectMembersTable,
@@ -14,6 +15,7 @@ import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
 import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
 import { assertProjectAccess } from "../services/access/access-helpers.js";
+import { assertClientPermission, findClientCompanyForUser } from "../services/client-team.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import { resolveLogProjectName } from "../services/daily-log-virtual-projects.js";
 import {
@@ -50,7 +52,7 @@ async function getProjects(req, res) {
   }
   if (clientId) query.clientId = parseInt(clientId);
   if (search) query.name = { $regex: search, $options: "i" };
-  if (req.user.role === "developer" || req.user.role === "tester" || req.user.role === "qa") {
+  if (isDevPortalStaffRole(req.user.role)) {
     const memberRows = await projectMembersTable.find({ userId: req.user.id });
     const projectIds = memberRows.map((m) => m.projectId);
     if (!projectIds.length) {
@@ -60,10 +62,15 @@ async function getProjects(req, res) {
     query.id = { $in: projectIds };
   }
   if (req.user.role === "client") {
-    const clientRow = await clientsTable.findOne({ userId: req.user.id });
-    if (clientRow) {
-      query.$or = [{ companyId: clientRow.id }, { clientId: clientRow.id }];
+    // Recognises both the primary client contact and active team members.
+    // If the user has no resolvable company, force the result to be empty
+    // so a misconfigured client account never falls through to "see all".
+    const clientRow = await findClientCompanyForUser(req.user.id);
+    if (!clientRow) {
+      res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+      return;
     }
+    query.$or = [{ companyId: clientRow.id }, { clientId: clientRow.id }];
   }
   const { items, total, page, limit } = await paginateModel(projectsTable, query, pagination);
   const includeTeam = req.user.role === "super_admin";
@@ -118,6 +125,7 @@ async function getProjectsById(req, res) {
   if (!project) notFound("Project");
   const access = await getProjectAccess(req, id);
   if (!access.allowed) forbidden();
+  await assertClientPermission(req, "overview", "view");
   res.json(await formatProject(project));
 }
 async function patchProjectsById(req, res) {
@@ -166,6 +174,7 @@ async function deleteProjectsById(req, res) {
 }
 async function getProjectsByIdMembers(req, res) {
   const projectId = parseInt(req.params["id"], 10);
+  await assertClientPermission(req, "developers", "view");
   const members = await projectMembersTable.find({ projectId }).lean().exec();
   if (!members.length) {
     res.json([]);
@@ -372,40 +381,126 @@ async function postProjectsByIdApkSchedules(req, res) {
     createdAt: schedule.createdAt.toISOString()
   });
 }
+async function formatMilestones(milestones, projectId) {
+  const assigneeIds = [...new Set(milestones.map((m) => m.assigneeId).filter(Boolean))];
+  const [memberRows, users] = await Promise.all([
+    assigneeIds.length
+      ? projectMembersTable.find({ projectId, userId: { $in: assigneeIds } }).lean().exec()
+      : [],
+    assigneeIds.length
+      ? usersTable
+          .find({ id: { $in: assigneeIds } })
+          .select({ id: 1, name: 1, avatarUrl: 1, designation: 1, employeeId: 1 })
+          .lean()
+          .exec()
+      : [],
+  ]);
+  const subTypeByUser = new Map(memberRows.map((m) => [m.userId, m.subType]));
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  return milestones.map((m) => {
+    const assignee = m.assigneeId ? userById.get(m.assigneeId) : null;
+    return {
+      id: m.id,
+      projectId: m.projectId,
+      title: m.title,
+      plannedDate: m.plannedDate.toISOString(),
+      actualDate: m.actualDate?.toISOString() ?? null,
+      status: m.status,
+      assigneeId: m.assigneeId ?? null,
+      assigneeName: assignee?.name ?? null,
+      assigneeAvatarUrl: assignee?.avatarUrl ?? null,
+      assigneeRole: m.assigneeId
+        ? (subTypeByUser.get(m.assigneeId) ?? assignee?.designation ?? null)
+        : null,
+      createdAt: m.createdAt.toISOString(),
+    };
+  });
+}
+
+async function resolveMilestoneAssigneeId(projectId, assigneeId) {
+  if (assigneeId == null || assigneeId === "") return null;
+  const resolved = Number(assigneeId);
+  const member = await projectMembersTable.findOne({ projectId, userId: resolved }).lean();
+  if (!member) badRequest("Assignee must be a member of this project.", "assigneeId");
+  return resolved;
+}
+
 async function getProjectsByIdMilestones(req, res) {
-  const milestones = await milestonesTable.find({ projectId: parseInt(req.params["id"]) }).sort({ plannedDate: 1 });
-  res.json(milestones.map((m) => ({
-    id: m.id,
-    projectId: m.projectId,
-    title: m.title,
-    plannedDate: m.plannedDate.toISOString(),
-    actualDate: m.actualDate?.toISOString() ?? null,
-    status: m.status,
-    createdAt: m.createdAt.toISOString()
-  })));
+  const projectId = parseInt(req.params["id"], 10);
+  await assertClientPermission(req, "milestones", "view");
+  const milestones = await milestonesTable.find({ projectId }).sort({ plannedDate: 1 }).lean().exec();
+  res.json(await formatMilestones(milestones, projectId));
 }
 async function postProjectsByIdMilestones(req, res) {
-  const { title, plannedDate, status } = req.body;
+  const projectId = parseInt(req.params["id"], 10);
+  const { title, plannedDate, status, assigneeId } = req.body ?? {};
+  if (!title) badRequest("title is required.", "title");
+  if (!plannedDate) badRequest("plannedDate is required.", "plannedDate");
+
+  let resolvedAssigneeId = null;
+  if (assigneeId != null && assigneeId !== "") {
+    resolvedAssigneeId = await resolveMilestoneAssigneeId(projectId, assigneeId);
+  }
+
   const nextId = await getNextSequence("milestones");
   const milestone = await milestonesTable.create({
     id: nextId,
-    projectId: parseInt(req.params["id"]),
+    projectId,
     title,
     plannedDate: new Date(plannedDate),
-    status: status ?? "pending"
+    status: status ?? "pending",
+    assigneeId: resolvedAssigneeId,
   });
-  res.status(201).json({
-    id: milestone.id,
-    projectId: milestone.projectId,
-    title: milestone.title,
-    plannedDate: milestone.plannedDate.toISOString(),
-    actualDate: null,
-    status: milestone.status,
-    createdAt: milestone.createdAt.toISOString()
-  });
+  const [formatted] = await formatMilestones([milestone.toObject()], projectId);
+  res.status(201).json(formatted);
 }
+
+async function patchProjectsByIdMilestonesByMilestoneId(req, res) {
+  const projectId = parseInt(req.params["id"], 10);
+  const milestoneId = parseInt(req.params["milestoneId"], 10);
+  const existing = await milestonesTable.findOne({ id: milestoneId, projectId }).lean();
+  if (!existing) notFound("Milestone");
+
+  const { title, plannedDate, status, assigneeId } = req.body ?? {};
+  const updates = {};
+
+  if (title !== undefined) {
+    if (!String(title).trim()) badRequest("title cannot be empty.", "title");
+    updates.title = String(title).trim();
+  }
+  if (plannedDate !== undefined) {
+    if (!plannedDate) badRequest("plannedDate is required.", "plannedDate");
+    updates.plannedDate = new Date(plannedDate);
+  }
+  if (status !== undefined) {
+    updates.status = status;
+    if (status === "completed" && !existing.actualDate) {
+      updates.actualDate = new Date();
+    }
+  }
+  if (assigneeId !== undefined) {
+    updates.assigneeId = await resolveMilestoneAssigneeId(projectId, assigneeId);
+  }
+
+  if (!Object.keys(updates).length) badRequest("No valid fields to update.");
+
+  const milestone = await milestonesTable.findOneAndUpdate(
+    { id: milestoneId, projectId },
+    { $set: updates },
+    { new: true },
+  ).lean();
+  if (!milestone) notFound("Milestone");
+
+  const [formatted] = await formatMilestones([milestone], projectId);
+  res.json(formatted);
+}
+
 async function getProjectsByIdLogs(req, res) {
   const projectId = parseInt(req.params["id"]);
+  // Daily logs are the "recent activity / progress" feed on the client
+  // portal, so gate them on the `progress` section.
+  await assertClientPermission(req, "progress", "view");
   const project = await projectsTable.findOne({ id: projectId }, { id: 1, name: 1 }).lean();
   const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: -1 }).lean();
   const isClient = req.user?.role === "client";
@@ -461,6 +556,7 @@ async function getProjectsByIdBugs(req, res) {
   res.json({ bugs, total: bugs.length, page: 1, limit: bugs.length });
 }
 async function getProjectsByIdApkReleases(req, res) {
+  await assertClientPermission(req, "documents", "view");
   const { apkReleasesTable } = await import("../models/schema/index.js");
   const { buildApkReleaseListFilter, formatApkReleaseRow } = await import("../services/apk-access.js");
   const { IdLookupCache } = await import("../lib/lookup-cache.js");
@@ -504,6 +600,7 @@ export {
   getProjectsByIdMembers,
   getProjectsByIdMilestones,
   patchProjectsById,
+  patchProjectsByIdMilestonesByMilestoneId,
   postProjects,
   postProjectsByIdApkSchedules,
   postProjectsByIdMembers,

@@ -17,3 +17,7 @@ export * from "./inventory.js";
 export * from "./EmployeeScreenshot.js";
 export * from "./MonitoringConsent.js";
 export * from "./WorkSession.js";
+export * from "./client-team.js";
+export * from "./direct-conversations.js";
+export * from "./job-runs.js";
+export * from "./hrm/index.js";

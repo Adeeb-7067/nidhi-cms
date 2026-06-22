@@ -3,7 +3,7 @@ import { customFetch } from "./custom-fetch";
 
 export type ProjectDiscussionPreview = {
   projectId: number;
-  threadType: "project" | "project_internal" | "company_team";
+  threadType: "project" | "project_internal" | "company_team" | "company_team_unofficial";
   /** @nullable */
   lastMessageAt: string | null;
   /** @nullable */

@@ -7,10 +7,20 @@ import {
   type ReactNode,
 } from "react";
 import { isElectron } from "@/lib/electron-bridge";
+import { getApiBaseUrl } from "@/lib/api-base";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMonitoringStatus, useConsentStatus } from "@/api/monitoring";
-import { useActiveSession, useClockIn, useClockOut, type WorkSession } from "@/api/work-sessions";
+import { useActiveSession, useClockIn, useClockOut, activeSessionQueryKey, type WorkSession } from "@/api/work-sessions";
+import { useListNotifications, getListNotificationsQueryKey } from "@/api";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { isMonitorableStaffRole } from "@/lib/user-roles";
+import { ensureNotificationPermission } from "@/lib/web-push-notify";
+import {
+  markWorkSessionAlertShown,
+  wasWorkSessionAlertShown,
+} from "@/lib/work-session-utils";
 
 interface WorkSessionContextType {
   activeSession: WorkSession | null;
@@ -30,23 +40,44 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
 
 export function WorkSessionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  // Only developer/tester/qa have work sessions. On web, skip polling for other roles
+  // Only monitorable staff roles have work sessions. On web, skip polling for other roles
   // to avoid 30-second background requests that always return null for admins/clients.
   // In Electron the desktop app always belongs to a monitorable employee, so allow any logged-in user.
-  const isMonitorableRole = ["developer", "tester", "qa"].includes(user?.role ?? "");
+  const isMonitorableRole = isMonitorableStaffRole(user?.role);
   const sessionEnabled = !!user && (isElectron() || isMonitorableRole);
 
   const { data: activeData, isLoading: sessionLoading } = useActiveSession(sessionEnabled);
-  const { data: status } = useMonitoringStatus(isElectron() && !!user);
+  const workSessionAlertParams = { unreadOnly: true as const, limit: 10 };
+  const { data: unreadAlerts } = useListNotifications(workSessionAlertParams, {
+    query: {
+      queryKey: getListNotificationsQueryKey(workSessionAlertParams),
+      enabled: sessionEnabled,
+      staleTime: 60_000,
+    },
+  });
+  const { data: status } = useMonitoringStatus(!!user && isMonitorableRole);
   const { data: consent } = useConsentStatus(
-    isElectron() && !!user && !!status?.screenshotEnabled,
+    isElectron() && !!user && isMonitorableRole && !!status?.screenshotEnabled,
   );
 
   const clockInMutation = useClockIn();
   const clockOutMutation = useClockOut();
 
   const activeSession = activeData?.session ?? null;
+
+  // Web + desktop open together: refetch when this tab/window gains focus.
+  useEffect(() => {
+    if (!sessionEnabled) return;
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        void queryClient.invalidateQueries({ queryKey: activeSessionQueryKey() });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [sessionEnabled, queryClient]);
 
   // Keep stable refs so the pre-quit handler never captures stale closures.
   // useMutation and activeSession both change identity across renders.
@@ -58,10 +89,27 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
 
   // Guard against concurrent clock-in calls (e.g. rapid double-click).
   const isClockingInRef = useRef(false);
+  const shownSessionAlertRef = useRef<Set<number>>(new Set());
 
-  // Sync the Electron screenshot scheduler whenever session/monitoring state changes.
+  // Surface unread work-session alerts once (persisted) — not on every app restart.
   useEffect(() => {
-    if (!isElectron() || !window.electron) return;
+    if (!isMonitorableRole || !unreadAlerts?.notifications?.length) return;
+    for (const item of unreadAlerts.notifications) {
+      if (item.type !== "work_session" || shownSessionAlertRef.current.has(item.id)) continue;
+      const alertKey = `notif:${item.id}`;
+      if (wasWorkSessionAlertShown(alertKey)) continue;
+      shownSessionAlertRef.current.add(item.id);
+      markWorkSessionAlertShown(alertKey);
+      toast.warning(item.title, {
+        description: item.body,
+        duration: 12_000,
+      });
+    }
+  }, [isMonitorableRole, unreadAlerts]);
+
+  // Sync Electron session + screenshot scheduler once active session is confirmed from API.
+  useEffect(() => {
+    if (!isElectron() || !window.electron || sessionLoading) return;
 
     const shouldCapture =
       !!activeSession &&
@@ -73,8 +121,37 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       enabled: shouldCapture,
       intervalMs: shouldCapture ? status!.screenshotIntervalMinutes * 60 * 1000 : 0,
       sessionId: activeSession?.id ?? 0,
+      apiBaseUrl: getApiBaseUrl() || undefined,
+      blurSensitiveApps: shouldCapture,
+      accessToken: localStorage.getItem("accessToken") ?? undefined,
     });
-  }, [activeSession, status, consent]);
+  }, [activeSession, status, consent, sessionLoading]);
+
+  // Main process may clock out (sleep, shutdown) — local events only; server sync is silent.
+  useEffect(() => {
+    if (!isElectron() || !window.electron?.onSessionEnded) return;
+    const SESSION_END_MESSAGES: Record<string, string> = {
+      system_sleep: "Work session ended — PC went to sleep.",
+      system_shutdown: "Work session ended — PC is shutting down.",
+      network_lost: "Work session ended — no network for an extended period.",
+      app_quit: "Work session ended — app closed.",
+      client_disconnected: "Work session ended — desktop app stopped sending heartbeats for 10+ minutes.",
+      session_expired: "Work session ended — 24-hour limit reached.",
+      day_ended: "Work session ended — a new work day started.",
+      logout: "Work session ended — you logged out.",
+      admin_terminated: "Work session ended — an administrator ended your session.",
+    };
+    const unsubscribe = window.electron.onSessionEnded(({ stopReason, silent }) => {
+      queryClient.setQueryData(activeSessionQueryKey(), { session: null });
+      queryClient.invalidateQueries({ queryKey: ["work-sessions"] });
+      if (silent) return;
+      const message = SESSION_END_MESSAGES[stopReason];
+      if (message) {
+        toast.info(message, { duration: 8_000 });
+      }
+    });
+    return unsubscribe;
+  }, [queryClient]);
 
   // Safety net: stop Electron scheduler when user is cleared (token expiry, forced logout).
   // Explicit logout is already handled in AuthContext.logout() before tokens are cleared;
@@ -104,17 +181,27 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   }, [activeSession]); // stable: clockOutMutationRef never changes identity
 
   const clockIn = useCallback(async () => {
-    // Reject if already clocked in or a clock-in is already in flight.
-    if (activeSession || isClockingInRef.current) return;
+    if (activeSession?.isActive) {
+      toast.info("You are already clocked in.");
+      return;
+    }
+    if (isClockingInRef.current) return;
     isClockingInRef.current = true;
     try {
       const deviceInfo = isElectron()
         ? `Electron/${window.electron?.platform ?? "desktop"}`
         : "Web";
-      await clockInMutation.mutateAsync(deviceInfo);
-      toast.success("Clocked in. Have a productive session!");
-    } catch {
-      toast.error("Failed to clock in. Please try again.");
+      const result = await clockInMutation.mutateAsync(deviceInfo);
+      if (isMonitorableRole) {
+        void ensureNotificationPermission();
+      }
+      if (result.resumed) {
+        toast.success("Session resumed — your timer continues from where you left off.");
+      } else {
+        toast.success("Clocked in. Have a productive session!");
+      }
+    } catch (error) {
+      toastApiError(error, "Failed to clock in. Please try again.");
     } finally {
       isClockingInRef.current = false;
     }
@@ -122,16 +209,21 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
 
   const clockOut = useCallback(
     async (reason: "clock_out" | "app_quit" | "logout" = "clock_out") => {
-      if (!activeSession) return;
+      if (!activeSession?.isActive) {
+        if (reason === "clock_out") toast.info("You are not clocked in.");
+        return;
+      }
       // Stop Electron scheduler immediately — don't wait for the API response.
       if (isElectron() && window.electron) {
         window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
       }
       try {
         await clockOutMutation.mutateAsync(reason);
-        if (reason === "clock_out") toast.success("Clocked out. See you next time!");
-      } catch {
-        if (reason === "clock_out") toast.error("Failed to clock out. Please try again.");
+        if (reason === "clock_out") {
+          toast.success("Session paused. Clock in again today to continue where you left off.");
+        }
+      } catch (error) {
+        if (reason === "clock_out") toastApiError(error, "Failed to clock out. Please try again.");
       }
     },
     [activeSession, clockOutMutation],
@@ -144,7 +236,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
         isLoading: sessionLoading,
         clockIn,
         clockOut,
-        isClockedIn: !!activeSession,
+        isClockedIn: !!activeSession?.isActive,
       }}
     >
       {children}

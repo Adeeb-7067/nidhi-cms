@@ -11,6 +11,7 @@ export type WorkspaceDashboard = {
     hoursThisWeek?: number;
     bugsAssigned?: number;
     bugsReported?: number;
+    milestonesAssigned?: number;
     maintenanceProjects: number;
     activeDevProjects: number;
   };
@@ -59,6 +60,14 @@ export type WorkspaceDashboard = {
     projectName: string;
     logDate: string;
     projectId: number;
+  }[];
+  myMilestones: {
+    id: number;
+    title: string;
+    plannedDate: string;
+    status: "pending" | "completed" | "delayed";
+    projectId: number;
+    projectName: string;
   }[];
 };
 

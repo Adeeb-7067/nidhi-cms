@@ -55,6 +55,7 @@ const milestoneSchema = new Schema({
   plannedDate: { type: Date, required: true },
   actualDate: { type: Date },
   status: { type: String, enum: milestoneStatuses, default: "pending", required: true },
+  assigneeId: { type: Number, ref: "Users", default: null, index: true },
   createdAt: { type: Date, default: Date.now }
 });
 const Milestones = mongoose.models.Milestones || mongoose.model("Milestones", milestoneSchema);

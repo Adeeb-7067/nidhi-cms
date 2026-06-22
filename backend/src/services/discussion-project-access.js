@@ -1,17 +1,25 @@
+import { adminStaffRoles, devPortalStaffRoles, isDevPortalStaffRole } from "../constants/user-roles.js";
 import {
   projectsTable,
   projectMembersTable,
-  clientsTable,
   usersTable,
 } from "../models/schema/index.js";
+import { findClientCompanyForUser, getClientCompanyUserIds } from "./client-team.js";
 
 const CLIENT_VISIBLE_THREAD = "project";
 const INTERNAL_THREAD = "project_internal";
 const COMPANY_TEAM_THREAD = "company_team";
+const COMPANY_TEAM_UNOFFICIAL_THREAD = "company_team_unofficial";
 const COMPANY_TEAM_THREAD_ID = 0;
-const COMPANY_TEAM_ROLES = ["super_admin", "developer", "tester", "qa"];
+const COMPANY_TEAM_UNOFFICIAL_THREAD_ID = 0;
+const COMPANY_TEAM_ROLES = adminStaffRoles;
 const PROJECT_THREAD_TYPES = [CLIENT_VISIBLE_THREAD, INTERNAL_THREAD];
-const DISCUSSION_THREAD_TYPES = [...PROJECT_THREAD_TYPES, COMPANY_TEAM_THREAD];
+const COMPANY_TEAM_THREAD_TYPES = [COMPANY_TEAM_THREAD, COMPANY_TEAM_UNOFFICIAL_THREAD];
+const DISCUSSION_THREAD_TYPES = [...PROJECT_THREAD_TYPES, ...COMPANY_TEAM_THREAD_TYPES];
+
+export function isCompanyTeamDiscussionThread(threadType) {
+  return COMPANY_TEAM_THREAD_TYPES.includes(threadType);
+}
 
 export function canAccessCompanyTeamDiscussion(role) {
   return role != null && COMPANY_TEAM_ROLES.includes(role);
@@ -31,11 +39,12 @@ export async function getProjectDiscussionParticipantIds(projectId) {
   const project = await projectsTable.findOne({ id: projectId }, { companyId: 1, clientId: 1 }).lean().exec();
   if (project) {
     const clientIds = [...new Set([project.companyId, project.clientId].filter((id) => id != null))];
-    if (clientIds.length) {
-      const clients = await clientsTable.find({ id: { $in: clientIds } }, { userId: 1 }).lean().exec();
-      for (const c of clients) {
-        if (c.userId != null) ids.add(c.userId);
-      }
+    // Include the primary client contact AND every team member of the
+    // owning company so discussions fan out to the full client side, not
+    // just the original portal account.
+    for (const companyId of clientIds) {
+      const memberIds = await getClientCompanyUserIds(companyId);
+      for (const id of memberIds) ids.add(id);
     }
   }
 
@@ -89,7 +98,7 @@ export async function getCompanyTeamDiscussionParticipantIds() {
 }
 
 export function getDiscussionParticipantIds(projectId, threadType) {
-  if (threadType === COMPANY_TEAM_THREAD) {
+  if (isCompanyTeamDiscussionThread(threadType)) {
     return getCompanyTeamDiscussionParticipantIds();
   }
   if (threadType === INTERNAL_THREAD) {
@@ -101,12 +110,13 @@ export function getDiscussionParticipantIds(projectId, threadType) {
 /** Project IDs the user may access in discussions (mirrors list projects rules). */
 export async function getAccessibleProjectIds(user) {
   const role = user.role;
-  if (role === "developer" || role === "tester" || role === "qa") {
+  if (isDevPortalStaffRole(role)) {
     const rows = await projectMembersTable.find({ userId: user.id }, { projectId: 1 }).lean().exec();
     return rows.map((m) => m.projectId).filter((id) => id != null);
   }
   if (role === "client") {
-    const clientRow = await clientsTable.findOne({ userId: user.id }).lean().exec();
+    // Resolves both primary client contacts and active team members.
+    const clientRow = await findClientCompanyForUser(user.id);
     if (!clientRow) return [];
     const projects = await projectsTable
       .find({ $or: [{ companyId: clientRow.id }, { clientId: clientRow.id }] }, { id: 1 })
@@ -125,8 +135,11 @@ export function discussionThreadTypesForRole(role) {
 }
 
 export async function canAccessDiscussionThread(user, threadType, threadId) {
-  if (threadType === COMPANY_TEAM_THREAD) {
-    return canAccessCompanyTeamDiscussion(user.role) && threadId === COMPANY_TEAM_THREAD_ID;
+  if (isCompanyTeamDiscussionThread(threadType)) {
+    return (
+      canAccessCompanyTeamDiscussion(user.role) &&
+      (threadId === COMPANY_TEAM_THREAD_ID || threadId === COMPANY_TEAM_UNOFFICIAL_THREAD_ID)
+    );
   }
   if (!PROJECT_THREAD_TYPES.includes(threadType)) return false;
   if (threadType === INTERNAL_THREAD && user.role === "client") return false;
@@ -138,7 +151,10 @@ export {
   CLIENT_VISIBLE_THREAD,
   INTERNAL_THREAD,
   COMPANY_TEAM_THREAD,
+  COMPANY_TEAM_UNOFFICIAL_THREAD,
   COMPANY_TEAM_THREAD_ID,
+  COMPANY_TEAM_UNOFFICIAL_THREAD_ID,
+  COMPANY_TEAM_THREAD_TYPES,
   COMPANY_TEAM_ROLES,
   PROJECT_THREAD_TYPES,
   DISCUSSION_THREAD_TYPES,

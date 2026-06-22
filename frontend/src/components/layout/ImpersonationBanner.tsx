@@ -2,20 +2,14 @@ import React from "react";
 import { Shield, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { formatStaffRoleLabel } from "@/lib/user-roles";
 
 export function ImpersonationBanner() {
   const { isImpersonating, impersonation, stopImpersonation, isStoppingImpersonation } = useAuth();
 
   if (!isImpersonating || !impersonation) return null;
 
-  const roleLabel =
-    impersonation.targetUser.role === "client"
-      ? "client"
-      : impersonation.targetUser.role === "qa"
-        ? "qa"
-        : impersonation.targetUser.role === "tester"
-          ? "tester"
-          : "developer";
+  const roleLabel = formatStaffRoleLabel(impersonation.targetUser.role).toLowerCase();
 
   return (
     <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2">

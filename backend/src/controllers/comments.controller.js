@@ -19,22 +19,46 @@ import {
   canAccessDiscussionThread,
   canAccessCompanyTeamDiscussion,
   COMPANY_TEAM_THREAD,
+  COMPANY_TEAM_UNOFFICIAL_THREAD,
   COMPANY_TEAM_THREAD_ID,
+  COMPANY_TEAM_UNOFFICIAL_THREAD_ID,
+  isCompanyTeamDiscussionThread,
   getDiscussionParticipantIds,
 } from "../services/discussion-project-access.js";
+import {
+  canAccessDirectConversation,
+  getDirectConversationParticipantIds,
+  touchDirectConversation,
+  DIRECT_THREAD_TYPE,
+} from "../services/direct-conversations.js";
+import {
+  assertClientPermission,
+  recordClientTeamActivityFromRequest,
+} from "../services/client-team.js";
 
 function isProjectDiscussionThread(threadType) {
-  return threadType === "project" || threadType === "project_internal" || threadType === COMPANY_TEAM_THREAD;
+  return (
+    threadType === "project" ||
+    threadType === "project_internal" ||
+    isCompanyTeamDiscussionThread(threadType)
+  );
 }
 
-// company_team uses a fixed sentinel id (0), which `parseIdParam` rejects.
-// Validate manually for that thread type so the team chat is reachable.
+function isDirectDiscussionThread(threadType) {
+  return threadType === DIRECT_THREAD_TYPE;
+}
+
+// Company team channels use a fixed sentinel id (0), which `parseIdParam` rejects.
 function parseDiscussionThreadId(rawThreadId, threadType) {
-  if (threadType === COMPANY_TEAM_THREAD) {
+  if (isCompanyTeamDiscussionThread(threadType)) {
     const value = Array.isArray(rawThreadId) ? rawThreadId[0] : rawThreadId;
     const id = Number.parseInt(String(value ?? ""), 10);
-    if (!Number.isFinite(id) || id !== COMPANY_TEAM_THREAD_ID) {
-      badRequest(`Invalid threadId for company_team. Expected ${COMPANY_TEAM_THREAD_ID}.`, "threadId");
+    const expectedId =
+      threadType === COMPANY_TEAM_UNOFFICIAL_THREAD
+        ? COMPANY_TEAM_UNOFFICIAL_THREAD_ID
+        : COMPANY_TEAM_THREAD_ID;
+    if (!Number.isFinite(id) || id !== expectedId) {
+      badRequest(`Invalid threadId for ${threadType}. Expected ${expectedId}.`, "threadId");
     }
     return id;
   }
@@ -121,8 +145,16 @@ async function getComments(req, res) {
     badRequest("Discussion thread type and id are required.", "threadType");
   }
   const threadIdNum = parseDiscussionThreadId(threadId, threadType);
-  if (isProjectDiscussionThread(threadType)) {
+  if (isDirectDiscussionThread(threadType)) {
+    if (!(await canAccessDirectConversation(req.user, threadIdNum))) forbidden();
+  } else if (isProjectDiscussionThread(threadType)) {
     if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+    // For the client-visible thread, ALSO honor per-section RBAC so a
+    // team member with `discussions: none` cannot read messages even
+    // though their company can see the project.
+    if (threadType === "project") {
+      await assertClientPermission(req, "discussions", "view");
+    }
   }
   if (threadType === "ticket") {
     await assertTicketAccess(req.user, threadIdNum);
@@ -169,15 +201,30 @@ async function postComments(req, res) {
     validateStoredFileUrl(attachmentUrl, "attachmentUrl");
   }
   const threadIdNum = parseDiscussionThreadId(threadId, threadType);
-  if (isProjectDiscussionThread(threadType)) {
+  if (isDirectDiscussionThread(threadType)) {
+    if (!(await canAccessDirectConversation(req.user, threadIdNum))) forbidden();
+  } else if (isProjectDiscussionThread(threadType)) {
     if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+    // Team members must have at least `create` on discussions to post.
+    if (threadType === "project") {
+      await assertClientPermission(req, "discussions", "create");
+    }
   }
   let ticketForThread = null;
   if (threadType === "ticket") {
     ticketForThread = await assertTicketAccess(req.user, threadIdNum);
   }
+  if (parentId != null) {
+    const parent = await commentsTable.findOne({
+      id: parentId,
+      threadType,
+      threadId: threadIdNum,
+      $or: [{ parentId: null }, { parentId: { $exists: false } }],
+    });
+    if (!parent) badRequest("Parent comment not found in this thread.", "parentId");
+  }
   let mentionIds = [];
-  if (threadType === COMPANY_TEAM_THREAD) {
+  if (isCompanyTeamDiscussionThread(threadType)) {
     mentionIds = await resolveCompanyTeamMentionIds(req.user.id, requestedMentionIds, text);
   } else if (isProjectDiscussionThread(threadType)) {
     mentionIds = await resolveProjectMentionIds(
@@ -202,6 +249,9 @@ async function postComments(req, res) {
     parentId: parentId ?? null,
     mentionedUserIds: mentionIds,
   });
+  if (isDirectDiscussionThread(threadType)) {
+    await touchDirectConversation(threadIdNum);
+  }
   if (threadType === "project" && attachmentUrl) {
     try {
       await syncClientDiscussionImageToResource(req, {
@@ -227,7 +277,10 @@ async function postComments(req, res) {
   try {
     const recipientIds = /* @__PURE__ */ new Set();
     let participantIds = null;
-    if (isProjectDiscussionThread(threadType)) {
+    if (isDirectDiscussionThread(threadType)) {
+      participantIds = await getDirectConversationParticipantIds(threadIdNum);
+      participantIds.forEach((id) => recipientIds.add(id));
+    } else if (isProjectDiscussionThread(threadType)) {
       participantIds = await getDiscussionParticipantIds(threadIdNum, threadType);
       participantIds.forEach((id) => recipientIds.add(id));
     } else if (threadType === "ticket" && ticketForThread) {
@@ -272,7 +325,7 @@ async function postComments(req, res) {
     await Promise.all(Array.from(recipientIds).map(async (userId) => {
       const notifId = await getNextSequence("notifications");
       const notifProjectId =
-        threadType === COMPANY_TEAM_THREAD
+        isCompanyTeamDiscussionThread(threadType) || isDirectDiscussionThread(threadType)
           ? null
           : isProjectDiscussionThread(threadType)
             ? threadIdNum
@@ -281,7 +334,9 @@ async function postComments(req, res) {
       const notifType = isMention ? "comment_mention" : "comment";
       const notifTitle = isMention
         ? `${authorName} mentioned you`
-        : `${authorName} commented`;
+        : isDirectDiscussionThread(threadType)
+          ? `${authorName} sent you a message`
+          : `${authorName} commented`;
       await notificationsTable.create({
         id: notifId,
         userId,
@@ -306,15 +361,65 @@ async function postComments(req, res) {
   } catch (err) {
     console.error("Failed to create comment notifications:", err);
   }
+
+  // Track posts to the company-scoped activity log so the Client Admin can
+  // see who on their team has been participating. Attachments are logged
+  // as a separate `document_uploaded` event so they show up in the
+  // Documents view of the activity log too. Non-blocking.
+  if (req.user.role === "client" && threadType === "project") {
+    const summarySnippet = text
+      ? text.length > 80 ? text.slice(0, 77) + "..." : text
+      : attachmentUrl
+        ? "Posted an attachment"
+        : "New message";
+    await recordClientTeamActivityFromRequest(req, {
+      action: "comment_posted",
+      section: "discussions",
+      entityType: threadType,
+      entityId: threadIdNum,
+      summary: `Posted in discussion: ${summarySnippet}`,
+    }).catch(() => undefined);
+
+    if (attachmentUrl) {
+      await recordClientTeamActivityFromRequest(req, {
+        action: "document_uploaded",
+        section: "documents",
+        entityType: "project_resource",
+        entityId: threadIdNum,
+        summary: `Uploaded ${attachmentName ?? "an attachment"} to discussion.`,
+        metadata: {
+          attachmentUrl,
+          attachmentName: attachmentName ?? null,
+          attachmentMimeType: attachmentMimeType ?? null,
+        },
+      }).catch(() => undefined);
+    }
+  }
+
   res.status(201).json(formattedComment);
 }
 async function patchCommentsById(req, res) {
   const { content } = req.body;
   const id = parseInt(req.params["id"]);
+  const existing = await commentsTable.findOne({ id, authorId: req.user.id });
+  if (!existing) notFound("Comment");
+
+  const { threadType, threadId: threadIdNum } = existing;
+  if (isDirectDiscussionThread(threadType)) {
+    if (!(await canAccessDirectConversation(req.user, threadIdNum))) forbidden();
+  } else if (isProjectDiscussionThread(threadType)) {
+    if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+    if (threadType === "project") {
+      await assertClientPermission(req, "discussions", "create");
+    }
+  } else if (threadType === "ticket") {
+    await assertTicketAccess(req.user, threadIdNum);
+  }
+
   const comment = await commentsTable.findOneAndUpdate(
     { id, authorId: req.user.id },
     { $set: { content, isEdited: true } },
-    { new: true }
+    { new: true },
   );
   if (!comment) notFound("Comment");
   res.json(await formatComment(comment));

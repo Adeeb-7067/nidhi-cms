@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Monitor, Shield, ChevronDown, ChevronUp, X } from "lucide-react";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
+import { isMonitorableStaffRole } from "@/lib/user-roles";
 
 /** Bottom-right consent banner — appears when employee hasn't yet acknowledged the
  *  monitoring policy. Non-blocking: they can still use the app, but screenshots
@@ -28,8 +30,8 @@ export function ConsentDialog() {
   );
   const { mutateAsync: recordConsent, isPending: recording } = useRecordConsent();
 
-  // Only developer / tester / qa can be monitored — admins never need to consent.
-  const isMonitorableRole = ["developer", "tester", "qa"].includes(user?.role ?? "");
+  // Monitored employee roles (developer, tester, qa, freelancer) — admins never need to consent.
+  const isMonitorableRole = isMonitorableStaffRole(user?.role);
 
   if (
     !isElectron() ||
@@ -50,8 +52,8 @@ export function ConsentDialog() {
     try {
       await recordConsent();
       toast.success("Monitoring consent recorded. Screenshots will start when you clock in.");
-    } catch {
-      toast.error("Could not record consent. Please try again.");
+    } catch (error) {
+      toastApiError(error, "Could not record consent. Please try again.");
     }
   };
 

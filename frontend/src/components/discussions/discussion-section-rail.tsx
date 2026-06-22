@@ -1,13 +1,20 @@
-import { Building2, Lock, Users } from "lucide-react";
+import { Building2, Lock, MessageCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type DiscussionAdminSection = "team" | "clients" | "internal";
+export type DiscussionAdminSection =
+  | "team"
+  | "team_direct"
+  | "clients"
+  | "clients_direct"
+  | "internal";
 
 export type DiscussionSectionRailProps = {
   activeSection: DiscussionAdminSection;
   onSectionChange: (section: DiscussionAdminSection) => void;
   teamUnread: number;
+  teamDirectUnread: number;
   clientsUnread: number;
+  clientsDirectUnread: number;
   internalUnread: number;
   clientsCount: number;
   internalCount: number;
@@ -27,7 +34,9 @@ export function DiscussionSectionRail({
   activeSection,
   onSectionChange,
   teamUnread,
+  teamDirectUnread,
   clientsUnread,
+  clientsDirectUnread,
   internalUnread,
   clientsCount,
   internalCount,
@@ -36,10 +45,17 @@ export function DiscussionSectionRail({
   const sections: SectionDefinition[] = [
     {
       id: "team",
-      label: "Team",
-      description: "Company-wide",
+      label: "Office",
+      description: "Official & unofficial",
       icon: Users,
       unread: teamUnread,
+    },
+    {
+      id: "team_direct",
+      label: "Staff 1:1",
+      description: "Direct with staff",
+      icon: MessageCircle,
+      unread: teamDirectUnread,
     },
     {
       id: "clients",
@@ -48,6 +64,13 @@ export function DiscussionSectionRail({
       icon: Building2,
       unread: clientsUnread,
       count: clientsCount,
+    },
+    {
+      id: "clients_direct",
+      label: "Client 1:1",
+      description: "Direct with clients",
+      icon: MessageCircle,
+      unread: clientsDirectUnread,
     },
     {
       id: "internal",

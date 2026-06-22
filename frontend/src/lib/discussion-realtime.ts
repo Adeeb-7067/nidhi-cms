@@ -11,12 +11,16 @@ import { discussionCommentPreview } from "@/lib/discussion-comment-preview";
 export { discussionCommentPreview };
 
 /** Single write path for live project comments (socket + optimistic send). */
+import type { ProjectDiscussionThreadType } from "@/lib/discussion-channels";
+
 function normalizeDiscussionThreadType(
   comment: Comment,
-  fallback: "project" | "project_internal" | "company_team" = "project",
-): "project" | "project_internal" | "company_team" {
+  fallback: ProjectDiscussionThreadType = "project",
+): ProjectDiscussionThreadType {
   if (comment.threadType === "company_team") return "company_team";
+  if (comment.threadType === "company_team_unofficial") return "company_team_unofficial";
   if (comment.threadType === "project_internal") return "project_internal";
+  if (comment.threadType === "direct") return "direct";
   return fallback;
 }
 
@@ -24,12 +28,12 @@ export function applyProjectCommentToCaches(
   queryClient: QueryClient,
   projectId: number,
   comment: Comment,
-  threadType: "project" | "project_internal" | "company_team" = normalizeDiscussionThreadType(
-    comment,
-  ),
+  threadType: ProjectDiscussionThreadType = normalizeDiscussionThreadType(comment),
 ): void {
   appendCommentToListCache(queryClient, threadType, projectId, comment);
-  patchDiscussionPreviewFromComment(queryClient, projectId, comment, threadType);
+  if (threadType !== "direct") {
+    patchDiscussionPreviewFromComment(queryClient, projectId, comment, threadType);
+  }
 }
 
 export function channelActivityPatchFromComment(

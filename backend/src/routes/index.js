@@ -26,6 +26,10 @@ import presenceRoutes from "./presence.routes.js";
 import screenshotsRoutes from "./screenshots.routes.js";
 import monitoringRoutes from "./monitoring.routes.js";
 import workSessionsRoutes from "./work-sessions.routes.js";
+import clientTeamRoutes from "./client-team.routes.js";
+import directConversationsRoutes from "./direct-conversations.routes.js";
+import permissionsRoutes from "./permissions.routes.js";
+import hrmRoutes from "./hrm.routes.js";
 const router = Router();
 
 // Normalize ?token= query param to the Authorization header.
@@ -71,6 +75,10 @@ const featureRouters = [
   screenshotsRoutes,
   monitoringRoutes,
   workSessionsRoutes,
+  clientTeamRoutes,
+  directConversationsRoutes,
+  permissionsRoutes,
+  hrmRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

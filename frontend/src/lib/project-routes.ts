@@ -1,9 +1,10 @@
-import type { UserRole } from "@/lib/navigation";
+import type { UserRole } from "@/lib/user-roles";
+import { isDevPortalRole } from "@/lib/navigation";
 
 /** List page for projects — role-appropriate (avoids admin-only /admin/projects for dev/QA). */
 export function getProjectsListHref(role: UserRole | string | undefined): string {
   if (role === "super_admin") return "/admin/projects";
-  if (role === "developer" || role === "tester" || role === "qa") return "/dev/projects";
+  if (isDevPortalRole(role)) return "/dev/projects";
   if (role === "client") return "/client";
   return "/dev/projects";
 }

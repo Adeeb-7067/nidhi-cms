@@ -1,17 +1,26 @@
 import path from "path";
 import fs from "fs/promises";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { employeeScreenshotsTable, workSessionsTable } from "../models/schema/index.js";
+import { employeeScreenshotsTable } from "../models/schema/index.js";
 import { getOrCreateSettings } from "./company-settings.js";
+import {
+  closeSessionsExceedingMaxDuration,
+  closeSessionsPastWorkDay,
+  closeStaleHeartbeatSessions,
+} from "./work-sessions.service.js";
 import { isObjectStorageEnabled } from "../lib/object-storage.js";
 import { logger } from "../lib/logger.js";
 import { isDatabaseConnected } from "../lib/db.js";
 
 const DAY_MS = 864e5;
 
-// Sessions open longer than this are treated as abandoned (crash / Task Manager kill / OS shutdown).
-// Must be longer than any realistic workday; 24 h is a safe upper bound.
+// Max session wall-clock span — aligned with work-session-policy.js (24 h).
 const STALE_SESSION_HOURS = 24;
+
+// Active sessions with no heartbeat for this long are auto-closed (app crash/kill, app closed
+// without graceful quit). Electron sends heartbeats every 60 s — 10 min ≈ 10 missed beats.
+// Do NOT set too low: brief network/API outages must not end active work sessions.
+const HEARTBEAT_STALE_MINUTES = 10;
 
 // Single S3 client shared across the purge run — avoid per-file client construction.
 let _s3Client = null;
@@ -88,30 +97,47 @@ async function runScreenshotPurge() {
   }
 }
 
-// Close any work sessions that have been open for longer than STALE_SESSION_HOURS.
-// These are sessions whose process was killed (Task Manager, OS shutdown, app crash)
-// before the graceful-quit clock-out could fire.
+// Safety net for crashed clients — same 24 h cap enforced in work-sessions.service.
 async function runStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
-  const cutoff = new Date(Date.now() - STALE_SESSION_HOURS * 60 * 60 * 1000);
-  const result = await workSessionsTable.updateMany(
-    { isActive: true, startedAt: { $lt: cutoff } },
-    { $set: { isActive: false, endedAt: cutoff, stopReason: "session_expired" } }
-  );
-
-  if (result.modifiedCount > 0) {
+  const { closed } = await closeSessionsExceedingMaxDuration();
+  if (closed > 0) {
     logger.info(
-      { count: result.modifiedCount, thresholdHours: STALE_SESSION_HOURS },
-      "Stale session cleanup: closed abandoned sessions"
+      { count: closed, thresholdHours: STALE_SESSION_HOURS },
+      "Stale session cleanup: closed sessions exceeding max duration",
+    );
+  }
+}
+
+async function runWorkDaySessionCleanup() {
+  if (!isDatabaseConnected()) return;
+
+  const { closed, todayKey } = await closeSessionsPastWorkDay();
+  if (closed > 0) {
+    logger.info({ count: closed, workDay: todayKey }, "Work-day session cleanup: closed prior-day sessions");
+  }
+}
+
+async function runHeartbeatStaleSessionCleanup() {
+  if (!isDatabaseConnected()) return;
+
+  const cutoff = new Date(Date.now() - HEARTBEAT_STALE_MINUTES * 60 * 1000);
+  const { closed } = await closeStaleHeartbeatSessions(cutoff);
+
+  if (closed > 0) {
+    logger.info(
+      { count: closed, thresholdMinutes: HEARTBEAT_STALE_MINUTES },
+      "Heartbeat stale session cleanup: closed disconnected sessions",
     );
   }
 }
 
 function startScreenshotPurgeJob() {
-  const intervalMs = 24 * 60 * 60 * 1e3;
+  const dailyIntervalMs = 24 * 60 * 60 * 1e3;
+  const heartbeatIntervalMs = 2 * 60 * 1e3;
 
-  const tick = () => {
+  const dailyTick = () => {
     runScreenshotPurge().catch((err) =>
       logger.error({ err }, "Screenshot purge job failed")
     );
@@ -120,9 +146,22 @@ function startScreenshotPurgeJob() {
     );
   };
 
-  setInterval(tick, intervalMs);
-  // Return tick so the caller (index.js) can run it immediately after DB is ready.
-  return tick;
+  const heartbeatTick = () => {
+    runWorkDaySessionCleanup().catch((err) =>
+      logger.error({ err }, "Work-day session cleanup job failed")
+    );
+    runStaleSessionCleanup().catch((err) =>
+      logger.error({ err }, "Max-duration session cleanup job failed")
+    );
+    runHeartbeatStaleSessionCleanup().catch((err) =>
+      logger.error({ err }, "Heartbeat stale session cleanup job failed")
+    );
+  };
+
+  setInterval(dailyTick, dailyIntervalMs);
+  setInterval(heartbeatTick, heartbeatIntervalMs);
+  // Return daily tick so the caller (index.js) can run it immediately after DB is ready.
+  return { dailyTick, heartbeatTick };
 }
 
 export { startScreenshotPurgeJob };

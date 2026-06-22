@@ -1,3 +1,4 @@
+import { isDeveloperRole } from "../constants/user-roles.js";
 import {
   resourceRequestsTable,
   usersTable,
@@ -19,7 +20,7 @@ async function getRequests(req, res) {
   const { status, projectId } = req.query;
   const pagination = parsePagination(req.query);
   const query = {};
-  if (req.user.role === "developer" || req.user.role === "client") {
+  if (isDeveloperRole(req.user.role) || req.user.role === "client") {
     query.developerId = req.user.id;
   }
   if (status) query.status = status;

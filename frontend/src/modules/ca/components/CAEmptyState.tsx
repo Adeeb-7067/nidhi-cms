@@ -1,0 +1,29 @@
+import type { LucideIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export function CAEmptyState({
+  icon: Icon,
+  title,
+  description,
+  className,
+}: {
+  icon: LucideIcon;
+  title: string;
+  description?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 py-16 px-6 text-center",
+        className,
+      )}
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
+        <Icon className="h-6 w-6 text-muted-foreground" />
+      </div>
+      <p className="text-sm font-medium">{title}</p>
+      {description && <p className="text-xs text-muted-foreground mt-1 max-w-sm">{description}</p>}
+    </div>
+  );
+}

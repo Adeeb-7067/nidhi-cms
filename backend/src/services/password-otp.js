@@ -3,6 +3,7 @@ import { passwordResetTokensTable, getNextSequence } from "../models/schema/inde
 import { Counter } from "../models/schema/counter.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
 import { sendPasswordOtpEmail, isEmailConfigured } from "../lib/email.js";
+import { isUserAccountActive } from "./user-access.js";
 import { badRequest } from "../utils/route-errors.js";
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -74,6 +75,10 @@ export async function invalidateActiveOtps(userId, purpose) {
  * @returns {{ expiresInSeconds: number, devOtp?: string }}
  */
 export async function issuePasswordOtp({ user, purpose, log }) {
+  if (!isUserAccountActive(user)) {
+    return { expiresInSeconds: Math.floor(OTP_TTL_MS / 1000) };
+  }
+
   const otp = generateOtpCode();
   const otpHash = await hashPassword(otp);
   const email = user.email?.toLowerCase?.() ?? user.email;

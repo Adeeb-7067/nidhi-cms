@@ -3,16 +3,20 @@ import { AppLayout } from "./AppLayout";
 import { PageOutlet } from "./PageOutlet";
 import { ConsentDialog } from "@/components/monitoring/ConsentDialog";
 import { WorkSessionProvider } from "@/contexts/WorkSessionContext";
+import { ClientTeamProvider } from "@/contexts/ClientTeamContext";
+import { ALL_AUTHENTICATED_ROLES } from "@/lib/user-roles";
 
 /** Single persistent shell — sidebar/navbar stay mounted while pages change. */
 export function AuthenticatedShell() {
   return (
-    <ProtectedRoute allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
+    <ProtectedRoute allowedRoles={ALL_AUTHENTICATED_ROLES}>
       <WorkSessionProvider>
-        <AppLayout>
-          <PageOutlet />
-        </AppLayout>
-        <ConsentDialog />
+        <ClientTeamProvider>
+          <AppLayout>
+            <PageOutlet />
+          </AppLayout>
+          <ConsentDialog />
+        </ClientTeamProvider>
       </WorkSessionProvider>
     </ProtectedRoute>
   );

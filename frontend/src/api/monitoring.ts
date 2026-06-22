@@ -71,24 +71,64 @@ export function useRecordConsent() {
   });
 }
 
-export function useListScreenshots(
-  params: { userId?: number; projectId?: number; startDate?: string; endDate?: string; page?: number; limit?: number },
-  enabled = true,
-) {
+export type ScreenshotListParams = {
+  userId?: number;
+  projectId?: number;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+};
+
+const SCREENSHOT_PAGE_SIZE = 500;
+
+function buildScreenshotSearchParams(params: ScreenshotListParams, page: number) {
   const sp = new URLSearchParams();
   if (params.userId) sp.set("userId", String(params.userId));
   if (params.projectId) sp.set("projectId", String(params.projectId));
   if (params.startDate) sp.set("startDate", params.startDate);
   if (params.endDate) sp.set("endDate", params.endDate);
-  if (params.page) sp.set("page", String(params.page));
-  if (params.limit) sp.set("limit", String(params.limit));
-  const qs = sp.toString();
+  sp.set("page", String(page));
+  sp.set("limit", String(params.limit ?? SCREENSHOT_PAGE_SIZE));
+  return sp;
+}
+
+async function fetchScreenshotListPage(params: ScreenshotListParams, page: number) {
+  const qs = buildScreenshotSearchParams(params, page).toString();
+  return customFetch<ScreenshotListResponse>(apiUrl(`/api/screenshots?${qs}`));
+}
+
+async function fetchAllScreenshotPages(params: ScreenshotListParams) {
+  const pageSize = params.limit ?? SCREENSHOT_PAGE_SIZE;
+  let page = 1;
+  const data: ScreenshotItem[] = [];
+  let total = 0;
+
+  while (true) {
+    const res = await fetchScreenshotListPage(params, page);
+    total = res.total;
+    data.push(...res.data);
+    if (data.length >= total || res.data.length === 0) break;
+    page += 1;
+  }
+
+  return { data, total, page: 1, limit: pageSize };
+}
+
+export function useListScreenshots(
+  params: ScreenshotListParams,
+  enabled = true,
+  refetchIntervalMs?: number,
+  fetchAllPages = false,
+) {
+  const queryParams = fetchAllPages ? { ...params, fetchAllPages: true as const } : params;
 
   return useQuery({
-    queryKey: screenshotsQueryKey(params),
+    queryKey: screenshotsQueryKey(queryParams),
     queryFn: () =>
-      customFetch<ScreenshotListResponse>(apiUrl(`/api/screenshots${qs ? `?${qs}` : ""}`)),
+      fetchAllPages ? fetchAllScreenshotPages(params) : fetchScreenshotListPage(params, params.page ?? 1),
     enabled,
+    refetchInterval: refetchIntervalMs,
   });
 }
 

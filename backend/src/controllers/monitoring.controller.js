@@ -1,5 +1,6 @@
 import * as monitoringService from "../services/monitoring.service.js";
-import { forbidden, parseIdParam } from "../utils/route-errors.js";
+import { getMonitoringAnalytics as buildMonitoringAnalytics } from "../services/monitoring-analytics.service.js";
+import { forbidden, parseIdParam, badRequest } from "../utils/route-errors.js";
 
 export async function getConsentStatus(req, res) {
   const isAdmin = req.user.role === "super_admin";
@@ -44,4 +45,13 @@ export async function listConsents(req, res) {
     page: result.page,
     limit: result.limit,
   });
+}
+
+export async function getMonitoringAnalytics(req, res) {
+  const now = new Date();
+  const month = Number.parseInt(req.query.month ?? String(now.getMonth() + 1), 10);
+  const year = Number.parseInt(req.query.year ?? String(now.getFullYear()), 10);
+  if (!month || month < 1 || month > 12) badRequest("Invalid month.");
+  if (!year || year < 2000) badRequest("Invalid year.");
+  res.json(await buildMonitoringAnalytics({ month, year }));
 }

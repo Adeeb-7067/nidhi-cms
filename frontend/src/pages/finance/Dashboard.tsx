@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
 import {
-  Table,
+  Table,  
   TableBody,
   TableCell,
   TableHead,
@@ -68,7 +68,7 @@ export default function FinanceDashboard() {
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="Finance dashboard"
+        title="Finance Dashboard"
         description="Company-wide financial overview — income, expenses, budgets, and cash flow"
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Dashboard" }]}
         actions={

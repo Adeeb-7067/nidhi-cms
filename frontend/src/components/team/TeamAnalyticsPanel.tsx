@@ -112,7 +112,7 @@ function DeveloperLeaderboardRow({ dev, rank }: { dev: DeveloperStats; rank: num
   );
 }
 
-export function TeamAnalyticsPanel() {
+export function TeamAnalyticsPanel({ variant = "team" }: { variant?: "team" | "monitoring" }) {
   const now = new Date();
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [year, setYear] = useState(now.getFullYear());
@@ -173,6 +173,23 @@ export function TeamAnalyticsPanel() {
     return [y - 1, y, y + 1];
   }, [now]);
 
+  const copy =
+    variant === "monitoring"
+      ? {
+          sectionTitle: "Work performance",
+          sectionHint: "Daily logs, utilisation, and throughput for monitored staff",
+          leaderboardTitle: "Employee leaderboard",
+          leaderboardHint: "Sorted by hours logged — compare workload across the team",
+          activeStaffHint: "Staff with log activity this period",
+        }
+      : {
+          sectionTitle: "Team performance",
+          sectionHint: "Utilisation, daily logs, and bug throughput",
+          leaderboardTitle: "Team leaderboard",
+          leaderboardHint: "Sorted by hours logged — click row metrics to compare workload",
+          activeStaffHint: "Developers, QA & testers with accounts",
+        };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -191,9 +208,9 @@ export function TeamAnalyticsPanel() {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-sm font-semibold">Team performance</h2>
+          <h2 className="text-sm font-semibold">{copy.sectionTitle}</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Utilisation, daily logs, and bug throughput for {formatMonthLabel(month, year)}.
+            {copy.sectionHint} for {formatMonthLabel(month, year)}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -289,7 +306,7 @@ export function TeamAnalyticsPanel() {
           <CardContent className="px-4 pb-3">
             <p className="text-lg font-bold">{summary.activeStaff}</p>
             <p className="text-[10px] text-muted-foreground mt-0.5">
-              Developers, QA & testers with accounts
+              {copy.activeStaffHint}
             </p>
           </CardContent>
         </Card>
@@ -434,10 +451,8 @@ export function TeamAnalyticsPanel() {
 
       <PortalContentCard>
         <div className="p-4 border-b border-border">
-          <h3 className="text-sm font-semibold">Team leaderboard</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Sorted by hours logged — click row metrics to compare workload
-          </p>
+          <h3 className="text-sm font-semibold">{copy.leaderboardTitle}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{copy.leaderboardHint}</p>
         </div>
         <div className="overflow-x-auto">
           <Table>

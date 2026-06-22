@@ -44,4 +44,10 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('cms:pre-quit', handler);
     return () => ipcRenderer.removeListener('cms:pre-quit', handler);
   },
+
+  onSessionEnded: (cb) => {
+    const handler = (_, payload) => cb(payload);
+    ipcRenderer.on('cms:session-ended', handler);
+    return () => ipcRenderer.removeListener('cms:session-ended', handler);
+  },
 });

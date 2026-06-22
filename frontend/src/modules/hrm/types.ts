@@ -1,0 +1,550 @@
+import type { HrmAction, HrmModule, HrmPermission } from "./constants";
+
+export type HrmDepartment = {
+  id: number;
+  name: string;
+  code?: string | null;
+  headUserId?: number | null;
+  status: string;
+  headcount?: number;
+};
+
+export type HrmRoleTemplate = {
+  id: number;
+  name: string;
+  code: string;
+  isSystem: boolean;
+  permissions: Array<{ id: number; module: HrmModule; action: HrmAction }>;
+};
+
+export type HrmLeaveType = {
+  id: number;
+  code: string;
+  name: string;
+  isPaid: boolean;
+  maxDaysPerYear?: number;
+  /** @deprecated use maxDaysPerYear */
+  maxPerYear?: number | null;
+  fifoPriority?: number;
+  carryForwardAllowed?: boolean;
+  requiresApproval?: boolean;
+  status?: string;
+};
+
+export type HrmLeaveBalance = {
+  id: number;
+  userId: number;
+  leaveTypeId: number;
+  year: number;
+  allocated: number;
+  used: number;
+  pending: number;
+  carriedForward: number;
+  /** @deprecated use carriedForward — kept for older UI code */
+  carryForward?: number;
+  available?: number;
+  leaveType?: HrmLeaveType;
+};
+
+export type HrmLeaveRequest = {
+  id: number;
+  userId: number;
+  leaveTypeId: number;
+  startDate: string;
+  endDate: string;
+  dayPart: string;
+  days?: number;
+  lopDays?: number;
+  reason?: string | null;
+  status: string;
+  reviewNote?: string | null;
+  reviewedBy?: number | null;
+  reviewedAt?: string | null;
+  userName?: string;
+  employeeId?: string | null;
+  leaveType?: HrmLeaveType | null;
+  leaveTypeName?: string | null;
+  balanceAllocations?: Array<{ leaveTypeId: number; days: number }>;
+  createdAt?: string;
+};
+
+export type HrmWfhRequest = {
+  id: number;
+  userId: number;
+  startDate: string;
+  endDate: string;
+  days?: number;
+  reason?: string | null;
+  status: string;
+  reviewNote?: string | null;
+  reviewedBy?: number | null;
+  reviewedAt?: string | null;
+  userName?: string;
+  employeeId?: string | null;
+  phoneNumber?: string | null;
+  /** @deprecated use startDate */
+  date?: string;
+  createdAt?: string;
+};
+
+export type HrmHoliday = {
+  id: number;
+  name: string;
+  date: string;
+  type: string;
+  scope: string;
+  departmentIds?: number[];
+};
+
+export type HrmCalendarEvent = {
+  kind: "holiday" | "birthday" | "company_event";
+  id?: number;
+  label: string;
+  type?: string;
+  scope?: string;
+  userId?: number;
+  employeeId?: string | null;
+};
+
+export type HrmCalendarMonth = {
+  year: number;
+  month: number;
+  startDate: string;
+  endDate: string;
+  stats: {
+    eventsThisMonth: number;
+    holidays: number;
+    birthdays: number;
+    companyEvents: number;
+  };
+  holidays: HrmHoliday[];
+  birthdays: Array<{ userId: number; name: string; employeeId: string | null; date: string }>;
+  days: Record<string, HrmCalendarEvent[]>;
+};
+
+export type HrmShiftTemplate = {
+  id: number;
+  name: string;
+  startTime: string;
+  endTime: string;
+  graceMinutesIn: number;
+  graceMinutesOut?: number;
+  breakMinutes?: number;
+  workingDays?: number[];
+  isDefault?: boolean;
+};
+
+export type HrmAttendanceSummary = {
+  userId: number;
+  employeeId?: string | null;
+  userName: string;
+  departmentId?: number | null;
+  departmentName?: string | null;
+  date: string;
+  status: string;
+  compliance?: string;
+  expectedMinutes: number;
+  activeMinutes: number;
+  varianceMinutes: number;
+  sessionCount: number;
+  corrected?: boolean;
+  forgivenLate?: boolean;
+  globalWfh?: boolean;
+  missingClockOut?: boolean;
+  source?: string;
+  persisted?: boolean;
+};
+
+export type HrmAttendanceVarianceRow = HrmAttendanceSummary & {
+  loggedHours: number;
+  clockHours: number;
+  varianceHours: number;
+  variancePct: number;
+  flagged: boolean;
+};
+
+export type HrmAttendanceCorrection = {
+  id: number;
+  userId: number;
+  date: string;
+  reason: string;
+  requestedStatus?: string | null;
+  requestedActiveMinutes?: number | null;
+  status: string;
+  reviewedBy?: number | null;
+  reviewedAt?: string | null;
+  reviewNote?: string | null;
+  createdAt?: string;
+};
+
+export type HrmSettings = {
+  hrmLeaveYearStartMonth: number;
+  hrmDefaultShiftTemplateId: number | null;
+  hrmAttendanceShortfallThresholdMinutes: number;
+  hrmWeekendDays: number[];
+  hrmGlobalWfhMode: boolean;
+  hrmPaidLeavesPerMonth: number;
+  hrmMaxFreeLates: number;
+  hrmElectronOnlyClock: boolean;
+  hrmLeaveCarryForwardStartYear: number;
+};
+
+export type HrmAuditLog = {
+  id: number;
+  actorId: number;
+  actorName?: string | null;
+  actorEmail?: string | null;
+  action: string;
+  entityType: string;
+  entityId?: number | null;
+  severity: string;
+  metadata?: Record<string, unknown> | null;
+  createdAt: string;
+};
+
+export type HrmDashboardStats = {
+  presentToday: number;
+  absentToday: number;
+  onLeaveToday: number;
+  pendingLeave: number;
+  pendingWfh: number;
+  pendingCorrections?: number;
+  headcount?: number;
+};
+
+export type HrmDashboardOnLeavePerson = {
+  userId: number;
+  userName: string;
+  employeeId?: string | null;
+  avatarUrl?: string | null;
+};
+
+export type HrmDashboardPendingLeave = {
+  id: number;
+  userId: number;
+  userName?: string;
+  startDate: string;
+  endDate: string;
+  days?: number;
+  status: string;
+  leaveTypeName?: string | null;
+};
+
+export type HrmDashboardPendingWfh = {
+  id: number;
+  userId: number;
+  userName?: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
+
+export type HrmDashboardSelfSummary = {
+  attendanceMonthPct: number;
+  activeMinutesToday: number;
+  leaveAvailableTotal: number;
+  latestNetPay: number | null;
+};
+
+export type HrmDashboardDepartmentRow = {
+  departmentId: number | null;
+  name: string;
+  count: number;
+};
+
+export type HrmDashboardPayrollBanner = {
+  year: number;
+  month: number;
+  status: string;
+  totalGross: number;
+  totalNet: number;
+  totalDeductions: number;
+  paidOut: number;
+  yetToPay: number;
+  payrollProgressPct: number;
+  employeeCount: number;
+};
+
+export type HrmDashboardTodayAttendanceRow = {
+  userId: number;
+  userName: string;
+  employeeId?: string | null;
+  avatarUrl?: string | null;
+  status: string;
+  activeMinutes: number;
+  clockIn?: string | null;
+};
+
+export type HrmDashboardLeaveByType = { name: string; value: number };
+
+export type HrmDashboardTopEarner = {
+  rank: number;
+  userId: number;
+  userName: string;
+  employeeId?: string | null;
+  avatarUrl?: string | null;
+  designation?: string | null;
+  gross: number;
+  net: number;
+};
+
+export type HrmDashboardActivityItem = {
+  id: number;
+  action: string;
+  entityType: string;
+  entityId?: number | null;
+  severity: string;
+  actorName?: string | null;
+  createdAt?: string | null;
+};
+
+export type HrmDashboardNeedsAttention = {
+  label: string;
+  href: string;
+  tone: "info" | "warning" | "critical";
+};
+
+export type HrmDashboardRequestStats = {
+  pending: number;
+  approved: number;
+  rejected?: number;
+};
+
+export type HrmDashboardAnalytics = {
+  attendanceTrend: Array<{
+    date: string;
+    label: string;
+    present: number;
+    absent: number;
+    count: number;
+  }>;
+  todayBreakdown: Array<{ name: string; value: number }>;
+  approvalPipeline: Array<{ name: string; value: number }>;
+};
+
+export type HrmDashboardResponse = {
+  view: "admin" | "manager" | "employee";
+  stats: HrmDashboardStats;
+  onLeaveToday: HrmDashboardOnLeavePerson[];
+  analytics?: HrmDashboardAnalytics;
+  self?: HrmDashboardSelfSummary;
+  pendingApprovals?: {
+    leave: HrmDashboardPendingLeave[];
+    wfh: HrmDashboardPendingWfh[];
+  };
+  departmentStrength?: HrmDashboardDepartmentRow[];
+  payrollBanner?: HrmDashboardPayrollBanner | null;
+  onWfhToday?: HrmDashboardOnLeavePerson[];
+  employeeStatus?: Array<{ name: string; value: number }>;
+  todayAttendance?: HrmDashboardTodayAttendanceRow[];
+  leaveByType?: HrmDashboardLeaveByType[];
+  leaveRequestStats?: HrmDashboardRequestStats;
+  wfhRequestStats?: HrmDashboardRequestStats;
+  topEarners?: HrmDashboardTopEarner[];
+  recentActivity?: HrmDashboardActivityItem[];
+  needsAttention?: HrmDashboardNeedsAttention[];
+};
+
+import type { EmployeeProfileExtension } from "./employee-profile-types";
+
+export type HrmEmployee = EmployeeProfileExtension & {
+  id: number;
+  employeeId: string | null;
+  name: string;
+  email: string;
+  role: string;
+  designation?: string | null;
+  avatarUrl?: string | null;
+  departmentId?: number | null;
+  department?: string | null;
+  departmentName?: string | null;
+  departmentCode?: string | null;
+  reportingManagerId?: number | null;
+  reportingManagerName?: string | null;
+  reportingManagerEmployeeId?: string | null;
+  teamleaderId?: number | null;
+  phoneNumber?: string | null;
+  joiningDate?: string | null;
+  linkedinUrl?: string | null;
+  status: string;
+  wfhMonthlyLimit?: number | null;
+  leaveAccrualDaysPerMonth?: number | null;
+  lastLoginAt?: string | null;
+  salary?: EmployeeProfileExtension["salary"];
+  socialProfiles?: EmployeeProfileExtension["socialProfiles"];
+};
+
+export type HrmEmployeeOverview = {
+  month: { year: number; month: number; startDate: string; endDate: string };
+  attendance: { present: number; absent: number; onLeave: number; late: number; wfh: number };
+  pendingLeave: number;
+  leaveBalances: Array<{ code: string; name: string; available: number }>;
+  salaryGross?: number | null;
+  salaryNet?: number | null;
+  latestPayrollNet?: number | null;
+  documentCount: number;
+};
+
+export type HrmPayrollRun = {
+  id: number;
+  year: number;
+  month: number;
+  status: string;
+  reviewedAt?: string | null;
+  reviewedBy?: number | null;
+  finalizedAt?: string | null;
+  finalizedBy?: number | null;
+  createdAt?: string;
+};
+
+export type HrmPayrollLine = {
+  id: number;
+  payrollRunId: number;
+  userId: number;
+  employeeName?: string;
+  employeeId?: string | null;
+  paidDays: number;
+  lopDays: number;
+  lateCount: number;
+  gross: number;
+  deductions: number;
+  lopDeduction?: number;
+  pfEmployee?: number;
+  pfEmployer?: number;
+  tds?: number;
+  net: number;
+  notes?: string | null;
+};
+
+export type HrmSalaryStructure = {
+  id: number;
+  userId: number;
+  employeeName?: string;
+  employeeId?: string | null;
+  basic: number;
+  hra: number;
+  allowances: number;
+  pfEmployee: number;
+  pfEmployer: number;
+  esiEmployee?: number;
+  esiEmployer?: number;
+  tds: number;
+  gross: number;
+  net: number;
+  bankAccountMasked?: string | null;
+  ifscMasked?: string | null;
+  panMasked?: string | null;
+  bankNameMasked?: string | null;
+};
+
+export type HrmPayslip = {
+  id: number;
+  payrollLineId?: number;
+  userId?: number;
+  year: number;
+  month: number;
+  gross?: number | null;
+  net?: number | null;
+  htmlContent?: string | null;
+};
+
+export type HrmPayslipDetail = {
+  id: number;
+  month: number;
+  year: number;
+  companyName: string;
+  employeeName: string;
+  employeeId: string | null;
+  department: string | null;
+  basic: number;
+  hra: number;
+  allowances: number;
+  paidDays: number;
+  lopDays: number;
+  lateCount: number;
+  gross: number;
+  deductions: number;
+  lopDeduction: number;
+  pfEmployee: number;
+  tds: number;
+  net: number;
+  htmlContent?: string | null;
+};
+
+export type HrmPayrollChecklistBlocker = {
+  code: string;
+  message: string;
+  count: number;
+  items?: Array<Record<string, unknown>>;
+};
+
+export type HrmPayrollChecklist = {
+  year: number;
+  month: number;
+  startDate: string;
+  endDate: string;
+  blockers: HrmPayrollChecklistBlocker[];
+  warnings: HrmPayrollChecklistBlocker[];
+  ready: boolean;
+};
+
+export type HrmCandidate = {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string | null;
+  position: string;
+  departmentId?: number | null;
+  stage: string;
+  notes?: string | null;
+  resumeUrl?: string | null;
+  createdAt?: string;
+};
+
+export type HrmOnboardingTask = {
+  id: number;
+  candidateId: number;
+  title: string;
+  completed: boolean;
+  completedAt?: string | null;
+};
+
+export type HrmEmployeeDocument = {
+  id: number;
+  userId: number;
+  userName?: string;
+  employeeId?: string | null;
+  name: string;
+  category: string;
+  fileUrl: string;
+  status: string;
+  reviewNote?: string | null;
+  reviewedBy?: number | null;
+  createdAt?: string;
+};
+
+export type HrmPolicy = {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  fileUrl?: string | null;
+  version: string;
+  isActive: boolean;
+  createdAt?: string;
+};
+
+export type HrmPolicyAcknowledgement = {
+  id: number;
+  policyId: number;
+  userId: number;
+  acknowledgedAt?: string;
+};
+
+export type HrmPermissionsResponse = {
+  permissions: HrmPermission[];
+  templateId: number | null;
+  role?: string;
+};
+
+export type { HrmPermission };

@@ -16,6 +16,7 @@ import { Loader2, Send } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
+import { developerLikeRoleBadgeClass } from "@/lib/user-roles";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { appendCommentToListCache } from "@/lib/comment-thread-query";
 import { formatUserRole } from "@/lib/bug-workflow";
@@ -26,7 +27,8 @@ function roleLabel(role: string) {
 
 function roleBadgeClass(role: string) {
   if (role === "qa" || role === "tester") return "bg-purple-500/15 text-purple-700 border-purple-500/30";
-  if (role === "developer") return "bg-blue-500/15 text-blue-700 border-blue-500/30";
+  const devLike = developerLikeRoleBadgeClass(role);
+  if (devLike) return devLike;
   if (role === "super_admin") return "bg-amber-500/15 text-amber-800 border-amber-500/30";
   return "bg-muted text-muted-foreground";
 }

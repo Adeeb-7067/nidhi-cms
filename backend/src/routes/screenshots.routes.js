@@ -4,6 +4,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
 import { UPLOAD_MAX_BYTES_DEFAULT } from "../config/upload-limits.js";
+import { monitorableStaffRoles } from "../constants/user-roles.js";
 import * as screenshotsController from "../controllers/screenshots.controller.js";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: UPLOAD_MAX_BYTES_DEFAULT } });
@@ -24,7 +25,7 @@ const router = Router();
 router.post(
   "/screenshots",
   requireAuth,
-  requireRole("developer", "tester", "qa"),
+  requireRole(...monitorableStaffRoles),
   uploadLimiter,
   upload.single("file"),
   asyncHandler(screenshotsController.create)

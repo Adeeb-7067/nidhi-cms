@@ -16,6 +16,7 @@ router.get("/projects/:id/apk-schedules", requireAuth, asyncHandler(projectsCont
 router.post("/projects/:id/apk-schedules", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjectsByIdApkSchedules));
 router.get("/projects/:id/milestones", requireAuth, asyncHandler(projectsController.getProjectsByIdMilestones));
 router.post("/projects/:id/milestones", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjectsByIdMilestones));
+router.patch("/projects/:id/milestones/:milestoneId", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.patchProjectsByIdMilestonesByMilestoneId));
 router.get("/projects/:id/logs", requireAuth, asyncHandler(projectsController.getProjectsByIdLogs));
 router.get("/projects/:id/bugs", requireAuth, asyncHandler(projectsController.getProjectsByIdBugs));
 router.get("/projects/:id/apk-releases", requireAuth, asyncHandler(projectsController.getProjectsByIdApkReleases));

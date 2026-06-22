@@ -9,8 +9,31 @@ const workSessionSchema = new Schema({
   deviceInfo: { type: String, default: null },
   stopReason: {
     type: String,
-    enum: ["clock_out", "app_quit", "logout", "session_expired", "admin_terminated"],
+    enum: [
+      "clock_out",
+      "app_quit",
+      "logout",
+      "session_expired",
+      "day_ended",
+      "admin_terminated",
+      "system_sleep",
+      "system_shutdown",
+      "network_lost",
+      "client_disconnected",
+    ],
     default: null,
+  },
+  lastHeartbeatAt: { type: Date, default: null },
+  /** Audit trail of pause/resume cycles within a single shift (same session id). */
+  pausePeriods: {
+    type: [
+      {
+        pausedAt: { type: Date, required: true },
+        resumedAt: { type: Date, default: null },
+        stopReason: { type: String, default: null },
+      },
+    ],
+    default: [],
   },
 }, { timestamps: true });
 

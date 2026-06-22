@@ -1,3 +1,4 @@
+import { bugAssigneeRoles, devPortalStaffRoles } from "../constants/user-roles.js";
 import {
   tasksTable,
   usersTable,
@@ -77,7 +78,7 @@ async function buildTaskListQuery(userId, role, params) {
     if (scope === "mine") query.assigneeId = userId;
     return query;
   }
-  if (role === "developer" || role === "tester" || role === "qa") {
+  if (devPortalStaffRoles.includes(role)) {
     const projectIdNum = projectId ? Number.parseInt(projectId, 10) : NaN;
     const assigneeIdNum = assigneeId ? Number.parseInt(assigneeId, 10) : NaN;
     if (Number.isFinite(projectIdNum) && Number.isFinite(assigneeIdNum) && assigneeIdNum !== userId) {
@@ -228,10 +229,8 @@ async function getProjectsByIdAssignableMembers(req, res) {
   );
   const roleFilter =
     assignFor === "bug"
-      ? ["developer"]
-      : assignFor === "task"
-        ? ["developer", "tester", "qa"]
-        : ["developer", "tester", "qa"];
+      ? bugAssigneeRoles
+      : devPortalStaffRoles;
   const users = await usersTable.find({
     id: { $in: memberIds },
     role: { $in: roleFilter },

@@ -1,0 +1,55 @@
+import type { ClientMatter } from "../types";
+import { counsel } from "./counsel";
+
+export const mockClientMatters: ClientMatter[] = [
+  {
+    id: 301,
+    clientName: "Paytm Payments Bank",
+    matterTitle: "IP ownership — dashboard module",
+    status: "active",
+    risk: "medium",
+    assignedTo: counsel(1),
+    openedAt: "2026-02-10T09:00:00Z",
+    contractValue: 4500000,
+  },
+  {
+    id: 302,
+    clientName: "Bright Solutions",
+    matterTitle: "Contract amendment — scope creep",
+    status: "pending",
+    risk: "low",
+    assignedTo: counsel(2),
+    openedAt: "2026-05-01T09:00:00Z",
+    contractValue: 850000,
+  },
+  {
+    id: 303,
+    clientName: "Agrolink Manufacturing",
+    matterTitle: "Payment default — legal notice",
+    status: "active",
+    risk: "high",
+    assignedTo: counsel(1),
+    openedAt: "2026-04-18T09:00:00Z",
+    contractValue: 1200000,
+  },
+  {
+    id: 304,
+    clientName: "Home7emirates LLC",
+    matterTitle: "Cross-border data transfer compliance",
+    status: "on_hold",
+    risk: "medium",
+    assignedTo: counsel(2),
+    openedAt: "2026-01-22T09:00:00Z",
+    contractValue: 2100000,
+  },
+  {
+    id: 305,
+    clientName: "TechNova Retail",
+    matterTitle: "Warranty claim — software defect",
+    status: "closed",
+    risk: "low",
+    assignedTo: counsel(2),
+    openedAt: "2025-08-05T09:00:00Z",
+    contractValue: 320000,
+  },
+];

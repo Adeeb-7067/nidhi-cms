@@ -1,0 +1,193 @@
+/** CMS-wide permission modules — keep in sync with backend constants/permissions.js */
+export const CMS_MODULE_GROUPS = [
+  {
+    label: "Platform",
+    modules: ["roles_permissions", "platform_settings", "platform_audit"],
+  },
+  {
+    label: "Manage",
+    modules: [
+      "admin_dashboard",
+      "admin_analytics",
+      "admin_companies",
+      "admin_projects",
+      "admin_team",
+      "admin_requests",
+      "admin_tickets",
+      "admin_discussions",
+    ],
+  },
+  {
+    label: "Monitoring",
+    modules: ["monitor_screenshots", "monitor_attendance", "monitor_policy"],
+  },
+  { label: "Sales", modules: ["sales"] },
+  { label: "Legal", modules: ["legal"] },
+  { label: "Finance", modules: ["finance"] },
+  { label: "CA", modules: ["ca"] },
+  {
+    label: "Delivery",
+    modules: [
+      "dev_workspace",
+      "dev_projects",
+      "dev_logs",
+      "dev_tasks",
+      "dev_bugs",
+      "dev_apk",
+      "dev_reports",
+      "dev_requests",
+      "dev_screenshots",
+    ],
+  },
+  { label: "Client portal", modules: ["client_portal"] },
+  {
+    label: "HRM",
+    modules: [
+      "hrm_dashboard",
+      "hrm_employees",
+      "hrm_departments",
+      "hrm_attendance",
+      "hrm_leave",
+      "hrm_wfh",
+      "hrm_shifts",
+      "hrm_holidays",
+      "hrm_payroll",
+      "hrm_settings",
+      "hrm_audit",
+      "hrm_recruitment",
+      "hrm_documents",
+      "hrm_policies",
+      "hrm_id_cards",
+    ],
+  },
+  {
+    label: "HRM self-service",
+    modules: [
+      "hrm_my_attendance",
+      "hrm_my_leave",
+      "hrm_my_wfh",
+      "hrm_my_payslips",
+      "hrm_my_holidays",
+    ],
+  },
+] as const;
+
+export const CMS_MODULES = CMS_MODULE_GROUPS.flatMap((g) => g.modules);
+
+export type CmsModule = (typeof CMS_MODULES)[number];
+export type CmsAction = "view" | "create" | "edit" | "delete" | "approve" | "finalize" | "export";
+
+export type CmsPermission = { module: CmsModule | string; action: CmsAction };
+
+/** Legacy HRM-only module keys → CMS module keys */
+export const LEGACY_MODULE_MAP: Record<string, CmsModule> = {
+  dashboard: "hrm_dashboard",
+  employees: "hrm_employees",
+  departments: "hrm_departments",
+  attendance: "hrm_attendance",
+  leave: "hrm_leave",
+  wfh: "hrm_wfh",
+  shifts: "hrm_shifts",
+  holidays: "hrm_holidays",
+  payroll: "hrm_payroll",
+  roles: "roles_permissions",
+  settings: "hrm_settings",
+  audit: "hrm_audit",
+  recruitment: "hrm_recruitment",
+  documents: "hrm_documents",
+  policies: "hrm_policies",
+  id_cards: "hrm_id_cards",
+  my_attendance: "hrm_my_attendance",
+  my_leave: "hrm_my_leave",
+  my_wfh: "hrm_my_wfh",
+  my_payslips: "hrm_my_payslips",
+  my_holidays: "hrm_my_holidays",
+};
+
+export function normalizeModule(module: string): string {
+  return LEGACY_MODULE_MAP[module] ?? module;
+}
+
+export const CMS_MODULE_LABELS: Record<string, string> = {
+  roles_permissions: "Roles & permissions",
+  platform_settings: "Platform settings",
+  platform_audit: "Platform audit log",
+  admin_dashboard: "Admin dashboard",
+  admin_analytics: "Analytics",
+  admin_companies: "Companies / clients",
+  admin_projects: "Projects",
+  admin_team: "Team / employees",
+  admin_requests: "Requests",
+  admin_tickets: "Tickets",
+  admin_discussions: "Discussions",
+  monitor_screenshots: "Screenshots",
+  monitor_attendance: "Live attendance monitor",
+  monitor_policy: "Monitoring policy",
+  sales: "Sales & CRM",
+  legal: "Legal",
+  finance: "Finance",
+  ca: "CA Master",
+  dev_workspace: "Dev workspace",
+  dev_projects: "My projects",
+  dev_logs: "Daily logs",
+  dev_tasks: "Tasks",
+  dev_bugs: "Bugs",
+  dev_apk: "APK releases",
+  dev_reports: "Reports",
+  dev_requests: "My requests",
+  dev_screenshots: "My screenshots",
+  client_portal: "Client portal",
+  hrm_dashboard: "HRM dashboard",
+  hrm_employees: "HRM employees",
+  hrm_departments: "Departments",
+  hrm_attendance: "HRM attendance",
+  hrm_leave: "Leave",
+  hrm_wfh: "WFH",
+  hrm_shifts: "Shifts",
+  hrm_holidays: "Holidays",
+  hrm_payroll: "Payroll",
+  hrm_settings: "HRM settings",
+  hrm_audit: "HRM audit",
+  hrm_recruitment: "Recruitment",
+  hrm_documents: "Employee documents",
+  hrm_policies: "Policies",
+  hrm_id_cards: "ID cards",
+  hrm_my_attendance: "My attendance",
+  hrm_my_leave: "My leave",
+  hrm_my_wfh: "My WFH",
+  hrm_my_payslips: "My payslips",
+  hrm_my_holidays: "My holidays",
+};
+
+export const CMS_ACTION_LABELS: Record<CmsAction, string> = {
+  view: "View",
+  create: "Create",
+  edit: "Edit",
+  delete: "Delete",
+  approve: "Approve",
+  finalize: "Finalize",
+  export: "Export",
+};
+
+/** Nav href → required view permission (optional matrix-driven nav filtering) */
+export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
+  "/admin": "admin_dashboard",
+  "/admin/analytics": "admin_analytics",
+  "/admin/clients": "admin_companies",
+  "/admin/projects": "admin_projects",
+  "/admin/employees": "admin_team",
+  "/admin/requests": "admin_requests",
+  "/admin/tickets": "admin_tickets",
+  "/discussions": "admin_discussions",
+  "/admin/screenshots": "monitor_screenshots",
+  "/admin/monitoring/analytics": "monitor_attendance",
+  "/admin/attendance": "monitor_attendance",
+  "/settings/monitoring": "monitor_policy",
+  "/sales": "sales",
+  "/legal": "legal",
+  "/finance": "finance",
+  "/ca": "ca",
+  "/dev": "dev_workspace",
+  "/hrm": "hrm_dashboard",
+  "/admin/roles": "roles_permissions",
+};

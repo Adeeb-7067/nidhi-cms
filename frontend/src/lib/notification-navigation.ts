@@ -55,10 +55,22 @@ export function getNotificationTarget(
   }
 
   if (type === "comment" || type === "comment_mention") {
+    if (entityType === "company_team_unofficial") {
+      return {
+        href: getDiscussionsHref(null, { companyTeamUnofficial: true }),
+        label: "Open unofficial chat",
+      };
+    }
     if (entityType === "company_team") {
       return {
         href: getDiscussionsHref(null, { companyTeam: true }),
-        label: "Open team chat",
+        label: "Open official chat",
+      };
+    }
+    if (entityType === "direct" && entityId != null) {
+      return {
+        href: getDiscussionsHref(null, { directConversationId: entityId }),
+        label: "Open message",
       };
     }
     if ((entityType === "project" || entityType === "project_internal") && entityId != null) {
@@ -104,6 +116,10 @@ export function getNotificationTarget(
     if (projectId != null && role === "super_admin") {
       return { href: `/admin/projects/${projectId}`, label: "Project inventory" };
     }
+  }
+
+  if (entityType === "work_session" || type === "work_session") {
+    return { href: "/dev/my-screenshots", label: "Work session" };
   }
 
   return null;

@@ -1,15 +1,19 @@
 import React from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { RoleGate } from "./RoleGate";
+import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
+import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import NotFound from "@/pages/not-found";
 
 const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
 const AdminScreenshots = React.lazy(() => import("@/pages/admin/Screenshots"));
 const AdminAttendance = React.lazy(() => import("@/pages/admin/Attendance"));
+const WorkAnalytics = React.lazy(() => import("@/pages/admin/WorkAnalytics"));
 const SettingsPage = React.lazy(() => import("@/pages/settings/SettingsPage"));
 const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
 const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
 const AdminEmployees = React.lazy(() => import("@/pages/admin/Employees"));
+const AdminRolesPermissions = React.lazy(() => import("@/pages/admin/RolesPermissions"));
 const AdminClients = React.lazy(() => import("@/pages/admin/Clients"));
 const AdminTickets = React.lazy(() => import("@/pages/admin/Tickets"));
 const AdminAnalytics = React.lazy(() => import("@/pages/admin/Analytics"));
@@ -24,9 +28,12 @@ const TaskDetail = React.lazy(() => import("@/pages/dev/TaskDetail"));
 const DevApk = React.lazy(() => import("@/pages/dev/Apk"));
 const DevReports = React.lazy(() => import("@/pages/dev/Reports"));
 const DevRequests = React.lazy(() => import("@/pages/dev/Requests"));
+const DevMyScreenshots = React.lazy(() => import("@/pages/dev/MyScreenshots"));
 const ClientPortal = React.lazy(() => import("@/pages/client/Portal"));
 const ClientAnalytics = React.lazy(() => import("@/pages/client/Analytics"));
 const ClientApk = React.lazy(() => import("@/pages/client/Apk"));
+const ClientTeam = React.lazy(() => import("@/pages/client/Team"));
+const ClientTeamActivity = React.lazy(() => import("@/pages/client/TeamActivity"));
 const ProfilePage = React.lazy(() => import("@/pages/profile/ProfilePage"));
 const NotificationsPage = React.lazy(() => import("@/pages/Notifications"));
 
@@ -51,6 +58,37 @@ const SalesReceiptDetail = React.lazy(() => import("@/pages/sales/ReceiptDetail"
 const SalesSettings = React.lazy(() => import("@/pages/sales/Settings"));
 const SalesNotifications = React.lazy(() => import("@/pages/sales/SalesNotifications"));
 
+const LegalDashboard = React.lazy(() => import("@/pages/legal/Dashboard"));
+const LegalCases = React.lazy(() => import("@/pages/legal/Cases"));
+const LegalCaseDetail = React.lazy(() => import("@/pages/legal/CaseDetail"));
+const LegalVendorDisputes = React.lazy(() => import("@/pages/legal/VendorDisputes"));
+const LegalClientMatters = React.lazy(() => import("@/pages/legal/ClientMatters"));
+const LegalNda = React.lazy(() => import("@/pages/legal/Nda"));
+const LegalAgreements = React.lazy(() => import("@/pages/legal/Agreements"));
+const LegalNotices = React.lazy(() => import("@/pages/legal/Notices"));
+const LegalCourtCases = React.lazy(() => import("@/pages/legal/CourtCases"));
+const LegalCompliance = React.lazy(() => import("@/pages/legal/Compliance"));
+const LegalExpenses = React.lazy(() => import("@/pages/legal/Expenses"));
+
+const CaDashboard = React.lazy(() => import("@/pages/ca/Dashboard"));
+const CaClientPayments = React.lazy(() => import("@/pages/ca/ClientPayments"));
+const CaVendors = React.lazy(() => import("@/pages/ca/Vendors"));
+const CaExpenses = React.lazy(() => import("@/pages/ca/Expenses"));
+const CaBankReconciliation = React.lazy(() => import("@/pages/ca/BankReconciliation"));
+const CaSuspense = React.lazy(() => import("@/pages/ca/Suspense"));
+const CaGst = React.lazy(() => import("@/pages/ca/Gst"));
+const CaTds = React.lazy(() => import("@/pages/ca/Tds"));
+const CaCompanyItr = React.lazy(() => import("@/pages/ca/CompanyItr"));
+const CaDirectorItr = React.lazy(() => import("@/pages/ca/DirectorItr"));
+const CaRoc = React.lazy(() => import("@/pages/ca/Roc"));
+const CaDinDsc = React.lazy(() => import("@/pages/ca/DinDsc"));
+const CaDocuments = React.lazy(() => import("@/pages/ca/Documents"));
+const CaAudit = React.lazy(() => import("@/pages/ca/Audit"));
+const CaNotices = React.lazy(() => import("@/pages/ca/Notices"));
+const CaComplianceCalendar = React.lazy(() => import("@/pages/ca/ComplianceCalendar"));
+const CaTasks = React.lazy(() => import("@/pages/ca/Tasks"));
+const CaComplianceScore = React.lazy(() => import("@/pages/ca/ComplianceScore"));
+
 const FinanceDashboard = React.lazy(() => import("@/pages/finance/Dashboard"));
 const FinanceExpenses = React.lazy(() => import("@/pages/finance/Expenses"));
 const FinanceIncome = React.lazy(() => import("@/pages/finance/Income"));
@@ -62,6 +100,28 @@ const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
 const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
+
+const HrmDashboard = React.lazy(() => import("@/pages/hrm/Dashboard"));
+const HrmDepartments = React.lazy(() => import("@/pages/hrm/Departments"));
+const HrmEmployees = React.lazy(() => import("@/pages/hrm/Employees"));
+const HrmEmployeeDetail = React.lazy(() => import("@/pages/hrm/EmployeeDetail"));
+const HrmLeave = React.lazy(() => import("@/pages/hrm/Leave"));
+const HrmWfh = React.lazy(() => import("@/pages/hrm/Wfh"));
+const HrmShifts = React.lazy(() => import("@/pages/hrm/Shifts"));
+const HrmCalendar = React.lazy(() => import("@/pages/hrm/Calendar"));
+const HrmHolidays = React.lazy(() => import("@/pages/hrm/Holidays"));
+const HrmAttendance = React.lazy(() => import("@/pages/hrm/Attendance"));
+const HrmPayroll = React.lazy(() => import("@/pages/hrm/Payroll"));
+const HrmMyAttendance = React.lazy(() => import("@/pages/hrm/MyAttendance"));
+const HrmMyLeave = React.lazy(() => import("@/pages/hrm/MyLeave"));
+const HrmMyWfh = React.lazy(() => import("@/pages/hrm/MyWfh"));
+const HrmMyPayslips = React.lazy(() => import("@/pages/hrm/MyPayslips"));
+const HrmMyHolidays = React.lazy(() => import("@/pages/hrm/MyHolidays"));
+const HrmSettings = React.lazy(() => import("@/pages/hrm/Settings"));
+const HrmRecruitment = React.lazy(() => import("@/pages/hrm/Recruitment"));
+const HrmDocuments = React.lazy(() => import("@/pages/hrm/Documents"));
+const HrmPolicies = React.lazy(() => import("@/pages/hrm/Policies"));
+const HrmAudit = React.lazy(() => import("@/pages/hrm/Audit"));
 
 /** Inner route switch — rendered inside persistent AppLayout (no layout remount on navigate). */
 export function PageOutlet() {
@@ -77,7 +137,7 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/projects/:id">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa"]}>
+        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES]}>
           <AdminProjectDetail />
         </RoleGate>
       </Route>
@@ -90,6 +150,14 @@ export function PageOutlet() {
         <RoleGate allowedRoles={["super_admin"]}>
           <AdminEmployees />
         </RoleGate>
+      </Route>
+      <Route path="/admin/roles">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <AdminRolesPermissions />
+        </RoleGate>
+      </Route>
+      <Route path="/hrm/roles">
+        <Redirect to="/admin/roles" />
       </Route>
       <Route path="/admin/screenshots">
         <RoleGate allowedRoles={["super_admin"]}>
@@ -105,13 +173,20 @@ export function PageOutlet() {
           </React.Suspense>
         </RoleGate>
       </Route>
+      <Route path="/admin/monitoring/analytics">
+        <RoleGate module="monitor_attendance">
+          <React.Suspense fallback={null}>
+            <WorkAnalytics />
+          </React.Suspense>
+        </RoleGate>
+      </Route>
       <Route path="/admin/clients">
         <RoleGate allowedRoles={["super_admin"]}>
           <AdminClients />
         </RoleGate>
       </Route>
       <Route path="/admin/tickets">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
+        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <AdminTickets />
         </RoleGate>
       </Route>
@@ -119,7 +194,7 @@ export function PageOutlet() {
         <Redirect to="/discussions" />
       </Route>
       <Route path="/discussions">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
+        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <DiscussionsPage />
         </RoleGate>
       </Route>
@@ -235,6 +310,153 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
 
+      <Route path="/legal/cases/:id">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalCaseDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/cases">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalCases />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/vendor-disputes">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalVendorDisputes />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/client-matters">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalClientMatters />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/nda">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalNda />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/agreements">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalAgreements />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/notices">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalNotices />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/court-cases">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalCourtCases />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/compliance">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalCompliance />
+        </RoleGate>
+      </Route>
+      <Route path="/legal/expenses">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalExpenses />
+        </RoleGate>
+      </Route>
+      <Route path="/legal">
+        <RoleGate allowedRoles={["super_admin"]}>
+          <LegalDashboard />
+        </RoleGate>
+      </Route>
+
+      <Route path="/ca/client-payments">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaClientPayments />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/vendors">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaVendors />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/expenses">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaExpenses />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/bank-reconciliation">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaBankReconciliation />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/suspense">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaSuspense />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/gst">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaGst />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/tds">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaTds />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/company-itr">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaCompanyItr />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/director-itr">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaDirectorItr />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/roc">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaRoc />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/din-dsc">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaDinDsc />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/documents">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaDocuments />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/audit">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaAudit />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/notices">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaNotices />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/compliance-calendar">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaComplianceCalendar />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/tasks">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaTasks />
+        </RoleGate>
+      </Route>
+      <Route path="/ca/compliance-score">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaComplianceScore />
+        </RoleGate>
+      </Route>
+      <Route path="/ca">
+        <RoleGate allowedRoles={CA_ACCESS_ROLES}>
+          <CaDashboard />
+        </RoleGate>
+      </Route>
+
       <Route path="/finance/invoices/:id">
         <RoleGate allowedRoles={["super_admin"]}>
           <FinanceInvoiceDetail />
@@ -291,55 +513,67 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
 
+      <Route path="/settings/:section">
+        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+          <SettingsPage />
+        </RoleGate>
+      </Route>
       <Route path="/settings">
-        <RoleGate allowedRoles={["super_admin", "developer", "tester", "qa", "client"]}>
+        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
 
       <Route path="/dev">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevWorkspace />
         </RoleGate>
       </Route>
       <Route path="/dev/projects">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevProjects />
         </RoleGate>
       </Route>
       <Route path="/dev/logs">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevLogs />
         </RoleGate>
       </Route>
       <Route path="/dev/tasks/:id">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <TaskDetail />
         </RoleGate>
       </Route>
       <Route path="/dev/tasks">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevTasks />
         </RoleGate>
       </Route>
       <Route path="/dev/bugs">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevBugs />
         </RoleGate>
       </Route>
       <Route path="/dev/apk">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevApk />
         </RoleGate>
       </Route>
       <Route path="/dev/reports">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevReports />
         </RoleGate>
       </Route>
       <Route path="/dev/requests">
-        <RoleGate allowedRoles={["developer", "tester", "qa", "super_admin"]}>
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevRequests />
+        </RoleGate>
+      </Route>
+      <Route path="/dev/my-screenshots">
+        <RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}>
+          <React.Suspense fallback={null}>
+            <DevMyScreenshots />
+          </React.Suspense>
         </RoleGate>
       </Route>
 
@@ -358,15 +592,51 @@ export function PageOutlet() {
           <ClientApk />
         </RoleGate>
       </Route>
+      <Route path="/client/team/activity">
+        <RoleGate allowedRoles={["client"]}>
+          <ClientTeamActivity />
+        </RoleGate>
+      </Route>
+      <Route path="/client/team">
+        <RoleGate allowedRoles={["client"]}>
+          <ClientTeam />
+        </RoleGate>
+      </Route>
 
       <Route path="/profile">
-        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester", "qa"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <ProfilePage />
         </RoleGate>
       </Route>
       <Route path="/notifications">
-        <RoleGate allowedRoles={["super_admin", "developer", "client", "tester", "qa"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <NotificationsPage />
+        </RoleGate>
+      </Route>
+
+      <Route path="/hrm/departments"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmDepartments /></RoleGate></Route>
+      <Route path="/hrm/employees/:id"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager"]}><HrmEmployeeDetail /></RoleGate></Route>
+      <Route path="/hrm/employees"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager"]}><HrmEmployees /></RoleGate></Route>
+      <Route path="/hrm/leave"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmLeave /></RoleGate></Route>
+      <Route path="/hrm/wfh"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmWfh /></RoleGate></Route>
+      <Route path="/hrm/shifts"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmShifts /></RoleGate></Route>
+      <Route path="/hrm/calendar"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmCalendar /></RoleGate></Route>
+      <Route path="/hrm/holidays"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmHolidays /></RoleGate></Route>
+      <Route path="/hrm/attendance"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmAttendance /></RoleGate></Route>
+      <Route path="/hrm/payroll"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPayroll /></RoleGate></Route>
+      <Route path="/hrm/my-attendance"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyAttendance /></RoleGate></Route>
+      <Route path="/hrm/my-leave"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyLeave /></RoleGate></Route>
+      <Route path="/hrm/my-wfh"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyWfh /></RoleGate></Route>
+      <Route path="/hrm/my-payslips"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyPayslips /></RoleGate></Route>
+      <Route path="/hrm/my-holidays"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyHolidays /></RoleGate></Route>
+      <Route path="/hrm/settings"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmSettings /></RoleGate></Route>
+      <Route path="/hrm/recruitment"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmRecruitment /></RoleGate></Route>
+      <Route path="/hrm/documents"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmDocuments /></RoleGate></Route>
+      <Route path="/hrm/policies"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPolicies /></RoleGate></Route>
+      <Route path="/hrm/audit"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmAudit /></RoleGate></Route>
+      <Route path="/hrm">
+        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES, ...MONITORABLE_STAFF_ROLES]}>
+          <HrmDashboard />
         </RoleGate>
       </Route>
 

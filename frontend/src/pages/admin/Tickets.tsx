@@ -252,13 +252,24 @@ export default function AdminTickets() {
       enabled: isCreateOpen && (isAdmin || role === "client"),
     },
   });
-  const usersParams = { role: "developer" as const, limit: 100 };
-  const { data: usersData } = useListUsers(usersParams, {
+  const devUsersParams = { role: "developer" as const, limit: 100 };
+  const freelancerUsersParams = { role: "freelancer" as const, limit: 100 };
+  const { data: devUsersData } = useListUsers(devUsersParams, {
     query: {
-      queryKey: getListUsersQueryKey(usersParams),
+      queryKey: getListUsersQueryKey(devUsersParams),
       enabled: isCreateOpen && isAdmin,
     },
   });
+  const { data: freelancerUsersData } = useListUsers(freelancerUsersParams, {
+    query: {
+      queryKey: getListUsersQueryKey(freelancerUsersParams),
+      enabled: isCreateOpen && isAdmin,
+    },
+  });
+  const assignableUsers = useMemo(() => {
+    const merged = [...(devUsersData?.users ?? []), ...(freelancerUsersData?.users ?? [])];
+    return merged.sort((a, b) => a.name.localeCompare(b.name));
+  }, [devUsersData, freelancerUsersData]);
 
   const createMutation = useCreateTicket();
 
@@ -447,11 +458,11 @@ export default function AdminTickets() {
                         <Select onValueChange={field.onChange} value={field.value}>
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Developer" />
+                              <SelectValue placeholder="Developer / Freelancer" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {usersData?.users.map((u) => (
+                            {assignableUsers.map((u) => (
                               <SelectItem key={u.id} value={u.id.toString()}>
                                 {u.name}
                               </SelectItem>

@@ -9,6 +9,15 @@ import { verifyMailer } from "./src/lib/email.js";
 import { startInventoryExpiryJob } from "./src/services/inventory/expiry-job.js";
 import { startDailyLogComplianceJob } from "./src/services/daily-log-compliance.js";
 import { startScreenshotPurgeJob } from "./src/services/screenshot-purge-job.js";
+import { migrateDirectConversationIndexes } from "./src/services/direct-conversation-migration.js";
+import {
+  ensureDefaultRoleTemplates,
+  backfillSystemTemplatePermissions,
+  assignRoleTemplatesToUsers,
+} from "./src/services/permissions.service.js";
+import { seedLeaveTypes } from "./src/services/hrm/leave.service.js";
+import { startLeaveAccrualJob } from "./src/services/hrm/leave-accrual.service.js";
+import { startAttendanceMaterializeJob } from "./src/services/hrm/attendance-materialize.service.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -18,18 +27,31 @@ initRealtime(server);
 initFirebaseAdmin();
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
-const runScreenshotPurge = startScreenshotPurgeJob();
+const runScreenshotJobs = startScreenshotPurgeJob();
 startDailyLogComplianceJob();
+const runLeaveAccrualTick = startLeaveAccrualJob();
+const runAttendanceMaterializeTick = startAttendanceMaterializeJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
   backgroundJobsBootstrapped = true;
   runInventoryExpiryCheck();
-  runScreenshotPurge();
-  // Daily log compliance only runs on the 5-minute interval (respects reminder hour/timezone).
-  logger.info("Background jobs started (inventory expiry, screenshot purge, daily log compliance)");
+  runScreenshotJobs.dailyTick();
+  runScreenshotJobs.heartbeatTick();
+  runLeaveAccrualTick();
+  runAttendanceMaterializeTick();
+  logger.info(
+    "Background jobs started (inventory expiry, screenshot purge, daily log compliance, leave accrual, attendance materialize)",
+  );
 };
-void whenDatabaseReady().then(bootstrapBackgroundJobs).catch((err) => {
+void whenDatabaseReady()
+  .then(() => migrateDirectConversationIndexes())
+  .then(() => ensureDefaultRoleTemplates())
+  .then(() => backfillSystemTemplatePermissions())
+  .then(() => assignRoleTemplatesToUsers())
+  .then(() => seedLeaveTypes())
+  .then(bootstrapBackgroundJobs)
+  .catch((err) => {
   logger.warn(
     { err },
     "Background jobs deferred: database unavailable (check DATABASE_URL / network)"

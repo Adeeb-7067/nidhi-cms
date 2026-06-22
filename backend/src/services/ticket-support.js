@@ -1,15 +1,16 @@
 import { ticketsTable, usersTable } from "../models/schema/index.js";
 import { notFound, forbidden } from "../utils/route-errors.js";
+import { devPortalStaffRoles, isDevPortalStaffRole } from "../constants/user-roles.js";
 
 export const TICKET_AUDIENCES = ["client", "staff"];
-const STAFF_CREATOR_ROLES = new Set(["developer", "tester", "qa", "super_admin"]);
+const STAFF_CREATOR_ROLES = new Set([...devPortalStaffRoles, "super_admin"]);
 
 export function ticketAudienceFromRole(role) {
   return role === "client" ? "client" : "staff";
 }
 
 export function isStaffTicketRole(role) {
-  return role === "developer" || role === "tester" || role === "qa";
+  return isDevPortalStaffRole(role);
 }
 
 const OPEN_TICKET_STATUSES = ["open", "pending"];

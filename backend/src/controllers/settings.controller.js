@@ -3,6 +3,7 @@ import {
   getOrCreateSettings,
   formatSettings,
   invalidateSettingsCache,
+  SCREENSHOT_BLUR_ALWAYS_ENABLED,
 } from "../services/company-settings.js";
 import { badRequest } from "../utils/route-errors.js";
 import { broadcast } from "../lib/realtime.js";
@@ -74,7 +75,6 @@ async function patchSettings(req, res) {
     screenshotEnabled,
     screenshotIntervalMinutes,
     screenshotRetentionDays,
-    screenshotBlurEnabled,
     screenshotConsentVersion
   } = req.body;
   const settings = await getOrCreateSettings();
@@ -103,9 +103,14 @@ async function patchSettings(req, res) {
   if (screenshotRetentionDays !== undefined) {
     update.screenshotRetentionDays = parseScreenshotRetention(screenshotRetentionDays);
   }
-  if (screenshotBlurEnabled !== undefined) update.screenshotBlurEnabled = Boolean(screenshotBlurEnabled);
+  // screenshotBlurEnabled is always on — ignore any client value.
   if (screenshotConsentVersion !== undefined) {
     update.screenshotConsentVersion = String(screenshotConsentVersion).trim();
+  }
+
+  const monitoringFields = ["screenshotEnabled", "screenshotIntervalMinutes", "screenshotRetentionDays", "screenshotConsentVersion"];
+  if (monitoringFields.some((f) => update[f] !== undefined)) {
+    update.screenshotBlurEnabled = SCREENSHOT_BLUR_ALWAYS_ENABLED;
   }
 
   const updated = await companySettingsTable.findOneAndUpdate(
@@ -120,13 +125,12 @@ async function patchSettings(req, res) {
   // Bust the in-process cache so subsequent reads return the new values immediately.
   invalidateSettingsCache();
 
-  const monitoringFields = ["screenshotEnabled", "screenshotIntervalMinutes", "screenshotRetentionDays", "screenshotBlurEnabled", "screenshotConsentVersion"];
   if (monitoringFields.some((f) => update[f] !== undefined)) {
     broadcast("monitoring:config-updated", {
       screenshotEnabled: updated.screenshotEnabled,
       screenshotIntervalMinutes: updated.screenshotIntervalMinutes,
       screenshotRetentionDays: updated.screenshotRetentionDays,
-      screenshotBlurEnabled: updated.screenshotBlurEnabled,
+      screenshotBlurEnabled: SCREENSHOT_BLUR_ALWAYS_ENABLED,
       screenshotConsentVersion: updated.screenshotConsentVersion
     });
     if (

@@ -157,31 +157,31 @@ function getStringField(value: unknown, key: string): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
-function truncate(text: string, maxLength = 300): string {
-  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
-}
 
 function buildErrorMessage(response: Response, data: unknown): string {
-  const prefix = `HTTP ${response.status} ${response.statusText}`;
+  const fromBody = getStringField(data, "message") ??
+    getStringField(data, "error_description") ??
+    getStringField(data, "error") ??
+    getStringField(data, "detail");
 
-  if (typeof data === "string") {
-    const text = data.trim();
-    return text ? `${prefix}: ${truncate(text)}` : prefix;
-  }
+  if (fromBody) return fromBody;
 
   const title = getStringField(data, "title");
   const detail = getStringField(data, "detail");
-  const message =
-    getStringField(data, "message") ??
-    getStringField(data, "error_description") ??
-    getStringField(data, "error");
+  if (title && detail) return `${title} — ${detail}`;
 
-  if (title && detail) return `${prefix}: ${title} — ${detail}`;
-  if (detail) return `${prefix}: ${detail}`;
-  if (message) return `${prefix}: ${message}`;
-  if (title) return `${prefix}: ${title}`;
+  const hints: Record<number, string> = {
+    400: "Check your input and try again.",
+    401: "Your session expired. Please sign in again.",
+    403: "You do not have permission to do that.",
+    404: "That item was not found.",
+    409: "This conflicts with existing data.",
+    422: "Some fields are invalid.",
+    429: "Too many requests. Wait a moment and try again.",
+    500: "Something went wrong. Please try again.",
+  };
 
-  return prefix;
+  return hints[response.status] ?? "Something went wrong. Please try again.";
 }
 
 export class ApiError<T = unknown> extends Error {

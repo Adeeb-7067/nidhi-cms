@@ -10,6 +10,7 @@ import {
   type WorkTask,
 } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { assigneeRoleShortLabel } from "@/lib/user-roles";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -262,7 +263,7 @@ export default function TaskDetailPage() {
                   {task.assigneeName}
                   {task.assigneeRole && (
                     <span className="text-xs">
-                      ({task.assigneeRole === "tester" || task.assigneeRole === "qa" ? "QA" : "Dev"})
+                      ({assigneeRoleShortLabel(task.assigneeRole)})
                     </span>
                   )}
                 </span>
@@ -369,7 +370,7 @@ export default function TaskDetailPage() {
                       <SelectItem value="none">Unassigned</SelectItem>
                       {assignableData?.members.map((m) => (
                         <SelectItem key={m.id} value={m.id.toString()}>
-                          {m.name} ({m.role === "tester" || m.role === "qa" ? "QA" : "Dev"})
+                          {m.name} ({assigneeRoleShortLabel(m.role)})
                         </SelectItem>
                       ))}
                     </SelectContent>

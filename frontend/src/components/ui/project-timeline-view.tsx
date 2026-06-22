@@ -1,14 +1,23 @@
 import React from "react";
-import { Calendar, CheckCircle2, Hourglass, AlertCircle, MapPin } from "lucide-react";
+import { Calendar, CheckCircle2, Hourglass, AlertCircle } from "lucide-react";
 import { Badge } from "./badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
+import { Avatar, AvatarFallback, AvatarImage } from "./avatar";
 
 interface Milestone {
   id: number;
   title: string;
   description?: string | null;
-  targetDate: string;
+  plannedDate?: string;
+  targetDate?: string;
   status: "pending" | "completed" | "delayed";
+  assigneeName?: string | null;
+  assigneeAvatarUrl?: string | null;
+  assigneeRole?: string | null;
+}
+
+function milestoneDate(m: Milestone) {
+  return m.plannedDate ?? m.targetDate ?? new Date().toISOString();
 }
 
 interface ProjectTimelineProps {
@@ -41,7 +50,9 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
   const daysRemaining = Math.ceil((end - now) / (1000 * 60 * 60 * 24));
 
   // Sort milestones chronologically
-  const sortedMilestones = [...milestones].sort((a, b) => new Date(a.targetDate).getTime() - new Date(b.targetDate).getTime());
+  const sortedMilestones = [...milestones].sort(
+    (a, b) => new Date(milestoneDate(a)).getTime() - new Date(milestoneDate(b)).getTime(),
+  );
 
   return (
     <div className="w-full py-12 px-6 bg-muted/10 border border-border rounded-xl relative overflow-hidden">
@@ -129,7 +140,7 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
         {/* Milestone Indicators */}
         <TooltipProvider delayDuration={100}>
           {sortedMilestones.map((milestone, index) => {
-            const pct = getPct(milestone.targetDate);
+            const pct = getPct(milestoneDate(milestone));
             const isEven = index % 2 === 0;
             
             let dotColor = "bg-blue-500";
@@ -171,8 +182,24 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
                         </Badge>
                       </div>
                       <p className="text-[9px] text-muted-foreground font-mono flex items-center gap-1">
-                        <Calendar className="h-2.5 w-2.5" /> {new Date(milestone.targetDate).toLocaleDateString()}
+                        <Calendar className="h-2.5 w-2.5" /> {new Date(milestoneDate(milestone)).toLocaleDateString()}
                       </p>
+                      {milestone.assigneeName && (
+                        <p className="text-[9px] text-muted-foreground flex items-center gap-1.5 pt-0.5">
+                          <Avatar className="h-4 w-4 shrink-0">
+                            {milestone.assigneeAvatarUrl && (
+                              <AvatarImage src={milestone.assigneeAvatarUrl} alt={milestone.assigneeName} />
+                            )}
+                            <AvatarFallback className="text-[7px] bg-primary/15 text-primary">
+                              {milestone.assigneeName.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="truncate">
+                            {milestone.assigneeName}
+                            {milestone.assigneeRole ? ` · ${milestone.assigneeRole}` : ""}
+                          </span>
+                        </p>
+                      )}
                       {milestone.description && (
                         <p className="text-[9px] text-muted-foreground border-t border-border/50 pt-1 mt-1 truncate-2-lines">
                           {milestone.description}

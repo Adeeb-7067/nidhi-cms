@@ -30,10 +30,15 @@ import {
   findActiveNavGroupLabel,
   getSectionDefaultHref,
   isPathInSection,
+  navigateNavHref,
+  syncSettingsSectionFromNavHref,
   type UserRole,
   type NavSection,
   type NavItem,
+  isDevPortalRole,
 } from "@/lib/navigation";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { useClientTeam } from "@/contexts/ClientTeamContext";
 
 const spring = { type: "spring" as const, stiffness: 380, damping: 28 };
 
@@ -53,7 +58,7 @@ function useBadgeCounts(role: UserRole) {
     { status: "open", limit: 1 },
     {
       query: {
-        enabled: role === "developer" || role === "tester" || role === "qa",
+        enabled: isDevPortalRole(role),
         staleTime: QUERY_STALE.list,
         queryKey: getListBugsQueryKey({ status: "open", limit: 1 }),
       },
@@ -74,9 +79,20 @@ type SidebarNavLinkProps = {
   count?: number;
 };
 
-function SidebarNavLink({ href, active, title, icon: Icon, count }: SidebarNavLinkProps) {
+function SidebarNavLink({
+  href,
+  active,
+  title,
+  icon: Icon,
+  count,
+  onNavigate,
+}: SidebarNavLinkProps & { onNavigate?: (href: string) => void }) {
   return (
-    <Link href={href} className="block outline-none">
+    <Link
+      href={href}
+      onClick={() => onNavigate?.(href)}
+      className="block outline-none"
+    >
       <motion.div
         className={cn(
           "group relative flex items-center gap-3 rounded-lg px-2.5 py-2 text-[13px] font-medium leading-tight",
@@ -152,10 +168,43 @@ type SidebarProps = {
 function useSidebarNavState() {
   const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
+  const team = useClientTeam();
   const badges = useBadgeCounts((user?.role ?? "developer") as UserRole);
 
   const role = user?.role as UserRole;
-  const sections = user ? getNavSections(role) : [];
+  const { canViewHref } = usePermissions();
+  const rawSections = user ? getNavSections(role) : [];
+
+  const sections = useMemo<NavSection[]>(() => {
+    const permissionFiltered = rawSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (role === "client") {
+            return item.roles.includes(role) && canViewHref(item.href);
+          }
+          return canViewHref(item.href);
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
+
+    if (role !== "client" || !team.isClientUser || team.isAdmin) return permissionFiltered;
+    return permissionFiltered
+      .map((section) => ({
+        ...section,
+        items: section.items.filter((item) => {
+          if (item.href === "/client/team") return false;
+          if (item.href === "/client/team/activity") return false;
+          if (item.href === "/client/analytics") return team.can("reports");
+          if (item.href === "/client/apk") return team.can("documents");
+          return true;
+        }),
+      }))
+      .filter((section) => section.items.length > 0);
+    // We rely on `team` and the role to recompute whenever permissions change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, team.isClientUser, team.isAdmin, team.permissions, rawSections.length, canViewHref]);
+
   const homeHref = user ? getHomeHref(role) : "/login";
 
   const [activeGroup, setActiveGroup] = useState(() =>
@@ -189,10 +238,14 @@ function useSidebarNavState() {
       setActiveGroup(section.label);
       if (isPathInSection(location, section)) return;
       const href = getSectionDefaultHref(section);
-      if (href) setLocation(href);
+      if (href) navigateNavHref(href, setLocation);
     },
     [location, setLocation],
   );
+
+  const handleNavItemClick = useCallback((href: string) => {
+    syncSettingsSectionFromNavHref(href);
+  }, []);
 
   return {
     user,
@@ -206,6 +259,7 @@ function useSidebarNavState() {
     groupedItems,
     getBadge,
     handleRailSelect,
+    handleNavItemClick,
     setActiveGroup,
   };
 }
@@ -223,6 +277,7 @@ export const Sidebar = memo(function Sidebar({ collapsed = false, className }: S
     groupedItems,
     getBadge,
     handleRailSelect,
+    handleNavItemClick,
     setActiveGroup,
   } = useSidebarNavState();
 
@@ -365,6 +420,7 @@ export const Sidebar = memo(function Sidebar({ collapsed = false, className }: S
                             title={item.title}
                             icon={item.icon}
                             count={getBadge(item.badgeKey)}
+                            onNavigate={handleNavItemClick}
                           />
                         </motion.li>
                       ))}
@@ -445,7 +501,10 @@ export function MobileNavSheet({ open, onOpenChange }: MobileNavSheetProps) {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      onClick={() => onOpenChange(false)}
+                      onClick={() => {
+                        syncSettingsSectionFromNavHref(item.href);
+                        onOpenChange(false);
+                      }}
                       className={cn(
                         "flex min-h-11 items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium",
                         isNavActive(location, item.href)

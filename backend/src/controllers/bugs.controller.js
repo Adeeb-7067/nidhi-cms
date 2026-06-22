@@ -1,3 +1,4 @@
+import { devPortalStaffRoles, isDeveloperRole } from "../constants/user-roles.js";
 import {
   bugsTable,
   projectsTable,
@@ -110,7 +111,7 @@ async function buildBugListQuery(userId, role, params) {
     return withListableBugsOnly(query);
   }
 
-  if (role === "developer") {
+  if (isDeveloperRole(role)) {
     mergeAndClause(query, { $or: [{ assigneeId: userId }, { assigneeIds: userId }] });
     return withListableBugsOnly(query);
   }
@@ -154,7 +155,7 @@ async function buildBugListQuery(userId, role, params) {
 async function assertCanViewBug(user, bug) {
   const role = user.role;
   if (role === "super_admin") return;
-  if (role === "developer") {
+  if (isDeveloperRole(role)) {
     const assigned =
       bug.assigneeId === user.id ||
       (Array.isArray(bug.assigneeIds) && bug.assigneeIds.includes(user.id));
@@ -341,7 +342,7 @@ async function postBugs(req, res) {
   if (!project) notFound("Project");
 
   const role = req.user.role;
-  const canCreate = ["developer", "tester", "qa", "super_admin"].includes(role);
+  const canCreate = [...devPortalStaffRoles, "super_admin"].includes(role);
   if (!canCreate) forbidden();
 
   const rawAssigneeIds = Array.isArray(assigneeIds)
@@ -397,7 +398,7 @@ async function postBugsBatch(req, res) {
   if (!project) notFound("Project");
 
   const role = req.user.role;
-  if (!["developer", "tester", "qa", "super_admin"].includes(role)) forbidden();
+  if (![...devPortalStaffRoles, "super_admin"].includes(role)) forbidden();
 
   const rawAssigneeIds = Array.isArray(assigneeIds)
     ? assigneeIds
@@ -452,7 +453,7 @@ async function patchBugsById(req, res) {
   const role = req.user.role;
   const isQaOrAdmin = role === "tester" || role === "qa" || role === "super_admin";
   const isAssigneeDev =
-    role === "developer" &&
+    isDeveloperRole(role) &&
     (existing.assigneeId === req.user.id ||
       (Array.isArray(existing.assigneeIds) && existing.assigneeIds.includes(req.user.id)));
 

@@ -1,4 +1,5 @@
 import type { BugStatus } from "@/api";
+import { isDeveloperRole } from "@/lib/user-roles";
 
 export type TrackStatus = "open" | "fixed";
 export type FinalStatus = "open" | "resolved";
@@ -77,7 +78,7 @@ export function canSetQaStatus(role?: string) {
 
 export function canSetDevStatus(role?: string, isAssignee?: boolean) {
   if (role === "super_admin") return true;
-  if (role === "developer") return !!isAssignee;
+  if (isDeveloperRole(role)) return !!isAssignee;
   return false;
 }
 
@@ -99,6 +100,7 @@ export const PRIORITY_LABELS: Record<string, string> = {
 export function formatUserRole(role: string | null | undefined): string {
   if (!role) return "User";
   if (role === "qa" || role === "tester") return "QA";
+  if (role === "freelancer") return "Freelancer";
   if (role === "developer") return "Developer";
   if (role === "super_admin") return "Admin";
   return role.replace(/_/g, " ");
@@ -135,7 +137,7 @@ export function canUserModifyBug(
 ): boolean {
   if (!role || userId == null) return false;
   if (role === "super_admin" || role === "tester" || role === "qa") return true;
-  if (role === "developer") {
+  if (isDeveloperRole(role)) {
     return (
       bug.assigneeId === userId ||
       (Array.isArray(bug.assigneeIds) && bug.assigneeIds.includes(userId))

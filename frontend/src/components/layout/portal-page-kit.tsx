@@ -9,6 +9,7 @@ import {
   PageKpiSkeleton,
   type StatCardProps,
 } from "@/components/dashboard/dashboard-kit";
+import { PageTableSkeleton } from "@/components/loading";
 
 /** Shared page wrapper for all portal roles (admin, dev, client, etc.). */
 export function PortalPageShell({
@@ -50,7 +51,7 @@ export function PortalKpiGrid({
   return (
     <div className={cn("grid grid-cols-1 gap-3", colClass)}>
       {items.map((item, i) => (
-        <ExecutiveStatCard key={item.title} {...item} delay={item.delay ?? i} />
+        <ExecutiveStatCard key={item.title || `kpi-${i}`} {...item} delay={item.delay ?? i} />
       ))}
     </div>
   );
@@ -77,8 +78,9 @@ export function PortalToolbar({
 }
 
 export const portalTabsListClass =
-  "h-9 w-full justify-start overflow-x-auto bg-muted/50 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
-export const portalTabsTriggerClass = "h-7 shrink-0 rounded-md px-3 text-xs";
+  "inline-flex h-9 w-full items-center justify-start gap-1 overflow-x-auto overflow-y-hidden bg-muted/50 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+export const portalTabsTriggerClass =
+  "h-7 shrink-0 rounded-md px-3 py-0 text-xs leading-none";
 
 export function PortalTabsList({
   className,
@@ -108,6 +110,29 @@ export function PortalContentCard({
     <Card className={cn("border-border/60 bg-card", className)}>
       <CardContent className={cn("p-4", contentClassName)}>{children}</CardContent>
     </Card>
+  );
+}
+
+/** Team / Admin list tab: PortalContentCard + skeleton or AdvancedTable. */
+export function PortalTablePanel({
+  isLoading,
+  loadingRows = 8,
+  loadingColumns = 6,
+  children,
+}: {
+  isLoading?: boolean;
+  loadingRows?: number;
+  loadingColumns?: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <PortalContentCard>
+      {isLoading ? (
+        <PageTableSkeleton rows={loadingRows} columns={loadingColumns} showToolbar />
+      ) : (
+        children
+      )}
+    </PortalContentCard>
   );
 }
 

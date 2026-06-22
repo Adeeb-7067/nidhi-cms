@@ -10,8 +10,17 @@ const {
   nativeImage,
   desktopCapturer,
   powerMonitor,
+  Notification,
 } = require('electron');
 const path = require('path');
+const fs = require('fs');
+const { isSensitiveForegroundApp } = require('./sensitive-apps');
+const {
+  applyFullBlur,
+  detectSensitiveBeforeCapture,
+  getForegroundWindow,
+  formatForegroundLabel,
+} = require('./screenshot-blur');
 
 // ─── Single-instance lock ────────────────────────────────────────────────────
 // Prevents opening a second copy when the user double-clicks the icon again.
@@ -36,6 +45,71 @@ let screenshotTimer = null;
 let screenshotIntervalMs = 0;
 let screenshotPauseTimer = null;
 let currentSessionId = 0;         // tracks the active work session id for screenshot uploads
+let heartbeatTimer = null;
+let clockOutPromise = null;
+let quitInProgress = null;
+let powerMonitorRegistered = false;
+let blurSensitiveAppsEnabled = false;
+/** Cached from renderer so heartbeat/screenshot/clock-out work when webContents is torn down. */
+let cachedAccessToken = null;
+
+const HEARTBEAT_INTERVAL_MS = 60_000;
+const CLOCK_OUT_TIMEOUT_MS = 15_000;
+const HEARTBEAT_FETCH_TIMEOUT_MS = 20_000;
+
+/** Auto clock-out only for definitive local events. Transient network/API errors do NOT end sessions. */
+const DEFINITIVE_LOCAL_STOP_REASONS = new Set([
+  'system_sleep',
+  'system_shutdown',
+  'app_quit',
+]);
+
+const SESSION_END_NATIVE_COPY = {
+  system_sleep: {
+    title: 'Work session ended',
+    body: 'Your PC went to sleep. Clock in again today to continue your shift.',
+  },
+  system_shutdown: {
+    title: 'Work session ended',
+    body: 'Your PC is shutting down. Clock in again today to continue your shift.',
+  },
+  app_quit: {
+    title: 'Work session ended',
+    body: 'The desktop app was closed. Clock in again today to continue your shift.',
+  },
+  client_disconnected: {
+    title: 'Work session ended',
+    body: 'Your session ended — open the app and clock in again today to continue.',
+  },
+  day_ended: {
+    title: 'Work session ended',
+    body: 'A new work day started. Clock in to begin today\'s shift.',
+  },
+  session_expired: {
+    title: 'Work session ended',
+    body: 'Your session reached the 24-hour limit. Clock in to start a new shift.',
+  },
+};
+
+function showNativeSessionNotification(stopReason) {
+  if (!Notification.isSupported()) return;
+  const copy = SESSION_END_NATIVE_COPY[stopReason];
+  if (!copy) return;
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  const iconPath = path.join(ASSETS_DIR, iconFile);
+  try {
+    const notification = new Notification({
+      title: copy.title,
+      body: copy.body,
+      icon: fs.existsSync(iconPath) ? iconPath : undefined,
+      silent: false,
+    });
+    notification.on('click', () => focusMainWindow());
+    notification.show();
+  } catch (err) {
+    console.warn('[notification] could not show session alert:', err.message);
+  }
+}
 
 // ─── Path helpers (dev vs packaged) ──────────────────────────────────────────
 // In dev:       __dirname === .../electron/
@@ -54,6 +128,29 @@ const ASSETS_DIR = app.isPackaged
   ? path.join(process.resourcesPath, 'electron', 'assets')
   : path.join(__dirname, 'assets');
 
+function readBundledApiUrl() {
+  const configPath = path.join(ASSETS_DIR, 'api-config.json');
+  try {
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+    if (parsed.apiUrl) return String(parsed.apiUrl).replace(/\/+$/, '');
+  } catch {
+    /* missing in dev until write-api-config.js runs */
+  }
+  return null;
+}
+
+/** Upload URL base — updated from renderer on each screenshot-config sync. */
+let runtimeApiBaseUrl = null;
+
+function resolveApiBaseUrl() {
+  return (
+    runtimeApiBaseUrl ||
+    process.env.CMS_API_URL ||
+    readBundledApiUrl() ||
+    'http://localhost:8080'
+  ).replace(/\/+$/, '');
+}
+
 // ─── Auto-updater (lazy) ─────────────────────────────────────────────────────
 // Must be required AFTER app is ready — it calls app.getVersion() on import.
 let _autoUpdater = null;
@@ -62,8 +159,11 @@ function getAutoUpdater() {
   return _autoUpdater;
 }
 
-// ─── Backend URL (passed from launch.js via CMS_API_URL) ─────────────────────
-const API_URL = (process.env.CMS_API_URL || 'http://localhost:15000').replace(/\/+$/, '');
+// ─── Backend URL (launch.js env, bundled api-config.json, or renderer sync) ──
+// Used for file:///uploads/* redirects before login. Screenshot uploads also
+// call resolveApiBaseUrl() which prefers runtimeApiBaseUrl from the renderer.
+const API_URL = resolveApiBaseUrl();
+console.log('[cms] API base URL:', API_URL);
 
 // ─── CSP ─────────────────────────────────────────────────────────────────────
 // Applied only to HTML responses (where CSP is meaningful).
@@ -113,7 +213,7 @@ function applyMediaRedirect() {
     (details, callback) => {
       // file:///uploads/foo.jpg -> /uploads/foo.jpg -> API_URL/uploads/foo.jpg
       const urlPath = details.url.slice('file://'.length);
-      callback({ redirectURL: `${API_URL}${urlPath}` });
+      callback({ redirectURL: `${resolveApiBaseUrl()}${urlPath}` });
     }
   );
 }
@@ -136,16 +236,61 @@ function createTray() {
   tray.setToolTip('CMS Desktop');
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Open CMS', click: () => mainWindow?.show() },
+      { label: 'Open CMS', click: () => focusMainWindow() },
       { type: 'separator' },
       { label: 'Quit', click: () => initiateGracefulQuit() },
     ])
   );
-  tray.on('double-click', () => mainWindow?.show());
+  tray.on('double-click', () => focusMainWindow());
 }
 
-// ─── Main window ──────────────────────────────────────────────────────────────
+// ─── Window manager (industry pattern) ───────────────────────────────────────
+// Single gateway for all BrowserWindow access — never call mainWindow?.foo() directly.
+// Slack/VS Code/1Password all use: getWindow → isDestroyed check → recreate if needed.
+
+function getMainWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) return mainWindow;
+  return null;
+}
+
+function isRendererAvailable() {
+  if (isQuitting || isGracefulQuitInitiated || isQuitReady) return false;
+  const win = getMainWindow();
+  if (!win) return false;
+  const wc = win.webContents;
+  return Boolean(wc && !wc.isDestroyed());
+}
+
+function sendToRenderer(channel, payload) {
+  if (!isRendererAvailable()) return false;
+  try {
+    getMainWindow().webContents.send(channel, payload);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let isCreatingWindow = false;
+
+function focusMainWindow() {
+  if (isQuitting) return;
+  const win = getMainWindow();
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+    return;
+  }
+  createWindow();
+}
+
 function createWindow() {
+  if (isCreatingWindow) return getMainWindow();
+  if (getMainWindow()) return mainWindow;
+
+  isCreatingWindow = true;
+  try {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -164,7 +309,9 @@ function createWindow() {
   });
 
   // Avoid white flash on startup
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.show();
+  });
 
   // If the frontend build is missing, show a helpful error instead of a blank screen
   mainWindow.webContents.on('did-fail-load', (_, errorCode, errorDesc, url) => {
@@ -192,24 +339,31 @@ function createWindow() {
     }
   });
 
-  // Minimize to tray instead of closing
+  // Closing the window clocks out and quits — no minimize-to-tray on ✕.
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       e.preventDefault();
-      mainWindow.hide();
+      initiateGracefulQuit();
     }
   });
 
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   mainWindow.loadFile(path.join(FRONTEND_DIST, 'index.html'));
+  return mainWindow;
+  } finally {
+    isCreatingWindow = false;
+  }
 }
 
-// ─── Second-instance handler ──────────────────────────────────────────────────
+// ─── Second-instance handler (Electron official pattern) ─────────────────────
+// User double-clicks shortcut while app is running → focus existing window.
+// If the process is quitting, ignore — the new launch will get the lock after exit.
 app.on('second-instance', () => {
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore();
-    mainWindow.show();
-    mainWindow.focus();
-  }
+  if (isQuitting) return;
+  focusMainWindow();
 });
 
 // ─── IPC handlers ────────────────────────────────────────────────────────────
@@ -222,7 +376,7 @@ ipcMain.handle('open-external', (_, url) => {
 ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('show-open-dialog', (_, opts) =>
-  dialog.showOpenDialog(mainWindow, opts)
+  dialog.showOpenDialog(getMainWindow(), opts)
 );
 
 ipcMain.handle('check-for-updates', () => {
@@ -233,6 +387,175 @@ ipcMain.handle('quit-and-install', () => {
   isQuitting = true;
   getAutoUpdater().quitAndInstall();
 });
+
+// ─── Session monitoring (heartbeat, network, clock-out) ─────────────────────
+
+async function getAccessToken() {
+  if (isRendererAvailable()) {
+    try {
+      const token = await getMainWindow().webContents.executeJavaScript(
+        'localStorage.getItem("accessToken")'
+      );
+      if (token) {
+        cachedAccessToken = token;
+        return token;
+      }
+    } catch {
+      /* webContents may be mid-teardown — fall back to cache */
+    }
+  }
+  return cachedAccessToken;
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+/**
+ * Server already ended the session. Sync Electron state without calling clock-out again.
+ * @param {string} stopReason
+ * @param {{ notify?: boolean }} opts — notify=false when alert was already sent server-side
+ */
+async function syncLocalSessionEnded(stopReason = 'client_disconnected', { notify = false } = {}) {
+  if (!currentSessionId) return;
+  stopScreenshotScheduler();
+  stopHeartbeat();
+  currentSessionId = 0;
+  screenshotIntervalMs = 0;
+  setMonitoringState('off');
+  sendToRenderer('cms:session-ended', { stopReason, silent: !notify });
+  if (notify) {
+    showNativeSessionNotification(stopReason);
+  }
+}
+
+async function sendHeartbeat() {
+  if (isQuitting || !currentSessionId) return;
+  const token = await getAccessToken();
+  if (!token) return;
+
+  const url = `${resolveApiBaseUrl()}/api/work-sessions/heartbeat`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(HEARTBEAT_FETCH_TIMEOUT_MS),
+    });
+    if (res.ok) {
+      let data = null;
+      try {
+        data = await res.json();
+      } catch {
+        /* ignore parse errors */
+      }
+      if (data && !data.session) {
+        const reason = data.stopReason || 'client_disconnected';
+        console.warn('[heartbeat] no active session on server — syncing local state', reason);
+        await syncLocalSessionEnded(reason, { notify: false });
+      }
+      return;
+    }
+    if (res.status === 401) {
+      // Token may be refreshing in the renderer — do not auto clock-out.
+      console.warn('[heartbeat] unauthorized — waiting for renderer token refresh');
+      return;
+    }
+    console.warn('[heartbeat] non-OK response:', res.status);
+  } catch (err) {
+    // Network blip or backend restart — session stays active; server stale job decides later.
+    console.warn('[heartbeat] failed:', err.message);
+  }
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  if (!currentSessionId) return;
+  void sendHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    sendHeartbeat().catch((err) =>
+      console.warn('[heartbeat] interval error:', err.message)
+    );
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopSessionMonitoring() {
+  stopHeartbeat();
+}
+
+async function clockOutFromMain(stopReason, { attemptApi = true } = {}) {
+  if (!DEFINITIVE_LOCAL_STOP_REASONS.has(stopReason)) {
+    console.warn('[clock-out] ignored non-definitive stop reason from main:', stopReason);
+    return;
+  }
+  if (clockOutPromise) return clockOutPromise;
+
+  clockOutPromise = (async () => {
+    const hadSession = currentSessionId > 0;
+    stopScreenshotScheduler();
+    stopSessionMonitoring();
+    currentSessionId = 0;
+    screenshotIntervalMs = 0;
+    setMonitoringState('off');
+
+    if (hadSession && attemptApi) {
+      const token = await getAccessToken();
+      if (token) {
+        const url = `${resolveApiBaseUrl()}/api/work-sessions/clock-out`;
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ stopReason }),
+            signal: AbortSignal.timeout(CLOCK_OUT_TIMEOUT_MS),
+          });
+          if (res.ok || res.status === 200) {
+            /* session ended on server */
+          }
+        } catch (err) {
+          console.warn('[clock-out] main process failed:', err.message);
+        }
+      }
+    }
+
+    if (isRendererAvailable()) {
+      sendToRenderer('cms:session-ended', { stopReason });
+    }
+    if (!isQuitting) {
+      showNativeSessionNotification(stopReason);
+    }
+  })();
+
+  try {
+    await clockOutPromise;
+  } finally {
+    clockOutPromise = null;
+  }
+}
+
+function registerPowerMonitorHandlers() {
+  if (powerMonitorRegistered) return;
+  powerMonitorRegistered = true;
+
+  powerMonitor.on('suspend', () => {
+    console.log('[power] system suspending — clocking out');
+    clockOutFromMain('system_sleep').catch((err) =>
+      console.error('[power] suspend clock-out failed:', err.message)
+    );
+  });
+
+  powerMonitor.on('shutdown', () => {
+    console.log('[power] system shutting down — clocking out');
+    clockOutFromMain('system_shutdown').catch((err) =>
+      console.error('[power] shutdown clock-out failed:', err.message)
+    );
+  });
+}
 
 // ─── Screenshot monitoring ────────────────────────────────────────────────────
 const IDLE_THRESHOLD_SECONDS = 5 * 60;
@@ -245,7 +568,7 @@ function setMonitoringState(state) {
       state === 'paused' ? ' · Screen monitoring paused' : '';
     tray.setToolTip(`${BASE_TOOLTIP}${suffix}`);
   }
-  mainWindow?.webContents.send('cms:monitoring-state', state);
+  sendToRenderer('cms:monitoring-state', state);
 }
 
 function stopScreenshotScheduler() {
@@ -273,11 +596,29 @@ function startScreenshotScheduler(intervalMs, captureImmediately = false) {
 }
 
 async function captureAndUpload() {
-  if (!mainWindow) return;
+  if (isQuitting || isGracefulQuitInitiated) return;
+  if (!getMainWindow()) return;
 
   if (powerMonitor.getSystemIdleTime() > IDLE_THRESHOLD_SECONDS) {
     console.log('[screenshot] skipped — user idle');
     return;
+  }
+
+  let shouldBlur = false;
+  let foregroundLabel = '';
+  if (blurSensitiveAppsEnabled) {
+    const preCheck = await detectSensitiveBeforeCapture(isSensitiveForegroundApp, {
+      samples: 3,
+      gapMs: 70,
+    });
+    shouldBlur = preCheck.shouldBlur;
+    foregroundLabel = formatForegroundLabel(preCheck.window);
+    if (shouldBlur) {
+      console.log(
+        `[screenshot] sensitive app (${preCheck.phase}) — will blur:`,
+        foregroundLabel
+      );
+    }
   }
 
   const sources = await desktopCapturer.getSources({
@@ -290,23 +631,33 @@ async function captureAndUpload() {
     return;
   }
 
-  const buffer = primary.thumbnail.toPNG();
+  let buffer = primary.thumbnail.toPNG();
 
-  let token;
-  try {
-    token = await mainWindow.webContents.executeJavaScript(
-      'localStorage.getItem("accessToken")'
-    );
-  } catch {
-    console.warn('[screenshot] could not read access token');
-    return;
+  // Re-check after capture — user may have opened WhatsApp/Gmail during getSources().
+  if (blurSensitiveAppsEnabled && !shouldBlur) {
+    const postWindow = await getForegroundWindow();
+    if (isSensitiveForegroundApp(postWindow)) {
+      shouldBlur = true;
+      foregroundLabel = formatForegroundLabel(postWindow);
+      console.log(
+        '[screenshot] sensitive app (post-capture) — will blur:',
+        foregroundLabel
+      );
+    }
   }
+
+  if (shouldBlur) {
+    buffer = await applyFullBlur(buffer);
+    console.log('[screenshot] full blur applied:', foregroundLabel);
+  }
+
+  let token = await getAccessToken();
   if (!token) {
     console.warn('[screenshot] no access token — user not logged in');
     return;
   }
 
-  const uploadUrl = `${API_URL}/api/screenshots`;
+  const uploadUrl = `${resolveApiBaseUrl()}/api/screenshots`;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const form = new FormData();
@@ -317,7 +668,7 @@ async function captureAndUpload() {
         headers: { Authorization: `Bearer ${token}` },
         body: form,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status} from ${uploadUrl}`);
       console.log('[screenshot] uploaded successfully');
       return;
     } catch (err) {
@@ -326,7 +677,7 @@ async function captureAndUpload() {
         console.warn(`[screenshot] attempt ${attempt + 1} failed (${err.message}), retrying in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         // Window may have been closed while we were waiting — abort remaining retries.
-        if (!mainWindow || mainWindow.isDestroyed()) break;
+        if (!getMainWindow()) break;
       } else {
         console.error(`[screenshot] all upload attempts failed: ${err.message}`);
       }
@@ -334,7 +685,17 @@ async function captureAndUpload() {
   }
 }
 
-ipcMain.on('cms:screenshot-config', (_, { enabled, intervalMs, sessionId }) => {
+ipcMain.on('cms:screenshot-config', (_, { enabled, intervalMs, sessionId, apiBaseUrl, blurSensitiveApps, accessToken }) => {
+  if (apiBaseUrl) {
+    runtimeApiBaseUrl = String(apiBaseUrl).replace(/\/+$/, '');
+  }
+  if (typeof accessToken === 'string' && accessToken.trim()) {
+    cachedAccessToken = accessToken.trim();
+  }
+  if (!enabled || !sessionId) {
+    cachedAccessToken = null;
+  }
+  blurSensitiveAppsEnabled = Boolean(blurSensitiveApps);
   if (screenshotPauseTimer) {
     clearTimeout(screenshotPauseTimer);
     screenshotPauseTimer = null;
@@ -348,6 +709,14 @@ ipcMain.on('cms:screenshot-config', (_, { enabled, intervalMs, sessionId }) => {
   const captureImmediately = enabled && (!wasSchedulerRunning || isNewSession);
 
   currentSessionId = sessionId || 0;
+
+  if (currentSessionId > 0) {
+    clockOutPromise = null;
+    registerPowerMonitorHandlers();
+    startHeartbeat();
+  } else {
+    stopSessionMonitoring();
+  }
 
   if (enabled) {
     startScreenshotScheduler(intervalMs, captureImmediately);
@@ -373,33 +742,37 @@ ipcMain.on('cms:screenshot-pause', (_, { durationMs }) => {
 });
 
 // ─── Pre-quit clock-out ───────────────────────────────────────────────────────
-// When quitting, tell the renderer to clock out first. The renderer sends
-// cms:clock-out-done when finished (or we force-quit after 4 s).
+// Main process clocks out directly — do not rely on renderer IPC during quit.
 ipcMain.on('cms:clock-out-done', () => {
   isQuitReady = true;
   stopScreenshotScheduler();
+  stopSessionMonitoring();
   app.quit();
 });
 
 async function initiateGracefulQuit() {
-  // Double-entry guard: before-quit can fire multiple times (e.g. tray Quit +
-  // quitAndInstall in quick succession). Only process the first call.
-  if (isQuitReady || isGracefulQuitInitiated) return;
-  isGracefulQuitInitiated = true;
+  if (isQuitReady) return;
+  if (quitInProgress) {
+    await quitInProgress;
+    return;
+  }
 
-  stopScreenshotScheduler();
+  quitInProgress = (async () => {
+    isGracefulQuitInitiated = true;
+    isQuitting = true;
 
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    // Ask renderer to clock out; it replies with cms:clock-out-done
-    mainWindow.webContents.send('cms:pre-quit');
-    // Safety net: force quit after 4 s if renderer doesn't respond
-    setTimeout(() => {
-      if (!isQuitReady) { isQuitReady = true; app.quit(); }
-    }, 4000);
-  } else {
+    stopScreenshotScheduler();
+    stopSessionMonitoring();
+
+    if (currentSessionId > 0) {
+      await clockOutFromMain('app_quit');
+    }
+
     isQuitReady = true;
     app.quit();
-  }
+  })();
+
+  await quitInProgress;
 }
 
 // ─── App lifecycle ────────────────────────────────────────────────────────────
@@ -414,22 +787,34 @@ app.whenReady().then(() => {
 
   if (app.isPackaged) {
     const updater = getAutoUpdater();
-    updater.on('update-available', (info) =>
-      mainWindow?.webContents.send('update-available', info)
-    );
-    updater.on('update-downloaded', (info) =>
-      mainWindow?.webContents.send('update-downloaded', info)
-    );
+    updater.on('update-available', (info) => {
+      sendToRenderer('update-available', info);
+    });
+    updater.on('update-downloaded', (info) => {
+      sendToRenderer('update-downloaded', info);
+    });
     updater.checkForUpdatesAndNotify();
   }
 });
 
-// Registering this listener (even empty) overrides Electron's default "quit on
-// last window closed" behaviour — the app stays alive in the tray on all platforms.
-app.on('window-all-closed', () => {});
+function destroyTray() {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
+// Industry default: quit when all windows close (Windows/Linux).
+// macOS keeps the app alive until explicit Cmd+Q — activate recreates the window.
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
 
 app.on('before-quit', (e) => {
   isQuitting = true;
+  destroyTray();
   if (!isQuitReady) {
     e.preventDefault();
     initiateGracefulQuit();
@@ -438,9 +823,5 @@ app.on('before-quit', (e) => {
 
 // macOS: clicking the Dock icon re-shows the window
 app.on('activate', () => {
-  if (mainWindow) {
-    mainWindow.show();
-  } else {
-    createWindow();
-  }
+  focusMainWindow();
 });

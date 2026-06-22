@@ -1,4 +1,5 @@
 import React from "react";
+import { useClientTeam } from "@/contexts/ClientTeamContext";
 import { useListProjects, useGetProjectAnalytics, getGetProjectAnalyticsQueryKey } from "@/api";
 import { ClientProjectTeamCard } from "@/components/presence/ClientProjectTeamCard";
 import { AnalyticsChartsSkeleton } from "@/components/loading";
@@ -42,9 +43,21 @@ const chartTooltip = {
 };
 
 export default function ClientAnalytics() {
+  const team = useClientTeam();
   const { data: projectsData } = useListProjects({ limit: 1 });
   const projectId = projectsData?.projects[0]?.id;
   const projectName = projectsData?.projects[0]?.name;
+
+  if (team.isClientUser && !team.isAdmin && !team.can("reports")) {
+    return (
+      <PortalPageShell>
+        <DashboardPageHeader
+          title="Reports & Analytics"
+          subtitle="You don't have access to this section. Ask your Client Admin to enable it."
+        />
+      </PortalPageShell>
+    );
+  }
 
   const { data: analytics, isLoading } = useGetProjectAnalytics(projectId!, {
     query: {

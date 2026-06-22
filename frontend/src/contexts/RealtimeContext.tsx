@@ -3,11 +3,13 @@ import { io, Socket } from "socket.io-client";
 import { useAuth } from "./AuthContext";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListNotifications, getListNotificationsQueryKey, type Comment } from "@/api";
+import { useListNotifications, getListNotificationsQueryKey, getGetSettingsQueryKey, type Comment, type CompanySettings } from "@/api";
 import { appendCommentToListCache } from "@/lib/comment-thread-query";
-import { applyProjectCommentToCaches } from "@/lib/discussion-realtime";
+import { applyProjectCommentToCaches, discussionCommentPreview } from "@/lib/discussion-realtime";
+import { patchDirectConversationFromComment } from "@/api/direct-conversations";
 import { isElectron } from "@/lib/electron-bridge";
 import { monitoringStatusQueryKey, consentStatusQueryKey } from "@/api/monitoring";
+import { activeSessionQueryKey, type WorkSession } from "@/api/work-sessions";
 
 import {
   initFirebase,
@@ -18,6 +20,13 @@ import {
 import { playNotificationAlert, stopPersistentAlert } from "../lib/notification-alert";
 import { apiUrl, getApiBaseUrl } from "../lib/api-base";
 import { BRAND } from "@/lib/brand";
+import { showWebPushNotification, ensureNotificationPermission } from "@/lib/web-push-notify";
+import { isMonitorableStaffRole } from "@/lib/user-roles";
+import {
+  markWorkSessionAlertShown,
+  wasWorkSessionAlertShown,
+  workSessionAlertKey,
+} from "@/lib/work-session-utils";
 import {
   NOTIFICATION_POLL_DISCONNECTED_MS,
   QUERY_STALE,
@@ -77,6 +86,14 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       stopPersistentAlert();
     }
   }, [unreadNotificationCount]);
+
+  // Request browser notification permission early for monitorable staff (web push when tab closed).
+  useEffect(() => {
+    if (!user?.id || !accessToken) return;
+    if (isMonitorableStaffRole(user.role)) {
+      void ensureNotificationPermission();
+    }
+  }, [user?.id, user?.role, accessToken]);
 
   // Firebase foreground push + token registration
   useEffect(() => {
@@ -155,7 +172,11 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     socketInstance.on("disconnect", () => setIsConnected(false));
     socketInstance.on("connect_error", () => setIsConnected(false));
 
-    socketInstance.on("notification", (data: { title?: string; body?: string }) => {
+    socketInstance.on("notification", (data: { title?: string; body?: string; type?: string }) => {
+      if (data.type === "work_session") {
+        queryClientRef.current.invalidateQueries({ queryKey: ["/api/notifications"] });
+        return;
+      }
       handleIncomingAlertRef.current(data.title || "New notification", data.body || "");
     });
 
@@ -167,14 +188,28 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
           if (
             threadType === "project" ||
             threadType === "project_internal" ||
-            threadType === "company_team"
+            threadType === "company_team" ||
+            threadType === "company_team_unofficial"
           ) {
             applyProjectCommentToCaches(
               queryClientRef.current,
               threadId,
               comment,
-              threadType,
+              threadType as "project" | "project_internal" | "company_team" | "company_team_unofficial",
             );
+          } else if (threadType === "direct") {
+            appendCommentToListCache(
+              queryClientRef.current,
+              threadType,
+              threadId,
+              comment,
+            );
+            patchDirectConversationFromComment(queryClientRef.current, threadId, {
+              lastMessageAt: comment.createdAt ?? new Date().toISOString(),
+              lastPreview: discussionCommentPreview(comment),
+              lastAuthorName: comment.authorName,
+              lastAuthorId: comment.authorId,
+            });
           } else {
             appendCommentToListCache(
               queryClientRef.current,
@@ -213,12 +248,78 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
       if (isElectron() && window.electron) {
         window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
       }
-      queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions", "active"] });
+      queryClientRef.current.setQueryData(activeSessionQueryKey(), { session: null });
+      queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions"] });
       toast.warning("Your work session was ended by an administrator.", { duration: 10_000 });
     });
 
+    // User clock in/out on web or desktop — keep every open client in sync (no toast).
+    socketInstance.on(
+      "work_session_sync",
+      (data: { session?: WorkSession | null }) => {
+        const session = data?.session?.isActive ? data.session : null;
+        queryClientRef.current.setQueryData(activeSessionQueryKey(), { session });
+        queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions"] });
+        if (isElectron() && window.electron && !session) {
+          window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
+        }
+      },
+    );
+
+    socketInstance.on("hrm_leave_updated", () => {
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "leave"] });
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
+    });
+
+    socketInstance.on("hrm_wfh_updated", () => {
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "wfh"] });
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
+    });
+
+    socketInstance.on(
+      (data: { title?: string; body?: string; stopReason?: string; entityId?: number }) => {
+        if (isElectron() && window.electron) {
+          window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
+        }
+        queryClientRef.current.setQueryData(activeSessionQueryKey(), { session: null });
+        queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions"] });
+        queryClientRef.current.invalidateQueries({ queryKey: ["/api/notifications"] });
+
+        const stopReason = data.stopReason ?? "unknown";
+        const dedupeKey =
+          data.entityId != null
+            ? workSessionAlertKey(data.entityId, stopReason)
+            : `socket:${stopReason}:${data.title ?? ""}`;
+        if (wasWorkSessionAlertShown(dedupeKey)) return;
+        markWorkSessionAlertShown(dedupeKey);
+
+        const title = data.title ?? "Work session ended";
+        const body =
+          data.body ??
+          "Your work session has ended. Clock in again today to continue the same shift.";
+        toast.warning(title, { description: body, duration: 10_000 });
+        if (!isElectron()) {
+          showWebPushNotification(title, body, {
+            tag: data.stopReason ? `work-session-${data.stopReason}` : "work-session-ended",
+          });
+        }
+      },
+    );
+
     socketInstance.on("monitoring:config-updated", (data: Record<string, unknown>) => {
       queryClientRef.current.setQueryData(monitoringStatusQueryKey(), data);
+      queryClientRef.current.setQueryData(getGetSettingsQueryKey(), (prev: CompanySettings | undefined) =>
+        prev
+          ? {
+              ...prev,
+              screenshotEnabled: Boolean(data.screenshotEnabled),
+              screenshotIntervalMinutes: Number(data.screenshotIntervalMinutes ?? prev.screenshotIntervalMinutes ?? 10),
+              screenshotRetentionDays: Number(data.screenshotRetentionDays ?? prev.screenshotRetentionDays ?? 30),
+              screenshotBlurEnabled: true,
+              screenshotConsentVersion: String(data.screenshotConsentVersion ?? prev.screenshotConsentVersion ?? "1.0"),
+            }
+          : prev,
+      );
       queryClientRef.current.invalidateQueries({ queryKey: consentStatusQueryKey() });
     });
 

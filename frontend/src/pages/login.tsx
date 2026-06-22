@@ -18,6 +18,7 @@ import { BRAND } from "@/lib/brand";
 import { AppLoadingScreen } from "@/components/loading";
 import { LoginLottie } from "@/components/auth/LoginLottie";
 import { LoginBackground } from "@/components/auth/LoginBackground";
+import { isDevPortalRole } from "@/lib/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 
 const emailSchema = z.object({
@@ -252,8 +253,7 @@ export default function Login() {
     if (isInitializing || isLoading) return;
     if (accessToken && user) {
       if (user.role === "super_admin") setLocation("/admin");
-      else if (user.role === "developer" || user.role === "tester" || user.role === "qa")
-        setLocation("/dev");
+      else if (isDevPortalRole(user.role)) setLocation("/dev");
       else if (user.role === "client") setLocation("/client");
     }
   }, [isInitializing, isLoading, accessToken, user, setLocation]);

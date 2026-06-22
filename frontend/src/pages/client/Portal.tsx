@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useClientTeam } from "@/contexts/ClientTeamContext";
 import { 
   useListProjects, 
   useGetApkReleases, 
@@ -36,7 +37,7 @@ import {
 import { 
   Smartphone, CheckCircle, Clock, Download, ExternalLink, Lock, Globe, Layout, 
   Github, FileJson, Send, MessageSquare, Activity, FileText,
-  TrendingUp, BarChart3, PieChart as PieChartIcon, Award, PlusCircle
+  TrendingUp, BarChart3, PieChart as PieChartIcon, Award, PlusCircle, Users
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { motion } from "framer-motion";
@@ -58,6 +59,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listInventoryResources } from "@/lib/inventory-api";
+import { ProjectDescriptionResourceList } from "@/components/project/ProjectDescriptionResourceList";
 import {
   appendCommentToListCache,
   commentThreadQueryParams,
@@ -85,6 +87,16 @@ import {
 
 export default function ClientPortal() {
   const { user } = useAuth();
+  const team = useClientTeam();
+  const canSeeOverview = team.can("overview");
+  const canSeeProgress = team.can("progress");
+  const canSeeDevelopers = team.can("developers");
+  const canSeeMilestones = team.can("milestones");
+  const canSeeDiscussions = team.can("discussions");
+  const canPostDiscussion = team.can("discussions", "create");
+  const canSeeDocuments = team.can("documents");
+  const canSeeReports = team.can("reports");
+  const canSeeReleases = team.can("documents");
   const userWithPresence = useUserWithPresence(user);
   const { socket } = useRealtime();
   const { data, isLoading } = useListProjects({ limit: 100 });
@@ -210,9 +222,11 @@ export default function ClientPortal() {
 
   const { data: resourcesData, isLoading: isLoadingResources } = useQuery({
     queryKey: ["inventory-resources", projectId],
-    queryFn: () => listInventoryResources(projectId!),
+    queryFn: () => listInventoryResources(projectId!, { limit: "100" }),
     enabled: projectId != null,
   });
+
+  const sharedResources = resourcesData?.resources ?? [];
 
   const { data: projectMembers } = useGetProjectMembers(projectId ?? 0, {
     query: {
@@ -380,6 +394,7 @@ export default function ClientPortal() {
         ]}
       />
 
+      {canSeeOverview ? (
       <div className="dashboard-panel bg-gradient-to-br from-primary/15 via-card to-violet-500/10 rounded-2xl p-6 border border-border/60 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-6">
         <div className="min-w-0 flex-1 space-y-3">
           <Badge variant="outline" className="bg-background/50 backdrop-blur-sm px-2 py-0.5 text-xs border-primary/50 text-primary">
@@ -397,6 +412,11 @@ export default function ClientPortal() {
                 className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded"
               >
                 Read more
+                {sharedResources.length > 0 && (
+                  <span className="text-muted-foreground font-normal">
+                    · {sharedResources.length} resource{sharedResources.length !== 1 ? "s" : ""}
+                  </span>
+                )}
                 <ExternalLink className="h-3 w-3" />
               </button>
             </div>
@@ -439,8 +459,9 @@ export default function ClientPortal() {
           </div>
         </div>
       </div>
+      ) : null}
 
-      {/* Beautiful Project Linear Flow for Clients */}
+      {canSeeMilestones ? (
       <div className="mt-4">
         <ProjectTimelineView 
           startDate={project.startDate || new Date().toISOString()} 
@@ -448,7 +469,9 @@ export default function ClientPortal() {
           milestones={(milestones as any) || []} 
         />
       </div>
+      ) : null}
 
+      {canSeeReports ? (
       <motion.section
         className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-stretch"
         initial={{ opacity: 0, y: 8 }}
@@ -546,8 +569,9 @@ export default function ClientPortal() {
           </ChartPanel>
         </ChartGridCell>
       </motion.section>
+      ) : null}
 
-      {/* KPI Cards Row */}
+      {canSeeProgress ? (
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <div className="bg-card/60 backdrop-blur border border-border/40 p-3.5 rounded-xl shadow-sm hover:border-primary/20 transition-colors">
           <p className="text-[9px] font-bold uppercase text-muted-foreground tracking-wider flex items-center gap-1">
@@ -578,10 +602,12 @@ export default function ClientPortal() {
           </p>
         </div>
       </div>
+      ) : null}
 
       <section className="grid gap-4 lg:grid-cols-12" aria-label="Project workspace">
         {/* Row 1: release + milestones | team */}
         <div className="grid gap-4 md:grid-cols-2 lg:col-span-8 md:items-stretch">
+            {canSeeReleases ? (
             <Card className="flex flex-col bg-card">
               <CardHeader className="pb-2 p-4 shrink-0">
                 <CardTitle className="flex items-center text-sm font-semibold">
@@ -634,7 +660,9 @@ export default function ClientPortal() {
                 )}
               </CardContent>
             </Card>
+            ) : null}
 
+            {canSeeMilestones ? (
             <Card className="flex flex-col bg-card">
               <CardHeader className="pb-2 p-4 shrink-0">
                 <CardTitle className="flex items-center text-sm font-semibold">
@@ -671,6 +699,15 @@ export default function ClientPortal() {
                           <time className="text-[9px] text-muted-foreground flex items-center gap-1 mt-1">
                             <Clock className="h-2.5 w-2.5" /> Planned: {milestone.plannedDate ? new Date(milestone.plannedDate).toLocaleDateString() : 'N/A'}
                           </time>
+                          {milestone.assigneeName && (
+                            <p className="text-[9px] text-muted-foreground mt-1.5 flex items-center gap-1.5">
+                              <Users className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate">
+                                {milestone.assigneeName}
+                                {milestone.assigneeRole ? ` · ${milestone.assigneeRole}` : ""}
+                              </span>
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -682,11 +719,15 @@ export default function ClientPortal() {
                 )}
               </CardContent>
             </Card>
+            ) : null}
         </div>
 
-        <ClientProjectTeamCard projectId={project?.id} className="lg:col-span-4 lg:row-start-1" />
+        {canSeeDevelopers ? (
+          <ClientProjectTeamCard projectId={project?.id} className="lg:col-span-4 lg:row-start-1" />
+        ) : null}
 
         {/* Row 2: activity feed | assets + discussion — matched height */}
+        {canSeeProgress ? (
         <div className="flex h-[460px] flex-col lg:col-span-8 lg:row-start-2 lg:h-[520px]">
           <ClientRecentActivityPanel
             logs={activityLogs}
@@ -695,9 +736,11 @@ export default function ClientPortal() {
             className="h-full min-h-0 flex-1"
           />
         </div>
+        ) : null}
 
         <div className="flex h-[460px] flex-col gap-4 lg:col-span-4 lg:row-start-2 lg:h-[520px]">
 
+          {canSeeDocuments ? (
           <Card className="shrink-0 bg-card shadow-sm">
             <CardHeader className="pb-2 p-4 border-b">
               <CardTitle className="flex items-center text-sm font-semibold">
@@ -705,15 +748,15 @@ export default function ClientPortal() {
                 Assets & Deliverables
               </CardTitle>
             </CardHeader>
-            <CardContent className="max-h-[180px] overflow-y-auto overscroll-y-auto dialog-scroll p-3 space-y-2.5">
+            <CardContent className="max-h-[240px] overflow-y-auto overscroll-y-auto dialog-scroll p-3 space-y-2.5">
               {isLoadingResources ? (
                 <Skeleton className="h-16 w-full" />
-              ) : resourcesData?.resources?.length ? (
+              ) : sharedResources.length ? (
                 <div className="space-y-2 pb-1">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    Shared files
+                    Project resources
                   </p>
-                  {resourcesData.resources.map((r) => {
+                  {sharedResources.map((r) => {
                     const isImage = r.mimeType?.startsWith("image/") && r.fileUrl;
                     return (
                       <div
@@ -789,7 +832,7 @@ export default function ClientPortal() {
                   !project.stagingUrl &&
                   !project.adminUrl &&
                   !project.websiteUrl &&
-                  !resourcesData?.resources?.length) && (
+                  !sharedResources.length) && (
                   <div className="text-center text-[10px] text-muted-foreground py-4 border border-dashed rounded bg-muted/5">
                     No linked environment assets yet.
                   </div>
@@ -797,7 +840,9 @@ export default function ClientPortal() {
               )}
             </CardContent>
           </Card>
+          ) : null}
 
+          {canSeeDiscussions ? (
           <Card className="flex min-h-0 flex-1 flex-col bg-card shadow-sm">
             <CardHeader className="pb-2 p-4 border-b flex flex-row items-center justify-between space-y-0 shrink-0">
               <CardTitle className="flex items-center text-sm font-semibold">
@@ -849,24 +894,31 @@ export default function ClientPortal() {
                 )}
               </div>
               
-              <div className="shrink-0 bg-[#f0f2f5] px-3 py-2 dark:bg-[#202c33]">
-                <ChatComposer
-                  value={commentText}
-                  onChange={setCommentText}
-                  onSubmit={async (payload) => {
-                    await handlePostComment(payload);
-                    setCommentText("");
-                  }}
-                  isSubmitting={createCommentMutation.isPending}
-                  placeholder="Type a message"
-                  mentionCandidates={mentionCandidates}
-                  enableEmojiPicker
-                  enableVoice
-                  size="compact"
-                />
-              </div>
+              {canPostDiscussion ? (
+                <div className="shrink-0 bg-[#f0f2f5] px-3 py-2 dark:bg-[#202c33]">
+                  <ChatComposer
+                    value={commentText}
+                    onChange={setCommentText}
+                    onSubmit={async (payload) => {
+                      await handlePostComment(payload);
+                      setCommentText("");
+                    }}
+                    isSubmitting={createCommentMutation.isPending}
+                    placeholder="Type a message"
+                    mentionCandidates={mentionCandidates}
+                    enableEmojiPicker
+                    enableVoice
+                    size="compact"
+                  />
+                </div>
+              ) : (
+                <div className="shrink-0 border-t border-border/60 bg-muted/30 px-3 py-2 text-center text-[10px] text-muted-foreground">
+                  Read-only access — ask your Client Admin for permission to reply.
+                </div>
+              )}
             </CardContent>
           </Card>
+          ) : null}
         </div>
       </section>
 
@@ -987,6 +1039,12 @@ export default function ClientPortal() {
                 {project.description}
               </FormattedText>
             </section>
+
+            {canSeeDocuments && isLoadingResources ? (
+              <Skeleton className="h-16 w-full" />
+            ) : canSeeDocuments && sharedResources.length > 0 ? (
+              <ProjectDescriptionResourceList resources={sharedResources} />
+            ) : null}
 
             <section className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-border/60 bg-muted/20 p-3">

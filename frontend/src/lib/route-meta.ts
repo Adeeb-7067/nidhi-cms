@@ -24,6 +24,11 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     title: "Team",
     description: "Manage employees, roles, and access.",
   },
+  "/admin/monitoring/analytics": {
+    title: "Monitoring analytics",
+    description: "Work sessions, clock vs logs, consent, and screenshots.",
+    hideHeader: true,
+  },
   "/admin/clients": {
     title: "Companies",
     description: "Company accounts and their projects.",

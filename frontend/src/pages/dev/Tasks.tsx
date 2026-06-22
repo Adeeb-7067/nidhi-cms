@@ -11,6 +11,7 @@ import {
   type WorkTask,
 } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { assigneeRoleShortLabel } from "@/lib/user-roles";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -422,7 +423,7 @@ export default function DevTasks() {
                           <SelectItem value="none">Unassigned (backlog)</SelectItem>
                           {assignableData?.members.map((m) => (
                             <SelectItem key={m.id} value={m.id.toString()}>
-                              {m.name} ({m.role === "tester" || m.role === "qa" ? "QA" : "Dev"})
+                              {m.name} ({assigneeRoleShortLabel(m.role)})
                             </SelectItem>
                           ))}
                         </SelectContent>

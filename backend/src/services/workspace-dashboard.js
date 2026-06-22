@@ -1,3 +1,4 @@
+import { isDeveloperRole, isDevPortalStaffRole } from "../constants/user-roles.js";
 import {
   projectsTable,
   projectMembersTable,
@@ -5,7 +6,6 @@ import {
   ticketsTable,
   dailyLogsTable,
   notificationsTable,
-  clientsTable,
   milestonesTable,
   apkReleasesTable,
   resourceRequestsTable,
@@ -16,6 +16,7 @@ import {
   isVirtualLogProjectId,
   resolveLogProjectName,
 } from "./daily-log-virtual-projects.js";
+import { findClientCompanyForUser } from "./client-team.js";
 
 const OPEN_BUG_FILTER = {
   $or: [
@@ -83,8 +84,9 @@ export async function buildWorkspaceDashboard(user) {
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-  const isDev = role === "developer";
+  const isDev = isDeveloperRole(role);
   const isQa = role === "qa" || role === "tester";
+  const isPortalStaff = isDevPortalStaffRole(role);
   const [
     projects,
     openBugs,
@@ -112,6 +114,8 @@ export async function buildWorkspaceDashboard(user) {
   let hoursThisWeek = 0;
   let bugsAssigned = 0;
   let bugsReported = 0;
+  let milestonesAssigned = 0;
+  let myMilestones = [];
   let logHoursTrend = [];
   let bugsTrend = [];
   let recentLogs = [];
@@ -147,6 +151,37 @@ export async function buildWorkspaceDashboard(user) {
       .limit(5)
       .lean()
       .exec();
+  }
+
+  if (isPortalStaff && projectIds.length) {
+    const milestoneFilter = {
+      projectId: { $in: projectIds },
+      assigneeId: user.id,
+      status: { $in: ["pending", "delayed"] },
+    };
+    milestonesAssigned = await milestonesTable.countDocuments(milestoneFilter);
+    const milestoneDocs = await milestonesTable
+      .find(milestoneFilter)
+      .sort({ plannedDate: 1 })
+      .limit(5)
+      .lean()
+      .exec();
+    const milestoneProjectIds = [...new Set(milestoneDocs.map((m) => m.projectId))];
+    const milestoneProjects = milestoneProjectIds.length
+      ? await projectsTable
+          .find({ id: { $in: milestoneProjectIds } }, { id: 1, name: 1 })
+          .lean()
+          .exec()
+      : [];
+    const milestoneProjectNameById = new Map(milestoneProjects.map((p) => [p.id, p.name]));
+    myMilestones = milestoneDocs.map((m) => ({
+      id: m.id,
+      title: m.title,
+      plannedDate: (m.plannedDate instanceof Date ? m.plannedDate : new Date(m.plannedDate)).toISOString(),
+      status: m.status,
+      projectId: m.projectId,
+      projectName: milestoneProjectNameById.get(m.projectId) ?? "Project",
+    }));
   }
 
   if (isQa) {
@@ -219,7 +254,8 @@ export async function buildWorkspaceDashboard(user) {
     openTickets +
     unreadNotifications +
     (isDev ? bugsAssigned : 0) +
-    (isQa ? bugsReported : 0);
+    (isQa ? bugsReported : 0) +
+    (isPortalStaff ? milestonesAssigned : 0);
 
   return {
     role,
@@ -231,6 +267,7 @@ export async function buildWorkspaceDashboard(user) {
       hoursThisWeek: isDev ? Math.round(hoursThisWeek * 10) / 10 : undefined,
       bugsAssigned: isDev ? bugsAssigned : undefined,
       bugsReported: isQa ? bugsReported : undefined,
+      milestonesAssigned: isPortalStaff ? milestonesAssigned : undefined,
       maintenanceProjects: maintenanceCount,
       activeDevProjects: activeDevCount,
     },
@@ -263,11 +300,14 @@ export async function buildWorkspaceDashboard(user) {
       logDate: l.logDate,
       projectId: l.projectId,
     })),
+    myMilestones,
   };
 }
 
 export async function buildClientHubDashboard(user) {
-  const company = await clientsTable.findOne({ userId: user.id }).lean();
+  // Resolve the company for primary clients AND active team members so the
+  // hub dashboard scopes to the correct company in both cases.
+  const company = await findClientCompanyForUser(user.id);
   if (!company) {
     return {
       projectCount: 0,

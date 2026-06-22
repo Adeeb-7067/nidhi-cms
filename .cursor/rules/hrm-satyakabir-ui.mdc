@@ -1,0 +1,67 @@
+---
+description: HRM pages must follow Satyakabir Frontend UI reference
+globs: frontend/src/pages/hrm/**,frontend/src/modules/hrm/**
+alwaysApply: false
+---
+
+# HRM UI — Satyakabir reference
+
+All CMS HRM pages must match visual and layout patterns from **`HRM Satyakabir/Frontend/`** (not generic CMS portal hero cards).
+
+## Reference source
+
+- Layout primitives: `Frontend/src/components/app/PageHeader.tsx`, `KpiCard.tsx`, `StatStrip.tsx`, `DataExplorer.tsx`
+- Page examples: `Frontend/src/routes/calendar.tsx`, `Frontend/src/components/policies/PolicyLibraryView.tsx`, `Frontend/src/routes/documents.tsx`, `Frontend/src/routes/audit.tsx`
+- Analysis: `HRM Satyakabir/FRONTEND_FULL_CODE_ANALYSIS.txt`
+
+## Required CMS kit
+
+Import from `@/modules/hrm/hrm-reference-kit` (or `@/modules/hrm/components` re-exports):
+
+| Pattern | Component |
+|---------|-----------|
+| Page title + subtitle + actions | `HrmRefPageHeader` via `HrmPageHero` |
+| Count subtitle | `hrmRefCountSubtitle(n, "policy")` |
+| Refresh button | `HrmRefRefreshButton` |
+| KPI / stat row | `HrmRefStatStrip` via `HrmPageKpiRow` |
+| Master-detail (policies, documents) | `HrmRefMasterDetail`, `HrmRefListItemContent`, `HrmRefDetailHeader` |
+| Detail fields | `HrmRefDetailRow`, `HrmRefDetailSection`, `HrmRefStatusPill` |
+| PDF preview / empty | `HrmRefPdfPanel` |
+| Empty states | `HrmRefEmptyState` |
+
+## Page structure
+
+```
+HrmPageShell
+  HrmPageHero (Satyakabir plain header — no DashboardHero card)
+  HrmPageKpiRow (gradient StatStrip chips)
+  [filters / tabs if needed]
+  PortalTablePanel + AdvancedTable  OR  HrmRefMasterDetail
+```
+
+## Master-detail pages
+
+Use `HrmRefMasterDetail` with:
+- Left: uppercase list label, `border-r-4 border-r-primary` on active row, icon + title + category
+- Right: detail header with Edit/Delete, PDF panel or field sections
+
+Examples: Policies, Documents, Calendar (grid + day panel).
+
+## Table pages
+
+Attendance, Leave, Employees, Audit, Recruitment:
+- `HrmRefPageHeader` title + dynamic count subtitle
+- `HrmRefRefreshButton` in actions
+- Primary action: `portalActionButtonClass()` purple button with icon
+- `HrmPageKpiRow` stat strip above table
+- `PortalTablePanel` + `AdvancedTable` (not legacy HrmTableCard)
+
+## Do not use on HRM pages
+
+- `DashboardHero` motion card (CMS Companies style) — HRM uses Satyakabir plain headers
+- `HrmTableCard` / `HrmAdvancedTable` — removed; use PortalTablePanel
+- Placeholder-only pages without real layout when API exists
+
+## Self-service ("My") pages
+
+Same header + stat strip; read-only where Satyakabir employee views are read-only (e.g. My Holidays calendar).

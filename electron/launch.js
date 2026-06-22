@@ -42,10 +42,10 @@ delete env.ELECTRON_RUN_AS_NODE;
 
 // Pass the backend URL to the Electron main process so it can redirect
 // file:///uploads/* requests to the real backend origin.
-env.CMS_API_URL = (
+  env.CMS_API_URL = (
   process.env.VITE_API_BASE_URL ||   // CLI override takes precedence
   frontendEnv.VITE_API_BASE_URL ||   // from frontend/.env
-  'http://localhost:15000'
+  'http://localhost:8080'
 ).replace(/\/+$/, '');
 
 const child = spawn(electronBin, [path.join(__dirname)], {
