@@ -396,7 +396,7 @@ export async function customFetch<T = unknown>(
 
             if (!_isRefreshing) {
               _isRefreshing = true;
-              const refreshUrl = _baseUrl ? `${_baseUrl}/api/auth/refresh` : "/api/auth/refresh";
+              const refreshUrl = _baseUrl ? `${_baseUrl}/auth/refresh` : "/api/auth/refresh";
               
               fetch(refreshUrl, {
                 method: "POST",
