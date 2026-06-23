@@ -1,4 +1,5 @@
 import { usersTable, departmentsTable, payrollLinesTable, payrollRunsTable, sessionsTable, credentialHistoryTable, getNextSequence } from "../../models/schema/index.js";
+import { shiftTemplatesTable } from "../../models/schema/hrm/shifts.js";
 import crypto from "crypto";
 import { staffEmployeeRoles } from "../../constants/user-roles.js";
 import { formatUser } from "../../mappers/user-format.js";
@@ -13,7 +14,7 @@ import { listLeaveBalances } from "./leave.service.js";
 import { listLeaveRequests } from "./leave.service.js";
 import { getAttendanceDailySummaries } from "./attendance.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
-import { listDocuments } from "./documents.service.js";
+import { countDocuments } from "./documents.service.js";
 import { getSalaryStructureForUser } from "./payroll.service.js";
 
 const EMPLOYEE_LIST_PROJECTION = {
@@ -58,30 +59,41 @@ export { monthBounds };
 async function enrichEmployees(rows) {
   const deptIds = [...new Set(rows.map((r) => r.departmentId).filter(Boolean))];
   const managerIds = [...new Set(rows.map((r) => r.reportingManagerId).filter(Boolean))];
-  const lookupIds = [...new Set([...managerIds])];
+  const teamleaderIds = [...new Set(rows.map((r) => r.teamleaderId).filter(Boolean))];
+  const shiftIds = [...new Set(rows.map((r) => r.shiftId).filter(Boolean))];
+  const peopleIds = [...new Set([...managerIds, ...teamleaderIds])];
 
-  const [departments, managers] = await Promise.all([
+  const [departments, people, shifts] = await Promise.all([
     deptIds.length
       ? departmentsTable.find({ id: { $in: deptIds } }, { id: 1, name: 1, code: 1 }).lean()
       : [],
-    lookupIds.length
-      ? usersTable.find({ id: { $in: lookupIds } }, { id: 1, name: 1, employeeId: 1 }).lean()
+    peopleIds.length
+      ? usersTable.find({ id: { $in: peopleIds } }, { id: 1, name: 1, employeeId: 1 }).lean()
+      : [],
+    shiftIds.length
+      ? shiftTemplatesTable.find({ id: { $in: shiftIds } }, { id: 1, name: 1 }).lean()
       : [],
   ]);
 
   const deptMap = new Map(departments.map((d) => [d.id, d]));
-  const managerMap = new Map(managers.map((m) => [m.id, m]));
+  const peopleMap = new Map(people.map((m) => [m.id, m]));
+  const shiftMap = new Map(shifts.map((s) => [s.id, s]));
 
   return rows.map((u) => {
-    const base = formatUser(u, { includeSensitive: true });
+    const base = formatUser(u, { includeSensitive: false });
     const dept = u.departmentId ? deptMap.get(u.departmentId) : null;
-    const mgr = u.reportingManagerId ? managerMap.get(u.reportingManagerId) : null;
+    const mgr = u.reportingManagerId ? peopleMap.get(u.reportingManagerId) : null;
+    const teamleader = u.teamleaderId ? peopleMap.get(u.teamleaderId) : null;
+    const shift = u.shiftId ? shiftMap.get(u.shiftId) : null;
     return {
       ...base,
       departmentName: dept?.name ?? u.department ?? null,
       departmentCode: dept?.code ?? null,
       reportingManagerName: mgr?.name ?? null,
       reportingManagerEmployeeId: mgr?.employeeId ?? null,
+      teamleaderName: teamleader?.name ?? null,
+      teamleaderEmployeeId: teamleader?.employeeId ?? null,
+      shiftName: shift?.name ?? null,
     };
   });
 }
@@ -134,12 +146,15 @@ export async function getHrmEmployeeDetail(userId) {
   const month = now.getMonth() + 1;
   const { startDate, endDate } = monthBounds(year, month);
 
-  const [{ summaries }, balances, leaveRequests, documents, structure] = await Promise.all([
+  const [{ summaries }, balances, leaveRequests, documentCount, structure, latestRun] = await Promise.all([
     getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] }),
     listLeaveBalances(userId, year),
-    listLeaveRequests({ userIds: [userId], status: "pending" }),
-    listDocuments(userId),
+    listLeaveRequests({ userIds: [userId] }),
+    countDocuments(userId),
     getSalaryStructureForUser(userId),
+    payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
+      .sort({ year: -1, month: -1 })
+      .lean(),
   ]);
 
   const userSummaries = summaries.filter((s) => s.userId === userId);
@@ -155,9 +170,6 @@ export async function getHrmEmployeeDetail(userId) {
 
   const structureRow = structure;
 
-  const latestRun = await payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
-    .sort({ year: -1, month: -1 })
-    .lean();
   let latestPayrollNet = null;
   if (latestRun) {
     const line = await payrollLinesTable.findOne({ payrollRunId: latestRun.id, userId }).lean();
@@ -167,7 +179,7 @@ export async function getHrmEmployeeDetail(userId) {
   const overview = {
     month: { year, month, startDate, endDate },
     attendance,
-    pendingLeave: leaveRequests.length,
+    pendingLeave: leaveRequests.filter((r) => r.status === "pending").length,
     leaveBalances: balances.map((b) => ({
       code: b.leaveType?.code ?? "",
       name: b.leaveType?.name ?? "Leave",
@@ -176,10 +188,16 @@ export async function getHrmEmployeeDetail(userId) {
     salaryGross: structureRow?.gross ?? null,
     salaryNet: structureRow?.net ?? null,
     latestPayrollNet,
-    documentCount: documents.length,
+    documentCount,
   };
 
-  return { employee, overview };
+  return {
+    employee,
+    overview,
+    attendanceSummaries: userSummaries,
+    leaveBalances: balances,
+    leaveRequests,
+  };
 }
 
 function generateTemporaryPassword() {

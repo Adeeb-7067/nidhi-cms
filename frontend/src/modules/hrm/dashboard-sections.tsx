@@ -15,6 +15,7 @@ import type {
   HrmDashboardActivityItem,
   HrmDashboardTodayAttendanceRow,
   HrmDashboardTopEarner,
+  HrmDashboardBirthday,
 } from "./types";
 import { HrmAttendanceBadge } from "./components";
 
@@ -350,17 +351,60 @@ export function HrmRecentActivityList({ items }: { items: HrmDashboardActivityIt
   );
 }
 
+export function HrmBirthdayList({ birthdays }: { birthdays: HrmDashboardBirthday[] }) {
+  if (!birthdays.length) {
+    return (
+      <p className="flex min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+        No upcoming birthdays in the next 3 months.
+      </p>
+    );
+  }
+  return (
+    <ul className="space-y-2.5">
+      {birthdays.map((b) => (
+        <li key={`${b.userId}-${b.date}`} className="flex items-center gap-2.5">
+          <HrmEmployeeAvatar name={b.userName} avatarUrl={b.avatarUrl} className="h-8 w-8" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium">{b.userName}</p>
+            <p className="truncate text-[10px] text-muted-foreground">
+              {format(new Date(`${b.date}T12:00:00`), "MMM d")}
+              {b.employeeId ? ` · ${b.employeeId}` : ""}
+            </p>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function HrmQuickStatsWidget({
   presentToday,
   headcount,
   pendingApprovals,
+  averageClockIn,
+  onTimeRatePct,
+  unreadAlerts,
+  wfhToday,
 }: {
   presentToday: number;
   headcount: number;
   pendingApprovals: number;
+  averageClockIn?: string | null;
+  onTimeRatePct?: number | null;
+  unreadAlerts?: number;
+  wfhToday?: number;
 }) {
   const now = new Date();
   const attendancePct = headcount > 0 ? Math.round((presentToday / headcount) * 100) : 0;
+  const tiles = [
+    { label: "Attendance", value: `${attendancePct}%` },
+    { label: "Pending", value: String(pendingApprovals) },
+    ...(averageClockIn != null ? [{ label: "Avg clock-in", value: averageClockIn }] : []),
+    ...(onTimeRatePct != null ? [{ label: "On-time", value: `${onTimeRatePct}%` }] : []),
+    ...(wfhToday != null ? [{ label: "WFH today", value: String(wfhToday) }] : []),
+    ...(unreadAlerts != null ? [{ label: "Unread alerts", value: String(unreadAlerts) }] : []),
+  ].slice(0, 6);
+
   return (
     <div className={cn("flex h-full flex-col", HRM_DASHBOARD_PANEL_MIN_H)}>
       <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
@@ -368,14 +412,15 @@ export function HrmQuickStatsWidget({
       </p>
       <p className="text-xs text-muted-foreground">{format(now, "EEEE, MMM d")}</p>
       <div className="mt-auto grid grid-cols-2 gap-2 pt-3">
-        <div className="rounded-lg border border-border/50 bg-background/60 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">Attendance</p>
-          <p className="text-base font-bold tabular-nums sm:text-lg">{attendancePct}%</p>
-        </div>
-        <div className="rounded-lg border border-border/50 bg-background/60 p-2 text-center">
-          <p className="text-[10px] text-muted-foreground">Pending</p>
-          <p className="text-base font-bold tabular-nums sm:text-lg">{pendingApprovals}</p>
-        </div>
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className="rounded-lg border border-border/50 bg-background/60 p-2 text-center"
+          >
+            <p className="text-[10px] text-muted-foreground">{tile.label}</p>
+            <p className="text-base font-bold tabular-nums sm:text-lg">{tile.value}</p>
+          </div>
+        ))}
       </div>
     </div>
   );

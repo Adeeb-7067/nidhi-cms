@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, startOfMonth, endOfMonth, subDays } from "date-fns";
 import { Link } from "wouter";
-import { AlertTriangle, ClipboardEdit, Grid3X3, UserCheck, UserX, CalendarClock, Home, ClipboardList, Clock, Pencil } from "lucide-react";
+import { AlertTriangle, ClipboardEdit, Grid3X3, UserCheck, UserX, CalendarClock, Home, ClipboardList, Clock, Pencil, LogIn, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -36,7 +36,9 @@ import {
   HrmWorkflowBadge,
   HrmApprovalActions,
   portalActionButtonClass,
+  HrmInsightBanner,
 } from "@/modules/hrm/components";
+import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
 import type { HrmAttendanceCorrection, HrmAttendanceSummary } from "@/modules/hrm/types";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import {
@@ -48,6 +50,7 @@ import {
   useReviewAttendanceCorrection,
   useExcuseLateArrival,
   useAdminOverrideAttendance,
+  useHrmSettings,
 } from "@/api/hrm";
 import { ATTENDANCE_STATUS_LABELS, PRIMARY_ATTENDANCE_STATUSES, isPresentLikeStatus, normalizeAttendanceStatus } from "@/modules/hrm/constants";
 import {
@@ -68,7 +71,10 @@ export default function HrmAttendancePage() {
   const canAdmin = useHrmPermission("attendance", "view");
   const canApprove = useHrmPermission("attendance", "approve");
   const canManage = useHrmPermission("attendance", "edit") || canApprove;
-  const [periodMode, setPeriodMode] = useState<"today" | "month">("today");
+  const [periodMode, setPeriodMode] = useState<"today" | "yesterday" | "month">("today");
+  const [dateSort, setDateSort] = useState<"newest" | "oldest">("newest");
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualMode, setManualMode] = useState<"clock_in" | "clock_out">("clock_in");
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
   const [departmentId, setDepartmentId] = useState<string>("all");
   const [employeeId, setEmployeeId] = useState<string>("all");
@@ -82,6 +88,7 @@ export default function HrmAttendancePage() {
   const [correctionStatus, setCorrectionStatus] = useState("present");
   const [correctionMinutes, setCorrectionMinutes] = useState("");
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [attendanceTab, setAttendanceTab] = useState("grid");
   const [adjustRow, setAdjustRow] = useState<AttendanceRow | null>(null);
   const [adjustStatus, setAdjustStatus] = useState("present");
   const [adjustHours, setAdjustHours] = useState("");
@@ -91,13 +98,18 @@ export default function HrmAttendancePage() {
   const [excuseNote, setExcuseNote] = useState("");
 
   const todayStr = format(new Date(), "yyyy-MM-dd");
+  const yesterdayStr = format(subDays(new Date(), 1), "yyyy-MM-dd");
   const startDate =
     canAdmin && periodMode === "today"
       ? todayStr
-      : format(startOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
+      : canAdmin && periodMode === "yesterday"
+        ? yesterdayStr
+        : format(startOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
   const endDate =
-    canAdmin && periodMode === "today"
-      ? todayStr
+    canAdmin && (periodMode === "today" || periodMode === "yesterday")
+      ? periodMode === "today"
+        ? todayStr
+        : yesterdayStr
       : format(endOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
   const deptNum = departmentId !== "all" ? Number(departmentId) : undefined;
   const selfOnly = !canAdmin;
@@ -133,27 +145,30 @@ export default function HrmAttendancePage() {
     startDate,
     endDate,
     filterUserId,
+    { enabled: attendanceTab === "variance" },
   );
-  const { data: correctionsData } = useHrmAttendanceCorrections(selfOnly ? user?.id : filterUserId);
-  const { data: departmentsData } = useHrmDepartments();
+  const { data: correctionsData } = useHrmAttendanceCorrections(selfOnly ? user?.id : filterUserId, {
+    enabled: attendanceTab === "corrections" || attendanceTab === "late-excuses",
+  });
+  const { data: departmentsData } = useHrmDepartments({ enabled: canAdmin });
   const applyCorrection = useApplyAttendanceCorrection();
   const reviewCorrection = useReviewAttendanceCorrection();
   const excuseLate = useExcuseLateArrival();
   const adminOverride = useAdminOverrideAttendance();
+  const { data: hrmSettings } = useHrmSettings({ enabled: adjustOpen || excuseOpen });
 
   const rows = useMemo(() => {
     let list = data?.summaries ?? [];
     if (statusFilter !== "all") {
       list = list.filter((r) => normalizeAttendanceStatus(r.status) === statusFilter);
     }
-    if (canAdmin) {
-      list = [...list].sort((a, b) => {
-        const byName = (a.userName ?? "").localeCompare(b.userName ?? "");
-        return byName !== 0 ? byName : a.date.localeCompare(b.date);
-      });
-    }
+    list = [...list].sort((a, b) => {
+      const byDate = dateSort === "newest" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
+      if (byDate !== 0) return byDate;
+      return (a.userName ?? "").localeCompare(b.userName ?? "");
+    });
     return list;
-  }, [data, statusFilter, canAdmin]);
+  }, [data, statusFilter, dateSort]);
 
   const varianceRows = useMemo(
     () => (varianceData?.rows ?? []).filter((r) => r.flagged),
@@ -181,8 +196,10 @@ export default function HrmAttendancePage() {
     const absent = list.filter((r) => r.status === "absent").length;
     const onLeave = list.filter((r) => r.status === "on_leave").length;
     const wfh = list.filter((r) => r.status === "wfh").length;
-    return [
-      { label: canAdmin ? "Present / onsite / WFH" : "Present days", value: present, hint: canAdmin ? "Today’s attendance" : "This period", icon: UserCheck, accent: "green" as const },
+    const halfDay = list.filter((r) => r.status === "half_day").length;
+    const holiday = list.filter((r) => r.status === "holiday").length;
+    const items = [
+      { label: canAdmin ? "Present / onsite / WFH" : "Present days", value: present, hint: canAdmin ? "This period" : "This period", icon: UserCheck, accent: "green" as const },
       { label: "Absent", value: absent, hint: "Marked absent", icon: UserX, accent: "blue" as const, alert: absent > 0 },
       { label: "On leave", value: onLeave, hint: "Approved leave", icon: CalendarClock, accent: "violet" as const },
       {
@@ -194,7 +211,24 @@ export default function HrmAttendancePage() {
         alert: canAdmin ? pendingCorrections.length > 0 : false,
       },
     ];
+    if (halfDay > 0) {
+      items.push({ label: "Half day", value: halfDay, hint: "Partial leave", icon: CalendarClock, accent: "amber" as const });
+    }
+    if (holiday > 0) {
+      items.push({ label: "Holiday", value: holiday, hint: "Company holiday", icon: CalendarClock, accent: "violet" as const });
+    }
+    return items;
   }, [data?.summaries, canAdmin, pendingCorrections.length]);
+
+  const workModeSummary = useMemo(() => {
+    const list = data?.summaries ?? [];
+    const onsite = list.filter(
+      (r) => isPresentLikeStatus(r.status) && r.status !== "wfh" && !r.globalWfh,
+    ).length;
+    const wfh = list.filter((r) => r.status === "wfh" || r.globalWfh).length;
+    const remoteDefault = list.filter((r) => r.globalWfh && r.status !== "wfh").length;
+    return { onsite, wfh, remoteDefault };
+  }, [data?.summaries]);
 
   const showCorrectionStatus = correctionRequestType === "full_day" || correctionRequestType === "wrong_time";
   const showCorrectionMinutes =
@@ -285,6 +319,28 @@ export default function HrmAttendancePage() {
         header: "Status",
         cell: (r) => <HrmAttendanceBadge status={r.status} suffix={attendanceStatusSuffix(r)} />,
         exportValue: (r) => `${r.status}${attendanceStatusSuffix(r)}`,
+      },
+      {
+        id: "workMode",
+        header: "Work mode",
+        cell: (r) => {
+          if (r.status === "wfh" || r.globalWfh) {
+            return (
+              <Badge variant="outline" className="text-[10px] border-blue-500/20 bg-blue-500/10 text-blue-700">
+                <Home className="mr-1 inline h-3 w-3" />
+                WFH
+              </Badge>
+            );
+          }
+          if (isPresentLikeStatus(r.status) || r.status === "onsite") {
+            return (
+              <Badge variant="outline" className="text-[10px] border-teal-500/20 bg-teal-500/10 text-teal-700">
+                Onsite
+              </Badge>
+            );
+          }
+          return <span className="text-muted-foreground">—</span>;
+        },
       },
       {
         id: "active",
@@ -533,6 +589,32 @@ export default function HrmAttendancePage() {
               <Button size="sm" className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")} onClick={() => setCorrectionOpen(true)}>
                 Request correction
               </Button>
+              {canManage && (
+                <>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setManualMode("clock_in");
+                      setManualOpen(true);
+                    }}
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Manual clock in
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setManualMode("clock_out");
+                      setManualOpen(true);
+                    }}
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Manual clock out
+                  </Button>
+                </>
+              )}
               {canAdmin && (
                 <Button asChild size="sm" variant="outline">
                   <Link href="/admin/attendance">Live sessions</Link>
@@ -544,15 +626,38 @@ export default function HrmAttendancePage() {
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading} />
 
+        {canAdmin && (periodMode === "today" || periodMode === "yesterday") && (
+          <HrmInsightBanner title="Work mode summary" icon={Grid3X3}>
+            <p className="text-xs text-muted-foreground">
+              {workModeSummary.onsite} onsite · {workModeSummary.wfh} WFH
+              {workModeSummary.remoteDefault > 0
+                ? ` · ${workModeSummary.remoteDefault} under global WFH policy`
+                : ""}
+            </p>
+          </HrmInsightBanner>
+        )}
+
         <HrmFilterBar>
           {canAdmin && (
-            <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as "today" | "month")}>
+            <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as "today" | "yesterday" | "month")}>
               <SelectTrigger className="h-9 w-36 bg-background">
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
+                <SelectItem value="yesterday">Yesterday</SelectItem>
                 <SelectItem value="month">Full month</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          {canAdmin && (
+            <Select value={dateSort} onValueChange={(v) => setDateSort(v as "newest" | "oldest")}>
+              <SelectTrigger className="h-9 w-36 bg-background">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest first</SelectItem>
+                <SelectItem value="oldest">Oldest first</SelectItem>
               </SelectContent>
             </Select>
           )}
@@ -610,7 +715,7 @@ export default function HrmAttendancePage() {
           )}
         </HrmFilterBar>
 
-        <Tabs defaultValue="grid" className="space-y-4">
+        <Tabs value={attendanceTab} onValueChange={setAttendanceTab} className="space-y-4">
           <HrmTabsList>
             <HrmTabsTrigger value="grid">Daily grid</HrmTabsTrigger>
             <HrmTabsTrigger value="variance">
@@ -767,6 +872,14 @@ export default function HrmAttendancePage() {
                 <p className="text-sm text-muted-foreground">
                   {adjustRow.userName ?? "Employee"} · {adjustRow.date}
                 </p>
+                {normalizeAttendanceStatus(adjustRow.status) === "onsite" && !adjustRow.forgivenLate && (
+                  <HrmInsightBanner title="Late policy">
+                    <p className="text-xs text-muted-foreground">
+                      First {hrmSettings?.hrmMaxFreeLates ?? 3} late days each month may be forgiven when the
+                      employee completes a full work day.
+                    </p>
+                  </HrmInsightBanner>
+                )}
                 <HrmField label="Status">
                   <Select value={adjustStatus} onValueChange={setAdjustStatus}>
                     <SelectTrigger>
@@ -834,6 +947,15 @@ export default function HrmAttendancePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {canManage && (
+          <ManualAttendanceDialog
+            open={manualOpen}
+            onOpenChange={setManualOpen}
+            employees={employeeOptions}
+            defaultMode={manualMode}
+          />
+        )}
       </HrmPageShell>
     </HrmGate>
   );

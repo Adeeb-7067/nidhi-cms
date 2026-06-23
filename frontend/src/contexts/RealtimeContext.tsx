@@ -97,7 +97,11 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
 
   // Firebase foreground push + token registration
   useEffect(() => {
-    if (!user || !accessToken) return;
+    if (!user || !accessToken) {
+      fcmRegisteredRef.current = false;
+      setFirebasePushEnabled(false);
+      return;
+    }
 
     let unsubscribeFcm: (() => void) | undefined;
 

@@ -1,5 +1,5 @@
-import { hrmAuditLogsTable, payrollSlipsTable, payrollRunsTable, leaveRequestsTable, wfhRequestsTable, attendanceCorrectionsTable } from "../models/schema/index.js";
-import { badRequest, notFound, parseIdParam, parsePagination } from "../utils/route-errors.js";
+import { hrmAuditLogsTable, payrollSlipsTable, payrollRunsTable, leaveRequestsTable, wfhRequestsTable, attendanceCorrectionsTable, employeeDocumentsTable } from "../models/schema/index.js";
+import { badRequest, notFound, parseIdParam, parsePagination, forbidden } from "../utils/route-errors.js";
 import * as departmentsService from "../services/hrm/departments.service.js";
 import * as leaveService from "../services/hrm/leave.service.js";
 import * as wfhService from "../services/hrm/wfh.service.js";
@@ -21,7 +21,8 @@ import { companySettingsTable } from "../models/schema/index.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
 import { logHrmAudit } from "../services/hrm/hrm-audit.service.js";
 import { userHasPermission } from "../services/permissions.service.js";
-import { buildUserProfilePatchSet } from "../utils/user-profile-fields.js";
+import { isHrmAdminRole } from "../constants/user-roles.js";
+import { buildUserProfilePatchSet, buildProfilePatchMongoUpdate } from "../utils/user-profile-fields.js";
 import * as employeesService from "../services/hrm/employees.service.js";
 import * as dashboardService from "../services/hrm/dashboard.service.js";
 
@@ -368,12 +369,28 @@ async function getMyPayslips(req, res) {
   res.json({ slips: await payrollService.listMyPayslips(req.user.id, year) });
 }
 
+async function getAdminPayslips(req, res) {
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  const allPeriods = req.query.allPeriods === "true" || req.query.allPeriods === "1";
+  res.json({
+    slips: await payrollService.listAdminPayslips({ year, month, allPeriods }),
+  });
+}
+
 async function getPayslipById(req, res) {
   const id = parseIdParam(req.params.id, "payslip id");
   const slip = await payrollSlipsTable.findOne({ id }, { userId: 1 }).lean();
   if (!slip) notFound("Payslip");
   await assertCanAccessUser(req, slip.userId);
-  res.json(await payrollService.getPayslipDetail(id, slip.userId));
+  const canViewUnpublished =
+    isHrmAdminRole(req.user.role) ||
+    (await userHasPermission(req.user.id, "hrm_payroll", "view"));
+  res.json(
+    await payrollService.getPayslipDetail(id, slip.userId, {
+      requirePublished: !canViewUnpublished,
+    }),
+  );
 }
 
 async function getCandidates(_req, res) {
@@ -429,6 +446,22 @@ async function postDocument(req, res) {
 async function patchDocument(req, res) {
   const id = parseIdParam(req.params.id, "document id");
   res.json(await documentsService.reviewDocument(id, req.body, req.user.id));
+}
+
+async function deleteDocument(req, res) {
+  const id = parseIdParam(req.params.id, "document id");
+  const row = await employeeDocumentsTable.findOne({ id }, { userId: 1 }).lean();
+  if (!row) notFound("Document");
+  await assertCanAccessUser(req, row.userId);
+  const canDeleteAny =
+    isHrmAdminRole(req.user.role) ||
+    (await userHasPermission(req.user.id, "hrm_documents", "edit")) ||
+    (await userHasPermission(req.user.id, "hrm_documents", "delete"));
+  if (row.userId !== req.user.id && !canDeleteAny) {
+    forbidden("You cannot delete this document.");
+  }
+  await documentsService.deleteDocument(id);
+  res.status(204).send();
 }
 
 async function getPolicies(_req, res) {
@@ -528,10 +561,11 @@ async function patchUserHrmProfile(req, res) {
   if (!Object.keys(update).length) {
     badRequest("No profile fields to update.");
   }
+  const mongoUpdate = buildProfilePatchMongoUpdate(update);
   const { usersTable } = await import("../models/schema/index.js");
   const before = await usersTable.findOne({ id: userId }).lean();
   if (!before) notFound("User");
-  const user = await usersTable.findOneAndUpdate({ id: userId }, { $set: update }, { new: true });
+  const user = await usersTable.findOneAndUpdate({ id: userId }, mongoUpdate, { new: true, runValidators: true });
   if (!user) notFound("User");
   if (Object.prototype.hasOwnProperty.call(update, "shiftId") && update.shiftId == null) {
     await shiftsService.clearShiftForUser(userId);
@@ -621,6 +655,7 @@ export {
   getPayrollExport,
   getPayrollBankExport,
   getMyPayslips,
+  getAdminPayslips,
   getPayslipById,
   getCandidates,
   postCandidate,
@@ -631,6 +666,7 @@ export {
   getDocuments,
   postDocument,
   patchDocument,
+  deleteDocument,
   getPolicies,
   postPolicy,
   patchPolicy,

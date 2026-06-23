@@ -5,6 +5,7 @@ import {
   payrollLinesTable,
   payrollSlipsTable,
   hrmAuditLogsTable,
+  notificationsTable,
 } from "../../models/schema/index.js";
 import { leaveTypesTable, leaveRequestsTable } from "../../models/schema/hrm/leave.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
@@ -18,7 +19,7 @@ import { listWfhRequests } from "./wfh.service.js";
 import { getDirectReportIds, resolveScopedUserIds } from "./team-scope.js";
 import { computeAvailableBalance } from "./leave-accrual.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
-import { getHrmPolicyContext, workDayKeyForDate } from "./hrm-date-utils.js";
+import { getHrmPolicyContext, workDayKeyForDate, minutesInTimezone } from "./hrm-date-utils.js";
 
 const PENDING_PREVIEW_LIMIT = 8;
 
@@ -83,6 +84,87 @@ export function buildTodayStatusBreakdown(summaries) {
       name: TODAY_STATUS_LABELS[key] ?? key,
       value,
     }));
+}
+
+/** On-time rate among present-like statuses today (present vs late/onsite). */
+export function computeOnTimeRatePct(todaySummaries) {
+  const presentLike = (todaySummaries ?? []).filter((s) => isPresentLikeStatus(s.status));
+  if (!presentLike.length) return null;
+  const onTime = presentLike.filter((s) => s.status === "present").length;
+  return Math.round((onTime / presentLike.length) * 100);
+}
+
+/** Average first clock-in time label from session start map. */
+export function computeAverageClockInLabel(firstSessionMap, todayKey, timezone) {
+  const mins = [];
+  for (const [key, startedAt] of firstSessionMap.entries()) {
+    if (!key.endsWith(`:${todayKey}`) || !startedAt) continue;
+    mins.push(minutesInTimezone(startedAt, timezone));
+  }
+  if (!mins.length) return null;
+  const avg = Math.round(mins.reduce((a, b) => a + b, 0) / mins.length);
+  const h24 = Math.floor(avg / 60);
+  const m = avg % 60;
+  const period = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+function dobToUpcomingDate(dob, fromDate, year) {
+  const d = new Date(dob);
+  if (Number.isNaN(d.getTime())) return null;
+  const month = d.getUTCMonth();
+  const day = d.getUTCDate();
+  const candidate = new Date(Date.UTC(year, month, day));
+  if (candidate < fromDate) return null;
+  const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { date: dateKey, candidate };
+}
+
+/** Upcoming employee birthdays within the next N days. */
+export async function buildUpcomingBirthdays(scopeUserIds, daysAhead = 90) {
+  const filter = {
+    role: { $in: staffEmployeeRoles },
+    status: "active",
+    dob: { $ne: null },
+  };
+  if (scopeUserIds?.length) filter.id = { $in: scopeUserIds };
+
+  const employees = await usersTable
+    .find(filter)
+    .select({ id: 1, name: 1, employeeId: 1, dob: 1, avatarUrl: 1 })
+    .lean();
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const end = new Date(today);
+  end.setUTCDate(end.getUTCDate() + daysAhead);
+
+  const results = [];
+  for (const emp of employees) {
+    let match = null;
+    for (const year of [today.getUTCFullYear(), today.getUTCFullYear() + 1]) {
+      const row = dobToUpcomingDate(emp.dob, today, year);
+      if (row && row.candidate <= end) {
+        match = row;
+        break;
+      }
+    }
+    if (!match) continue;
+    results.push({
+      userId: emp.id,
+      userName: emp.name,
+      employeeId: emp.employeeId ?? null,
+      avatarUrl: emp.avatarUrl ?? null,
+      date: match.date,
+    });
+  }
+
+  return results.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 12);
+}
+
+async function countUnreadNotifications(userId) {
+  return notificationsTable.countDocuments({ userId, isRead: false });
 }
 
 /** Approval queue slices for pipeline-style charts. */
@@ -169,7 +251,10 @@ async function buildTodayAttendanceRowsFromSummaries(todaySummaries, todayKey) {
         status: s.status,
         activeMinutes: s.activeMinutes,
         expectedMinutes: s.expectedMinutes,
-        firstSessionStart: firstSessionMap.get(`${s.userId}:${todayKey}`) ?? null,
+        clockIn: (() => {
+          const startedAt = firstSessionMap.get(`${s.userId}:${todayKey}`);
+          return startedAt ? new Date(startedAt).toISOString() : null;
+        })(),
       };
     })
     .sort((a, b) => a.userName.localeCompare(b.userName));
@@ -515,6 +600,23 @@ async function buildPayrollBanner() {
   };
 }
 
+async function buildDashboardInsights(todaySummaries, todayKey, userId) {
+  const userIds = [...new Set(todaySummaries.map((s) => s.userId))];
+  const { timezone } = await getHrmPolicyContext();
+  const firstSessionMap =
+    userIds.length > 0
+      ? await loadFirstSessionStarts(userIds, todayKey, todayKey, timezone)
+      : new Map();
+
+  const [unreadAlerts] = await Promise.all([countUnreadNotifications(userId)]);
+
+  return {
+    averageClockIn: computeAverageClockInLabel(firstSessionMap, todayKey, timezone),
+    onTimeRatePct: computeOnTimeRatePct(todaySummaries),
+    unreadAlerts,
+  };
+}
+
 function slimLeaveRequest(row) {
   return {
     id: row.id,
@@ -582,18 +684,23 @@ export async function getHrmDashboard(req) {
     const reportIds = await getDirectReportIds(req.user.id);
     const managerScope = reportIds.length ? [req.user.id, ...reportIds] : [req.user.id];
     const managerToday = filterSummariesByUserIds(todaySummaries, managerScope);
-    const [leave, wfh, leaveByType, leaveRequestStats, wfhRequestStats] = await Promise.all([
+    const [leave, wfh, leaveByType, leaveRequestStats, wfhRequestStats, upcomingBirthdays, insights] =
+      await Promise.all([
       listLeaveRequests({ userIds: reportIds, status: "pending" }),
       listWfhRequests({ userIds: reportIds, status: "pending" }),
       buildLeaveByTypeStats(managerScope),
       buildLeaveRequestStats(managerScope),
       buildWfhRequestStats(managerScope),
+      buildUpcomingBirthdays(managerScope),
+      buildDashboardInsights(managerToday, todayKey, req.user.id),
     ]);
     payload.onWfhToday = await buildOnWfhTodayFromSummaries(managerToday);
     payload.todayAttendance = await buildTodayAttendanceRowsFromSummaries(managerToday, todayKey);
     payload.leaveByType = leaveByType;
     payload.leaveRequestStats = leaveRequestStats;
     payload.wfhRequestStats = wfhRequestStats;
+    payload.upcomingBirthdays = upcomingBirthdays;
+    payload.insights = insights;
     payload.needsAttention = buildNeedsAttention({ stats, payrollBanner: null });
     if (reportIds.length) {
       payload.pendingApprovals = {
@@ -619,6 +726,8 @@ export async function getHrmDashboard(req) {
       recentActivity,
       onWfhToday,
       todayAttendance,
+      upcomingBirthdays,
+      insights,
     ] = await Promise.all([
       listLeaveRequests({ status: "pending" }),
       listWfhRequests({ status: "pending" }),
@@ -632,6 +741,8 @@ export async function getHrmDashboard(req) {
       buildRecentActivity(),
       buildOnWfhTodayFromSummaries(todaySummaries),
       buildTodayAttendanceRowsFromSummaries(todaySummaries, todayKey),
+      buildUpcomingBirthdays(null),
+      buildDashboardInsights(todaySummaries, todayKey, req.user.id),
     ]);
     payload.pendingApprovals = {
       leave: leave.slice(0, PENDING_PREVIEW_LIMIT).map(slimLeaveRequest),
@@ -648,6 +759,8 @@ export async function getHrmDashboard(req) {
     payload.topEarners = topEarners;
     payload.recentActivity = recentActivity;
     payload.needsAttention = buildNeedsAttention({ stats, payrollBanner });
+    payload.upcomingBirthdays = upcomingBirthdays;
+    payload.insights = insights;
   }
 
   return payload;

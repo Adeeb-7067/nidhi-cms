@@ -142,7 +142,9 @@ type UserLike = Record<string, unknown>;
 
 function dateInput(value: unknown) {
   if (!value) return "";
-  return new Date(String(value)).toISOString().split("T")[0];
+  const d = new Date(String(value));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
 }
 
 export function mapUserToTeamEmployeeForm(
@@ -272,9 +274,9 @@ export function buildTeamEmployeePayload(
     probationEndDate: values.probationEndDate || null,
     linkedinUrl: values.linkedinUrl,
     dob: values.dob || null,
-    gender: values.gender || null,
-    maritalStatus: values.maritalStatus || null,
-    bloodGroup: values.bloodGroup || null,
+    gender: values.gender?.trim() ?? "",
+    maritalStatus: values.maritalStatus?.trim() ?? "",
+    bloodGroup: values.bloodGroup?.trim() ?? "",
     bio: values.bio ?? "",
     employeeType: values.employeeType ?? "FULL-TIME",
     hrEmploymentStatus: values.hrEmploymentStatus ?? "Active",

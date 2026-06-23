@@ -11,6 +11,7 @@ const UPLOAD_CATEGORIES = [
   "avatars",
   "reports",
   "misc",
+  "hrm",
   "screenshots",
 ];
 // Screenshots are access-controlled via backend proxy — never serve directly from S3.

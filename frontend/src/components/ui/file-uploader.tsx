@@ -1,13 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "./button";
-import { Loader2, UploadCloud, CheckCircle2, AlertCircle, X } from "lucide-react";
+import { Loader2, UploadCloud, CheckCircle2, X } from "lucide-react";
 import { Progress } from "./progress";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { apiUrl } from "@/lib/api-base";
+import { cn } from "@/lib/utils";
 
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
-export type UploadCategory = "bugs" | "apk" | "inventory" | "avatars" | "reports" | "misc";
+export type UploadCategory = "bugs" | "apk" | "inventory" | "avatars" | "reports" | "misc" | "hrm";
+
+export type FileUploaderVariant = "dropzone" | "choose-file";
 
 const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
   apk: 500,
@@ -16,6 +19,7 @@ const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
   inventory: 50,
   reports: 50,
   misc: 50,
+  hrm: 10,
 };
 
 interface FileUploaderProps {
@@ -25,6 +29,9 @@ interface FileUploaderProps {
   value?: string | null;
   maxSizeMB?: number;
   category?: UploadCategory;
+  /** choose-file = compact row with "Choose file" + filename (Satyakabir HRM style) */
+  variant?: FileUploaderVariant;
+  className?: string;
 }
 
 export function FileUploader({
@@ -34,27 +41,31 @@ export function FileUploader({
   value = "",
   maxSizeMB,
   category = "misc",
+  variant = "dropzone",
+  className,
 }: FileUploaderProps) {
   const limitMb = maxSizeMB ?? CATEGORY_MAX_SIZE_MB[category] ?? 50;
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentFileUrl, setCurrentFileUrl] = useState<string | null>(value || null);
+  const [displayName, setDisplayName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setCurrentFileUrl(value || null);
+    if (!value) setDisplayName(null);
   }, [value]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation Size Check
     if (file.size > limitMb * 1024 * 1024) {
       toast.error(`File is too large. Max allowed is ${limitMb}MB`);
       return;
     }
 
+    setDisplayName(file.name);
     setIsUploading(true);
     setProgress(10);
 
@@ -62,13 +73,12 @@ export function FileUploader({
       const formData = new FormData();
       formData.append("file", file);
 
-      // Perform standard XHR to track progress accurately
       const xhr = new XMLHttpRequest();
-      
+
       xhr.upload.addEventListener("progress", (event) => {
         if (event.lengthComputable) {
           const pct = Math.round((event.loaded / event.total) * 100);
-          setProgress(Math.max(10, Math.min(pct, 95))); // Caps until finished
+          setProgress(Math.max(10, Math.min(pct, 95)));
         }
       });
 
@@ -77,8 +87,7 @@ export function FileUploader({
           ? `/api/upload?category=${encodeURIComponent(category)}`
           : "/api/upload";
         xhr.open("POST", apiUrl(uploadPath), true);
-        
-        // Forward Authorization Token automatically
+
         const token = localStorage.getItem("accessToken");
         if (token) {
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
@@ -87,16 +96,15 @@ export function FileUploader({
         xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             try {
-              const response = JSON.parse(xhr.responseText);
-              resolve(response);
-            } catch (e) {
+              resolve(JSON.parse(xhr.responseText));
+            } catch {
               reject(new Error("Invalid server response format"));
             }
           } else {
             try {
               const err = JSON.parse(xhr.responseText);
               reject(new Error(err.message || "Upload failed"));
-            } catch (e) {
+            } catch {
               reject(new Error(`Upload failed (${xhr.status})`));
             }
           }
@@ -107,14 +115,15 @@ export function FileUploader({
       });
 
       const response = await uploadPromise;
-      
+
       setProgress(100);
       setCurrentFileUrl(response.url);
+      setDisplayName(file.name);
       onUploadComplete(response.url, { fileName: file.name });
       toast.success("File uploaded successfully!");
-    } catch (err: any) {
+    } catch (err: unknown) {
       toastApiError(err, "Failed to upload file.");
-      console.error("Uploader failure:", err);
+      setDisplayName(null);
     } finally {
       setIsUploading(false);
     }
@@ -123,12 +132,17 @@ export function FileUploader({
   const clearSelection = (e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentFileUrl(null);
+    setDisplayName(null);
     onUploadComplete("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
+  const openPicker = () => {
+    if (!isUploading) fileInputRef.current?.click();
+  };
+
   return (
-    <div className="w-full">
+    <div className={cn("w-full", className)}>
       <input
         type="file"
         ref={fileInputRef}
@@ -137,15 +151,60 @@ export function FileUploader({
         accept={accept}
       />
 
-      {!currentFileUrl ? (
-        <div 
-          onClick={() => fileInputRef.current?.click()}
-          className={`border border-dashed border-border rounded-lg p-4 text-center hover:border-primary/50 cursor-pointer hover:bg-muted/20 transition-all flex flex-col items-center justify-center gap-2 ${isUploading ? 'pointer-events-none opacity-70' : ''}`}
+      {variant === "choose-file" ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={openPicker}
+            disabled={isUploading}
+            className={cn(
+              "flex w-full min-h-10 items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-left text-xs transition-colors",
+              "hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              isUploading && "pointer-events-none opacity-70",
+            )}
+          >
+            <span className="shrink-0 font-semibold text-primary">
+              {isUploading ? `Uploading… ${progress}%` : "Choose file"}
+            </span>
+            <span className="min-w-0 truncate text-muted-foreground">
+              {displayName ?? (currentFileUrl ? "File ready" : "No file chosen")}
+            </span>
+          </button>
+          {isUploading ? <Progress value={progress} className="h-1" /> : null}
+          {currentFileUrl ? (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/20 px-2 py-1.5">
+              <a
+                href={currentFileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="min-w-0 truncate text-[11px] text-primary hover:underline"
+              >
+                View uploaded file
+              </a>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={clearSelection}
+                className="h-6 w-6 shrink-0 hover:bg-destructive/10 hover:text-destructive"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : !currentFileUrl ? (
+        <div
+          onClick={openPicker}
+          className={cn(
+            "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border p-4 text-center transition-all hover:border-primary/50 hover:bg-muted/20",
+            isUploading && "pointer-events-none opacity-70",
+          )}
         >
           {isUploading ? (
-            <div className="w-full space-y-2 text-center flex flex-col items-center py-2">
+            <div className="flex w-full flex-col items-center space-y-2 py-2 text-center">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              <p className="text-[10px] text-muted-foreground">Uploading your file... {progress}%</p>
+              <p className="text-[10px] text-muted-foreground">Uploading your file… {progress}%</p>
               <Progress value={progress} className="h-1 w-[60%]" />
             </div>
           ) : (
@@ -153,33 +212,35 @@ export function FileUploader({
               <UploadCloud className="h-6 w-6 text-muted-foreground opacity-60" />
               <div>
                 <p className="text-xs font-medium text-foreground">{label}</p>
-                <p className="text-[9px] text-muted-foreground mt-0.5">Max {limitMb}MB</p>
+                <p className="mt-0.5 text-[9px] text-muted-foreground">Max {limitMb}MB</p>
               </div>
             </>
           )}
         </div>
       ) : (
-        <div className="border border-border rounded-lg p-2.5 flex items-center justify-between bg-muted/20">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+        <div className="flex items-center justify-between rounded-lg border border-border bg-muted/20 p-2.5">
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium truncate text-foreground">File Attached Successfully</p>
-              <a 
-                href={currentFileUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="text-[9px] text-blue-500 hover:underline truncate block"
+              <p className="truncate text-xs font-medium text-foreground">
+                {displayName ?? "File attached"}
+              </p>
+              <a
+                href={currentFileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block truncate text-[9px] text-blue-500 hover:underline"
               >
-                View Uploaded Item
+                View uploaded item
               </a>
             </div>
           </div>
-          <Button 
-            type="button" 
-            variant="ghost" 
-            size="icon" 
-            onClick={clearSelection} 
-            className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive shrink-0 ml-2"
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={clearSelection}
+            className="ml-2 h-6 w-6 shrink-0 hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="h-3.5 w-3.5" />
           </Button>

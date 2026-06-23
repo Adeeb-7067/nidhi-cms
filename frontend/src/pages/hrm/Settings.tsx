@@ -217,15 +217,23 @@ export default function HrmSettingsPage() {
           description="Company-wide attendance rules, leave defaults, and shift policy"
           breadcrumbs={[{ label: "HRM", href: "/hrm" }, { label: "Settings" }]}
           actions={
-            <Button
-              type="submit"
-              form={FORM_ID}
-              size="sm"
-              className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")}
-              disabled={updateSettings.isPending || isLoading || !isDirty}
-            >
-              {updateSettings.isPending ? "Saving…" : LEGACY_SETTINGS_LABELS.save}
-            </Button>
+            <>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/settings">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Company branding
+                </Link>
+              </Button>
+              <Button
+                type="submit"
+                form={FORM_ID}
+                size="sm"
+                className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")}
+                disabled={updateSettings.isPending || isLoading || !isDirty}
+              >
+                {updateSettings.isPending ? "Saving…" : LEGACY_SETTINGS_LABELS.save}
+              </Button>
+            </>
           }
         />
 

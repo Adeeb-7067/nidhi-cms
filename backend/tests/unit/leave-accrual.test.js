@@ -39,7 +39,15 @@ describe("getLeaveYearForDate", () => {
 });
 
 describe("resolveAccrualDaysPerMonth", () => {
-  test("uses per-user override when set", () => {
+  test("uses leave.monthlyQuota when set (Satyakabir)", () => {
+    assert.equal(resolveAccrualDaysPerMonth({ leave: { monthlyQuota: 2 } }, {}), 2);
+  });
+
+  test("uses monthlyLeaveQuota legacy field", () => {
+    assert.equal(resolveAccrualDaysPerMonth({ monthlyLeaveQuota: 1.5 }, {}), 1.5);
+  });
+
+  test("uses per-user leaveAccrualDaysPerMonth override when set", () => {
     assert.equal(resolveAccrualDaysPerMonth({ leaveAccrualDaysPerMonth: 2.5 }, {}), 2.5);
     assert.equal(resolveAccrualDaysPerMonth({ leaveAccrualDaysPerMonth: 0 }, {}), 0);
   });
@@ -54,7 +62,17 @@ describe("resolveAccrualDaysPerMonth", () => {
     assert.equal(resolveAccrualDaysPerMonth({}, { hrmPaidLeavesPerMonth: null }), 1);
   });
 
-  test("per-user override wins over global", () => {
+  test("nested monthlyQuota wins over leaveAccrualDaysPerMonth", () => {
+    assert.equal(
+      resolveAccrualDaysPerMonth(
+        { leave: { monthlyQuota: 2 }, leaveAccrualDaysPerMonth: 3 },
+        { hrmPaidLeavesPerMonth: 1 },
+      ),
+      2,
+    );
+  });
+
+  test("per-user leaveAccrualDaysPerMonth wins over global", () => {
     assert.equal(
       resolveAccrualDaysPerMonth(
         { leaveAccrualDaysPerMonth: 3 },

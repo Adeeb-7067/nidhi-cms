@@ -18,6 +18,11 @@ import {
 import { badRequest, unauthorized, notFound, parseIdParam, optionalString } from "../utils/route-errors.js";
 import { formatUser } from "../mappers/user-format.js";
 import {
+  buildSelfServiceProfilePatchSet,
+  buildProfilePatchMongoUpdate,
+} from "../utils/user-profile-fields.js";
+import { evictUserFromAuthCache } from "../middlewares/auth.js";
+import {
   getClientContextForUser,
   recordClientTeamActivity,
 } from "../services/client-team.js";
@@ -125,9 +130,19 @@ async function postAuthLogin(req, res) {
 }
 async function postAuthLogout(req, res) {
   const { refreshToken } = req.body;
+  const fcmToken = optionalString(req.body.fcmToken ?? req.body.token);
+  let userId = null;
+
   if (refreshToken) {
+    const session = await sessionsTable.findOne({ refreshToken });
+    if (session) userId = session.userId;
     await sessionsTable.deleteOne({ refreshToken });
   }
+
+  if (fcmToken && userId) {
+    await usersTable.updateOne({ id: userId }, { $pull: { fcmTokens: fcmToken } });
+  }
+
   res.json({ success: true });
 }
 async function postAuthRefresh(req, res) {
@@ -340,12 +355,21 @@ async function postAuthStopImpersonate(req, res) {
 async function getAuthMe(req, res) {
   const user = await usersTable.findOne({ id: req.user.id });
   if (!user) notFound("User");
-  res.json(formatUser(user, { withPresence: true }));
+  res.json(formatUser(user, { withPresence: true, includeSensitive: true }));
 }
 async function patchAuthMe(req, res) {
-  const { name, designation, avatarUrl, email } = req.body;
-  validateStoredFileUrl(avatarUrl, "avatarUrl");
-  const normalizedEmail = typeof email === "string" ? email.trim().toLowerCase() : void 0;
+  const user = await usersTable.findOne({ id: req.user.id });
+  if (!user) notFound("User");
+
+  const body = req.body ?? {};
+  for (const field of ["avatarUrl", "image", "resumeUrl", "idProofUrl", "addressProofUrl"]) {
+    if (body[field] !== undefined) {
+      validateStoredFileUrl(optionalString(body[field]), field);
+    }
+  }
+
+  const normalizedEmail =
+    typeof body.email === "string" ? body.email.trim().toLowerCase() : undefined;
   if (normalizedEmail) {
     const existing = await usersTable.findOne({
       email: normalizedEmail,
@@ -355,20 +379,25 @@ async function patchAuthMe(req, res) {
       badRequest("This email is already in use by another account.", "email");
     }
   }
+
+  const profilePatch = buildSelfServiceProfilePatchSet(body, { existingSalary: user.salary });
+  const mongoUpdate = buildProfilePatchMongoUpdate({
+    ...profilePatch,
+    ...normalizedEmail && { email: normalizedEmail },
+  });
+
+  if (!mongoUpdate.$set && !mongoUpdate.$unset) {
+    badRequest("No profile fields to update.", "body");
+  }
+
   const updated = await usersTable.findOneAndUpdate(
     { id: req.user.id },
-    {
-      $set: {
-        ...name && { name },
-        ...normalizedEmail && { email: normalizedEmail },
-        ...designation !== void 0 && { designation },
-        ...avatarUrl !== void 0 && { avatarUrl: avatarUrl || null }
-      }
-    },
-    { new: true }
+    mongoUpdate,
+    { new: true, runValidators: true },
   );
   if (!updated) notFound("User");
-  res.json(formatUser(updated, { withPresence: true }));
+  evictUserFromAuthCache(req.user.id);
+  res.json(formatUser(updated, { withPresence: true, includeSensitive: true }));
 }
 export {
   getAuthMe,

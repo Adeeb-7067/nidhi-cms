@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ScrollText, ShieldAlert, Activity, Hash } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import { HrmGate } from "@/modules/hrm/HrmGate";
@@ -19,9 +20,11 @@ import type { HrmAuditLog } from "@/modules/hrm/types";
 
 export default function HrmAuditPage() {
   const [actionFilter, setActionFilter] = useState("");
-  const { data, isLoading, refetch, isFetching } = useHrmAuditLogs(
-    actionFilter.trim() ? { action: actionFilter.trim() } : undefined,
-  );
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const { data, isLoading, refetch, isFetching } = useHrmAuditLogs({
+    ...(actionFilter.trim() ? { action: actionFilter.trim() } : {}),
+    ...(severityFilter !== "all" ? { severity: severityFilter } : {}),
+  });
 
   const logs = data?.logs ?? [];
   const today = format(new Date(), "yyyy-MM-dd");
@@ -82,6 +85,14 @@ export default function HrmAuditPage() {
       ),
       exportValue: (log) => log.severity,
     },
+    {
+      id: "ip",
+      header: "IP",
+      cell: (log) => (
+        <span className="font-mono text-xs text-muted-foreground">{log.ipAddress ?? "—"}</span>
+      ),
+      exportValue: (log) => log.ipAddress ?? "",
+    },
   ], []);
 
   return (
@@ -103,7 +114,19 @@ export default function HrmAuditPage() {
           search={actionFilter}
           onSearchChange={setActionFilter}
           searchPlaceholder="Filter by action (e.g. leave_approved)"
-        />
+        >
+          <Select value={severityFilter} onValueChange={setSeverityFilter}>
+            <SelectTrigger className="h-9 w-40 bg-background">
+              <SelectValue placeholder="Severity" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All severities</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="info">Info</SelectItem>
+            </SelectContent>
+          </Select>
+        </HrmFilterRow>
 
         <PortalTablePanel isLoading={isLoading}>
           <AdvancedTable

@@ -11,6 +11,9 @@ const candidateSchema = new Schema({
   stage: { type: String, enum: recruitmentStages, default: "applied", index: true },
   notes: { type: String },
   resumeUrl: { type: String },
+  experienceYears: { type: Number },
+  source: { type: String },
+  rating: { type: Number, min: 0, max: 5 },
   hiredUserId: { type: Number },
 }, { timestamps: true });
 

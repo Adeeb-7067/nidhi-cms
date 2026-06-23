@@ -37,8 +37,16 @@ export function getLeaveYearForDate(year, month, startMonth = 1) {
   return month >= sm ? year : year - 1;
 }
 
-/** Days to credit this employee for the monthly accrual run. */
+/** Days to credit this employee for the monthly accrual run (Satyakabir: leave.monthlyQuota). */
 export function resolveAccrualDaysPerMonth(user, settings) {
+  const nested = user?.leave?.monthlyQuota;
+  if (nested != null && Number.isFinite(Number(nested))) {
+    return Math.max(0, Number(nested));
+  }
+  const legacy = user?.monthlyLeaveQuota;
+  if (legacy != null && Number.isFinite(Number(legacy))) {
+    return Math.max(0, Number(legacy));
+  }
   const perUser = user?.leaveAccrualDaysPerMonth;
   if (perUser != null && Number.isFinite(Number(perUser))) {
     return Math.max(0, Number(perUser));
@@ -148,11 +156,103 @@ async function findAccrualLeaveType() {
   return type;
 }
 
+/**
+ * One-time self-heal: balances created before accrual-only model may have been
+ * seeded with maxDaysPerYear (EL=15, CL=12, SL=10) despite no usage. Reset to 0.
+ * Also clears carriedForward that only exists from prior-year auto-seeds (no accrual).
+ */
+export async function reconcileAutoSeededBalance(bal, leaveType) {
+  if (!bal || !leaveType || leaveType.isPaid === false) return bal;
+
+  const max = leaveType.maxDaysPerYear ?? 0;
+  const used = bal.used ?? 0;
+  const pending = bal.pending ?? 0;
+  const allocated = bal.allocated ?? 0;
+  const carriedForward = bal.carriedForward ?? 0;
+
+  if (used > 0 || pending > 0) return bal;
+
+  let nextAllocated = allocated;
+  let nextCarried = carriedForward;
+
+  // Legacy upfront annual grant (pre-accrual model).
+  if (max > 0 && allocated === max) {
+    nextAllocated = 0;
+  }
+
+  // Legacy carry-forward from a prior year that only had auto-seeded allocation.
+  if (
+    leaveType.code === ACCRUAL_LEAVE_CODE &&
+    nextAllocated === 0 &&
+    carriedForward > 0 &&
+    carriedForward <= max
+  ) {
+    nextCarried = 0;
+  }
+
+  if (nextAllocated === allocated && nextCarried === carriedForward) return bal;
+
+  const updated = await leaveBalancesTable.findOneAndUpdate(
+    { id: bal.id, version: bal.version },
+    {
+      $set: { allocated: nextAllocated, carriedForward: nextCarried },
+      $inc: { version: 1 },
+    },
+    { new: true },
+  );
+  return updated ?? bal;
+}
+
+/** Reconcile all balance rows for a user/year (run on every balance read). */
+export async function reconcileUserLeaveBalances(userId, year) {
+  const y = year ?? new Date().getFullYear();
+  const types = await leaveTypesTable.find({ status: "active" }).lean();
+  let changed = false;
+  for (const type of types) {
+    const bal = await leaveBalancesTable.findOne({ userId, leaveTypeId: type.id, year: y });
+    if (!bal) continue;
+    const fixed = await reconcileAutoSeededBalance(bal, type);
+    if (fixed && (fixed.allocated !== bal.allocated || fixed.carriedForward !== bal.carriedForward)) {
+      changed = true;
+    }
+  }
+  if (changed) {
+    await syncUserLeaveAvailable(userId, y);
+  }
+  return changed;
+}
+
+/** Mirror Satyakabir leaveAvailable / leaveBalance on the user profile (EL accrual pool only). */
+export async function syncUserLeaveAvailable(userId, year) {
+  const y = year ?? new Date().getFullYear();
+  const accrualType = await findAccrualLeaveType();
+  if (!accrualType) {
+    await usersTable.updateOne({ id: userId }, { $set: { leaveAvailable: 0, leaveBalance: 0 } });
+    return 0;
+  }
+  const bal = await leaveBalancesTable
+    .findOne({ userId, leaveTypeId: accrualType.id, year: y })
+    .lean();
+  const total = bal ? computeAvailableBalance(bal) : 0;
+  const rounded = Math.round(total * 10) / 10;
+  await usersTable.updateOne(
+    { id: userId },
+    { $set: { leaveAvailable: rounded, leaveBalance: rounded } },
+  );
+  return rounded;
+}
+
 async function ensureBalanceRow(userId, leaveTypeId, leaveYear, session) {
   let query = leaveBalancesTable.findOne({ userId, leaveTypeId, year: leaveYear });
   if (session) query = query.session(session);
   let bal = await query;
-  if (bal) return bal;
+  if (bal) {
+    const type = await leaveTypesTable.findOne({ id: leaveTypeId }).lean();
+    if (type) {
+      bal = await reconcileAutoSeededBalance(bal, type);
+    }
+    return bal;
+  }
 
   const id = await getNextSequence("leave_balances");
   const doc = {
@@ -283,6 +383,7 @@ export async function runMonthlyLeaveAccrual(periodKey) {
         }
         creditedTotal += days;
         employeeCount += 1;
+        await syncUserLeaveAvailable(user.id, leaveYear);
       }
     });
 

@@ -26,6 +26,9 @@ export async function createCandidate(body) {
     stage: body.stage ?? "applied",
     notes: body.notes ?? null,
     resumeUrl: body.resumeUrl ?? null,
+    experienceYears: body.experienceYears != null ? Number(body.experienceYears) : null,
+    source: body.source?.trim() || null,
+    rating: body.rating != null ? Math.min(5, Math.max(0, Number(body.rating))) : null,
   });
 }
 
@@ -38,7 +41,11 @@ export async function updateCandidate(id, body) {
   if (patch.stage != null && !recruitmentStages.includes(patch.stage)) {
     badRequest("Invalid recruitment stage.");
   }
-  const c = await candidatesTable.findOneAndUpdate({ id }, { $set: patch }, { new: true });  if (!c) notFound("Candidate");
+  if (patch.experienceYears != null) patch.experienceYears = Number(patch.experienceYears);
+  if (patch.rating != null) patch.rating = Math.min(5, Math.max(0, Number(patch.rating)));
+  if (patch.source != null) patch.source = String(patch.source).trim() || null;
+  const c = await candidatesTable.findOneAndUpdate({ id }, { $set: patch }, { new: true });
+  if (!c) notFound("Candidate");
   return c;
 }
 

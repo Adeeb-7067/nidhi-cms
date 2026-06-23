@@ -44,6 +44,12 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
       exportValue: (r) => formatLeaveDayPartLabel(r.dayPart),
     },
     {
+      id: "days",
+      header: "Days",
+      cell: (r) => <span className="tabular-nums">{r.days ?? "—"}</span>,
+      exportValue: (r) => (r.days != null ? String(r.days) : ""),
+    },
+    {
       id: "reason",
       header: "Reason",
       cell: (r) => <span className="max-w-[200px] truncate text-muted-foreground">{r.reason || "—"}</span>,
@@ -140,6 +146,12 @@ export function buildWfhRequestColumns(opts: WfhColumnOptions): Column<HrmWfhReq
       ),
       exportValue: (r) =>
         r.endDate !== r.startDate ? `${r.startDate} – ${r.endDate}` : r.startDate,
+    },
+    {
+      id: "days",
+      header: "Days",
+      cell: (r) => <span className="tabular-nums">{r.days ?? "—"}</span>,
+      exportValue: (r) => (r.days != null ? String(r.days) : ""),
     },
     {
       id: "reason",

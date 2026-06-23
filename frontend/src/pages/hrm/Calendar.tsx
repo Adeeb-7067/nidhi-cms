@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import { Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,10 @@ import {
   HrmPageShell,
   HrmField,
   portalActionButtonClass,
+  HrmChartCard,
 } from "@/modules/hrm/components";
+import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { Badge } from "@/components/ui/badge";
 import { HrmRefRefreshButton } from "@/modules/hrm/hrm-reference-kit";
 import {
   HrmCalendarDayPanel,
@@ -65,6 +69,57 @@ export default function HrmCalendarPage() {
     if (!selectedDate || !data?.holidays) return null;
     return data.holidays.find((h) => h.date === selectedDate) ?? null;
   }, [selectedDate, data?.holidays]);
+
+  type MonthEventRow = {
+    id: string;
+    date: string;
+    type: string;
+    title: string;
+    description: string;
+  };
+
+  const monthEvents = useMemo((): MonthEventRow[] => {
+    const rows: MonthEventRow[] = [];
+    for (const [date, events] of Object.entries(days)) {
+      for (const ev of events ?? []) {
+        rows.push({
+          id: `${date}-${ev.kind}-${ev.id ?? ev.userId ?? ev.label}`,
+          date,
+          type: ev.kind,
+          title: ev.label,
+          description: ev.type ?? ev.scope ?? "",
+        });
+      }
+    }
+    return rows.sort((a, b) => a.date.localeCompare(b.date));
+  }, [days]);
+
+  const eventColumns = useMemo((): Column<MonthEventRow>[] => [
+    {
+      id: "date",
+      header: "Date",
+      cell: (r) => (
+        <span className="text-muted-foreground">
+          {format(new Date(`${r.date}T12:00:00`), "MMM d")}
+        </span>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      cell: (r) => (
+        <Badge variant="outline" className="text-[10px] capitalize">
+          {r.type.replace(/_/g, " ")}
+        </Badge>
+      ),
+    },
+    { id: "title", header: "Title", accessorKey: "title" },
+    {
+      id: "description",
+      header: "Details",
+      cell: (r) => <span className="text-muted-foreground">{r.description || "—"}</span>,
+    },
+  ], []);
 
   const openAddDialog = () => {
     if (!selectedDate) return;
@@ -184,6 +239,19 @@ export default function HrmCalendarPage() {
           onAddHoliday={openAddDialog}
           onDeleteHoliday={(id) => void handleDeleteHoliday(id)}
         />
+
+        <HrmChartCard
+          title="Upcoming this month"
+          description="Holidays, birthdays, and company events"
+          badge={monthEvents.length || undefined}
+        >
+          <AdvancedTable
+            data={monthEvents}
+            columns={eventColumns}
+            filename="HrmCalendarEventsExport"
+            viewStorageKey="hrm-calendar-events"
+          />
+        </HrmChartCard>
 
         <p className="text-xs text-muted-foreground px-1">
           Click a day to mark holidays or add events. Use &quot;Generate {year}&quot; to seed Sundays as

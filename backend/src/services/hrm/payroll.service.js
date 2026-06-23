@@ -38,16 +38,11 @@ import { runInTx } from "../../lib/db-tx.js";
 import { encryptIntoFields, decryptFromFields, maskTail } from "../../lib/hrm-crypto.js";
 
 import {
-
   aggregateAttendanceForPayroll,
-
   computePayrollLineAmounts,
-
   evaluatePayrollReadiness,
-
 } from "./payroll-compute.js";
-
-
+import { generatePayslipHtmlFromCms } from "./payslip-template.js";
 
 const PAYROLL_LINE_EDITABLE = ["paidDays", "lopDays", "lateCount", "gross", "deductions", "lopDeduction", "notes"];
 
@@ -141,71 +136,61 @@ function stripBankFields(body) {
 
 
 
-function buildPayslipHtml({ user, run, line, structure, settings }) {
+/** Create or refresh salary slip rows + Satyakabir HTML for every line in a payroll run. */
+async function syncPayslipsForRun(runId, session = null) {
+  const run = await payrollRunsTable.findOne({ id: runId }).lean();
+  if (!run) return;
 
-  const period = `${run.month}/${run.year}`;
+  const lines = await payrollLinesTable.find({ payrollRunId: runId }).lean();
+  if (!lines.length) return;
 
-  return `<!DOCTYPE html>
+  const settings = await getOrCreateSettings();
+  const existing = await payrollSlipsTable
+    .find({ payrollLineId: { $in: lines.map((l) => l.id) } })
+    .lean();
+  const slipByLineId = new Map(existing.map((s) => [s.payrollLineId, s]));
+  const sessOpts = session ? { session } : {};
 
-<html><head><meta charset="utf-8"><title>Payslip ${period}</title>
+  for (const line of lines) {
+    const [user, structure] = await Promise.all([
+      usersTable.findOne({ id: line.userId }).lean(),
+      salaryStructuresTable.findOne({ userId: line.userId }).lean(),
+    ]);
+    const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings });
+    const prior = slipByLineId.get(line.id);
 
-<style>
-
-  body{font-family:system-ui,sans-serif;padding:24px;color:#111}
-
-  h1{font-size:1.25rem;margin:0 0 8px}
-
-  table{width:100%;border-collapse:collapse;margin-top:16px}
-
-  td,th{border:1px solid #ddd;padding:8px;text-align:left}
-
-  th{background:#f5f5f5}
-
-  .net{font-size:1.1rem;font-weight:bold}
-
-</style></head><body>
-
-  <h1>${settings.companyName ?? "Company"} — Salary Slip</h1>
-
-  <p><strong>${user?.name ?? "Employee"}</strong> · ${user?.employeeId ?? ""}</p>
-
-  <p>Period: ${period}</p>
-
-  <table>
-
-    <tr><th>Item</th><th>Amount (INR)</th></tr>
-
-    <tr><td>Basic</td><td>${structure?.basic ?? 0}</td></tr>
-
-    <tr><td>HRA</td><td>${structure?.hra ?? 0}</td></tr>
-
-    <tr><td>Allowances</td><td>${structure?.allowances ?? 0}</td></tr>
-
-    <tr><td>Gross</td><td>${line.gross}</td></tr>
-
-    <tr><td>Paid days</td><td>${line.paidDays}</td></tr>
-
-    <tr><td>LOP days</td><td>${line.lopDays}</td></tr>
-
-    <tr><td>Late count</td><td>${line.lateCount}</td></tr>
-
-    <tr><td>LOP deduction</td><td>${line.lopDeduction ?? 0}</td></tr>
-
-    <tr><td>PF (employee)</td><td>${line.pfEmployee ?? 0}</td></tr>
-
-    <tr><td>TDS</td><td>${line.tds ?? 0}</td></tr>
-
-    <tr><td>Total deductions</td><td>${line.deductions}</td></tr>
-
-    <tr class="net"><td>Net pay</td><td>${line.net}</td></tr>
-
-  </table>
-
-</body></html>`;
-
+    if (prior) {
+      await payrollSlipsTable.updateOne(
+        { id: prior.id },
+        { $set: { htmlContent: html, year: run.year, month: run.month, userId: line.userId } },
+        sessOpts,
+      );
+    } else {
+      const slipId = await getNextSequence("payroll_slips");
+      const doc = {
+        id: slipId,
+        payrollLineId: line.id,
+        userId: line.userId,
+        year: run.year,
+        month: run.month,
+        htmlContent: html,
+      };
+      if (session) {
+        await payrollSlipsTable.create([doc], { session });
+      } else {
+        await payrollSlipsTable.create(doc);
+      }
+    }
+  }
 }
 
-
+async function syncPayslipForLine(lineId) {
+  const line = await payrollLinesTable.findOne({ id: lineId }).lean();
+  if (!line) return;
+  const run = await payrollRunsTable.findOne({ id: line.payrollRunId }).lean();
+  if (!run || run.status === "finalized" || run.status === "paid") return;
+  await syncPayslipsForRun(run.id);
+}
 
 async function staffMissingShiftAssignment(userIds, startDate, endDate) {
 
@@ -501,6 +486,11 @@ export async function generatePayrollRun(year, month, actorId) {
 
 
 
+  const oldLines = await payrollLinesTable.find({ payrollRunId: run.id }, { id: 1 }).lean();
+  if (oldLines.length) {
+    await payrollSlipsTable.deleteMany({ payrollLineId: { $in: oldLines.map((l) => l.id) } });
+  }
+
   await payrollLinesTable.deleteMany({ payrollRunId: run.id });
 
 
@@ -556,6 +546,8 @@ export async function generatePayrollRun(year, month, actorId) {
   }
 
 
+
+  await syncPayslipsForRun(run.id);
 
   await logHrmAudit({
 
@@ -631,75 +623,10 @@ export async function finalizePayrollRun(runId, actorId) {
 
   const { startDate, endDate } = monthBounds(run.year, run.month);
 
-  const lineIds = lines.map((l) => l.id);
-
-
-
   const updated = await runInTx(async (session) => {
-
     const sessOpts = session ? { session } : {};
 
-
-
-    let deleteSlips = payrollSlipsTable.deleteMany({ payrollLineId: { $in: lineIds } });
-
-    if (session) deleteSlips = deleteSlips.session(session);
-
-    await deleteSlips;
-
-
-
-    for (const line of lines) {
-
-      const user = await usersTable.findOne({ id: line.userId }).lean();
-
-      const structure = await salaryStructuresTable.findOne({ userId: line.userId }).lean();
-
-      const html = buildPayslipHtml({ user, run, line, structure, settings });
-
-      const slipId = await getNextSequence("payroll_slips");
-
-      if (session) {
-
-        await payrollSlipsTable.create([{
-
-          id: slipId,
-
-          payrollLineId: line.id,
-
-          userId: line.userId,
-
-          year: run.year,
-
-          month: run.month,
-
-          htmlContent: html,
-
-        }], { session });
-
-      } else {
-
-        await payrollSlipsTable.create({
-
-          id: slipId,
-
-          payrollLineId: line.id,
-
-          userId: line.userId,
-
-          year: run.year,
-
-          month: run.month,
-
-          htmlContent: html,
-
-        });
-
-      }
-
-    }
-
-
+    await syncPayslipsForRun(runId, session);
 
     await dailyAttendanceTable.updateMany(
 
@@ -814,23 +741,72 @@ export async function listPayrollRuns() {
 
 
 export async function getPayrollRunLines(runId) {
-
   const lines = await payrollLinesTable.find({ payrollRunId: runId }).lean();
-
+  const lineIds = lines.map((l) => l.id);
   const users = await usersTable.find({ id: { $in: lines.map((l) => l.userId) } }, { id: 1, name: 1, employeeId: 1 }).lean();
-
+  const slips = lineIds.length
+    ? await payrollSlipsTable.find({ payrollLineId: { $in: lineIds } }, { id: 1, payrollLineId: 1 }).lean()
+    : [];
+  const slipByLineId = new Map(slips.map((s) => [s.payrollLineId, s.id]));
   const userMap = new Map(users.map((u) => [u.id, u]));
 
   return lines.map((l) => ({
-
     ...l,
-
     employeeName: userMap.get(l.userId)?.name,
-
     employeeId: userMap.get(l.userId)?.employeeId,
-
+    payslipId: slipByLineId.get(l.id) ?? null,
   }));
+}
 
+/** Admin salary-slip archive — optional period filter or all periods. */
+export async function listAdminPayslips({ year, month, allPeriods = false, limit = 500 } = {}) {
+  const query = {};
+  if (!allPeriods) {
+    if (year) query.year = year;
+    if (month) query.month = month;
+  }
+  const slips = await payrollSlipsTable
+    .find(query)
+    .sort({ year: -1, month: -1, id: -1 })
+    .limit(Math.min(Number(limit) || 500, 500))
+    .lean();
+  if (!slips.length) return [];
+
+  const lineIds = slips.map((s) => s.payrollLineId);
+  const userIds = [...new Set(slips.map((s) => s.userId))];
+  const [lines, users] = await Promise.all([
+    payrollLinesTable.find({ id: { $in: lineIds } }).lean(),
+    usersTable.find({ id: { $in: userIds } }, { id: 1, name: 1, employeeId: 1, designation: 1 }).lean(),
+  ]);
+  const lineById = new Map(lines.map((l) => [l.id, l]));
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  const runIds = [...new Set(lines.map((l) => l.payrollRunId))];
+  const runs = runIds.length
+    ? await payrollRunsTable.find({ id: { $in: runIds } }, { id: 1, status: 1 }).lean()
+    : [];
+  const runById = new Map(runs.map((r) => [r.id, r]));
+
+  return slips.map((s) => {
+    const line = lineById.get(s.payrollLineId);
+    const user = userById.get(s.userId);
+    const run = line ? runById.get(line.payrollRunId) : null;
+    const paid = run?.status === "paid";
+    return {
+      id: s.id,
+      payrollLineId: s.payrollLineId,
+      userId: s.userId,
+      year: s.year,
+      month: s.month,
+      employeeName: user?.name ?? `User #${s.userId}`,
+      employeeId: user?.employeeId ?? null,
+      designation: user?.designation ?? null,
+      gross: line?.gross ?? null,
+      net: line?.net ?? null,
+      status: paid ? "PAID" : "UNPAID",
+      runStatus: run?.status ?? null,
+    };
+  });
 }
 
 
@@ -873,8 +849,9 @@ export async function updatePayrollLine(lineId, body) {
 
 
 
-  return payrollLinesTable.findOneAndUpdate({ id: lineId }, { $set: patch }, { new: true });
-
+  const updated = await payrollLinesTable.findOneAndUpdate({ id: lineId }, { $set: patch }, { new: true });
+  await syncPayslipForLine(lineId);
+  return updated;
 }
 
 
@@ -888,18 +865,32 @@ export async function listMyPayslips(userId, year) {
   const lineIds = slips.map((s) => s.payrollLineId);
   const lines = await payrollLinesTable.find({ id: { $in: lineIds } }).lean();
   const lineById = new Map(lines.map((l) => [l.id, l]));
+  const runIds = [...new Set(lines.map((l) => l.payrollRunId))];
+  const runs = runIds.length
+    ? await payrollRunsTable.find({ id: { $in: runIds } }, { id: 1, status: 1 }).lean()
+    : [];
+  const runStatusById = new Map(runs.map((r) => [r.id, r.status]));
+  const runByLine = new Map(
+    lines.map((l) => [l.id, runStatusById.get(l.payrollRunId) ?? null]),
+  );
 
-  return slips.map((s) => ({
+  return slips
+    .filter((s) => {
+      const runStatus = runByLine.get(s.payrollLineId);
+      return runStatus === "finalized" || runStatus === "paid";
+    })
+    .map((s) => ({
     id: s.id,
     month: s.month,
     year: s.year,
     payrollLineId: s.payrollLineId,
     net: lineById.get(s.payrollLineId)?.net ?? null,
     gross: lineById.get(s.payrollLineId)?.gross ?? null,
+    status: runByLine.get(s.payrollLineId) === "paid" ? "PAID" : "UNPAID",
   }));
 }
 
-export async function getPayslipDetail(id, userId) {
+export async function getPayslipDetail(id, userId, { requirePublished = false } = {}) {
   const slip = await payrollSlipsTable.findOne({ id }).lean();
   if (!slip) notFound("Payslip");
   if (slip.userId !== userId) notFound("Payslip");
@@ -910,6 +901,13 @@ export async function getPayslipDetail(id, userId) {
     getOrCreateSettings(),
   ]);
   if (!line) notFound("Payroll line");
+
+  if (requirePublished) {
+    const run = await payrollRunsTable.findOne({ id: line.payrollRunId }, { status: 1 }).lean();
+    if (!run || (run.status !== "finalized" && run.status !== "paid")) {
+      notFound("Payslip");
+    }
+  }
 
   const structure = await salaryStructuresTable.findOne({ userId: slip.userId }).lean();
 

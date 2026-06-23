@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
-import { useGetMe, useUpdateMyProfile, getGetMeQueryKey } from "@/api";
+import { getGetMeQueryKey } from "@/api";
+import { patchSelfProfile } from "@/api/self-profile";
+import { teamEmployeeQueryKey, useTeamEmployeeProfile } from "@/api/team-employees";
+import { useAuth } from "@/contexts/AuthContext";
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
+import { EmployeeSelfProfileForm } from "@/components/profile/EmployeeSelfProfileForm";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageShell } from "@/components/layout/PageShell";
 import { ProfilePageSkeleton } from "@/components/loading";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Card,
   CardContent,
@@ -31,13 +36,18 @@ import {
   Briefcase,
   Settings,
   Bell,
+  Phone,
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isValid, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useUserWithPresence } from "@/contexts/PresenceContext";
 import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
 import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
 import { formatLastLogin } from "@/lib/presence";
+import {
+  buildSelfProfilePayload,
+  usesEmployeeSelfProfile,
+} from "@/modules/hrm/self-profile-shared";
 
 const ROLE_STYLES: Record<string, string> = {
   super_admin: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/25",
@@ -46,13 +56,31 @@ const ROLE_STYLES: Record<string, string> = {
   qa: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
   tester: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25",
   client: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
+  hr: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/25",
+  manager: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25",
 };
 
+function formatProfileDate(value: string | null | undefined) {
+  if (!value) return "—";
+  const parsed = parseISO(value);
+  if (!isValid(parsed)) return "—";
+  return format(parsed, "MMM d, yyyy");
+}
+
 export default function ProfilePage() {
-  const { data: user, isLoading: isLoadingUser } = useGetMe();
-  const { mutateAsync: updateProfile, isPending: isUpdatingProfile } = useUpdateMyProfile();
+  const { user, isLoading: isAuthLoading } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [profileSyncVersion, setProfileSyncVersion] = useState(0);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const isEmployeeProfile = usesEmployeeSelfProfile(user);
+  const {
+    data: fullEmployeeRecord,
+    isLoading: isLoadingEmployeeRecord,
+  } = useTeamEmployeeProfile(user?.id, isEmployeeProfile);
+
+  const employeeProfileSource = (fullEmployeeRecord ?? user) as Record<string, unknown>;
 
   const [profileForm, setProfileForm] = useState({
     name: "",
@@ -61,7 +89,7 @@ export default function ProfilePage() {
     avatarUrl: "",
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (user) {
       setProfileForm({
         name: user.name || "",
@@ -73,35 +101,64 @@ export default function ProfilePage() {
   }, [user]);
 
   const userWithPresence = useUserWithPresence(user);
-  const displayAvatar = profileForm.avatarUrl || user?.avatarUrl || undefined;
-  const displayName = profileForm.name || user?.name || "User";
+  const displayAvatar = user?.avatarUrl || undefined;
+  const displayName = user?.name || "User";
+  const phoneNumber = user?.phoneNumber || null;
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSavingProfile(true);
     try {
-      await updateProfile({
-        data: {
-          name: profileForm.name.trim(),
-          email: profileForm.email.trim().toLowerCase(),
-          designation: profileForm.designation.trim() || undefined,
-          avatarUrl: profileForm.avatarUrl.trim() || undefined,
-        },
+      const updated = await patchSelfProfile({
+        name: profileForm.name.trim(),
+        email: profileForm.email.trim().toLowerCase(),
+        designation: profileForm.designation.trim() || undefined,
+        avatarUrl: profileForm.avatarUrl.trim() || undefined,
       });
+      queryClient.setQueryData(getGetMeQueryKey(), updated);
       toast({
         title: "Profile updated",
         description: "Your profile has been saved successfully.",
       });
-      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
     } catch (error: unknown) {
       toast({
         title: "Update failed",
         description: getApiErrorMessage(error, "Could not update your profile."),
         variant: "destructive",
       });
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
-  if (isLoadingUser || !user) {
+  const handleStaffProfileSave = async (
+    payload: ReturnType<typeof buildSelfProfilePayload>,
+  ) => {
+    setIsSavingProfile(true);
+    try {
+      const updated = await patchSelfProfile(payload);
+      queryClient.setQueryData(getGetMeQueryKey(), updated);
+      if (user?.id) {
+        queryClient.setQueryData(teamEmployeeQueryKey(user.id), updated);
+      }
+      setProfileSyncVersion((v) => v + 1);
+      toast({
+        title: "Profile updated",
+        description: "Your employee profile has been saved.",
+      });
+    } catch (error: unknown) {
+      toast({
+        title: "Update failed",
+        description: getApiErrorMessage(error, "Could not update your profile."),
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  if (isAuthLoading || !user) {
     return (
       <PageShell hideHeader>
         <ProfilePageSkeleton />
@@ -115,7 +172,9 @@ export default function ProfilePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">My Profile</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Update your photo, details, and password
+            {isEmployeeProfile
+              ? "Keep your personal, contact, and payroll details up to date"
+              : "Update your photo, details, and password"}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -162,7 +221,7 @@ export default function ProfilePage() {
                   </Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {profileForm.designation || user.designation || "No designation"}
+                  {user.designation || "No designation"}
                 </p>
               </div>
 
@@ -180,11 +239,15 @@ export default function ProfilePage() {
                   <Mail className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate text-muted-foreground">{user.email}</span>
                 </li>
+                {phoneNumber ? (
+                  <li className="flex items-center gap-3 min-w-0">
+                    <Phone className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="truncate text-muted-foreground">{phoneNumber}</span>
+                  </li>
+                ) : null}
                 <li className="flex items-center gap-3">
                   <Briefcase className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span className="text-muted-foreground">
-                    {profileForm.designation || user.designation || "—"}
-                  </span>
+                  <span className="text-muted-foreground">{user.designation || "—"}</span>
                 </li>
                 <li className="flex items-center gap-3">
                   <Check className="h-4 w-4 shrink-0 text-emerald-500" />
@@ -214,7 +277,7 @@ export default function ProfilePage() {
                     <Calendar className="h-3 w-3" />
                     <span>Joined</span>
                   </div>
-                  <p className="font-medium">{format(new Date(user.createdAt), "MMM d, yyyy")}</p>
+                  <p className="font-medium">{formatProfileDate(user.createdAt)}</p>
                 </div>
                 <div className="rounded-lg border border-border/60 bg-muted/30 p-3">
                   <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
@@ -229,89 +292,117 @@ export default function ProfilePage() {
         </Card>
 
         <div className="lg:col-span-8 space-y-6">
-          <Card className="border-border/80">
-            <CardHeader>
-              <CardTitle className="text-base">Account information</CardTitle>
-              <CardDescription>Changes apply across the workspace after you save</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleUpdateProfile} className="space-y-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full name</Label>
-                    <Input
-                      id="name"
-                      value={profileForm.name}
-                      onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                      required
-                    />
+          {isEmployeeProfile ? (
+            <Card className="border-border/80">
+              <CardHeader>
+                <CardTitle className="text-base">Employee profile</CardTitle>
+                <CardDescription>
+                  Same personal fields as your HR record — department, salary amounts, and leave
+                  settings are managed by admin/HR.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {isLoadingEmployeeRecord ? (
+                  <div className="space-y-4">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-32 w-full" />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={profileForm.email}
-                      onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="designation">Designation</Label>
-                    <Input
-                      id="designation"
-                      value={profileForm.designation}
-                      onChange={(e) =>
-                        setProfileForm({ ...profileForm, designation: e.target.value })
-                      }
-                      placeholder="e.g. Senior Developer"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Profile photo</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Upload a photo — preview updates on the left before you save.
-                  </p>
-                  <FileUploader
-                    category="avatars"
-                    accept="image/*"
-                    label="Upload profile photo"
-                    value={profileForm.avatarUrl}
-                    maxSizeMB={5}
-                    onUploadComplete={(url) =>
-                      setProfileForm({ ...profileForm, avatarUrl: url })
-                    }
+                ) : (
+                  <EmployeeSelfProfileForm
+                    user={employeeProfileSource}
+                    syncVersion={profileSyncVersion}
+                    saving={isSavingProfile}
+                    onSave={handleStaffProfileSave}
                   />
-                </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="border-border/80">
+              <CardHeader>
+                <CardTitle className="text-base">Account information</CardTitle>
+                <CardDescription>Changes apply across the workspace after you save</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleUpdateProfile} className="space-y-5">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full name</Label>
+                      <Input
+                        id="name"
+                        value={profileForm.name}
+                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
 
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() =>
-                      setProfileForm({
-                        name: user.name || "",
-                        email: user.email || "",
-                        designation: user.designation || "",
-                        avatarUrl: user.avatarUrl || "",
-                      })
-                    }
-                  >
-                    Reset
-                  </Button>
-                  <Button type="submit" disabled={isUpdatingProfile}>
-                    {isUpdatingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save changes
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="designation">Designation</Label>
+                      <Input
+                        id="designation"
+                        value={profileForm.designation}
+                        onChange={(e) =>
+                          setProfileForm({ ...profileForm, designation: e.target.value })
+                        }
+                        placeholder="e.g. Senior Developer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Profile photo</Label>
+                    <p className="text-xs text-muted-foreground">
+                      Upload a photo — preview updates on the left before you save.
+                    </p>
+                    <FileUploader
+                      category="avatars"
+                      accept="image/*"
+                      label="Upload profile photo"
+                      value={profileForm.avatarUrl}
+                      maxSizeMB={5}
+                      onUploadComplete={(url) =>
+                        setProfileForm({ ...profileForm, avatarUrl: url })
+                      }
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        setProfileForm({
+                          name: user.name || "",
+                          email: user.email || "",
+                          designation: user.designation || "",
+                          avatarUrl: user.avatarUrl || "",
+                        })
+                      }
+                    >
+                      Reset
+                    </Button>
+                    <Button type="submit" disabled={isSavingProfile}>
+                      {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Save changes
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-border/80">
             <CardHeader>
@@ -330,5 +421,3 @@ export default function ProfilePage() {
     </PageShell>
   );
 }
-
-

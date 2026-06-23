@@ -79,7 +79,12 @@ router.post("/hrm/payroll/runs/:id/paid", perm("hrm_payroll", "finalize"), async
 router.get("/hrm/payroll/runs/:id/export", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollExport));
 router.get("/hrm/payroll/runs/:id/export/bank", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollBankExport));
 router.get("/hrm/my-payslips", perm("hrm_my_payslips", "view"), asyncHandler(hrm.getMyPayslips));
-router.get("/hrm/payslips/:id", perm("hrm_my_payslips", "view"), asyncHandler(hrm.getPayslipById));
+router.get("/hrm/payslips", perm("hrm_payroll", "view"), asyncHandler(hrm.getAdminPayslips));
+router.get(
+  "/hrm/payslips/:id",
+  requireAnyPermission(["hrm_my_payslips", "view"], ["hrm_payroll", "view"]),
+  asyncHandler(hrm.getPayslipById),
+);
 
 router.get("/hrm/recruitment/candidates", perm("hrm_recruitment", "view"), asyncHandler(hrm.getCandidates));
 router.post("/hrm/recruitment/candidates", perm("hrm_recruitment", "create"), asyncHandler(hrm.postCandidate));
@@ -91,6 +96,7 @@ router.patch("/hrm/recruitment/onboarding/:taskId", perm("hrm_recruitment", "edi
 router.get("/hrm/documents", asyncHandler(hrm.getDocuments));
 router.post("/hrm/documents", asyncHandler(hrm.postDocument));
 router.patch("/hrm/documents/:id", perm("hrm_documents", "approve"), asyncHandler(hrm.patchDocument));
+router.delete("/hrm/documents/:id", asyncHandler(hrm.deleteDocument));
 
 router.get("/hrm/policies", asyncHandler(hrm.getPolicies));
 router.post("/hrm/policies", perm("hrm_policies", "create"), asyncHandler(hrm.postPolicy));

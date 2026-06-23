@@ -79,7 +79,15 @@ function applyBaseUrl(input: RequestInfo | URL): RequestInfo | URL {
   // Only prepend to relative paths (starting with /)
   if (!url.startsWith("/")) return input;
 
-  const absolute = `${_baseUrl}${url}`;
+  const base = _baseUrl.replace(/\/+$/, "");
+  let path = url;
+
+  // Orval paths omit `/api`; manual callers often include it — avoid `/api/api/...`.
+  if (base.endsWith("/api") && (path === "/api" || path.startsWith("/api/"))) {
+    path = path === "/api" ? "/" : path.slice(4);
+  }
+
+  const absolute = `${base}${path}`;
   if (typeof input === "string") return absolute;
   if (isUrl(input)) return new URL(absolute);
   return new Request(absolute, input as Request);

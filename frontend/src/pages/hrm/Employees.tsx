@@ -18,6 +18,7 @@ import {
 } from "@/modules/hrm/components";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import { useHrmDepartments, useHrmEmployees } from "@/api/hrm";
+import { getHrmEmployeeDetailHref } from "@/lib/employee-routes";
 import type { HrmEmployee } from "@/modules/hrm/types";
 
 export default function HrmEmployeesPage() {
@@ -172,7 +173,7 @@ export default function HrmEmployeesPage() {
                 columns={columns}
                 filename="HrmEmployeesExport"
                 viewStorageKey="hrm-employees"
-                onRowClick={(e) => setLocation(`/hrm/employees/${e.id}`)}
+                onRowClick={(e) => setLocation(getHrmEmployeeDetailHref(e.id))}
                 clientPagination={pagination}
               />
             </PortalTablePanel>

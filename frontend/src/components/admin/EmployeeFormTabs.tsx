@@ -7,6 +7,8 @@ import {
   UserRound,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { FileUploader } from "@/components/ui/file-uploader";
+import { EmployeeDocumentsPanel } from "@/modules/hrm/EmployeeDocumentsPanel";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
@@ -176,7 +178,7 @@ export function EmployeeFormTabs({
         })}
       </PortalTabsList>
 
-      <TabsContent value="personal" className="mt-0 space-y-5 focus-visible:outline-none">
+      <TabsContent forceMount value="personal" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
         <FormSection title="Identity" description="Legal name and employee identifier used across HRM.">
           <FormRow>
             <FormField
@@ -340,13 +342,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.bloodGroup}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ""}>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                    value={field.value ? field.value : "__none__"}
+                  >
                     <FormControl>
                       <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder="Select blood group" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="__none__">Not set</SelectItem>
                       {EMPLOYEE_BLOOD_GROUPS.filter(Boolean).map((bg) => (
                         <SelectItem key={bg} value={bg}>
                           {bg}
@@ -366,13 +372,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.gender}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                    value={field.value ? field.value : "__none__"}
+                  >
                     <FormControl>
                       <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="__none__">Not set</SelectItem>
                       {EMPLOYEE_GENDERS.map((g) => (
                         <SelectItem key={g} value={g}>
                           {g}
@@ -390,13 +400,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.maritalStatus}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                    value={field.value ? field.value : "__none__"}
+                  >
                     <FormControl>
                       <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select" />
+                        <SelectValue placeholder="Select status" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
+                      <SelectItem value="__none__">Not set</SelectItem>
                       {EMPLOYEE_MARITAL_STATUSES.map((s) => (
                         <SelectItem key={s} value={s}>
                           {s}
@@ -499,7 +513,7 @@ export function EmployeeFormTabs({
         </FormSection>
       </TabsContent>
 
-      <TabsContent value="address" className="mt-0 space-y-4 focus-visible:outline-none">
+      <TabsContent forceMount value="address" className="mt-0 space-y-4 focus-visible:outline-none data-[state=inactive]:hidden">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <FormFieldHint>Permanent and current residence for HR records.</FormFieldHint>
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={copyPermanentToCurrent}>
@@ -523,7 +537,7 @@ export function EmployeeFormTabs({
         </div>
       </TabsContent>
 
-      <TabsContent value="work" className="mt-0 space-y-5 focus-visible:outline-none">
+      <TabsContent forceMount value="work" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
         <FormSection title="Role & access">
           <FormRow>
             <FormField
@@ -935,7 +949,7 @@ export function EmployeeFormTabs({
         </FormSection>
       </TabsContent>
 
-      <TabsContent value="compensation" className="mt-0 space-y-5 focus-visible:outline-none">
+      <TabsContent forceMount value="compensation" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
         <FormSection title="Salary structure" description="Reference amounts for HR and payroll.">
           <FormRow>
             <FormField
@@ -1030,8 +1044,8 @@ export function EmployeeFormTabs({
 
         <Separator />
 
-        <FormSection title="Document links" description="URLs to uploaded resume and identity documents.">
-          <div className="space-y-3">
+        <FormSection title="Documents" description="Upload resume and identity documents (PDF or image).">
+          <div className="grid gap-4 sm:grid-cols-2">
             {(
               [
                 ["resumeUrl", "Resume"],
@@ -1044,10 +1058,17 @@ export function EmployeeFormTabs({
                 control={form.control}
                 name={name}
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className={name === "addressProofUrl" ? "sm:col-span-2" : undefined}>
                     <FormLabel>{label}</FormLabel>
                     <FormControl>
-                      <Input className={employeeFormInputClass} placeholder="https://..." {...field} />
+                      <FileUploader
+                        variant="choose-file"
+                        category="hrm"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        value={field.value ?? ""}
+                        maxSizeMB={10}
+                        onUploadComplete={(url) => field.onChange(url)}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -1055,6 +1076,15 @@ export function EmployeeFormTabs({
               />
             ))}
           </div>
+          {editUser?.id ? (
+            <EmployeeDocumentsPanel
+              userId={editUser.id}
+              canUpload
+              canDelete
+              fetchEnabled={tab === "compensation"}
+              className="mt-4"
+            />
+          ) : null}
         </FormSection>
       </TabsContent>
     </Tabs>

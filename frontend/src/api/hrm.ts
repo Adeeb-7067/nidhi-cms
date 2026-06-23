@@ -1,7 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 import { useHrmMutation, useHrmQuery } from "./hrm-hooks";
 import { apiUrl } from "@/lib/api-base";
+import { QUERY_STALE } from "@/lib/query-config";
 import type {
   HrmAttendanceSummary,
   HrmDashboardStats,
@@ -23,8 +24,10 @@ import type {
   HrmAuditLog,
   HrmEmployee,
   HrmEmployeeOverview,
+  HrmEmployeeDetailResponse,
   HrmPayslip,
   HrmPayslipDetail,
+  HrmAdminPayslipRow,
   HrmPayrollChecklist,
   HrmCandidate,
   HrmOnboardingTask,
@@ -62,9 +65,11 @@ export const hrmCorrectionsQueryKey = (params?: object) => ["hrm", "attendance",
 export const hrmVarianceQueryKey = (params?: object) => ["hrm", "attendance", "variance", params] as const;
 export const hrmAuditQueryKey = (params?: object) => ["hrm", "audit", params] as const;
 
-export function useHrmDepartments() {
+export function useHrmDepartments(options?: { enabled?: boolean }) {
   return useHrmQuery({
     queryKey: hrmDepartmentsQueryKey(),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.reference,
     queryFn: () =>
       customFetch<{ departments: HrmDepartment[] }>(apiUrl("/api/hrm/departments")),
     meta: { errorMessage: "Could not load departments" },
@@ -74,7 +79,7 @@ export function useHrmDepartments() {
 export function useCreateDepartment() {
   const qc = useQueryClient();
   return useHrmMutation({
-    mutationFn: (body: { name: string; code?: string; headUserId?: number }) =>
+    mutationFn: (body: { name: string; code?: string; headUserId?: number; description?: string }) =>
       customFetch<HrmDepartment>(apiUrl("/api/hrm/departments"), { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: hrmDepartmentsQueryKey() }),
     meta: { errorMessage: "Could not create department" },
@@ -84,7 +89,7 @@ export function useCreateDepartment() {
 export function useUpdateDepartment() {
   const qc = useQueryClient();
   return useHrmMutation({
-    mutationFn: ({ id, ...body }: { id: number; name?: string; code?: string; headUserId?: number | null }) =>
+    mutationFn: ({ id, ...body }: { id: number; name?: string; code?: string; headUserId?: number | null; description?: string }) =>
       customFetch<HrmDepartment>(apiUrl(`/api/hrm/departments/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -204,6 +209,7 @@ export function useHrmShiftAssignments(userId?: number) {
 export function useHrmDashboard() {
   return useHrmQuery({
     queryKey: hrmDashboardQueryKey(),
+    staleTime: QUERY_STALE.analytics,
     queryFn: () => customFetch<HrmDashboardResponse>(apiUrl("/api/hrm/dashboard")),
     meta: { errorMessage: "Could not load HRM dashboard" },
   });
@@ -212,18 +218,21 @@ export function useHrmDashboard() {
 export function useHrmLeaveTypes() {
   return useHrmQuery({
     queryKey: ["hrm", "leave", "types"],
+    staleTime: QUERY_STALE.reference,
     queryFn: () => customFetch<{ types: HrmLeaveType[] }>(apiUrl("/api/hrm/leave/types")),
     meta: { errorMessage: "Could not load leave types" },
   });
 }
 
-export function useHrmLeaveBalances(userId?: number, year?: number) {
+export function useHrmLeaveBalances(userId?: number, year?: number, options?: { enabled?: boolean }) {
   const params = new URLSearchParams();
   if (userId) params.set("userId", String(userId));
   if (year) params.set("year", String(year));
   const qs = params.toString();
   return useHrmQuery({
     queryKey: hrmLeaveBalancesQueryKey(userId, year),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ balances: HrmLeaveBalance[] }>(
         apiUrl(`/api/hrm/leave/balances${qs ? `?${qs}` : ""}`),
@@ -248,6 +257,7 @@ export function useHrmLeaveRequests(
         apiUrl(`/api/hrm/leave/requests${qs ? `?${qs}` : ""}`),
       ),
     enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
     meta: { errorMessage: "Could not load leave requests" },
   });
 }
@@ -415,7 +425,13 @@ export function useGenerateSundayHolidays() {
   });
 }
 
-export function useHrmAttendanceDaily(startDate: string, endDate: string, userId?: number, departmentId?: number) {
+export function useHrmAttendanceDaily(
+  startDate: string,
+  endDate: string,
+  userId?: number,
+  departmentId?: number,
+  options?: { enabled?: boolean },
+) {
   const params = new URLSearchParams({ startDate, endDate });
   if (userId) params.set("userId", String(userId));
   if (departmentId) params.set("departmentId", String(departmentId));
@@ -425,12 +441,18 @@ export function useHrmAttendanceDaily(startDate: string, endDate: string, userId
       customFetch<{ summaries: HrmAttendanceSummary[] }>(
         apiUrl(`/api/hrm/attendance/daily?${params}`),
       ),
-    enabled: !!startDate && !!endDate,
+    enabled: (options?.enabled ?? true) && !!startDate && !!endDate,
+    staleTime: QUERY_STALE.analytics,
     meta: { errorMessage: "Could not load attendance" },
   });
 }
 
-export function useHrmAttendanceVariance(startDate: string, endDate: string, userId?: number) {
+export function useHrmAttendanceVariance(
+  startDate: string,
+  endDate: string,
+  userId?: number,
+  options?: { enabled?: boolean },
+) {
   const params = new URLSearchParams({ startDate, endDate });
   if (userId) params.set("userId", String(userId));
   return useHrmQuery({
@@ -439,15 +461,18 @@ export function useHrmAttendanceVariance(startDate: string, endDate: string, use
       customFetch<{ rows: HrmAttendanceVarianceRow[]; flaggedCount?: number }>(
         apiUrl(`/api/hrm/attendance/variance?${params}`),
       ),
-    enabled: !!startDate && !!endDate,
+    enabled: (options?.enabled ?? true) && !!startDate && !!endDate,
+    staleTime: QUERY_STALE.analytics,
     meta: { errorMessage: "Could not load attendance variance" },
   });
 }
 
-export function useHrmAttendanceCorrections(userId?: number) {
+export function useHrmAttendanceCorrections(userId?: number, options?: { enabled?: boolean }) {
   const params = userId ? `?userId=${userId}` : "";
   return useHrmQuery({
     queryKey: hrmCorrectionsQueryKey({ userId }),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ corrections: HrmAttendanceCorrection[] }>(
         apiUrl(`/api/hrm/attendance/corrections${params}`),
@@ -576,9 +601,11 @@ export function useSendEmployeeCredentials() {
   });
 }
 
-export function useHrmSettings() {
+export function useHrmSettings(options?: { enabled?: boolean }) {
   return useHrmQuery({
     queryKey: hrmSettingsQueryKey(),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.reference,
     queryFn: () => customFetch<HrmSettings>(apiUrl("/api/hrm/settings")),
     meta: { errorMessage: "Could not load HRM settings" },
   });
@@ -600,13 +627,16 @@ export function useUpdateHrmSettings() {
   });
 }
 
-export function useHrmEmployees(params?: {
-  search?: string;
-  departmentId?: number;
-  status?: string;
-  page?: number;
-  limit?: number;
-}) {
+export function useHrmEmployees(
+  params?: {
+    search?: string;
+    departmentId?: number;
+    status?: string;
+    page?: number;
+    limit?: number;
+  },
+  options?: { enabled?: boolean },
+) {
   const searchParams = new URLSearchParams();
   if (params?.search) searchParams.set("search", params.search);
   if (params?.departmentId != null) searchParams.set("departmentId", String(params.departmentId));
@@ -616,6 +646,8 @@ export function useHrmEmployees(params?: {
   const qs = searchParams.toString();
   return useHrmQuery({
     queryKey: hrmEmployeesQueryKey(params),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ employees: HrmEmployee[]; total: number; page: number; limit: number }>(
         apiUrl(`/api/hrm/employees${qs ? `?${qs}` : ""}`),
@@ -628,10 +660,9 @@ export function useHrmEmployee(id?: number) {
   return useHrmQuery({
     queryKey: hrmEmployeeQueryKey(id),
     enabled: id != null && id > 0,
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
-      customFetch<{ employee: HrmEmployee; overview: HrmEmployeeOverview }>(
-        apiUrl(`/api/hrm/employees/${id}`),
-      ),
+      customFetch<HrmEmployeeDetailResponse>(apiUrl(`/api/hrm/employees/${id}`)),
     meta: { errorMessage: "Could not load employee" },
   });
 }
@@ -649,9 +680,11 @@ export function useHrmAuditLogs(params?: { severity?: string; action?: string })
   });
 }
 
-export function useHrmShiftTemplates() {
+export function useHrmShiftTemplates(options?: { enabled?: boolean }) {
   return useHrmQuery({
     queryKey: hrmShiftTemplatesQueryKey(),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.reference,
     queryFn: () =>
       customFetch<{ templates: HrmShiftTemplate[] }>(apiUrl("/api/hrm/shifts/templates")),
     meta: { errorMessage: "Could not load shift templates" },
@@ -661,15 +694,18 @@ export function useHrmShiftTemplates() {
 export function useHrmPayrollRuns() {
   return useHrmQuery({
     queryKey: hrmPayrollRunsQueryKey(),
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ runs: HrmPayrollRun[] }>(apiUrl("/api/hrm/payroll/runs")),
     meta: { errorMessage: "Could not load payroll runs" },
   });
 }
 
-export function useHrmSalaryStructures() {
+export function useHrmSalaryStructures(options?: { enabled?: boolean }) {
   return useHrmQuery({
     queryKey: ["hrm", "payroll", "structures"],
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.reference,
     queryFn: () =>
       customFetch<{ structures: HrmSalaryStructure[] }>(apiUrl("/api/hrm/payroll/structures")),
     meta: { errorMessage: "Could not load salary structures" },
@@ -729,7 +765,7 @@ export function useUpdatePayrollLine() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "payroll", "lines"] }),
+    onSuccess: () => invalidatePayrollSlipQueries(qc),
     meta: { errorMessage: "Could not update payroll line" },
   });
 }
@@ -765,6 +801,7 @@ export function useHrmPayrollChecklist(runId?: number) {
 export function useHrmPayrollChecklistByPeriod(year: number, month: number) {
   return useHrmQuery({
     queryKey: ["hrm", "payroll", "checklist", year, month],
+    staleTime: QUERY_STALE.analytics,
     queryFn: () =>
       customFetch<HrmPayrollChecklist>(
         apiUrl(`/api/hrm/payroll/checklist?year=${year}&month=${month}`),
@@ -776,11 +813,19 @@ export function useHrmPayrollChecklistByPeriod(year: number, month: number) {
 export function useHrmPayrollRunLines(runId?: number) {
   return useHrmQuery({
     queryKey: ["hrm", "payroll", "lines", runId],
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ lines: HrmPayrollLine[] }>(apiUrl(`/api/hrm/payroll/runs/${runId}/lines`)),
     enabled: !!runId,
     meta: { errorMessage: "Could not load payroll lines" },
   });
+}
+
+function invalidatePayrollSlipQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: hrmPayrollRunsQueryKey() });
+  qc.invalidateQueries({ queryKey: ["hrm", "payroll", "lines"] });
+  qc.invalidateQueries({ queryKey: ["hrm", "admin-payslips"] });
+  qc.invalidateQueries({ queryKey: ["hrm", "my-payslips"] });
 }
 
 export function useGeneratePayrollRun() {
@@ -791,7 +836,7 @@ export function useGeneratePayrollRun() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: hrmPayrollRunsQueryKey() }),
+    onSuccess: () => invalidatePayrollSlipQueries(qc),
     meta: { errorMessage: "Could not generate payroll", showErrorToast: false },
   });
 }
@@ -801,7 +846,7 @@ export function useFinalizePayrollRun() {
   return useHrmMutation({
     mutationFn: (runId: number) =>
       customFetch(apiUrl(`/api/hrm/payroll/runs/${runId}/finalize`), { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: hrmPayrollRunsQueryKey() }),
+    onSuccess: () => invalidatePayrollSlipQueries(qc),
     meta: { errorMessage: "Could not finalize payroll" },
   });
 }
@@ -828,6 +873,22 @@ export function useMyPayslips(year?: number) {
         apiUrl(`/api/hrm/my-payslips${params}`),
       ),
     meta: { errorMessage: "Could not load payslips" },
+  });
+}
+
+export function useAdminPayslips(opts?: { year?: number; month?: number; allPeriods?: boolean }) {
+  const params = new URLSearchParams();
+  if (opts?.year) params.set("year", String(opts.year));
+  if (opts?.month) params.set("month", String(opts.month));
+  if (opts?.allPeriods) params.set("allPeriods", "true");
+  const qs = params.toString();
+  return useHrmQuery({
+    queryKey: ["hrm", "admin-payslips", opts?.year, opts?.month, opts?.allPeriods],
+    queryFn: () =>
+      customFetch<{ slips: HrmAdminPayslipRow[] }>(
+        apiUrl(`/api/hrm/payslips${qs ? `?${qs}` : ""}`),
+      ),
+    meta: { errorMessage: "Could not load salary slips" },
   });
 }
 
@@ -939,10 +1000,12 @@ export function useCompleteOnboardingTask() {
   });
 }
 
-export function useHrmDocuments(userId?: number) {
+export function useHrmDocuments(userId?: number, options?: { enabled?: boolean }) {
   const qs = userId ? `?userId=${userId}` : "";
   return useHrmQuery({
     queryKey: ["hrm", "documents", userId ?? "all"],
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ documents: HrmEmployeeDocument[] }>(apiUrl(`/api/hrm/documents${qs}`)),
     meta: { errorMessage: "Could not load documents" },
@@ -972,6 +1035,16 @@ export function useReviewDocument() {
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "documents"] }),
     meta: { errorMessage: "Could not review document" },
+  });
+}
+
+export function useDeleteDocument() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/hrm/documents/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "documents"] }),
+    meta: { errorMessage: "Could not delete document" },
   });
 }
 

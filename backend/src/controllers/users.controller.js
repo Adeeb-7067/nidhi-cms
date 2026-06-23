@@ -30,6 +30,7 @@ import {
 import {
   buildUserProfileCreateFields,
   buildUserProfilePatchSet,
+  buildProfilePatchMongoUpdate,
 } from "../utils/user-profile-fields.js";
 import {
   badRequest,
@@ -247,20 +248,15 @@ async function patchUsersById(req, res) {
     explicitTemplate &&
     (body.roleTemplateId ?? body.hrmRoleTemplateId) == null;
   const profilePatch = buildUserProfilePatchSet(body);
-  const user = await usersTable.findOneAndUpdate(
-    { id },
-    {
-      $set: {
-        ...profilePatch,
-        ...body.name !== void 0 && !profilePatch.name && { name: optionalString(body.name) },
-        ...body.email !== void 0 && { email: optionalString(body.email)?.toLowerCase() },
-        ...body.role !== void 0 && { role: optionalString(body.role) },
-        ...body.avatarUrl !== void 0 && { avatarUrl: avatarUrl ?? null },
-        ...body.department !== void 0 && { department: optionalString(body.department) },
-      },
-    },
-    { new: true }
-  );
+  const mongoUpdate = buildProfilePatchMongoUpdate({
+    ...profilePatch,
+    ...body.name !== void 0 && !profilePatch.name && { name: optionalString(body.name) },
+    ...body.email !== void 0 && { email: optionalString(body.email)?.toLowerCase() },
+    ...body.role !== void 0 && { role: optionalString(body.role) },
+    ...body.avatarUrl !== void 0 && { avatarUrl: avatarUrl ?? null },
+    ...body.department !== void 0 && { department: optionalString(body.department) },
+  });
+  const user = await usersTable.findOneAndUpdate({ id }, mongoUpdate, { new: true, runValidators: true });
   if (!user) notFound("User");
   await syncUserRoleTemplate(id, user.role, {
     explicitTemplateId:

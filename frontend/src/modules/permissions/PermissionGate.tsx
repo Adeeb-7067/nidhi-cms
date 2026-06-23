@@ -1,8 +1,9 @@
 import React from "react";
-import { usePermission } from "./usePermission";
+import { usePermission, usePermissionLoading } from "./usePermission";
 import { normalizeModule, type CmsAction } from "./constants";
 import { useAuth } from "@/contexts/AuthContext";
 import { isHrmAdminRole } from "@/lib/user-roles";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function PermissionGate({
   module,
@@ -14,10 +15,20 @@ export function PermissionGate({
   children: React.ReactNode;
 }) {
   const { user } = useAuth();
+  const loading = usePermissionLoading();
   const allowed = usePermission(module, action);
 
   if (user && (user.role === "super_admin" || isHrmAdminRole(user.role))) {
     return <>{children}</>;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+    );
   }
 
   if (!allowed) {

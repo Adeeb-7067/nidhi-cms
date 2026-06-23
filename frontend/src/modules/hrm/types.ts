@@ -4,9 +4,20 @@ export type HrmDepartment = {
   id: number;
   name: string;
   code?: string | null;
+  description?: string | null;
   headUserId?: number | null;
+  managerId?: number | null;
+  managerName?: string | null;
   status: string;
   headcount?: number;
+  designations?: string[];
+  members?: Array<{
+    userId: number;
+    userName: string;
+    employeeId?: string | null;
+    avatarUrl?: string | null;
+    designation?: string | null;
+  }>;
 };
 
 export type HrmRoleTemplate = {
@@ -198,6 +209,7 @@ export type HrmAuditLog = {
   entityType: string;
   entityId?: number | null;
   severity: string;
+  ipAddress?: string | null;
   metadata?: Record<string, unknown> | null;
   createdAt: string;
 };
@@ -304,6 +316,20 @@ export type HrmDashboardNeedsAttention = {
   tone: "info" | "warning" | "critical";
 };
 
+export type HrmDashboardBirthday = {
+  userId: number;
+  userName: string;
+  employeeId?: string | null;
+  avatarUrl?: string | null;
+  date: string;
+};
+
+export type HrmDashboardInsights = {
+  averageClockIn: string | null;
+  onTimeRatePct: number | null;
+  unreadAlerts: number;
+};
+
 export type HrmDashboardRequestStats = {
   pending: number;
   approved: number;
@@ -343,6 +369,8 @@ export type HrmDashboardResponse = {
   topEarners?: HrmDashboardTopEarner[];
   recentActivity?: HrmDashboardActivityItem[];
   needsAttention?: HrmDashboardNeedsAttention[];
+  upcomingBirthdays?: HrmDashboardBirthday[];
+  insights?: HrmDashboardInsights;
 };
 
 import type { EmployeeProfileExtension } from "./employee-profile-types";
@@ -363,6 +391,11 @@ export type HrmEmployee = EmployeeProfileExtension & {
   reportingManagerName?: string | null;
   reportingManagerEmployeeId?: string | null;
   teamleaderId?: number | null;
+  teamleaderName?: string | null;
+  teamleaderEmployeeId?: string | null;
+  shiftName?: string | null;
+  subType?: string | null;
+  roleTemplateId?: number | null;
   phoneNumber?: string | null;
   joiningDate?: string | null;
   linkedinUrl?: string | null;
@@ -372,6 +405,14 @@ export type HrmEmployee = EmployeeProfileExtension & {
   lastLoginAt?: string | null;
   salary?: EmployeeProfileExtension["salary"];
   socialProfiles?: EmployeeProfileExtension["socialProfiles"];
+};
+
+export type HrmEmployeeDetailResponse = {
+  employee: HrmEmployee;
+  overview: HrmEmployeeOverview;
+  attendanceSummaries?: HrmAttendanceSummary[];
+  leaveBalances?: HrmLeaveBalance[];
+  leaveRequests?: HrmLeaveRequest[];
 };
 
 export type HrmEmployeeOverview = {
@@ -403,6 +444,7 @@ export type HrmPayrollLine = {
   userId: number;
   employeeName?: string;
   employeeId?: string | null;
+  payslipId?: number | null;
   paidDays: number;
   lopDays: number;
   lateCount: number;
@@ -446,6 +488,22 @@ export type HrmPayslip = {
   gross?: number | null;
   net?: number | null;
   htmlContent?: string | null;
+  status?: string | null;
+};
+
+export type HrmAdminPayslipRow = {
+  id: number;
+  payrollLineId: number;
+  userId: number;
+  year: number;
+  month: number;
+  employeeName: string;
+  employeeId: string | null;
+  designation?: string | null;
+  gross: number | null;
+  net: number | null;
+  status: "PAID" | "UNPAID";
+  runStatus?: string | null;
 };
 
 export type HrmPayslipDetail = {
@@ -498,6 +556,9 @@ export type HrmCandidate = {
   stage: string;
   notes?: string | null;
   resumeUrl?: string | null;
+  experienceYears?: number | null;
+  source?: string | null;
+  rating?: number | null;
   createdAt?: string;
 };
 

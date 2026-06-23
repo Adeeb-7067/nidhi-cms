@@ -34,6 +34,7 @@ import { apiUrl } from "@/lib/api-base";
 import { isDevPortalRole, isMonitorableStaffRole, isStaffEmployeeRole } from "@/lib/user-roles";
 import { permissionsQueryKey } from "@/api/permissions";
 import { customFetch } from "@/api/custom-fetch";
+import { resolveFcmTokenForLogout, revokeFirebaseToken } from "@/lib/firebase";
 import type { PermissionsResponse } from "@/api/permissions";
 
 interface AuthContextType {
@@ -124,6 +125,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (cancelled) return;
           if (token) {
             setAccessToken(token);
+            prefetchPermissions(queryClient);
           } else {
             clearTokens();
             clearImpersonationMeta();
@@ -349,17 +351,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const refreshToken = getRefreshToken();
+    const fcmToken = await resolveFcmTokenForLogout().catch(() => null);
     try {
       if (token) {
         await apiLogout({
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ refreshToken }),
+          body: JSON.stringify({
+            refreshToken,
+            ...(fcmToken ? { fcmToken } : {}),
+          }),
         });
       }
     } catch {
       // Clear local session even if API call fails
     } finally {
+      await revokeFirebaseToken().catch(() => undefined);
       clearTokens();
       clearImpersonationMeta();
       setImpersonation(null);

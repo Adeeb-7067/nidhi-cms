@@ -57,6 +57,18 @@ export {
   hrmRefCountSubtitle,
   hrmKpiToRefStats,
 } from "./hrm-reference-kit";
+export {
+  HrmDetailDrawer,
+  HrmDetailSection,
+  HrmDetailRow,
+  HrmPersonChip,
+  HrmRatingStars,
+  HrmTrendRangeSelect,
+  HrmDataExplorerCard,
+  HrmDrawerCloseButton,
+  sliceTrendByDays,
+  type HrmTrendDays,
+} from "./rich-ui-kit";
 import { ATTENDANCE_STATUS_LABELS, LEAVE_STATUS_LABELS, normalizeAttendanceStatus } from "./constants";
 
 export {

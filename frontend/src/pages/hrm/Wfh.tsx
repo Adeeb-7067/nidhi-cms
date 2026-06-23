@@ -37,7 +37,7 @@ export default function HrmWfhPage() {
   const canAdminView = useHrmPermission("wfh", "view");
   const canApprove = useHrmPermission("wfh", "approve");
   const pendingQuery = useHrmWfhRequests(
-    canAdminView ? { status: "pending" } : { userId: user?.id },
+    canAdminView || canApprove ? { status: "pending" } : { userId: user?.id },
   );
   const allQuery = useHrmWfhRequests(
     canAdminView ? {} : { userId: user?.id },
@@ -133,13 +133,13 @@ export default function HrmWfhPage() {
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading || (canAdminView && allLoading)} />
 
-        <Tabs defaultValue={canAdminView ? "queue" : "history"} className="space-y-4">
+        <Tabs defaultValue={canApprove || canAdminView ? "queue" : "history"} className="space-y-4">
           <HrmTabsList>
-            {canAdminView && <HrmTabsTrigger value="queue">Pending approvals</HrmTabsTrigger>}
+            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Pending approvals</HrmTabsTrigger>}
             <HrmTabsTrigger value="history">{canAdminView ? "All requests" : "My requests"}</HrmTabsTrigger>
           </HrmTabsList>
 
-          {canAdminView && (
+          {(canAdminView || canApprove) && (
             <TabsContent value="queue" className="space-y-4 m-0">
               {pendingState.isError ? (
                 <HrmQueryErrorPanel

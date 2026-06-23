@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { format } from "date-fns";
 import { Check, Download, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { apiUrl } from "@/lib/api-base";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import type { HrmEmployeeDocument } from "./types";
 import {
   HrmRefDetailHeader,
@@ -35,11 +35,6 @@ function DocReviewActions({
       </Button>
     </div>
   );
-}
-
-function resolveFileUrl(url: string) {
-  if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  return apiUrl(url.startsWith("/") ? url : `/${url}`);
 }
 
 function statusTone(status: string): "success" | "warning" | "danger" | "muted" {

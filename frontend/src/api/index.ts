@@ -38,6 +38,15 @@ export {
   type DirectConversationListResult,
 } from "./direct-conversations";
 export { setBaseUrl, setAuthTokenGetter, ApiError } from "./custom-fetch";
+export {
+  fetchTeamEmployee,
+  createTeamEmployee,
+  updateTeamEmployee,
+  useTeamEmployeeProfile,
+  useSaveTeamEmployee,
+  teamEmployeeQueryKey,
+  type TeamEmployeeRecord,
+} from "./team-employees";
 export type { AuthTokenGetter } from "./custom-fetch";
 export {
   clientTeamActivityQueryKey,

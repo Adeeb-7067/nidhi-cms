@@ -196,6 +196,75 @@ export function buildUserProfileCreateFields(body) {
   return out;
 }
 
+/** Body keys employees may update on their own profile (HR/admin fields excluded). */
+export const SELF_SERVICE_PROFILE_BODY_KEYS = [
+  "name",
+  "firstName",
+  "lastName",
+  "email",
+  "designation",
+  "avatarUrl",
+  "image",
+  "phone",
+  "phoneNumber",
+  "dob",
+  "gender",
+  "maritalStatus",
+  "bloodGroup",
+  "bio",
+  "permanentAddress",
+  "currentAddress",
+  "socialProfiles",
+  "linkedinUrl",
+  "resumeUrl",
+  "idProofUrl",
+  "addressProofUrl",
+  "certificateUrls",
+  "aadharNumber",
+  "panNumber",
+  "emergencyContacts",
+  "salary",
+];
+
+/** Strip admin-only fields; salary updates are limited to bank account details. */
+export function pickSelfServiceProfileBody(body) {
+  if (!body || typeof body !== "object") return {};
+  const picked = {};
+  for (const key of SELF_SERVICE_PROFILE_BODY_KEYS) {
+    if (body[key] !== undefined) picked[key] = body[key];
+  }
+  if (picked.salary !== undefined) {
+    const bank =
+      picked.salary && typeof picked.salary === "object" ? picked.salary.bankAccount : undefined;
+    picked.salary =
+      bank && typeof bank === "object" ? { bankAccount: bank } : { bankAccount: {} };
+  }
+  return picked;
+}
+
+/** Build $set patch for self-service profile updates (merges bank into existing salary). */
+export function buildSelfServiceProfilePatchSet(body, { existingSalary } = {}) {
+  const picked = pickSelfServiceProfileBody(body);
+  const bankOnly = picked.salary;
+  delete picked.salary;
+
+  const set = buildUserProfilePatchSet(picked);
+
+  if (bankOnly !== undefined) {
+    const bankPatch = pickSalary(bankOnly).bankAccount;
+    const prev = existingSalary && typeof existingSalary === "object" ? existingSalary : {};
+    set.salary = {
+      basicSalary: parseNumber(prev.basicSalary) ?? 0,
+      allowances: parseNumber(prev.allowances) ?? 0,
+      deductions: parseNumber(prev.deductions) ?? 0,
+      netSalary: parseNumber(prev.netSalary) ?? 0,
+      bankAccount: bankPatch,
+    };
+  }
+
+  return set;
+}
+
 /** Build $set patch for profile + sync CMS alias fields. */
 export function buildUserProfilePatchSet(body) {
   const set = {};
@@ -220,8 +289,6 @@ export function buildUserProfilePatchSet(body) {
     ["image", "image"],
     ["avatarUrl", "avatarUrl"],
     ["dob", "dob", parseDate],
-    ["gender", "gender", optionalString],
-    ["maritalStatus", "maritalStatus", optionalString],
     ["exitDate", "exitDate", parseDate],
     ["probationEndDate", "probationEndDate", parseDate],
     ["employeeType", "employeeType", optionalString],
@@ -229,7 +296,6 @@ export function buildUserProfilePatchSet(body) {
     ["teamleaderId", "teamleaderId"],
     ["shiftId", "shiftId"],
     ["bio", "bio", optionalString],
-    ["bloodGroup", "bloodGroup", optionalString],
     ["resumeUrl", "resumeUrl", optionalString],
     ["idProofUrl", "idProofUrl", optionalString],
     ["addressProofUrl", "addressProofUrl", optionalString],
@@ -315,6 +381,7 @@ export function buildUserProfilePatchSet(body) {
   }
 
   if (body.departmentId !== undefined) set.departmentId = body.departmentId ?? null;
+  if (body.department !== undefined) set.department = optionalString(body.department) ?? null;
   if (body.designation !== undefined) set.designation = optionalString(body.designation) ?? null;
   if (body.subType !== undefined) set.subType = optionalString(body.subType) ?? null;
   if (body.joiningDate !== undefined) {
@@ -334,7 +401,11 @@ export function buildUserProfilePatchSet(body) {
     if (body[field] !== undefined && body[field] !== null && body[field] !== "") {
       set[field] = assertEnum(field, body[field], allowed);
     } else if (body[field] === null || body[field] === "") {
-      set[field] = null;
+      if (field === "bloodGroup") {
+        set[field] = "";
+      } else {
+        set[field] = null;
+      }
     }
   }
 
@@ -353,6 +424,37 @@ export function buildUserProfilePatchSet(body) {
   return set;
 }
 
+/** Build Mongo update doc from profile patch ($set + $unset for enum fields that disallow null). */
+export function buildProfilePatchMongoUpdate(patch) {
+  const set = { ...patch };
+  const unset = {};
+
+  for (const field of ["gender", "maritalStatus"]) {
+    if (set[field] === null) {
+      unset[field] = "";
+      delete set[field];
+    }
+  }
+  if (set.bloodGroup === null) {
+    set.bloodGroup = "";
+  }
+
+  for (const key of Object.keys(set)) {
+    if (set[key] === undefined) delete set[key];
+  }
+
+  const update = {};
+  if (Object.keys(set).length) update.$set = set;
+  if (Object.keys(unset).length) update.$unset = unset;
+  return update;
+}
+
+function toProfileIso(value) {
+  if (value == null || value === "") return null;
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 /** Serialize profile fields for API responses. */
 export function formatUserProfileFields(user, { includeSensitive = false } = {}) {
   if (!user) return {};
@@ -361,13 +463,13 @@ export function formatUserProfileFields(user, { includeSensitive = false } = {})
     firstName: user.firstName ?? splitName(user.name).firstName,
     lastName: user.lastName ?? splitName(user.name).lastName,
     image: user.image ?? user.avatarUrl ?? null,
-    dob: user.dob ? new Date(user.dob).toISOString() : null,
+    dob: toProfileIso(user.dob),
     gender: user.gender ?? null,
     maritalStatus: user.maritalStatus ?? null,
     permanentAddress: user.permanentAddress ?? null,
     currentAddress: user.currentAddress ?? null,
-    exitDate: user.exitDate ? new Date(user.exitDate).toISOString() : null,
-    probationEndDate: user.probationEndDate ? new Date(user.probationEndDate).toISOString() : null,
+    exitDate: toProfileIso(user.exitDate),
+    probationEndDate: toProfileIso(user.probationEndDate),
     employeeType: user.employeeType ?? "FULL-TIME",
     hrEmploymentStatus: user.hrEmploymentStatus ?? "Active",
     teamleaderId: user.teamleaderId ?? null,

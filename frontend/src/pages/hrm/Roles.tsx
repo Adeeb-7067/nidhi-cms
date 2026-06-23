@@ -1,1 +1,1 @@
-export { default } from "@/pages/admin/RolesPermissions";
+export { default } from "@/pages/hrm/HrmRolesEditor";

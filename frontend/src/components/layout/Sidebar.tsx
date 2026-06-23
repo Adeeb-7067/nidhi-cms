@@ -173,7 +173,10 @@ function useSidebarNavState() {
 
   const role = user?.role as UserRole;
   const { canViewHref } = usePermissions();
-  const rawSections = user ? getNavSections(role) : [];
+  const rawSections = useMemo(
+    () => (user ? getNavSections(role) : []),
+    [user, role],
+  );
 
   const sections = useMemo<NavSection[]>(() => {
     const permissionFiltered = rawSections
@@ -201,9 +204,14 @@ function useSidebarNavState() {
         }),
       }))
       .filter((section) => section.items.length > 0);
-    // We rely on `team` and the role to recompute whenever permissions change.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role, team.isClientUser, team.isAdmin, team.permissions, rawSections.length, canViewHref]);
+  }, [
+    role,
+    team.isClientUser,
+    team.isAdmin,
+    team.can,
+    rawSections,
+    canViewHref,
+  ]);
 
   const homeHref = user ? getHomeHref(role) : "/login";
 
@@ -392,28 +400,13 @@ export const Sidebar = memo(function Sidebar({ collapsed = false, className }: S
             </div>
 
             <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 py-3">
-              <motion.div
-                key={activeSection.label}
-                initial="hidden"
-                animate="show"
-                variants={{
-                  hidden: { opacity: 0 },
-                  show: { opacity: 1, transition: { staggerChildren: 0.03 } },
-                }}
-                className="space-y-0.5"
-              >
+              <div className="space-y-0.5">
                 {groupedItems.map((bucket, bucketIndex) => (
                   <div key={`${activeSection.label}-${bucket.group ?? "default"}-${bucketIndex}`}>
                     {bucket.group ? <SidebarGroupLabel label={bucket.group} /> : null}
                     <ul className="space-y-0.5">
                       {bucket.items.map((item) => (
-                        <motion.li
-                          key={item.href}
-                          variants={{
-                            hidden: { opacity: 0, x: -6 },
-                            show: { opacity: 1, x: 0 },
-                          }}
-                        >
+                        <li key={item.href}>
                           <SidebarNavLink
                             href={item.href}
                             active={isNavActive(location, item.href)}
@@ -422,12 +415,12 @@ export const Sidebar = memo(function Sidebar({ collapsed = false, className }: S
                             count={getBadge(item.badgeKey)}
                             onNavigate={handleNavItemClick}
                           />
-                        </motion.li>
+                        </li>
                       ))}
                     </ul>
                   </div>
                 ))}
-              </motion.div>
+              </div>
             </nav>
 
             <div className="shrink-0 border-t border-sidebar-primary-foreground/15 bg-black/5 px-3 py-3 backdrop-blur-sm">

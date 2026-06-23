@@ -49,6 +49,7 @@ export function useRoleTemplates() {
     queryKey: roleTemplatesQueryKey(),
     queryFn: () =>
       customFetch<{ templates: RoleTemplate[] }>(apiUrl("/api/roles")),
+    staleTime: 5 * 60_000,
   });
 }
 

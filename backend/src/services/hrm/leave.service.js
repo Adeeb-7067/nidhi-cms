@@ -13,7 +13,7 @@ import { logHrmAudit } from "./hrm-audit.service.js";
 import { companyHolidaysTable } from "../../models/schema/hrm/holidays.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { allocateOldestFirst, getLeaveYearForDate } from "./leave-accrual.service.js";
+import { allocateOldestFirst, getLeaveYearForDate, reconcileAutoSeededBalance, reconcileUserLeaveBalances, syncUserLeaveAvailable } from "./leave-accrual.service.js";
 import {
   canUserReviewLeaveRequest,
   resolveLeaveNotifierIds,
@@ -44,7 +44,13 @@ async function ensureBalance(userId, leaveTypeId, year, session) {
   let query = leaveBalancesTable.findOne({ userId, leaveTypeId, year });
   if (session) query = query.session(session);
   let bal = await query;
-  if (bal) return bal;
+  if (bal) {
+    const type = await leaveTypesTable.findOne({ id: leaveTypeId }).lean();
+    if (type) {
+      bal = await reconcileAutoSeededBalance(bal, type);
+    }
+    return bal;
+  }
 
   const type = await leaveTypesTable.findOne({ id: leaveTypeId }).lean();
   if (!type) notFound("Leave type");
@@ -54,7 +60,8 @@ async function ensureBalance(userId, leaveTypeId, year, session) {
     userId,
     leaveTypeId,
     year,
-    allocated: type.maxDaysPerYear ?? 0,
+    // Accrual-only (Satyakabir model): balances grow via monthly EL credits, not upfront annual grants.
+    allocated: 0,
     used: 0,
     pending: 0,
     carriedForward: 0,
@@ -139,6 +146,7 @@ export async function listLeaveTypes() {
 
 export async function listLeaveBalances(userId, year) {
   const y = year ?? new Date().getFullYear();
+  await reconcileUserLeaveBalances(userId, y);
   const types = await listLeaveTypes();
   const result = [];
   for (const t of types) {
@@ -240,6 +248,7 @@ export async function applyLeaveRequest(userId, body, actorId) {
   });
 
   await notifyApprovers(userId, request, "New leave request");
+  await syncUserLeaveAvailable(userId, leaveYear);
   await logHrmAudit({
     actorId: actorId ?? userId,
     action: "leave_applied",
@@ -344,6 +353,8 @@ export async function reviewLeaveRequest(id, { status, reviewNote }, reviewerId)
   notifyUser(req.userId, "notification", { type: "hrm_leave", title: `Leave ${status}` });
   broadcast("hrm_leave_updated", { id });
 
+  await syncUserLeaveAvailable(req.userId, leaveYear);
+
   await logHrmAudit({
     actorId: reviewerId,
     action: `leave_${status}`,
@@ -397,6 +408,7 @@ export async function cancelLeaveRequest(id, userId) {
   });
 
   broadcast("hrm_leave_updated", { id });
+  await syncUserLeaveAvailable(userId, leaveYear);
   return updated;
 }
 

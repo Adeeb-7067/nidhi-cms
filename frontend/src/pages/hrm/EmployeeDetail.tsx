@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useRoute } from "wouter";
+import { useLocation, useRoute } from "wouter";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -46,6 +46,7 @@ import {
   EmployeeOverviewStats,
   todayAttendanceRow,
 } from "@/modules/hrm/employee-detail-sections";
+import { EmployeeDocumentsPanel } from "@/modules/hrm/EmployeeDocumentsPanel";
 import {
   hrmEmployeeQueryKey,
   useHrmEmployee,
@@ -62,22 +63,37 @@ import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { buildLeaveBalanceColumns } from "@/modules/hrm/hrm-table-columns";
 import type { HrmAttendanceSummary, HrmLeaveRequest } from "@/modules/hrm/types";
 import { formatCurrency } from "@/modules/finance/constants";
+import { isAdminTeamEmployeeDetail, parseEmployeeDetailId } from "@/lib/employee-routes";
 
 export default function HrmEmployeeDetailPage() {
-  const [, params] = useRoute("/hrm/employees/:id");
-  const employeeId = Number(params?.id);
+  const [location] = useLocation();
+  const [, adminParams] = useRoute("/admin/employees/:id");
+  const [, hrmParams] = useRoute("/hrm/employees/:id");
+  const employeeId =
+    parseEmployeeDetailId(location) ??
+    Number(adminParams?.id ?? hrmParams?.id ?? NaN);
+  const fromAdminTeam = isAdminTeamEmployeeDetail(location);
+  const backHref = fromAdminTeam ? "/admin/employees" : "/hrm/employees";
+  const backLabel = fromAdminTeam ? "Back to team" : "Back to employees";
+
   const canEdit = useHrmPermission("employees", "edit");
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data, isLoading, isError, error, refetch } = useHrmEmployee(employeeId);
-  const employee = data?.employee;
-  const overview = data?.overview;
+  const { data, isLoading, isFetching, isError, error, refetch } = useHrmEmployee(employeeId);
+  const employee = data?.employee?.id === employeeId ? data.employee : undefined;
+  const overview = data?.employee?.id === employeeId ? data.overview : undefined;
 
-  const { data: deptData } = useHrmDepartments();
-  const { data: shiftData } = useHrmShiftTemplates();
-  const { data: staffData } = useHrmEmployees({ status: "active", limit: 200 });
+  useEffect(() => {
+    setActiveTab("overview");
+  }, [employeeId]);
+
+  const fileTabActive = activeTab === "file";
+
+  const { data: deptData } = useHrmDepartments({ enabled: fileTabActive });
+  const { data: shiftData } = useHrmShiftTemplates({ enabled: fileTabActive });
+  const { data: staffData } = useHrmEmployees({ status: "active", limit: 200 }, { enabled: fileTabActive });
   const patchProfile = usePatchUserHrmProfile();
   const sendCredentials = useSendEmployeeCredentials();
 
@@ -94,13 +110,23 @@ export default function HrmEmployeeDetailPage() {
   const [lateChargePct, setLateChargePct] = useState("100");
 
   const monthRange = overview?.month;
+  const attendanceTabActive = activeTab === "attendance";
+  const leaveTabActive = activeTab === "leave";
+
   const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
     monthRange?.startDate ?? format(new Date(), "yyyy-MM-01"),
     monthRange?.endDate ?? format(new Date(), "yyyy-MM-dd"),
     employeeId,
+    undefined,
+    { enabled: attendanceTabActive && !!employeeId },
   );
-  const { data: balancesData } = useHrmLeaveBalances(employeeId, overview?.month.year);
-  const { data: leaveReqData } = useHrmLeaveRequests({ userId: employeeId });
+  const { data: balancesData } = useHrmLeaveBalances(employeeId, overview?.month.year, {
+    enabled: leaveTabActive && !!employeeId,
+  });
+  const { data: leaveReqData } = useHrmLeaveRequests(
+    { userId: employeeId },
+    { enabled: leaveTabActive && !!employeeId },
+  );
 
   const managerOptions = (staffData?.employees ?? []).filter((u) => u.id !== employeeId);
 
@@ -121,12 +147,20 @@ export default function HrmEmployeeDetailPage() {
     setLateChargePct(String(employee.lateChargePercentage ?? 100));
   }, [employee]);
 
-  const attendanceRows = useMemo(
-    () => (attendanceData?.summaries ?? []).filter((s) => s.userId === employeeId),
-    [attendanceData?.summaries, employeeId],
-  );
-  const leaveRows = leaveReqData?.requests ?? [];
-  const balanceRows = balancesData?.balances ?? [];
+  const attendanceRows = useMemo(() => {
+    const source =
+      attendanceTabActive && attendanceData?.summaries
+        ? attendanceData.summaries
+        : (data?.attendanceSummaries ?? []);
+    return source.filter((s) => s.userId === employeeId);
+  }, [attendanceTabActive, attendanceData?.summaries, data?.attendanceSummaries, employeeId]);
+
+  const leaveRows = leaveTabActive
+    ? (leaveReqData?.requests ?? [])
+    : (data?.leaveRequests ?? []);
+  const balanceRows = leaveTabActive
+    ? (balancesData?.balances ?? [])
+    : (data?.leaveBalances ?? []);
   const todayRow = useMemo(() => todayAttendanceRow(attendanceRows), [attendanceRows]);
 
   const attendanceColumns = useMemo((): Column<HrmAttendanceSummary>[] => [
@@ -267,7 +301,7 @@ export default function HrmEmployeeDetailPage() {
     );
   }
 
-  if (isLoading && !employee) {
+  if (isLoading || (isFetching && !employee)) {
     return (
       <HrmGate module="employees">
         <HrmPageShell className="space-y-4">
@@ -289,6 +323,8 @@ export default function HrmEmployeeDetailPage() {
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Employee profile</p>
           <EmployeeDetailToolbar
+            backHref={backHref}
+            backLabel={backLabel}
             onRefresh={() => void handleRefresh()}
             onEdit={() => setActiveTab("file")}
             onSendCredentials={() => void handleSendCredentials()}
@@ -544,6 +580,12 @@ export default function HrmEmployeeDetailPage() {
                     .
                   </p>
                 </HrmChartCard>
+                <EmployeeDocumentsPanel
+                  userId={employee.id}
+                  canUpload={canEdit}
+                  canDelete={canEdit}
+                  fetchEnabled={fileTabActive}
+                />
               </>
             ) : null}
           </TabsContent>

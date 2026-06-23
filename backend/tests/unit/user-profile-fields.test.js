@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   buildUserProfileCreateFields,
   buildUserProfilePatchSet,
+  buildProfilePatchMongoUpdate,
+  buildSelfServiceProfilePatchSet,
+  pickSelfServiceProfileBody,
   formatUserProfileFields,
 } from "../../src/utils/user-profile-fields.js";
 
@@ -59,6 +62,18 @@ describe("buildUserProfilePatchSet", () => {
       (err) => err.message.includes("Invalid gender"),
     );
   });
+
+  test("clears gender/marital via unset and blood group via empty string", () => {
+    const set = buildUserProfilePatchSet({
+      gender: "",
+      maritalStatus: "",
+      bloodGroup: "",
+    });
+    const mongo = buildProfilePatchMongoUpdate(set);
+    assert.deepEqual(mongo.$unset, { gender: "", maritalStatus: "" });
+    assert.equal(mongo.$set.bloodGroup, "");
+    assert.equal(mongo.$set.gender, undefined);
+  });
 });
 
 describe("formatUserProfileFields", () => {
@@ -86,5 +101,63 @@ describe("formatUserProfileFields", () => {
     assert.equal(out.aadharNumber, 123456789012);
     assert.equal(out.panNumber, "ABCDE1234F");
     assert.equal(out.idProofUrl, "https://example.com/id.pdf");
+  });
+});
+
+describe("buildSelfServiceProfilePatchSet", () => {
+  test("allows personal fields and strips admin keys", () => {
+    const set = buildSelfServiceProfilePatchSet({
+      firstName: "Alex",
+      lastName: "Lee",
+      gender: "Male",
+      phoneNumber: "9876543210",
+      role: "super_admin",
+      departmentId: 99,
+      leaveAccrualDaysPerMonth: 5,
+    });
+    assert.equal(set.firstName, "Alex");
+    assert.equal(set.gender, "Male");
+    assert.equal(set.phoneNumber, "9876543210");
+    assert.equal(set.role, undefined);
+    assert.equal(set.departmentId, undefined);
+    assert.equal(set.leaveAccrualDaysPerMonth, undefined);
+  });
+
+  test("merges bank account without resetting salary amounts", () => {
+    const set = buildSelfServiceProfilePatchSet(
+      {
+        salary: {
+          basicSalary: 99999,
+          bankAccount: {
+            accountNumber: "NEW123",
+            ifsc: "HDFC0001",
+          },
+        },
+      },
+      {
+        existingSalary: {
+          basicSalary: 50000,
+          allowances: 5000,
+          deductions: 1000,
+          netSalary: 54000,
+          bankAccount: { accountNumber: "OLD" },
+        },
+      },
+    );
+    assert.equal(set.salary.basicSalary, 50000);
+    assert.equal(set.salary.netSalary, 54000);
+    assert.equal(set.salary.bankAccount.accountNumber, "NEW123");
+    assert.equal(set.salary.bankAccount.ifsc, "HDFC0001");
+  });
+
+  test("pickSelfServiceProfileBody ignores unknown keys", () => {
+    const body = pickSelfServiceProfileBody({
+      bio: "Hello",
+      status: "inactive",
+      wfhMonthlyLimit: 10,
+    });
+    assert.equal(body.bio, "Hello");
+    assert.equal(body.status, undefined);
+    assert.equal(body.wfhMonthlyLimit, undefined);
   });
 });

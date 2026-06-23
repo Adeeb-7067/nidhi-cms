@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
+import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,41 +15,48 @@ import {
   Building2,
   Receipt,
   TrendingUp,
-  BarChart3,
-  ClipboardEdit,
   Home,
-  RefreshCw,
+  Cake,
+  Clock,
+  Bell,
   Plus,
+  AlertCircle,
   PieChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DashboardPipelineChart } from "@/components/dashboard/admin-dashboard-charts";
+import { Progress } from "@/components/ui/progress";
 import {
-  HrmPayrollBannerCard,
-  HrmPeopleMiniList,
-  HrmMiniRingStat,
-  HrmHorizontalBarList,
-  HrmNeedsAttentionList,
-  HrmTodayAttendanceTable,
-  HrmTopEarnersList,
-  HrmRecentActivityList,
-  HrmQuickStatsWidget,
-} from "./dashboard-sections";
-import { HrmAttendanceTrendChart, HrmDepartmentBarChart } from "./dashboard-charts";
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
+import { SalesPageHeader, SalesDonutPanel } from "@/modules/sales/components";
 import {
   HrmApprovalActions,
-  HrmPageHeader,
-  HrmKpiGrid,
-  HrmChartCard,
-  HrmChartGridCell,
   HrmChartEmptyState,
-  HrmSectionLabel,
-  HrmFilterBar,
-  HrmFilterRow,
-  HrmPipelineStrip,
-  hrmActionButtonClass,
+  sliceTrendByDays,
+  type HrmTrendDays,
 } from "./components";
+import { HrmAttendanceTrendChart } from "./dashboard-charts";
+import {
+  HrmBirthdayList,
+  HrmEmployeeAvatar,
+  HrmHorizontalBarList,
+  HrmNeedsAttentionList,
+  HrmRecentActivityList,
+  HrmTodayAttendanceTable,
+  HrmTopEarnersList,
+} from "./dashboard-sections";
+import {
+  HrmAttendancePipelineFlow,
+  HrmDashboardFilterBar,
+  HrmDashboardSectionLabel,
+} from "./hrm-dashboard-kit";
 import { formatCompactCurrency } from "@/modules/finance/constants";
 import { hrmDashboardQueryKey, useReviewLeaveRequest } from "@/api/hrm";
 import { useHrmPermission } from "./useHrmPermission";
@@ -64,7 +72,7 @@ type Props = {
 };
 
 export function HrmRichDashboard({ data, view }: Props) {
-  const [period, setPeriod] = useState("month");
+  const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
   const queryClient = useQueryClient();
   const canApproveLeave = useHrmPermission("leave", "approve");
   const reviewLeave = useReviewLeaveRequest();
@@ -73,41 +81,41 @@ export function HrmRichDashboard({ data, view }: Props) {
   const analytics = data.analytics;
   const pendingLeave = data.pendingApprovals?.leave ?? [];
   const pendingTotal = (stats?.pendingLeave ?? 0) + (stats?.pendingWfh ?? 0) + (stats?.pendingCorrections ?? 0);
-  const peopleColSpan = view === "admin" ? 4 : 6;
+  const insights = data.insights;
+  const upcomingBirthdays = data.upcomingBirthdays ?? [];
 
   const trendData = useMemo(() => {
     const rows = analytics?.attendanceTrend ?? [];
-    if (period === "month") return rows;
-    return rows.slice(-Math.min(180, rows.length));
-  }, [analytics?.attendanceTrend, period]);
+    const days = trendDays === "180" ? 180 : Number(trendDays);
+    return sliceTrendByDays(rows, days);
+  }, [analytics?.attendanceTrend, trendDays]);
 
-  const pipelineStages = useMemo(() => {
-    const colorMap: Record<string, string> = {
-      Present: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
-      Late: "border-amber-500/30 bg-amber-500/10 text-amber-700",
-      WFH: "border-blue-500/30 bg-blue-500/10 text-blue-700",
-      "On leave": "border-violet-500/30 bg-violet-500/10 text-violet-700",
-      Absent: "border-red-500/30 bg-red-500/10 text-red-700",
-    };
-    return (analytics?.todayBreakdown ?? []).map((row) => ({
-      label: row.name,
-      value: row.value,
-      color: colorMap[row.name] ?? "border-border bg-muted/30",
-    }));
-  }, [analytics?.todayBreakdown]);
+  const pipelineStages = useMemo(
+    () =>
+      (analytics?.todayBreakdown ?? []).map((row) => ({
+        label: row.name,
+        value: row.value,
+      })),
+    [analytics?.todayBreakdown],
+  );
 
   const attendancePct =
     (stats?.headcount ?? 0) > 0
       ? Math.round(((stats?.presentToday ?? 0) / (stats?.headcount ?? 1)) * 100)
       : 0;
 
+  const refreshDashboard = () => {
+    void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+    toast.success("Dashboard refreshed");
+  };
+
   const reviewLeaveRequest = async (id: number, status: "approved" | "rejected") => {
     try {
       await reviewLeave.mutateAsync({ id, status });
       toast.success(status === "approved" ? "Approved" : "Rejected");
-      queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
     } catch {
-      // Error toast handled by useReviewLeaveRequest
+      // Error toast handled by mutation hook
     }
   };
 
@@ -118,327 +126,494 @@ export function HrmRichDashboard({ data, view }: Props) {
     year: "numeric",
   });
 
+  const topEarners = [...(data.topEarners ?? [])].slice(0, 5);
+  const maxEarnerNet = topEarners[0]?.net ?? 1;
+
   return (
     <div className="space-y-4">
-      <HrmPageHeader
-        title="Dashboard"
-        description={`Org snapshot, leave, payroll, and attendance · ${today}`}
+      <SalesPageHeader
+        title="HRM Dashboard"
+        description={`People operations control center — attendance, leave, and payroll · ${today}`}
+        breadcrumbs={[{ label: "HRM", href: "/hrm" }, { label: "Dashboard" }]}
         actions={
           <>
             <Button
               size="sm"
               variant="outline"
-              className="h-9 border-border/60 text-xs"
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
-                toast.success("Dashboard refreshed");
-              }}
+              className="h-8"
+              onClick={() => toast.success("Summary export started")}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
+              Export summary
             </Button>
-            {view === "admin" && (
-              <Button asChild size="sm" className={hrmActionButtonClass()}>
+            {view === "admin" ? (
+              <Button size="sm" className="h-8" asChild>
                 <Link href="/admin/employees">
-                  <Plus className="mr-2 h-4 w-4" />
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
                   Add employee
                 </Link>
               </Button>
-            )}
+            ) : null}
           </>
         }
       />
 
-      <HrmFilterRow
-        period={period}
-        onPeriodChange={setPeriod}
-        periodOptions={[
-          { value: "month", label: "Last 30 days" },
-          { value: "6m", label: "Last 6 months" },
-        ]}
-        className="px-1"
+      <HrmDashboardFilterBar
+        trendDays={trendDays}
+        onTrendDaysChange={setTrendDays}
+        onRefresh={refreshDashboard}
+        onExport={() => toast.success("Export started")}
       />
 
-      <HrmKpiGrid
-        items={[
-          {
-            label: "Total employees",
-            value: stats?.headcount ?? 0,
-            hint: "Active directory",
-            icon: Users,
-            accent: "violet",
-            href: "/hrm/employees",
-          },
-          {
-            label: "Present today",
-            value: `${stats?.presentToday ?? 0}/${stats?.headcount ?? 0}`,
-            hint: "Clocked in today",
-            icon: UserCheck,
-            accent: "green",
-            href: "/hrm/attendance",
-          },
-          {
-            label: "Pending approvals",
-            value: pendingTotal,
-            hint: "Leave, WFH & corrections",
-            icon: ClipboardList,
-            accent: "amber",
-            href: "/hrm/leave",
-            alert: pendingTotal > 0,
-          },
-          {
-            label: "Absent today",
-            value: stats?.absentToday ?? 0,
-            hint: "Not present",
-            icon: UserX,
-            accent: "blue",
-            href: "/hrm/attendance",
-            alert: (stats?.absentToday ?? 0) > 0,
-          },
-        ]}
-      />
-
-      {view === "admin" && data.payrollBanner && (
-        <HrmKpiGrid
-          columns={3}
-          count={3}
+      <motion.div className="space-y-2">
+        <HrmDashboardSectionLabel>Workforce KPIs</HrmDashboardSectionLabel>
+        <PortalKpiGrid
+          columns={4}
+          count={6}
           items={[
             {
-              label: "Contract pay",
-              value: formatCompactCurrency(data.payrollBanner.totalGross),
-              hint: monthLabel(data.payrollBanner.year, data.payrollBanner.month),
-              icon: Wallet,
+              title: "Total employees",
+              value: (stats?.headcount ?? 0).toLocaleString(),
+              hint: "Active directory",
+              icon: Users,
               accent: "violet",
-              href: "/hrm/payroll",
+              href: "/hrm/employees",
+              delay: 0,
             },
             {
-              label: "Net payroll",
-              value: formatCompactCurrency(data.payrollBanner.totalNet),
-              hint: "After deductions",
-              icon: Receipt,
+              title: "Present today",
+              value: `${stats?.presentToday ?? 0}/${stats?.headcount ?? 0}`,
+              hint: `${attendancePct}% attendance rate`,
+              icon: UserCheck,
               accent: "green",
-              href: "/hrm/payroll",
+              href: "/hrm/attendance",
+              delay: 1,
             },
             {
-              label: "Yet to pay",
-              value: formatCompactCurrency(data.payrollBanner.yetToPay),
-              hint: "Outstanding balance",
-              icon: Briefcase,
+              title: "Pending approvals",
+              value: pendingTotal,
+              hint: "Leave, WFH & corrections",
+              icon: ClipboardList,
               accent: "amber",
-              href: "/hrm/payroll",
-              alert: data.payrollBanner.yetToPay > 0,
+              href: "/hrm/leave",
+              alert: pendingTotal > 0,
+              delay: 2,
+            },
+            {
+              title: "Absent today",
+              value: stats?.absentToday ?? 0,
+              hint: "Not marked present",
+              icon: UserX,
+              accent: "red",
+              href: "/hrm/attendance",
+              alert: (stats?.absentToday ?? 0) > 0,
+              delay: 3,
+            },
+            {
+              title: "On leave today",
+              value: data.onLeaveToday?.length ?? 0,
+              hint: "Approved leave",
+              icon: CalendarClock,
+              accent: "sky",
+              href: "/hrm/leave",
+              delay: 4,
+            },
+            {
+              title: "WFH today",
+              value: data.onWfhToday?.length ?? 0,
+              hint: "Remote workers",
+              icon: Home,
+              accent: "blue",
+              href: "/hrm/wfh",
+              delay: 5,
             },
           ]}
         />
+      </motion.div>
+
+      <HrmAttendancePipelineFlow stages={pipelineStages} />
+
+      {(insights?.averageClockIn != null ||
+        insights?.onTimeRatePct != null ||
+        upcomingBirthdays.length > 0 ||
+        (insights?.unreadAlerts ?? 0) > 0) && (
+        <motion.div className="space-y-2">
+          <HrmDashboardSectionLabel>Insights</HrmDashboardSectionLabel>
+          <PortalKpiGrid
+            columns={4}
+            count={4}
+            items={[
+              ...(insights?.averageClockIn != null
+                ? [
+                    {
+                      title: "Avg clock-in",
+                      value: insights.averageClockIn,
+                      hint: "Today's first punch",
+                      icon: Clock,
+                      accent: "blue" as const,
+                      delay: 0,
+                    },
+                  ]
+                : []),
+              ...(insights?.onTimeRatePct != null
+                ? [
+                    {
+                      title: "On-time rate",
+                      value: `${insights.onTimeRatePct}%`,
+                      hint: "Present vs late today",
+                      icon: UserCheck,
+                      accent: "green" as const,
+                      delay: 1,
+                    },
+                  ]
+                : []),
+              ...(upcomingBirthdays.length > 0
+                ? [
+                    {
+                      title: "Upcoming birthdays",
+                      value: upcomingBirthdays.length,
+                      hint: "Next 3 months",
+                      icon: Cake,
+                      accent: "violet" as const,
+                      href: "/hrm/calendar",
+                      delay: 2,
+                    },
+                  ]
+                : []),
+              ...((insights?.unreadAlerts ?? 0) > 0
+                ? [
+                    {
+                      title: "Unread alerts",
+                      value: insights!.unreadAlerts,
+                      hint: "Notifications",
+                      icon: Bell,
+                      accent: "amber" as const,
+                      alert: true,
+                      delay: 3,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+        </motion.div>
       )}
 
-      {pipelineStages.length > 0 && (
-        <HrmPipelineStrip title="Today's attendance mix" stages={pipelineStages} />
-      )}
+      {view === "admin" && data.payrollBanner ? (
+        <motion.div className="space-y-2">
+          <HrmDashboardSectionLabel>Payroll KPIs</HrmDashboardSectionLabel>
+          <PortalKpiGrid
+            columns={4}
+            count={3}
+            items={[
+              {
+                title: "Contract pay",
+                value: formatCompactCurrency(data.payrollBanner.totalGross),
+                hint: monthLabel(data.payrollBanner.year, data.payrollBanner.month),
+                icon: Wallet,
+                accent: "violet",
+                href: "/hrm/payroll",
+                delay: 0,
+              },
+              {
+                title: "Net payroll",
+                value: formatCompactCurrency(data.payrollBanner.totalNet),
+                hint: "After deductions",
+                icon: Receipt,
+                accent: "green",
+                href: "/hrm/payroll",
+                delay: 1,
+              },
+              {
+                title: "Yet to pay",
+                value: formatCompactCurrency(data.payrollBanner.yetToPay),
+                hint: "Outstanding balance",
+                icon: AlertCircle,
+                accent: "red",
+                alert: data.payrollBanner.yetToPay > 0,
+                href: "/hrm/payroll",
+                delay: 2,
+              },
+            ]}
+          />
+        </motion.div>
+      ) : null}
 
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-        <HrmChartGridCell colSpan={peopleColSpan}>
-          <HrmChartCard
-            title="On leave today"
-            icon={CalendarClock}
-            badge={data.onLeaveToday?.length ?? 0}
-            viewAllHref="/hrm/leave"
-            className="min-h-[240px]"
-          >
-            <HrmPeopleMiniList title="" people={data.onLeaveToday ?? []} emptyLabel="No one on leave today" />
-          </HrmChartCard>
-        </HrmChartGridCell>
-        <HrmChartGridCell colSpan={peopleColSpan}>
-          <HrmChartCard
-            title="On WFH today"
-            icon={Home}
-            badge={data.onWfhToday?.length ?? 0}
-            viewAllHref="/hrm/wfh"
-            className="min-h-[240px]"
-          >
-            <HrmPeopleMiniList title="" people={data.onWfhToday ?? []} emptyLabel="No WFH today" emptyIcon={Home} />
-          </HrmChartCard>
-        </HrmChartGridCell>
-        {view === "admin" && (
-          <HrmChartGridCell colSpan={4}>
-            <HrmChartCard title="Employees by status" icon={Users} className="min-h-[240px]">
-              {(data.employeeStatus?.length ?? 0) > 0 ? (
-                <DashboardPipelineChart data={data.employeeStatus!} />
-              ) : (
-                <HrmChartEmptyState message="No employee records yet." icon={Users} />
-              )}
-            </HrmChartCard>
-          </HrmChartGridCell>
-        )}
-      </div>
-
-      <HrmSectionLabel title="Trends & analytics" />
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-        <HrmChartGridCell colSpan={8}>
-          <HrmChartCard
-            title="Attendance trend"
-            description="Present vs absent · last 30 days"
-            icon={TrendingUp}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="Today's attendance mix"
+            description="Present, late, WFH, leave, absent"
+            icon={UserCheck}
+            accent="emerald"
             viewAllHref="/hrm/attendance"
-            className="min-h-[260px]"
+          >
+            {pipelineStages.length > 0 ? (
+              <SalesDonutPanel
+                data={pipelineStages.map((d) => ({ name: d.label, count: d.value, value: d.value }))}
+              />
+            ) : (
+              <HrmChartEmptyState message="No attendance recorded yet today." icon={UserCheck} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="Leave by type"
+            description="Approved days this year"
+            icon={PieChart}
+            accent="violet"
+            viewAllHref="/hrm/leave"
+          >
+            {(data.leaveByType?.length ?? 0) > 0 ? (
+              <SalesDonutPanel
+                data={(data.leaveByType ?? []).map((d) => ({
+                  name: d.name,
+                  count: d.value,
+                  value: d.value,
+                }))}
+              />
+            ) : (
+              <HrmChartEmptyState message="No approved leave yet." icon={CalendarClock} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="Attendance trend"
+            description={`Present vs absent · last ${trendDays === "180" ? "6 months" : `${trendDays} days`}`}
+            icon={TrendingUp}
+            accent="blue"
+            viewAllHref="/hrm/attendance"
           >
             {trendData.length > 0 ? (
               <HrmAttendanceTrendChart data={trendData} />
             ) : (
               <HrmChartEmptyState message="Trend appears once attendance is recorded." icon={TrendingUp} />
             )}
-          </HrmChartCard>
-        </HrmChartGridCell>
-        <HrmChartGridCell colSpan={4}>
-          <HrmChartCard title="Top departments" icon={Building2} viewAllHref="/hrm/departments" className="min-h-[260px]">
+          </ChartPanel>
+        </ChartGridCell>
+
+        {view === "admin" ? (
+          <ChartGridCell colSpan={4}>
+            <ChartPanel
+              title="Employees by status"
+              description="Active directory breakdown"
+              icon={Users}
+              accent="amber"
+              viewAllHref="/hrm/employees"
+            >
+              {(data.employeeStatus?.length ?? 0) > 0 ? (
+                <SalesDonutPanel
+                  data={(data.employeeStatus ?? []).map((d) => ({
+                    name: d.name,
+                    count: d.value,
+                    value: d.value,
+                  }))}
+                />
+              ) : (
+                <HrmChartEmptyState message="No employee records yet." icon={Users} />
+              )}
+            </ChartPanel>
+          </ChartGridCell>
+        ) : null}
+
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="On leave today"
+            description={`${data.onLeaveToday?.length ?? 0} employees`}
+            icon={CalendarClock}
+            accent="violet"
+            viewAllHref="/hrm/leave"
+          >
+            {(data.onLeaveToday?.length ?? 0) > 0 ? (
+              <div className="space-y-2">
+                {(data.onLeaveToday ?? []).slice(0, 6).map((p) => (
+                  <div key={p.userId} className="flex items-center gap-2 rounded-lg border p-2">
+                    <HrmEmployeeAvatar name={p.userName} avatarUrl={p.avatarUrl} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">{p.userName}</p>
+                      <p className="text-[10px] text-muted-foreground">On leave</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <HrmChartEmptyState message="No one on leave today." icon={CalendarClock} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="WFH today"
+            description={`${data.onWfhToday?.length ?? 0} employees`}
+            icon={Home}
+            accent="blue"
+            viewAllHref="/hrm/wfh"
+          >
+            {(data.onWfhToday?.length ?? 0) > 0 ? (
+              <div className="space-y-2">
+                {(data.onWfhToday ?? []).slice(0, 6).map((p) => (
+                  <div key={p.userId} className="flex items-center gap-2 rounded-lg border p-2">
+                    <HrmEmployeeAvatar name={p.userName} avatarUrl={p.avatarUrl} />
+                    <p className="text-xs font-medium truncate">{p.userName}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <HrmChartEmptyState message="No WFH today." icon={Home} />
+            )}
+          </ChartPanel>
+        </ChartGridCell>
+
+        <ChartGridCell colSpan={4}>
+          <ChartPanel
+            title="Top departments"
+            description="Headcount by department"
+            icon={Building2}
+            accent="emerald"
+            viewAllHref="/hrm/departments"
+          >
             <HrmHorizontalBarList
               data={(data.departmentStrength ?? []).map((d) => ({ name: d.name, value: d.count }))}
               valueSuffix=" staff"
             />
-          </HrmChartCard>
-        </HrmChartGridCell>
+          </ChartPanel>
+        </ChartGridCell>
+
+        {view === "admin" && topEarners.length > 0 ? (
+          <ChartGridCell colSpan={4}>
+            <ChartPanel
+              title="Top earners"
+              description="By net pay this period"
+              icon={Wallet}
+              accent="blue"
+              viewAllHref="/hrm/payroll"
+            >
+              <div className="space-y-3">
+                {topEarners.map((e, i) => (
+                  <div key={e.userId} className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] text-muted-foreground w-4">{i + 1}</span>
+                        <HrmEmployeeAvatar name={e.userName} className="h-7 w-7" />
+                        <span className="text-xs font-medium truncate">{e.userName}</span>
+                      </div>
+                      <span className="text-xs font-semibold tabular-nums">
+                        {formatCompactCurrency(e.net)}
+                      </span>
+                    </div>
+                    <Progress value={(e.net / maxEarnerNet) * 100} className="h-1.5" />
+                  </div>
+                ))}
+              </div>
+            </ChartPanel>
+          </ChartGridCell>
+        ) : null}
+
+        {upcomingBirthdays.length > 0 ? (
+          <ChartGridCell colSpan={4}>
+            <ChartPanel
+              title="Upcoming birthdays"
+              description="Next 3 months"
+              icon={Cake}
+              accent="amber"
+              viewAllHref="/hrm/calendar"
+            >
+              <HrmBirthdayList birthdays={upcomingBirthdays} />
+            </ChartPanel>
+          </ChartGridCell>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <HrmChartCard title="Attendance today" icon={UserCheck} className="min-h-[220px]">
-          <HrmMiniRingStat label="Present rate" value={`${attendancePct}%`} pct={attendancePct} color="#22c55e" />
-        </HrmChartCard>
-        <HrmChartCard title="Leave requests" icon={CalendarClock} viewAllHref="/hrm/leave" className="min-h-[220px]">
-          <HrmMiniRingStat
-            label="Pending"
-            value={data.leaveRequestStats?.pending ?? 0}
-            sublabel={`${data.leaveRequestStats?.approved ?? 0} approved`}
-            pct={Math.min(100, (data.leaveRequestStats?.pending ?? 0) * 10)}
-            color="#f59e0b"
-          />
-        </HrmChartCard>
-        <HrmChartCard title="WFH requests" icon={Home} viewAllHref="/hrm/wfh" className="min-h-[220px]">
-          <HrmMiniRingStat
-            label="Pending"
-            value={data.wfhRequestStats?.pending ?? 0}
-            sublabel={`${data.wfhRequestStats?.approved ?? 0} approved`}
-            pct={Math.min(100, (data.wfhRequestStats?.pending ?? 0) * 10)}
-            color="#3b82f6"
-          />
-        </HrmChartCard>
-        <HrmChartCard title="Needs attention" icon={ClipboardEdit} className="min-h-[220px]">
-          <HrmNeedsAttentionList items={data.needsAttention ?? []} />
-        </HrmChartCard>
-      </div>
+      {canApproveLeave ? (
+        <ChartPanel
+          title="Pending leave requests"
+          description="Awaiting manager / HR approval"
+          icon={ClipboardList}
+          accent="amber"
+          viewAllHref="/hrm/leave"
+          badge={pendingLeave.length || undefined}
+        >
+          {pendingLeave.length === 0 ? (
+            <HrmChartEmptyState message="No pending leave requests." icon={ClipboardList} />
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Employee</TableHead>
+                  <TableHead className="text-xs">Dates</TableHead>
+                  <TableHead className="text-xs">Type</TableHead>
+                  <TableHead className="text-xs text-right">Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pendingLeave.slice(0, 8).map((r) => (
+                  <TableRow key={r.id}>
+                    <TableCell>
+                      <p className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</p>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {r.startDate} → {r.endDate}
+                    </TableCell>
+                    <TableCell className="text-xs">{r.leaveTypeName ?? "Leave"}</TableCell>
+                    <TableCell className="text-right">
+                      <HrmApprovalActions
+                        compact
+                        disabled={reviewLeave.isPending}
+                        onApprove={() => void reviewLeaveRequest(r.id, "approved")}
+                        onReject={() => void reviewLeaveRequest(r.id, "rejected")}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </ChartPanel>
+      ) : null}
 
-      <HrmChartCard
+      <ChartPanel
         title="Today's attendance"
         description="Clock-in, hours, and live status"
-        icon={BarChart3}
+        icon={Briefcase}
+        accent="blue"
         viewAllHref="/hrm/attendance"
+        badge={data.todayAttendance?.length ?? undefined}
       >
         <HrmTodayAttendanceTable rows={data.todayAttendance ?? []} />
-      </HrmChartCard>
+      </ChartPanel>
 
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
-        {canApproveLeave && (
-          <HrmChartCard
-            title="Pending leave requests"
-            icon={ClipboardList}
-            badge={pendingLeave.length}
-            viewAllHref="/hrm/leave"
-            className="min-h-[240px]"
-          >
-            {pendingLeave.length === 0 ? (
-              <HrmChartEmptyState message="No pending leave requests." icon={ClipboardList} />
-            ) : (
-              <div className="max-h-[240px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Employee</TableHead>
-                      <TableHead className="text-xs">Dates</TableHead>
-                      <TableHead className="text-xs text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pendingLeave.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {r.startDate} → {r.endDate}
-                        </TableCell>
-                        <TableCell>
-                          <HrmApprovalActions
-                            compact
-                            disabled={reviewLeave.isPending}
-                            onApprove={() => reviewLeaveRequest(r.id, "approved")}
-                            onReject={() => reviewLeaveRequest(r.id, "rejected")}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </HrmChartCard>
-        )}
-        <HrmChartCard
-          title="Approved leave by type"
-          description="Days approved this year"
-          icon={PieChart}
-          className="min-h-[240px]"
-        >
-          <HrmHorizontalBarList data={data.leaveByType ?? []} valueSuffix=" days" />
-        </HrmChartCard>
-      </div>
-
-      {view === "admin" && (
-        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-          <HrmChartGridCell colSpan={4}>
-            <HrmChartCard title="Payroll status" icon={Receipt} viewAllHref="/hrm/payroll" className="min-h-[220px]">
-              {data.payrollBanner ? (
-                <HrmMiniRingStat
-                  label={data.payrollBanner.status.replace(/_/g, " ")}
-                  value={`${data.payrollBanner.payrollProgressPct}%`}
-                  pct={data.payrollBanner.payrollProgressPct}
-                  sublabel={formatCompactCurrency(data.payrollBanner.totalNet)}
-                  color="#10b981"
-                />
-              ) : (
-                <HrmChartEmptyState message="No payroll run yet." icon={Receipt} />
-              )}
-            </HrmChartCard>
-          </HrmChartGridCell>
-          <HrmChartGridCell colSpan={4}>
-            <HrmChartCard title="Department strength" icon={Building2} viewAllHref="/hrm/departments" className="min-h-[220px]">
-              <HrmDepartmentBarChart data={data.departmentStrength ?? []} />
-            </HrmChartCard>
-          </HrmChartGridCell>
-          <HrmChartGridCell colSpan={4}>
-            <HrmChartCard title="Top earners" icon={Wallet} viewAllHref="/hrm/payroll" className="min-h-[220px]">
-              <HrmTopEarnersList earners={data.topEarners ?? []} />
-            </HrmChartCard>
-          </HrmChartGridCell>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-12">
-        {view === "admin" && (
-          <HrmChartGridCell colSpan={8}>
-            <HrmChartCard title="Recent activity" icon={ClipboardList} viewAllHref="/hrm/audit" className="min-h-[220px]">
-              <div className="max-h-[220px] overflow-y-auto">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        {view === "admin" ? (
+          <ChartGridCell colSpan={8}>
+            <ChartPanel
+              title="Recent HRM activity"
+              description="Audit trail snapshot"
+              icon={ClipboardList}
+              accent="violet"
+              viewAllHref="/hrm/audit"
+            >
+              <div className="max-h-[280px] overflow-y-auto">
                 <HrmRecentActivityList items={data.recentActivity ?? []} />
               </div>
-            </HrmChartCard>
-          </HrmChartGridCell>
-        )}
-        <HrmChartGridCell colSpan={view === "admin" ? 4 : 12}>
-          <HrmChartCard title="Live snapshot" icon={BarChart3} className="min-h-[220px]">
-            <HrmQuickStatsWidget
-              presentToday={stats?.presentToday ?? 0}
-              headcount={stats?.headcount ?? 0}
-              pendingApprovals={pendingTotal}
-            />
-          </HrmChartCard>
-        </HrmChartGridCell>
+            </ChartPanel>
+          </ChartGridCell>
+        ) : null}
+
+        <ChartGridCell colSpan={view === "admin" ? 4 : 12}>
+          <ChartPanel title="Needs attention" description="Items requiring follow-up" icon={AlertCircle} accent="rose">
+            <HrmNeedsAttentionList items={data.needsAttention ?? []} />
+          </ChartPanel>
+        </ChartGridCell>
       </div>
+
+      {view === "manager" && topEarners.length > 0 ? (
+        <ChartPanel title="Top earners" icon={Wallet} accent="blue" viewAllHref="/hrm/payroll">
+          <HrmTopEarnersList earners={topEarners} />
+        </ChartPanel>
+      ) : null}
     </div>
   );
 }

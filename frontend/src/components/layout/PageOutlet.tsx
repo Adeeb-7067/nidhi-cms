@@ -116,12 +116,15 @@ const HrmMyAttendance = React.lazy(() => import("@/pages/hrm/MyAttendance"));
 const HrmMyLeave = React.lazy(() => import("@/pages/hrm/MyLeave"));
 const HrmMyWfh = React.lazy(() => import("@/pages/hrm/MyWfh"));
 const HrmMyPayslips = React.lazy(() => import("@/pages/hrm/MyPayslips"));
+const HrmSalarySlips = React.lazy(() => import("@/pages/hrm/SalarySlips"));
 const HrmMyHolidays = React.lazy(() => import("@/pages/hrm/MyHolidays"));
 const HrmSettings = React.lazy(() => import("@/pages/hrm/Settings"));
 const HrmRecruitment = React.lazy(() => import("@/pages/hrm/Recruitment"));
 const HrmDocuments = React.lazy(() => import("@/pages/hrm/Documents"));
 const HrmPolicies = React.lazy(() => import("@/pages/hrm/Policies"));
 const HrmAudit = React.lazy(() => import("@/pages/hrm/Audit"));
+const HrmOnboarding = React.lazy(() => import("@/pages/hrm/Onboarding"));
+const HrmRoles = React.lazy(() => import("@/pages/hrm/Roles"));
 
 /** Inner route switch — rendered inside persistent AppLayout (no layout remount on navigate). */
 export function PageOutlet() {
@@ -146,6 +149,11 @@ export function PageOutlet() {
           <AdminProjects />
         </RoleGate>
       </Route>
+      <Route path="/admin/employees/:id">
+        <RoleGate allowedRoles={["super_admin"]} module="hrm_employees">
+          <HrmEmployeeDetail />
+        </RoleGate>
+      </Route>
       <Route path="/admin/employees">
         <RoleGate allowedRoles={["super_admin"]}>
           <AdminEmployees />
@@ -157,7 +165,9 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/hrm/roles">
-        <Redirect to="/admin/roles" />
+        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}>
+          <HrmRoles />
+        </RoleGate>
       </Route>
       <Route path="/admin/screenshots">
         <RoleGate allowedRoles={["super_admin"]}>
@@ -624,6 +634,7 @@ export function PageOutlet() {
       <Route path="/hrm/holidays"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmHolidays /></RoleGate></Route>
       <Route path="/hrm/attendance"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmAttendance /></RoleGate></Route>
       <Route path="/hrm/payroll"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPayroll /></RoleGate></Route>
+      <Route path="/hrm/salary-slips"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmSalarySlips /></RoleGate></Route>
       <Route path="/hrm/my-attendance"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyAttendance /></RoleGate></Route>
       <Route path="/hrm/my-leave"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyLeave /></RoleGate></Route>
       <Route path="/hrm/my-wfh"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyWfh /></RoleGate></Route>
@@ -631,6 +642,7 @@ export function PageOutlet() {
       <Route path="/hrm/my-holidays"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyHolidays /></RoleGate></Route>
       <Route path="/hrm/settings"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmSettings /></RoleGate></Route>
       <Route path="/hrm/recruitment"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmRecruitment /></RoleGate></Route>
+      <Route path="/hrm/onboarding"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmOnboarding /></RoleGate></Route>
       <Route path="/hrm/documents"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmDocuments /></RoleGate></Route>
       <Route path="/hrm/policies"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPolicies /></RoleGate></Route>
       <Route path="/hrm/audit"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmAudit /></RoleGate></Route>

@@ -208,6 +208,7 @@ export async function syncUserRoleTemplate(userId, role, options = {}) {
       { $set: { roleTemplateId: null, hrmRoleTemplateId: null } },
     );
     evictUserFromAuthCache(userId);
+    evictPermissionCache(userId);
     return;
   }
 
@@ -216,6 +217,7 @@ export async function syncUserRoleTemplate(userId, role, options = {}) {
     { $set: { roleTemplateId: templateId, hrmRoleTemplateId: templateId } },
   );
   evictUserFromAuthCache(userId);
+  evictPermissionCache(userId);
 }
 
 /** One-time-style migration: attach templates to staff missing roleTemplateId. */
@@ -247,6 +249,70 @@ export async function assignRoleTemplatesToUsers() {
 /** @deprecated alias */
 export const ensureDefaultHrmTemplates = ensureDefaultRoleTemplates;
 
+const PERM_CACHE_TTL_MS = 30_000;
+/** @type {Map<number, { set: Set<string>, templateId: number | null, expiresAt: number }>} */
+const _permCache = new Map();
+/** @type {Promise<void> | null} */
+let _templatesReadyPromise = null;
+
+function ensureTemplatesReady() {
+  if (!_templatesReadyPromise) {
+    _templatesReadyPromise = ensureDefaultRoleTemplates().catch((err) => {
+      _templatesReadyPromise = null;
+      throw err;
+    });
+  }
+  return _templatesReadyPromise;
+}
+
+function permissionEntryKey(module, action) {
+  return `${normalizePermissionModule(module)}:${action}`;
+}
+
+/** Clear cached permissions after role/template changes. */
+export function evictPermissionCache(userId) {
+  if (userId == null) _permCache.clear();
+  else _permCache.delete(userId);
+}
+
+async function loadUserPermissionEntry(userId) {
+  const now = Date.now();
+  const cached = _permCache.get(userId);
+  if (cached && cached.expiresAt > now) return cached;
+
+  const user = await usersTable
+    .findOne({ id: userId }, { role: 1, roleTemplateId: 1, hrmRoleTemplateId: 1 })
+    .lean();
+  if (!user) return null;
+
+  if (user.role === "super_admin") {
+    const entry = {
+      set: new Set(ALL_MODULE_ACTIONS.map((p) => permissionEntryKey(p.module, p.action))),
+      templateId: null,
+      expiresAt: now + PERM_CACHE_TTL_MS,
+    };
+    _permCache.set(userId, entry);
+    return entry;
+  }
+
+  await ensureTemplatesReady();
+  const templateId = await resolveTemplateIdForUser(user);
+  if (!templateId) {
+    const entry = { set: new Set(), templateId: null, expiresAt: now + PERM_CACHE_TTL_MS };
+    _permCache.set(userId, entry);
+    return entry;
+  }
+
+  const rows = await hrmPermissionsTable.find({ roleTemplateId: templateId }).lean();
+  const entry = {
+    set: new Set(rows.map((r) => permissionEntryKey(r.module, r.action))),
+    templateId,
+    expiresAt: now + PERM_CACHE_TTL_MS,
+  };
+  _permCache.set(userId, entry);
+  return entry;
+}
+
 function resolveRoleTemplateId(user) {
   const explicit = user.roleTemplateId ?? user.hrmRoleTemplateId;
   if (explicit) return explicit;
@@ -264,61 +330,55 @@ async function resolveTemplateIdForUser(user) {
 }
 
 export async function getPermissionsForUser(userId) {
-  const user = await usersTable.findOne({ id: userId }).lean();
+  const user = await usersTable.findOne({ id: userId }, { role: 1 }).lean();
   if (!user) return { permissions: [], templateId: null, groups: cmsModuleGroups };
 
-  if (user.role === "super_admin") {
-    await ensureDefaultRoleTemplates();
-    return {
-      permissions: ALL_MODULE_ACTIONS,
-      templateId: null,
-      role: user.role,
-      groups: cmsModuleGroups,
-    };
-  }
+  const entry = await loadUserPermissionEntry(userId);
+  if (!entry) return { permissions: [], templateId: null, groups: cmsModuleGroups };
 
-  await ensureDefaultRoleTemplates();
-  const templateId = await resolveTemplateIdForUser(user);
-  if (!templateId) {
-    return { permissions: [], templateId: null, role: user.role, groups: cmsModuleGroups };
-  }
+  const permissions = [...entry.set].map((key) => {
+    const [module, action] = key.split(":");
+    return { module, action };
+  });
 
-  const rows = await hrmPermissionsTable.find({ roleTemplateId: templateId }).lean();
   return {
-    permissions: rows.map((r) => ({
-      module: normalizePermissionModule(r.module),
-      action: r.action,
-    })),
-    templateId,
+    permissions,
+    templateId: entry.templateId,
     role: user.role,
     groups: cmsModuleGroups,
   };
 }
 
 export async function userHasPermission(userId, module, action) {
-  const user = await usersTable.findOne({ id: userId }, { role: 1 }).lean();
-  if (user?.role === "super_admin") return true;
-  const normalized = normalizePermissionModule(module);
-  const { permissions } = await getPermissionsForUser(userId);
-  return permissions.some((p) => p.module === normalized && p.action === action);
+  const entry = await loadUserPermissionEntry(userId);
+  if (!entry) return false;
+  return entry.set.has(permissionEntryKey(module, action));
 }
 
 export async function listRoleTemplates() {
-  await ensureDefaultRoleTemplates();
+  await ensureTemplatesReady();
   const templates = await hrmRoleTemplatesTable.find().sort({ name: 1 }).lean();
-  const result = [];
-  for (const t of templates) {
-    const permissions = await hrmPermissionsTable.find({ roleTemplateId: t.id }).lean();
-    result.push({
-      ...t,
-      permissions: permissions.map((p) => ({
-        id: p.id,
-        module: normalizePermissionModule(p.module),
-        action: p.action,
-      })),
-    });
+  if (!templates.length) return [];
+
+  const templateIds = templates.map((t) => t.id);
+  const allPermissions = await hrmPermissionsTable
+    .find({ roleTemplateId: { $in: templateIds } })
+    .lean();
+  const byTemplate = new Map();
+  for (const p of allPermissions) {
+    const list = byTemplate.get(p.roleTemplateId) ?? [];
+    list.push(p);
+    byTemplate.set(p.roleTemplateId, list);
   }
-  return result;
+
+  return templates.map((t) => ({
+    ...t,
+    permissions: (byTemplate.get(t.id) ?? []).map((p) => ({
+      id: p.id,
+      module: normalizePermissionModule(p.module),
+      action: p.action,
+    })),
+  }));
 }
 
 export async function updateRoleTemplatePermissions(templateId, permissionList) {
@@ -336,7 +396,11 @@ export async function updateRoleTemplatePermissions(templateId, permissionList) 
     { $or: [{ hrmRoleTemplateId: templateId }, { roleTemplateId: templateId }] },
     { id: 1 },
   ).lean();
-  for (const u of users) evictUserFromAuthCache(u.id);
+  for (const u of users) {
+    evictUserFromAuthCache(u.id);
+    evictPermissionCache(u.id);
+  }
+  evictPermissionCache(null);
 }
 
 export function getPermissionCatalog() {

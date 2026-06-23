@@ -1,5 +1,12 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
-import { getMessaging, getToken, onMessage, isSupported, type Messaging } from "firebase/messaging";
+import {
+  getMessaging,
+  getToken,
+  deleteToken,
+  onMessage,
+  isSupported,
+  type Messaging,
+} from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -12,6 +19,7 @@ const firebaseConfig = {
 
 let app: FirebaseApp | null = null;
 let messaging: Messaging | null = null;
+let cachedFcmToken: string | null = null;
 
 export function isFirebaseConfigured(): boolean {
   return Boolean(firebaseConfig.apiKey && firebaseConfig.projectId);
@@ -71,7 +79,10 @@ export const requestFirebaseToken = async (vapidKey: string): Promise<string | n
       vapidKey,
       serviceWorkerRegistration: registration,
     });
-    if (currentToken) return currentToken;
+    if (currentToken) {
+      cachedFcmToken = currentToken;
+      return currentToken;
+    }
     console.warn("No FCM registration token available.");
     return null;
   } catch (err) {
@@ -79,6 +90,31 @@ export const requestFirebaseToken = async (vapidKey: string): Promise<string | n
     return null;
   }
 };
+
+export function getCachedFcmToken(): string | null {
+  return cachedFcmToken;
+}
+
+/** Best-effort: resolve the device token for logout even if it was not cached this session. */
+export async function resolveFcmTokenForLogout(): Promise<string | null> {
+  if (cachedFcmToken) return cachedFcmToken;
+  const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+  if (!vapidKey || !isFirebaseConfigured()) return null;
+  await initFirebase();
+  return requestFirebaseToken(vapidKey);
+}
+
+/** Invalidate local FCM registration so this browser stops receiving pushes. */
+export async function revokeFirebaseToken(): Promise<void> {
+  if (!messaging) return;
+  try {
+    await deleteToken(messaging);
+  } catch (err) {
+    console.warn("Failed to delete local FCM token.", err);
+  } finally {
+    cachedFcmToken = null;
+  }
+}
 
 /** Subscribe to foreground FCM messages (returns unsubscribe). */
 export function subscribeForegroundMessages(

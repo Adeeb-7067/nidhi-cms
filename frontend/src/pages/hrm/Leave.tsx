@@ -35,6 +35,7 @@ import {
   useHrmLeaveTypes,
   useReviewLeaveRequest,
   useCancelLeaveRequest,
+  useHrmSettings,
 } from "@/api/hrm";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { HrmPageKpiRow, countByStatus } from "@/modules/hrm/page-kpis";
@@ -51,15 +52,27 @@ export default function HrmLeavePage() {
   const { user } = useAuth();
   const canApprove = useHrmPermission("leave", "approve");
   const canAdminView = useHrmPermission("leave", "view");
+
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [leaveTab, setLeaveTab] = useState(canApprove || canAdminView ? "queue" : "history");
+  const [leaveTypeId, setLeaveTypeId] = useState("");
+  const [leaveDuration, setLeaveDuration] = useState<LeaveDurationUi>("full");
+  const [halfDayPart, setHalfDayPart] = useState<HalfDayPartUi>("first_half");
+  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [reason, setReason] = useState("");
+
   const { data: types } = useHrmLeaveTypes();
   const requestsQuery = useHrmLeaveRequests(
-    canAdminView ? { status: "pending" } : { userId: user?.id },
+    canAdminView || canApprove ? { status: "pending" } : { userId: user?.id },
   );
   const historyQuery = useHrmLeaveRequests(
     canAdminView ? {} : { userId: user?.id },
-    { enabled: canAdminView },
+    { enabled: leaveTab === "history" },
   );
-  const balancesQuery = useHrmLeaveBalances(user?.id, new Date().getFullYear());
+  const balancesQuery = useHrmLeaveBalances(user?.id, new Date().getFullYear(), {
+    enabled: leaveTab === "balances" || !canAdminView,
+  });
   const { data: requests, isLoading: requestsLoading } = requestsQuery;
   const { data: historyData, isLoading: historyLoading } = historyQuery;
   const { data: balances, isLoading: balancesLoading } = balancesQuery;
@@ -69,14 +82,7 @@ export default function HrmLeavePage() {
   const applyLeave = useApplyLeaveRequest();
   const reviewLeave = useReviewLeaveRequest();
   const cancelLeave = useCancelLeaveRequest();
-
-  const [applyOpen, setApplyOpen] = useState(false);
-  const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [leaveDuration, setLeaveDuration] = useState<LeaveDurationUi>("full");
-  const [halfDayPart, setHalfDayPart] = useState<HalfDayPartUi>("first_half");
-  const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [reason, setReason] = useState("");
+  const { data: hrmSettings } = useHrmSettings({ enabled: !canAdminView || applyOpen });
 
   const submitLeave = async () => {
     if (!leaveTypeId) {
@@ -120,21 +126,30 @@ export default function HrmLeavePage() {
     const approved = countByStatus(rows, "approved");
     const rejected = countByStatus(rows, "rejected");
     const available = balanceRows.reduce((n, b) => n + getLeaveBalanceAvailable(b), 0);
+    const totalApprovedDays = rows
+      .filter((r) => r.status === "approved")
+      .reduce((sum, r) => sum + (r.days ?? 1), 0);
     if (canAdminView) {
       return [
         { label: "Pending approval", value: pending, hint: "Awaiting review", icon: Clock, accent: "amber" as const },
         { label: "Approved", value: approved, hint: "This period", icon: CheckCircle, accent: "green" as const },
-        { label: "Rejected", value: rejected, hint: "Declined requests", icon: XCircle, accent: "blue" as const, alert: rejected > 0 },
+        { label: "Total days", value: totalApprovedDays, hint: "Approved leave days", icon: Wallet, accent: "blue" as const },
         { label: "Total requests", value: rows.length, hint: "All leave records", icon: ClipboardList, accent: "violet" as const },
       ];
     }
     return [
       { label: "Pending", value: pending, hint: "Awaiting approval", icon: Clock, accent: "amber" as const },
       { label: "Approved", value: approved, hint: "Approved leave", icon: CheckCircle, accent: "green" as const },
-      { label: "Available days", value: available, hint: "Remaining balance", icon: Wallet, accent: "blue" as const },
-      { label: "My requests", value: rows.length, hint: "Submitted by you", icon: ClipboardList, accent: "violet" as const },
+      {
+        label: "Monthly quota",
+        value: hrmSettings?.hrmPaidLeavesPerMonth ?? 0,
+        hint: "Paid leave accrual / month",
+        icon: Wallet,
+        accent: "blue" as const,
+      },
+      { label: "Available days", value: available, hint: "Remaining balance", icon: Wallet, accent: "violet" as const },
     ];
-  }, [canAdminView, historyRows, requestRows, balanceRows]);
+  }, [canAdminView, historyRows, requestRows, balanceRows, hrmSettings?.hrmPaidLeavesPerMonth]);
 
   const leaveActionOpts = useMemo(
     () => ({
@@ -194,14 +209,14 @@ export default function HrmLeavePage() {
 
         <HrmPageKpiRow items={kpiItems} loading={requestsLoading || balancesLoading} />
 
-        <Tabs defaultValue={canAdminView ? "queue" : "history"} className="space-y-4">
+        <Tabs value={leaveTab} onValueChange={setLeaveTab} className="space-y-4">
           <HrmTabsList>
-            {canAdminView && <HrmTabsTrigger value="queue">Pending approvals</HrmTabsTrigger>}
+            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Pending approvals</HrmTabsTrigger>}
             <HrmTabsTrigger value="history">{canAdminView ? "All requests" : "My requests"}</HrmTabsTrigger>
             <HrmTabsTrigger value="balances">Balances</HrmTabsTrigger>
           </HrmTabsList>
 
-          {canAdminView && (
+          {(canAdminView || canApprove) && (
             <TabsContent value="queue" className="space-y-4 m-0">
               {pendingQueryState.isError ? (
                 <HrmQueryErrorPanel

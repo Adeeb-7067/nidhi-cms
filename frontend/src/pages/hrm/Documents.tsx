@@ -22,6 +22,8 @@ import {
 import { HrmDocumentLibrary } from "@/modules/hrm/HrmDocumentsView";
 import { useCreateDocument, useHrmDocuments, useReviewDocument } from "@/api/hrm";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
+import { HRM_DOCUMENT_CATEGORIES } from "@/modules/hrm/document-constants";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import type { HrmEmployeeDocument } from "@/modules/hrm/types";
 
 export default function HrmDocumentsPage() {
@@ -83,7 +85,7 @@ export default function HrmDocumentsPage() {
   };
 
   const handleDownload = (doc: HrmEmployeeDocument) => {
-    if (doc.fileUrl) window.open(doc.fileUrl, "_blank", "noopener,noreferrer");
+    if (doc.fileUrl) window.open(resolveFileUrl(doc.fileUrl), "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -155,15 +157,25 @@ export default function HrmDocumentsPage() {
                 <Input value={docName} onChange={(e) => setDocName(e.target.value)} placeholder="e.g. Aadhar card" />
               </HrmField>
               <HrmField label="Category">
-                <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="general" />
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-xs"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                >
+                  {HRM_DOCUMENT_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
               </HrmField>
               <HrmField label="File">
                 <FileUploader
-                  category="misc"
+                  variant="choose-file"
+                  category="hrm"
                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                   value={fileUrl}
                   onUploadComplete={(url) => setFileUrl(url)}
-                  label="Upload PDF or image"
                 />
               </HrmField>
             </div>

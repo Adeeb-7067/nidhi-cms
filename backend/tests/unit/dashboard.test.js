@@ -6,6 +6,7 @@ import {
   buildAttendanceTrendPoints,
   buildTodayStatusBreakdown,
   buildApprovalPipeline,
+  computeOnTimeRatePct,
 } from "../../src/services/hrm/dashboard.service.js";
 
 describe("resolveDashboardView", () => {
@@ -76,6 +77,23 @@ describe("buildTodayStatusBreakdown", () => {
       { name: "Onsite", value: 1 },
       { name: "On leave", value: 1 },
     ]);
+  });
+});
+
+describe("computeOnTimeRatePct", () => {
+  test("returns null when no present-like rows", () => {
+    assert.equal(computeOnTimeRatePct([]), null);
+  });
+
+  test("computes on-time percentage", () => {
+    assert.equal(
+      computeOnTimeRatePct([
+        { status: "present" },
+        { status: "present" },
+        { status: "onsite" },
+      ]),
+      67,
+    );
   });
 });
 

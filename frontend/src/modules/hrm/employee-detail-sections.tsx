@@ -27,6 +27,7 @@ import {
   YAxis,
 } from "recharts";
 import { cn } from "@/lib/utils";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -142,6 +143,8 @@ export function EmployeeDetailToolbar({
   refreshing,
   sendingCredentials,
   canEdit,
+  backHref = "/hrm/employees",
+  backLabel = "Back to employees",
 }: {
   onRefresh: () => void;
   onEdit: () => void;
@@ -149,13 +152,15 @@ export function EmployeeDetailToolbar({
   refreshing?: boolean;
   sendingCredentials?: boolean;
   canEdit?: boolean;
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" size="sm" className="h-8" asChild>
-        <Link href="/hrm/employees">
+        <Link href={backHref}>
           <ArrowLeft className="mr-2 h-3.5 w-3.5" />
-          Back to employees
+          {backLabel}
         </Link>
       </Button>
       <div className="flex items-center gap-2">
@@ -278,20 +283,14 @@ export function EmployeePaidLeaveCard({
   balances: HrmLeaveBalance[];
   overviewBalances: HrmEmployeeOverview["leaveBalances"];
 }) {
-  const primary =
-    overviewBalances.find((b) => b.code === "EL") ??
-    overviewBalances[0] ??
-    (balances[0]
-      ? {
-          name: balances[0].leaveType?.name ?? "Leave",
-          available: getLeaveBalanceAvailable(balances[0]),
-          code: balances[0].leaveType?.code ?? "",
-        }
-      : null);
+  const elBalance =
+    balances.find((b) => b.leaveType?.code === "EL") ??
+    balances.find((b) => (b.leaveType?.isPaid ?? true) !== false) ??
+    balances[0];
 
-  const bal = balances.find((b) => b.leaveType?.code === primary?.code) ?? balances[0];
+  const overviewEl = overviewBalances.find((b) => b.code === "EL");
 
-  if (!primary && !bal) {
+  if (!elBalance && !overviewEl) {
     return (
       <Card className="border-border/60 shadow-sm lg:col-span-2">
         <CardHeader className="pb-2">
@@ -302,24 +301,28 @@ export function EmployeePaidLeaveCard({
     );
   }
 
-  const allocated = bal?.allocated ?? 0;
-  const used = bal?.used ?? 0;
-  const pending = bal?.pending ?? 0;
-  const available = primary?.available ?? getLeaveBalanceAvailable(bal ?? {});
-  const carry = getLeaveBalanceCarriedForward(bal ?? {});
+  const allocated = elBalance?.allocated ?? 0;
+  const used = elBalance?.used ?? 0;
+  const pending = elBalance?.pending ?? 0;
+  const carry = getLeaveBalanceCarriedForward(elBalance ?? {});
+  const available =
+    elBalance != null
+      ? getLeaveBalanceAvailable(elBalance)
+      : (overviewEl?.available ?? 0);
 
   return (
     <Card className="border-violet-500/20 bg-gradient-to-br from-violet-500/5 to-indigo-500/5 shadow-sm lg:col-span-2">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">Paid leave</CardTitle>
         <CardDescription className="text-xs">
-          You can use now: <span className="font-semibold text-foreground">{available} day{available === 1 ? "" : "s"}</span>
+          Monthly accrual balance — grows each month per employee quota. Available now:{" "}
+          <span className="font-semibold text-foreground">{available} day{available === 1 ? "" : "s"}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pb-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: "Allocated", value: allocated + carry },
+            { label: "Accrued", value: allocated + carry },
             { label: "Taken", value: used },
             { label: "Left", value: available },
             { label: "Pending", value: pending },
@@ -502,126 +505,246 @@ export function EmployeeSalaryBar({
   );
 }
 
+function ProfileDetailRow({
+  label,
+  value,
+  href,
+}: {
+  label: string;
+  value?: React.ReactNode;
+  href?: string | null;
+}) {
+  const empty = value == null || value === "" || value === "—";
+  const content = empty ? "—" : value;
+  return (
+    <p className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      {href && !empty ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          className="text-primary text-right text-xs hover:underline break-all"
+        >
+          {content}
+        </a>
+      ) : (
+        <span className="text-right break-words">{content}</span>
+      )}
+    </p>
+  );
+}
+
+function formatProfileDate(value?: string | null) {
+  if (!value) return "—";
+  try {
+    return format(new Date(value), "PP");
+  } catch {
+    return "—";
+  }
+}
+
+function addressesEqual(
+  a?: { street?: string; city?: string; state?: string; country?: string; zipCode?: string } | null,
+  b?: { street?: string; city?: string; state?: string; country?: string; zipCode?: string } | null,
+) {
+  const line = (addr?: typeof a) => formatAddressLine(addr);
+  return line(a) === line(b);
+}
+
 export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee; overview: HrmEmployeeOverview }) {
   const profileSalaryNet = employee.salary?.netSalary;
   const profileSalaryBasic = employee.salary?.basicSalary;
+  const profileAllowances = employee.salary?.allowances;
+  const profileDeductions = employee.salary?.deductions;
+  const bank = employee.salary?.bankAccount;
   const linkedin = employee.linkedinUrl ?? employee.socialProfiles?.linkedin;
+  const social = employee.socialProfiles ?? {};
+  const permanent = employee.permanentAddress;
+  const current = employee.currentAddress;
+  const showBothAddresses =
+    permanent && current && !addressesEqual(permanent, current);
 
   return (
-    <div className="grid gap-4 md:grid-cols-3">
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
       <Card className="border-border/60 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Contact & personal</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Mail className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{employee.email}</span>
-          </p>
-          <p className="flex items-center gap-2 text-muted-foreground">
-            <Phone className="h-3.5 w-3.5 shrink-0" />
-            {employee.phoneNumber ?? "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Gender · </span>
-            {employee.gender ?? "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Blood group · </span>
-            {employee.bloodGroup || "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Marital status · </span>
-            {employee.maritalStatus ?? "—"}
-          </p>
+          <ProfileDetailRow label="Email" value={employee.email} />
+          <ProfileDetailRow label="Phone" value={employee.phoneNumber} />
+          <ProfileDetailRow
+            label="Legal name"
+            value={
+              employee.firstName || employee.lastName
+                ? `${employee.firstName ?? ""} ${employee.lastName ?? ""}`.trim()
+                : employee.name
+            }
+          />
+          <ProfileDetailRow label="Date of birth" value={formatProfileDate(employee.dob)} />
+          <ProfileDetailRow label="Gender" value={employee.gender} />
+          <ProfileDetailRow label="Blood group" value={employee.bloodGroup || "—"} />
+          <ProfileDetailRow label="Marital status" value={employee.maritalStatus} />
+          <ProfileDetailRow
+            label="Aadhar"
+            value={employee.aadharNumber != null ? String(employee.aadharNumber) : "—"}
+          />
+          <ProfileDetailRow label="PAN" value={employee.panNumber} />
           {linkedin ? (
-            <a href={linkedin} target="_blank" rel="noreferrer" className="text-primary text-xs hover:underline">
-              LinkedIn profile
-            </a>
+            <ProfileDetailRow label="LinkedIn" value="Open profile" href={linkedin} />
           ) : null}
         </CardContent>
       </Card>
+
       <Card className="border-border/60 shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Employment</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>
-            <span className="text-muted-foreground">Department · </span>
-            {employee.departmentName ?? employee.department ?? "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Manager · </span>
-            {employee.reportingManagerName ?? "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Type · </span>
-            {employee.employeeType ?? "—"}
-          </p>
-          <p>
-            <span className="text-muted-foreground">Joined · </span>
-            {employee.joiningDate ? format(new Date(employee.joiningDate), "PP") : "—"}
-          </p>
-          {employee.exitDate ? (
-            <p>
-              <span className="text-muted-foreground">Exit · </span>
-              {format(new Date(employee.exitDate), "PP")}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-1 pt-1">
-            <Badge variant="outline" className="text-[10px] capitalize">
-              {employee.role.replace(/_/g, " ")}
-            </Badge>
-            <Badge variant="outline" className="text-[10px] capitalize">
-              {employee.hrEmploymentStatus ?? employee.status}
-            </Badge>
-            {employee.position ? (
-              <Badge variant="outline" className="text-[10px] capitalize">
-                {employee.position.replace(/_/g, " ")}
-              </Badge>
-            ) : null}
-          </div>
+          <ProfileDetailRow label="Department" value={employee.departmentName ?? employee.department} />
+          <ProfileDetailRow label="Designation" value={employee.designation} />
+          <ProfileDetailRow label="Sub-type" value={employee.subType} />
+          <ProfileDetailRow label="Reporting manager" value={employee.reportingManagerName} />
+          <ProfileDetailRow label="Team leader" value={employee.teamleaderName} />
+          <ProfileDetailRow label="Shift" value={employee.shiftName ?? (employee.shiftId ? "Assigned" : "Company default")} />
+          <ProfileDetailRow label="Employment type" value={employee.employeeType} />
+          <ProfileDetailRow label="Position" value={employee.position?.replace(/_/g, " ")} />
+          <ProfileDetailRow label="CMS role" value={employee.role.replace(/_/g, " ")} />
+          <ProfileDetailRow label="HR status" value={employee.hrEmploymentStatus ?? employee.status} />
+          <ProfileDetailRow label="Account status" value={employee.status} />
+          <ProfileDetailRow label="Joined" value={formatProfileDate(employee.joiningDate)} />
+          <ProfileDetailRow label="Probation ends" value={formatProfileDate(employee.probationEndDate)} />
+          <ProfileDetailRow label="Exit date" value={formatProfileDate(employee.exitDate)} />
         </CardContent>
       </Card>
+
       <Card className="border-border/60 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Address & compensation</CardTitle>
+          <CardTitle className="text-sm">Address</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm">
+          {showBothAddresses ? (
+            <>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Current</p>
+                <p className="text-muted-foreground">{formatAddressLine(current)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">Permanent</p>
+                <p className="text-muted-foreground">{formatAddressLine(permanent)}</p>
+              </div>
+            </>
+          ) : (
+            <p className="flex items-start gap-2 text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <span>{formatAddressLine(current ?? permanent)}</span>
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Compensation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p className="flex items-start gap-2 text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-            <span>{formatAddressLine(employee.currentAddress ?? employee.permanentAddress)}</span>
-          </p>
-          <p className="flex items-center justify-between">
-            <span className="text-muted-foreground">Net pay</span>
-            <span className="font-semibold">
-              {overview.salaryNet != null
-                ? formatCurrency(overview.salaryNet)
-                : profileSalaryNet != null
-                  ? formatCurrency(profileSalaryNet)
+          <ProfileDetailRow
+            label="Basic salary"
+            value={
+              profileSalaryBasic != null
+                ? formatCurrency(profileSalaryBasic)
+                : overview.salaryGross != null
+                  ? formatCurrency(overview.salaryGross)
+                  : "—"
+            }
+          />
+          <ProfileDetailRow
+            label="Allowances"
+            value={profileAllowances != null ? formatCurrency(profileAllowances) : "—"}
+          />
+          <ProfileDetailRow
+            label="Deductions"
+            value={profileDeductions != null ? formatCurrency(profileDeductions) : "—"}
+          />
+          <ProfileDetailRow
+            label="Net pay"
+            value={
+              profileSalaryNet != null
+                ? formatCurrency(profileSalaryNet)
+                : overview.salaryNet != null
+                  ? formatCurrency(overview.salaryNet)
                   : overview.latestPayrollNet != null
                     ? formatCurrency(overview.latestPayrollNet)
-                    : "—"}
-            </span>
-          </p>
-          <p className="flex items-center justify-between">
-            <span className="text-muted-foreground">Basic</span>
-            <span>
-              {overview.salaryGross != null
-                ? formatCurrency(overview.salaryGross)
-                : profileSalaryBasic != null
-                  ? formatCurrency(profileSalaryBasic)
-                  : "—"}
-            </span>
-          </p>
-          <p className="flex items-center justify-between">
-            <span className="text-muted-foreground">WFH limit / mo</span>
-            <span>{employee.wfhMonthlyLimit ?? 4} days</span>
-          </p>
-          <p className="flex items-center justify-between">
-            <span className="text-muted-foreground">Leave accrual</span>
-            <span>{employee.leaveAccrualDaysPerMonth ?? "Default"} / mo</span>
-          </p>
+                    : "—"
+            }
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Bank account</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <ProfileDetailRow label="Account holder" value={bank?.accountHolderName} />
+          <ProfileDetailRow label="Account number" value={bank?.accountNumber} />
+          <ProfileDetailRow label="Bank" value={bank?.bankName} />
+          <ProfileDetailRow label="Branch" value={bank?.branchName} />
+          <ProfileDetailRow label="IFSC" value={bank?.ifsc} />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">HRM policies</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm">
+          <ProfileDetailRow label="WFH limit / mo" value={`${employee.wfhMonthlyLimit ?? 4} days`} />
+          <ProfileDetailRow
+            label="Leave accrual"
+            value={`${employee.leaveAccrualDaysPerMonth ?? employee.monthlyLeaveQuota ?? "Default"} / mo`}
+          />
+          <ProfileDetailRow label="Late charge" value={`${employee.lateChargePercentage ?? 100}%`} />
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/60 shadow-sm md:col-span-2 xl:col-span-3">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Social & documents</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Social profiles</p>
+            <ProfileDetailRow label="Twitter" value={social.twitter} href={social.twitter} />
+            <ProfileDetailRow label="Facebook" value={social.facebook} href={social.facebook} />
+            <ProfileDetailRow label="Instagram" value={social.instagram} href={social.instagram} />
+            <ProfileDetailRow label="Website" value={social.website} href={social.website} />
+          </div>
+          <div className="space-y-2">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Document links</p>
+            <ProfileDetailRow
+              label="Resume"
+              value={employee.resumeUrl ? "View" : "—"}
+              href={employee.resumeUrl ? resolveFileUrl(employee.resumeUrl) : undefined}
+            />
+            <ProfileDetailRow
+              label="ID proof"
+              value={employee.idProofUrl ? "View" : "—"}
+              href={employee.idProofUrl ? resolveFileUrl(employee.idProofUrl) : undefined}
+            />
+            <ProfileDetailRow
+              label="Address proof"
+              value={employee.addressProofUrl ? "View" : "—"}
+              href={employee.addressProofUrl ? resolveFileUrl(employee.addressProofUrl) : undefined}
+            />
+          </div>
+          {employee.bio ? (
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Bio</p>
+              <p className="text-muted-foreground whitespace-pre-wrap">{employee.bio}</p>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>
@@ -689,7 +812,10 @@ export function EmployeeOverviewStats({
 }) {
   const rate = attendanceRatePct(attendanceRows);
   const hours = totalWorkHours(attendanceRows);
-  const leaveAvailable = overview.leaveBalances.reduce((n, b) => n + b.available, 0);
+  const elAvailable =
+    overview.leaveBalances.find((b) => b.code === "EL")?.available ??
+    overview.leaveBalances.reduce((n, b) => n + b.available, 0);
+  const leaveAvailable = elAvailable;
   const netPay =
     overview.latestPayrollNet != null
       ? formatCurrency(overview.latestPayrollNet)

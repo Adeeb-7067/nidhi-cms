@@ -1,8 +1,7 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useLocation } from "wouter";
 import {
   useListUsers,
-  useCreateUser,
-  useUpdateUser,
   useDeleteUser,
   getListUsersQueryKey,
   useGetTeamAnalytics,
@@ -13,6 +12,7 @@ import {
   useGetLogComplianceCalendar,
   getGetLogComplianceCalendarQueryKey,
 } from "@/api";
+import { useTeamEmployeeProfile, useSaveTeamEmployee } from "@/api/team-employees";
 import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { TeamAnalyticsPanel } from "@/components/team/TeamAnalyticsPanel";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -98,7 +98,6 @@ import {
   teamEmployeeSchema,
   defaultTeamEmployeeFormValues,
   mapUserToTeamEmployeeForm,
-  buildTeamEmployeePayload,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
 import {
@@ -108,6 +107,7 @@ import {
   prevEmployeeFormTab,
   type EmployeeFormTab,
 } from "@/components/admin/EmployeeFormTabs";
+import { getAdminEmployeeDetailHref } from "@/lib/employee-routes";
 
 type EmployeeFormValues = TeamEmployeeFormValues;
 
@@ -174,6 +174,7 @@ function EmployeePresenceDetailCell({ user }: { user: User }) {
 }
 
 export default function AdminEmployees() {
+  const [, setLocation] = useLocation();
   const { impersonate, isImpersonating } = useAuth();
   const { getPresence } = usePresence();
   const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
@@ -251,8 +252,7 @@ export default function AdminEmployees() {
     };
   }, [staffSummary, staffTotal, teamAnalytics]);
   const statsLoading = staffTotalLoading || staffSummaryLoading;
-  const createUserMutation = useCreateUser();
-  const updateUserMutation = useUpdateUser();
+  const saveTeamEmployee = useSaveTeamEmployee();
   const deleteUserMutation = useDeleteUser();
   const { data: hrmDepartmentsData } = useHrmDepartments();
   const { data: shiftTemplatesData } = useHrmShiftTemplates();
@@ -385,25 +385,49 @@ export default function AdminEmployees() {
   const form = useForm<EmployeeFormValues>({
     resolver: zodResolver(teamEmployeeSchema),
     defaultValues: defaultTeamEmployeeFormValues(defaultDepartmentId),
+    // Radix tabs unmount inactive panels — keep all tab fields in submit payload.
+    shouldUnregister: false,
   });
 
   const employeeDialogOpen = isDialogOpen || !!editUser;
+  const editUserId = editUser?.id;
+  const {
+    data: editUserProfile,
+    isLoading: editProfileLoading,
+    isError: editProfileError,
+  } = useTeamEmployeeProfile(editUserId, employeeDialogOpen);
+
+  const dialogWasOpenRef = useRef(false);
+  const formHydratedForRef = useRef<number | "create" | null>(null);
 
   useEffect(() => {
-    if (!employeeDialogOpen) return;
-    if (editUser) {
+    const justOpened = employeeDialogOpen && !dialogWasOpenRef.current;
+    dialogWasOpenRef.current = employeeDialogOpen;
+
+    if (!employeeDialogOpen) {
+      formHydratedForRef.current = null;
+      return;
+    }
+
+    if (editUserId) {
+      if (!editUserProfile) return;
+      if (!justOpened && formHydratedForRef.current === editUserId) return;
+      formHydratedForRef.current = editUserId;
       form.reset(
         mapUserToTeamEmployeeForm(
-          editUser as User & Record<string, unknown>,
+          editUserProfile as User & Record<string, unknown>,
           defaultDepartmentId,
           hrmDepartments,
         ),
       );
-    } else {
-      form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
+      setPreviewEmployeeId(String(editUserProfile.employeeId ?? editUser?.employeeId ?? ""));
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when dialog opens or target employee changes
-  }, [employeeDialogOpen, editUser?.id, defaultDepartmentId, hrmDepartments]);
+
+    if (!justOpened && formHydratedForRef.current === "create") return;
+    formHydratedForRef.current = "create";
+    form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
+  }, [employeeDialogOpen, editUserId, editUserProfile, defaultDepartmentId, hrmDepartments, editUser?.employeeId, form]);
 
   const syncDisplayNameFromParts = () => {
     const fn = form.getValues("firstName")?.trim() ?? "";
@@ -446,37 +470,39 @@ export default function AdminEmployees() {
 
   const onSubmit = async (values: EmployeeFormValues) => {
     try {
-      const payload = buildTeamEmployeePayload(values, departmentNameById);
       if (editUser) {
-        const trimmedPassword = values.password?.trim() ?? "";
-        await updateUserMutation.mutateAsync({
+        const result = await saveTeamEmployee.mutateAsync({
           id: editUser.id,
-          data: trimmedPassword
-            ? ({ ...payload, password: trimmedPassword } as any)
-            : (payload as any),
+          values,
+          departmentNameById,
+          password: values.password?.trim() || undefined,
         });
+        const trimmedPassword = values.password?.trim() ?? "";
         toast.success(trimmedPassword ? "Employee and password updated!" : "Employee updated!");
         setEditUser(null);
         setIsDialogOpen(false);
         setEmployeeFormTab("personal");
+        void result;
       } else {
         if (!values.password?.trim()) {
           form.setError("password", { message: "Login password is required for new employees" });
           setEmployeeFormTab("personal");
           return;
         }
-        const result = await createUserMutation.mutateAsync({
-          data: { ...payload, password: values.password!.trim() } as any,
+        const result = await saveTeamEmployee.mutateAsync({
+          values,
+          departmentNameById,
+          password: values.password.trim(),
         });
-        toast.success(`Employee created! ID: ${result.employeeId}`);
+        toast.success(`Employee created! ID: ${result.employeeId ?? "assigned"}`);
         setIsDialogOpen(false);
         setEmployeeFormTab("personal");
       }
       form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
       queryClient.invalidateQueries({ queryKey: ["hrm", "employees"] });
-    } catch (error: unknown) {
-      toastApiError(error, "Failed to save employee");
+    } catch {
+      // Toast handled by useSaveTeamEmployee
     }
   };
 
@@ -517,7 +543,7 @@ export default function AdminEmployees() {
       header: "Employee",
       accessorKey: "name",
       cell: (user) => (
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => setSelectedUser(user)}>
+        <div className="flex items-center gap-3">
           <AvatarWithPresence
             name={user.name}
             avatarUrl={user.avatarUrl}
@@ -632,6 +658,19 @@ export default function AdminEmployees() {
       hideInDetail: true,
       cell: (user) => (
         <div className="flex justify-end gap-2 transition-opacity">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 px-2 text-[10px] font-semibold"
+            title="Open employee profile"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLocation(getAdminEmployeeDetailHref(user.id));
+            }}
+          >
+            <Eye className="h-3 w-3 mr-1" />
+            Profile
+          </Button>
           {canViewAsEmployee(user) && (
             <Button
               size="sm"
@@ -710,18 +749,29 @@ export default function AdminEmployees() {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
                 <div className="flex-1 overflow-y-auto px-6 py-4 dialog-scroll">
-                  <EmployeeFormTabs
-                    form={form}
-                    tab={employeeFormTab}
-                    onTabChange={setEmployeeFormTab}
-                    editUser={editUser}
-                    previewEmployeeId={previewEmployeeId}
-                    roleTemplateOptions={roleTemplateOptions}
-                    hrmDepartments={hrmDepartments}
-                    managerOptions={managerOptions}
-                    shiftTemplates={shiftTemplates}
-                    onSyncDisplayName={syncDisplayNameFromParts}
-                  />
+                  {editUser && editProfileLoading ? (
+                    <div className="space-y-4 py-8">
+                      <PageTableSkeleton rows={6} columns={2} showToolbar={false} />
+                      <p className="text-center text-sm text-muted-foreground">Loading employee profile…</p>
+                    </div>
+                  ) : editUser && editProfileError ? (
+                    <p className="py-8 text-center text-sm text-destructive">
+                      Could not load this employee&apos;s profile. Close and try again.
+                    </p>
+                  ) : (
+                    <EmployeeFormTabs
+                      form={form}
+                      tab={employeeFormTab}
+                      onTabChange={setEmployeeFormTab}
+                      editUser={editUser}
+                      previewEmployeeId={previewEmployeeId}
+                      roleTemplateOptions={roleTemplateOptions}
+                      hrmDepartments={hrmDepartments}
+                      managerOptions={managerOptions}
+                      shiftTemplates={shiftTemplates}
+                      onSyncDisplayName={syncDisplayNameFromParts}
+                    />
+                  )}
                 </div>
                 <DialogFooter className="shrink-0 px-6 py-4 border-t border-border/60 bg-muted/20 sm:justify-between gap-3">
                   <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -767,9 +817,12 @@ export default function AdminEmployees() {
                       type="submit"
                       size="sm"
                       className="h-9 min-w-[120px]"
-                      disabled={createUserMutation.isPending || updateUserMutation.isPending}
+                      disabled={
+                        saveTeamEmployee.isPending ||
+                        (editUser != null && (editProfileLoading || editProfileError))
+                      }
                     >
-                      {(createUserMutation.isPending || updateUserMutation.isPending)
+                      {saveTeamEmployee.isPending
                         ? editUser
                           ? "Saving…"
                           : "Creating…"
@@ -828,6 +881,7 @@ export default function AdminEmployees() {
                   searchPlaceholder="Filter employees..." 
                   filename="EmployeesExport"
                   viewStorageKey="employees"
+                  onRowClick={(user) => setLocation(getAdminEmployeeDetailHref(user.id))}
                 />
               )}
           </PortalContentCard>

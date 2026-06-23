@@ -3,6 +3,10 @@ import { notFound, badRequest } from "../../utils/route-errors.js";
 import { validateStoredFileUrl } from "../../lib/file-storage.js";
 import { documentStatuses } from "../../constants/hrm-workflow.js";
 
+export async function countDocuments(userId) {
+  return employeeDocumentsTable.countDocuments(userId ? { userId } : {});
+}
+
 export async function listDocuments(userId) {
   const query = userId ? { userId } : {};
   const rows = await employeeDocumentsTable.find(query).sort({ createdAt: -1 }).lean();
@@ -43,4 +47,11 @@ export async function reviewDocument(id, { status, reviewNote }, reviewerId) {
   );
   if (!doc) notFound("Document");
   return doc;
+}
+
+export async function deleteDocument(id) {
+  const doc = await employeeDocumentsTable.findOne({ id }).lean();
+  if (!doc) notFound("Document");
+  await employeeDocumentsTable.deleteOne({ id });
+  return { ok: true };
 }

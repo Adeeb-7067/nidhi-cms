@@ -29,6 +29,7 @@ import {
   portalActionButtonClass,
   HrmRefRefreshButton,
   hrmRefCountSubtitle,
+  HrmRatingStars,
 } from "@/modules/hrm/components";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import {
@@ -69,6 +70,9 @@ export default function HrmRecruitmentPage() {
   const [position, setPosition] = useState("");
   const [departmentId, setDepartmentId] = useState<string>("none");
   const [notes, setNotes] = useState("");
+  const [experienceYears, setExperienceYears] = useState("");
+  const [source, setSource] = useState("");
+  const [rating, setRating] = useState(0);
 
   const candidates = data?.candidates ?? [];
   const departments = deptData?.departments ?? [];
@@ -94,6 +98,9 @@ export default function HrmRecruitmentPage() {
     setPosition("");
     setDepartmentId("none");
     setNotes("");
+    setExperienceYears("");
+    setSource("");
+    setRating(0);
   };
 
   const handleCreate = async () => {
@@ -109,6 +116,9 @@ export default function HrmRecruitmentPage() {
         position: position.trim(),
         departmentId: departmentId === "none" ? null : Number(departmentId),
         notes: notes.trim() || undefined,
+        experienceYears: experienceYears.trim() ? Number(experienceYears) : undefined,
+        source: source.trim() || undefined,
+        rating: rating > 0 ? rating : undefined,
       });
       toast.success("Candidate added");
       setCreateOpen(false);
@@ -128,17 +138,44 @@ export default function HrmRecruitmentPage() {
   const columns = useMemo((): Column<HrmCandidate>[] => [
     {
       id: "name",
-      header: "Name",
+      header: "Candidate",
       accessorKey: "name",
-      cell: (c) => <span className="font-medium">{c.name}</span>,
+      cell: (c) => (
+        <div>
+          <p className="font-medium">{c.name}</p>
+          <p className="text-[11px] text-muted-foreground">{c.email}</p>
+        </div>
+      ),
+      exportValue: (c) => `${c.name} <${c.email}>`,
     },
     {
-      id: "email",
-      header: "Email",
-      accessorKey: "email",
-      cell: (c) => <span className="text-muted-foreground">{c.email}</span>,
+      id: "role",
+      header: "Role",
+      cell: (c) => (
+        <div>
+          <p className="text-sm">{c.position}</p>
+          <p className="text-[11px] text-muted-foreground">
+            {departments.find((d) => d.id === c.departmentId)?.name ?? "—"}
+          </p>
+        </div>
+      ),
     },
-    { id: "position", header: "Position", accessorKey: "position" },
+    {
+      id: "exp",
+      header: "Exp",
+      cell: (c) => (c.experienceYears != null ? `${c.experienceYears}y` : "—"),
+      exportValue: (c) => (c.experienceYears != null ? String(c.experienceYears) : ""),
+    },
+    {
+      id: "source",
+      header: "Source",
+      cell: (c) => <span className="text-muted-foreground">{c.source ?? "—"}</span>,
+    },
+    {
+      id: "rating",
+      header: "Rating",
+      cell: (c) => <HrmRatingStars value={c.rating ?? 0} />,
+    },
     {
       id: "stage",
       header: "Stage",
@@ -189,7 +226,7 @@ export default function HrmRecruitmentPage() {
         </div>
       ),
     },
-  ], [startOnboarding]);
+  ], [startOnboarding, departments]);
 
   return (
     <HrmGate module="recruitment">
@@ -260,6 +297,17 @@ export default function HrmRecruitmentPage() {
               </HrmField>
               <HrmField label="Notes">
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+              </HrmField>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <HrmField label="Experience (years)">
+                  <Input type="number" min={0} value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} />
+                </HrmField>
+                <HrmField label="Source">
+                  <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="LinkedIn, referral…" />
+                </HrmField>
+              </div>
+              <HrmField label="Rating">
+                <HrmRatingStars value={rating} editable onChange={setRating} size="md" />
               </HrmField>
             </div>
             <DialogFooter>
