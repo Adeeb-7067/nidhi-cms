@@ -8,12 +8,21 @@ import {
 } from "../../models/schema/index.js";
 import { notifyUser, broadcast } from "../../lib/realtime.js";
 import { conflict, notFound, badRequest, forbidden } from "../../utils/route-errors.js";
-import { getHrmPolicyContext, countWorkingDays, getDayOfWeek, normalizeDateKey } from "./hrm-date-utils.js";
+import { getHrmPolicyContext, countWorkingDays, getDayOfWeek, normalizeDateKey, workDayKeyForDate } from "./hrm-date-utils.js";
 import { logHrmAudit } from "./hrm-audit.service.js";
 import { companyHolidaysTable } from "../../models/schema/hrm/holidays.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { allocateOldestFirst, getLeaveYearForDate, reconcileAutoSeededBalance, reconcileUserLeaveBalances, syncUserLeaveAvailable } from "./leave-accrual.service.js";
+import {
+  allocateOldestFirst,
+  ensureUserLeaveAccrualForPeriod,
+  getLeaveYearForDate,
+  reconcileAutoSeededBalance,
+  reconcileUserLeaveBalances,
+  syncUserLeaveAvailable,
+} from "./leave-accrual.service.js";
+import { getOrCreateSettings } from "../company-settings.js";
+import { resolveWorkDayTimezone } from "../work-session-policy.js";
 import {
   canUserReviewLeaveRequest,
   resolveLeaveNotifierIds,
@@ -145,7 +154,20 @@ export async function listLeaveTypes() {
 }
 
 export async function listLeaveBalances(userId, year) {
-  const y = year ?? new Date().getFullYear();
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const now = new Date();
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [cy, cm] = fmt.format(now).split("-").map(Number);
+  const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+  const y = year != null ? getLeaveYearForDate(year, cm, startMonth) : getLeaveYearForDate(cy, cm, startMonth);
+
+  await ensureUserLeaveAccrualForPeriod(userId);
   await reconcileUserLeaveBalances(userId, y);
   const types = await listLeaveTypes();
   const result = [];
@@ -187,10 +209,16 @@ export async function applyLeaveRequest(userId, body, actorId) {
   if (!startDate || !endDate) badRequest("Valid startDate and endDate are required.");
   if (endDate < startDate) badRequest("endDate must be on or after startDate.");
   if (!reason?.trim()) badRequest("Reason is required.");
+
+  const { weekendDays, settings, timezone } = await getHrmPolicyContext();
+  const todayKey = workDayKeyForDate(new Date(), timezone);
+  if (startDate < todayKey) {
+    badRequest("Leave cannot be applied for past dates.", "startDate");
+  }
+
   const type = await leaveTypesTable.findOne({ id: leaveTypeId, status: "active" }).lean();
   if (!type) notFound("Leave type");
 
-  const { weekendDays, settings } = await getHrmPolicyContext();
   const holidays = await getHolidaySet(startDate, endDate);
   const days = calculateLeaveDays(startDate, endDate, dayPart, weekendDays, holidays);
   if (days <= 0) badRequest("No working days in selected range.");

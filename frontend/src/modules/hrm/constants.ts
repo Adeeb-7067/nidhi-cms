@@ -13,6 +13,7 @@ export const HRM_MODULES = [
   "settings",
   "audit",
   "recruitment",
+  "onboarding",
   "documents",
   "policies",
   "id_cards",
@@ -42,6 +43,7 @@ export const HRM_MODULE_LABELS: Record<HrmModule, string> = {
   settings: "HRM Settings",
   audit: "Audit Log",
   recruitment: "Recruitment",
+  onboarding: "Onboarding",
   documents: "Documents",
   policies: "Policies",
   id_cards: "ID Cards",
@@ -73,6 +75,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
   holiday: "Holiday",
   weekend: "Weekend",
   short: "Half day",
+  scheduled: "Scheduled",
 };
 
 /** Primary statuses for filters, corrections, and reports. */
@@ -93,6 +96,24 @@ export function normalizeAttendanceStatus(status: string): string {
 
 export function isPresentLikeStatus(status: string): boolean {
   return ["present", "onsite", "late", "wfh"].includes(status);
+}
+
+/** Satyakabir "Scheduled" — global WFH day awaiting clock-in. */
+export function resolveAttendanceDisplayStatus(
+  status: string,
+  options?: { globalWfh?: boolean },
+): string {
+  if (options?.globalWfh && status === "absent") return "scheduled";
+  return normalizeAttendanceStatus(status);
+}
+
+export function attendanceDisplayLabel(
+  status: string,
+  options?: { globalWfh?: boolean },
+): string {
+  const key = resolveAttendanceDisplayStatus(status, options);
+  if (key === "scheduled") return "Scheduled";
+  return ATTENDANCE_STATUS_LABELS[key] ?? ATTENDANCE_STATUS_LABELS[status] ?? status;
 }
 
 export const LEAVE_STATUS_LABELS: Record<string, string> = {

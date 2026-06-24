@@ -2,10 +2,12 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   computeAvailableBalance,
+  currentAccrualPeriodKey,
   getLeaveYearForDate,
   resolveAccrualDaysPerMonth,
   computeCarryForwardAmount,
   allocateOldestFirst,
+  leaveProfileFieldsTouched,
 } from "../../src/services/hrm/leave-accrual.service.js";
 
 describe("computeAvailableBalance", () => {
@@ -80,6 +82,20 @@ describe("resolveAccrualDaysPerMonth", () => {
       ),
       3,
     );
+  });
+});
+
+describe("currentAccrualPeriodKey", () => {
+  test("formats YYYY-MM in UTC", () => {
+    const key = currentAccrualPeriodKey(new Date("2026-06-15T12:00:00Z"), null);
+    assert.equal(key, "2026-06");
+  });
+});
+
+describe("leaveProfileFieldsTouched", () => {
+  test("detects leave quota patch keys", () => {
+    assert.equal(leaveProfileFieldsTouched(["leaveAccrualDaysPerMonth"]), true);
+    assert.equal(leaveProfileFieldsTouched(["name", "email"]), false);
   });
 });
 

@@ -3,6 +3,23 @@
 export type LeaveDurationUi = "full" | "half" | "short";
 export type HalfDayPartUi = "first_half" | "second_half";
 
+/** Today as YYYY-MM-DD in the given IANA timezone (defaults to browser local). */
+export function getTodayDateKey(timezone?: string): string {
+  const tz = timezone?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** True when dateKey is strictly before today (company/browser timezone). */
+export function isLeaveDateInPast(dateKey: string, timezone?: string): boolean {
+  if (!dateKey) return false;
+  return dateKey < getTodayDateKey(timezone);
+}
+
 export function resolveLeaveDayPart(
   duration: LeaveDurationUi,
   halfPart: HalfDayPartUi,

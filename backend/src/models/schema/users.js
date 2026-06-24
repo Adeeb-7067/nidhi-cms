@@ -88,6 +88,8 @@ const userSchema = new Schema({
     monthlyLimit: { type: Number, default: null },
   },
   leaveAccrualDaysPerMonth: { type: Number, min: 0, default: null },
+  /** YYYY-MM of the last monthly paid-leave accrual credit (dedupes lazy + scheduled runs). */
+  lastLeaveAccrualPeriod: { type: String, default: null, trim: true },
   leave: {
     monthlyQuota: { type: Number, default: 1, min: 0 },
   },

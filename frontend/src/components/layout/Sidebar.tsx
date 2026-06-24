@@ -65,8 +65,8 @@ function useBadgeCounts(role: UserRole) {
     },
   );
   return {
-    requests: pendingRequests?.total ?? 0,
-    bugs: openBugs?.total ?? 0,
+    requests: pendingRequests?.data?.total ?? 0,
+    bugs: openBugs?.data?.total ?? 0,
     notifications: unreadNotificationCount,
   };
 }

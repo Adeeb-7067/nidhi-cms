@@ -63,6 +63,10 @@ export const LEGACY_EMPLOYEE_LABELS = {
 export const LEGACY_LEAVE_LABELS = {
   dialogTitle: "Apply for leave",
   dialogDescription: "Submit a request to HR. You will be notified once it is approved or rejected.",
+  adminDialogTitle: "Apply leave for employee",
+  adminDialogDescription:
+    "Record leave on behalf of an employee. The request enters the normal approval queue unless you approve it separately.",
+  employee: "Employee",
   leaveType: "Leave type",
   duration: "Duration",
   startDate: "Start date",
@@ -72,6 +76,7 @@ export const LEGACY_LEAVE_LABELS = {
   contactPhone: "Contact phone (optional)",
   reason: "Reason",
   submit: "Submit request",
+  adminSubmit: "Submit for employee",
   durationFull: "Full day",
   durationHalf: "Half day",
   durationShort: "Short leave (hours)",
@@ -109,7 +114,7 @@ export const LEGACY_PAYROLL_LABELS = {
 export const LEGACY_SETTINGS_LABELS = {
   attendancePolicy: "Attendance policy",
   globalWfhMode: "Global WFH mode",
-  globalWfhHint: "Treat all working days as WFH — no late penalties; remote-friendly clock.",
+  globalWfhHint: "Everyone works remotely — clock in to mark WFH; no office geofence or late penalties until disabled.",
   shortfallThreshold: "Grace period (minutes)",
   maxFreeLates: "Free late days / month",
   electronOnlyClock: "Electron-only clock",

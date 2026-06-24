@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
+import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
   UserCheck,
@@ -23,7 +24,9 @@ import {
   HrmDashboardFilterBar,
   HrmDashboardSectionLabel,
 } from "@/modules/hrm/hrm-dashboard-kit";
-import { useHrmDashboard } from "@/api/hrm";
+import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
+import { deriveTodayAttendanceStats } from "@/modules/hrm/attendance-day-stats";
+import { useHrmDashboard, useHrmAttendanceDaily } from "@/api/hrm";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { isMonitorableStaffRole } from "@/lib/user-roles";
 import { useAuth } from "@/contexts/AuthContext";
@@ -58,6 +61,14 @@ export default function HrmDashboardPage() {
   const { user } = useAuth();
   const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
   const { data, isLoading, isError, error } = useHrmDashboard();
+  const todayKey = data?.todayKey ?? format(new Date(), "yyyy-MM-dd");
+  const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
+    todayKey,
+    todayKey,
+    undefined,
+    undefined,
+    { enabled: !isLoading && !!data },
+  );
 
   const trendData = useMemo(() => {
     const rows = data?.analytics?.attendanceTrend ?? [];
@@ -65,14 +76,25 @@ export default function HrmDashboardPage() {
     return sliceTrendByDays(rows, days);
   }, [data?.analytics?.attendanceTrend, trendDays]);
 
-  const todayBreakdown = useMemo(
-    () =>
-      (data?.analytics?.todayBreakdown ?? []).map((row) => ({
-        name: row.name,
+  const todayBreakdown = useMemo(() => {
+    const rows = attendanceData?.summaries ?? [];
+    if (rows.length > 0) {
+      return deriveTodayAttendanceStats(rows).pipelineStages.map((row) => ({
+        name: row.label,
         count: row.value,
         value: row.value,
-      })),
-    [data?.analytics?.todayBreakdown],
+      }));
+    }
+    return (data?.analytics?.todayBreakdown ?? []).map((row) => ({
+      name: row.name,
+      count: row.value,
+      value: row.value,
+    }));
+  }, [attendanceData?.summaries, data?.analytics?.todayBreakdown]);
+
+  const todayAttendanceRows = useMemo(
+    () => attendanceData?.summaries ?? [],
+    [attendanceData?.summaries],
   );
 
   if (isLoading) {
@@ -231,6 +253,22 @@ export default function HrmDashboardPage() {
             </ChartPanel>
           </ChartGridCell>
         </div>
+
+        <ChartPanel
+          title="Today's attendance"
+          description="Your status, work mode, and hours — same as Attendance"
+          icon={UserCheck}
+          accent="emerald"
+          viewAllHref="/hrm/my-attendance"
+        >
+          <HrmAttendanceGridPanel
+            rows={todayAttendanceRows}
+            isLoading={attendanceLoading}
+            showEmployee={false}
+            viewStorageKey="hrm-employee-dashboard-attendance"
+            filename="MyAttendanceTodayExport"
+          />
+        </ChartPanel>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ChartPanel

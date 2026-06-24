@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
+import { Check, CheckCircle2, ClipboardList, Pencil, Plus, Rocket, Trash2, Users, UserPlus } from "lucide-react";
 import { toast } from "sonner";
-import { CheckCircle2, ClipboardList, Plus, UserPlus, Users } from "lucide-react";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
@@ -14,6 +15,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -24,107 +35,152 @@ import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHero,
   HrmPageShell,
-  HrmContentCard,
   HrmField,
   portalActionButtonClass,
   HrmRefRefreshButton,
   hrmRefCountSubtitle,
   HrmRatingStars,
 } from "@/modules/hrm/components";
+import { HrmRefStatusPill } from "@/modules/hrm/hrm-reference-kit";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import {
-  useCompleteOnboardingTask,
+  CANDIDATE_SOURCES,
+  RECRUITMENT_STAGES,
+  RECRUITMENT_STAGE_LABELS,
+  RECRUITMENT_ONBOARDING_STAGES,
+  stageTone,
+} from "@/modules/hrm/recruitment-constants";
+import {
   useCreateCandidate,
+  useDeleteCandidate,
   useHrmCandidates,
   useHrmDepartments,
   useOnboardingTasks,
   useStartOnboarding,
+  useToggleOnboardingTask,
   useUpdateCandidate,
 } from "@/api/hrm";
 import type { HrmCandidate } from "@/modules/hrm/types";
 
-const STAGE_LABELS: Record<string, string> = {
-  applied: "Applied",
-  screening: "Screening",
-  interview: "Interview",
-  offer: "Offer",
-  hired: "Hired",
-  rejected: "Rejected",
+type CandidateForm = {
+  name: string;
+  email: string;
+  phone: string;
+  position: string;
+  departmentId: string;
+  notes: string;
+  experienceYears: string;
+  source: string;
+  rating: number;
 };
 
-const STAGES = Object.keys(STAGE_LABELS);
+const emptyForm = (): CandidateForm => ({
+  name: "",
+  email: "",
+  phone: "",
+  position: "",
+  departmentId: "none",
+  notes: "",
+  experienceYears: "",
+  source: "",
+  rating: 0,
+});
 
 export default function HrmRecruitmentPage() {
+  const canCreate = useHrmPermission("recruitment", "create");
+  const canEdit = useHrmPermission("recruitment", "edit");
+  const canDelete = useHrmPermission("recruitment", "delete");
+  const canOnboard = useHrmPermission("onboarding", "create");
+
   const { data, isLoading, refetch, isFetching } = useHrmCandidates();
   const { data: deptData } = useHrmDepartments();
   const createCandidate = useCreateCandidate();
   const updateCandidate = useUpdateCandidate();
+  const deleteCandidate = useDeleteCandidate();
   const startOnboarding = useStartOnboarding();
-  const completeTask = useCompleteOnboardingTask();
+  const toggleTask = useToggleOnboardingTask();
 
-  const [createOpen, setCreateOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<HrmCandidate | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<HrmCandidate | null>(null);
   const [onboardingCandidateId, setOnboardingCandidateId] = useState<number | null>(null);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [position, setPosition] = useState("");
-  const [departmentId, setDepartmentId] = useState<string>("none");
-  const [notes, setNotes] = useState("");
-  const [experienceYears, setExperienceYears] = useState("");
-  const [source, setSource] = useState("");
-  const [rating, setRating] = useState(0);
+  const [form, setForm] = useState<CandidateForm>(emptyForm());
 
   const candidates = data?.candidates ?? [];
   const departments = deptData?.departments ?? [];
   const { data: onboardingData } = useOnboardingTasks(onboardingCandidateId ?? undefined);
-  const onboardingTasks = onboardingData?.tasks ?? [];
+  const onboardingRecord = onboardingData?.record ?? null;
 
   const kpiItems = useMemo(() => {
-    const active = candidates.filter((c) => !["hired", "rejected"].includes(c.stage)).length;
-    const hired = candidates.filter((c) => c.stage === "hired").length;
+    const active = candidates.filter(
+      (c) => !["hired", "rejected", "onboarding"].includes(c.stage),
+    ).length;
     const interview = candidates.filter((c) => c.stage === "interview").length;
+    const offer = candidates.filter((c) => c.stage === "offer").length;
+    const onboarding = candidates.filter((c) => c.stage === "onboarding").length;
+    const hired = candidates.filter((c) => c.stage === "hired").length;
+    const rejected = candidates.filter((c) => c.stage === "rejected").length;
     return [
       { label: "Pipeline", value: active, hint: "Open candidates", icon: Users, accent: "violet" as const },
       { label: "In interview", value: interview, hint: "Active interviews", icon: ClipboardList, accent: "amber" as const },
-      { label: "Hired", value: hired, hint: "Onboarding handoff", icon: CheckCircle2, accent: "green" as const },
-      { label: "Total", value: candidates.length, hint: "All records", icon: UserPlus, accent: "blue" as const },
+      { label: "Offers", value: offer, hint: "Pending hire", icon: Rocket, accent: "blue" as const },
+      { label: "Onboarding", value: onboarding, hint: "Ready for checklist", icon: UserPlus, accent: "violet" as const },
+      { label: "Hired", value: hired, hint: "Completed hire", icon: CheckCircle2, accent: "green" as const },
+      { label: "Rejected", value: rejected, hint: "Closed out", icon: Trash2, accent: "rose" as const },
     ];
   }, [candidates]);
 
-  const resetForm = () => {
-    setName("");
-    setEmail("");
-    setPhone("");
-    setPosition("");
-    setDepartmentId("none");
-    setNotes("");
-    setExperienceYears("");
-    setSource("");
-    setRating(0);
+  const openCreate = () => {
+    setEditing(null);
+    setForm(emptyForm());
+    setFormOpen(true);
   };
 
-  const handleCreate = async () => {
-    if (!name.trim() || !email.trim() || !position.trim()) {
+  const openEdit = (candidate: HrmCandidate) => {
+    setEditing(candidate);
+    setForm({
+      name: candidate.name,
+      email: candidate.email,
+      phone: candidate.phone ?? "",
+      position: candidate.position,
+      departmentId: candidate.departmentId != null ? String(candidate.departmentId) : "none",
+      notes: candidate.notes ?? "",
+      experienceYears: candidate.experienceYears != null ? String(candidate.experienceYears) : "",
+      source: candidate.source ?? "",
+      rating: candidate.rating ?? 0,
+    });
+    setFormOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.name.trim() || !form.email.trim() || !form.position.trim()) {
       toast.error("Name, email, and position are required");
       return;
     }
+    const payload = {
+      name: form.name.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim() || undefined,
+      position: form.position.trim(),
+      departmentId: form.departmentId === "none" ? null : Number(form.departmentId),
+      notes: form.notes.trim() || undefined,
+      experienceYears: form.experienceYears.trim() ? Number(form.experienceYears) : undefined,
+      source: form.source.trim() || undefined,
+      rating: form.rating > 0 ? form.rating : undefined,
+    };
     try {
-      await createCandidate.mutateAsync({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        position: position.trim(),
-        departmentId: departmentId === "none" ? null : Number(departmentId),
-        notes: notes.trim() || undefined,
-        experienceYears: experienceYears.trim() ? Number(experienceYears) : undefined,
-        source: source.trim() || undefined,
-        rating: rating > 0 ? rating : undefined,
-      });
-      toast.success("Candidate added");
-      setCreateOpen(false);
-      resetForm();
+      if (editing) {
+        await updateCandidate.mutateAsync({ id: editing.id, ...payload });
+        toast.success("Candidate updated");
+      } else {
+        await createCandidate.mutateAsync(payload);
+        toast.success("Candidate added");
+      }
+      setFormOpen(false);
+      setEditing(null);
     } catch {
-      // toast from mutation
+      // mutation toast
     }
   };
 
@@ -133,6 +189,26 @@ export default function HrmRecruitmentPage() {
       { id: candidate.id, stage },
       { onSuccess: () => toast.success("Stage updated") },
     );
+  };
+
+  const handleStartOnboarding = (candidate: HrmCandidate) => {
+    startOnboarding.mutate(candidate.id, {
+      onSuccess: () => {
+        toast.success("Onboarding started — open Onboarding to track checklist");
+        setOnboardingCandidateId(candidate.id);
+      },
+    });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCandidate.mutateAsync(deleteTarget.id);
+      toast.success("Candidate removed");
+      setDeleteTarget(null);
+    } catch {
+      // mutation toast
+    }
   };
 
   const columns = useMemo((): Column<HrmCandidate>[] => [
@@ -154,9 +230,7 @@ export default function HrmRecruitmentPage() {
       cell: (c) => (
         <div>
           <p className="text-sm">{c.position}</p>
-          <p className="text-[11px] text-muted-foreground">
-            {departments.find((d) => d.id === c.departmentId)?.name ?? "—"}
-          </p>
+          <p className="text-[11px] text-muted-foreground">{c.departmentName ?? "—"}</p>
         </div>
       ),
     },
@@ -164,7 +238,6 @@ export default function HrmRecruitmentPage() {
       id: "exp",
       header: "Exp",
       cell: (c) => (c.experienceYears != null ? `${c.experienceYears}y` : "—"),
-      exportValue: (c) => (c.experienceYears != null ? String(c.experienceYears) : ""),
     },
     {
       id: "source",
@@ -177,56 +250,77 @@ export default function HrmRecruitmentPage() {
       cell: (c) => <HrmRatingStars value={c.rating ?? 0} />,
     },
     {
+      id: "applied",
+      header: "Applied",
+      cell: (c) => {
+        const d = c.appliedOn ?? c.createdAt;
+        return d ? (
+          <span className="text-xs tabular-nums">{format(new Date(d), "MMM d, yyyy")}</span>
+        ) : (
+          "—"
+        );
+      },
+    },
+    {
       id: "stage",
       header: "Stage",
-      cell: (c) => (
-        <Select value={c.stage} onValueChange={(v) => handleStageChange(c, v)}>
-          <SelectTrigger className="h-8 w-36" onClick={(e) => e.stopPropagation()}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {STAGES.map((s) => (
-              <SelectItem key={s} value={s}>
-                {STAGE_LABELS[s]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ),
-      exportValue: (c) => STAGE_LABELS[c.stage] ?? c.stage,
+      cell: (c) =>
+        canEdit ? (
+          <Select value={c.stage} onValueChange={(v) => handleStageChange(c, v)}>
+            <SelectTrigger className="h-8 w-36" onClick={(e) => e.stopPropagation()}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {RECRUITMENT_STAGES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {RECRUITMENT_STAGE_LABELS[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : (
+          <HrmRefStatusPill tone={stageTone(c.stage)}>
+            {RECRUITMENT_STAGE_LABELS[c.stage] ?? c.stage}
+          </HrmRefStatusPill>
+        ),
+      exportValue: (c) => RECRUITMENT_STAGE_LABELS[c.stage] ?? c.stage,
     },
     {
       id: "actions",
       header: "Actions",
       className: "text-right",
       cell: (c) => (
-        <div className="space-x-2" onClick={(e) => e.stopPropagation()}>
-          {c.stage === "offer" && (
+        <div className="flex flex-wrap justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+          {RECRUITMENT_ONBOARDING_STAGES.includes(c.stage as (typeof RECRUITMENT_ONBOARDING_STAGES)[number]) && canOnboard ? (
             <Button
               size="sm"
               variant="outline"
               disabled={startOnboarding.isPending}
-              onClick={() =>
-                startOnboarding.mutate(c.id, {
-                  onSuccess: () => {
-                    toast.success("Onboarding started");
-                    setOnboardingCandidateId(c.id);
-                  },
-                })
-              }
+              onClick={() => handleStartOnboarding(c)}
             >
-              Start onboarding
+              <Rocket className="mr-1 h-3 w-3" />
+              Onboard
             </Button>
-          )}
-          {c.stage === "hired" && (
-            <Button size="sm" variant="ghost" onClick={() => setOnboardingCandidateId(c.id)}>
-              View tasks
+          ) : null}
+          {canEdit ? (
+            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(c)}>
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
-          )}
+          ) : null}
+          {canDelete ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0 text-destructive"
+              onClick={() => setDeleteTarget(c)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       ),
     },
-  ], [startOnboarding, departments]);
+  ], [canDelete, canEdit, canOnboard, startOnboarding.isPending]);
 
   return (
     <HrmGate module="recruitment">
@@ -236,20 +330,27 @@ export default function HrmRecruitmentPage() {
           description={
             isLoading
               ? "Loading pipeline…"
-              : `${hrmRefCountSubtitle(candidates.length, "candidate")} · pipeline and onboarding`
+              : `${hrmRefCountSubtitle(candidates.length, "candidate")} · pipeline and hiring funnel`
           }
           actions={
             <div className="flex flex-wrap gap-2">
               <HrmRefRefreshButton onClick={() => void refetch()} loading={isFetching} />
-              <Button size="sm" className={portalActionButtonClass("h-8")} onClick={() => setCreateOpen(true)}>
-                <Plus className="mr-1.5 h-3.5 w-3.5" />
-                Add candidate
-              </Button>
+              <Link href="/hrm/onboarding">
+                <Button size="sm" variant="outline" className="h-8">
+                  Onboarding
+                </Button>
+              </Link>
+              {canCreate ? (
+                <Button size="sm" className={portalActionButtonClass("h-8")} onClick={openCreate}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" />
+                  Add candidate
+                </Button>
+              ) : null}
             </div>
           }
         />
 
-        <HrmPageKpiRow items={kpiItems} loading={isLoading} />
+        <HrmPageKpiRow items={kpiItems} loading={isLoading} columns={3} />
 
         <PortalTablePanel isLoading={isLoading}>
           <AdvancedTable
@@ -262,26 +363,36 @@ export default function HrmRecruitmentPage() {
           />
         </PortalTablePanel>
 
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog open={formOpen} onOpenChange={setFormOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Add candidate</DialogTitle>
+              <DialogTitle>{editing ? "Edit candidate" : "Add candidate"}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <HrmField label="Full name">
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
+                <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
               </HrmField>
               <HrmField label="Email">
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                />
               </HrmField>
               <HrmField label="Phone">
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
               </HrmField>
               <HrmField label="Position">
-                <Input value={position} onChange={(e) => setPosition(e.target.value)} />
+                <Input
+                  value={form.position}
+                  onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+                />
               </HrmField>
               <HrmField label="Department">
-                <Select value={departmentId} onValueChange={setDepartmentId}>
+                <Select
+                  value={form.departmentId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, departmentId: v }))}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select department" />
                   </SelectTrigger>
@@ -296,23 +407,49 @@ export default function HrmRecruitmentPage() {
                 </Select>
               </HrmField>
               <HrmField label="Notes">
-                <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
               </HrmField>
               <div className="grid gap-4 sm:grid-cols-2">
                 <HrmField label="Experience (years)">
-                  <Input type="number" min={0} value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} />
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.experienceYears}
+                    onChange={(e) => setForm((f) => ({ ...f, experienceYears: e.target.value }))}
+                  />
                 </HrmField>
                 <HrmField label="Source">
-                  <Input value={source} onChange={(e) => setSource(e.target.value)} placeholder="LinkedIn, referral…" />
+                  <Select value={form.source || "none"} onValueChange={(v) => setForm((f) => ({ ...f, source: v === "none" ? "" : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">—</SelectItem>
+                      {CANDIDATE_SOURCES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </HrmField>
               </div>
               <HrmField label="Rating">
-                <HrmRatingStars value={rating} editable onChange={setRating} size="md" />
+                <HrmRatingStars
+                  value={form.rating}
+                  editable
+                  onChange={(rating) => setForm((f) => ({ ...f, rating }))}
+                  size="md"
+                />
               </HrmField>
             </div>
             <DialogFooter>
-              <Button className={portalActionButtonClass()} disabled={createCandidate.isPending} onClick={handleCreate}>
-                Save candidate
+              <Button
+                className={portalActionButtonClass()}
+                disabled={createCandidate.isPending || updateCandidate.isPending}
+                onClick={() => void handleSave()}
+              >
+                {editing ? "Save changes" : "Save candidate"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -321,46 +458,73 @@ export default function HrmRecruitmentPage() {
         <Dialog open={onboardingCandidateId != null} onOpenChange={(open) => !open && setOnboardingCandidateId(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Onboarding checklist</DialogTitle>
+              <DialogTitle>Onboarding started</DialogTitle>
             </DialogHeader>
-            <HrmContentCard className="border-0 shadow-none p-0">
-              <ul className="space-y-2">
-                {onboardingTasks.map((task) => (
-                  <li
-                    key={task.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 px-3 py-2"
-                  >
-                    <span className={task.completed ? "line-through text-muted-foreground" : ""}>{task.title}</span>
-                    {task.completed ? (
-                      <Badge variant="outline" className="text-green-600">
-                        Done
-                      </Badge>
-                    ) : (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={completeTask.isPending}
-                        onClick={() =>
-                          completeTask.mutate(task.id, {
-                            onSuccess: () => {
-                              toast.success("Task completed");
-                              void refetch();
-                            },
-                          })
-                        }
+            <p className="text-sm text-muted-foreground">
+              Track the full checklist on the{" "}
+              <Link href="/hrm/onboarding" className="text-primary underline-offset-2 hover:underline">
+                Onboarding
+              </Link>{" "}
+              page. Ensure the employee exists in Team with the same email as the candidate.
+            </p>
+            {onboardingRecord?.tasks?.length ? (
+              <ul className="mt-3 space-y-1.5">
+                {onboardingRecord.tasks.map((task, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      disabled={toggleTask.isPending}
+                      onClick={() =>
+                        toggleTask.mutate(
+                          { recordId: onboardingRecord.id, taskIndex: i },
+                          { onSuccess: () => toast.success("Task updated") },
+                        )
+                      }
+                      className="flex w-full items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-left hover:bg-muted/40"
+                    >
+                      <div
+                        className={`flex size-5 items-center justify-center rounded ${
+                          task.completed ? "bg-emerald-600 text-white" : "border border-border"
+                        }`}
                       >
-                        Complete
-                      </Button>
-                    )}
+                        {task.completed ? <Check className="size-3" /> : null}
+                      </div>
+                      <span className={task.completed ? "text-sm line-through text-muted-foreground" : "text-sm"}>
+                        {task.title}
+                      </span>
+                    </button>
                   </li>
                 ))}
-                {onboardingTasks.length === 0 && (
-                  <p className="text-sm text-muted-foreground">No onboarding tasks for this candidate.</p>
-                )}
               </ul>
-            </HrmContentCard>
+            ) : (
+              <p className="text-sm text-muted-foreground">No checklist loaded yet.</p>
+            )}
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={Boolean(deleteTarget)} onOpenChange={() => setDeleteTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete candidate?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleteTarget ? `"${deleteTarget.name}" will be removed from the pipeline.` : ""}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteCandidate.isPending}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteCandidate.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void confirmDelete();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </HrmPageShell>
     </HrmGate>
   );

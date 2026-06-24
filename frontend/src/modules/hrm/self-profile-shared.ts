@@ -48,10 +48,10 @@ type AuthUserLike = {
   employeeId?: string | null;
 };
 
-/** Extended employee self-service form — not for super_admin or client portal users. */
+/** Extended employee self-service form — company HRM employees only (not freelancers/clients). */
 export function usesEmployeeSelfProfile(user: AuthUserLike | null | undefined): boolean {
   if (!user) return false;
-  if (user.role === "super_admin" || user.role === "client") return false;
+  if (user.role === "super_admin" || user.role === "client" || user.role === "freelancer") return false;
   return Boolean(user.employeeId?.trim());
 }
 

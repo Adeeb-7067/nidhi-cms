@@ -98,6 +98,7 @@ import {
   teamEmployeeSchema,
   defaultTeamEmployeeFormValues,
   mapUserToTeamEmployeeForm,
+  teamEmployeeEditHydrateKey,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
 import {
@@ -262,7 +263,7 @@ export default function AdminEmployees() {
     {
       query: referenceQueryOptions({
         queryKey: getListUsersQueryKey({ staff: "1", limit: 200 }),
-        enabled: isDialogOpen,
+        enabled: isDialogOpen || !!editUser,
       }),
     },
   );
@@ -393,26 +394,32 @@ export default function AdminEmployees() {
   const editUserId = editUser?.id;
   const {
     data: editUserProfile,
-    isLoading: editProfileLoading,
+    isFetching: editProfileFetching,
     isError: editProfileError,
   } = useTeamEmployeeProfile(editUserId, employeeDialogOpen);
 
-  const dialogWasOpenRef = useRef(false);
-  const formHydratedForRef = useRef<number | "create" | null>(null);
+  const editProfileReady =
+    !editUser || (editUserProfile != null && !editProfileFetching);
+
+  const lastEditHydrateKeyRef = useRef<string | null>(null);
+  const createFormInitializedRef = useRef(false);
 
   useEffect(() => {
-    const justOpened = employeeDialogOpen && !dialogWasOpenRef.current;
-    dialogWasOpenRef.current = employeeDialogOpen;
-
     if (!employeeDialogOpen) {
-      formHydratedForRef.current = null;
+      lastEditHydrateKeyRef.current = null;
+      createFormInitializedRef.current = false;
       return;
     }
 
     if (editUserId) {
-      if (!editUserProfile) return;
-      if (!justOpened && formHydratedForRef.current === editUserId) return;
-      formHydratedForRef.current = editUserId;
+      if (!editUserProfile || editProfileFetching) return;
+      const hydrateKey = teamEmployeeEditHydrateKey(
+        editUserProfile as User & Record<string, unknown>,
+        defaultDepartmentId,
+        hrmDepartments,
+      );
+      if (lastEditHydrateKeyRef.current === hydrateKey) return;
+      lastEditHydrateKeyRef.current = hydrateKey;
       form.reset(
         mapUserToTeamEmployeeForm(
           editUserProfile as User & Record<string, unknown>,
@@ -424,10 +431,19 @@ export default function AdminEmployees() {
       return;
     }
 
-    if (!justOpened && formHydratedForRef.current === "create") return;
-    formHydratedForRef.current = "create";
+    if (createFormInitializedRef.current) return;
+    createFormInitializedRef.current = true;
     form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
-  }, [employeeDialogOpen, editUserId, editUserProfile, defaultDepartmentId, hrmDepartments, editUser?.employeeId, form]);
+  }, [
+    employeeDialogOpen,
+    editUserId,
+    editUserProfile,
+    editProfileFetching,
+    defaultDepartmentId,
+    hrmDepartments,
+    editUser?.employeeId,
+    form,
+  ]);
 
   const syncDisplayNameFromParts = () => {
     const fn = form.getValues("firstName")?.trim() ?? "";
@@ -739,7 +755,7 @@ export default function AdminEmployees() {
               <DialogTitle className="text-lg">{editUser ? "Edit employee" : "Add employee"}</DialogTitle>
               <DialogDescription className="text-xs">
                 {editUser
-                  ? `Update ${editUser.name}'s profile across personal, work, and compensation settings.`
+                  ? `Update ${editUser.name}'s profile across personal, work, pay, and document settings.`
                   : "Complete all four steps to onboard a new team member."}
               </DialogDescription>
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground pt-1">
@@ -749,7 +765,7 @@ export default function AdminEmployees() {
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
                 <div className="flex-1 overflow-y-auto px-6 py-4 dialog-scroll">
-                  {editUser && editProfileLoading ? (
+                  {editUser && !editProfileReady ? (
                     <div className="space-y-4 py-8">
                       <PageTableSkeleton rows={6} columns={2} showToolbar={false} />
                       <p className="text-center text-sm text-muted-foreground">Loading employee profile…</p>
@@ -819,7 +835,7 @@ export default function AdminEmployees() {
                       className="h-9 min-w-[120px]"
                       disabled={
                         saveTeamEmployee.isPending ||
-                        (editUser != null && (editProfileLoading || editProfileError))
+                        (editUser != null && (!editProfileReady || editProfileError))
                       }
                     >
                       {saveTeamEmployee.isPending

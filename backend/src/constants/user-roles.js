@@ -7,6 +7,9 @@ const developerStaffRoles = ["developer", "freelancer"];
 /** Employee ID + dev-portal login (employee ID, not email). */
 const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer"];
 
+/** Payroll / leave / attendance HRM records — company employees only (not freelancers). */
+const hrmEmployeeRoles = ["manager", "developer", "tester", "qa"];
+
 /** Shown on admin Team page and staff user listings. */
 const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer"];
 
@@ -38,6 +41,10 @@ function isStaffEmployeeRole(role) {
   return staffEmployeeRoles.includes(role);
 }
 
+function isHrmEmployeeRole(role) {
+  return hrmEmployeeRoles.includes(role);
+}
+
 function isBugAssigneeRole(role) {
   return bugAssigneeRoles.includes(role);
 }
@@ -52,10 +59,12 @@ export {
   developerStaffRoles,
   devPortalStaffRoles,
   hrmAdminRoles,
+  hrmEmployeeRoles,
   isBugAssigneeRole,
   isDeveloperRole,
   isDevPortalStaffRole,
   isHrmAdminRole,
+  isHrmEmployeeRole,
   isMonitorableStaffRole,
   isStaffEmployeeRole,
   monitorableStaffRoles,

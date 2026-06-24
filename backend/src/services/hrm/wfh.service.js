@@ -87,6 +87,9 @@ export async function applyWfhRequest(userId, body, actorId) {
   if (wfhOverlap) conflict("Dates overlap with an existing WFH request.");
 
   const id = await getNextSequence("wfh_requests");
+  const { settings } = await getHrmPolicyContext();
+  const globalWfhMode = settings.hrmGlobalWfhMode === true;
+
   const request = await wfhRequestsTable.create({
     id,
     userId,
@@ -95,16 +98,36 @@ export async function applyWfhRequest(userId, body, actorId) {
     days,
     reason: reason.trim(),
     phoneNumber: phoneNumber?.trim() || null,
-    status: "pending",
+    status: globalWfhMode ? "approved" : "pending",
+    reviewedBy: globalWfhMode ? (actorId ?? userId) : null,
+    reviewedAt: globalWfhMode ? new Date() : null,
+    reviewNote: globalWfhMode ? "Auto-approved (company-wide WFH mode)" : null,
   });
 
   await logHrmAudit({
     actorId: actorId ?? userId,
-    action: "wfh_applied",
+    action: globalWfhMode ? "wfh_auto_approved_global" : "wfh_applied",
     entityType: "wfh_request",
     entityId: id,
     newVal: request.toObject(),
   });
+
+  if (globalWfhMode) {
+    const notifId = await getNextSequence("notifications");
+    await notificationsTable.create({
+      id: notifId,
+      userId,
+      type: "hrm_wfh",
+      title: "WFH approved",
+      body: `Your WFH (${startDate} – ${endDate}) was auto-approved — company-wide WFH is active. Clock in to mark attendance.`,
+      entityType: "wfh_request",
+      entityId: id,
+      isRead: false,
+    });
+    notifyUser(userId, "notification", { type: "hrm_wfh", title: "WFH approved" });
+    broadcast("hrm_wfh_updated", { id });
+    return request;
+  }
 
   await notifyWfhApprovers(userId, request, "New WFH request");
   return request;

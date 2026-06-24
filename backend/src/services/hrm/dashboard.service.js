@@ -10,7 +10,7 @@ import {
 import { leaveTypesTable, leaveRequestsTable } from "../../models/schema/hrm/leave.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { salaryStructuresTable } from "../../models/schema/hrm/payroll.js";
-import { isHrmAdminRole, staffEmployeeRoles } from "../../constants/user-roles.js";
+import { isHrmAdminRole, hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { buildDashboardStatsFromSummaries, getAttendanceDailySummaries } from "./attendance.service.js";
 import { loadFirstSessionStarts } from "./attendance-context.js";
 import { listLeaveBalances } from "./leave.service.js";
@@ -124,7 +124,7 @@ function dobToUpcomingDate(dob, fromDate, year) {
 /** Upcoming employee birthdays within the next N days. */
 export async function buildUpcomingBirthdays(scopeUserIds, daysAhead = 90) {
   const filter = {
-    role: { $in: staffEmployeeRoles },
+    role: { $in: hrmEmployeeRoles },
     status: "active",
     dob: { $ne: null },
   };
@@ -218,6 +218,10 @@ async function buildOnLeaveTodayFromSummaries(todaySummaries) {
 }
 
 async function buildOnWfhTodayFromSummaries(todaySummaries) {
+  const { settings } = await getHrmPolicyContext();
+  if (settings.hrmGlobalWfhMode === true) {
+    return [];
+  }
   const onWfh = todaySummaries.filter((s) => s.status === "wfh");
   return enrichSummaryUsers(onWfh, (s, u) => ({
     userId: s.userId,
@@ -331,8 +335,8 @@ async function buildOnWfhTodayList(scopeUserIds) {
 
 export async function buildEmployeeStatusBreakdown() {
   const [active, inactive] = await Promise.all([
-    usersTable.countDocuments({ role: { $in: staffEmployeeRoles }, status: "active" }),
-    usersTable.countDocuments({ role: { $in: staffEmployeeRoles }, status: { $ne: "active" } }),
+    usersTable.countDocuments({ role: { $in: hrmEmployeeRoles }, status: "active" }),
+    usersTable.countDocuments({ role: { $in: hrmEmployeeRoles }, status: { $ne: "active" } }),
   ]);
   return [
     { name: "Active", value: active },
@@ -545,7 +549,7 @@ async function buildEmployeeSelfSummary(userId) {
 
 async function buildDepartmentStrength() {
   const users = await usersTable.find(
-    { role: { $in: staffEmployeeRoles }, status: "active" },
+    { role: { $in: hrmEmployeeRoles }, status: "active" },
     { departmentId: 1 },
   ).lean();
   const deptIds = [...new Set(users.map((u) => u.departmentId).filter(Boolean))];
@@ -644,8 +648,8 @@ function slimWfhRequest(row) {
 export async function getHrmDashboard(req) {
   const view = resolveDashboardView(req.user.role);
   const scopeUserIds = await resolveScopedUserIds(req, undefined);
-  const { timezone } = await getHrmPolicyContext();
-  const todayKey = workDayKeyForDate(new Date(), timezone);
+  const policy = await getHrmPolicyContext();
+  const todayKey = workDayKeyForDate(new Date(), policy.timezone);
   const trendStart = shiftDateKey(todayKey, -29);
 
   const fetchUserIds = view === "employee" ? [req.user.id] : scopeUserIds ?? undefined;
@@ -668,8 +672,10 @@ export async function getHrmDashboard(req) {
 
   const payload = {
     view,
+    todayKey,
     stats,
     onLeaveToday,
+    globalWfhMode: policy.settings.hrmGlobalWfhMode === true,
     analytics: {
       ...analytics,
       approvalPipeline: buildApprovalPipeline(stats),

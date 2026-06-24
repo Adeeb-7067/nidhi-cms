@@ -147,6 +147,15 @@ function dateInput(value: unknown) {
   return d.toISOString().split("T")[0];
 }
 
+/** Stable key for edit-dialog hydration — changes when server profile or department list updates. */
+export function teamEmployeeEditHydrateKey(
+  user: UserLike,
+  defaultDepartmentId: number | null,
+  departments?: Array<{ id: number; name: string }>,
+): string {
+  return JSON.stringify(mapUserToTeamEmployeeForm(user, defaultDepartmentId, departments));
+}
+
 export function mapUserToTeamEmployeeForm(
   user: UserLike,
   defaultDepartmentId: number | null,

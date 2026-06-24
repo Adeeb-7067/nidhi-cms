@@ -27,6 +27,9 @@ export const STAFF_EMPLOYEE_ROLES: UserRole[] = [
   "freelancer",
 ];
 
+/** HRM payroll / leave / employee directory — company employees only (not freelancers). */
+export const HRM_EMPLOYEE_ROLES: UserRole[] = ["manager", "developer", "tester", "qa"];
+
 /** Screenshot / attendance monitoring — mirrors developer for freelancers. */
 export const MONITORABLE_STAFF_ROLES: UserRole[] = [
   "manager",
@@ -68,6 +71,10 @@ export function isDevPortalRole(role: UserRole | string | undefined): boolean {
 
 export function isStaffEmployeeRole(role: UserRole | string | undefined): boolean {
   return !!role && STAFF_EMPLOYEE_ROLES.includes(role as UserRole);
+}
+
+export function isHrmEmployeeRole(role: UserRole | string | undefined): boolean {
+  return !!role && HRM_EMPLOYEE_ROLES.includes(role as UserRole);
 }
 
 export function isMonitorableStaffRole(role: UserRole | string | undefined): boolean {

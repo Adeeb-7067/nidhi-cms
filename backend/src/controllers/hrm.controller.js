@@ -1,5 +1,18 @@
-import { hrmAuditLogsTable, payrollSlipsTable, payrollRunsTable, leaveRequestsTable, wfhRequestsTable, attendanceCorrectionsTable, employeeDocumentsTable } from "../models/schema/index.js";
-import { badRequest, notFound, parseIdParam, parsePagination, forbidden } from "../utils/route-errors.js";
+import {
+  hrmAuditLogsTable,
+  payrollSlipsTable,
+  payrollRunsTable,
+  leaveRequestsTable,
+  wfhRequestsTable,
+  attendanceCorrectionsTable,
+  employeeDocumentsTable,
+  companySettingsTable,
+  usersTable,
+  notificationsTable,
+  getNextSequence,
+} from "../models/schema/index.js";
+import { notifyUser, broadcast } from "../lib/realtime.js";
+import { hrmEmployeeRoles, isHrmAdminRole } from "../constants/user-roles.js";
 import * as departmentsService from "../services/hrm/departments.service.js";
 import * as leaveService from "../services/hrm/leave.service.js";
 import * as wfhService from "../services/hrm/wfh.service.js";
@@ -9,22 +22,26 @@ import * as calendarService from "../services/hrm/calendar.service.js";
 import * as attendanceService from "../services/hrm/attendance.service.js";
 import * as payrollService from "../services/hrm/payroll.service.js";
 import * as recruitmentService from "../services/hrm/recruitment.service.js";
+import * as onboardingService from "../services/hrm/onboarding.service.js";
 import * as documentsService from "../services/hrm/documents.service.js";
 import * as policiesService from "../services/hrm/policies.service.js";
-import { resolveScopedUserIds, resolveAttendanceScopedUserIds, assertCanAccessUser, assertCanViewAttendanceForUser, resolveHrmEmployeeScope } from "../services/hrm/team-scope.js";
+import { resolveScopedUserIds, resolveAttendanceScopedUserIds, assertCanAccessUser, assertCanViewAttendanceForUser, assertHrmEmployeeUser, resolveHrmEmployeeScope } from "../services/hrm/team-scope.js";
 import {
   getOrCreateSettings,
   formatSettings,
   invalidateSettingsCache,
 } from "../services/company-settings.js";
-import { companySettingsTable } from "../models/schema/index.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
 import { logHrmAudit } from "../services/hrm/hrm-audit.service.js";
 import { userHasPermission } from "../services/permissions.service.js";
-import { isHrmAdminRole } from "../constants/user-roles.js";
 import { buildUserProfilePatchSet, buildProfilePatchMongoUpdate } from "../utils/user-profile-fields.js";
+import {
+  ensureUserLeaveAccrualForPeriod,
+  leaveProfileFieldsTouched,
+} from "../services/hrm/leave-accrual.service.js";
 import * as employeesService from "../services/hrm/employees.service.js";
 import * as dashboardService from "../services/hrm/dashboard.service.js";
+import { badRequest, notFound, parseIdParam, parsePagination } from "../utils/route-errors.js";
 
 const MAX_DATE_RANGE_DAYS = 93;
 
@@ -72,6 +89,7 @@ async function getLeaveTypes(_req, res) {
 async function getLeaveBalances(req, res) {
   const userId = req.query.userId != null ? parseIdParam(String(req.query.userId), "user id") : req.user.id;
   await assertCanAccessUser(req, userId);
+  await assertHrmEmployeeUser(userId);
   const year = req.query.year ? Number(req.query.year) : new Date().getFullYear();
   res.json({ balances: await leaveService.listLeaveBalances(userId, year) });
 }
@@ -92,6 +110,7 @@ async function getLeaveRequests(req, res) {
 async function postLeaveRequest(req, res) {
   const userId = req.body.userId != null ? parseIdParam(String(req.body.userId), "user id") : req.user.id;
   await assertCanAccessUser(req, userId);
+  await assertHrmEmployeeUser(userId);
   const request = await leaveService.applyLeaveRequest(userId, req.body, req.user.id);
   res.status(201).json(request);
 }
@@ -123,6 +142,7 @@ async function getWfhRequests(req, res) {
 async function postWfhRequest(req, res) {
   const userId = req.body.userId != null ? parseIdParam(String(req.body.userId), "user id") : req.user.id;
   await assertCanAccessUser(req, userId);
+  await assertHrmEmployeeUser(userId);
   const request = await wfhService.applyWfhRequest(userId, req.body, req.user.id);
   res.status(201).json(request);
 }
@@ -406,19 +426,62 @@ async function patchCandidate(req, res) {
   res.json(await recruitmentService.updateCandidate(id, req.body));
 }
 
+async function deleteCandidate(req, res) {
+  const id = parseIdParam(req.params.id, "candidate id");
+  res.json(await recruitmentService.deleteCandidate(id));
+}
+
 async function postOnboarding(req, res) {
   const id = parseIdParam(req.params.id, "candidate id");
-  res.status(201).json({ tasks: await recruitmentService.startOnboarding(id) });
+  const record = await recruitmentService.startOnboarding(id, req.user.id);
+  res.status(201).json({ record });
 }
 
 async function getOnboardingTasks(req, res) {
   const id = parseIdParam(req.params.id, "candidate id");
-  res.json({ tasks: await recruitmentService.listOnboardingTasks(id) });
+  const record = await onboardingService.getOnboardingByCandidateId(id);
+  res.json({ record, tasks: record?.tasks ?? [] });
+}
+
+async function getOnboardingList(req, res) {
+  const status = req.query.status ?? undefined;
+  res.json({ records: await onboardingService.listOnboardingRecords({ status }) });
+}
+
+async function getOnboardingEligibleEmployees(req, res) {
+  res.json({ employees: await employeesService.listOnboardingEligibleEmployees() });
+}
+
+async function postOnboardingRecord(req, res) {
+  const record = await onboardingService.createOnboardingRecord(req.body, req.user.id);
+  res.status(201).json({ record });
+}
+
+async function getOnboardingRecord(req, res) {
+  const id = parseIdParam(req.params.id, "onboarding id");
+  res.json({ record: await onboardingService.getOnboardingRecord(id) });
+}
+
+async function patchOnboardingRecord(req, res) {
+  const id = parseIdParam(req.params.id, "onboarding id");
+  res.json({ record: await onboardingService.updateOnboardingRecord(id, req.body, req.user.id) });
+}
+
+async function patchOnboardingTaskToggle(req, res) {
+  const id = parseIdParam(req.params.id, "onboarding id");
+  const taskIndex = parseIdParam(req.params.taskIndex, "task index");
+  res.json({
+    record: await onboardingService.toggleOnboardingTask(id, taskIndex, req.user.id),
+  });
+}
+
+async function deleteOnboardingRecord(req, res) {
+  const id = parseIdParam(req.params.id, "onboarding id");
+  res.json(await onboardingService.deleteOnboardingRecord(id, req.user.id));
 }
 
 async function patchOnboardingTask(req, res) {
-  const id = parseIdParam(req.params.taskId, "onboarding task id");
-  res.json(await recruitmentService.completeOnboardingTask(id));
+  badRequest("Use PATCH /hrm/onboarding/:id/tasks/:taskIndex");
 }
 
 async function getDocuments(req, res) {
@@ -440,17 +503,37 @@ async function getDocuments(req, res) {
 async function postDocument(req, res) {
   const userId = req.body.userId != null ? parseIdParam(String(req.body.userId), "user id") : req.user.id;
   await assertCanAccessUser(req, userId);
-  res.status(201).json(await documentsService.createDocument(userId, req.body));
+  const doc = await documentsService.createDocument(userId, req.body);
+  await logHrmAudit({
+    actorId: req.user.id,
+    action: "document_uploaded",
+    entityType: "employee_document",
+    entityId: doc.id,
+    severity: "info",
+    metadata: { userId, name: doc.name, category: doc.category },
+    ipAddress: req.ip ?? null,
+  });
+  res.status(201).json(doc);
 }
 
 async function patchDocument(req, res) {
   const id = parseIdParam(req.params.id, "document id");
-  res.json(await documentsService.reviewDocument(id, req.body, req.user.id));
+  const doc = await documentsService.reviewDocument(id, req.body, req.user.id);
+  await logHrmAudit({
+    actorId: req.user.id,
+    action: req.body.status === "approved" ? "document_approved" : "document_rejected",
+    entityType: "employee_document",
+    entityId: id,
+    severity: "info",
+    metadata: { userId: doc.userId, status: doc.status },
+    ipAddress: req.ip ?? null,
+  });
+  res.json(doc);
 }
 
 async function deleteDocument(req, res) {
   const id = parseIdParam(req.params.id, "document id");
-  const row = await employeeDocumentsTable.findOne({ id }, { userId: 1 }).lean();
+  const row = await employeeDocumentsTable.findOne({ id }, { userId: 1, name: 1 }).lean();
   if (!row) notFound("Document");
   await assertCanAccessUser(req, row.userId);
   const canDeleteAny =
@@ -461,6 +544,15 @@ async function deleteDocument(req, res) {
     forbidden("You cannot delete this document.");
   }
   await documentsService.deleteDocument(id);
+  await logHrmAudit({
+    actorId: req.user.id,
+    action: "document_deleted",
+    entityType: "employee_document",
+    entityId: id,
+    severity: "warning",
+    metadata: { userId: row.userId, name: row.name },
+    ipAddress: req.ip ?? null,
+  });
   res.status(204).send();
 }
 
@@ -520,6 +612,34 @@ async function patchHrmSettings(req, res) {
     { new: true },
   );
   invalidateSettingsCache();
+
+  if (
+    req.body.hrmGlobalWfhMode !== undefined &&
+    req.body.hrmGlobalWfhMode !== settings.hrmGlobalWfhMode
+  ) {
+    const enabled = req.body.hrmGlobalWfhMode === true;
+    const actorName = req.user.name ?? "HR";
+    const staff = await usersTable
+      .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1 })
+      .lean();
+    for (const member of staff) {
+      if (member.id === req.user.id) continue;
+      const notifId = await getNextSequence("notifications");
+      await notificationsTable.create({
+        id: notifId,
+        userId: member.id,
+        type: "hrm_global_wfh",
+        title: enabled ? "Company-wide WFH enabled" : "Company-wide WFH disabled",
+        body: enabled
+          ? `${actorName} enabled company-wide WFH. Clock in from anywhere — no late penalties.`
+          : `${actorName} disabled company-wide WFH. Normal attendance rules apply.`,
+        isRead: false,
+      });
+      notifyUser(member.id, "notification", { type: "hrm_global_wfh" });
+    }
+    broadcast("hrm_settings_updated", { hrmGlobalWfhMode: enabled });
+  }
+
   if (Object.keys(update).length) {
     await logHrmAudit({
       actorId: req.user.id,
@@ -580,6 +700,21 @@ async function patchUserHrmProfile(req, res) {
     metadata: { fields: Object.keys(update) },
     ipAddress: req.ip ?? null,
   });
+  const docFields = ["resumeUrl", "idProofUrl", "addressProofUrl", "certificateUrls", "profileDocuments"];
+  if (Object.keys(update).some((f) => docFields.includes(f))) {
+    await logHrmAudit({
+      actorId: req.user.id,
+      action: "profile_document_updated",
+      entityType: "user",
+      entityId: userId,
+      severity: "info",
+      metadata: { fields: Object.keys(update).filter((f) => docFields.includes(f)) },
+      ipAddress: req.ip ?? null,
+    });
+  }
+  if (leaveProfileFieldsTouched(Object.keys(update))) {
+    await ensureUserLeaveAccrualForPeriod(userId);
+  }
   const detail = await employeesService.getHrmEmployeeDetail(userId);
   res.json({ message: "HRM profile updated", employee: detail.employee });
 }
@@ -587,7 +722,13 @@ async function patchUserHrmProfile(req, res) {
 async function getAuditLogs(req, res) {
   const query = {};
   if (req.query.severity) query.severity = req.query.severity;
-  if (req.query.action) query.action = req.query.action;
+  if (req.query.action) {
+    const term = String(req.query.action).trim();
+    if (term) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.action = { $regex: escaped, $options: "i" };
+    }
+  }
   const logs = await hrmAuditLogsTable.find(query).sort({ createdAt: -1 }).limit(200).lean();
   const actorIds = [...new Set(logs.map((l) => l.actorId).filter(Boolean))];
   const { usersTable } = await import("../models/schema/index.js");
@@ -600,6 +741,7 @@ async function getAuditLogs(req, res) {
       ...l,
       actorName: actorById.get(l.actorId)?.name ?? null,
       actorEmail: actorById.get(l.actorId)?.email ?? null,
+      createdAt: l.createdAt?.toISOString?.() ?? l.createdAt,
     })),
   });
 }
@@ -660,9 +802,17 @@ export {
   getCandidates,
   postCandidate,
   patchCandidate,
+  deleteCandidate,
   postOnboarding,
   getOnboardingTasks,
   patchOnboardingTask,
+  getOnboardingList,
+  getOnboardingEligibleEmployees,
+  postOnboardingRecord,
+  getOnboardingRecord,
+  patchOnboardingRecord,
+  patchOnboardingTaskToggle,
+  deleteOnboardingRecord,
   getDocuments,
   postDocument,
   patchDocument,

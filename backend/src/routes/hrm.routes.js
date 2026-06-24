@@ -89,9 +89,17 @@ router.get(
 router.get("/hrm/recruitment/candidates", perm("hrm_recruitment", "view"), asyncHandler(hrm.getCandidates));
 router.post("/hrm/recruitment/candidates", perm("hrm_recruitment", "create"), asyncHandler(hrm.postCandidate));
 router.patch("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchCandidate));
-router.post("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_recruitment", "edit"), asyncHandler(hrm.postOnboarding));
-router.get("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_recruitment", "view"), asyncHandler(hrm.getOnboardingTasks));
-router.patch("/hrm/recruitment/onboarding/:taskId", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchOnboardingTask));
+router.delete("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "delete"), asyncHandler(hrm.deleteCandidate));
+router.post("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_onboarding", "create"), asyncHandler(hrm.postOnboarding));
+router.get("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_onboarding", "view"), asyncHandler(hrm.getOnboardingTasks));
+
+router.get("/hrm/onboarding", perm("hrm_onboarding", "view"), asyncHandler(hrm.getOnboardingList));
+router.get("/hrm/onboarding/eligible-employees", perm("hrm_onboarding", "create"), asyncHandler(hrm.getOnboardingEligibleEmployees));
+router.post("/hrm/onboarding", perm("hrm_onboarding", "create"), asyncHandler(hrm.postOnboardingRecord));
+router.get("/hrm/onboarding/:id", perm("hrm_onboarding", "view"), asyncHandler(hrm.getOnboardingRecord));
+router.patch("/hrm/onboarding/:id", perm("hrm_onboarding", "edit"), asyncHandler(hrm.patchOnboardingRecord));
+router.patch("/hrm/onboarding/:id/tasks/:taskIndex", perm("hrm_onboarding", "edit"), asyncHandler(hrm.patchOnboardingTaskToggle));
+router.delete("/hrm/onboarding/:id", perm("hrm_onboarding", "delete"), asyncHandler(hrm.deleteOnboardingRecord));
 
 router.get("/hrm/documents", asyncHandler(hrm.getDocuments));
 router.post("/hrm/documents", asyncHandler(hrm.postDocument));

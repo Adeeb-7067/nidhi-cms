@@ -2,6 +2,7 @@ import type { UseFormReturn } from "react-hook-form";
 import {
   Briefcase,
   Copy,
+  FileText,
   Home,
   IndianRupee,
   UserRound,
@@ -55,13 +56,14 @@ type Manager = { id: number; name: string; designation?: string | null };
 type RoleTemplate = { id: number; name: string };
 type ShiftTemplate = { id: number; name: string };
 
-export type EmployeeFormTab = "personal" | "address" | "work" | "compensation";
+export type EmployeeFormTab = "personal" | "address" | "work" | "compensation" | "documents";
 
 export const EMPLOYEE_FORM_TAB_ORDER: EmployeeFormTab[] = [
   "personal",
   "address",
   "work",
   "compensation",
+  "documents",
 ];
 
 export const EMPLOYEE_FORM_TAB_META: Record<
@@ -72,6 +74,7 @@ export const EMPLOYEE_FORM_TAB_META: Record<
   address: { label: "Address", shortLabel: "Address", step: 2, icon: Home },
   work: { label: "Work & HRM", shortLabel: "Work", step: 3, icon: Briefcase },
   compensation: { label: "Compensation", shortLabel: "Pay", step: 4, icon: IndianRupee },
+  documents: { label: "Documents", shortLabel: "Docs", step: 5, icon: FileText },
 };
 
 function AddressBlock({
@@ -164,7 +167,7 @@ export function EmployeeFormTabs({
 
   return (
     <Tabs value={tab} onValueChange={(v) => onTabChange(v as EmployeeFormTab)} className="w-full space-y-4">
-      <PortalTabsList className="grid w-full grid-cols-4">
+      <PortalTabsList className="grid w-full grid-cols-5">
         {EMPLOYEE_FORM_TAB_ORDER.map((key) => {
           const meta = EMPLOYEE_FORM_TAB_META[key];
           const Icon = meta.icon;
@@ -1041,9 +1044,9 @@ export function EmployeeFormTabs({
             </FormRow>
           </div>
         </FormSection>
+      </TabsContent>
 
-        <Separator />
-
+      <TabsContent forceMount value="documents" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
         <FormSection title="Documents" description="Upload resume and identity documents (PDF or image).">
           <div className="grid gap-4 sm:grid-cols-2">
             {(
@@ -1081,10 +1084,14 @@ export function EmployeeFormTabs({
               userId={editUser.id}
               canUpload
               canDelete
-              fetchEnabled={tab === "compensation"}
+              fetchEnabled={tab === "documents"}
               className="mt-4"
             />
-          ) : null}
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Save the employee first to upload additional documents to the document center.
+            </p>
+          )}
         </FormSection>
       </TabsContent>
     </Tabs>

@@ -290,6 +290,7 @@ const ATTENDANCE_STATUS_CLASS: Record<string, string> = {
   weekend: "bg-muted text-muted-foreground border-border",
   short: "bg-cyan-500/10 text-cyan-700 border-cyan-500/20",
   half_day: "bg-cyan-500/10 text-cyan-700 border-cyan-500/20",
+  scheduled: "bg-sky-500/10 text-sky-700 border-sky-500/20",
 };
 
 /** Legacy StatusPill style */
@@ -310,7 +311,7 @@ export function HrmWorkflowBadge({ status }: { status: string }) {
 }
 
 export function HrmAttendanceBadge({ status, suffix }: { status: string; suffix?: string }) {
-  const normalized = normalizeAttendanceStatus(status);
+  const normalized = status === "scheduled" ? "scheduled" : normalizeAttendanceStatus(status);
   const label = ATTENDANCE_STATUS_LABELS[normalized] ?? ATTENDANCE_STATUS_LABELS[status] ?? status;
   return (
     <Badge

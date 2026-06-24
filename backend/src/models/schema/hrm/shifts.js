@@ -7,7 +7,7 @@ const shiftTemplateSchema = new Schema({
   endTime: { type: String, required: true },
   graceMinutesIn: { type: Number, default: 15, min: 0 },
   graceMinutesOut: { type: Number, default: 0, min: 0 },
-  breakMinutes: { type: Number, default: 60, min: 0 },
+  breakMinutes: { type: Number, default: 30, min: 0 },
   workingDays: { type: [Number], default: [1, 2, 3, 4, 5] },
   halfDayThresholdMinutes: { type: Number, default: 240 },
   fullDayThresholdMinutes: { type: Number, default: 450 },

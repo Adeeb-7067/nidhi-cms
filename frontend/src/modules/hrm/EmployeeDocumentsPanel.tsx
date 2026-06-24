@@ -150,7 +150,7 @@ export function EmployeeDocumentsPanel({
             <DocumentRow
               key={doc.id}
               doc={doc}
-              canDelete={canDelete}
+              canDelete={canDelete && doc.source !== "profile"}
               deleting={deleteDocument.isPending}
               onDelete={() => void handleDelete(doc)}
             />
@@ -185,7 +185,8 @@ function DocumentRow({
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{doc.name}</p>
         <p className="text-[11px] text-muted-foreground">
-          {documentCategoryLabel(doc.category)} · {dateLabel}
+          {documentCategoryLabel(doc.category)}
+          {doc.source === "profile" ? " · from profile" : ""} · {dateLabel}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

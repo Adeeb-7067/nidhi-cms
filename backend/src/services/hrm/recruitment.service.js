@@ -1,10 +1,23 @@
-import { candidatesTable, onboardingTasksTable, getNextSequence } from "../../models/schema/index.js";
+import { candidatesTable, departmentsTable, usersTable } from "../../models/schema/index.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { notFound, badRequest } from "../../utils/route-errors.js";
 import { validateStoredFileUrl } from "../../lib/file-storage.js";
 import { recruitmentStages } from "../../constants/hrm-workflow.js";
+import * as onboardingService from "./onboarding.service.js";
 
 export async function listCandidates() {
-  return candidatesTable.find().sort({ createdAt: -1 }).lean();
+  const rows = await candidatesTable.find().sort({ createdAt: -1 }).lean();
+  const deptIds = [...new Set(rows.map((r) => r.departmentId).filter(Boolean))];
+  const departments = deptIds.length
+    ? await departmentsTable.find({ id: { $in: deptIds } }, { id: 1, name: 1 }).lean()
+    : [];
+  const deptById = new Map(departments.map((d) => [d.id, d.name]));
+
+  return rows.map((row) => ({
+    ...row,
+    departmentName: row.departmentId ? deptById.get(row.departmentId) ?? null : null,
+    appliedOn: row.createdAt,
+  }));
 }
 
 export async function createCandidate(body) {
@@ -15,6 +28,7 @@ export async function createCandidate(body) {
   if (body.stage && !recruitmentStages.includes(body.stage)) {
     badRequest("Invalid recruitment stage.");
   }
+  const { getNextSequence } = await import("../../models/schema/index.js");
   const id = await getNextSequence("candidates");
   return candidatesTable.create({
     id,
@@ -32,6 +46,13 @@ export async function createCandidate(body) {
   });
 }
 
+async function resolveHiredUserIdForEmail(email) {
+  const employee = await usersTable
+    .findOne({ email: email.trim().toLowerCase(), role: { $in: hrmEmployeeRoles } }, { id: 1 })
+    .lean();
+  return employee?.id ?? null;
+}
+
 export async function updateCandidate(id, body) {
   const patch = { ...body };
   if (patch.name != null) patch.name = String(patch.name).trim();
@@ -44,37 +65,44 @@ export async function updateCandidate(id, body) {
   if (patch.experienceYears != null) patch.experienceYears = Number(patch.experienceYears);
   if (patch.rating != null) patch.rating = Math.min(5, Math.max(0, Number(patch.rating)));
   if (patch.source != null) patch.source = String(patch.source).trim() || null;
+
+  const existing = await candidatesTable.findOne({ id }).lean();
+  if (!existing) notFound("Candidate");
+
+  if (patch.stage === "onboarding") {
+    const hiredUserId = await resolveHiredUserIdForEmail(patch.email ?? existing.email);
+    if (hiredUserId != null) patch.hiredUserId = hiredUserId;
+  }
+
   const c = await candidatesTable.findOneAndUpdate({ id }, { $set: patch }, { new: true });
   if (!c) notFound("Candidate");
   return c;
 }
 
-export async function startOnboarding(candidateId) {
-  const candidate = await candidatesTable.findOne({ id: candidateId });
-  if (!candidate) notFound("Candidate");
-  const tasks = [
-    "Complete HR paperwork",
-    "IT equipment setup",
-    "Policy acknowledgement",
-    "Team introduction",
-  ];
-  const created = [];
-  for (const title of tasks) {
-    const id = await getNextSequence("onboarding_tasks");
-    created.push(await onboardingTasksTable.create({ id, candidateId, title }));
-  }
-  await candidatesTable.updateOne({ id: candidateId }, { $set: { stage: "hired" } });
-  return created;
+export async function deleteCandidate(id) {
+  const c = await candidatesTable.findOneAndDelete({ id });
+  if (!c) notFound("Candidate");
+  return { deleted: true };
 }
 
+/** @deprecated legacy flat tasks — use onboarding records */
 export async function listOnboardingTasks(candidateId) {
-  return onboardingTasksTable.find({ candidateId }).lean();
+  const record = await onboardingService.getOnboardingByCandidateId(candidateId);
+  if (record) {
+    return record.tasks.map((t, i) => ({
+      id: i,
+      candidateId,
+      title: t.title,
+      completed: t.completed,
+    }));
+  }
+  return [];
 }
 
-export async function completeOnboardingTask(id) {
-  return onboardingTasksTable.findOneAndUpdate(
-    { id },
-    { $set: { completed: true, completedAt: new Date() } },
-    { new: true },
-  );
+export async function startOnboarding(candidateId, actorId = null) {
+  return onboardingService.createOnboardingFromCandidate(candidateId, actorId);
+}
+
+export async function completeOnboardingTask(_id) {
+  badRequest("Use PATCH /hrm/onboarding/:id/tasks/:taskIndex instead.");
 }

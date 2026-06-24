@@ -350,7 +350,15 @@ export default function HrmEmployeeDetailPage() {
               <>
                 <div className="grid gap-3 lg:grid-cols-6">
                   <div className="lg:col-span-2">
-                    <EmployeePaidLeaveCard balances={balanceRows} overviewBalances={overview.leaveBalances} />
+                    <EmployeePaidLeaveCard
+                      balances={balanceRows}
+                      overviewBalances={overview.leaveBalances}
+                      monthlyQuota={
+                        employee.leaveAccrualDaysPerMonth ??
+                        employee.monthlyLeaveQuota ??
+                        null
+                      }
+                    />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:col-span-4 lg:grid-cols-3">
                     <EmployeeOverviewStats

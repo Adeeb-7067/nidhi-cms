@@ -7,7 +7,7 @@ import {
   detectMissingClockOut,
   DEFAULT_WORKDAY_MINUTES,
 } from "./attendance-engine.js";
-import { getDayOfWeek, workDayKeyForDate } from "./hrm-date-utils.js";
+import { getDayOfWeek } from "./hrm-date-utils.js";
 import { withJobLock } from "../jobs/withJobLock.js";
 import { getOrCreateSettings } from "../company-settings.js";
 import { resolveWorkDayTimezone } from "../work-session-policy.js";
@@ -28,9 +28,11 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
   const activeMinutes = minutesFromMs(sess?.totalMs ?? 0);
   const shift = ctx.shiftMap?.get(`${user.id}:${date}`) ?? null;
   const isWeekend = ctx.weekendDays.includes(getDayOfWeek(date));
-  let expectedMinutes = computeExpectedMinutes(shift);
+  // Expected = assigned shift (or company default) end − start − break — per employee.
+  const effectiveShift = shift ?? (!isWeekend ? ctx.defaultShiftTemplate : null);
+  let expectedMinutes = computeExpectedMinutes(effectiveShift);
   if (!expectedMinutes && !isWeekend) {
-    expectedMinutes = ctx.defaultExpectedMinutes ?? DEFAULT_WORKDAY_MINUTES;
+    expectedMinutes = DEFAULT_WORKDAY_MINUTES;
   }
 
   const holiday = ctx.holidays.find((h) => {
@@ -87,6 +89,7 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
     sessionCount: sess?.sessionCount ?? 0,
     threshold: ctx.shortfallThreshold,
     missingClockOut,
+    shiftName: effectiveShift?.name ?? null,
     ...refs,
   };
 

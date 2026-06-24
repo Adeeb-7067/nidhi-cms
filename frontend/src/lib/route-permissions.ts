@@ -32,6 +32,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/hrm/payroll", "hrm_payroll"],
   ["/hrm/salary-slips", "hrm_payroll"],
   ["/hrm/recruitment", "hrm_recruitment"],
+  ["/hrm/onboarding", "hrm_onboarding"],
   ["/hrm/documents", "hrm_documents"],
   ["/hrm/policies", "hrm_policies"],
   ["/hrm/settings", "hrm_settings"],

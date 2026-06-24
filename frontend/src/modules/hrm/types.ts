@@ -157,6 +157,7 @@ export type HrmAttendanceSummary = {
   expectedMinutes: number;
   activeMinutes: number;
   varianceMinutes: number;
+  shiftName?: string | null;
   sessionCount: number;
   corrected?: boolean;
   forgivenLate?: boolean;
@@ -350,8 +351,11 @@ export type HrmDashboardAnalytics = {
 
 export type HrmDashboardResponse = {
   view: "admin" | "manager" | "employee";
+  /** HRM policy timezone work-day key (YYYY-MM-DD) — use for today's attendance fetches */
+  todayKey?: string;
   stats: HrmDashboardStats;
   onLeaveToday: HrmDashboardOnLeavePerson[];
+  globalWfhMode?: boolean;
   analytics?: HrmDashboardAnalytics;
   self?: HrmDashboardSelfSummary;
   pendingApprovals?: {
@@ -405,6 +409,8 @@ export type HrmEmployee = EmployeeProfileExtension & {
   lastLoginAt?: string | null;
   salary?: EmployeeProfileExtension["salary"];
   socialProfiles?: EmployeeProfileExtension["socialProfiles"];
+  /** Linked to a recruitment candidate in the Onboarding pipeline stage. */
+  recruitmentOnboarding?: boolean;
 };
 
 export type HrmEmployeeDetailResponse = {
@@ -553,15 +559,44 @@ export type HrmCandidate = {
   phone?: string | null;
   position: string;
   departmentId?: number | null;
+  departmentName?: string | null;
   stage: string;
   notes?: string | null;
   resumeUrl?: string | null;
   experienceYears?: number | null;
   source?: string | null;
   rating?: number | null;
+  hiredUserId?: number | null;
+  appliedOn?: string;
   createdAt?: string;
 };
 
+export type HrmOnboardingTaskItem = {
+  title: string;
+  completed: boolean;
+};
+
+export type HrmOnboardingRecord = {
+  id: number;
+  userId: number;
+  candidateId?: number | null;
+  buddyId?: number | null;
+  startDate: string;
+  status: "active" | "complete";
+  tasks: HrmOnboardingTaskItem[];
+  progress: number;
+  employeeName: string;
+  employeeEmail?: string | null;
+  employeeDesignation?: string | null;
+  employeeAvatarUrl?: string | null;
+  employeeCode?: string | null;
+  buddyName?: string | null;
+  candidateName?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** @deprecated legacy flat task rows */
 export type HrmOnboardingTask = {
   id: number;
   candidateId: number;
@@ -579,6 +614,7 @@ export type HrmEmployeeDocument = {
   category: string;
   fileUrl: string;
   status: string;
+  source?: "library" | "profile";
   reviewNote?: string | null;
   reviewedBy?: number | null;
   createdAt?: string;

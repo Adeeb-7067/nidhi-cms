@@ -1,5 +1,5 @@
 import { companyHolidaysTable, usersTable, getNextSequence } from "../../models/schema/index.js";
-import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { eachDateInRange } from "./hrm-date-utils.js";
 
 function monthRange(year, month) {
@@ -26,7 +26,7 @@ export async function getCalendarMonth(year, month) {
     .lean();
 
   const employees = await usersTable
-    .find({ role: { $in: staffEmployeeRoles }, status: "active", dob: { $ne: null } })
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active", dob: { $ne: null } })
     .select({ id: 1, name: 1, employeeId: 1, dob: 1 })
     .lean();
 

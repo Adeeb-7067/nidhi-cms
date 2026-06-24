@@ -33,6 +33,10 @@ import {
   buildProfilePatchMongoUpdate,
 } from "../utils/user-profile-fields.js";
 import {
+  ensureUserLeaveAccrualForPeriod,
+  leaveProfileFieldsTouched,
+} from "../services/hrm/leave-accrual.service.js";
+import {
   badRequest,
   conflict,
   notFound,
@@ -274,6 +278,9 @@ async function patchUsersById(req, res) {
   }
 
   if (body.role !== undefined) notifyUser(id, "role_updated", { userId: id, role: user.role });
+  if (leaveProfileFieldsTouched(Object.keys(profilePatch))) {
+    await ensureUserLeaveAccrualForPeriod(id);
+  }
   res.json(formatUser(user, { withPresence: true, includeSensitive: true }));
 }
 async function deleteUsersById(req, res) {

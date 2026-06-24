@@ -49,16 +49,17 @@ import {
   HrmHorizontalBarList,
   HrmNeedsAttentionList,
   HrmRecentActivityList,
-  HrmTodayAttendanceTable,
   HrmTopEarnersList,
 } from "./dashboard-sections";
+import { HrmAttendanceGridPanel } from "./hrm-attendance-grid";
+import { deriveTodayAttendanceStats } from "./attendance-day-stats";
 import {
   HrmAttendancePipelineFlow,
   HrmDashboardFilterBar,
   HrmDashboardSectionLabel,
 } from "./hrm-dashboard-kit";
 import { formatCompactCurrency } from "@/modules/finance/constants";
-import { hrmDashboardQueryKey, useReviewLeaveRequest } from "@/api/hrm";
+import { hrmAttendanceQueryKey, hrmDashboardQueryKey, useHrmAttendanceDaily, useReviewLeaveRequest } from "@/api/hrm";
 import { useHrmPermission } from "./useHrmPermission";
 import type { HrmDashboardResponse } from "./types";
 
@@ -73,6 +74,11 @@ type Props = {
 
 export function HrmRichDashboard({ data, view }: Props) {
   const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
+  const todayKey = data.todayKey ?? format(new Date(), "yyyy-MM-dd");
+  const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
+    todayKey,
+    todayKey,
+  );
   const queryClient = useQueryClient();
   const canApproveLeave = useHrmPermission("leave", "approve");
   const reviewLeave = useReviewLeaveRequest();
@@ -90,22 +96,36 @@ export function HrmRichDashboard({ data, view }: Props) {
     return sliceTrendByDays(rows, days);
   }, [analytics?.attendanceTrend, trendDays]);
 
-  const pipelineStages = useMemo(
-    () =>
-      (analytics?.todayBreakdown ?? []).map((row) => ({
-        label: row.name,
-        value: row.value,
-      })),
-    [analytics?.todayBreakdown],
-  );
+  const attendanceRows = useMemo(() => {
+    const list = attendanceData?.summaries ?? [];
+    return [...list].sort((a, b) => (a.userName ?? "").localeCompare(b.userName ?? ""));
+  }, [attendanceData?.summaries]);
+
+  const liveToday = useMemo(() => deriveTodayAttendanceStats(attendanceRows), [attendanceRows]);
+  const useLiveToday = !attendanceLoading && attendanceData !== undefined;
+
+  const headcount = stats?.headcount ?? liveToday.workingCount;
+  const presentToday = useLiveToday ? liveToday.present : (stats?.presentToday ?? 0);
+  const absentToday = useLiveToday ? liveToday.absent : (stats?.absentToday ?? 0);
+  const onLeaveCount = useLiveToday ? liveToday.onLeave : (data.onLeaveToday?.length ?? stats?.onLeaveToday ?? 0);
+  const globalWfhMode = data.globalWfhMode === true;
+  const wfhCount = useLiveToday
+    ? liveToday.wfh
+    : globalWfhMode
+      ? Math.max(0, headcount - onLeaveCount)
+      : (data.onWfhToday?.length ?? 0);
+  const pipelineStages = useLiveToday
+    ? liveToday.pipelineStages
+    : (analytics?.todayBreakdown ?? []).map((row) => ({ label: row.name, value: row.value }));
+  const onLeaveToday = useLiveToday ? liveToday.onLeaveToday : (data.onLeaveToday ?? []);
+  const onWfhToday = useLiveToday ? liveToday.onWfhToday : (data.onWfhToday ?? []);
 
   const attendancePct =
-    (stats?.headcount ?? 0) > 0
-      ? Math.round(((stats?.presentToday ?? 0) / (stats?.headcount ?? 1)) * 100)
-      : 0;
+    headcount > 0 ? Math.round((presentToday / headcount) * 100) : 0;
 
   const refreshDashboard = () => {
     void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: hrmAttendanceQueryKey({ startDate: todayKey, endDate: todayKey }) });
     toast.success("Dashboard refreshed");
   };
 
@@ -114,6 +134,7 @@ export function HrmRichDashboard({ data, view }: Props) {
       await reviewLeave.mutateAsync({ id, status });
       toast.success(status === "approved" ? "Approved" : "Rejected");
       void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: hrmAttendanceQueryKey({ startDate: todayKey, endDate: todayKey }) });
     } catch {
       // Error toast handled by mutation hook
     }
@@ -181,7 +202,7 @@ export function HrmRichDashboard({ data, view }: Props) {
             },
             {
               title: "Present today",
-              value: `${stats?.presentToday ?? 0}/${stats?.headcount ?? 0}`,
+              value: `${presentToday}/${headcount}`,
               hint: `${attendancePct}% attendance rate`,
               icon: UserCheck,
               accent: "green",
@@ -200,17 +221,17 @@ export function HrmRichDashboard({ data, view }: Props) {
             },
             {
               title: "Absent today",
-              value: stats?.absentToday ?? 0,
+              value: absentToday,
               hint: "Not marked present",
               icon: UserX,
               accent: "red",
               href: "/hrm/attendance",
-              alert: (stats?.absentToday ?? 0) > 0,
+              alert: absentToday > 0,
               delay: 3,
             },
             {
               title: "On leave today",
-              value: data.onLeaveToday?.length ?? 0,
+              value: onLeaveCount,
               hint: "Approved leave",
               icon: CalendarClock,
               accent: "sky",
@@ -219,7 +240,7 @@ export function HrmRichDashboard({ data, view }: Props) {
             },
             {
               title: "WFH today",
-              value: data.onWfhToday?.length ?? 0,
+              value: wfhCount,
               hint: "Remote workers",
               icon: Home,
               accent: "blue",
@@ -421,14 +442,14 @@ export function HrmRichDashboard({ data, view }: Props) {
         <ChartGridCell colSpan={4}>
           <ChartPanel
             title="On leave today"
-            description={`${data.onLeaveToday?.length ?? 0} employees`}
+            description={`${onLeaveCount} employees`}
             icon={CalendarClock}
             accent="violet"
             viewAllHref="/hrm/leave"
           >
-            {(data.onLeaveToday?.length ?? 0) > 0 ? (
+            {onLeaveToday.length > 0 ? (
               <div className="space-y-2">
-                {(data.onLeaveToday ?? []).slice(0, 6).map((p) => (
+                {onLeaveToday.slice(0, 6).map((p) => (
                   <div key={p.userId} className="flex items-center gap-2 rounded-lg border p-2">
                     <HrmEmployeeAvatar name={p.userName} avatarUrl={p.avatarUrl} />
                     <div className="min-w-0 flex-1">
@@ -446,15 +467,19 @@ export function HrmRichDashboard({ data, view }: Props) {
 
         <ChartGridCell colSpan={4}>
           <ChartPanel
-            title="WFH today"
-            description={`${data.onWfhToday?.length ?? 0} employees`}
+            title={globalWfhMode ? "WFH today (All)" : "WFH today"}
+            description={globalWfhMode ? "Company-wide WFH active" : `${wfhCount} employees`}
             icon={Home}
             accent="blue"
             viewAllHref="/hrm/wfh"
           >
-            {(data.onWfhToday?.length ?? 0) > 0 ? (
+            {globalWfhMode ? (
+              <p className="text-xs text-muted-foreground">
+                Everyone can work remotely today. Employees must clock in to mark WFH — no office geofence or late penalties.
+              </p>
+            ) : onWfhToday.length > 0 ? (
               <div className="space-y-2">
-                {(data.onWfhToday ?? []).slice(0, 6).map((p) => (
+                {onWfhToday.slice(0, 6).map((p) => (
                   <div key={p.userId} className="flex items-center gap-2 rounded-lg border p-2">
                     <HrmEmployeeAvatar name={p.userName} avatarUrl={p.avatarUrl} />
                     <p className="text-xs font-medium truncate">{p.userName}</p>
@@ -576,13 +601,19 @@ export function HrmRichDashboard({ data, view }: Props) {
 
       <ChartPanel
         title="Today's attendance"
-        description="Clock-in, hours, and live status"
+        description="Daily grid — same data as the Attendance page"
         icon={Briefcase}
         accent="blue"
         viewAllHref="/hrm/attendance"
-        badge={data.todayAttendance?.length ?? undefined}
+        badge={attendanceRows.length || undefined}
       >
-        <HrmTodayAttendanceTable rows={data.todayAttendance ?? []} />
+        <HrmAttendanceGridPanel
+          rows={attendanceRows}
+          isLoading={attendanceLoading}
+          showEmployee
+          viewStorageKey="hrm-dashboard-attendance-grid"
+          filename="HrmDashboardAttendanceExport"
+        />
       </ChartPanel>
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">

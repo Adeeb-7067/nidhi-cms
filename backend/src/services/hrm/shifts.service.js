@@ -2,10 +2,23 @@ import {
   shiftTemplatesTable,
   shiftAssignmentsTable,
   usersTable,
+  companySettingsTable,
   getNextSequence,
 } from "../../models/schema/index.js";
 import { notFound } from "../../utils/route-errors.js";
 import { eachDateInRange } from "./hrm-date-utils.js";
+import { invalidateSettingsCache } from "../company-settings.js";
+
+/** Canonical default shift: 9:30 AM – 6:00 PM with 30 min break → 8 h expected. */
+export const DEFAULT_OFFICE_SHIFT = {
+  name: "Default Office",
+  startTime: "09:30",
+  endTime: "18:00",
+  graceMinutesIn: 15,
+  breakMinutes: 30,
+  workingDays: [1, 2, 3, 4, 5],
+  isDefault: true,
+};
 
 function parseTimeToMinutes(timeStr) {
   const [h, m] = timeStr.split(":").map(Number);
@@ -13,10 +26,19 @@ function parseTimeToMinutes(timeStr) {
 }
 
 export function computeExpectedMinutes(template) {
-  if (!template) return 0;
+  if (!template?.startTime || !template?.endTime) return 0;
   const start = parseTimeToMinutes(template.startTime);
-  const end = parseTimeToMinutes(template.endTime);
-  return Math.max(0, end - start - (template.breakMinutes ?? 0));
+  let end = parseTimeToMinutes(template.endTime);
+  if (end <= start) end += 24 * 60;
+  const breakMins = template.breakMinutes ?? 0;
+  return Math.max(0, end - start - breakMins);
+}
+
+/** Human-readable expected hours for a shift template (e.g. "8h"). */
+export function formatExpectedHours(template) {
+  const mins = computeExpectedMinutes(template);
+  if (!mins) return "0h";
+  return `${Math.round((mins / 60) * 10) / 10}h`;
 }
 
 export async function listShiftTemplates() {
@@ -91,13 +113,14 @@ export async function resolveShiftForUser(userId, dateStr) {
 
   if (!assignment) return null;
   const template = await shiftTemplatesTable.findOne({ id: assignment.shiftTemplateId }).lean();
-  return resolveShiftTemplateForDate(template, dateStr);
+  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr));
 }
 
 function resolveShiftTemplateForDate(template, dateStr) {
   if (!template) return null;
   const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
-  if (!template.workingDays?.includes(dow)) return null;
+  const workingDays = template.workingDays?.length ? template.workingDays : [1, 2, 3, 4, 5];
+  if (!workingDays.includes(dow)) return null;
   return template;
 }
 
@@ -161,7 +184,7 @@ export async function buildShiftMapForRange(userIds, startDate, endDate, { defau
         if (profileShiftId) template = templateById.get(profileShiftId) ?? null;
       }
       if (!template) template = defaultTemplate;
-      template = resolveShiftTemplateForDate(template, date);
+      template = normalizeShiftTemplate(resolveShiftTemplateForDate(template, date));
       if (template) shiftMap.set(`${userId}:${date}`, template);
     }
   }
@@ -169,19 +192,58 @@ export async function buildShiftMapForRange(userIds, startDate, endDate, { defau
   return shiftMap;
 }
 
-export async function seedDefaultShift(settings) {
-  let tpl = await shiftTemplatesTable.findOne({ name: "Default Office" }).lean();
+export async function seedDefaultShift() {
+  let tpl = await shiftTemplatesTable.findOne({ name: DEFAULT_OFFICE_SHIFT.name }).lean();
   if (!tpl) {
     const id = await getNextSequence("shift_templates");
-    tpl = await shiftTemplatesTable.create({
-      id,
-      name: "Default Office",
-      startTime: "10:00",
-      endTime: "19:00",
-      graceMinutesIn: 15,
-      breakMinutes: 60,
-      workingDays: [1, 2, 3, 4, 5],
-    });
+    tpl = await shiftTemplatesTable.create({ id, ...DEFAULT_OFFICE_SHIFT });
+    return tpl;
   }
+  tpl = await shiftTemplatesTable.findOneAndUpdate(
+    { id: tpl.id },
+    { $set: DEFAULT_OFFICE_SHIFT },
+    { new: true },
+  );
   return tpl;
+}
+
+/** Load the company default shift template document (seeds when missing). */
+export async function getDefaultShiftTemplate(settings) {
+  const id = await resolveDefaultShiftTemplateId(settings);
+  let template = await shiftTemplatesTable.findOne({ id }).lean();
+  if (template?.name === DEFAULT_OFFICE_SHIFT.name) {
+    template = await shiftTemplatesTable.findOneAndUpdate(
+      { id },
+      { $set: DEFAULT_OFFICE_SHIFT },
+      { new: true },
+    );
+  }
+  return normalizeShiftTemplate(template);
+}
+
+function normalizeShiftTemplate(template) {
+  if (!template) return null;
+  return {
+    ...template,
+    workingDays: template.workingDays?.length ? template.workingDays : [1, 2, 3, 4, 5],
+  };
+}
+
+/** Ensure company settings reference a default shift used for expected hours when none is assigned. */
+export async function resolveDefaultShiftTemplateId(settings) {
+  if (settings?.hrmDefaultShiftTemplateId) {
+    const existing = await shiftTemplatesTable
+      .findOne({ id: settings.hrmDefaultShiftTemplateId })
+      .lean();
+    if (existing) return existing.id;
+  }
+  const tpl = await seedDefaultShift();
+  if (settings?.id && settings.hrmDefaultShiftTemplateId !== tpl.id) {
+    await companySettingsTable.updateOne(
+      { id: settings.id },
+      { $set: { hrmDefaultShiftTemplateId: tpl.id } },
+    );
+    invalidateSettingsCache();
+  }
+  return tpl.id;
 }

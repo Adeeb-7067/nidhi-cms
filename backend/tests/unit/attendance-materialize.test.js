@@ -11,7 +11,7 @@ import {
 } from "../../src/services/hrm/attendance-engine.js";
 
 const weekendDays = [0, 6];
-const shift = { startTime: "09:00", graceMinutesIn: 15 };
+const shift = { startTime: "09:00", endTime: "18:00", graceMinutesIn: 15 };
 const timezone = "Asia/Kolkata";
 
 describe("effectiveExpectedMinutes", () => {
@@ -206,6 +206,71 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
       timezone,
     });
     assert.equal(result.status, "absent");
+  });
+});
+
+describe("resolveAttendanceStatus — global WFH (Satyakabir)", () => {
+  test("before clock-in stays absent with globalWfh flag (Scheduled in UI)", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: true,
+      activeMinutes: 0,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: null,
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "absent");
+    assert.equal(result.globalWfh, true);
+    assert.equal(result.compliance, "absent");
+  });
+
+  test("after clock-in marks WFH even when late (no onsite penalty)", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: true,
+      activeMinutes: 480,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T05:30:00.000Z"),
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "wfh");
+    assert.equal(result.globalWfh, true);
+    assert.equal(result.compliance, "met");
+  });
+
+  test("approved individual WFH pre-marks wfh when global mode off", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: { id: 42 },
+      globalWfhMode: false,
+      activeMinutes: 0,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: null,
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "wfh");
+    assert.equal(result.wfhRequestId, 42);
+    assert.equal(result.globalWfh, false);
   });
 });
 

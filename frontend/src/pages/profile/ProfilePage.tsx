@@ -77,10 +77,14 @@ export default function ProfilePage() {
   const isEmployeeProfile = usesEmployeeSelfProfile(user);
   const {
     data: fullEmployeeRecord,
-    isLoading: isLoadingEmployeeRecord,
+    isFetching: isFetchingEmployeeRecord,
+    isError: employeeRecordError,
   } = useTeamEmployeeProfile(user?.id, isEmployeeProfile);
 
-  const employeeProfileSource = (fullEmployeeRecord ?? user) as Record<string, unknown>;
+  const employeeRecordReady =
+    !isEmployeeProfile || (fullEmployeeRecord != null && !isFetchingEmployeeRecord);
+
+  const employeeProfileSource = fullEmployeeRecord as Record<string, unknown> | undefined;
 
   const [profileForm, setProfileForm] = useState({
     name: "",
@@ -302,20 +306,25 @@ export default function ProfilePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {isLoadingEmployeeRecord ? (
+                {!employeeRecordReady ? (
                   <div className="space-y-4">
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-10 w-full" />
                     <Skeleton className="h-32 w-full" />
+                    <p className="text-center text-sm text-muted-foreground">Loading your employee profile…</p>
                   </div>
-                ) : (
+                ) : employeeRecordError ? (
+                  <p className="py-6 text-center text-sm text-destructive">
+                    Could not load your full profile. Refresh the page or try again later.
+                  </p>
+                ) : employeeProfileSource ? (
                   <EmployeeSelfProfileForm
                     user={employeeProfileSource}
                     syncVersion={profileSyncVersion}
                     saving={isSavingProfile}
                     onSave={handleStaffProfileSave}
                   />
-                )}
+                ) : null}
               </CardContent>
             </Card>
           ) : (

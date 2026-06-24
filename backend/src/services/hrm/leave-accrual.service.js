@@ -4,7 +4,7 @@ import {
   usersTable,
   getNextSequence,
 } from "../../models/schema/index.js";
-import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { getOrCreateSettings } from "../company-settings.js";
 import { resolveWorkDayTimezone } from "../work-session-policy.js";
 import { withJobLock } from "../jobs/withJobLock.js";
@@ -144,6 +144,17 @@ function parsePeriodKey(periodKey) {
     throw new Error(`Invalid accrual period key: ${periodKey}`);
   }
   return { year: y, month: m };
+}
+
+/** Calendar month key (YYYY-MM) in the company work-day timezone. */
+export function currentAccrualPeriodKey(now = new Date(), tz) {
+  const { year, month } = localDateParts(now, tz);
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+export function leaveProfileFieldsTouched(patchKeys) {
+  const keys = new Set(patchKeys);
+  return keys.has("leaveAccrualDaysPerMonth") || keys.has("monthlyLeaveQuota") || keys.has("leave");
 }
 
 async function findAccrualLeaveType() {
@@ -292,7 +303,7 @@ export async function runLeaveCarryForward(targetLeaveYear) {
     if (!cfTypes.length) return { carried: 0, employees: 0 };
 
     const staff = await usersTable
-      .find({ role: { $in: staffEmployeeRoles }, status: "active" })
+      .find({ role: { $in: hrmEmployeeRoles }, status: "active" })
       .lean();
 
     let carriedTotal = 0;
@@ -344,8 +355,69 @@ export async function runLeaveCarryForward(targetLeaveYear) {
 }
 
 // ---------------------------------------------------------------------------
-// Monthly accrual (deduped per YYYY-MM)
+// Monthly accrual (deduped per YYYY-MM per user)
 // ---------------------------------------------------------------------------
+
+/**
+ * Credit this employee's monthly paid-leave accrual for `periodKey` if not already done.
+ * Safe to call on balance reads and after admin saves leave quota.
+ */
+export async function ensureUserLeaveAccrualForPeriod(userId, options = {}) {
+  const { periodKey: explicitPeriod, force = false, now = new Date() } = options;
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const periodKey = explicitPeriod ?? currentAccrualPeriodKey(now, tz);
+  const { year, month } = parsePeriodKey(periodKey);
+  const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+  const leaveYear = getLeaveYearForDate(year, month, startMonth);
+
+  const user = await usersTable.findOne({ id: userId }).lean();
+  if (!user || user.status !== "active") return { skipped: "inactive", periodKey };
+  if (!hrmEmployeeRoles.includes(user.role)) return { skipped: "not_hrm_employee", periodKey };
+
+  const days = resolveAccrualDaysPerMonth(user, settings);
+  if (days <= 0) return { skipped: "zero_quota", periodKey };
+
+  if (!force && user.lastLeaveAccrualPeriod === periodKey) {
+    return { skipped: "already_credited", periodKey, leaveYear };
+  }
+
+  const accrualType = await findAccrualLeaveType();
+  if (!accrualType) return { skipped: "no_accrual_leave_type", periodKey };
+
+  if (!force && !user.lastLeaveAccrualPeriod) {
+    const existing = await leaveBalancesTable
+      .findOne({ userId, leaveTypeId: accrualType.id, year: leaveYear })
+      .lean();
+    if (existing && (existing.allocated ?? 0) > 0) {
+      await usersTable.updateOne({ id: userId }, { $set: { lastLeaveAccrualPeriod: periodKey } });
+      await syncUserLeaveAvailable(userId, leaveYear);
+      return { skipped: "legacy_balance_assumed", periodKey, leaveYear };
+    }
+  }
+
+  await runInTx(async (session) => {
+    const sessOpts = session ? { session } : {};
+    const bal = await ensureBalanceRow(user.id, accrualType.id, leaveYear, session);
+    const updated = await leaveBalancesTable.updateOne(
+      { id: bal.id, version: bal.version },
+      { $inc: { allocated: days, version: 1 } },
+      sessOpts,
+    );
+    if (updated.modifiedCount !== 1) {
+      throw new Error(`Accrual conflict for user ${user.id}`);
+    }
+    await usersTable.updateOne(
+      { id: user.id },
+      { $set: { lastLeaveAccrualPeriod: periodKey } },
+      sessOpts,
+    );
+  });
+
+  await syncUserLeaveAvailable(userId, leaveYear);
+
+  return { credited: days, periodKey, leaveYear, leaveTypeId: accrualType.id };
+}
 
 export async function runMonthlyLeaveAccrual(periodKey) {
   const outcome = await withJobLock("hrm_accrual", periodKey, async () => {
@@ -360,32 +432,19 @@ export async function runMonthlyLeaveAccrual(periodKey) {
     }
 
     const staff = await usersTable
-      .find({ role: { $in: staffEmployeeRoles }, status: "active" })
+      .find({ role: { $in: hrmEmployeeRoles }, status: "active" })
       .lean();
 
     let creditedTotal = 0;
     let employeeCount = 0;
 
-    await runInTx(async (session) => {
-      const sessOpts = session ? { session } : {};
-      for (const user of staff) {
-        const days = resolveAccrualDaysPerMonth(user, settings);
-        if (days <= 0) continue;
-
-        const bal = await ensureBalanceRow(user.id, accrualType.id, leaveYear, session);
-        const updated = await leaveBalancesTable.updateOne(
-          { id: bal.id, version: bal.version },
-          { $inc: { allocated: days, version: 1 } },
-          sessOpts,
-        );
-        if (updated.modifiedCount !== 1) {
-          throw new Error(`Accrual conflict for user ${user.id}`);
-        }
-        creditedTotal += days;
+    for (const user of staff) {
+      const result = await ensureUserLeaveAccrualForPeriod(user.id, { periodKey });
+      if (result.credited) {
+        creditedTotal += result.credited;
         employeeCount += 1;
-        await syncUserLeaveAvailable(user.id, leaveYear);
       }
-    });
+    }
 
     await logHrmAudit({
       actorId: null,

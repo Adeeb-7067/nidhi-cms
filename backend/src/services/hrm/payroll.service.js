@@ -31,7 +31,7 @@ import { logHrmAudit } from "./hrm-audit.service.js";
 
 import { getOrCreateSettings } from "../company-settings.js";
 
-import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 
 import { runInTx } from "../../lib/db-tx.js";
 
@@ -230,7 +230,7 @@ export async function getPayrollPreRunChecklist(year, month) {
 
   const staff = await usersTable
 
-    .find({ role: { $in: staffEmployeeRoles }, status: "active" }, { id: 1, name: 1, employeeId: 1 })
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1, name: 1, employeeId: 1 })
 
     .lean();
 
@@ -497,7 +497,7 @@ export async function generatePayrollRun(year, month, actorId) {
 
   const { startDate, endDate } = monthBounds(year, month);
 
-  const staff = await usersTable.find({ role: { $in: staffEmployeeRoles }, status: "active" }).lean();
+  const staff = await usersTable.find({ role: { $in: hrmEmployeeRoles }, status: "active" }).lean();
 
   const { summaries } = await getAttendanceDailySummaries({ startDate, endDate });
 

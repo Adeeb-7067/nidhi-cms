@@ -1,7 +1,7 @@
 import React from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { RoleGate } from "./RoleGate";
-import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
+import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import NotFound from "@/pages/not-found";
 
@@ -627,19 +627,19 @@ export function PageOutlet() {
       <Route path="/hrm/departments"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmDepartments /></RoleGate></Route>
       <Route path="/hrm/employees/:id"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager"]}><HrmEmployeeDetail /></RoleGate></Route>
       <Route path="/hrm/employees"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager"]}><HrmEmployees /></RoleGate></Route>
-      <Route path="/hrm/leave"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmLeave /></RoleGate></Route>
-      <Route path="/hrm/wfh"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmWfh /></RoleGate></Route>
+      <Route path="/hrm/leave"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...HRM_EMPLOYEE_ROLES]}><HrmLeave /></RoleGate></Route>
+      <Route path="/hrm/wfh"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...HRM_EMPLOYEE_ROLES]}><HrmWfh /></RoleGate></Route>
       <Route path="/hrm/shifts"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmShifts /></RoleGate></Route>
       <Route path="/hrm/calendar"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmCalendar /></RoleGate></Route>
       <Route path="/hrm/holidays"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmHolidays /></RoleGate></Route>
-      <Route path="/hrm/attendance"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...MONITORABLE_STAFF_ROLES]}><HrmAttendance /></RoleGate></Route>
+      <Route path="/hrm/attendance"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES, "manager", ...HRM_EMPLOYEE_ROLES]}><HrmAttendance /></RoleGate></Route>
       <Route path="/hrm/payroll"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPayroll /></RoleGate></Route>
       <Route path="/hrm/salary-slips"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmSalarySlips /></RoleGate></Route>
-      <Route path="/hrm/my-attendance"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyAttendance /></RoleGate></Route>
-      <Route path="/hrm/my-leave"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyLeave /></RoleGate></Route>
-      <Route path="/hrm/my-wfh"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyWfh /></RoleGate></Route>
-      <Route path="/hrm/my-payslips"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyPayslips /></RoleGate></Route>
-      <Route path="/hrm/my-holidays"><RoleGate allowedRoles={[...MONITORABLE_STAFF_ROLES]}><HrmMyHolidays /></RoleGate></Route>
+      <Route path="/hrm/my-attendance"><RoleGate allowedRoles={[...HRM_EMPLOYEE_ROLES]}><HrmMyAttendance /></RoleGate></Route>
+      <Route path="/hrm/my-leave"><RoleGate allowedRoles={[...HRM_EMPLOYEE_ROLES]}><HrmMyLeave /></RoleGate></Route>
+      <Route path="/hrm/my-wfh"><RoleGate allowedRoles={[...HRM_EMPLOYEE_ROLES]}><HrmMyWfh /></RoleGate></Route>
+      <Route path="/hrm/my-payslips"><RoleGate allowedRoles={[...HRM_EMPLOYEE_ROLES]}><HrmMyPayslips /></RoleGate></Route>
+      <Route path="/hrm/my-holidays"><RoleGate allowedRoles={[...HRM_EMPLOYEE_ROLES]}><HrmMyHolidays /></RoleGate></Route>
       <Route path="/hrm/settings"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmSettings /></RoleGate></Route>
       <Route path="/hrm/recruitment"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmRecruitment /></RoleGate></Route>
       <Route path="/hrm/onboarding"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmOnboarding /></RoleGate></Route>
@@ -647,7 +647,7 @@ export function PageOutlet() {
       <Route path="/hrm/policies"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPolicies /></RoleGate></Route>
       <Route path="/hrm/audit"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmAudit /></RoleGate></Route>
       <Route path="/hrm">
-        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES, ...MONITORABLE_STAFF_ROLES]}>
+        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES, ...HRM_EMPLOYEE_ROLES]}>
           <HrmDashboard />
         </RoleGate>
       </Route>

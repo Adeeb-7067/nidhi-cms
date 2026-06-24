@@ -279,9 +279,11 @@ export function EmployeeProfileHero({ employee }: { employee: HrmEmployee }) {
 export function EmployeePaidLeaveCard({
   balances,
   overviewBalances,
+  monthlyQuota,
 }: {
   balances: HrmLeaveBalance[];
   overviewBalances: HrmEmployeeOverview["leaveBalances"];
+  monthlyQuota?: number | null;
 }) {
   const elBalance =
     balances.find((b) => b.leaveType?.code === "EL") ??
@@ -315,7 +317,16 @@ export function EmployeePaidLeaveCard({
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold">Paid leave</CardTitle>
         <CardDescription className="text-xs">
-          Monthly accrual balance — grows each month per employee quota. Available now:{" "}
+          {monthlyQuota != null ? (
+            <>
+              Monthly quota:{" "}
+              <span className="font-semibold text-foreground">
+                {monthlyQuota} day{monthlyQuota === 1 ? "" : "s"}/month
+              </span>
+              {" · "}
+            </>
+          ) : null}
+          Accrued balance. Available now:{" "}
           <span className="font-semibold text-foreground">{available} day{available === 1 ? "" : "s"}</span>
         </CardDescription>
       </CardHeader>

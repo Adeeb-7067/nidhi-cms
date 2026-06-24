@@ -43,17 +43,31 @@ import {
 import type { HrmEmployee, HrmShiftTemplate } from "@/modules/hrm/types";
 
 function formatShiftWindow(t: HrmShiftTemplate | undefined) {
-  if (!t) return "—";
-  return `${t.startTime} – ${t.endTime}`;
+  if (!t?.startTime || !t?.endTime) return "—";
+  const startMins =
+    parseInt(t.startTime.slice(0, 2), 10) * 60 + parseInt(t.startTime.slice(3, 5) || "0", 10);
+  let endMins =
+    parseInt(t.endTime.slice(0, 2), 10) * 60 + parseInt(t.endTime.slice(3, 5) || "0", 10);
+  if (endMins <= startMins) endMins += 24 * 60;
+  const expected = Math.max(0, endMins - startMins - (t.breakMinutes ?? 0));
+  const expectedH = Math.round((expected / 60) * 10) / 10;
+  return `${t.startTime} – ${t.endTime} · ${expectedH}h expected`;
+}
+
+function assignmentDateKey(value: string | Date | null | undefined) {
+  if (!value) return "";
+  if (typeof value === "string") return value.slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
 
 function assignmentCoversToday(
-  effectiveFrom: string,
+  effectiveFrom: string | Date,
   effectiveTo?: string | null,
   today = new Date().toISOString().slice(0, 10),
 ) {
-  const from = effectiveFrom.slice(0, 10);
-  const to = effectiveTo?.slice(0, 10) ?? null;
+  const from = assignmentDateKey(effectiveFrom);
+  const to = effectiveTo ? assignmentDateKey(effectiveTo) : null;
   return from <= today && (!to || to >= today);
 }
 
@@ -92,7 +106,7 @@ export default function HrmShiftsPage() {
   const currentShiftByUserId = useMemo(() => {
     const map = new Map<number, number>();
     const sorted = [...(assignData?.assignments ?? [])].sort((a, b) =>
-      b.effectiveFrom.localeCompare(a.effectiveFrom),
+      assignmentDateKey(b.effectiveFrom).localeCompare(assignmentDateKey(a.effectiveFrom)),
     );
     for (const row of sorted) {
       if (map.has(row.userId)) continue;
@@ -132,16 +146,18 @@ export default function HrmShiftsPage() {
   const [tplOpen, setTplOpen] = useState(false);
   const [editing, setEditing] = useState<HrmShiftTemplate | null>(null);
   const [name, setName] = useState("");
-  const [startTime, setStartTime] = useState("10:00");
-  const [endTime, setEndTime] = useState("19:00");
+  const [startTime, setStartTime] = useState("09:30");
+  const [endTime, setEndTime] = useState("18:00");
   const [graceMinutesIn, setGraceMinutesIn] = useState("15");
+  const [breakMinutes, setBreakMinutes] = useState("30");
 
   const openCreate = () => {
     setEditing(null);
     setName("");
-    setStartTime("10:00");
-    setEndTime("19:00");
+    setStartTime("09:30");
+    setEndTime("18:00");
     setGraceMinutesIn("15");
+    setBreakMinutes("30");
     setTplOpen(true);
   };
 
@@ -151,6 +167,7 @@ export default function HrmShiftsPage() {
     setStartTime(t.startTime);
     setEndTime(t.endTime);
     setGraceMinutesIn(String(t.graceMinutesIn ?? 15));
+    setBreakMinutes(String(t.breakMinutes ?? 30));
     setTplOpen(true);
   };
 
@@ -161,7 +178,7 @@ export default function HrmShiftsPage() {
       startTime,
       endTime,
       graceMinutesIn: Number(graceMinutesIn) || 0,
-      breakMinutes: 60,
+      breakMinutes: Number(breakMinutes) || 0,
       workingDays: [1, 2, 3, 4, 5],
     };
     try {
@@ -262,14 +279,17 @@ export default function HrmShiftsPage() {
         className: "min-w-[200px]",
         cell: (e) => {
           const shiftId = resolveEmployeeShiftId(e);
-          const selectValue = shiftId != null ? String(shiftId) : "default";
+          const hasTemplate = shiftId != null && templateById.has(shiftId);
+          const selectValue = hasTemplate ? String(shiftId) : "default";
           const busy = assigningUserId === e.id;
+          const selectDisabled =
+            busy || assignShift.isPending || patchProfile.isPending || tplLoading || assignLoading;
           return (
             <div onClick={(ev) => ev.stopPropagation()}>
               <Select
                 value={selectValue}
                 onValueChange={(v) => void handleShiftAssign(e, v)}
-                disabled={busy || assignShift.isPending || patchProfile.isPending}
+                disabled={selectDisabled}
               >
                 <SelectTrigger className="h-9 w-full min-w-[180px] bg-background">
                   <SelectValue placeholder="Select shift" />
@@ -295,11 +315,13 @@ export default function HrmShiftsPage() {
   }, [
     assignShift.isPending,
     assigningUserId,
+    assignLoading,
     handleShiftAssign,
     patchProfile.isPending,
     resolveEmployeeShiftId,
     templateById,
     templates,
+    tplLoading,
   ]);
 
   const templateColumns = useMemo((): Column<HrmShiftTemplate>[] => [
@@ -449,6 +471,9 @@ export default function HrmShiftsPage() {
               </div>
               <HrmField label="Grace minutes (late threshold)">
                 <Input type="number" min={0} value={graceMinutesIn} onChange={(e) => setGraceMinutesIn(e.target.value)} />
+              </HrmField>
+              <HrmField label="Break minutes (deducted from expected hours)">
+                <Input type="number" min={0} value={breakMinutes} onChange={(e) => setBreakMinutes(e.target.value)} />
               </HrmField>
             </div>
             <DialogFooter>

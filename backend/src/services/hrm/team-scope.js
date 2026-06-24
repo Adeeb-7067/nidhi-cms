@@ -1,7 +1,15 @@
 import { usersTable } from "../../models/schema/index.js";
-import { isHrmAdminRole } from "../../constants/user-roles.js";
-import { forbidden } from "../../utils/route-errors.js";
+import { hrmEmployeeRoles, isHrmAdminRole, isHrmEmployeeRole } from "../../constants/user-roles.js";
+import { forbidden, notFound } from "../../utils/route-errors.js";
 import { userHasPermission } from "../permissions.service.js";
+
+export async function assertHrmEmployeeUser(userId) {
+  const user = await usersTable.findOne({ id: userId }, { id: 1, role: 1 }).lean();
+  if (!user) notFound("Employee");
+  if (!isHrmEmployeeRole(user.role)) {
+    forbidden("HRM applies to company employees only. Freelancers are managed under Team, not HRM.");
+  }
+}
 
 export async function getDirectReportIds(managerId) {
   const rows = await usersTable.find({ reportingManagerId: managerId, status: "active" }, { id: 1 }).lean();
@@ -66,7 +74,11 @@ export async function resolveHrmEmployeeScope(req) {
   if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
   if (req.user.role === "manager") {
     const reports = await getDirectReportIds(req.user.id);
-    return [req.user.id, ...reports];
+    const ids = [req.user.id, ...reports];
+    const rows = await usersTable
+      .find({ id: { $in: ids }, role: { $in: hrmEmployeeRoles } }, { id: 1 })
+      .lean();
+    return rows.map((r) => r.id);
   }
   forbidden("You cannot access the employee directory.");
 }
@@ -81,7 +93,11 @@ export async function resolveScopedUserIds(req, requestedUserId) {
   if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
   if (req.user.role === "manager") {
     const reports = await getDirectReportIds(req.user.id);
-    return [req.user.id, ...reports];
+    const ids = [req.user.id, ...reports];
+    const rows = await usersTable
+      .find({ id: { $in: ids }, role: { $in: hrmEmployeeRoles } }, { id: 1 })
+      .lean();
+    return rows.map((r) => r.id);
   }
   return [req.user.id];
 }

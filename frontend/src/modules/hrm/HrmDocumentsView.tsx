@@ -88,7 +88,11 @@ export function HrmDocumentLibrary({
           <HrmRefListItemContent
             icon={FileText}
             title={doc.name}
-            subtitle={doc.category}
+            subtitle={
+              doc.source === "profile"
+                ? `${doc.category} · from profile`
+                : doc.category
+            }
             active={active}
           />
         );
@@ -107,7 +111,7 @@ export function HrmDocumentLibrary({
                       Download
                     </Button>
                   )}
-                  {canReview && selected.status === "pending" && onApprove && onReject && (
+                  {canReview && selected.status === "pending" && selected.source !== "profile" && onApprove && onReject && (
                     <DocReviewActions
                       disabled={reviewPending}
                       onApprove={() => onApprove(selected)}
@@ -132,15 +136,19 @@ export function HrmDocumentLibrary({
                     />
                   )}
                   <HrmRefDetailRow
+                    label="Source"
+                    value={selected.source === "profile" ? "Employee profile" : "Document library"}
+                  />
+                  <HrmRefDetailRow
                     label="Status"
                     value={<HrmRefStatusPill tone={statusTone(selected.status)}>{selected.status}</HrmRefStatusPill>}
                   />
-                  {selected.createdAt && (
+                  {selected.createdAt ? (
                     <HrmRefDetailRow
                       label="Uploaded"
                       value={format(new Date(selected.createdAt), "PPP")}
                     />
-                  )}
+                  ) : null}
                   {selected.reviewNote && (
                     <HrmRefDetailRow label="Review note" value={selected.reviewNote} />
                   )}

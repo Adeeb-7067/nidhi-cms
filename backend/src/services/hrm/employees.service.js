@@ -1,10 +1,10 @@
-import { usersTable, departmentsTable, payrollLinesTable, payrollRunsTable, sessionsTable, credentialHistoryTable, getNextSequence } from "../../models/schema/index.js";
+import { usersTable, departmentsTable, payrollLinesTable, payrollRunsTable, sessionsTable, credentialHistoryTable, candidatesTable, onboardingRecordsTable, getNextSequence } from "../../models/schema/index.js";
 import { shiftTemplatesTable } from "../../models/schema/hrm/shifts.js";
 import crypto from "crypto";
-import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { formatUser } from "../../mappers/user-format.js";
 import { paginateModel } from "../../utils/mongo-list.js";
-import { badRequest, notFound } from "../../utils/route-errors.js";
+import { badRequest, notFound, conflict } from "../../utils/route-errors.js";
 import { hashPassword, encryptPasswordForHistory } from "../../lib/password.js";
 import { sendHrmEmployeeCredentialsEmail, isEmailConfigured } from "../../lib/email.js";
 import { getOrCreateSettings } from "../company-settings.js";
@@ -105,7 +105,7 @@ export async function listHrmEmployees({
   scopeUserIds,
   pagination,
 }) {
-  const query = { role: { $in: staffEmployeeRoles } };
+  const query = { role: { $in: hrmEmployeeRoles } };
   if (scopeUserIds?.length) query.id = { $in: scopeUserIds };
   if (departmentId != null) query.departmentId = departmentId;
   if (status) query.status = status;
@@ -134,8 +134,83 @@ export async function listHrmEmployees({
   };
 }
 
+async function loadRecruitmentOnboardingLinks() {
+  const candidates = await candidatesTable
+    .find({ stage: "onboarding" }, { email: 1, hiredUserId: 1 })
+    .lean();
+  const emails = new Set(
+    candidates.map((c) => c.email?.trim().toLowerCase()).filter(Boolean),
+  );
+  const userIds = new Set(candidates.map((c) => c.hiredUserId).filter(Boolean));
+  return { emails, userIds };
+}
+
+function isRecruitmentOnboardingMatch(user, links) {
+  const email = user.email?.trim().toLowerCase();
+  return (email && links.emails.has(email)) || links.userIds.has(user.id);
+}
+
+/** Employees who can start onboarding: active staff, plus recruitment "onboarding" hires (any account status). */
+export async function listOnboardingEligibleEmployees() {
+  const [existingRecords, links] = await Promise.all([
+    onboardingRecordsTable.find({}, { userId: 1 }).lean(),
+    loadRecruitmentOnboardingLinks(),
+  ]);
+  const onboardedUserIds = new Set(existingRecords.map((r) => r.userId));
+
+  const orClauses = [{ status: "active" }];
+  if (links.emails.size) {
+    orClauses.push({ email: { $in: [...links.emails] } });
+  }
+  if (links.userIds.size) {
+    orClauses.push({ id: { $in: [...links.userIds] } });
+  }
+
+  const rows = await usersTable
+    .find(
+      {
+        role: { $in: hrmEmployeeRoles },
+        id: { $nin: [...onboardedUserIds] },
+        $or: orClauses,
+      },
+      EMPLOYEE_LIST_PROJECTION,
+    )
+    .sort({ name: 1 })
+    .limit(500)
+    .lean();
+
+  const employees = await enrichEmployees(rows);
+  return employees
+    .map((employee) => ({
+      ...employee,
+      recruitmentOnboarding: isRecruitmentOnboardingMatch(employee, links),
+    }))
+    .sort((a, b) => Number(b.recruitmentOnboarding) - Number(a.recruitmentOnboarding));
+}
+
+export async function assertOnboardingEligibleEmployee(userId) {
+  const user = await usersTable
+    .findOne({ id: userId, role: { $in: hrmEmployeeRoles } }, EMPLOYEE_LIST_PROJECTION)
+    .lean();
+  if (!user) notFound("Employee");
+
+  const existing = await onboardingRecordsTable.findOne({ userId }).lean();
+  if (existing) {
+    conflict("Onboarding already exists for this employee.");
+  }
+
+  if (user.status === "active") return user;
+
+  const links = await loadRecruitmentOnboardingLinks();
+  if (isRecruitmentOnboardingMatch(user, links)) return user;
+
+  badRequest(
+    "Employee is not eligible for onboarding. Set the candidate to Onboarding in Recruitment, or activate the employee account.",
+  );
+}
+
 export async function getHrmEmployeeDetail(userId) {
-  const user = await usersTable.findOne({ id: userId, role: { $in: staffEmployeeRoles } }).lean();
+  const user = await usersTable.findOne({ id: userId, role: { $in: hrmEmployeeRoles } }).lean();
   if (!user) notFound("Employee");
 
   const [employees] = await enrichEmployees([user]);
@@ -206,7 +281,7 @@ function generateTemporaryPassword() {
 
 /** Email login credentials to an HRM employee (employee ID + temporary password). */
 export async function sendEmployeeLoginCredentials(userId, actor, { resend = false } = {}) {
-  const user = await usersTable.findOne({ id: userId, role: { $in: staffEmployeeRoles } }).lean();
+  const user = await usersTable.findOne({ id: userId, role: { $in: hrmEmployeeRoles } }).lean();
   if (!user) notFound("Employee");
   if (!user.email?.trim()) badRequest("Employee has no email address on file.");
   if (!user.employeeId?.trim()) badRequest("Employee has no employee ID assigned.");

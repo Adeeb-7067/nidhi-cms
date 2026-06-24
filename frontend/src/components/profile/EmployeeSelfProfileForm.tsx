@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
@@ -92,6 +92,7 @@ function AddressFields({
 
 export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: Props) {
   const hydrateKey = selfProfileHydrateKey(user);
+  const lastHydrateKeyRef = useRef<string | null>(null);
 
   const form = useForm<SelfProfileFormValues>({
     resolver: zodResolver(selfProfileSchema),
@@ -101,6 +102,9 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
 
   // Hydrate when full employee record loads or after a successful save.
   useEffect(() => {
+    const key = `${hydrateKey}:${syncVersion}`;
+    if (lastHydrateKeyRef.current === key) return;
+    lastHydrateKeyRef.current = key;
     form.reset(mapUserToSelfProfileForm(user));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when server snapshot changes
   }, [hydrateKey, syncVersion]);
@@ -426,7 +430,7 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
               ))}
             </div>
             <EmployeeDocumentsPanel
-              userId={user.id}
+              userId={Number(user.id)}
               canUpload
               canDelete
               fetchEnabled={profileTab === "social"}

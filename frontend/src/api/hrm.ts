@@ -30,7 +30,8 @@ import type {
   HrmAdminPayslipRow,
   HrmPayrollChecklist,
   HrmCandidate,
-  HrmOnboardingTask,
+  HrmOnboardingRecord,
+  HrmOnboardingTaskItem,
   HrmEmployeeDocument,
   HrmPolicy,
   HrmPolicyAcknowledgement,
@@ -163,7 +164,10 @@ export function useCreateShiftTemplate() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: hrmShiftTemplatesQueryKey() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: hrmShiftTemplatesQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+    },
     meta: { errorMessage: "Could not create shift template" },
   });
 }
@@ -176,7 +180,10 @@ export function useUpdateShiftTemplate() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: hrmShiftTemplatesQueryKey() }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: hrmShiftTemplatesQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+    },
     meta: { errorMessage: "Could not update shift template" },
   });
 }
@@ -189,6 +196,7 @@ export function useAssignShift() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "shifts", "assignments"] });
       qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
     },
     meta: { errorMessage: "Could not assign shift" },
   });
@@ -953,7 +961,23 @@ export function useCreateCandidate() {
 export function useUpdateCandidate() {
   const qc = useQueryClient();
   return useHrmMutation({
-    mutationFn: ({ id, ...body }: { id: number; stage?: string; notes?: string; position?: string }) =>
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      stage?: string;
+      notes?: string;
+      position?: string;
+      name?: string;
+      email?: string;
+      phone?: string;
+      departmentId?: number | null;
+      experienceYears?: number;
+      source?: string;
+      rating?: number;
+      resumeUrl?: string;
+    }) =>
       customFetch<HrmCandidate>(apiUrl(`/api/hrm/recruitment/candidates/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -963,15 +987,30 @@ export function useUpdateCandidate() {
   });
 }
 
+export function useDeleteCandidate() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ deleted: boolean }>(apiUrl(`/api/hrm/recruitment/candidates/${id}`), {
+        method: "DELETE",
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] }),
+    meta: { errorMessage: "Could not delete candidate" },
+  });
+}
+
 export function useStartOnboarding() {
   const qc = useQueryClient();
   return useHrmMutation({
     mutationFn: (candidateId: number) =>
-      customFetch<{ tasks: HrmOnboardingTask[] }>(
+      customFetch<{ record: HrmOnboardingRecord }>(
         apiUrl(`/api/hrm/recruitment/candidates/${candidateId}/onboarding`),
         { method: "POST" },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
+    },
     meta: { errorMessage: "Could not start onboarding" },
   });
 }
@@ -980,7 +1019,7 @@ export function useOnboardingTasks(candidateId?: number) {
   return useHrmQuery({
     queryKey: ["hrm", "recruitment", "onboarding", candidateId],
     queryFn: () =>
-      customFetch<{ tasks: HrmOnboardingTask[] }>(
+      customFetch<{ record: HrmOnboardingRecord | null; tasks: HrmOnboardingTaskItem[] }>(
         apiUrl(`/api/hrm/recruitment/candidates/${candidateId}/onboarding`),
       ),
     enabled: !!candidateId,
@@ -988,15 +1027,89 @@ export function useOnboardingTasks(candidateId?: number) {
   });
 }
 
-export function useCompleteOnboardingTask() {
+export function useHrmOnboardingRecords(status?: string) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return useHrmQuery({
+    queryKey: ["hrm", "onboarding", status ?? "all"],
+    queryFn: () =>
+      customFetch<{ records: HrmOnboardingRecord[] }>(apiUrl(`/api/hrm/onboarding${qs}`)),
+    meta: { errorMessage: "Could not load onboarding records" },
+  });
+}
+
+export function useOnboardingEligibleEmployees(options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: ["hrm", "onboarding", "eligible-employees"],
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
+    queryFn: () =>
+      customFetch<{ employees: HrmEmployee[] }>(apiUrl("/api/hrm/onboarding/eligible-employees")),
+    meta: { errorMessage: "Could not load employees for onboarding" },
+  });
+}
+
+export function useCreateOnboardingRecord() {
   const qc = useQueryClient();
   return useHrmMutation({
-    mutationFn: (taskId: number) =>
-      customFetch<HrmOnboardingTask>(apiUrl(`/api/hrm/recruitment/onboarding/${taskId}`), {
-        method: "PATCH",
+    mutationFn: (body: { userId: number; buddyId?: number | null; startDate?: string }) =>
+      customFetch<{ record: HrmOnboardingRecord }>(apiUrl("/api/hrm/onboarding"), {
+        method: "POST",
+        body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] }),
-    meta: { errorMessage: "Could not complete task" },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding", "eligible-employees"] });
+    },
+    meta: { errorMessage: "Could not start onboarding" },
+  });
+}
+
+export function useUpdateOnboardingRecord() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      buddyId?: number | null;
+      startDate?: string;
+      status?: "active" | "complete";
+    }) =>
+      customFetch<{ record: HrmOnboardingRecord }>(apiUrl(`/api/hrm/onboarding/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] }),
+    meta: { errorMessage: "Could not update onboarding" },
+  });
+}
+
+export function useToggleOnboardingTask() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({ recordId, taskIndex }: { recordId: number; taskIndex: number }) =>
+      customFetch<{ record: HrmOnboardingRecord }>(
+        apiUrl(`/api/hrm/onboarding/${recordId}/tasks/${taskIndex}`),
+        { method: "PATCH" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] });
+    },
+    meta: { errorMessage: "Could not update task" },
+  });
+}
+
+export function useDeleteOnboardingRecord() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ deleted: boolean }>(apiUrl(`/api/hrm/onboarding/${id}`), {
+        method: "DELETE",
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] }),
+    meta: { errorMessage: "Could not remove onboarding" },
   });
 }
 

@@ -20,7 +20,7 @@ import { computeUserDaySummary, materializeUserAttendanceDay } from "./attendanc
 import { eachDateInRange, getHrmPolicyContext, workDayKeyForDate, normalizeDateKey } from "./hrm-date-utils.js";
 
 import { logHrmAudit } from "./hrm-audit.service.js";
-import { staffEmployeeRoles } from "../../constants/user-roles.js";
+import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { canUserReviewLeaveRequest } from "./leave-approval.js";
 
 
@@ -93,8 +93,6 @@ export async function getAttendanceDailySummaries({
 
 
 
-  const todayKey = workDayKeyForDate(new Date(), ctx.timezone);
-
   const persistedMap = await loadPersistedSummaries(ctx.userIds, startDate, endDate, userMetaById);
 
 
@@ -117,15 +115,13 @@ export async function getAttendanceDailySummaries({
 
 
 
-      // Prefer payroll-locked and manual/admin overrides; recompute engine rows live.
+      // Payroll-locked and manual corrections stay as stored; engine rows always recompute (shift-aware expected hours).
       if (
         persisted &&
         (
           persisted.lockedForPayroll ||
-          (
-            persisted.source !== "engine" &&
-            (date < todayKey || persisted.source === "admin_override" || persisted.source === "manual_correction")
-          )
+          persisted.source === "admin_override" ||
+          persisted.source === "manual_correction"
         )
       ) {
 
@@ -385,7 +381,7 @@ export async function buildDashboardStatsFromSummaries(todaySummaries, scopeUser
     attendanceCorrectionsTable.countDocuments({ ...pendingQuery, status: "pending" }),
     scopeUserIds?.length
       ? Promise.resolve(scopeUserIds.length)
-      : usersTable.countDocuments({ role: { $in: staffEmployeeRoles }, status: "active" }),
+      : usersTable.countDocuments({ role: { $in: hrmEmployeeRoles }, status: "active" }),
   ]);
 
   return {

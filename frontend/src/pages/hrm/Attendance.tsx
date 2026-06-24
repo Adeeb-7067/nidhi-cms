@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useListUsers, getListUsersQueryKey } from "@/api/generated/api";
+import type { User } from "@/api/generated/api.schemas";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHero,
@@ -32,15 +33,16 @@ import {
   HrmTabsTrigger,
   HrmFilterBar,
   HrmField,
-  HrmAttendanceBadge,
   HrmWorkflowBadge,
   HrmApprovalActions,
   portalActionButtonClass,
   HrmInsightBanner,
 } from "@/modules/hrm/components";
 import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
+import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
 import type { HrmAttendanceCorrection, HrmAttendanceSummary } from "@/modules/hrm/types";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import type { HrmKpiItem } from "@/modules/hrm/components";
 import {
   useApplyAttendanceCorrection,
   useHrmAttendanceCorrections,
@@ -65,6 +67,12 @@ import { toast } from "sonner";
 type AttendanceRow = HrmAttendanceSummary;
 
 const CLOCKABLE_ROLES = new Set(["manager", "developer", "tester", "qa", "freelancer"]);
+
+function staffUsersFromListResponse(
+  payload: { data?: { users?: User[] }; users?: User[] } | undefined,
+): User[] {
+  return payload?.data?.users ?? payload?.users ?? [];
+}
 
 export default function HrmAttendancePage() {
   const { user } = useAuth();
@@ -129,10 +137,10 @@ export default function HrmAttendancePage() {
   });
   const employeeOptions = useMemo(
     () =>
-      (staffData?.users ?? [])
+      staffUsersFromListResponse(staffData)
         .filter((u) => u.status === "active" && CLOCKABLE_ROLES.has(u.role))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [staffData?.users],
+    [staffData],
   );
 
   const { data, isLoading } = useHrmAttendanceDaily(
@@ -155,7 +163,7 @@ export default function HrmAttendancePage() {
   const reviewCorrection = useReviewAttendanceCorrection();
   const excuseLate = useExcuseLateArrival();
   const adminOverride = useAdminOverrideAttendance();
-  const { data: hrmSettings } = useHrmSettings({ enabled: adjustOpen || excuseOpen });
+  const { data: hrmSettings } = useHrmSettings();
 
   const rows = useMemo(() => {
     let list = data?.summaries ?? [];
@@ -193,14 +201,24 @@ export default function HrmAttendancePage() {
   const kpiItems = useMemo(() => {
     const list = data?.summaries ?? [];
     const present = list.filter((r) => isPresentLikeStatus(r.status)).length;
-    const absent = list.filter((r) => r.status === "absent").length;
+    const absent = list.filter((r) => r.status === "absent" && !(r.globalWfh && r.status === "absent")).length;
+    const scheduled = list.filter((r) => r.globalWfh && r.status === "absent").length;
     const onLeave = list.filter((r) => r.status === "on_leave").length;
     const wfh = list.filter((r) => r.status === "wfh").length;
     const halfDay = list.filter((r) => r.status === "half_day").length;
     const holiday = list.filter((r) => r.status === "holiday").length;
-    const items = [
+    const items: HrmKpiItem[] = [
       { label: canAdmin ? "Present / onsite / WFH" : "Present days", value: present, hint: canAdmin ? "This period" : "This period", icon: UserCheck, accent: "green" as const },
       { label: "Absent", value: absent, hint: "Marked absent", icon: UserX, accent: "blue" as const, alert: absent > 0 },
+      ...(scheduled > 0
+        ? [{
+            label: "Scheduled",
+            value: scheduled,
+            hint: "Awaiting clock-in (global WFH)",
+            icon: Home,
+            accent: "blue" as const,
+          }]
+        : []),
       { label: "On leave", value: onLeave, hint: "Approved leave", icon: CalendarClock, accent: "violet" as const },
       {
         label: canAdmin ? "Pending corrections" : "WFH days",
@@ -225,9 +243,9 @@ export default function HrmAttendancePage() {
     const onsite = list.filter(
       (r) => isPresentLikeStatus(r.status) && r.status !== "wfh" && !r.globalWfh,
     ).length;
-    const wfh = list.filter((r) => r.status === "wfh" || r.globalWfh).length;
-    const remoteDefault = list.filter((r) => r.globalWfh && r.status !== "wfh").length;
-    return { onsite, wfh, remoteDefault };
+    const wfh = list.filter((r) => r.status === "wfh").length;
+    const awaitingClock = list.filter((r) => r.globalWfh && r.status !== "wfh").length;
+    return { onsite, wfh, remoteDefault: awaitingClock };
   }, [data?.summaries]);
 
   const showCorrectionStatus = correctionRequestType === "full_day" || correctionRequestType === "wrong_time";
@@ -289,111 +307,6 @@ export default function HrmAttendancePage() {
     setExcuseNote("");
     setExcuseOpen(true);
   };
-
-  const attendanceStatusSuffix = (r: AttendanceRow) =>
-    (r.forgivenLate ? " (excused)" : "") +
-    (r.corrected ? " · corrected" : "") +
-    (r.missingClockOut ? " · no clock-out" : "") +
-    (r.globalWfh ? " · global WFH" : "") +
-    (r.source === "admin_override" ? " · manual" : "");
-
-  const gridColumns = useMemo((): Column<AttendanceRow>[] => {
-    const cols: Column<AttendanceRow>[] = [];
-    if (canAdmin) {
-      cols.push({
-        id: "employee",
-        header: "Employee",
-        accessorKey: "userName",
-        cell: (r) => <span className="font-medium">{r.userName}</span>,
-      });
-    }
-    cols.push(
-      {
-        id: "date",
-        header: "Date",
-        accessorKey: "date",
-        cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
-      },
-      {
-        id: "status",
-        header: "Status",
-        cell: (r) => <HrmAttendanceBadge status={r.status} suffix={attendanceStatusSuffix(r)} />,
-        exportValue: (r) => `${r.status}${attendanceStatusSuffix(r)}`,
-      },
-      {
-        id: "workMode",
-        header: "Work mode",
-        cell: (r) => {
-          if (r.status === "wfh" || r.globalWfh) {
-            return (
-              <Badge variant="outline" className="text-[10px] border-blue-500/20 bg-blue-500/10 text-blue-700">
-                <Home className="mr-1 inline h-3 w-3" />
-                WFH
-              </Badge>
-            );
-          }
-          if (isPresentLikeStatus(r.status) || r.status === "onsite") {
-            return (
-              <Badge variant="outline" className="text-[10px] border-teal-500/20 bg-teal-500/10 text-teal-700">
-                Onsite
-              </Badge>
-            );
-          }
-          return <span className="text-muted-foreground">—</span>;
-        },
-      },
-      {
-        id: "active",
-        header: "Active",
-        cell: (r) => `${Math.round((r.activeMinutes / 60) * 10) / 10}h`,
-        exportValue: (r) => String(Math.round((r.activeMinutes / 60) * 10) / 10),
-      },
-      {
-        id: "expected",
-        header: "Expected",
-        cell: (r) => `${Math.round((r.expectedMinutes / 60) * 10) / 10}h`,
-        exportValue: (r) => String(Math.round((r.expectedMinutes / 60) * 10) / 10),
-      },
-      { id: "sessions", header: "Sessions", accessorKey: "sessionCount" },
-    );
-    if (canManage) {
-      cols.push({
-        id: "actions",
-        header: "Actions",
-        className: "text-right",
-        cell: (r) => {
-          const isLateOnsite = normalizeAttendanceStatus(r.status) === "onsite" && !r.forgivenLate;
-          return (
-            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-              {isLateOnsite && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs"
-                  disabled={excuseLate.isPending}
-                  onClick={() => openExcuseDialog(r)}
-                >
-                  <Clock className="mr-1 h-3 w-3" />
-                  Excuse
-                </Button>
-              )}
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                disabled={adminOverride.isPending}
-                onClick={() => openAdjustDialog(r)}
-              >
-                <Pencil className="mr-1 h-3 w-3" />
-                Adjust
-              </Button>
-            </div>
-          );
-        },
-      });
-    }
-    return cols;
-  }, [canAdmin, canManage, excuseLate.isPending, adminOverride.isPending]);
 
   type VarianceRow = {
     userId: number;
@@ -624,6 +537,13 @@ export default function HrmAttendancePage() {
           }
         />
 
+        {hrmSettings?.hrmGlobalWfhMode && canAdmin ? (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-800 dark:text-sky-200">
+            <Home className="h-4 w-4 shrink-0" />
+            Company-wide WFH is active — employees clock in from anywhere; status becomes WFH after clock-in (no late penalties).
+          </div>
+        ) : null}
+
         <HrmPageKpiRow items={kpiItems} loading={isLoading} />
 
         {canAdmin && (periodMode === "today" || periodMode === "yesterday") && (
@@ -631,7 +551,7 @@ export default function HrmAttendancePage() {
             <p className="text-xs text-muted-foreground">
               {workModeSummary.onsite} onsite · {workModeSummary.wfh} WFH
               {workModeSummary.remoteDefault > 0
-                ? ` · ${workModeSummary.remoteDefault} under global WFH policy`
+                ? ` · ${workModeSummary.remoteDefault} awaiting clock (global WFH)`
                 : ""}
             </p>
           </HrmInsightBanner>
@@ -747,16 +667,52 @@ export default function HrmAttendancePage() {
           </HrmTabsList>
 
           <TabsContent value="grid" className="space-y-4 m-0">
-            <PortalTablePanel isLoading={isLoading}>
-              <AdvancedTable
-                data={rows}
-                columns={gridColumns}
-                searchKey={canAdmin ? "userName" : undefined}
-                searchPlaceholder="Filter employees…"
-                filename="HrmAttendanceGridExport"
-                viewStorageKey="hrm-attendance-grid"
-              />
-            </PortalTablePanel>
+            <HrmAttendanceGridPanel
+              rows={rows}
+              isLoading={isLoading}
+              showEmployee={canAdmin}
+              extraColumns={
+                canManage
+                  ? [
+                      {
+                        id: "actions",
+                        header: "Actions",
+                        className: "text-right",
+                        cell: (r) => {
+                          const isLateOnsite =
+                            normalizeAttendanceStatus(r.status) === "onsite" && !r.forgivenLate;
+                          return (
+                            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                              {isLateOnsite && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-xs"
+                                  disabled={excuseLate.isPending}
+                                  onClick={() => openExcuseDialog(r)}
+                                >
+                                  <Clock className="mr-1 h-3 w-3" />
+                                  Excuse
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs"
+                                disabled={adminOverride.isPending}
+                                onClick={() => openAdjustDialog(r)}
+                              >
+                                <Pencil className="mr-1 h-3 w-3" />
+                                Adjust
+                              </Button>
+                            </div>
+                          );
+                        },
+                      },
+                    ]
+                  : undefined
+              }
+            />
           </TabsContent>
 
           <TabsContent value="variance" className="space-y-4 m-0">
