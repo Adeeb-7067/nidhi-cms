@@ -7,6 +7,7 @@ import { loadClientContext } from "../services/client-team.js";
 // Trade-off: a deactivated or role-changed user has up to 30 s before the
 // change is reflected. Acceptable for this app's team size and threat model.
 const AUTH_CACHE_TTL_MS = 30_000;
+const AUTH_CACHE_MAX = 2000; // evict oldest entry when full to prevent unbounded growth
 const _authCache = new Map(); // userId → { data: UserDoc, expiresAt: number }
  
 async function getCachedUser(userId) {
@@ -20,6 +21,9 @@ async function getCachedUser(userId) {
   );
 
   if (user?.status === "active") {
+    if (_authCache.size >= AUTH_CACHE_MAX) {
+      _authCache.delete(_authCache.keys().next().value);
+    }
     _authCache.set(userId, { data: user, expiresAt: now + AUTH_CACHE_TTL_MS });
   } else {
     // Never cache inactive or missing users — they must pass a fresh DB check.

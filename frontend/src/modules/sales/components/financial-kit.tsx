@@ -135,18 +135,34 @@ export function InstallmentCard({
   href,
   compact,
 }: {
-  installment: Installment;
+  installment: {
+    id: number;
+    name: string;
+    dueAmount: number;
+    paidAmount: number;
+    dueDate: string;
+    status: Installment["status"];
+    projectId?: number;
+    projectName?: string;
+    invoiceId?: number | null;
+    invoiceNumber?: string;
+  };
   href?: string;
   compact?: boolean;
 }) {
   const remaining = calcRemaining(installment.dueAmount, installment.paidAmount);
+  const projectLabel =
+    installment.projectName ??
+    (`projectId` in installment ? `Project #${(installment as { projectId: number }).projectId}` : null);
   const content = (
     <Card className={cn("transition-colors hover:border-primary/30", href && "cursor-pointer")}>
       <CardContent className={cn("p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2 mb-2">
           <div>
             <p className="text-sm font-semibold">{installment.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">{installment.projectName}</p>
+            {projectLabel && (
+              <p className="text-[10px] text-muted-foreground truncate">{projectLabel}</p>
+            )}
           </div>
           <SalesStatusBadge variant="installment" value={installment.status} />
         </div>

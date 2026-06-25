@@ -1,33 +1,18 @@
 import { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, IndianRupee, Plus } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  getInstallmentById,
-  getPartialPaymentsByInstallment,
-  getProjectById,
-} from "@/modules/sales/mock-data";
+  useGetInstallment,
+  useListPayments,
+  useGetInvoice,
+} from "@/api/sales";
 import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
+import { paymentToPartial } from "@/modules/sales/adapters";
 import {
   SalesPageHeader,
   SalesStatusBadge,
@@ -36,24 +21,35 @@ import {
   PaymentHistoryTable,
   PaymentTimeline,
   OutstandingBadge,
+  RecordPaymentDialog,
 } from "@/modules/sales/components";
-import { toast } from "sonner";
 
 export default function InstallmentDetailPage() {
   const [, params] = useRoute("/sales/installments/:id");
   const installmentId = Number(params?.id);
-  const installment = getInstallmentById(installmentId);
-  const payments = getPartialPaymentsByInstallment(installmentId);
-  const project = installment ? getProjectById(installment.projectId) : undefined;
-  const [amount, setAmount] = useState("");
-  const [mode, setMode] = useState("bank_transfer");
-  const [open, setOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
-  if (!installment) {
+  const { data: installment, isLoading, isError } = useGetInstallment(installmentId, !!installmentId);
+  const { data: invoice } = useGetInvoice(installment?.invoiceId ?? 0, !!installment?.invoiceId);
+  const { data: paymentsData } = useListPayments(
+    invoice?.id ? { invoiceId: invoice.id } : undefined,
+    !!invoice?.id,
+  );
+
+  if (isLoading) {
+    return (
+      <PortalPageShell>
+        <Skeleton className="h-10 w-48 mb-4" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </PortalPageShell>
+    );
+  }
+
+  if (isError || !installment) {
     return (
       <SalesEmptyState
         title="Installment not found"
-        description={`No installment #${installmentId} in demo data.`}
+        description={`No installment #${installmentId} exists.`}
         actionLabel="Back to installments"
         onAction={() => window.history.back()}
       />
@@ -61,18 +57,13 @@ export default function InstallmentDetailPage() {
   }
 
   const remaining = calcRemaining(installment.dueAmount, installment.paidAmount);
-
-  const handleRecordPayment = () => {
-    toast.success(`Payment of ${formatCurrency(Number(amount) || 0)} recorded (demo)`);
-    setOpen(false);
-    setAmount("");
-  };
+  const payments = (paymentsData?.payments ?? []).map(paymentToPartial);
 
   return (
     <PortalPageShell>
       <SalesPageHeader
         title={installment.name}
-        description={`${installment.projectName} · ${installment.customerName}`}
+        description={`Project #${installment.projectId} · Customer #${installment.customerId}`}
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Installments", href: "/sales/installments" },
@@ -91,9 +82,9 @@ export default function InstallmentDetailPage() {
       <div className="flex flex-wrap items-center gap-2">
         <SalesStatusBadge variant="installment" value={installment.status} />
         <OutstandingBadge amount={remaining} />
-        {installment.invoiceNumber && (
-          <Link href={`/sales/invoices/${installment.invoiceId}`} className="text-xs text-primary hover:underline font-mono">
-            {installment.invoiceNumber}
+        {invoice && (
+          <Link href={`/sales/invoices/${invoice.id}`} className="text-xs text-primary hover:underline font-mono">
+            {invoice.number}
           </Link>
         )}
       </div>
@@ -103,54 +94,22 @@ export default function InstallmentDetailPage() {
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Installment progress</CardTitle>
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="h-8 gap-1.5" disabled={remaining <= 0}>
-                    <Plus className="h-3.5 w-3.5" />
-                    Record payment
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Record partial payment</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-3 pt-2">
-                    <div className="rounded-lg bg-muted/40 p-3 text-xs">
-                      Remaining balance: <span className="font-bold">{formatCurrency(remaining)}</span>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Amount (INR)</Label>
-                      <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="10000" className="mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Payment mode</Label>
-                      <Select value={mode} onValueChange={setMode}>
-                        <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="bank_transfer">Bank transfer</SelectItem>
-                          <SelectItem value="upi">UPI</SelectItem>
-                          <SelectItem value="cheque">Cheque</SelectItem>
-                          <SelectItem value="cash">Cash</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs">Transaction ID</Label>
-                      <Input placeholder="NEFT-xxx" className="mt-1" />
-                    </div>
-                    <div>
-                      <Label className="text-xs">Notes</Label>
-                      <Textarea placeholder="Optional notes…" className="mt-1 min-h-[72px]" />
-                    </div>
-                    <Button className="w-full" onClick={handleRecordPayment}>
-                      <IndianRupee className="h-4 w-4 mr-1.5" />
-                      Save payment & generate receipt
-                    </Button>
-                  </div>
-                </DialogContent>
-              </Dialog>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5"
+                disabled={remaining <= 0 || !invoice}
+                onClick={() => setPaymentOpen(true)}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Record payment
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!invoice && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  Link an invoice to this installment before recording payments.
+                </p>
+              )}
               <InstallmentProgress paid={installment.paidAmount} total={installment.dueAmount} />
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <div><p className="text-muted-foreground">Due amount</p><p className="font-bold">{formatCurrency(installment.dueAmount)}</p></div>
@@ -167,23 +126,24 @@ export default function InstallmentDetailPage() {
           </Card>
         </div>
 
-        <div className="space-y-4">
-          {project && (
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Project summary</CardTitle></CardHeader>
-              <CardContent className="text-xs space-y-2">
-                <p className="font-semibold">{project.name}</p>
-                <InstallmentProgress paid={project.paidAmount} total={project.totalAmount} />
-                <p className="text-muted-foreground">Total {formatCurrency(project.totalAmount)}</p>
-              </CardContent>
-            </Card>
-          )}
-          <Card>
-            <CardHeader className="pb-2"><CardTitle className="text-sm">Payment timeline</CardTitle></CardHeader>
-            <CardContent><PaymentTimeline payments={payments} /></CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Payment timeline</CardTitle></CardHeader>
+          <CardContent>
+            <PaymentTimeline payments={payments} />
+            {payments.length === 0 && (
+              <p className="text-xs text-muted-foreground">No payments yet.</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {invoice && (
+        <RecordPaymentDialog
+          open={paymentOpen}
+          onOpenChange={setPaymentOpen}
+          defaultInvoiceId={invoice.id}
+        />
+      )}
     </PortalPageShell>
   );
 }

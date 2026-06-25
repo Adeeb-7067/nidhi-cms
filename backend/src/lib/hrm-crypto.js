@@ -1,48 +1,52 @@
-import { encryptSecret, decryptSecret } from "./inventory-crypto.js";
+import crypto from "crypto";
+
+const ALGO = "aes-256-gcm";
+
+// HRM uses its own key so rotating inventory credentials doesn't affect
+// payroll PII (bank accounts, PAN) and vice versa.
+// Set HRM_ENCRYPTION_KEY in .env; falls back to SESSION_SECRET for existing
+// single-key deployments, but never to a hardcoded string.
+// Key is cached at module scope — scryptSync is intentionally slow and must
+// not run on every encrypt/decrypt call.
+let _cachedHrmKey = null;
+function getHrmKey() {
+  if (_cachedHrmKey) return _cachedHrmKey;
+  const secret = process.env.HRM_ENCRYPTION_KEY || process.env.SESSION_SECRET;
+  if (!secret) throw new Error("HRM_ENCRYPTION_KEY (or SESSION_SECRET) must be set — refusing to encrypt payroll PII with a hardcoded key.");
+  _cachedHrmKey = crypto.scryptSync(secret, "nexus-hrm-salt", 32);
+  return _cachedHrmKey;
+}
+
+function encryptSecret(plaintext) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv(ALGO, getHrmKey(), iv);
+  const enc = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  return { encrypted: enc.toString("base64"), iv: iv.toString("base64"), authTag: authTag.toString("base64") };
+}
+
+function decryptSecret(encrypted, iv, authTag) {
+  const decipher = crypto.createDecipheriv(ALGO, getHrmKey(), Buffer.from(iv, "base64"));
+  decipher.setAuthTag(Buffer.from(authTag, "base64"));
+  const dec = Buffer.concat([decipher.update(Buffer.from(encrypted, "base64")), decipher.final()]);
+  return dec.toString("utf8");
+}
 
 /**
- * Thin HRM-facing wrapper around the platform's AES-256-GCM secret encryption
- * (lib/inventory-crypto.js). The mechanism, key derivation, and on-disk
- * layout are identical to how InventoryCredentials encrypts vendor passwords —
- * that's the platform's existing pattern for "sensitive secrets at rest."
- *
- * Why a separate file:
- *   - Call sites in services/hrm/* are explicit about which subsystem they
- *     belong to (grep-ability for the security review).
- *   - If HR ever needs a different key (e.g. dedicated HRM_ENCRYPTION_KEY env)
- *     we only flip one import; today it reuses inventory-crypto's getKey()
- *     which itself falls back to SESSION_SECRET.
- *
- * Storage convention (recommended): on the Mongoose doc, persist three fields
- * per encrypted value. Example for bankAccountNumber:
- *   bankAccountNumber:           String  (the ciphertext, base64)
- *   bankAccountNumberIv:         String  (base64)
- *   bankAccountNumberAuthTag:    String  (base64)
- *
- * Or use `encryptToObject` / `decryptFromObject` below if you prefer storing
- * the three parts in a sub-document.
+ * Storage convention: three flat fields per encrypted value on the Mongoose doc.
+ *   bankAccountNumber:        String  (ciphertext, base64)
+ *   bankAccountNumberIv:      String  (base64)
+ *   bankAccountNumberAuthTag: String  (base64)
  */
 
-/**
- * Encrypts a plaintext string. Returns null when the input is empty/nullish
- * so callers can pass model fields through directly.
- *
- * @param {string | null | undefined} plaintext
- * @returns {{ ciphertext: string, iv: string, authTag: string } | null}
- */
+/** Returns null on empty input so callers can pass model fields through directly. */
 export function encryptHrm(plaintext) {
   if (plaintext == null || plaintext === "") return null;
   const { encrypted, iv, authTag } = encryptSecret(String(plaintext));
   return { ciphertext: encrypted, iv, authTag };
 }
 
-/**
- * Decrypts a previously-encrypted value. Returns null when any of the three
- * parts is missing — useful for partially-populated legacy rows.
- *
- * @param {{ ciphertext?: string, iv?: string, authTag?: string } | null | undefined} parts
- * @returns {string | null}
- */
+/** Returns null when any part is missing — handles partially-populated legacy rows. */
 export function decryptHrm(parts) {
   if (!parts) return null;
   const { ciphertext, iv, authTag } = parts;

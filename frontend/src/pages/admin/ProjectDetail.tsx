@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { 
@@ -23,7 +24,19 @@ import {
   useUpdateMilestone,
   useGetProjectHistory,
   getGetProjectHistoryQueryKey,
+  useListTasks,
+  getListTasksQueryKey,
   type Milestone,
+  type Project,
+  type ProjectAnalytics,
+  type ApkRelease,
+  type RequestListResult,
+  type AuditLog,
+  type WorkTask,
+  type ProjectMember,
+  type BugListResult,
+  type LogListResult,
+  type CommentListResult,
 } from "@/api";
 import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-dialog";
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
@@ -74,6 +87,9 @@ import { isDeveloperRole } from "@/lib/navigation";
 import { getProjectsListHref } from "@/lib/project-routes";
 import { ProjectPriorityBanner } from "@/components/project/ProjectPriorityBanner";
 import { ProjectTeamPanel } from "@/components/project/ProjectTeamPanel";
+import { ProjectTasksPanel } from "@/components/project/ProjectTasksPanel";
+import { ProjectTicketsPanel } from "@/components/project/ProjectTicketsPanel";
+import { ProjectClientTeamPanel } from "@/components/project/ProjectClientTeamPanel";
 import { getDiscussionsHref } from "@/lib/discussions-navigation";
 import { commentThreadQueryParams } from "@/lib/comment-thread-query";
 
@@ -92,7 +108,7 @@ function milestoneDateInput(iso: string) {
 }
 
 export default function AdminProjectDetail() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const [, setLocation] = useLocation();
   const projectId = Number(id);
   const discussionsHref = getDiscussionsHref(projectId);
@@ -135,49 +151,68 @@ export default function AdminProjectDetail() {
 
   const validProjectId = !!projectId && !Number.isNaN(projectId);
 
-  const { data: project, isLoading } = useGetProject(projectId, {
+  const { data: _projectRaw, isLoading } = useGetProject(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectQueryKey(projectId) },
   });
+  const project = _projectRaw as unknown as Project | undefined;
 
-  const { data: members } = useGetProjectMembers(projectId, {
+  const { data: _membersRaw } = useGetProjectMembers(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectMembersQueryKey(projectId) }
   });
+  const members = _membersRaw as unknown as ProjectMember[] | undefined;
 
-  const { data: analytics } = useGetProjectAnalytics(projectId, {
+  const { data: _analyticsRaw } = useGetProjectAnalytics(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectAnalyticsQueryKey(projectId) }
   });
+  const analytics = _analyticsRaw as unknown as ProjectAnalytics | undefined;
 
-  const { data: apks } = useGetApkReleases(projectId, {
+  const { data: _apksRaw } = useGetApkReleases(projectId, {
     query: { enabled: validProjectId, queryKey: getGetApkReleasesQueryKey(projectId) }
   });
+  const apks = _apksRaw as unknown as ApkRelease[] | undefined;
 
-  const { data: bugs } = useGetProjectBugs(projectId, {
+  const { data: _bugsRaw } = useGetProjectBugs(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectBugsQueryKey(projectId) }
   });
+  const bugs = _bugsRaw as unknown as BugListResult | undefined;
 
-  const { data: logs } = useGetProjectLogs(projectId, {
+  const { data: _logsRaw } = useGetProjectLogs(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectLogsQueryKey(projectId) }
   });
+  const logs = _logsRaw as unknown as LogListResult | undefined;
 
   const projectCommentsParams = commentThreadQueryParams("project", projectId);
-  const { data: comments } = useListComments(projectCommentsParams, {
+  const { data: _commentsRaw } = useListComments(projectCommentsParams, {
     query: {
       enabled: validProjectId,
       queryKey: getListCommentsQueryKey(projectCommentsParams),
     },
   });
+  const comments = _commentsRaw as unknown as CommentListResult | undefined;
 
-  const { data: requests } = useListRequests({ projectId, limit: 50 }, {
+  const { data: _requestsRaw } = useListRequests({ projectId, limit: 50 }, {
     query: { enabled: validProjectId, queryKey: getListRequestsQueryKey({ projectId, limit: 50 }) }
   });
+  const requests = _requestsRaw as unknown as RequestListResult | undefined;
 
-  const { data: milestones } = useGetProjectMilestones(projectId, {
+  const { data: _milestonesRaw } = useGetProjectMilestones(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectMilestonesQueryKey(projectId) }
   });
+  const milestones = _milestonesRaw as unknown as Milestone[] | undefined;
   
-  const { data: history } = useGetProjectHistory(projectId, {
+  const { data: _historyRaw } = useGetProjectHistory(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectHistoryQueryKey(projectId) }
   });
+  const history = _historyRaw as unknown as AuditLog[] | undefined;
+
+  const tasksParams = validProjectId ? { projectId, scope: "all" as const, limit: 100 } : undefined;
+  const { data: tasksData } = useListTasks(tasksParams, {
+    query: {
+      enabled: validProjectId && !!tasksParams,
+      queryKey: tasksParams ? getListTasksQueryKey(tasksParams) : ["tasks", "project-hub", "idle"],
+    },
+  });
+  const projectTasks = (tasksData as unknown as { tasks: WorkTask[] })?.tasks ?? [];
 
   const [activeTab, setActiveTab] = useState<ProjectHubTab>("overview");
   const [milestoneOpen, setMilestoneOpen] = useState(false);
@@ -257,8 +292,9 @@ export default function AdminProjectDetail() {
         await createMilestoneMutation.mutateAsync({
           id: projectId,
           data: {
-            ...rest,
+            title: rest.title,
             plannedDate: targetDate,
+            ...(rest.status !== undefined ? { status: rest.status } : {}),
             ...(assigneePayload != null ? { assigneeId: assigneePayload } : {}),
           },
         });
@@ -666,7 +702,7 @@ export default function AdminProjectDetail() {
                 bugs={bugs?.bugs ?? []}
                 onOpenBug={(bug) => {
                   setDetailBugId(bug.id);
-                  setDetailIssueKey(bug.issueKey ?? null);
+                  setDetailIssueKey((bug as BugRecord & { issueKey?: string }).issueKey ?? null);
                 }}
                 onEditBug={(bug) => {
                   setEditBug(bug);
@@ -1126,6 +1162,39 @@ export default function AdminProjectDetail() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="tasks" className="mt-4">
+          <Card className="bg-card">
+            <CardHeader className="p-3">
+              <CardTitle className="text-xs">Project Tasks</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ProjectTasksPanel
+                tasks={projectTasks}
+                isLoading={!tasksData && validProjectId}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="tickets" className="mt-4">
+          <Card className="bg-card">
+            <CardHeader className="p-3">
+              <CardTitle className="text-xs">Client Tickets</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ProjectTicketsPanel
+                projectId={projectId}
+                userRole={role}
+                userId={user?.id}
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="clients" className="mt-4">
+          <ProjectClientTeamPanel projectId={projectId} />
+        </TabsContent>
       </Tabs>
 
       <BugFormDialog
@@ -1173,7 +1242,7 @@ export default function AdminProjectDetail() {
         listQueryKey={getGetProjectBugsQueryKey(projectId)}
         onSelectChild={(child) => {
           setDetailBugId(child.id);
-          setDetailIssueKey(child.issueKey ?? null);
+          setDetailIssueKey((child as BugRecord & { issueKey?: string }).issueKey ?? null);
         }}
         onSelectParent={(parentId) => {
           setDetailBugId(parentId);

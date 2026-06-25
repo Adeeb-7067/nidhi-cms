@@ -151,11 +151,18 @@ async function syncPayslipsForRun(runId, session = null) {
   const slipByLineId = new Map(existing.map((s) => [s.payrollLineId, s]));
   const sessOpts = session ? { session } : {};
 
+  // Bulk-load all users and salary structures in two queries instead of 2×N.
+  const lineUserIds = lines.map((l) => l.userId);
+  const [bulkUsers, bulkStructures] = await Promise.all([
+    usersTable.find({ id: { $in: lineUserIds } }).lean(),
+    salaryStructuresTable.find({ userId: { $in: lineUserIds } }).lean(),
+  ]);
+  const userMap = new Map(bulkUsers.map((u) => [u.id, u]));
+  const structMap = new Map(bulkStructures.map((s) => [s.userId, s]));
+
   for (const line of lines) {
-    const [user, structure] = await Promise.all([
-      usersTable.findOne({ id: line.userId }).lean(),
-      salaryStructuresTable.findOne({ userId: line.userId }).lean(),
-    ]);
+    const user = userMap.get(line.userId);
+    const structure = structMap.get(line.userId);
     const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings });
     const prior = slipByLineId.get(line.id);
 
@@ -501,7 +508,10 @@ export async function generatePayrollRun(year, month, actorId) {
 
   const { summaries } = await getAttendanceDailySummaries({ startDate, endDate });
 
-
+  // Bulk-load all salary structures in one query instead of one per employee.
+  const staffIds = staff.map((u) => u.id);
+  const allStructures = await salaryStructuresTable.find({ userId: { $in: staffIds } }).lean();
+  const structureByUserId = new Map(allStructures.map((s) => [s.userId, s]));
 
   for (const user of staff) {
 
@@ -509,7 +519,7 @@ export async function generatePayrollRun(year, month, actorId) {
 
     const counts = aggregateAttendanceForPayroll(userSummaries);
 
-    const structure = await salaryStructuresTable.findOne({ userId: user.id }).lean();
+    const structure = structureByUserId.get(user.id);
 
     const amounts = computePayrollLineAmounts({
 

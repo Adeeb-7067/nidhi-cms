@@ -9,9 +9,11 @@ import {
   cmsModules,
   cmsModuleGroups,
   defaultTemplateByRole,
+  builtInAssignableCmsRoles,
   legacyModuleMap,
   normalizePermissionModule,
 } from "../constants/permissions.js";
+import { userRoles } from "../constants/user-roles.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
 
 const ALL_MODULE_ACTIONS = cmsModules.flatMap((module) =>
@@ -41,10 +43,11 @@ const HRM_ADMIN_MODULES = cmsModuleGroups
   .filter((m) => m !== "hrm_id_cards");
 
 const DEFAULT_TEMPLATES = [
-  { code: "super_admin", name: "Super Admin", isSystem: true, grants: "all" },
+  { code: "super_admin", name: "Super Admin", cmsRole: "super_admin", isSystem: true, grants: "all" },
   {
     code: "hr_admin",
     name: "HR Admin",
+    cmsRole: "hr",
     isSystem: true,
     grants: [
       ...HRM_ADMIN_MODULES.flatMap((module) =>
@@ -58,6 +61,7 @@ const DEFAULT_TEMPLATES = [
   {
     code: "manager",
     name: "Manager",
+    cmsRole: "manager",
     isSystem: true,
     grants: [
       { module: "hrm_dashboard", action: "view" },
@@ -75,6 +79,28 @@ const DEFAULT_TEMPLATES = [
       { module: "hrm_my_holidays", action: "view" },
       { module: "hrm_my_payslips", action: "view" },
       ...DEV_PORTAL_VIEW,
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_tickets", action: "view" },
+    ],
+  },
+  {
+    code: "bde",
+    name: "BDE",
+    cmsRole: "bde",
+    isSystem: true,
+    grants: [
+      { module: "sales", action: "view" },
+      { module: "sales", action: "create" },
+      { module: "sales", action: "edit" },
+      { module: "hrm_dashboard", action: "view" },
+      { module: "hrm_my_attendance", action: "view" },
+      { module: "hrm_my_leave", action: "view" },
+      { module: "hrm_my_leave", action: "create" },
+      { module: "hrm_my_wfh", action: "view" },
+      { module: "hrm_my_wfh", action: "create" },
+      { module: "hrm_my_holidays", action: "view" },
+      { module: "hrm_my_payslips", action: "view" },
+      { module: "hrm_holidays", action: "view" },
       { module: "admin_discussions", action: "view" },
       { module: "admin_tickets", action: "view" },
     ],
@@ -127,8 +153,12 @@ export async function ensureDefaultRoleTemplates() {
         id,
         name: tpl.name,
         code: tpl.code,
+        cmsRole: tpl.cmsRole ?? null,
         isSystem: tpl.isSystem,
       });
+    } else if (tpl.cmsRole && !existing.cmsRole) {
+      await hrmRoleTemplatesTable.updateOne({ id: existing.id }, { $set: { cmsRole: tpl.cmsRole } });
+      existing = { ...existing, cmsRole: tpl.cmsRole };
     }
     const templateId = existing.id;
     const count = await hrmPermissionsTable.countDocuments({ roleTemplateId: templateId });
@@ -181,9 +211,12 @@ export async function backfillSystemTemplatePermissions() {
 
 async function templateIdForRole(role) {
   const code = defaultTemplateByRole[role];
-  if (!code) return null;
-  const tpl = await hrmRoleTemplatesTable.findOne({ code }).lean();
-  return tpl?.id ?? null;
+  if (code) {
+    const tpl = await hrmRoleTemplatesTable.findOne({ code }).lean();
+    if (tpl) return tpl.id;
+  }
+  const byCms = await hrmRoleTemplatesTable.findOne({ cmsRole: role }).lean();
+  return byCms?.id ?? null;
 }
 
 /** Assign default role template when role changes or user has none. */
@@ -250,6 +283,7 @@ export async function assignRoleTemplatesToUsers() {
 export const ensureDefaultHrmTemplates = ensureDefaultRoleTemplates;
 
 const PERM_CACHE_TTL_MS = 30_000;
+const PERM_CACHE_MAX = 2000; // evict oldest entry when full to prevent unbounded growth
 /** @type {Map<number, { set: Set<string>, templateId: number | null, expiresAt: number }>} */
 const _permCache = new Map();
 /** @type {Promise<void> | null} */
@@ -291,6 +325,7 @@ async function loadUserPermissionEntry(userId) {
       templateId: null,
       expiresAt: now + PERM_CACHE_TTL_MS,
     };
+    if (_permCache.size >= PERM_CACHE_MAX) _permCache.delete(_permCache.keys().next().value);
     _permCache.set(userId, entry);
     return entry;
   }
@@ -299,6 +334,7 @@ async function loadUserPermissionEntry(userId) {
   const templateId = await resolveTemplateIdForUser(user);
   if (!templateId) {
     const entry = { set: new Set(), templateId: null, expiresAt: now + PERM_CACHE_TTL_MS };
+    if (_permCache.size >= PERM_CACHE_MAX) _permCache.delete(_permCache.keys().next().value);
     _permCache.set(userId, entry);
     return entry;
   }
@@ -309,6 +345,7 @@ async function loadUserPermissionEntry(userId) {
     templateId,
     expiresAt: now + PERM_CACHE_TTL_MS,
   };
+  if (_permCache.size >= PERM_CACHE_MAX) _permCache.delete(_permCache.keys().next().value);
   _permCache.set(userId, entry);
   return entry;
 }
@@ -322,11 +359,17 @@ function resolveRoleTemplateId(user) {
 }
 
 async function resolveTemplateIdForUser(user) {
-  const codeOrId = resolveRoleTemplateId(user);
-  if (codeOrId == null) return null;
-  if (typeof codeOrId === "number") return codeOrId;
-  const tpl = await hrmRoleTemplatesTable.findOne({ code: codeOrId }).lean();
-  return tpl?.id ?? null;
+  const explicit = user.roleTemplateId ?? user.hrmRoleTemplateId;
+  if (explicit) return explicit;
+
+  const code = defaultTemplateByRole[user.role];
+  if (code) {
+    const tpl = await hrmRoleTemplatesTable.findOne({ code }).lean();
+    if (tpl) return tpl.id;
+  }
+
+  const byCms = await hrmRoleTemplatesTable.findOne({ cmsRole: user.role }).lean();
+  return byCms?.id ?? null;
 }
 
 export async function getPermissionsForUser(userId) {
@@ -405,4 +448,146 @@ export async function updateRoleTemplatePermissions(templateId, permissionList) 
 
 export function getPermissionCatalog() {
   return { modules: cmsModules, actions: cmsActions, groups: cmsModuleGroups };
+}
+
+/** All valid user.role values including dynamic roles from DB templates. */
+export async function listAllUserRoles() {
+  await ensureTemplatesReady();
+  const dynamic = await hrmRoleTemplatesTable
+    .find({ cmsRole: { $nin: [null, ""] } })
+    .select({ cmsRole: 1 })
+    .lean();
+  const extra = dynamic
+    .map((t) => t.cmsRole)
+    .filter((c) => c && !userRoles.includes(c));
+  return [...new Set([...userRoles, ...extra])];
+}
+
+export async function isValidUserRole(role) {
+  if (!role) return false;
+  return (await listAllUserRoles()).includes(String(role).toLowerCase());
+}
+
+/** CMS login roles for Team form + assignee pickers (excludes client). */
+export async function listAssignableCmsRoles() {
+  await ensureTemplatesReady();
+  const byValue = new Map(builtInAssignableCmsRoles.map((r) => [r.value, { ...r, isSystem: true }]));
+
+  const templates = await hrmRoleTemplatesTable.find().sort({ name: 1 }).lean();
+  for (const t of templates) {
+    if (t.cmsRole && !byValue.has(t.cmsRole)) {
+      byValue.set(t.cmsRole, {
+        value: t.cmsRole,
+        label: t.name,
+        templateId: t.id,
+        isSystem: t.isSystem,
+      });
+    }
+  }
+
+  return [...byValue.values()].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function slugifyRoleCode(name) {
+  return String(name)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "")
+    .slice(0, 48);
+}
+
+export async function createRoleTemplate({ name, code, cmsRole, description, grants = [] }) {
+  await ensureTemplatesReady();
+  const trimmedName = String(name ?? "").trim();
+  if (!trimmedName) throw new Error("Role name is required");
+
+  const roleCode = (code ?? slugifyRoleCode(trimmedName)).trim().toLowerCase();
+  if (!roleCode) throw new Error("Role code is required");
+
+  const existing = await hrmRoleTemplatesTable.findOne({ code: roleCode }).lean();
+  if (existing) throw new Error("A role with this code already exists");
+
+  const normalizedCmsRole = cmsRole ? String(cmsRole).trim().toLowerCase() : null;
+  if (normalizedCmsRole) {
+    const clash = await hrmRoleTemplatesTable.findOne({ cmsRole: normalizedCmsRole }).lean();
+    if (clash) throw new Error("This CMS login role is already assigned to another template");
+    if (userRoles.includes(normalizedCmsRole) && defaultTemplateByRole[normalizedCmsRole]) {
+      throw new Error("This CMS login role is reserved by a built-in role");
+    }
+  }
+
+  const id = await getNextSequence("hrm_role_templates");
+  const template = await hrmRoleTemplatesTable.create({
+    id,
+    name: trimmedName,
+    code: roleCode,
+    cmsRole: normalizedCmsRole,
+    description: optionalString(description),
+    isSystem: false,
+  });
+
+  if (grants.length > 0) {
+    await updateRoleTemplatePermissions(id, grants);
+  }
+
+  return template.toObject();
+}
+
+function optionalString(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s || null;
+}
+
+export async function updateRoleTemplateMeta(templateId, { name, description, cmsRole }) {
+  const existing = await hrmRoleTemplatesTable.findOne({ id: templateId }).lean();
+  if (!existing) throw new Error("Role template not found");
+  if (existing.isSystem && cmsRole !== undefined && cmsRole !== existing.cmsRole) {
+    throw new Error("Cannot change CMS login role on system templates");
+  }
+
+  const updates = {};
+  if (name !== undefined) {
+    const trimmed = String(name).trim();
+    if (!trimmed) throw new Error("Role name is required");
+    updates.name = trimmed;
+  }
+  if (description !== undefined) updates.description = optionalString(description);
+  if (cmsRole !== undefined) {
+    const normalized = cmsRole ? String(cmsRole).trim().toLowerCase() : null;
+    if (normalized) {
+      const clash = await hrmRoleTemplatesTable.findOne({
+        cmsRole: normalized,
+        id: { $ne: templateId },
+      }).lean();
+      if (clash) throw new Error("This CMS login role is already assigned to another template");
+    }
+    updates.cmsRole = normalized;
+  }
+
+  if (Object.keys(updates).length === 0) return existing;
+
+  const updated = await hrmRoleTemplatesTable
+    .findOneAndUpdate({ id: templateId }, { $set: updates }, { new: true })
+    .lean();
+  evictPermissionCache(null);
+  return updated;
+}
+
+export async function deleteRoleTemplate(templateId) {
+  const existing = await hrmRoleTemplatesTable.findOne({ id: templateId }).lean();
+  if (!existing) throw new Error("Role template not found");
+  if (existing.isSystem) throw new Error("System roles cannot be deleted");
+
+  const usersOnTemplate = await usersTable.countDocuments({
+    $or: [{ roleTemplateId: templateId }, { hrmRoleTemplateId: templateId }],
+  });
+  if (usersOnTemplate > 0) {
+    throw new Error("Cannot delete: users are still assigned to this role template");
+  }
+
+  await hrmPermissionsTable.deleteMany({ roleTemplateId: templateId });
+  await hrmRoleTemplatesTable.deleteOne({ id: templateId });
+  evictPermissionCache(null);
 }

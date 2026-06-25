@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Building2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
   Table,
@@ -12,29 +13,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { mockCustomers } from "@/modules/sales/mock-data";
+import { useListCustomers } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
   SalesEmptyState,
+  CustomerFormDrawer,
 } from "@/modules/sales/components";
 
 export default function Customers() {
   const [search, setSearch] = useState("");
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return mockCustomers.filter(
-      (c) =>
-        !q ||
-        c.companyName.toLowerCase().includes(q) ||
-        c.contactPerson.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
-        c.location.toLowerCase().includes(q),
-    );
-  }, [search]);
+  const { data, isLoading, isError, refetch } = useListCustomers({ search: search || undefined });
+  const filtered = data?.customers ?? [];
 
   return (
     <PortalPageShell>
@@ -46,7 +40,7 @@ export default function Customers() {
           { label: "Customers" },
         ]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5">
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             Add customer
           </Button>
@@ -55,7 +49,13 @@ export default function Customers() {
 
       <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search customers…" />
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState icon={Building2} title="Failed to load customers" description="Could not fetch customers." actionLabel="Retry" onAction={() => refetch()} />
+      ) : filtered.length === 0 ? (
         <SalesEmptyState icon={Building2} title="No customers found" description="Try a different search term." />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -83,8 +83,8 @@ export default function Customers() {
                     </Link>
                   </TableCell>
                   <TableCell className="text-xs">{c.contactPerson}</TableCell>
-                  <TableCell className="text-xs">{c.phone}</TableCell>
-                  <TableCell className="text-xs">{c.location}</TableCell>
+                  <TableCell className="text-xs">{c.phone ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{c.location ?? "—"}</TableCell>
                   <TableCell className="text-xs capitalize">{c.type}</TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="customer" value={c.status} />
@@ -100,6 +100,7 @@ export default function Customers() {
           </Table>
         </div>
       )}
+      <CustomerFormDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
     </PortalPageShell>
   );
 }

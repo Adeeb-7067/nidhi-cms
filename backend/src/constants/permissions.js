@@ -139,5 +139,18 @@ export const defaultTemplateByRole = {
   tester: "employee",
   qa: "employee",
   freelancer: "employee",
+  bde: "bde",
   client: null,
 };
+
+/** Built-in CMS login roles shown in Team / assignee pickers (client excluded). */
+export const builtInAssignableCmsRoles = [
+  { value: "super_admin", label: "Super Admin" },
+  { value: "hr", label: "HR" },
+  { value: "manager", label: "Manager" },
+  { value: "developer", label: "Developer" },
+  { value: "tester", label: "Tester" },
+  { value: "qa", label: "QA" },
+  { value: "freelancer", label: "Freelancer" },
+  { value: "bde", label: "BDE" },
+];

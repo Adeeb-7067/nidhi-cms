@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useRoute } from "wouter";
 import { format } from "date-fns";
 import { ArrowLeft, Mail, Phone, Globe, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,80 +15,56 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  getCustomerById,
-  mockProposals,
-  mockPayments,
-  getInstallmentsByCustomer,
-  getInvoicesByCustomer,
-  getTimelineByCustomer,
-  mockCustomerProjects,
-} from "@/modules/sales/mock-data";
-import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
+import { useGetCustomer, useListProposals, useListPayments } from "@/api/sales";
+import { formatCurrency } from "@/modules/sales/constants";
+import { installmentCardData } from "@/modules/sales/adapters";
 import {
   SalesPageHeader,
   SalesStatusBadge,
   SalesEmptyState,
   InstallmentCard,
-  FinancialActivityTimeline,
-  InstallmentProgress,
 } from "@/modules/sales/components";
 
 export default function CustomerDetail() {
   const [, params] = useRoute("/sales/customers/:id");
   const customerId = Number(params?.id);
-  const customer = getCustomerById(customerId);
   const [tab, setTab] = useState("overview");
 
-  const proposals = useMemo(
-    () => mockProposals.filter((p) => p.customerId === customerId),
-    [customerId],
-  );
+  const { data: customer, isLoading, isError } = useGetCustomer(customerId, !!customerId);
+  const { data: proposalsData } = useListProposals({ customerId }, !!customerId);
+  const { data: paymentsData } = useListPayments({ customerId }, !!customerId);
 
-  const installments = useMemo(
-    () => getInstallmentsByCustomer(customerId),
-    [customerId],
-  );
+  const proposals = proposalsData?.proposals ?? [];
+  const payments = paymentsData?.payments ?? [];
 
-  const invoices = useMemo(
-    () => getInvoicesByCustomer(customerId),
-    [customerId],
-  );
+  if (isLoading) {
+    return (
+      <PortalPageShell>
+        <Skeleton className="h-10 w-48 mb-4" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+      </PortalPageShell>
+    );
+  }
 
-  const timeline = useMemo(
-    () => getTimelineByCustomer(customerId),
-    [customerId],
-  );
-
-  const projects = useMemo(
-    () => mockCustomerProjects.filter((p) => p.customerId === customerId),
-    [customerId],
-  );
-
-  const payments = useMemo(
-    () =>
-      mockPayments.filter((p) =>
-        p.customerName.toLowerCase().includes(customer?.companyName.split(" ")[0].toLowerCase() ?? ""),
-      ),
-    [customer?.companyName],
-  );
-
-  if (!customer) {
+  if (isError || !customer) {
     return (
       <SalesEmptyState
         title="Customer not found"
-        description={`No customer with ID #${customerId} in demo data.`}
+        description={`No customer with ID #${customerId} exists.`}
         actionLabel="Back to customers"
         onAction={() => window.history.back()}
       />
     );
   }
 
+  const installments = customer.installments ?? [];
+  const invoices = customer.invoices ?? [];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
         title={customer.companyName}
-        description={`${customer.contactPerson} · ${customer.location}`}
+        description={`${customer.contactPerson}${customer.location ? ` · ${customer.location}` : ""}`}
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Customers", href: "/sales/customers" },
@@ -110,33 +87,18 @@ export default function CustomerDetail() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="h-9 flex-wrap">
-          <TabsTrigger value="overview" className="text-xs">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="proposals" className="text-xs">
-            Proposals ({proposals.length})
-          </TabsTrigger>
-          <TabsTrigger value="invoices" className="text-xs">
-            Invoices
-          </TabsTrigger>
-          <TabsTrigger value="payments" className="text-xs">
-            Payments ({payments.length})
-          </TabsTrigger>
-          <TabsTrigger value="financial" className="text-xs">
-            Financial
-          </TabsTrigger>
-          <TabsTrigger value="notes" className="text-xs">
-            Notes
-          </TabsTrigger>
+          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+          <TabsTrigger value="proposals" className="text-xs">Proposals ({proposals.length})</TabsTrigger>
+          <TabsTrigger value="invoices" className="text-xs">Invoices ({invoices.length})</TabsTrigger>
+          <TabsTrigger value="payments" className="text-xs">Payments ({payments.length})</TabsTrigger>
+          <TabsTrigger value="financial" className="text-xs">Installments</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">
-                  Total sales
-                </CardTitle>
+                <CardTitle className="text-[10px] uppercase text-muted-foreground">Total sales</CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <p className="text-lg font-bold">{formatCurrency(customer.totalSales)}</p>
@@ -144,14 +106,10 @@ export default function CustomerDetail() {
             </Card>
             <Card>
               <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">
-                  Outstanding
-                </CardTitle>
+                <CardTitle className="text-[10px] uppercase text-muted-foreground">Outstanding</CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
-                <p
-                  className={`text-lg font-bold ${customer.outstanding > 0 ? "text-destructive" : ""}`}
-                >
+                <p className={`text-lg font-bold ${customer.outstanding > 0 ? "text-destructive" : ""}`}>
                   {formatCurrency(customer.outstanding)}
                 </p>
               </CardContent>
@@ -165,34 +123,29 @@ export default function CustomerDetail() {
             <CardContent className="space-y-3 text-sm">
               <div className="flex items-center gap-2">
                 <Mail className="h-4 w-4 text-muted-foreground" />
-                <a href={`mailto:${customer.email}`} className="hover:text-primary">
-                  {customer.email}
-                </a>
+                <a href={`mailto:${customer.email}`} className="hover:text-primary">{customer.email}</a>
               </div>
-              <div className="flex items-center gap-2">
-                <Phone className="h-4 w-4 text-muted-foreground" />
-                <span>{customer.phone}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-                <span>{customer.location}</span>
-              </div>
+              {customer.phone && (
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span>{customer.phone}</span>
+                </div>
+              )}
+              {customer.location && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span>{customer.location}</span>
+                </div>
+              )}
               {customer.website && (
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-muted-foreground" />
-                  <a
-                    href={customer.website}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:text-primary"
-                  >
+                  <a href={customer.website} target="_blank" rel="noopener noreferrer" className="hover:text-primary">
                     {customer.website}
                   </a>
                 </div>
               )}
-              {customer.gstin && (
-                <p className="text-xs text-muted-foreground">GSTIN: {customer.gstin}</p>
-              )}
+              {customer.gstin && <p className="text-xs text-muted-foreground">GSTIN: {customer.gstin}</p>}
               <p className="text-xs text-muted-foreground">
                 Customer since {format(new Date(customer.createdAt), "MMMM yyyy")}
               </p>
@@ -222,7 +175,7 @@ export default function CustomerDetail() {
 
         <TabsContent value="invoices" className="mt-4 space-y-2">
           {invoices.length === 0 ? (
-            <SalesEmptyState title="No invoices" description="Invoices appear after installment billing is set up." />
+            <SalesEmptyState title="No invoices" description="Invoices appear after billing is set up." />
           ) : (
             invoices.map((inv) => (
               <Link key={inv.id} href={`/sales/invoices/${inv.id}`}>
@@ -230,7 +183,9 @@ export default function CustomerDetail() {
                   <CardContent className="p-4 flex justify-between items-center gap-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium font-mono">{inv.number}</p>
-                      <p className="text-xs text-muted-foreground truncate">{inv.installmentName ?? inv.projectName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {inv.installmentId ? `Installment #${inv.installmentId}` : "Direct invoice"}
+                      </p>
                     </div>
                     <div className="text-right shrink-0">
                       <SalesStatusBadge variant="invoice" value={inv.status} />
@@ -251,23 +206,25 @@ export default function CustomerDetail() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-xs">Receipt</TableHead>
                     <TableHead className="text-xs">Invoice</TableHead>
                     <TableHead className="text-xs text-right">Amount</TableHead>
-                    <TableHead className="text-xs">Due</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Date</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payments.map((pay) => (
                     <TableRow key={pay.id}>
-                      <TableCell className="text-xs font-mono">{pay.invoiceNumber}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">
-                        {formatCurrency(pay.amount)}
+                      <TableCell className="text-xs font-mono">
+                        <Link href={`/sales/receipts/${pay.id}`} className="text-primary hover:underline">
+                          {pay.receiptNumber}
+                        </Link>
                       </TableCell>
+                      <TableCell className="text-xs font-mono">{pay.invoiceNumber ?? `#${pay.invoiceId}`}</TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">{formatCurrency(pay.amount)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(pay.dueDate), "MMM d, yyyy")}
+                        {format(new Date(pay.createdAt), "MMM d, yyyy")}
                       </TableCell>
-                      <TableCell className="text-xs capitalize">{pay.status}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -276,46 +233,21 @@ export default function CustomerDetail() {
           )}
         </TabsContent>
 
-        <TabsContent value="financial" className="mt-4 space-y-4">
-          {projects.map((project) => (
-            <Card key={project.id}>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">{project.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <InstallmentProgress paid={project.paidAmount} total={project.totalAmount} />
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div><p className="text-muted-foreground">Project value</p><p className="font-bold">{formatCurrency(project.totalAmount)}</p></div>
-                  <div><p className="text-muted-foreground">Paid</p><p className="font-bold text-emerald-700">{formatCurrency(project.paidAmount)}</p></div>
-                  <div><p className="text-muted-foreground">Outstanding</p><p className="font-bold text-amber-700">{formatCurrency(calcRemaining(project.totalAmount, project.paidAmount))}</p></div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-          {installments.length > 0 && (
+        <TabsContent value="financial" className="mt-4">
+          {installments.length === 0 ? (
+            <SalesEmptyState title="No installments" description="Create installment plans from approved proposals." />
+          ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {installments.map((inst) => (
-                <InstallmentCard key={inst.id} installment={inst} href={`/sales/installments/${inst.id}`} compact />
+                <InstallmentCard
+                  key={inst.id}
+                  installment={installmentCardData(inst)}
+                  href={`/sales/installments/${inst.id}`}
+                  compact
+                />
               ))}
             </div>
           )}
-          {timeline.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Financial timeline</CardTitle></CardHeader>
-              <CardContent><FinancialActivityTimeline events={timeline} limit={8} /></CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="notes" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
-              <SalesEmptyState
-                title="No notes"
-                description="Add internal notes about this customer account."
-              />
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
     </PortalPageShell>

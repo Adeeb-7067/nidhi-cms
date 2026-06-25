@@ -85,9 +85,27 @@ async function ensureBalance(userId, leaveTypeId, year, session) {
 
 async function loadBalanceMap(userId, leaveYear, session) {
   const types = await leaveTypesTable.find({ status: "active" }).sort({ fifoPriority: 1 }).lean();
+
+  // Bulk-load all existing balances for this user/year in one query.
+  let existingQuery = leaveBalancesTable.find({
+    userId,
+    year: leaveYear,
+    leaveTypeId: { $in: types.map((t) => t.id) },
+  });
+  if (session) existingQuery = existingQuery.session(session);
+  const existingBalances = await existingQuery;
+  const balByTypeId = new Map(existingBalances.map((b) => [b.leaveTypeId, b]));
+
   const map = new Map();
   for (const t of types) {
-    const bal = await ensureBalance(userId, t.id, leaveYear, session);
+    let bal = balByTypeId.get(t.id);
+    if (bal) {
+      // Reconcile auto-seeded accruals reusing the already-fetched type doc.
+      bal = await reconcileAutoSeededBalance(bal, t);
+    } else {
+      // Balance doesn't exist yet — create it (first-time only, rare path).
+      bal = await ensureBalance(userId, t.id, leaveYear, session);
+    }
     map.set(t.id, {
       allocated: bal.allocated ?? 0,
       carriedForward: bal.carriedForward ?? 0,
@@ -123,15 +141,21 @@ async function applyBalanceTransition(userId, leaveYear, request, mode, session)
   if (!allocations.length) return;
 
   const sessOpts = session ? { session } : {};
+
+  // Bulk-load all needed balances in one query instead of one findOne per allocation.
+  const leaveTypeIds = allocations.map((a) => a.leaveTypeId);
+  let bulkQuery = leaveBalancesTable.find({
+    userId,
+    leaveTypeId: { $in: leaveTypeIds },
+    year: leaveYear,
+  });
+  if (session) bulkQuery = bulkQuery.session(session);
+  const balances = await bulkQuery;
+  const balByTypeId = new Map(balances.map((b) => [b.leaveTypeId, b]));
+
   const ops = [];
   for (const alloc of allocations) {
-    let query = leaveBalancesTable.findOne({
-      userId,
-      leaveTypeId: alloc.leaveTypeId,
-      year: leaveYear,
-    });
-    if (session) query = query.session(session);
-    const bal = await query;
+    const bal = balByTypeId.get(alloc.leaveTypeId);
     if (!bal) notFound("Leave balance");
     ops.push({
       leaveTypeId: alloc.leaveTypeId,
@@ -182,10 +206,14 @@ export async function listLeaveBalances(userId, year) {
   return result;
 }
 
-export async function listLeaveRequests({ userIds, status } = {}) {
+export async function listLeaveRequests({ userIds, status, date } = {}) {
   const query = {};
   if (userIds?.length) query.userId = { $in: userIds };
   if (status) query.status = status;
+  if (date) {
+    query.startDate = { $lte: date };
+    query.endDate = { $gte: date };
+  }
   const rows = await leaveRequestsTable.find(query).sort({ createdAt: -1 }).lean();
   const userIdsSet = [...new Set(rows.map((r) => r.userId))];
   const users = await usersTable.find({ id: { $in: userIdsSet } }, { id: 1, name: 1, employeeId: 1 }).lean();

@@ -71,7 +71,8 @@ const userSchema = new Schema({
   lastName: { type: String },
   email: { type: String, required: true, unique: true, lowercase: true },
   passwordHash: { type: String, required: true },
-  role: { type: String, enum: userRoles, default: "developer", required: true },
+  /** Validated in users.controller via permissions.service (supports dynamic roles from DB). */
+  role: { type: String, default: "developer", required: true, trim: true, lowercase: true },
   subType: { type: String },
   designation: { type: String },
   avatarUrl: { type: String },

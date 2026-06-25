@@ -24,7 +24,7 @@ export const teamEmployeeSchema = z
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Invalid email address"),
     password: z.string().optional().or(z.literal("")),
-    role: z.enum(["developer", "tester", "qa", "manager", "hr", "super_admin", "freelancer"]),
+    role: z.string().min(1, "Role is required"),
     roleTemplateId: z.number().nullable().optional(),
     status: z.enum(["active", "inactive"]).optional(),
     designation: z.string().optional(),

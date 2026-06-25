@@ -225,6 +225,9 @@ export async function applyCorrection(userId, body, actorId) {
   const date = normalizeDateKey(body.date);
   if (!date) badRequest("Valid date is required.");
   if (!body.reason?.trim()) badRequest("Reason is required.");
+  if (!body.requestedStatus && body.requestedActiveMinutes == null) {
+    badRequest("At least one of requestedStatus or requestedActiveMinutes is required.");
+  }
 
   const locked = await dailyAttendanceTable
     .findOne({ userId, date, lockedForPayroll: true })

@@ -21,6 +21,7 @@ router.get("/projects/:id/logs", requireAuth, asyncHandler(projectsController.ge
 router.get("/projects/:id/bugs", requireAuth, asyncHandler(projectsController.getProjectsByIdBugs));
 router.get("/projects/:id/apk-releases", requireAuth, asyncHandler(projectsController.getProjectsByIdApkReleases));
 router.get("/projects/:id/history", requireAuth, asyncHandler(projectsController.getProjectsByIdHistory));
+router.get("/projects/:id/client-team", requireAuth, asyncHandler(projectsController.getProjectsByIdClientTeam));
 var stdin_default = router;
 export {
   stdin_default as default

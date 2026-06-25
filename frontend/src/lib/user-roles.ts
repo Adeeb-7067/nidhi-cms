@@ -6,7 +6,9 @@ export type UserRole =
   | "tester"
   | "qa"
   | "client"
-  | "freelancer";
+  | "freelancer"
+  | "bde"
+  | (string & {});
 
 /** Same delivery permissions as developer — only the display label differs. */
 export const DEVELOPER_STAFF_ROLES: UserRole[] = ["developer", "freelancer"];
@@ -41,10 +43,14 @@ export const MONITORABLE_STAFF_ROLES: UserRole[] = [
 
 export const HRM_ADMIN_ROLES: UserRole[] = ["super_admin", "hr"];
 
+/** Roles that can access CRM & Sales — super_admin manages, bde operates */
+export const SALES_STAFF_ROLES: UserRole[] = ["super_admin", "bde"];
+
 /** All internal staff (non-client) — nav visibility is driven by the permission matrix. */
 export const INTERNAL_STAFF_ROLES: UserRole[] = [
   "super_admin",
   "hr",
+  "bde",
   ...DEV_PORTAL_STAFF_ROLES,
 ];
 
@@ -99,6 +105,7 @@ export function formatStaffRoleLabel(role: string): string {
   if (role === "qa") return "QA";
   if (role === "tester") return "Tester";
   if (role === "freelancer") return "Freelancer";
+  if (role === "bde") return "BDE";
   if (role === "developer") return "Developer";
   return role.replace(/_/g, " ");
 }
@@ -110,6 +117,7 @@ export function staffRoleBadgeClass(role: string): string {
   if (role === "qa") return "bg-amber-500/10 text-amber-700";
   if (role === "tester") return "bg-cyan-500/10 text-cyan-700";
   if (role === "freelancer") return "bg-blue-500/10 text-blue-500";
+  if (role === "bde") return "bg-emerald-500/10 text-emerald-700";
   return "bg-blue-500/10 text-blue-500";
 }
 

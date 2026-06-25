@@ -26,6 +26,7 @@ import { formatUser } from "../mappers/user-format.js";
 import { paginateModel, toIso } from "../utils/mongo-list.js";
 import {
   syncUserRoleTemplate,
+  isValidUserRole,
 } from "../services/permissions.service.js";
 import {
   buildUserProfileCreateFields,
@@ -114,7 +115,7 @@ async function postUsers(req, res) {
     badRequest("Password is required (at least 8 characters).", "password");
   }
   if (!role) badRequest("Role is required.", "role");
-  if (!userRoles.includes(role)) badRequest("Invalid role.", "role");
+  if (!(await isValidUserRole(role))) badRequest("Invalid role.", "role");
   validateStoredFileUrl(avatarUrl, "avatarUrl");
   const existing = await usersTable.findOne({ email: email.toLowerCase() }).lean();
   if (existing) conflict("This email is already registered.", "email");
@@ -243,7 +244,7 @@ async function patchUsersById(req, res) {
   }
   if (body.role !== void 0) {
     const nextRole = optionalString(body.role);
-    if (!nextRole || !userRoles.includes(nextRole)) badRequest("Invalid role.", "role");
+    if (!nextRole || !(await isValidUserRole(nextRole))) badRequest("Invalid role.", "role");
   }
   const roleChanged = body.role !== void 0 && optionalString(body.role) !== existing.role;
   const explicitTemplate =

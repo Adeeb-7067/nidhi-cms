@@ -1,8 +1,15 @@
 import crypto from "crypto";
 const ALGO = "aes-256-gcm";
+// Derived key is cached at module scope — scryptSync is intentionally slow and
+// must not run on every encrypt/decrypt call. The secret never changes while
+// the process is alive, so caching is safe.
+let _cachedInventoryKey = null;
 function getKey() {
-  const secret = process.env.INVENTORY_ENCRYPTION_KEY || process.env.SESSION_SECRET || "dev-inventory-key";
-  return crypto.scryptSync(secret, "nexus-inventory-salt", 32);
+  if (_cachedInventoryKey) return _cachedInventoryKey;
+  const secret = process.env.INVENTORY_ENCRYPTION_KEY || process.env.SESSION_SECRET;
+  if (!secret) throw new Error("INVENTORY_ENCRYPTION_KEY (or SESSION_SECRET) must be set — refusing to encrypt with a hardcoded key.");
+  _cachedInventoryKey = crypto.scryptSync(secret, "nexus-inventory-salt", 32);
+  return _cachedInventoryKey;
 }
 function encryptSecret(plaintext) {
   const iv = crypto.randomBytes(12);

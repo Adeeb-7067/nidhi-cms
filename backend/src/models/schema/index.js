@@ -21,3 +21,4 @@ export * from "./client-team.js";
 export * from "./direct-conversations.js";
 export * from "./job-runs.js";
 export * from "./hrm/index.js";
+export * from "./sales/index.js";

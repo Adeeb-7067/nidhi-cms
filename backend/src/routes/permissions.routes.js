@@ -22,11 +22,34 @@ router.get(
   requirePermission("roles_permissions", "view"),
   asyncHandler(permissions.getRoleTemplates),
 );
+router.get(
+  "/roles/assignable",
+  requireAuth,
+  asyncHandler(permissions.getAssignableCmsRoles),
+);
+router.post(
+  "/roles",
+  requireAuth,
+  requirePermission("roles_permissions", "edit"),
+  asyncHandler(permissions.postRoleTemplate),
+);
+router.patch(
+  "/roles/:id",
+  requireAuth,
+  requirePermission("roles_permissions", "edit"),
+  asyncHandler(permissions.patchRoleTemplate),
+);
 router.patch(
   "/roles/:id/permissions",
   requireAuth,
   requirePermission("roles_permissions", "edit"),
   asyncHandler(permissions.patchRoleTemplatePermissions),
+);
+router.delete(
+  "/roles/:id",
+  requireAuth,
+  requirePermission("roles_permissions", "edit"),
+  asyncHandler(permissions.deleteRoleTemplateHandler),
 );
 
 export default router;

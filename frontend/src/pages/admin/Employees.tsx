@@ -91,7 +91,7 @@ import {
   staffRoleBadgeClass,
 } from "@/lib/user-roles";
 import { useHrmDepartments, useHrmShiftTemplates } from "@/api/hrm";
-import { useRoleTemplates } from "@/api/permissions";
+import { useRoleTemplates, useAssignableCmsRoles } from "@/api/permissions";
 import { User } from "@/api";
 import { cn } from "@/lib/utils";
 import {
@@ -258,6 +258,7 @@ export default function AdminEmployees() {
   const { data: hrmDepartmentsData } = useHrmDepartments();
   const { data: shiftTemplatesData } = useHrmShiftTemplates();
   const { data: roleTemplatesData } = useRoleTemplates();
+  const { data: assignableRolesData } = useAssignableCmsRoles(isDialogOpen || !!editUser);
   const { data: managerPoolData } = useListUsers(
     { staff: "1", limit: 200 },
     {
@@ -270,6 +271,10 @@ export default function AdminEmployees() {
   const roleTemplateOptions = useMemo(
     () => roleTemplatesData?.templates ?? [],
     [roleTemplatesData?.templates],
+  );
+  const cmsRoleOptions = useMemo(
+    () => assignableRolesData?.roles ?? [],
+    [assignableRolesData?.roles],
   );
   const shiftTemplates = useMemo(
     () => shiftTemplatesData?.templates ?? [],
@@ -782,6 +787,7 @@ export default function AdminEmployees() {
                       editUser={editUser}
                       previewEmployeeId={previewEmployeeId}
                       roleTemplateOptions={roleTemplateOptions}
+                      cmsRoleOptions={cmsRoleOptions}
                       hrmDepartments={hrmDepartments}
                       managerOptions={managerOptions}
                       shiftTemplates={shiftTemplates}

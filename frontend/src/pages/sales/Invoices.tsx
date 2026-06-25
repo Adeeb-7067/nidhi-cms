@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { Plus, Receipt, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
   Table,
@@ -13,15 +14,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { dashboardKpis, mockInvoices, invoiceSummary } from "@/modules/sales/mock-data";
+import { useListInvoices, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
   SalesEmptyState,
+  CreateInvoiceDialog,
+  InvoiceFromProposalDialog,
 } from "@/modules/sales/components";
-import { toast } from "sonner";
 
 type InvoiceStatus = "paid" | "unpaid" | "partial" | "overdue";
 
@@ -30,32 +32,34 @@ const STATUS_TABS: (InvoiceStatus | "all")[] = ["all", "unpaid", "partial", "pai
 export default function Invoices() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [fromProposalOpen, setFromProposalOpen] = useState(false);
+
+  const { data: invData, isLoading, isError, refetch } = useListInvoices();
+  const { data: dashData } = useSalesDashboard();
+  const allInvoices = invData?.invoices ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return mockInvoices.filter((inv) => {
-      const matchesSearch =
-        !q ||
-        inv.number.toLowerCase().includes(q) ||
-        inv.customer.toLowerCase().includes(q);
+    return allInvoices.filter((inv) => {
+      const matchesSearch = !q || inv.number.toLowerCase().includes(q);
       const matchesStatus = statusTab === "all" || inv.status === statusTab;
       return matchesSearch && matchesStatus;
     });
-  }, [search, statusTab]);
+  }, [allInvoices, search, statusTab]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: mockInvoices.length };
+    const counts: Record<string, number> = { all: allInvoices.length };
     for (const s of STATUS_TABS) {
       if (s === "all") continue;
-      counts[s] = mockInvoices.filter((i) => i.status === s).length;
+      counts[s] = allInvoices.filter((i) => i.status === s).length;
     }
     return counts;
-  }, []);
+  }, [allInvoices]);
 
-  const totalDue = mockInvoices.reduce(
-    (s, i) => s + Math.max(0, i.amount - i.paidAmount),
-    0,
-  );
+  const totalDue = allInvoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+  const paidCount = dashData?.invoiceByStatus?.paid?.count ?? statusCounts.paid ?? 0;
+  const unpaidCount = dashData?.invoiceByStatus?.unpaid?.count ?? statusCounts.unpaid ?? 0;
 
   return (
     <PortalPageShell>
@@ -72,12 +76,12 @@ export default function Invoices() {
               size="sm"
               variant="outline"
               className="h-8 gap-1.5"
-              onClick={() => toast.success("Convert from proposal (demo)")}
+              onClick={() => setFromProposalOpen(true)}
             >
               <FileDown className="h-3.5 w-3.5" />
               From proposal
             </Button>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => toast.success("Create invoice (demo)")}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
               New invoice
             </Button>
@@ -87,10 +91,10 @@ export default function Invoices() {
 
       <PortalKpiGrid
         items={[
-          { title: "Total invoices", value: dashboardKpis.invoices, icon: Receipt, accent: "blue", delay: 0 },
-          { title: "Paid", value: invoiceSummary[0].count, icon: Receipt, accent: "green", delay: 1 },
-          { title: "Unpaid", value: invoiceSummary[1].count, icon: Receipt, accent: "amber", delay: 2 },
-          { title: "Outstanding", value: formatCurrency(totalDue), icon: Receipt, accent: "red", alert: true, delay: 3 },
+          { title: "Total invoices", value: dashData?.pendingInvoices != null ? allInvoices.length : "—", icon: Receipt, accent: "blue", delay: 0 },
+          { title: "Paid", value: paidCount, icon: Receipt, accent: "green", delay: 1 },
+          { title: "Unpaid", value: unpaidCount, icon: Receipt, accent: "amber", delay: 2 },
+          { title: "Outstanding", value: formatCurrency(dashData?.outstanding ?? totalDue), icon: Receipt, accent: "red", alert: true, delay: 3 },
         ]}
       />
 
@@ -106,8 +110,14 @@ export default function Invoices() {
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
-        <SalesEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." />
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState icon={Receipt} title="Failed to load invoices" description="Could not fetch invoices." actionLabel="Retry" onAction={() => refetch()} />
+      ) : filtered.length === 0 ? (
+        <SalesEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="New invoice" onAction={() => setCreateOpen(true)} />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
@@ -130,8 +140,12 @@ export default function Invoices() {
                   <TableCell className="text-xs font-mono">
                     <Link href={`/sales/invoices/${inv.id}`} className="hover:text-primary">{inv.number}</Link>
                   </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[180px] truncate">{inv.customer}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{inv.installmentName ?? "—"}</TableCell>
+                  <TableCell className="text-xs font-medium max-w-[180px] truncate text-muted-foreground">
+                    Customer #{inv.customerId}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
+                    {inv.installmentId ? `Installment #${inv.installmentId}` : "—"}
+                  </TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="invoice" value={inv.status} />
                   </TableCell>
@@ -150,6 +164,9 @@ export default function Invoices() {
           </Table>
         </div>
       )}
+
+      <CreateInvoiceDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <InvoiceFromProposalDialog open={fromProposalOpen} onOpenChange={setFromProposalOpen} />
     </PortalPageShell>
   );
 }

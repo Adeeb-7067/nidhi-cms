@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
   Table,
@@ -13,9 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockProposals, calcProposalTotal } from "@/modules/sales/mock-data";
+import { useListProposals, type ProposalStatus } from "@/api/sales";
 import { PROPOSAL_STATUS_LABELS, formatCurrency } from "@/modules/sales/constants";
-import type { ProposalStatus } from "@/modules/sales/types";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -28,37 +28,47 @@ const STATUS_ORDER: (ProposalStatus | "all")[] = [
   "all",
   "draft",
   "sent",
+  "seen",
   "revised",
   "approved",
-  "rejected",
+  "declined",
+  "counter_offer",
   "expired",
 ];
 
+function calcTotal(items: { quantity: number; unitPrice: number; taxPercent: number }[], discount: number) {
+  const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice * (1 + i.taxPercent / 100), 0);
+  return subtotal * (1 - (discount ?? 0) / 100);
+}
+
 export default function Proposals() {
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
 
+  const { data, isLoading, isError, refetch } = useListProposals();
+  const allProposals = data?.proposals ?? [];
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return mockProposals.filter((p) => {
+    return allProposals.filter((p) => {
       const matchesSearch =
         !q ||
         p.title.toLowerCase().includes(q) ||
-        p.number.toLowerCase().includes(q) ||
-        p.customerName.toLowerCase().includes(q);
+        p.number.toLowerCase().includes(q);
       const matchesStatus = statusTab === "all" || p.status === statusTab;
       return matchesSearch && matchesStatus;
     });
-  }, [search, statusTab]);
+  }, [allProposals, search, statusTab]);
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: mockProposals.length };
+    const counts: Record<string, number> = { all: allProposals.length };
     for (const s of STATUS_ORDER) {
       if (s === "all") continue;
-      counts[s] = mockProposals.filter((p) => p.status === s).length;
+      counts[s] = allProposals.filter((p) => p.status === s).length;
     }
     return counts;
-  }, []);
+  }, [allProposals]);
 
   return (
     <PortalPageShell>
@@ -93,19 +103,31 @@ export default function Proposals() {
               value={s}
               className="text-xs data-[state=active]:bg-primary/10"
             >
-              {s === "all" ? "All" : PROPOSAL_STATUS_LABELS[s]} ({statusCounts[s] ?? 0})
+              {s === "all" ? "All" : ((PROPOSAL_STATUS_LABELS as Record<string, string>)[s] ?? s)} ({statusCounts[s] ?? 0})
             </TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState
+          icon={FileText}
+          title="Failed to load proposals"
+          description="Could not fetch proposals from the server."
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : filtered.length === 0 ? (
         <SalesEmptyState
           icon={FileText}
           title="No proposals found"
           description="Adjust filters or create a new proposal."
           actionLabel="Create proposal"
-          onAction={() => {}}
+          onAction={() => navigate("/sales/proposals/create")}
         />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -115,7 +137,7 @@ export default function Proposals() {
                 <TableRow className="bg-muted/30">
                   <TableHead className="text-xs">Number</TableHead>
                   <TableHead className="text-xs">Title</TableHead>
-                  <TableHead className="text-xs">Customer</TableHead>
+                  <TableHead className="text-xs">For</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Executive</TableHead>
                   <TableHead className="text-xs text-right">Total</TableHead>
@@ -125,7 +147,12 @@ export default function Proposals() {
               </TableHeader>
               <TableBody>
                 {filtered.map((p) => {
-                  const { total } = calcProposalTotal(p);
+                  const total = calcTotal(p.items, p.discount);
+                  const forLabel = p.leadId
+                    ? `Lead #${p.leadId}`
+                    : p.customerId
+                    ? `Customer #${p.customerId}`
+                    : "—";
                   return (
                     <TableRow key={p.id} className="hover:bg-muted/30">
                       <TableCell>
@@ -139,20 +166,24 @@ export default function Proposals() {
                       <TableCell className="text-xs font-medium max-w-[180px] truncate">
                         {p.title}
                       </TableCell>
-                      <TableCell className="text-xs max-w-[140px] truncate">
-                        {p.customerName}
+                      <TableCell className="text-xs max-w-[140px] truncate text-muted-foreground">
+                        {forLabel}
                       </TableCell>
                       <TableCell>
                         <SalesStatusBadge variant="proposal" value={p.status} />
                       </TableCell>
                       <TableCell>
-                        <ExecutiveAvatar name={p.assignedTo.name} />
+                        {p.assignedToUser ? (
+                          <ExecutiveAvatar name={p.assignedToUser.name} />
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-right font-medium tabular-nums">
                         {formatCurrency(total)}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(p.validUntil), "MMM d, yyyy")}
+                        {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {format(new Date(p.createdAt), "MMM d, yyyy")}

@@ -1,7 +1,7 @@
 import React from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { RoleGate } from "./RoleGate";
-import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
+import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, MONITORABLE_STAFF_ROLES, SALES_STAFF_ROLES } from "@/lib/user-roles";
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import NotFound from "@/pages/not-found";
 
@@ -196,7 +196,7 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/tickets">
-        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <AdminTickets />
         </RoleGate>
       </Route>
@@ -204,7 +204,7 @@ export function PageOutlet() {
         <Redirect to="/discussions" />
       </Route>
       <Route path="/discussions">
-        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <DiscussionsPage />
         </RoleGate>
       </Route>
@@ -220,102 +220,102 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/sales/leads/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesLeadDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/proposals/create">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesProposalCreate />
         </RoleGate>
       </Route>
       <Route path="/sales/proposals/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesProposalDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/receipts/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesReceiptDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/installments/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesInstallmentDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/invoices/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesInvoiceDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/customers/:id">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesCustomerDetail />
         </RoleGate>
       </Route>
       <Route path="/sales/leads">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesLeads />
         </RoleGate>
       </Route>
       <Route path="/sales/follow-ups">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesFollowUps />
         </RoleGate>
       </Route>
       <Route path="/sales/proposals">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesProposals />
         </RoleGate>
       </Route>
       <Route path="/sales/installments">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesInstallments />
         </RoleGate>
       </Route>
       <Route path="/sales/invoices">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesInvoices />
         </RoleGate>
       </Route>
       <Route path="/sales/payments">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesPayments />
         </RoleGate>
       </Route>
       <Route path="/sales/customers">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesCustomers />
         </RoleGate>
       </Route>
       <Route path="/sales/products">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesProducts />
         </RoleGate>
       </Route>
       <Route path="/sales/team">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}>
           <SalesTeam />
         </RoleGate>
       </Route>
       <Route path="/sales/reports">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesReports />
         </RoleGate>
       </Route>
       <Route path="/sales/settings">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}>
           <SalesSettings />
         </RoleGate>
       </Route>
       <Route path="/sales/notifications">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesNotifications />
         </RoleGate>
       </Route>
       <Route path="/sales">
-        <RoleGate allowedRoles={["super_admin"]}>
+        <RoleGate allowedRoles={SALES_STAFF_ROLES}>
           <SalesDashboard />
         </RoleGate>
       </Route>
@@ -524,12 +524,12 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/settings/:section">
-        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
       <Route path="/settings">
-        <RoleGate allowedRoles={["super_admin", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
@@ -614,12 +614,12 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/profile">
-        <RoleGate allowedRoles={["super_admin", "hr", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <ProfilePage />
         </RoleGate>
       </Route>
       <Route path="/notifications">
-        <RoleGate allowedRoles={["super_admin", "hr", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <NotificationsPage />
         </RoleGate>
       </Route>

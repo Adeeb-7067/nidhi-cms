@@ -1,7 +1,10 @@
 import { useRoute, Link } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, FileText, History, Layers, Send, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { ArrowLeft, FileText, History, Send, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,27 +15,57 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getProposalById, calcProposalTotal, mockCustomerProjects } from "@/modules/sales/mock-data";
+import {
+  useGetProposal,
+  useSendProposal,
+  useApproveProposal,
+  useDeclineProposal,
+} from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { calcProposalTotal } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesStatusBadge,
   ExecutiveAvatar,
   SalesEmptyState,
-  InstallmentProgress,
 } from "@/modules/sales/components";
-import { toast } from "sonner";
 
 export default function ProposalDetail() {
   const [, params] = useRoute("/sales/proposals/:id");
   const proposalId = Number(params?.id);
-  const proposal = getProposalById(proposalId);
 
-  if (!proposal) {
+  const { data: proposal, isLoading, isError } = useGetProposal(proposalId, !!proposalId);
+  const sendProposal = useSendProposal();
+  const approveProposal = useApproveProposal();
+  const declineProposal = useDeclineProposal();
+
+  const runAction = async (
+    action: "send" | "approve" | "decline",
+    mutate: { mutateAsync: (vars: { id: number; reason?: string }) => Promise<unknown> },
+  ) => {
+    try {
+      await mutate.mutateAsync({ id: proposalId });
+      const labels = { send: "sent", approve: "approved", decline: "declined" };
+      toast.success(`Proposal ${labels[action]}`);
+    } catch (err) {
+      toastApiError(err, `Failed to ${action} proposal`);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <PortalPageShell>
+        <Skeleton className="h-10 w-64 mb-4" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+      </PortalPageShell>
+    );
+  }
+
+  if (isError || !proposal) {
     return (
       <SalesEmptyState
         title="Proposal not found"
-        description={`No proposal with ID #${proposalId} in demo data.`}
+        description={`No proposal with ID #${proposalId} exists.`}
         actionLabel="Back to proposals"
         onAction={() => window.history.back()}
       />
@@ -40,9 +73,11 @@ export default function ProposalDetail() {
   }
 
   const { subtotal, tax, total } = calcProposalTotal(proposal);
-  const linkedProject = mockCustomerProjects.find((p) => p.proposalId === proposal.id);
-  const milestoneTotal = proposal.milestones?.reduce((s, m) => s + m.amount, 0) ?? 0;
-  const milestonePaid = linkedProject?.paidAmount ?? 0;
+  const clientLabel = proposal.leadId
+    ? `Lead #${proposal.leadId}`
+    : proposal.customerId
+    ? `Customer #${proposal.customerId}`
+    : "—";
 
   const revisions = Array.from({ length: proposal.revision }, (_, i) => ({
     rev: i + 1,
@@ -72,20 +107,42 @@ export default function ProposalDetail() {
               </Link>
             </Button>
             {proposal.status === "draft" && (
-              <Button size="sm" className="h-8 gap-1.5" onClick={() => toast.success("Proposal sent (demo)")}>
+              <Button
+                size="sm"
+                className="h-8 gap-1.5"
+                disabled={sendProposal.isPending}
+                onClick={() => runAction("send", sendProposal)}
+              >
                 <Send className="h-3.5 w-3.5" />
                 Send proposal
               </Button>
             )}
-            {proposal.status === "sent" && (
-              <Button size="sm" className="h-8 gap-1.5" onClick={() => toast.success("Marked approved (demo)")}>
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Mark approved
-              </Button>
+            {(proposal.status === "sent" || proposal.status === "seen") && (
+              <>
+                <Button
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  disabled={approveProposal.isPending}
+                  onClick={() => runAction("approve", approveProposal)}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Mark approved
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 gap-1.5"
+                  disabled={declineProposal.isPending}
+                  onClick={() => runAction("decline", declineProposal)}
+                >
+                  <XCircle className="h-3.5 w-3.5" />
+                  Decline
+                </Button>
+              </>
             )}
-            {proposal.status === "approved" && proposal.projectId && (
+            {proposal.status === "approved" && (
               <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
-                <Link href={`/sales/installments`}>View installments</Link>
+                <Link href="/sales/installments">View installments</Link>
               </Button>
             )}
           </>
@@ -94,10 +151,13 @@ export default function ProposalDetail() {
 
       <div className="flex flex-wrap items-center gap-2">
         <SalesStatusBadge variant="proposal" value={proposal.status} />
-        <span className="text-xs text-muted-foreground">
-          Valid until {format(new Date(proposal.validUntil), "MMM d, yyyy")}
-        </span>
-        <ExecutiveAvatar name={proposal.assignedTo.name} />
+        {proposal.validUntil && (
+          <span className="text-xs text-muted-foreground">
+            Valid until {format(new Date(proposal.validUntil), "MMM d, yyyy")}
+          </span>
+        )}
+        {proposal.assignedToUser && <ExecutiveAvatar name={proposal.assignedToUser.name} />}
+        <span className="text-xs text-muted-foreground">For {clientLabel}</span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -119,11 +179,11 @@ export default function ProposalDetail() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {proposal.items.map((item) => {
+                    {proposal.items.map((item, idx) => {
                       const line = item.quantity * item.unitPrice;
                       const lineTax = line * (item.taxPercent / 100);
                       return (
-                        <TableRow key={item.id}>
+                        <TableRow key={item.itemId ?? idx}>
                           <TableCell className="text-xs">{item.description}</TableCell>
                           <TableCell className="text-xs text-right">{item.quantity}</TableCell>
                           <TableCell className="text-xs text-right tabular-nums">
@@ -162,30 +222,6 @@ export default function ProposalDetail() {
             </CardContent>
           </Card>
 
-          {proposal.milestones && proposal.milestones.length > 0 && (
-            <Card>
-              <CardHeader className="pb-2 flex flex-row items-center gap-2">
-                <Layers className="h-4 w-4 text-muted-foreground" />
-                <CardTitle className="text-sm">Installment / milestone plan</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {proposal.milestones.map((m) => (
-                  <div key={m.id} className="rounded-lg border p-3 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold">{m.name}</p>
-                        {m.description && <p className="text-[10px] text-muted-foreground">{m.description}</p>}
-                      </div>
-                      <p className="text-sm font-bold tabular-nums">{formatCurrency(m.amount)}</p>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">Due {format(new Date(m.dueDate), "MMM d, yyyy")}</p>
-                  </div>
-                ))}
-                <InstallmentProgress paid={milestonePaid} total={milestoneTotal} />
-              </CardContent>
-            </Card>
-          )}
-
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center gap-2">
               <History className="h-4 w-4 text-muted-foreground" />
@@ -210,26 +246,33 @@ export default function ProposalDetail() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              PDF preview
+              Summary
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="rounded-lg border-2 border-dashed bg-muted/30 aspect-[3/4] flex flex-col items-center justify-center p-6 text-center">
               <FileText className="h-12 w-12 text-muted-foreground/50 mb-3" />
-              <p className="text-sm font-medium">{proposal.customerName}</p>
+              <p className="text-sm font-medium">{clientLabel}</p>
               <p className="text-xs text-muted-foreground mt-1">{proposal.number}</p>
               <p className="text-lg font-bold mt-4 text-primary">{formatCurrency(total)}</p>
               <p className="text-[10px] text-muted-foreground mt-6">
-                PDF preview placeholder — connect PDF generator in production
+                PDF preview — connect PDF generator in production
               </p>
             </div>
             <div className="mt-4 space-y-2 text-xs text-muted-foreground">
-              <p>
-                <span className="font-medium text-foreground">Terms:</span> {proposal.terms}
-              </p>
-              {proposal.notes && (
+              {proposal.terms && (
                 <p>
-                  <span className="font-medium text-foreground">Notes:</span> {proposal.notes}
+                  <span className="font-medium text-foreground">Terms:</span> {proposal.terms}
+                </p>
+              )}
+              {proposal.clientNote && (
+                <p>
+                  <span className="font-medium text-foreground">Client notes:</span> {proposal.clientNote}
+                </p>
+              )}
+              {proposal.internalNotes && (
+                <p>
+                  <span className="font-medium text-foreground">Internal notes:</span> {proposal.internalNotes}
                 </p>
               )}
             </div>

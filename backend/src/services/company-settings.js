@@ -7,9 +7,9 @@ const DEFAULT_DAILY_LOG_REMINDER_HOUR = 23;
 export const SCREENSHOT_BLUR_ALWAYS_ENABLED = true;
 
 // Settings are a singleton document that changes rarely (only when an admin
-// explicitly updates them). Cache them in-process for 60 s to avoid a DB
+// explicitly updates them). Cache them in-process for 5 min to avoid a DB
 // round-trip on every monitoring/consent/work-policy request.
-const SETTINGS_CACHE_TTL_MS = 60_000;
+const SETTINGS_CACHE_TTL_MS = 300_000;
 let _settingsCache = null;
 let _settingsCachedAt = 0;
 

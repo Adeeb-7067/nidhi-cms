@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { Plus, Package } from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,23 +17,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Switch } from "@/components/ui/switch";
-import { mockProducts } from "@/modules/sales/mock-data";
-
-type CatalogProduct = {
-  id: number;
-  name: string;
-  category: string;
-  price: number;
-  taxPercent: number;
-  status: "active" | "inactive";
-  description?: string;
-};
+import { useListProducts, useCreateProduct, useUpdateProduct } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
-import { toast } from "sonner";
 
 export default function Products() {
-  const [products, setProducts] = useState<CatalogProduct[]>([...mockProducts]);
+  const { data, isLoading, isError, refetch } = useListProducts();
+  const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
+
+  const products = data?.products ?? [];
   const [name, setName] = useState("");
   const [category, setCategory] = useState("Services");
   const [price, setPrice] = useState("");
@@ -38,33 +34,35 @@ export default function Products() {
 
   const activeCount = useMemo(() => products.filter((p) => p.status === "active").length, [products]);
 
-  const addProduct = () => {
+  const addProduct = async () => {
     if (!name.trim() || !price) {
       toast.error("Name and price are required");
       return;
     }
-    setProducts((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
+    try {
+      await createProduct.mutateAsync({
         name: name.trim(),
         category,
         price: Number(price),
         taxPercent: Number(tax),
-        status: "active",
-      },
-    ]);
-    setName("");
-    setPrice("");
-    toast.success("Product added (demo)");
+      });
+      toast.success("Product added");
+      setName("");
+      setPrice("");
+    } catch (err) {
+      toastApiError(err, "Failed to add product");
+    }
   };
 
-  const toggleStatus = (id: number) => {
-    setProducts((prev) =>
-      prev.map((p): CatalogProduct =>
-        p.id === id ? { ...p, status: p.status === "active" ? "inactive" : "active" } : p,
-      ),
-    );
+  const toggleStatus = async (id: number, current: "active" | "inactive") => {
+    try {
+      await updateProduct.mutateAsync({
+        id,
+        status: current === "active" ? "inactive" : "active",
+      });
+    } catch (err) {
+      toastApiError(err, "Failed to update product");
+    }
   };
 
   return (
@@ -105,13 +103,21 @@ export default function Products() {
                 <Input type="number" value={tax} onChange={(e) => setTax(e.target.value)} />
               </div>
             </div>
-            <Button size="sm" className="w-full" onClick={addProduct}>Save product</Button>
+            <Button size="sm" className="w-full" onClick={addProduct} disabled={createProduct.isPending}>
+              {createProduct.isPending ? "Saving…" : "Save product"}
+            </Button>
           </CardContent>
         </Card>
 
         <div className="lg:col-span-8 space-y-3">
           <p className="text-xs text-muted-foreground">{activeCount} active · {products.length} total in catalog</p>
-          {products.length === 0 ? (
+          {isLoading ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
+            </div>
+          ) : isError ? (
+            <SalesEmptyState icon={Package} title="Failed to load products" actionLabel="Retry" onAction={() => refetch()} />
+          ) : products.length === 0 ? (
             <SalesEmptyState icon={Package} title="No products" description="Add your first product or service." />
           ) : (
             <div className="rounded-xl border bg-card overflow-hidden">
@@ -132,11 +138,15 @@ export default function Products() {
                         <p className="text-xs font-medium">{p.name}</p>
                         {p.description && <p className="text-[10px] text-muted-foreground">{p.description}</p>}
                       </TableCell>
-                      <TableCell className="text-xs">{p.category}</TableCell>
+                      <TableCell className="text-xs">{p.category ?? "—"}</TableCell>
                       <TableCell className="text-xs text-right tabular-nums">{formatCurrency(p.price)}</TableCell>
                       <TableCell className="text-xs text-right">{p.taxPercent}%</TableCell>
                       <TableCell>
-                        <Switch checked={p.status === "active"} onCheckedChange={() => toggleStatus(p.id)} />
+                        <Switch
+                          checked={p.status === "active"}
+                          onCheckedChange={() => toggleStatus(p.id, p.status)}
+                          disabled={updateProduct.isPending}
+                        />
                       </TableCell>
                     </TableRow>
                   ))}

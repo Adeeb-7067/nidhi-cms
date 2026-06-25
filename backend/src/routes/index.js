@@ -30,6 +30,7 @@ import clientTeamRoutes from "./client-team.routes.js";
 import directConversationsRoutes from "./direct-conversations.routes.js";
 import permissionsRoutes from "./permissions.routes.js";
 import hrmRoutes from "./hrm.routes.js";
+import salesRoutes from "./sales.routes.js";
 const router = Router();
 
 // Normalize ?token= query param to the Authorization header.
@@ -44,7 +45,11 @@ router.use((req, _res, next) => {
 });
 
 router.use((req, res, next) => {
-  if (req.method === "OPTIONS" || PUBLIC_API_PATHS.has(req.path)) {
+  if (
+    req.method === "OPTIONS" ||
+    PUBLIC_API_PATHS.has(req.path) ||
+    req.path.startsWith("/sales/proposals/view/")
+  ) {
     next();
     return;
   }
@@ -79,6 +84,7 @@ const featureRouters = [
   directConversationsRoutes,
   permissionsRoutes,
   hrmRoutes,
+  salesRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

@@ -54,6 +54,7 @@ import {
 type Dept = { id: number; name: string };
 type Manager = { id: number; name: string; designation?: string | null };
 type RoleTemplate = { id: number; name: string };
+type CmsRoleOption = { value: string; label: string };
 type ShiftTemplate = { id: number; name: string };
 
 export type EmployeeFormTab = "personal" | "address" | "work" | "compensation" | "documents";
@@ -144,6 +145,7 @@ export function EmployeeFormTabs({
   editUser,
   previewEmployeeId,
   roleTemplateOptions,
+  cmsRoleOptions,
   hrmDepartments,
   managerOptions,
   shiftTemplates,
@@ -155,6 +157,7 @@ export function EmployeeFormTabs({
   editUser: User | null;
   previewEmployeeId: string;
   roleTemplateOptions: RoleTemplate[];
+  cmsRoleOptions: CmsRoleOption[];
   hrmDepartments: Dept[];
   managerOptions: Manager[];
   shiftTemplates: ShiftTemplate[];
@@ -556,13 +559,11 @@ export function EmployeeFormTabs({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="developer">Developer</SelectItem>
-                      <SelectItem value="freelancer">Freelancer</SelectItem>
-                      <SelectItem value="tester">Tester</SelectItem>
-                      <SelectItem value="qa">QA</SelectItem>
-                      <SelectItem value="manager">Manager</SelectItem>
-                      <SelectItem value="hr">HR</SelectItem>
-                      <SelectItem value="super_admin">Super Admin</SelectItem>
+                      {cmsRoleOptions.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>
+                          {r.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />

@@ -5,26 +5,25 @@ import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay 
 import { AlertTriangle, Calendar, List, Phone, Mail, Video } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { mockFollowUps } from "@/modules/sales/mock-data";
+import { useListFollowUps, type FollowUp as ApiFollowUp } from "@/api/sales";
 import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
-  ExecutiveAvatar,
   SalesEmptyState,
 } from "@/modules/sales/components";
-import type { FollowUp } from "@/modules/sales/types";
 
-const typeIcons = {
+const typeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   call: Phone,
   email: Mail,
   meeting: Video,
   demo: Video,
 };
 
-function FollowUpCard({ fu }: { fu: FollowUp }) {
+function FollowUpCard({ fu }: { fu: ApiFollowUp }) {
   const Icon = typeIcons[fu.type] ?? Phone;
   return (
     <Link href={`/sales/leads/${fu.leadId}`}>
@@ -36,21 +35,17 @@ function FollowUpCard({ fu }: { fu: FollowUp }) {
       >
         <CardContent className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-sm font-medium truncate">{fu.leadName}</p>
-              <p className="text-xs text-muted-foreground truncate">{fu.company}</p>
-            </div>
+            <p className="text-sm font-medium">Lead #{fu.leadId}</p>
             <SalesStatusBadge variant="followUp" value={fu.status} />
           </div>
-          <p className="text-xs text-muted-foreground line-clamp-2">{fu.notes}</p>
-          <div className="flex items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Icon className="h-3 w-3" />
-              <span className="capitalize">{fu.type}</span>
-              <span>·</span>
-              <span>{format(new Date(fu.scheduledAt), "MMM d, h:mm a")}</span>
-            </div>
-            <ExecutiveAvatar name={fu.executive.name} />
+          {fu.notes && (
+            <p className="text-xs text-muted-foreground line-clamp-2">{fu.notes}</p>
+          )}
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground pt-1">
+            <Icon className="h-3 w-3" />
+            <span className="capitalize">{fu.type}</span>
+            <span>·</span>
+            <span>{format(new Date(fu.scheduledAt), "MMM d, h:mm a")}</span>
           </div>
         </CardContent>
       </Card>
@@ -62,36 +57,34 @@ export default function FollowUps() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("list");
 
+  const { data, isLoading, isError, refetch } = useListFollowUps();
+  const allFollowUps = data?.followUps ?? [];
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return mockFollowUps.filter(
-      (f) =>
-        !q ||
-        f.leadName.toLowerCase().includes(q) ||
-        f.company.toLowerCase().includes(q) ||
-        f.notes.toLowerCase().includes(q),
-    );
-  }, [search]);
+    if (!q) return allFollowUps;
+    return allFollowUps.filter((f) => f.notes.toLowerCase().includes(q));
+  }, [allFollowUps, search]);
 
   const overdue = filtered.filter((f) => f.status === "overdue");
   const scheduled = filtered.filter((f) => f.status === "scheduled");
   const completed = filtered.filter((f) => f.status === "completed");
 
-  const monthStart = startOfMonth(new Date(2026, 4, 1));
+  const monthStart = startOfMonth(new Date());
   const monthEnd = endOfMonth(monthStart);
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startPad = getDay(monthStart);
 
   const followUpsByDay = useMemo(() => {
-    const map = new Map<string, FollowUp[]>();
-    for (const fu of mockFollowUps) {
+    const map = new Map<string, ApiFollowUp[]>();
+    for (const fu of allFollowUps) {
       const key = format(new Date(fu.scheduledAt), "yyyy-MM-dd");
       const list = map.get(key) ?? [];
       list.push(fu);
       map.set(key, list);
     }
     return map;
-  }, []);
+  }, [allFollowUps]);
 
   return (
     <PortalPageShell>
@@ -110,6 +103,19 @@ export default function FollowUps() {
         searchPlaceholder="Search follow-ups…"
       />
 
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState
+          title="Failed to load follow-ups"
+          description="Could not fetch follow-ups from the server."
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : (
+        <>
       {overdue.length > 0 && (
         <motion.section
           className="rounded-xl border border-destructive/30 bg-destructive/[0.04] p-4 space-y-3"
@@ -131,7 +137,7 @@ export default function FollowUps() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardContent className="p-4">
-            <p className="text-sm font-semibold mb-3">May 2026 — calendar</p>
+            <p className="text-sm font-semibold mb-3">{format(monthStart, "MMMM yyyy")} — calendar</p>
             <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-medium text-muted-foreground mb-2">
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
                 <span key={d}>{d}</span>
@@ -150,7 +156,7 @@ export default function FollowUps() {
                     key={key}
                     className={cn(
                       "aspect-square rounded-md border p-0.5 text-[10px] flex flex-col items-center justify-start",
-                      isSameDay(day, new Date(2026, 4, 24)) && "border-primary bg-primary/5",
+                      isSameDay(day, new Date()) && "border-primary bg-primary/5",
                       dayFollowUps.length > 0 && "bg-muted/40",
                       hasOverdue && "border-destructive/40 bg-destructive/[0.06]",
                     )}
@@ -223,6 +229,8 @@ export default function FollowUps() {
           </Tabs>
         </div>
       </div>
+        </>
+      )}
     </PortalPageShell>
   );
 }

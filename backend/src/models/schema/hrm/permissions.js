@@ -5,6 +5,8 @@ const hrmRoleTemplateSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   name: { type: String, required: true },
   code: { type: String, required: true, unique: true, lowercase: true, trim: true },
+  /** When set, users with this CMS login role default to this permission template. */
+  cmsRole: { type: String, trim: true, lowercase: true, default: null, sparse: true },
   description: { type: String },
   isSystem: { type: Boolean, default: false },
 }, { timestamps: true });

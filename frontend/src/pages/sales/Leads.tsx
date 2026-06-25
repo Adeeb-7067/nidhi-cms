@@ -5,6 +5,7 @@ import { format } from "date-fns";
 import { Plus, Users, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -16,7 +17,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { mockLeads } from "@/modules/sales/mock-data";
+import { useListLeads } from "@/api/sales";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_ORDER,
@@ -30,6 +31,7 @@ import {
   ExecutiveAvatar,
   SalesEmptyState,
   LeadFormDrawer,
+  BulkLeadActions,
 } from "@/modules/sales/components";
 
 export default function SalesLeads() {
@@ -38,27 +40,27 @@ export default function SalesLeads() {
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  const { data, isLoading, isError, refetch } = useListLeads({ search: search || undefined });
+  const allLeads = data?.leads ?? [];
+
   const filtered = useMemo(() => {
-    return mockLeads.filter((lead) => {
-      const q = search.toLowerCase();
-      const matchesSearch =
-        !q ||
-        lead.name.toLowerCase().includes(q) ||
-        lead.company.toLowerCase().includes(q) ||
-        lead.email.toLowerCase().includes(q);
-      const matchesStatus = statusTab === "all" || lead.status === statusTab;
-      return matchesSearch && matchesStatus;
-    });
-  }, [search, statusTab]);
+    if (statusTab === "all") return allLeads;
+    return allLeads.filter((l) => l.status === statusTab);
+  }, [allLeads, statusTab]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: allLeads.length };
+    for (const s of LEAD_STATUS_ORDER) {
+      counts[s] = allLeads.filter((l) => l.status === s).length;
+    }
+    return counts;
+  }, [allLeads]);
 
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
   const toggleAll = () => {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(filtered.map((l) => l.id)));
-    }
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(filtered.map((l) => l.id)));
   };
 
   const toggleOne = (id: number) => {
@@ -69,14 +71,6 @@ export default function SalesLeads() {
       return next;
     });
   };
-
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: mockLeads.length };
-    for (const s of LEAD_STATUS_ORDER) {
-      counts[s] = mockLeads.filter((l) => l.status === s).length;
-    }
-    return counts;
-  }, []);
 
   return (
     <PortalPageShell>
@@ -127,12 +121,10 @@ export default function SalesLeads() {
           animate={{ opacity: 1, y: 0 }}
         >
           <span className="font-medium">{selected.size} selected</span>
-          <Button variant="outline" size="sm" className="h-7 text-xs">
-            Assign executive
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-xs">
-            Change status
-          </Button>
+          <BulkLeadActions
+            selectedIds={[...selected]}
+            onClear={() => setSelected(new Set())}
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -144,7 +136,21 @@ export default function SalesLeads() {
         </motion.div>
       )}
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState
+          icon={Users}
+          title="Failed to load leads"
+          description="Could not fetch leads from the server."
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : filtered.length === 0 ? (
         <SalesEmptyState
           icon={Users}
           title="No leads found"
@@ -169,7 +175,7 @@ export default function SalesLeads() {
                   <TableHead className="text-xs">Priority</TableHead>
                   <TableHead className="text-xs">Executive</TableHead>
                   <TableHead className="text-xs text-right">Expected value</TableHead>
-                  <TableHead className="text-xs">Next follow-up</TableHead>
+                  <TableHead className="text-xs">Next reminder</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
                 </TableRow>
               </TableHeader>
@@ -194,11 +200,13 @@ export default function SalesLeads() {
                     <TableCell>
                       <Link href={`/sales/leads/${lead.id}`} className="block min-w-0 hover:text-primary">
                         <p className="text-xs font-medium">{lead.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{lead.email}</p>
+                        <p className="text-[10px] text-muted-foreground">{lead.email ?? "—"}</p>
                       </Link>
                     </TableCell>
-                    <TableCell className="text-xs max-w-[140px] truncate">{lead.company}</TableCell>
-                    <TableCell className="text-xs">{LEAD_SOURCE_LABELS[lead.source]}</TableCell>
+                    <TableCell className="text-xs max-w-[140px] truncate">{lead.company ?? "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {lead.source ? (LEAD_SOURCE_LABELS[lead.source as keyof typeof LEAD_SOURCE_LABELS] ?? lead.source) : "—"}
+                    </TableCell>
                     <TableCell>
                       <SalesStatusBadge variant="lead" value={lead.status} />
                     </TableCell>
@@ -206,14 +214,18 @@ export default function SalesLeads() {
                       <SalesStatusBadge variant="priority" value={lead.priority} />
                     </TableCell>
                     <TableCell>
-                      <ExecutiveAvatar name={lead.assignedTo.name} />
+                      {lead.assignedToUser ? (
+                        <ExecutiveAvatar name={lead.assignedToUser.name} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-right font-medium tabular-nums">
                       {formatCompactCurrency(lead.expectedValue)}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {lead.nextFollowUp
-                        ? format(new Date(lead.nextFollowUp), "MMM d, yyyy")
+                      {lead.reminder?.date
+                        ? format(new Date(lead.reminder.date), "MMM d, yyyy")
                         : "—"}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">

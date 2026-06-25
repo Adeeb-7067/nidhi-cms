@@ -1,6 +1,9 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { useCreateLead } from "@/api/sales";
 import {
   Sheet,
   SheetContent,
@@ -27,10 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { salesExecutives } from "../mock-data";
 import { LEAD_SOURCE_LABELS } from "../constants";
 import type { LeadSource, LeadPriority } from "../types";
-import { toast } from "sonner";
+import { useSalesStaff } from "../use-sales-staff";
+import type { User } from "@/api/generated/api.schemas";
 
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -54,6 +57,9 @@ export function LeadFormDrawer({
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }) {
+  const createLead = useCreateLead();
+  const { staff } = useSalesStaff();
+
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
@@ -63,16 +69,30 @@ export function LeadFormDrawer({
       company: "",
       source: "website",
       priority: "medium",
-      assignedTo: String(salesExecutives[0]?.id ?? 1),
+      assignedTo: "",
       notes: "",
     },
   });
 
-  const onSubmit = (values: FormValues) => {
-    toast.success(`Lead "${values.name}" created (demo)`);
-    form.reset();
-    onOpenChange(false);
-    onSuccess?.();
+  const onSubmit = async (values: FormValues) => {
+    try {
+      await createLead.mutateAsync({
+        name: values.name,
+        email: values.email,
+        phone: values.phone,
+        company: values.company,
+        source: values.source,
+        priority: values.priority as LeadPriority,
+        assignedTo: values.assignedTo && values.assignedTo !== "none" ? Number(values.assignedTo) : null,
+        description: values.notes?.trim() || null,
+      });
+      toast.success(`Lead "${values.name}" created`);
+      form.reset();
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, "Failed to create lead");
+    }
   };
 
   return (
@@ -194,14 +214,15 @@ export function LeadFormDrawer({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Assigned executive</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value || "none"}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue />
+                        <SelectValue placeholder="Optional" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {salesExecutives.map((e) => (
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {staff.map((e: User) => (
                         <SelectItem key={e.id} value={String(e.id)}>
                           {e.name}
                         </SelectItem>
@@ -226,8 +247,8 @@ export function LeadFormDrawer({
               )}
             />
             <SheetFooter className="pt-2">
-              <Button type="submit" className="w-full sm:w-auto">
-                Create lead
+              <Button type="submit" className="w-full sm:w-auto" disabled={createLead.isPending}>
+                {createLead.isPending ? "Creating…" : "Create lead"}
               </Button>
             </SheetFooter>
           </form>

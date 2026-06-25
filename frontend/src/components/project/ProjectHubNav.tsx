@@ -7,6 +7,7 @@ import {
   Bug,
   Users,
   BarChart3,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,7 +22,10 @@ export type ProjectHubTab =
   | "comments"
   | "requests"
   | "analytics"
-  | "history";
+  | "history"
+  | "tasks"
+  | "tickets"
+  | "clients";
 
 type HubSection = {
   id: string;
@@ -34,6 +38,7 @@ type HubSection = {
 const SECTIONS: HubSection[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, tab: "overview" },
   { id: "resources", label: "Resources", icon: FolderOpen, tab: "inventory" },
+  { id: "work", label: "Work", icon: ListTodo, tab: "tasks" },
   {
     id: "delivery",
     label: "Delivery",
@@ -61,8 +66,10 @@ const SECTIONS: HubSection[] = [
     tab: "team",
     children: [
       { id: "team", label: "Members" },
+      { id: "clients", label: "Clients" },
       { id: "comments", label: "Comments" },
       { id: "requests", label: "Requests" },
+      { id: "tickets", label: "Tickets" },
     ],
   },
   {

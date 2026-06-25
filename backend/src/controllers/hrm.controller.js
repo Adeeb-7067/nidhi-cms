@@ -98,12 +98,7 @@ async function getLeaveRequests(req, res) {
   const userIds = await resolveScopedUserIds(req, req.query.userId);
   const status = req.query.status ?? undefined;
   const date = req.query.date ?? undefined;
-  let requests = await leaveService.listLeaveRequests({ userIds: userIds ?? undefined, status });
-  if (date) {
-    requests = requests.filter(
-      (r) => r.startDate <= date && r.endDate >= date,
-    );
-  }
+  const requests = await leaveService.listLeaveRequests({ userIds: userIds ?? undefined, status, date });
   res.json({ requests });
 }
 
@@ -277,7 +272,7 @@ async function patchAttendanceCorrection(req, res) {
   const id = parseIdParam(req.params.id, "correction id");
   const row = await attendanceCorrectionsTable.findOne({ id }).lean();
   if (!row) notFound("Correction");
-  await assertCanAccessUser(req, row.userId);
+  await assertCanViewAttendanceForUser(req, row.userId);
   res.json(await attendanceService.reviewCorrection(id, req.body, req.user.id));
 }
 

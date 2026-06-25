@@ -6,6 +6,7 @@ import {
   milestonesTable,
   usersTable,
   clientsTable,
+  clientTeamMembersTable,
   dailyLogsTable,
   getNextSequence
 } from "../models/schema/index.js";
@@ -587,6 +588,62 @@ async function getProjectsByIdHistory(req, res) {
   }).sort({ createdAt: -1 });
   res.json(history);
 }
+async function getProjectsByIdClientTeam(req, res) {
+  const id = parseInt(req.params["id"], 10);
+  const project = await projectsTable.findOne({ id }).lean();
+  if (!project) notFound("Project");
+  const access = await getProjectAccess(req, id);
+  if (!access.allowed) forbidden();
+
+  const companyId = project.companyId || project.clientId;
+  if (!companyId) {
+    res.json({ primaryContact: null, members: [] });
+    return;
+  }
+
+  const [clientRow, teamMembers] = await Promise.all([
+    clientsTable.findOne({ id: companyId }, { id: 1, userId: 1, contactPerson: 1, email: 1, phone: 1 }).lean(),
+    clientTeamMembersTable.find({ clientCompanyId: companyId, status: { $ne: "inactive" } }).lean(),
+  ]);
+
+  const memberUserIds = teamMembers.map((m) => m.userId);
+  const allUserIds = [...new Set([
+    ...(clientRow?.userId ? [clientRow.userId] : []),
+    ...memberUserIds,
+  ])];
+
+  const users = allUserIds.length
+    ? await usersTable.find({ id: { $in: allUserIds } }, { id: 1, name: 1, email: 1, avatarUrl: 1 }).lean()
+    : [];
+  const userById = new Map(users.map((u) => [u.id, u]));
+
+  const primaryContact = clientRow?.userId
+    ? {
+        userId: clientRow.userId,
+        name: userById.get(clientRow.userId)?.name ?? clientRow.contactPerson ?? null,
+        email: userById.get(clientRow.userId)?.email ?? clientRow.email ?? null,
+        avatarUrl: userById.get(clientRow.userId)?.avatarUrl ?? null,
+        title: "Client Admin",
+        isAdmin: true,
+        status: "active",
+      }
+    : null;
+
+  const members = teamMembers.map((m) => {
+    const user = userById.get(m.userId);
+    return {
+      userId: m.userId,
+      name: user?.name ?? null,
+      email: user?.email ?? null,
+      avatarUrl: user?.avatarUrl ?? null,
+      title: m.title ?? null,
+      isAdmin: false,
+      status: m.status,
+    };
+  });
+
+  res.json({ primaryContact, members });
+}
 export {
   deleteProjectsById,
   deleteProjectsByIdMembersByUserId,
@@ -595,6 +652,7 @@ export {
   getProjectsByIdApkReleases,
   getProjectsByIdApkSchedules,
   getProjectsByIdBugs,
+  getProjectsByIdClientTeam,
   getProjectsByIdHistory,
   getProjectsByIdLogs,
   getProjectsByIdMembers,
