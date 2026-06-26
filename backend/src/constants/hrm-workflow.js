@@ -44,6 +44,33 @@ export const candidateSources = [
 export const documentStatuses = ["pending", "approved", "rejected"];
 export const policyAckStatuses = ["pending", "acknowledged"];
 
+export const assetCategories = [
+  "Laptop",
+  "Monitor",
+  "Headset",
+  "Phone",
+  "Keyboard",
+  "Mouse",
+  "Chair",
+  "ID Card",
+  "Other",
+];
+
+export const assetStatuses = ["assigned", "in_stock", "in_repair", "retired"];
+export const assetConditions = ["new", "good", "fair", "poor"];
+
+/** Satyakabir exit workflow stages (1-indexed in API). */
+export const EXIT_WORKFLOW_STAGES = [
+  "Resignation",
+  "Approval",
+  "Knowledge transfer",
+  "Asset return",
+  "FnF settlement",
+  "Exit",
+];
+
+export const exitRequestStatuses = ["active", "completed", "cancelled"];
+
 export function isHrmManagerRole(role) {
   return role === "manager" || role === "super_admin" || role === "hr";
 }

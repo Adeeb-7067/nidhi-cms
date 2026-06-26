@@ -122,4 +122,18 @@ router.patch("/hrm/users/:userId/profile", perm("hrm_employees", "edit"), asyncH
 
 router.get("/hrm/audit", perm("hrm_audit", "view"), asyncHandler(hrm.getAuditLogs));
 
+router.get("/hrm/assets", perm("hrm_assets", "view"), asyncHandler(hrm.getAssets));
+router.get("/hrm/assets/:id", perm("hrm_assets", "view"), asyncHandler(hrm.getAsset));
+router.post("/hrm/assets", perm("hrm_assets", "create"), asyncHandler(hrm.postAsset));
+router.patch("/hrm/assets/:id", perm("hrm_assets", "edit"), asyncHandler(hrm.patchAsset));
+router.delete("/hrm/assets/:id", perm("hrm_assets", "delete"), asyncHandler(hrm.deleteAsset));
+
+router.get("/hrm/exit", perm("hrm_exit", "view"), asyncHandler(hrm.getExitRequests));
+router.get("/hrm/exit/:id", perm("hrm_exit", "view"), asyncHandler(hrm.getExitRequest));
+router.post("/hrm/exit", perm("hrm_exit", "create"), asyncHandler(hrm.postExitRequest));
+router.patch("/hrm/exit/:id", perm("hrm_exit", "edit"), asyncHandler(hrm.patchExitRequest));
+router.post("/hrm/exit/:id/advance", perm("hrm_exit", "edit"), asyncHandler(hrm.postExitAdvance));
+router.post("/hrm/exit/:id/return-assets", perm("hrm_exit", "edit"), asyncHandler(hrm.postExitReturnAssets));
+router.post("/hrm/exit/:id/cancel", perm("hrm_exit", "delete"), asyncHandler(hrm.postExitCancel));
+
 export default router;

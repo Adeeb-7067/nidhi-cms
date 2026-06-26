@@ -45,6 +45,8 @@ const EMPLOYEE_LIST_PROJECTION = {
   leaveAccrualDaysPerMonth: 1,
   lastLoginAt: 1,
   createdAt: 1,
+  bloodGroup: 1,
+  emergencyContacts: 1,
 };
 
 function monthBounds(year, month) {
@@ -87,7 +89,7 @@ async function enrichEmployees(rows) {
     const shift = u.shiftId ? shiftMap.get(u.shiftId) : null;
     return {
       ...base,
-      departmentName: dept?.name ?? u.department ?? null,
+      departmentName: dept?.name ?? null,
       departmentCode: dept?.code ?? null,
       reportingManagerName: mgr?.name ?? null,
       reportingManagerEmployeeId: mgr?.employeeId ?? null,

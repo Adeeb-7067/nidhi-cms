@@ -25,6 +25,8 @@ import * as recruitmentService from "../services/hrm/recruitment.service.js";
 import * as onboardingService from "../services/hrm/onboarding.service.js";
 import * as documentsService from "../services/hrm/documents.service.js";
 import * as policiesService from "../services/hrm/policies.service.js";
+import * as assetsService from "../services/hrm/assets.service.js";
+import * as exitService from "../services/hrm/exit.service.js";
 import { resolveScopedUserIds, resolveAttendanceScopedUserIds, assertCanAccessUser, assertCanViewAttendanceForUser, assertHrmEmployeeUser, resolveHrmEmployeeScope } from "../services/hrm/team-scope.js";
 import {
   getOrCreateSettings,
@@ -714,6 +716,73 @@ async function patchUserHrmProfile(req, res) {
   res.json({ message: "HRM profile updated", employee: detail.employee });
 }
 
+async function getAssets(req, res) {
+  res.json({
+    assets: await assetsService.listAssets({
+      status: req.query.status,
+      category: req.query.category,
+      assignedUserId: req.query.assignedUserId,
+      search: req.query.search,
+    }),
+  });
+}
+
+async function getAsset(req, res) {
+  const id = parseIdParam(req.params.id, "asset id");
+  res.json({ asset: await assetsService.getAsset(id) });
+}
+
+async function postAsset(req, res) {
+  const asset = await assetsService.createAsset(req.body, req.user.id);
+  res.status(201).json(asset);
+}
+
+async function patchAsset(req, res) {
+  const id = parseIdParam(req.params.id, "asset id");
+  res.json(await assetsService.updateAsset(id, req.body, req.user.id));
+}
+
+async function deleteAsset(req, res) {
+  const id = parseIdParam(req.params.id, "asset id");
+  res.json(await assetsService.deleteAsset(id, req.user.id));
+}
+
+async function getExitRequests(req, res) {
+  res.json({
+    requests: await exitService.listExitRequests({ status: req.query.status }),
+  });
+}
+
+async function getExitRequest(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json({ request: await exitService.getExitRequest(id) });
+}
+
+async function postExitRequest(req, res) {
+  const request = await exitService.createExitRequest(req.body, req.user.id);
+  res.status(201).json(request);
+}
+
+async function patchExitRequest(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.updateExitRequest(id, req.body, req.user.id));
+}
+
+async function postExitAdvance(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.advanceExitStage(id, req.user.id));
+}
+
+async function postExitReturnAssets(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.returnExitAssets(id, req.user.id));
+}
+
+async function postExitCancel(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.cancelExitRequest(id, req.user.id));
+}
+
 async function getAuditLogs(req, res) {
   const query = {};
   if (req.query.severity) query.severity = req.query.severity;
@@ -821,5 +890,17 @@ export {
   getHrmSettings,
   patchHrmSettings,
   patchUserHrmProfile,
+  getAssets,
+  getAsset,
+  postAsset,
+  patchAsset,
+  deleteAsset,
+  getExitRequests,
+  getExitRequest,
+  postExitRequest,
+  patchExitRequest,
+  postExitAdvance,
+  postExitReturnAssets,
+  postExitCancel,
   getAuditLogs,
 };

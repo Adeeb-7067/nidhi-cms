@@ -11,3 +11,5 @@ export * from "./audit.js";
 export * from "./recruitment.js";
 export * from "./documents.js";
 export * from "./policies.js";
+export * from "./assets.js";
+export * from "./exit.js";

@@ -125,6 +125,9 @@ const HrmPolicies = React.lazy(() => import("@/pages/hrm/Policies"));
 const HrmAudit = React.lazy(() => import("@/pages/hrm/Audit"));
 const HrmOnboarding = React.lazy(() => import("@/pages/hrm/Onboarding"));
 const HrmRoles = React.lazy(() => import("@/pages/hrm/Roles"));
+const HrmAssets = React.lazy(() => import("@/pages/hrm/Assets"));
+const HrmExit = React.lazy(() => import("@/pages/hrm/Exit"));
+const HrmIdCards = React.lazy(() => import("@/pages/hrm/IdCards"));
 
 /** Inner route switch — rendered inside persistent AppLayout (no layout remount on navigate). */
 export function PageOutlet() {
@@ -645,6 +648,9 @@ export function PageOutlet() {
       <Route path="/hrm/onboarding"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmOnboarding /></RoleGate></Route>
       <Route path="/hrm/documents"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmDocuments /></RoleGate></Route>
       <Route path="/hrm/policies"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmPolicies /></RoleGate></Route>
+      <Route path="/hrm/assets"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmAssets /></RoleGate></Route>
+      <Route path="/hrm/exit"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmExit /></RoleGate></Route>
+      <Route path="/hrm/id-cards"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmIdCards /></RoleGate></Route>
       <Route path="/hrm/audit"><RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}><HrmAudit /></RoleGate></Route>
       <Route path="/hrm">
         <RoleGate allowedRoles={[...HRM_ADMIN_ROLES, ...HRM_EMPLOYEE_ROLES]}>

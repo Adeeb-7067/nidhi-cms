@@ -48,6 +48,8 @@ import {
   FolderOpen,
   CalendarDays,
   IdCard,
+  Laptop,
+  LogOut,
 } from "lucide-react";
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
@@ -479,6 +481,9 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Salary slips", href: "/hrm/salary-slips", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
         { title: "Documents", href: "/hrm/documents", icon: FolderOpen, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Policies", href: "/hrm/policies", icon: FileText, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
+        { title: "Assets", href: "/hrm/assets", icon: Laptop, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
+        { title: "Exit workflow", href: "/hrm/exit", icon: LogOut, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
+        { title: "ID Cards", href: "/hrm/id-cards", icon: IdCard, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Audit log", href: "/hrm/audit", icon: ShieldCheck, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "HRM settings", href: "/hrm/settings", icon: Settings, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "My attendance", href: "/hrm/my-attendance", icon: ClipboardList, roles: [...HRM_EMPLOYEE_ROLES], group: "Self-service" },

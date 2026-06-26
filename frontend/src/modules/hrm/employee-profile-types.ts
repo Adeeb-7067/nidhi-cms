@@ -30,6 +30,13 @@ export type EmployeeSalaryProfile = {
   };
 };
 
+export type EmployeeEmergencyContact = {
+  name?: string;
+  relation?: string;
+  phone?: string;
+  email?: string;
+};
+
 export type EmployeeProfileExtension = {
   firstName?: string | null;
   lastName?: string | null;
@@ -50,6 +57,7 @@ export type EmployeeProfileExtension = {
   weeklyOff?: string[];
   bio?: string | null;
   bloodGroup?: string | null;
+  emergencyContacts?: EmployeeEmergencyContact[];
   socialProfiles?: EmployeeSocialProfiles | null;
   position?: string | null;
   aadharNumber?: number | null;

@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useListUsers, getListUsersQueryKey } from "@/api/generated/api";
+import type { User } from "@/api/generated/api.schemas";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHero,
@@ -49,8 +50,11 @@ export default function HrmDepartmentsPage() {
     query: { queryKey: getListUsersQueryKey(staffParams) },
   });
   const staffOptions = useMemo(
-    () => (staffData?.users ?? []).filter((u) => u.status === "active").sort((a, b) => a.name.localeCompare(b.name)),
-    [staffData?.users],
+    () =>
+      (staffData?.data?.users ?? [])
+        .filter((u: User) => u.status === "active")
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [staffData?.data?.users],
   );
 
   const [open, setOpen] = useState(false);

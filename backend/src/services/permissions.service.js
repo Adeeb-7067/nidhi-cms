@@ -39,8 +39,7 @@ const DEV_PORTAL_VIEW = [
 
 const HRM_ADMIN_MODULES = cmsModuleGroups
   .filter((g) => g.label === "HRM" || g.label === "HRM self-service")
-  .flatMap((g) => g.modules)
-  .filter((m) => m !== "hrm_id_cards");
+  .flatMap((g) => g.modules);
 
 const DEFAULT_TEMPLATES = [
   { code: "super_admin", name: "Super Admin", cmsRole: "super_admin", isSystem: true, grants: "all" },

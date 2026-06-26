@@ -104,7 +104,7 @@ export function HrmKpiGrid({
 
 /** @deprecated Use HrmKpiGrid — single stat chip. */
 export function HrmKpiCard(props: HrmKpiItem) {
-  return <HrmKpiGrid items={[props]} columns={1} count={1} />;
+  return <HrmKpiGrid items={[props]} columns={2} count={1} />;
 }
 
 export function HrmChartCard({

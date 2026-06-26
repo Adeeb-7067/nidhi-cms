@@ -35,6 +35,8 @@ import type {
   HrmEmployeeDocument,
   HrmPolicy,
   HrmPolicyAcknowledgement,
+  HrmAsset,
+  HrmExitRequest,
 } from "@/modules/hrm/types";
 import type { HrmProfilePatchPayload } from "@/modules/hrm/employee-profile-types";
 import type { HrmAction, HrmModule } from "@/modules/hrm/constants";
@@ -1239,5 +1241,167 @@ export function useAcknowledgePolicy() {
       customFetch(apiUrl(`/api/hrm/policies/${policyId}/acknowledge`), { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "policies"] }),
     meta: { errorMessage: "Could not acknowledge policy" },
+  });
+}
+
+export const hrmAssetsQueryKey = (params?: object) => ["hrm", "assets", params] as const;
+export const hrmAssetQueryKey = (id?: number) => ["hrm", "assets", id] as const;
+export const hrmExitQueryKey = (params?: object) => ["hrm", "exit", params] as const;
+export const hrmExitDetailQueryKey = (id?: number) => ["hrm", "exit", id] as const;
+
+export function useHrmAssets(params?: { status?: string; category?: string; search?: string }, options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: hrmAssetsQueryKey(params),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
+    queryFn: () => {
+      const qs = params
+        ? `?${new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v != null && v !== "") as [string, string][],
+          ).toString()}`
+        : "";
+      return customFetch<{ assets: HrmAsset[] }>(apiUrl(`/api/hrm/assets${qs}`));
+    },
+    meta: { errorMessage: "Could not load assets" },
+  });
+}
+
+export function useHrmAsset(id?: number, options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: hrmAssetQueryKey(id),
+    enabled: (options?.enabled ?? true) && id != null,
+    queryFn: () => customFetch<{ asset: HrmAsset }>(apiUrl(`/api/hrm/assets/${id}`)),
+    meta: { errorMessage: "Could not load asset" },
+  });
+}
+
+export function useCreateAsset() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (body: Partial<HrmAsset> & { category: string; brand: string }) =>
+      customFetch<HrmAsset>(apiUrl("/api/hrm/assets"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "assets"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+    },
+    meta: { errorMessage: "Could not create asset" },
+  });
+}
+
+export function useUpdateAsset() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Partial<HrmAsset>) =>
+      customFetch<HrmAsset>(apiUrl(`/api/hrm/assets/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "assets"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+    },
+    meta: { errorMessage: "Could not update asset" },
+  });
+}
+
+export function useDeleteAsset() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) => customFetch(apiUrl(`/api/hrm/assets/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "assets"] }),
+    meta: { errorMessage: "Could not delete asset" },
+  });
+}
+
+export function useHrmExitRequests(status?: string, options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: hrmExitQueryKey({ status }),
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.list,
+    queryFn: () => {
+      const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+      return customFetch<{ requests: HrmExitRequest[] }>(apiUrl(`/api/hrm/exit${qs}`));
+    },
+    meta: { errorMessage: "Could not load exit requests" },
+  });
+}
+
+export function useHrmExitRequest(id?: number, options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: hrmExitDetailQueryKey(id),
+    enabled: (options?.enabled ?? true) && id != null,
+    queryFn: () => customFetch<{ request: HrmExitRequest }>(apiUrl(`/api/hrm/exit/${id}`)),
+    meta: { errorMessage: "Could not load exit request" },
+  });
+}
+
+export function useCreateExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (body: {
+      userId: number;
+      reason: string;
+      resignationDate: string;
+      lastWorkingDay: string;
+      notes?: string;
+    }) =>
+      customFetch<HrmExitRequest>(apiUrl("/api/hrm/exit"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+    },
+    meta: { errorMessage: "Could not start exit workflow" },
+  });
+}
+
+export function useUpdateExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({ id, ...body }: { id: number } & Record<string, unknown>) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+    },
+    meta: { errorMessage: "Could not update exit request" },
+  });
+}
+
+export function useAdvanceExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}/advance`), { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+    },
+    meta: { errorMessage: "Could not advance exit stage" },
+  });
+}
+
+export function useReturnExitAssets() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}/return-assets`), { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "assets"] });
+    },
+    meta: { errorMessage: "Could not mark assets returned" },
+  });
+}
+
+export function useCancelExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}/cancel`), { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "exit"] }),
+    meta: { errorMessage: "Could not cancel exit request" },
   });
 }

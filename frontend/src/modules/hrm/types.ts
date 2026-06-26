@@ -638,6 +638,52 @@ export type HrmPolicyAcknowledgement = {
   acknowledgedAt?: string;
 };
 
+export type HrmAsset = {
+  id: number;
+  tag: string;
+  category: string;
+  brand: string;
+  serial: string;
+  cost: number;
+  condition: string;
+  status: string;
+  assignedUserId?: number | null;
+  assignedOn?: string | null;
+  assignedToName?: string | null;
+  assignedEmployeeCode?: string | null;
+  assignedDesignation?: string | null;
+  assignedAvatarUrl?: string | null;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type HrmExitRequest = {
+  id: number;
+  userId: number;
+  employeeName: string;
+  employeeEmail?: string | null;
+  employeeCode?: string | null;
+  employeeDesignation?: string | null;
+  employeeAvatarUrl?: string | null;
+  employeeDepartment?: string | null;
+  reason: string;
+  resignationDate: string;
+  lastWorkingDay: string;
+  stage: number;
+  stageLabel: string;
+  stageCount: number;
+  status: string;
+  assetReturnComplete: boolean;
+  fnfSettled: boolean;
+  noticeDaysRemaining: number;
+  assignedAssetCount?: number;
+  assets?: HrmAsset[];
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type HrmPermissionsResponse = {
   permissions: HrmPermission[];
   templateId: number | null;
