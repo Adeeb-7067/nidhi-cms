@@ -253,7 +253,7 @@ export function LeadFormModal({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <DialogBody className="px-6 py-4 space-y-4">
               <FormField
                 control={form.control}
