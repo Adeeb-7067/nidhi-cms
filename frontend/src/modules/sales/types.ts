@@ -14,6 +14,7 @@ export type LeadSource =
   | "website"
   | "instagram"
   | "facebook"
+  | "whatsapp"
   | "referral"
   | "linkedin"
   | "cold_call"
@@ -22,9 +23,11 @@ export type LeadSource =
 export type ProposalStatus =
   | "draft"
   | "sent"
+  | "seen"
   | "revised"
   | "approved"
-  | "rejected"
+  | "declined"
+  | "counter_offer"
   | "expired";
 
 export type FollowUpStatus = "scheduled" | "completed" | "overdue" | "cancelled";

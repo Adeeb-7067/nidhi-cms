@@ -4,9 +4,19 @@ export { ActivityTimeline } from "./ActivityTimeline";
 export { SalesEmptyState } from "./SalesEmptyState";
 export { UserAvatarGroup, ExecutiveAvatar } from "./UserAvatarGroup";
 export { SalesPageHeader } from "./SalesPageHeader";
-export { LeadFormDrawer } from "./LeadFormDrawer";
+export { LeadFormModal } from "./LeadFormModal";
+export { LeadAddableSelect } from "./LeadAddableSelect";
 export {
-  CustomerFormDrawer,
+  LeadDetailHero,
+  LeadPipelineStrip,
+  LeadDetailMetrics,
+  LeadContactCard,
+  LeadAssignmentCard,
+  LeadDescriptionCard,
+  LeadReminderChip,
+} from "./LeadDetailSections";
+export {
+  CustomerFormModal,
   FollowUpDialog,
   LeadReminderDialog,
   ConvertLeadDialog,

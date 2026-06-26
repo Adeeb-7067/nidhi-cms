@@ -311,6 +311,17 @@ export function useUpdateLead() {
   });
 }
 
+export function useDeleteLead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ success: boolean; id: number }>(apiUrl(`/api/sales/leads/${id}`), { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-leads"] });
+    },
+  });
+}
+
 export function useBulkUpdateLeads() {
   const qc = useQueryClient();
   return useMutation({
@@ -331,6 +342,11 @@ export function useConvertLead() {
       portalEmail: string;
       password: string;
       companyName?: string;
+      phone?: string;
+      address?: string;
+      industry?: string;
+      website?: string;
+      location?: string;
       gstin?: string;
       type?: CustomerType;
     }) =>
@@ -338,8 +354,9 @@ export function useConvertLead() {
         apiUrl(`/api/sales/leads/${id}/convert`),
         { method: "POST", body: JSON.stringify(body) }
       ),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["sales-leads"] });
+      qc.invalidateQueries({ queryKey: salesKeys.lead(vars.id) });
       qc.invalidateQueries({ queryKey: ["sales-customers"] });
     },
   });
@@ -396,7 +413,11 @@ export function useCreateFollowUp() {
       executiveId?: number;
     }) =>
       customFetch<FollowUp>(apiUrl("/api/sales/follow-ups"), { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-follow-ups"] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["sales-follow-ups"] });
+      qc.invalidateQueries({ queryKey: salesKeys.lead(vars.leadId) });
+      qc.invalidateQueries({ queryKey: salesKeys.leadActivity(vars.leadId) });
+    },
   });
 }
 
@@ -454,11 +475,13 @@ export function useCreateProposal() {
       title: string;
       leadId?: number;
       customerId?: number;
+      assignedTo?: number;
       items?: ProposalItem[];
       discount?: number;
       validUntil?: string;
       clientNote?: string;
       terms?: string;
+      internalNotes?: string;
     }) =>
       customFetch<Proposal>(apiUrl("/api/sales/proposals"), { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-proposals"] }),

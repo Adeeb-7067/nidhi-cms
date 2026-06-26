@@ -152,6 +152,10 @@ async function convertLead(req, res) {
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
   if (lead.status === "converted") badRequest("This lead has already been converted.", "status");
+  // Guard against partial-failure retries: if a customer already exists for this lead
+  // (created by a prior attempt that failed at the final updateOne), block re-conversion.
+  const existingCustomer = await SalesCustomers.findOne({ leadId: id }).lean();
+  if (existingCustomer) badRequest("A customer record already exists for this lead. Contact support to resolve.", "leadId");
   const body = req.body;
   const portalEmail = optionalString(body.portalEmail ?? body.email ?? lead.email);
   const portalPassword = optionalString(body.password);
@@ -212,11 +216,11 @@ async function convertLead(req, res) {
     );
     res.status(201).json({ success: true, customerId, clientId, portalUserId });
   } catch (err) {
-    if (portalUserId && !clientId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
-    if (clientId && !customerId) {
-      await clientsTable.deleteOne({ id: clientId }).catch(() => {});
-      if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
-    }
+    // Roll back in reverse creation order. Each step is guarded so a failure
+    // in one cleanup doesn't prevent the others from running.
+    if (customerId) await SalesCustomers.deleteOne({ id: customerId }).catch(() => {});
+    if (clientId) await clientsTable.deleteOne({ id: clientId }).catch(() => {});
+    if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
     throw err;
   }
 }
@@ -247,6 +251,7 @@ async function setReminder(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+
   const { date, note } = req.body;
   if (!date) badRequest("date is required.", "date");
   const parsedDate = new Date(date);
@@ -260,6 +265,23 @@ async function setReminder(req, res) {
   res.json({ success: true, reminder });
 }
 
+async function deleteLead(req, res) {
+  const id = parseIdParam(req.params.id, "lead id");
+  const lead = await SalesLeads.findOne({ id }).lean();
+  if (!lead) notFound("Lead");
+  if (lead.status === "converted" && lead.customerId) {
+    badRequest("Cannot delete a converted lead. Manage the customer record instead.", "status");
+  }
+
+  await Promise.all([
+    SalesLeadActivity.deleteMany({ leadId: id }),
+    SalesFollowUps.deleteMany({ leadId: id }),
+    SalesLeads.deleteOne({ id }),
+  ]);
+
+  res.json({ success: true, id });
+}
+
 export {
   listLeads,
   createLead,
@@ -269,4 +291,5 @@ export {
   convertLead,
   getLeadActivity,
   setReminder,
+  deleteLead,
 };

@@ -98,6 +98,7 @@ import {
   teamEmployeeSchema,
   defaultTeamEmployeeFormValues,
   mapUserToTeamEmployeeForm,
+  storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
@@ -408,16 +409,19 @@ export default function AdminEmployees() {
 
   const lastEditHydrateKeyRef = useRef<string | null>(null);
   const createFormInitializedRef = useRef(false);
+  const editBaselineRef = useRef<TeamEmployeeFormValues | null>(null);
 
   useEffect(() => {
     if (!employeeDialogOpen) {
       lastEditHydrateKeyRef.current = null;
       createFormInitializedRef.current = false;
+      editBaselineRef.current = null;
       return;
     }
 
     if (editUserId) {
       if (!editUserProfile || editProfileFetching) return;
+      if (form.formState.isDirty) return;
       const hydrateKey = teamEmployeeEditHydrateKey(
         editUserProfile as User & Record<string, unknown>,
         defaultDepartmentId,
@@ -425,13 +429,18 @@ export default function AdminEmployees() {
       );
       if (lastEditHydrateKeyRef.current === hydrateKey) return;
       lastEditHydrateKeyRef.current = hydrateKey;
-      form.reset(
-        mapUserToTeamEmployeeForm(
-          editUserProfile as User & Record<string, unknown>,
-          defaultDepartmentId,
-          hrmDepartments,
-        ),
+      const mapped = mapUserToTeamEmployeeForm(
+        editUserProfile as User & Record<string, unknown>,
+        defaultDepartmentId,
+        hrmDepartments,
+        cmsRoleOptions,
+        roleTemplateOptions,
       );
+      editBaselineRef.current = {
+        ...mapped,
+        roleTemplateId: storedRoleTemplateId(editUserProfile as User & Record<string, unknown>),
+      };
+      form.reset(mapped);
       setPreviewEmployeeId(String(editUserProfile.employeeId ?? editUser?.employeeId ?? ""));
       return;
     }
@@ -446,8 +455,37 @@ export default function AdminEmployees() {
     editProfileFetching,
     defaultDepartmentId,
     hrmDepartments,
+    cmsRoleOptions,
+    roleTemplateOptions,
     editUser?.employeeId,
     form,
+    form.formState.isDirty,
+  ]);
+
+  useEffect(() => {
+    if (!employeeDialogOpen || !editUserId || !editUserProfile || form.formState.isDirty) return;
+    if (!cmsRoleOptions.length && !roleTemplateOptions.length) return;
+    const resolved = mapUserToTeamEmployeeForm(
+      editUserProfile as User & Record<string, unknown>,
+      defaultDepartmentId,
+      hrmDepartments,
+      cmsRoleOptions,
+      roleTemplateOptions,
+    ).roleTemplateId;
+    if (resolved == null) return;
+    const current = form.getValues("roleTemplateId");
+    if (current === resolved) return;
+    form.setValue("roleTemplateId", resolved, { shouldDirty: false, shouldValidate: false });
+  }, [
+    employeeDialogOpen,
+    editUserId,
+    editUserProfile,
+    cmsRoleOptions,
+    roleTemplateOptions,
+    defaultDepartmentId,
+    hrmDepartments,
+    form,
+    form.formState.isDirty,
   ]);
 
   const syncDisplayNameFromParts = () => {
@@ -492,11 +530,17 @@ export default function AdminEmployees() {
   const onSubmit = async (values: EmployeeFormValues) => {
     try {
       if (editUser) {
+        const baseline = editBaselineRef.current;
+        if (!baseline) {
+          toast.error("Employee profile is still loading. Please try again.");
+          return;
+        }
         const result = await saveTeamEmployee.mutateAsync({
           id: editUser.id,
           values,
           departmentNameById,
           password: values.password?.trim() || undefined,
+          baseline,
         });
         const trimmedPassword = values.password?.trim() ?? "";
         toast.success(trimmedPassword ? "Employee and password updated!" : "Employee updated!");

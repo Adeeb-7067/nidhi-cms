@@ -9,8 +9,8 @@ import {
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
-  const count = await SalesInvoices.countDocuments({ number: { $regex: `^INV-${year}-` } });
-  return `INV-${year}-${String(count + 1).padStart(4, "0")}`;
+  const seq = await getNextSequence(`inv_num_${year}`);
+  return `INV-${year}-${String(seq).padStart(4, "0")}`;
 }
 
 async function listInvoices(req, res) {

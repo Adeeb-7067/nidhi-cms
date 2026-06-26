@@ -79,8 +79,12 @@ export async function buildWorkspaceDashboard(user) {
   const bugProjectFilter = projectIds.length ? { projectId: { $in: projectIds } } : { projectId: -1 };
 
   const now = new Date();
-  const weekAgo = new Date(now);
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  // Start of the current calendar week (Monday 00:00 local time)
+  const startOfWeek = new Date(now);
+  const dayOfWeek = startOfWeek.getDay(); // 0=Sun, 1=Mon … 6=Sat
+  startOfWeek.setDate(startOfWeek.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  startOfWeek.setHours(0, 0, 0, 0);
+  const startOfWeekStr = startOfWeek.toISOString().slice(0, 10); // "YYYY-MM-DD"
   const sixMonthsAgo = new Date(now);
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -122,7 +126,7 @@ export async function buildWorkspaceDashboard(user) {
 
   if (isDev) {
     const weekLogs = await dailyLogsTable
-      .find({ developerId: user.id, createdAt: { $gte: weekAgo } })
+      .find({ developerId: user.id, logDate: { $gte: startOfWeekStr } })
       .lean()
       .exec();
     hoursThisWeek = weekLogs.reduce((s, l) => s + Number(l.hoursSpent || 0), 0);

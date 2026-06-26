@@ -47,6 +47,7 @@ import {
   todayAttendanceRow,
 } from "@/modules/hrm/employee-detail-sections";
 import { EmployeeDocumentsPanel } from "@/modules/hrm/EmployeeDocumentsPanel";
+import { EmployeeWorkTab } from "@/modules/hrm/EmployeeWorkTab";
 import {
   hrmEmployeeQueryKey,
   useHrmEmployee,
@@ -343,6 +344,7 @@ export default function HrmEmployeeDetailPage() {
             <HrmTabsTrigger value="attendance">Attendance</HrmTabsTrigger>
             <HrmTabsTrigger value="leave">Leaves</HrmTabsTrigger>
             <HrmTabsTrigger value="payroll">Payroll</HrmTabsTrigger>
+            <HrmTabsTrigger value="work">Work activity</HrmTabsTrigger>
           </HrmTabsList>
 
           <TabsContent value="overview" className="space-y-4 mt-0">
@@ -629,6 +631,12 @@ export default function HrmEmployeeDetailPage() {
                 viewStorageKey={`hrm-employee-${employeeId}-leave`}
               />
             </PortalTablePanel>
+          </TabsContent>
+
+          <TabsContent value="work" className="mt-0">
+            {activeTab === "work" && employeeId ? (
+              <EmployeeWorkTab employeeId={employeeId} />
+            ) : null}
           </TabsContent>
 
           <TabsContent value="payroll" className="mt-0 space-y-4">

@@ -144,7 +144,7 @@ async function postUsers(req, res) {
   });
   await syncUserRoleTemplate(user.id, role, {
     roleChanged: true,
-    ...(explicitTemplateId !== undefined ? { explicitTemplateId } : {}),
+    ...(typeof explicitTemplateId === "number" ? { explicitTemplateId } : {}),
   });
   const credId = await getNextSequence("credential_history");
   await credentialHistoryTable.create({
@@ -247,11 +247,11 @@ async function patchUsersById(req, res) {
     if (!nextRole || !(await isValidUserRole(nextRole))) badRequest("Invalid role.", "role");
   }
   const roleChanged = body.role !== void 0 && optionalString(body.role) !== existing.role;
-  const explicitTemplate =
+  const templateInBody =
     body.roleTemplateId !== void 0 || body.hrmRoleTemplateId !== void 0;
-  const templateCleared =
-    explicitTemplate &&
-    (body.roleTemplateId ?? body.hrmRoleTemplateId) == null;
+  const templateValue = templateInBody
+    ? (body.roleTemplateId ?? body.hrmRoleTemplateId ?? null)
+    : undefined;
   const profilePatch = buildUserProfilePatchSet(body);
   const mongoUpdate = buildProfilePatchMongoUpdate({
     ...profilePatch,
@@ -264,11 +264,12 @@ async function patchUsersById(req, res) {
   const user = await usersTable.findOneAndUpdate({ id }, mongoUpdate, { new: true, runValidators: true });
   if (!user) notFound("User");
   await syncUserRoleTemplate(id, user.role, {
-    explicitTemplateId:
-      explicitTemplate && !templateCleared
-        ? (body.roleTemplateId ?? body.hrmRoleTemplateId)
-        : undefined,
-    roleChanged: roleChanged || templateCleared,
+    explicitTemplateId: templateInBody
+      ? templateValue != null
+        ? templateValue
+        : null
+      : undefined,
+    roleChanged: roleChanged || (templateInBody && templateValue == null),
   });
   evictUserFromAuthCache(id); // role, name, email, or status may have changed
 

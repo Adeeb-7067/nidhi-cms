@@ -5,6 +5,7 @@ import {
   getNextSequence,
 } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
+import { runInTx } from "../../lib/db-tx.js";
 
 async function listPayments(req, res) {
   const { page, limit } = parsePagination(req.query);
@@ -35,8 +36,8 @@ async function listPayments(req, res) {
 
 async function nextReceiptNumber() {
   const year = new Date().getFullYear();
-  const count = await SalesPayments.countDocuments({ receiptNumber: { $regex: `^REC-${year}-` } });
-  return `REC-${year}-${String(count + 1).padStart(4, "0")}`;
+  const seq = await getNextSequence(`rec_num_${year}`);
+  return `REC-${year}-${String(seq).padStart(4, "0")}`;
 }
 
 function deriveInvoiceStatus(invoice, newPaidAmount) {
@@ -53,28 +54,39 @@ async function recordPayment(req, res) {
   const invoiceId = Number(body.invoiceId);
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
-  const invoice = await SalesInvoices.findOne({ id: invoiceId }).lean();
-  if (!invoice) notFound("Invoice");
-  if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
-  const newPaidAmount = Math.min(invoice.amount, invoice.paidAmount + amount);
-  const newStatus = deriveInvoiceStatus(invoice, newPaidAmount);
+
+  // Allocate IDs before the transaction so the atomic counter isn't inside the tx
   const [receiptNumber, id] = await Promise.all([
     nextReceiptNumber(),
     getNextSequence("sales_payments"),
   ]);
-  await Promise.all([
-    SalesPayments.create({
-      id,
-      invoiceId,
-      customerId: invoice.customerId,
-      amount,
-      paymentMethod: body.paymentMethod,
-      transactionId: optionalString(body.transactionId) ?? null,
-      recordedBy: req.user.id,
-      receiptNumber,
-    }),
-    SalesInvoices.updateOne({ id: invoiceId }, { $set: { paidAmount: newPaidAmount, status: newStatus } }),
-  ]);
+
+  let newStatus;
+  await runInTx(async (session) => {
+    // Re-read inside the transaction so concurrent requests see each other's writes
+    const invoice = await SalesInvoices.findOne({ id: invoiceId }).session(session).lean();
+    if (!invoice) notFound("Invoice");
+    if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
+
+    // Cap the applied amount at the remaining balance — store only what was actually credited
+    const remaining = invoice.amount - invoice.paidAmount;
+    const appliedAmount = Math.min(amount, remaining);
+    const newPaidAmount = invoice.paidAmount + appliedAmount;
+    newStatus = deriveInvoiceStatus(invoice, newPaidAmount);
+
+    await SalesPayments.create(
+      [{ id, invoiceId, customerId: invoice.customerId, amount: appliedAmount,
+         paymentMethod: body.paymentMethod, transactionId: optionalString(body.transactionId) ?? null,
+         recordedBy: req.user.id, receiptNumber }],
+      { session }
+    );
+    await SalesInvoices.updateOne(
+      { id: invoiceId },
+      { $set: { paidAmount: newPaidAmount, status: newStatus } },
+      { session }
+    );
+  });
+
   const payment = await SalesPayments.findOne({ id }).lean();
   res.status(201).json({ ...payment, invoiceStatus: newStatus });
 }

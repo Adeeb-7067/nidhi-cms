@@ -140,6 +140,53 @@ export function defaultTeamEmployeeFormValues(defaultDepartmentId: number | null
 
 type UserLike = Record<string, unknown>;
 
+type CmsRoleOptionLike = { value: string; templateId?: number };
+type RoleTemplateLike = { id: number; code: string; cmsRole?: string | null };
+
+/** Mirrors backend defaultTemplateByRole — used when assignable roles omit templateId. */
+const DEFAULT_TEMPLATE_CODE_BY_ROLE: Record<string, string> = {
+  super_admin: "super_admin",
+  hr: "hr_admin",
+  manager: "manager",
+  developer: "employee",
+  tester: "employee",
+  qa: "employee",
+  freelancer: "employee",
+  bde: "bde",
+};
+
+function coerceTemplateId(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Template id persisted on the user document (explicit assignment only). */
+export function storedRoleTemplateId(user: UserLike): number | null {
+  return coerceTemplateId(user.roleTemplateId) ?? coerceTemplateId(user.hrmRoleTemplateId);
+}
+
+/** Template to show in the form — explicit id or the role's default template. */
+export function resolveEmployeeRoleTemplateId(
+  user: UserLike,
+  cmsRoleOptions: CmsRoleOptionLike[] = [],
+  roleTemplates: RoleTemplateLike[] = [],
+): number | null {
+  const stored = storedRoleTemplateId(user);
+  if (stored != null) return stored;
+  const role = String(user.role ?? "");
+  const match = cmsRoleOptions.find((r) => r.value === role);
+  if (match?.templateId != null) return Number(match.templateId);
+
+  const defaultCode = DEFAULT_TEMPLATE_CODE_BY_ROLE[role];
+  if (defaultCode) {
+    const byCode = roleTemplates.find((t) => t.code === defaultCode);
+    if (byCode) return byCode.id;
+  }
+  const byCmsRole = roleTemplates.find((t) => t.cmsRole === role);
+  return byCmsRole?.id ?? null;
+}
+
 function dateInput(value: unknown) {
   if (!value) return "";
   const d = new Date(String(value));
@@ -153,13 +200,16 @@ export function teamEmployeeEditHydrateKey(
   defaultDepartmentId: number | null,
   departments?: Array<{ id: number; name: string }>,
 ): string {
-  return JSON.stringify(mapUserToTeamEmployeeForm(user, defaultDepartmentId, departments));
+  const mapped = mapUserToTeamEmployeeForm(user, defaultDepartmentId, departments);
+  return JSON.stringify({ ...mapped, roleTemplateId: storedRoleTemplateId(user) });
 }
 
 export function mapUserToTeamEmployeeForm(
   user: UserLike,
   defaultDepartmentId: number | null,
   departments?: Array<{ id: number; name: string }>,
+  cmsRoleOptions: CmsRoleOptionLike[] = [],
+  roleTemplates: RoleTemplateLike[] = [],
 ): TeamEmployeeFormValues {
   const split = splitDisplayName(user.name as string);
   const social = (user.socialProfiles as Record<string, string> | undefined) ?? {};
@@ -185,7 +235,7 @@ export function mapUserToTeamEmployeeForm(
     email: (user.email as string) ?? "",
     password: "",
     role: (user.role as TeamEmployeeFormValues["role"]) ?? "developer",
-    roleTemplateId: (user.roleTemplateId as number | null) ?? null,
+    roleTemplateId: resolveEmployeeRoleTemplateId(user, cmsRoleOptions, roleTemplates),
     status: (user.status as TeamEmployeeFormValues["status"]) ?? "active",
     designation: (user.designation as string) ?? "",
     subType: (user.subType as string) ?? "",
@@ -326,4 +376,25 @@ export function buildTeamEmployeePayload(
     },
     wfh: { monthlyLimit: values.wfhMonthlyLimit },
   };
+}
+
+function payloadFieldEqual(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Send only fields that changed vs the loaded profile — avoids wiping template/shift on unrelated edits. */
+export function buildTeamEmployeePatchPayload(
+  values: TeamEmployeeFormValues,
+  departmentNameById: Map<number, string>,
+  baseline: TeamEmployeeFormValues,
+) {
+  const next = buildTeamEmployeePayload(values, departmentNameById);
+  const prev = buildTeamEmployeePayload(baseline, departmentNameById);
+  const patch: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(next)) {
+    if (!payloadFieldEqual(value, prev[key as keyof typeof prev])) {
+      patch[key] = value;
+    }
+  }
+  return patch;
 }

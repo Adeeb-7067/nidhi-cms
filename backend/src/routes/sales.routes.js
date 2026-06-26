@@ -27,6 +27,7 @@ router.post("/sales/leads", ...guard, wrap(leadsCtrl.createLead));
 router.patch("/sales/leads/bulk", ...guard, wrap(leadsCtrl.bulkUpdateLeads)); // before /:id
 router.get("/sales/leads/:id", ...guard, wrap(leadsCtrl.getLeadById));
 router.patch("/sales/leads/:id", ...guard, wrap(leadsCtrl.updateLead));
+router.delete("/sales/leads/:id", ...guard, wrap(leadsCtrl.deleteLead));
 router.post("/sales/leads/:id/convert", ...guard, wrap(leadsCtrl.convertLead));
 router.get("/sales/leads/:id/activity", ...guard, wrap(leadsCtrl.getLeadActivity));
 router.post("/sales/leads/:id/reminder", ...guard, wrap(leadsCtrl.setReminder));

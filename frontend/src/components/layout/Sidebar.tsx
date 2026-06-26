@@ -183,9 +183,7 @@ function useSidebarNavState() {
       .map((section) => ({
         ...section,
         items: section.items.filter((item) => {
-          if (role === "client") {
-            return item.roles.includes(role) && canViewHref(item.href);
-          }
+          if (!item.roles.includes(role)) return false;
           return canViewHref(item.href);
         }),
       }))

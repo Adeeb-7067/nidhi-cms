@@ -25,13 +25,13 @@ const hrmAdminRoles = ["super_admin", "hr"];
 /** Roles QA can assign bugs to. */
 const bugAssigneeRoles = developerStaffRoles;
  
-function isDeveloperRole(role) {
+function isDeveloperRole(role) { 
   return developerStaffRoles.includes(role);
 }
 
 function isDevPortalStaffRole(role) {
   return devPortalStaffRoles.includes(role);
-}
+} 
 
 function isMonitorableStaffRole(role) {
   return monitorableStaffRoles.includes(role);

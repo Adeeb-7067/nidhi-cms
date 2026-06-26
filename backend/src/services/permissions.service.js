@@ -12,6 +12,7 @@ import {
   builtInAssignableCmsRoles,
   legacyModuleMap,
   normalizePermissionModule,
+  salesModules,
 } from "../constants/permissions.js";
 import { userRoles } from "../constants/user-roles.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
@@ -19,6 +20,12 @@ import { evictUserFromAuthCache } from "../middlewares/auth.js";
 const ALL_MODULE_ACTIONS = cmsModules.flatMap((module) =>
   cmsActions.map((action) => ({ module, action })),
 );
+
+const SALES_BDE_GRANTS = salesModules.flatMap((module) => [
+  { module, action: "view" },
+  { module, action: "create" },
+  { module, action: "edit" },
+]);
 
 const DEV_PORTAL_VIEW = [
   "dev_workspace",
@@ -88,9 +95,7 @@ const DEFAULT_TEMPLATES = [
     cmsRole: "bde",
     isSystem: true,
     grants: [
-      { module: "sales", action: "view" },
-      { module: "sales", action: "create" },
-      { module: "sales", action: "edit" },
+      ...SALES_BDE_GRANTS,
       { module: "hrm_dashboard", action: "view" },
       { module: "hrm_my_attendance", action: "view" },
       { module: "hrm_my_leave", action: "view" },
@@ -141,8 +146,44 @@ export async function migrateLegacyPermissionModules() {
   }
 }
 
+/** Expand legacy umbrella `sales` grants into per-page sales_* modules. */
+export async function migrateSalesPermissionModules() {
+  const salesRows = await hrmPermissionsTable.find({ module: "sales" }).lean();
+  for (const row of salesRows) {
+    for (const mod of salesModules) {
+      const exists = await hrmPermissionsTable.findOne({
+        roleTemplateId: row.roleTemplateId,
+        module: mod,
+        action: row.action,
+      }).lean();
+      if (exists) continue;
+      const id = await getNextSequence("hrm_permissions");
+      await hrmPermissionsTable.create({
+        id,
+        roleTemplateId: row.roleTemplateId,
+        module: mod,
+        action: row.action,
+      });
+    }
+    await hrmPermissionsTable.deleteOne({ id: row.id });
+  }
+}
+
+function expandLegacySalesPermissionSet(set) {
+  const actions = new Set();
+  for (const key of set) {
+    if (key.startsWith("sales:")) actions.add(key.slice("sales:".length));
+  }
+  for (const action of actions) {
+    for (const mod of salesModules) {
+      set.add(`${mod}:${action}`);
+    }
+  }
+}
+
 export async function ensureDefaultRoleTemplates() {
   await migrateLegacyPermissionModules();
+  await migrateSalesPermissionModules();
 
   for (const tpl of DEFAULT_TEMPLATES) {
     let existing = await hrmRoleTemplatesTable.findOne({ code: tpl.code }).lean();
@@ -223,7 +264,15 @@ export async function syncUserRoleTemplate(userId, role, options = {}) {
   const { explicitTemplateId, roleChanged = false } = options;
   await ensureDefaultRoleTemplates();
 
-  if (explicitTemplateId !== undefined) return;
+  // Explicit numeric template was written by the caller — refresh permission cache only.
+  if (typeof explicitTemplateId === "number") {
+    evictUserFromAuthCache(userId);
+    evictPermissionCache(userId);
+    return;
+  }
+
+  // explicitTemplateId === null means "use role default" (caller cleared custom template).
+  const shouldAssignDefault = explicitTemplateId === null || roleChanged;
 
   const user = await usersTable
     .findOne({ id: userId }, { roleTemplateId: 1, hrmRoleTemplateId: 1 })
@@ -231,7 +280,7 @@ export async function syncUserRoleTemplate(userId, role, options = {}) {
   if (!user) return;
 
   const hasTemplate = user.roleTemplateId != null || user.hrmRoleTemplateId != null;
-  if (hasTemplate && !roleChanged) return;
+  if (hasTemplate && !shouldAssignDefault) return;
 
   const templateId = await templateIdForRole(role);
   if (!templateId) {
@@ -339,8 +388,10 @@ async function loadUserPermissionEntry(userId) {
   }
 
   const rows = await hrmPermissionsTable.find({ roleTemplateId: templateId }).lean();
+  const set = new Set(rows.map((r) => permissionEntryKey(r.module, r.action)));
+  expandLegacySalesPermissionSet(set);
   const entry = {
-    set: new Set(rows.map((r) => permissionEntryKey(r.module, r.action))),
+    set,
     templateId,
     expiresAt: now + PERM_CACHE_TTL_MS,
   };
@@ -394,7 +445,11 @@ export async function getPermissionsForUser(userId) {
 export async function userHasPermission(userId, module, action) {
   const entry = await loadUserPermissionEntry(userId);
   if (!entry) return false;
-  return entry.set.has(permissionEntryKey(module, action));
+  const key = permissionEntryKey(module, action);
+  if (entry.set.has(key)) return true;
+  const mod = normalizePermissionModule(module);
+  if (mod.startsWith("sales_") && entry.set.has(permissionEntryKey("sales", action))) return true;
+  return false;
 }
 
 export async function listRoleTemplates() {
@@ -474,14 +529,24 @@ export async function listAssignableCmsRoles() {
 
   const templates = await hrmRoleTemplatesTable.find().sort({ name: 1 }).lean();
   for (const t of templates) {
-    if (t.cmsRole && !byValue.has(t.cmsRole)) {
-      byValue.set(t.cmsRole, {
-        value: t.cmsRole,
-        label: t.name,
-        templateId: t.id,
-        isSystem: t.isSystem,
-      });
+    if (!t.cmsRole) continue;
+    const existing = byValue.get(t.cmsRole);
+    if (existing) {
+      if (!existing.templateId) {
+        byValue.set(t.cmsRole, {
+          ...existing,
+          templateId: t.id,
+          isSystem: t.isSystem ?? existing.isSystem,
+        });
+      }
+      continue;
     }
+    byValue.set(t.cmsRole, {
+      value: t.cmsRole,
+      label: t.name,
+      templateId: t.id,
+      isSystem: t.isSystem,
+    });
   }
 
   return [...byValue.values()].sort((a, b) => a.label.localeCompare(b.label));

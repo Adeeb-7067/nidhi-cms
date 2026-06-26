@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
   BarChart,
@@ -41,6 +41,7 @@ import { SalesPageHeader, SalesFeatureCoverage, RevenueChartCard } from "@/modul
 import { Link } from "wouter";
 import { CheckCircle2, Circle } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "@/modules/permissions/usePermission";
 
 const PIE_COLORS = ["#3b82f6", "#8b5cf6", "#f59e0b", "#22c55e", "#ec4899", "#94a3b8"];
 
@@ -59,6 +60,15 @@ const performanceData = salesExecutives.map((e) => ({
 
 export default function Reports() {
   const [reportType, setReportType] = useState("conversion");
+  const { canViewHref } = usePermissions();
+
+  const visibleModules = useMemo(
+    () =>
+      ADMIN_DASHBOARD_MODULES.filter(
+        (mod) => !mod.route || canViewHref(mod.route),
+      ),
+    [canViewHref],
+  );
 
   const exportReport = () => toast.success("Export started (demo)");
 
@@ -293,11 +303,11 @@ export default function Reports() {
 
         <TabsContent value="modules" className="mt-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Super admin control center — {ADMIN_DASHBOARD_MODULES.filter((m) => m.inUi).length} of{" "}
-            {ADMIN_DASHBOARD_MODULES.length} modules in UI.
+            Modules you can access — {visibleModules.filter((m) => m.inUi).length} of{" "}
+            {visibleModules.length} pages.
           </p>
           <ul className="rounded-xl border bg-card divide-y">
-            {ADMIN_DASHBOARD_MODULES.map((mod) => (
+            {visibleModules.map((mod) => (
               <li key={mod.id} className="flex items-center gap-3 px-4 py-3 text-sm">
                 {mod.inUi ? (
                   <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />

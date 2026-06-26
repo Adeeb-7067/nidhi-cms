@@ -22,8 +22,22 @@ export const cmsModuleGroups = [
     modules: ["monitor_screenshots", "monitor_attendance", "monitor_policy"],
   },
   {
-    label: "Sales",
-    modules: ["sales"],
+    label: "Sales & CRM",
+    modules: [
+      "sales_dashboard",
+      "sales_leads",
+      "sales_follow_ups",
+      "sales_proposals",
+      "sales_customers",
+      "sales_installments",
+      "sales_invoices",
+      "sales_payments",
+      "sales_products",
+      "sales_reports",
+      "sales_notifications",
+      "sales_team",
+      "sales_settings",
+    ],
   },
   {
     label: "Legal",
@@ -89,6 +103,8 @@ export const cmsModuleGroups = [
     ],
   },
 ];
+
+export const salesModules = cmsModuleGroups.find((g) => g.label === "Sales & CRM")?.modules ?? [];
 
 export const cmsModules = cmsModuleGroups.flatMap((g) => g.modules);
 

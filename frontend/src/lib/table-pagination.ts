@@ -13,7 +13,7 @@ export type PageLimit = TablePageSize | typeof PAGE_SIZE_ALL;
 export const DEFAULT_TABLE_PAGE_SIZE: TablePageSize = 10;
 
 /** Max rows the API will return for a single “show all” request. */
-export const API_PAGE_LIMIT_CAP = 500;
+export const API_PAGE_LIMIT_CAP = 1000;
 
 export const PAGE_SIZE_ALL_SELECT_VALUE = "all";
 

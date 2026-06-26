@@ -577,8 +577,9 @@ export function EmployeeFormTabs({
                 <FormItem>
                   <FormLabel>Permission template</FormLabel>
                   <Select
+                    key={`role-template-${field.value ?? "default"}-${roleTemplateOptions.map((t) => t.id).join(",")}`}
                     onValueChange={(v) => field.onChange(v === "default" ? null : Number(v))}
-                    value={field.value != null ? String(field.value) : "default"}
+                    value={field.value != null && field.value !== "" ? String(field.value) : "default"}
                   >
                     <FormControl>
                       <SelectTrigger className={employeeFormSelectTriggerClass}>

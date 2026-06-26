@@ -17,8 +17,8 @@ import {
 
 async function nextProposalNumber() {
   const year = new Date().getFullYear();
-  const count = await SalesProposals.countDocuments({ number: { $regex: `^PROP-${year}-` } });
-  return `PROP-${year}-${String(count + 1).padStart(4, "0")}`;
+  const seq = await getNextSequence(`prop_num_${year}`);
+  return `PROP-${year}-${String(seq).padStart(4, "0")}`;
 }
 
 function parseItems(rawItems) {
@@ -76,8 +76,9 @@ async function createProposal(req, res) {
     viewToken,
   });
   if (proposal.leadId) {
+    // Only advance status — never regress a lead that is already converted/lost
     await SalesLeads.updateOne(
-      { id: proposal.leadId },
+      { id: proposal.leadId, status: { $nin: ["converted", "lost"] } },
       { $set: { proposalId: id, status: "proposal_sent" } }
     );
     const actId = await getNextSequence("sales_lead_activity");
@@ -125,11 +126,15 @@ async function updateProposal(req, res) {
 async function sendProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const updated = await SalesProposals.findOneAndUpdate(
-    { id },
+    { id, status: { $in: ["draft", "revised", "counter_offer"] } },
     { $set: { status: "sent", sentAt: new Date() } },
     { new: true }
   ).lean();
-  if (!updated) notFound("Proposal");
+  if (!updated) {
+    const exists = await SalesProposals.findOne({ id }).lean();
+    if (!exists) notFound("Proposal");
+    badRequest("Only draft, revised, or counter-offer proposals can be sent.", "status");
+  }
   res.json(updated);
 }
 
@@ -141,7 +146,7 @@ async function approveProposal(req, res) {
     { new: true }
   ).lean();
   if (!updated) notFound("Proposal");
-  res.json(updated);
+  res.json(updated);  
 }
 
 async function declineProposal(req, res) {
@@ -183,7 +188,7 @@ async function reviseProposal(req, res) {
 // Public — no auth required. Marks the proposal as seen on first view.
 async function viewProposal(req, res) {
   const { token } = req.params;
-  if (!token || token.length < 32) badRequest("Invalid link.");
+  if (!token || token.length < 64) badRequest("Invalid link.");
   const proposal = await SalesProposals.findOne({ viewToken: token }).lean();
   if (!proposal) notFound("Proposal");
   if (!proposal.seenAt) {

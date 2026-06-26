@@ -1,42 +1,44 @@
 import { useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
-import { motion } from "framer-motion";
-import { format } from "date-fns";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import {
-  FileText,
-  Phone,
-  Mail,
-  Building2,
-  Calendar,
-  MapPin,
-  Briefcase,
-  Bell,
   ArrowLeft,
   Plus,
   UserCheck,
   CheckCircle2,
+  Pencil,
+  Activity,
+  StickyNote,
+  FileText,
+  Bell,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { useGetLead, useListProposals, useUpdateLead, type LeadActivity } from "@/api/sales";
 import type { SalesActivity } from "@/modules/sales/types";
-import { LEAD_SOURCE_LABELS, formatCurrency } from "@/modules/sales/constants";
 import {
-  SalesPageHeader,
   SalesStatusBadge,
   ActivityTimeline,
-  ExecutiveAvatar,
   SalesEmptyState,
   FollowUpDialog,
   LeadReminderDialog,
   ConvertLeadDialog,
+  LeadFormModal,
+  LeadDetailHero,
+  LeadPipelineStrip,
+  LeadDetailMetrics,
+  LeadContactCard,
+  LeadAssignmentCard,
+  LeadDescriptionCard,
+  LeadReminderChip,
 } from "@/modules/sales/components";
+import { format } from "date-fns";
 
 const ACTIVITY_TYPE_MAP: Record<string, SalesActivity["type"]> = {
   status_change: "lead",
@@ -71,6 +73,7 @@ export default function LeadDetail() {
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [reminderOpen, setReminderOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, isError } = useGetLead(leadId, !!leadId);
   const { data: proposalsData } = useListProposals({ leadId }, !!leadId);
@@ -92,14 +95,13 @@ export default function LeadDetail() {
 
   if (isLoading) {
     return (
-      <PortalPageShell>
-        <div className="space-y-4">
-          <Skeleton className="h-10 w-48" />
-          <Skeleton className="h-6 w-32" />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
-          </div>
-          <Skeleton className="h-48 rounded-xl" />
+      <PortalPageShell className="space-y-4">
+        <Skeleton className="h-5 w-64" />
+        <Skeleton className="h-28 w-full rounded-2xl" />
+        <Skeleton className="h-20 w-full rounded-xl" />
+        <div className="grid gap-3 lg:grid-cols-3">
+          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       </PortalPageShell>
     );
@@ -119,168 +121,108 @@ export default function LeadDetail() {
   }
 
   return (
-    <PortalPageShell className="pb-24">
-      <SalesPageHeader
-        title={lead.name}
-        description={lead.company ?? undefined}
-        breadcrumbs={[
-          { label: "Sales", href: "/sales" },
-          { label: "Leads", href: "/sales/leads" },
-          { label: lead.name },
-        ]}
-        actions={
-          <Button variant="outline" size="sm" className="h-8" asChild>
-            <Link href="/sales/leads">
-              <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
-              Back
-            </Link>
-          </Button>
-        }
-      />
+    <PortalPageShell className="pb-28 space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <nav className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+          <Link href="/sales" className="hover:text-foreground transition-colors">Sales</Link>
+          <ChevronRight className="size-3" />
+          <Link href="/sales/leads" className="hover:text-foreground transition-colors">Leads</Link>
+          <ChevronRight className="size-3" />
+          <span className="text-foreground font-medium truncate max-w-[200px]">{lead.name}</span>
+        </nav>
+        <Button variant="outline" size="sm" className="h-8 w-fit" asChild>
+          <Link href="/sales/leads">
+            <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
+            Back to leads
+          </Link>
+        </Button>
+      </div>
 
-      <motion.div className="flex flex-wrap items-center gap-2">
-        <SalesStatusBadge variant="lead" value={lead.status} />
-        <SalesStatusBadge variant="priority" value={lead.priority} />
-        {lead.tags?.map((tag) => (
-          <span key={tag} className="text-[10px] rounded-full border px-2 py-0.5 text-muted-foreground">{tag}</span>
-        ))}
-        <span className="text-xs text-muted-foreground">#{lead.id}</span>
-      </motion.div>
+      <LeadDetailHero lead={lead} onEdit={() => setEditOpen(true)} />
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-9">
-          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
-          <TabsTrigger value="activity" className="text-xs">
-            Activity {rawActivities.length > 0 && `(${rawActivities.length})`}
+      <LeadPipelineStrip status={lead.status} />
+
+      <LeadDetailMetrics lead={lead} />
+
+      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <TabsList className="h-auto w-full justify-start gap-1 rounded-xl bg-muted/50 p-1 flex-wrap">
+          <TabsTrigger value="overview" className="text-xs rounded-lg data-[state=active]:shadow-sm">
+            Overview
           </TabsTrigger>
-          <TabsTrigger value="proposals" className="text-xs">
-            Proposals ({proposals.length})
+          <TabsTrigger value="activity" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
+            <Activity className="size-3.5" />
+            Activity
+            {rawActivities.length > 0 ? (
+              <span className="rounded-full bg-primary/15 px-1.5 py-0 text-[10px] font-semibold">
+                {rawActivities.length}
+              </span>
+            ) : null}
           </TabsTrigger>
-          <TabsTrigger value="notes" className="text-xs">Notes</TabsTrigger>
+          <TabsTrigger value="proposals" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
+            <FileText className="size-3.5" />
+            Proposals
+            <span className="rounded-full bg-muted px-1.5 py-0 text-[10px] font-semibold">
+              {proposals.length}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
+            <StickyNote className="size-3.5" />
+            Notes
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="mt-4 space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">Expected value</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <p className="text-lg font-bold">{formatCurrency(lead.expectedValue)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">Source</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <p className="text-sm font-medium">
-                  {lead.source ? (LEAD_SOURCE_LABELS[lead.source as keyof typeof LEAD_SOURCE_LABELS] ?? lead.source) : "—"}
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">Reminder</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                {lead.reminder ? (
-                  <>
-                    <p className="text-sm font-medium">{format(new Date(lead.reminder.date), "MMM d, yyyy")}</p>
-                    {lead.reminder.note && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{lead.reminder.note}</p>
-                    )}
-                  </>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Not set</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">Assigned to</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                {lead.assignedToUser ? (
-                  <ExecutiveAvatar name={lead.assignedToUser.name} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Unassigned</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Contact information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                {lead.email && (
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <a href={`mailto:${lead.email}`} className="hover:text-primary truncate">{lead.email}</a>
-                  </div>
-                )}
-                {lead.phone && (
-                  <div className="flex items-center gap-2">
-                    <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>{lead.phone}</span>
-                  </div>
-                )}
-                {lead.company && (
-                  <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>{lead.company}</span>
-                  </div>
-                )}
-                {lead.position && (
-                  <div className="flex items-center gap-2">
-                    <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span>{lead.position}</span>
-                  </div>
-                )}
-                {lead.address && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="text-muted-foreground">{lead.address}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span>Created {format(new Date(lead.createdAt), "MMM d, yyyy")}</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Recent activity</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activities.length > 0 ? (
-                  <ActivityTimeline activities={activities} limit={4} />
-                ) : (
-                  <p className="text-xs text-muted-foreground">No activity yet.</p>
-                )}
-              </CardContent>
-            </Card>
+        <TabsContent value="overview" className="mt-0 space-y-4">
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="lg:col-span-2 space-y-4">
+              <LeadContactCard lead={lead} />
+              <LeadDescriptionCard lead={lead} onEdit={() => setEditOpen(true)} />
+            </div>
+            <div className="space-y-4">
+              <LeadAssignmentCard lead={lead} />
+              <LeadReminderChip reminder={lead.reminder} onManage={() => setReminderOpen(true)} />
+              <Card className="border-border/80 shadow-sm">
+                <CardContent className="pt-4 px-4 pb-4">
+                  <p className="text-sm font-semibold mb-3">Recent activity</p>
+                  {activities.length > 0 ? (
+                    <ActivityTimeline activities={activities} limit={5} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">No activity recorded yet.</p>
+                  )}
+                  {activities.length > 0 ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-3 h-7 w-full text-xs"
+                      onClick={() => setTab("activity")}
+                    >
+                      View all activity
+                    </Button>
+                  ) : null}
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
-        <TabsContent value="activity" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
+        <TabsContent value="activity" className="mt-0">
+          <Card className="border-border/80 shadow-sm">
+            <CardContent className="pt-5 px-4 pb-4">
               {activities.length > 0 ? (
                 <ActivityTimeline activities={activities} />
               ) : (
-                <SalesEmptyState title="No activity" description="Activity will appear here as you work this lead." />
+                <SalesEmptyState
+                  icon={Activity}
+                  title="No activity yet"
+                  description="Status changes, follow-ups, and assignments will appear here."
+                  actionLabel="Add follow-up"
+                  onAction={() => setFollowUpOpen(true)}
+                />
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="proposals" className="mt-4 space-y-3">
+        <TabsContent value="proposals" className="mt-0 space-y-3">
           {proposals.length === 0 ? (
             <SalesEmptyState
               icon={FileText}
@@ -292,11 +234,11 @@ export default function LeadDetail() {
           ) : (
             proposals.map((p) => (
               <Link key={p.id} href={`/sales/proposals/${p.id}`}>
-                <Card className="hover:border-primary/30 transition-colors">
-                  <CardContent className="p-4 flex items-center justify-between gap-3">
+                <Card className="border-border/80 shadow-sm hover:border-primary/40 hover:shadow-md transition-all">
+                  <CardContent className="p-4 flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{p.title}</p>
-                      <p className="text-xs text-muted-foreground">{p.number}</p>
+                      <p className="text-sm font-semibold truncate">{p.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{p.number}</p>
                     </div>
                     <SalesStatusBadge variant="proposal" value={p.status} />
                   </CardContent>
@@ -306,13 +248,26 @@ export default function LeadDetail() {
           )}
         </TabsContent>
 
-        <TabsContent value="notes" className="mt-4">
-          <Card>
-            <CardContent className="pt-4">
-              {lead.description ? (
-                <p className="text-sm whitespace-pre-wrap">{lead.description}</p>
+        <TabsContent value="notes" className="mt-0">
+          <Card className="border-border/80 shadow-sm">
+            <CardContent className="pt-5 px-4 pb-4">
+              {lead.description?.trim() ? (
+                <div className="prose prose-sm max-w-none">
+                  <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground/90">
+                    {lead.description}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground mt-4">
+                    Last updated {format(new Date(lead.updatedAt), "PPp")}
+                  </p>
+                </div>
               ) : (
-                <SalesEmptyState title="No notes" description="Add a description when creating or editing the lead." />
+                <SalesEmptyState
+                  icon={StickyNote}
+                  title="No notes"
+                  description="Add a description when creating or editing the lead."
+                  actionLabel="Edit lead"
+                  onAction={() => setEditOpen(true)}
+                />
               )}
             </CardContent>
           </Card>
@@ -321,35 +276,42 @@ export default function LeadDetail() {
 
       <div
         className={cn(
-          "fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80",
-          "px-4 py-3 flex flex-wrap gap-2 justify-end",
+          "fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
+          "px-4 py-3 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)]",
         )}
       >
-        <Button variant="outline" size="sm" onClick={() => setFollowUpOpen(true)}>
-          <Plus className="h-3.5 w-3.5 mr-1.5" />
-          Add follow-up
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setReminderOpen(true)}>
-          <Bell className="h-3.5 w-3.5 mr-1.5" />
-          {lead.reminder ? "Edit reminder" : "Set reminder"}
-        </Button>
-        {(lead.status === "proposal_sent" || lead.status === "interested") && (
-          <Button variant="outline" size="sm" onClick={approveLead} disabled={updateLead.isPending}>
-            <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-            Approve lead
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            Edit
           </Button>
-        )}
-        {lead.status !== "converted" && (
-          <Button variant="outline" size="sm" onClick={() => setConvertOpen(true)}>
-            <UserCheck className="h-3.5 w-3.5 mr-1.5" />
-            Convert to customer
+          <Button variant="outline" size="sm" onClick={() => setFollowUpOpen(true)}>
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Follow-up
           </Button>
-        )}
-        <Button size="sm" asChild>
-          <Link href={`/sales/proposals/create?leadId=${lead.id}`}>Generate proposal</Link>
-        </Button>
+          <Button variant="outline" size="sm" onClick={() => setReminderOpen(true)}>
+            <Bell className="h-3.5 w-3.5 mr-1.5" />
+            {lead.reminder ? "Reminder" : "Set reminder"}
+          </Button>
+          {(lead.status === "proposal_sent" || lead.status === "interested") && (
+            <Button variant="outline" size="sm" onClick={approveLead} disabled={updateLead.isPending}>
+              <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+              Approve
+            </Button>
+          )}
+          {lead.status !== "converted" && (
+            <Button variant="outline" size="sm" onClick={() => setConvertOpen(true)}>
+              <UserCheck className="h-3.5 w-3.5 mr-1.5" />
+              Convert
+            </Button>
+          )}
+          <Button size="sm" asChild>
+            <Link href={`/sales/proposals/create?leadId=${lead.id}`}>Generate proposal</Link>
+          </Button>
+        </div>
       </div>
 
+      <LeadFormModal open={editOpen} onOpenChange={setEditOpen} lead={lead} />
       <FollowUpDialog open={followUpOpen} onOpenChange={setFollowUpOpen} leadId={leadId} />
       <LeadReminderDialog
         open={reminderOpen}
@@ -364,6 +326,8 @@ export default function LeadDetail() {
         leadId={leadId}
         defaultEmail={lead.email}
         defaultCompany={lead.company}
+        defaultPhone={lead.phone}
+        defaultAddress={lead.address}
       />
     </PortalPageShell>
   );

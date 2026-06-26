@@ -38,20 +38,70 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   website: "Website",
   instagram: "Instagram",
   facebook: "Facebook",
+  whatsapp: "WhatsApp",
   referral: "Referral",
   linkedin: "LinkedIn",
   cold_call: "Cold Call",
   other: "Other",
 };
 
+/** How the lead was reached (contact channel) — presets; custom values allowed via form. */
+export const LEAD_CONTACT_CHANNEL_PRESETS = [
+  { value: "call", label: "Call" },
+  { value: "web", label: "Web / Website" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "instagram", label: "Instagram DM" },
+  { value: "email", label: "Email" },
+  { value: "linkedin", label: "LinkedIn" },
+  { value: "walk_in", label: "Walk-in" },
+  { value: "referral", label: "Referral" },
+] as const;
+
 export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   draft: "Draft",
   sent: "Sent",
+  seen: "Seen",
   revised: "Revised",
   approved: "Approved",
-  rejected: "Rejected",
+  declined: "Declined",
+  counter_offer: "Counter Offer",
   expired: "Expired",
 };
+
+export const LEAD_PRIORITY_OPTIONS: { value: import("./types").LeadPriority; label: string }[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "Urgent" },
+];
+
+export const CUSTOMER_TYPE_OPTIONS: { value: "corporate" | "sme" | "individual"; label: string }[] = [
+  { value: "corporate", label: "Corporate" },
+  { value: "sme", label: "SME" },
+  { value: "individual", label: "Individual" },
+];
+
+export const CUSTOMER_STATUS_OPTIONS: { value: import("./types").CustomerStatus; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "prospect", label: "Prospect" },
+  { value: "inactive", label: "Inactive" },
+  { value: "lost", label: "Lost" },
+];
+
+export const PAYMENT_METHOD_OPTIONS: { value: "bank_transfer" | "upi" | "cheque" | "cash" | "card"; label: string }[] = [
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "upi", label: "UPI" },
+  { value: "cheque", label: "Cheque" },
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+];
+
+export const FOLLOW_UP_TYPE_OPTIONS: { value: "call" | "email" | "meeting" | "demo"; label: string }[] = [
+  { value: "call", label: "Call" },
+  { value: "email", label: "Email" },
+  { value: "meeting", label: "Meeting" },
+  { value: "demo", label: "Demo" },
+];
 
 export const CUSTOMER_STATUS_LABELS: Record<CustomerStatus, string> = {
   active: "Active",
@@ -100,6 +150,17 @@ export const COMPANY_BILLING = {
   email: "accounts@satyakabir.com",
   phone: "+91 75555 12345",
 };
+
+export function formatLeadSourceLabel(source: string | null | undefined): string {
+  if (!source?.trim()) return "—";
+  return LEAD_SOURCE_LABELS[source as LeadSource] ?? source.replace(/_/g, " ");
+}
+
+export function formatLeadContactChannelLabel(channel: string | null | undefined): string {
+  if (!channel?.trim()) return "—";
+  const preset = LEAD_CONTACT_CHANNEL_PRESETS.find((item) => item.value === channel);
+  return preset?.label ?? channel.replace(/_/g, " ");
+}
 
 export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-IN", {
@@ -170,6 +231,7 @@ export const ADMIN_DASHBOARD_MODULES = [
   { id: "installments", label: "Installment management", route: "/sales/installments", inUi: true },
   { id: "invoices", label: "Invoice & billing management", route: "/sales/invoices", inUi: true },
   { id: "payments", label: "Payment & receipt management", route: "/sales/payments", inUi: true },
+  { id: "products", label: "Product catalog", route: "/sales/products", inUi: true },
   { id: "reports", label: "Financial analytics & reports", route: "/sales/reports", inUi: true },
   { id: "team", label: "Sales team management", route: "/sales/team", inUi: true },
   { id: "settings", label: "Automation & system settings", route: "/sales/settings", inUi: true },

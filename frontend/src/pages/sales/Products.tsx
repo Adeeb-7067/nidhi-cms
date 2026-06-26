@@ -31,6 +31,7 @@ export default function Products() {
   const [category, setCategory] = useState("Services");
   const [price, setPrice] = useState("");
   const [tax, setTax] = useState("18");
+  const [description, setDescription] = useState("");
 
   const activeCount = useMemo(() => products.filter((p) => p.status === "active").length, [products]);
 
@@ -45,10 +46,12 @@ export default function Products() {
         category,
         price: Number(price),
         taxPercent: Number(tax),
+        description: description.trim() || undefined,
       });
       toast.success("Product added");
       setName("");
       setPrice("");
+      setDescription("");
     } catch (err) {
       toastApiError(err, "Failed to add product");
     }
@@ -102,6 +105,10 @@ export default function Products() {
                 <Label className="text-xs">GST %</Label>
                 <Input type="number" value={tax} onChange={(e) => setTax(e.target.value)} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details" />
             </div>
             <Button size="sm" className="w-full" onClick={addProduct} disabled={createProduct.isPending}>
               {createProduct.isPending ? "Saving…" : "Save product"}

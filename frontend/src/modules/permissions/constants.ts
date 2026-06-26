@@ -21,7 +21,24 @@ export const CMS_MODULE_GROUPS = [
     label: "Monitoring",
     modules: ["monitor_screenshots", "monitor_attendance", "monitor_policy"],
   },
-  { label: "Sales", modules: ["sales"] },
+  {
+    label: "Sales & CRM",
+    modules: [
+      "sales_dashboard",
+      "sales_leads",
+      "sales_follow_ups",
+      "sales_proposals",
+      "sales_customers",
+      "sales_installments",
+      "sales_invoices",
+      "sales_payments",
+      "sales_products",
+      "sales_reports",
+      "sales_notifications",
+      "sales_team",
+      "sales_settings",
+    ],
+  },
   { label: "Legal", modules: ["legal"] },
   { label: "Finance", modules: ["finance"] },
   { label: "CA", modules: ["ca"] },
@@ -75,10 +92,22 @@ export const CMS_MODULE_GROUPS = [
   },
 ] as const;
 
+export const SALES_MODULES = CMS_MODULE_GROUPS.find((g) => g.label === "Sales & CRM")?.modules ?? [];
+
 export const CMS_MODULES = CMS_MODULE_GROUPS.flatMap((g) => g.modules);
 
 export type CmsModule = (typeof CMS_MODULES)[number];
 export type CmsAction = "view" | "create" | "edit" | "delete" | "approve" | "finalize" | "export";
+
+export const CMS_ACTIONS: CmsAction[] = [
+  "view",
+  "create",
+  "edit",
+  "delete",
+  "approve",
+  "finalize",
+  "export",
+];
 
 export type CmsPermission = { module: CmsModule | string; action: CmsAction };
 
@@ -129,7 +158,20 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   monitor_screenshots: "Screenshots",
   monitor_attendance: "Live attendance monitor",
   monitor_policy: "Monitoring policy",
-  sales: "Sales & CRM",
+  sales_dashboard: "Sales dashboard",
+  sales_leads: "Lead management",
+  sales_follow_ups: "Follow-ups",
+  sales_proposals: "Proposals",
+  sales_customers: "Customers (CRM)",
+  sales_installments: "Installments",
+  sales_invoices: "Invoices",
+  sales_payments: "Payments",
+  sales_products: "Products",
+  sales_reports: "Sales reports",
+  sales_notifications: "Financial alerts",
+  sales_team: "Sales team",
+  sales_settings: "Automation & settings",
+  sales: "Sales & CRM (all pages)",
   legal: "Legal",
   finance: "Finance",
   ca: "CA Master",
@@ -192,7 +234,7 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/admin/monitoring/analytics": "monitor_attendance",
   "/admin/attendance": "monitor_attendance",
   "/settings/monitoring": "monitor_policy",
-  "/sales": "sales",
+  "/sales": "sales_dashboard",
   "/legal": "legal",
   "/finance": "finance",
   "/ca": "ca",

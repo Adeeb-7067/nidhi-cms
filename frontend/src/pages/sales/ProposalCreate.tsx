@@ -29,6 +29,8 @@ import { useCreateProposal, useListLeads, useListCustomers } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { SalesPageHeader } from "@/modules/sales/components";
+import { useSalesStaff } from "@/modules/sales/use-sales-staff";
+import type { User } from "@/api/generated/api.schemas";
 import { readSearchParam } from "@/modules/sales/utils";
 
 function calcTotals(items: ProposalLineItem[], discount: number) {
@@ -56,6 +58,7 @@ const emptyItem = (): ProposalLineItem => ({
 export default function ProposalCreate() {
   const [, navigate] = useLocation();
   const createProposal = useCreateProposal();
+  const { staff } = useSalesStaff();
   const { data: leadsData } = useListLeads({ limit: 200 });
   const { data: customersData } = useListCustomers();
 
@@ -75,6 +78,8 @@ export default function ProposalCreate() {
   );
   const [terms, setTerms] = useState("Net 30. Standard payment terms apply.");
   const [notes, setNotes] = useState("");
+  const [internalNotes, setInternalNotes] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
 
   useEffect(() => {
     if (prefillLeadId) {
@@ -118,6 +123,7 @@ export default function ProposalCreate() {
         title: title.trim(),
         leadId: clientType === "lead" ? Number(clientId) : undefined,
         customerId: clientType === "customer" ? Number(clientId) : undefined,
+        assignedTo: assignedTo ? Number(assignedTo) : undefined,
         items: validItems.map((i, idx) => ({
           itemId: String(idx + 1),
           description: i.description,
@@ -129,6 +135,7 @@ export default function ProposalCreate() {
         validUntil: validUntil || undefined,
         clientNote: notes.trim() || undefined,
         terms: terms.trim() || undefined,
+        internalNotes: internalNotes.trim() || undefined,
       });
       toast.success(`Proposal ${proposal.number} created`);
       navigate(`/sales/proposals/${proposal.id}`);
@@ -210,7 +217,7 @@ export default function ProposalCreate() {
                         {clientType === "lead"
                           ? leads.map((l) => (
                               <SelectItem key={l.id} value={String(l.id)}>
-                                {l.company ?? l.name} — {l.name}
+                                {l.company ? `${l.company} — ${l.name}` : l.name}
                               </SelectItem>
                             ))
                           : customers.map((c) => (
@@ -231,6 +238,22 @@ export default function ProposalCreate() {
                     onChange={(e) => setValidUntil(e.target.value)}
                   />
                 </div>
+                {staff.length > 0 ? (
+                  <div className="space-y-2">
+                    <Label>Assigned to</Label>
+                    <Select value={assignedTo || "default"} onValueChange={(v) => setAssignedTo(v === "default" ? "" : v)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Current user (default)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="default">Current user (default)</SelectItem>
+                        {staff.map((s: User) => (
+                          <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -330,6 +353,16 @@ export default function ProposalCreate() {
                 <div className="space-y-2">
                   <Label htmlFor="notes">Client notes</Label>
                   <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="internalNotes">Internal notes</Label>
+                  <Textarea
+                    id="internalNotes"
+                    rows={2}
+                    value={internalNotes}
+                    onChange={(e) => setInternalNotes(e.target.value)}
+                    placeholder="Visible to sales team only"
+                  />
                 </div>
               </CardContent>
             </Card>

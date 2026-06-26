@@ -1,11 +1,23 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Plus, Users, Upload } from "lucide-react";
+import { Plus, Users, Upload, Pencil, Eye, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Table,
   TableBody,
@@ -17,12 +29,12 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { useListLeads } from "@/api/sales";
+import { useDeleteLead, useListLeads, type Lead, type LeadStatus } from "@/api/sales";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_ORDER,
-  LEAD_SOURCE_LABELS,
   formatCompactCurrency,
+  formatLeadSourceLabel,
 } from "@/modules/sales/constants";
 import {
   SalesPageHeader,
@@ -30,32 +42,58 @@ import {
   SalesStatusBadge,
   ExecutiveAvatar,
   SalesEmptyState,
-  LeadFormDrawer,
+  LeadFormModal,
   BulkLeadActions,
 } from "@/modules/sales/components";
 
 export default function SalesLeads() {
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState<string>("all");
+  const [statusTab, setStatusTab] = useState<LeadStatus | "all">("all");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
 
-  const { data, isLoading, isError, refetch } = useListLeads({ search: search || undefined });
-  const allLeads = data?.leads ?? [];
+  const deleteLead = useDeleteLead();
 
-  const filtered = useMemo(() => {
-    if (statusTab === "all") return allLeads;
-    return allLeads.filter((l) => l.status === statusTab);
-  }, [allLeads, statusTab]);
+  const openCreateDrawer = () => {
+    setEditingLead(null);
+    setDrawerOpen(true);
+  };
 
-  const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allLeads.length };
-    for (const s of LEAD_STATUS_ORDER) {
-      counts[s] = allLeads.filter((l) => l.status === s).length;
+  const openEditDrawer = (lead: Lead) => {
+    setEditingLead(lead);
+    setDrawerOpen(true);
+  };
+
+  const handleDrawerOpenChange = (open: boolean) => {
+    setDrawerOpen(open);
+    if (!open) setEditingLead(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteLead.mutateAsync(deleteTarget.id);
+      toast.success(`Lead "${deleteTarget.name}" deleted`);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(deleteTarget.id);
+        return next;
+      });
+      setDeleteTarget(null);
+    } catch (err) {
+      toastApiError(err, "Failed to delete lead");
     }
-    return counts;
-  }, [allLeads]);
+  };
 
+  const { data, isLoading, isError, refetch } = useListLeads({
+    search: search || undefined,
+    status: statusTab !== "all" ? statusTab : undefined,
+  });
+  const filtered = data?.leads ?? [];
+
+  const totalCount = data?.total ?? 0;
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
   const toggleAll = () => {
@@ -87,7 +125,7 @@ export default function SalesLeads() {
               <Upload className="h-3.5 w-3.5" />
               Import CSV
             </Button>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={openCreateDrawer}>
               <Plus className="h-3.5 w-3.5" />
               Add lead
             </Button>
@@ -101,14 +139,14 @@ export default function SalesLeads() {
         searchPlaceholder="Search by name, company, email…"
       />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
+      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as LeadStatus | "all")}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">
-            All ({statusCounts.all})
+            All ({statusTab === "all" ? totalCount : "…"})
           </TabsTrigger>
           {LEAD_STATUS_ORDER.map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs data-[state=active]:bg-primary/10">
-              {LEAD_STATUS_LABELS[s]} ({statusCounts[s] ?? 0})
+              {LEAD_STATUS_LABELS[s]}{statusTab === s ? ` (${totalCount})` : ""}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -156,7 +194,7 @@ export default function SalesLeads() {
           title="No leads found"
           description="Try adjusting your search or status filter, or add a new lead."
           actionLabel="Add lead"
-          onAction={() => setDrawerOpen(true)}
+          onAction={openCreateDrawer}
         />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -177,6 +215,7 @@ export default function SalesLeads() {
                   <TableHead className="text-xs text-right">Expected value</TableHead>
                   <TableHead className="text-xs">Next reminder</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
+                  <TableHead className="text-xs text-right w-[108px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -198,14 +237,14 @@ export default function SalesLeads() {
                       #{lead.id}
                     </TableCell>
                     <TableCell>
-                      <Link href={`/sales/leads/${lead.id}`} className="block min-w-0 hover:text-primary">
+                      <div className="min-w-0">
                         <p className="text-xs font-medium">{lead.name}</p>
                         <p className="text-[10px] text-muted-foreground">{lead.email ?? "—"}</p>
-                      </Link>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs max-w-[140px] truncate">{lead.company ?? "—"}</TableCell>
                     <TableCell className="text-xs">
-                      {lead.source ? (LEAD_SOURCE_LABELS[lead.source as keyof typeof LEAD_SOURCE_LABELS] ?? lead.source) : "—"}
+                      {formatLeadSourceLabel(lead.source)}
                     </TableCell>
                     <TableCell>
                       <SalesStatusBadge variant="lead" value={lead.status} />
@@ -231,6 +270,43 @@ export default function SalesLeads() {
                     <TableCell className="text-xs text-muted-foreground">
                       {format(new Date(lead.createdAt), "MMM d, yyyy")}
                     </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="View lead"
+                          asChild
+                        >
+                          <Link href={`/sales/leads/${lead.id}`}>
+                            <Eye className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Edit lead"
+                          onClick={() => openEditDrawer(lead)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          title="Delete lead"
+                          disabled={lead.status === "converted" && !!lead.customerId}
+                          onClick={() => setDeleteTarget(lead)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -239,7 +315,37 @@ export default function SalesLeads() {
         </div>
       )}
 
-      <LeadFormDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <LeadFormModal
+        open={drawerOpen}
+        onOpenChange={handleDrawerOpenChange}
+        lead={editingLead}
+      />
+
+      <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete lead?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `This will permanently remove "${deleteTarget.name}" and its activity history. This cannot be undone.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLead.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteLead.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {deleteLead.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PortalPageShell>
   );
 }

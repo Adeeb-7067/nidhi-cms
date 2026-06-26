@@ -66,7 +66,7 @@ import {
   Users,
 } from "lucide-react";
 
-const ADMIN_STATS_LIMIT = 500;
+const ADMIN_STATS_LIMIT = 1000;
 
 function formatCategory(cat: string) {
   return cat.replace(/_/g, " ");

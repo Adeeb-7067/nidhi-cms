@@ -20,7 +20,7 @@ import {
   SalesFilterBar,
   SalesStatusBadge,
   SalesEmptyState,
-  CustomerFormDrawer,
+  CustomerFormModal,
 } from "@/modules/sales/components";
 
 export default function Customers() {
@@ -100,7 +100,7 @@ export default function Customers() {
           </Table>
         </div>
       )}
-      <CustomerFormDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <CustomerFormModal open={drawerOpen} onOpenChange={setDrawerOpen} />
     </PortalPageShell>
   );
 }

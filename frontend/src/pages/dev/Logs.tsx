@@ -101,18 +101,25 @@ function DeveloperLogsView() {
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [year, setYear] = useState(currentDate.getFullYear());
   const queryClient = useQueryClient();
-  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
-  useEffect(() => {
-    resetPage();
-  }, [month, year, resetPage]);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination(20);
+
+  useEffect(() => { resetPage(); }, [month, year, resetPage]);
 
   const listParams = useMemo(
     () => ({ month, year, page, limit: apiLimit }),
     [month, year, page, apiLimit],
   );
+  // Separate fetch for KPI tiles and export — always covers the full month (up to 1000 rows).
+  const statsParams = useMemo(
+    () => ({ month, year, page: 1, limit: 1000 }),
+    [month, year],
+  );
 
   const { data, isLoading, refetch } = useListMyLogs(listParams);
+  const { data: statsData, refetch: refetchStats } = useListMyLogs(statsParams);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const displayLogs = useMemo((): DailyLog[] => (data as any)?.logs ?? [], [data]);
   const { data: dailySummary, refetch: refetchDailySummary } = useGetDailyLogSummary(
     { date: todayIso },
     { query: { queryKey: getGetDailyLogSummaryQueryKey({ date: todayIso }) } },
@@ -159,7 +166,9 @@ function DeveloperLogsView() {
   };
 
   const handleExportLogs = () => {
-    if (!data?.logs || data.logs.length === 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const allMonthLogs: DailyLog[] = (statsData as any)?.logs ?? [];
+    if (allMonthLogs.length === 0) {
       toast.error("No timesheet entries available to export.");
       return;
     }
@@ -167,7 +176,7 @@ function DeveloperLogsView() {
     const devName = userObj?.name || "Enterprise Developer";
     const monthStr = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    PDFService.generateDeveloperLogsPDF(devName, monthStr, data.logs);
+    PDFService.generateDeveloperLogsPDF(devName, monthStr, allMonthLogs);
     toast.success("Exporting developer timesheet...");
   };
 
@@ -187,16 +196,18 @@ function DeveloperLogsView() {
   });
 
   const logStats = useMemo(() => {
-    const logs = data?.logs ?? [];
-    const totalHours = logs.reduce((acc, l) => acc + (l.hoursSpent || 0), 0);
-    const projectIds = new Set(logs.map((l) => l.projectId));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const monthLogs: DailyLog[] = (statsData as any)?.logs ?? [];
+    const totalHours = monthLogs.reduce((acc, l) => acc + (l.hoursSpent || 0), 0);
+    const projectIds = new Set(monthLogs.map((l) => l.projectId));
     return {
-      entries: logs.length,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      entries: (statsData as any)?.total ?? monthLogs.length,
       totalHours: Math.round(totalHours * 10) / 10,
       projects: projectIds.size,
-      avgHours: logs.length ? Math.round((totalHours / logs.length) * 10) / 10 : 0,
+      avgHours: monthLogs.length ? Math.round((totalHours / monthLogs.length) * 10) / 10 : 0,
     };
-  }, [data?.logs]);
+  }, [statsData]);
 
   const onSubmit = async (values: LogFormValues) => {
     try {
@@ -254,6 +265,7 @@ function DeveloperLogsView() {
       setEditingLog(null);
       form.reset();
       refetch();
+      refetchStats();
       void refetchDailySummary();
       void queryClient.invalidateQueries({ queryKey: getGetDailyLogSummaryQueryKey() });
     } catch (error: unknown) {
@@ -599,14 +611,14 @@ function DeveloperLogsView() {
       <div className="space-y-4">
         {isLoading ? (
           <PageLogEntriesSkeleton count={5} />
-        ) : data?.logs.length === 0 ? (
+        ) : displayLogs.length === 0 ? (
           <DevEmptyState
             icon={Clock}
             title="No logs found"
             description="You haven't logged any work yet."
           />
         ) : (
-          data?.logs.map(log => (
+          displayLogs.map(log => (
             <Card
               key={log.id}
               className="bg-card hover:bg-muted/30 transition-colors cursor-pointer"
@@ -687,7 +699,7 @@ function DeveloperLogsView() {
           page={data?.page ?? page}
           total={data?.total ?? 0}
           limit={limit}
-          loadedRowCount={data?.logs?.length ?? 0}
+          loadedRowCount={displayLogs.length}
           onPageChange={setPage}
           onLimitChange={setLimit}
         />

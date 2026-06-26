@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 import {
   buildTeamEmployeePayload,
+  buildTeamEmployeePatchPayload,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
+import { apiUrl } from "@/lib/api-base";
 import { getListUsersQueryKey } from "./generated/api";
 import { hrmEmployeeQueryKey } from "./hrm";
 import { toastApiError } from "@/lib/api-error";
@@ -19,7 +21,7 @@ export type TeamEmployeeRecord = Record<string, unknown> & {
 export const teamEmployeeQueryKey = (id?: number) => ["team", "employee", id] as const;
 
 export async function fetchTeamEmployee(id: number, signal?: AbortSignal) {
-  return customFetch<TeamEmployeeRecord>(`/users/${id}`, { signal });
+  return customFetch<TeamEmployeeRecord>(apiUrl(`/api/users/${id}`), { signal });
 }
 
 export async function createTeamEmployee(
@@ -31,7 +33,7 @@ export async function createTeamEmployee(
     ...buildTeamEmployeePayload(values, departmentNameById),
     password: password.trim(),
   };
-  return customFetch<TeamEmployeeRecord>("/users", {
+  return customFetch<TeamEmployeeRecord>(apiUrl("/api/users"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -43,13 +45,16 @@ export async function updateTeamEmployee(
   values: TeamEmployeeFormValues,
   departmentNameById: Map<number, string>,
   password?: string,
+  baseline?: TeamEmployeeFormValues,
 ) {
-  const payload = buildTeamEmployeePayload(values, departmentNameById);
+  const payload = baseline
+    ? buildTeamEmployeePatchPayload(values, departmentNameById, baseline)
+    : buildTeamEmployeePayload(values, departmentNameById);
   const trimmedPassword = password?.trim() ?? "";
   if (trimmedPassword) {
-    (payload as Record<string, unknown>).password = trimmedPassword;
+    payload.password = trimmedPassword;
   }
-  return customFetch<TeamEmployeeRecord>(`/users/${id}`, {
+  return customFetch<TeamEmployeeRecord>(apiUrl(`/api/users/${id}`), {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -74,14 +79,16 @@ export function useSaveTeamEmployee() {
       values,
       departmentNameById,
       password,
+      baseline,
     }: {
       id?: number;
       values: TeamEmployeeFormValues;
       departmentNameById: Map<number, string>;
       password?: string;
+      baseline?: TeamEmployeeFormValues;
     }) => {
       if (id != null) {
-        return updateTeamEmployee(id, values, departmentNameById, password);
+        return updateTeamEmployee(id, values, departmentNameById, password, baseline);
       }
       const pwd = password?.trim() ?? "";
       if (!pwd) throw new Error("Password is required for new employees");
@@ -90,6 +97,7 @@ export function useSaveTeamEmployee() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
       qc.invalidateQueries({ queryKey: ["hrm", "employees"] });
+      qc.invalidateQueries({ queryKey: ["permissions"] });
       if (vars.id != null) {
         qc.invalidateQueries({ queryKey: teamEmployeeQueryKey(vars.id) });
         qc.invalidateQueries({ queryKey: hrmEmployeeQueryKey(vars.id) });

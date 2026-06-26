@@ -37,6 +37,8 @@ import {
 } from "@/api/permissions";
 import {
   CMS_ACTION_LABELS,
+  CMS_ACTIONS,
+  CMS_MODULE_GROUPS,
   CMS_MODULE_LABELS,
   type CmsAction,
 } from "@/modules/permissions/constants";
@@ -170,8 +172,8 @@ export default function RolesPermissionsPage() {
     });
   };
 
-  const groups = catalog?.groups ?? [];
-  const actions = catalog?.actions ?? [];
+  const groups = CMS_MODULE_GROUPS;
+  const actions = catalog?.actions?.length ? catalog.actions : CMS_ACTIONS;
 
   return (
     <PermissionGate module="roles_permissions">
