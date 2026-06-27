@@ -32,12 +32,14 @@ const leadStyles: Record<LeadStatus, string> = {
 };
 
 const proposalStyles: Record<ProposalStatus, string> = {
-  draft: "bg-slate-500/10 text-slate-700 border-slate-500/25",
-  sent: "bg-blue-500/10 text-blue-700 border-blue-500/25",
-  revised: "bg-amber-500/10 text-amber-700 border-amber-500/25",
-  approved: "bg-green-500/10 text-green-700 border-green-500/25",
-  rejected: "bg-red-500/10 text-red-600 border-red-500/25",
-  expired: "bg-gray-500/10 text-gray-600 border-gray-500/25",
+  draft:         "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  sent:          "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  seen:          "bg-violet-500/10 text-violet-700 border-violet-500/25",
+  revised:       "bg-amber-500/10 text-amber-700 border-amber-500/25",
+  approved:      "bg-green-500/10 text-green-700 border-green-500/25",
+  declined:      "bg-red-500/10 text-red-600 border-red-500/25",
+  counter_offer: "bg-orange-500/10 text-orange-700 border-orange-500/25",
+  expired:       "bg-gray-500/10 text-gray-600 border-gray-500/25",
 };
 
 const customerStyles: Record<CustomerStatus, string> = {

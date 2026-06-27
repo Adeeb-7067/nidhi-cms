@@ -1,6 +1,6 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
-import { PUBLIC_API_PATHS } from "../config/index.js";
+import { PUBLIC_API_PATHS, isPublicApiRequest } from "../config/api.js";
 import { requireAuth } from "../middlewares/auth.js";
 import healthRoutes from "./health.routes.js";
 import authRoutes from "./auth.routes.js";
@@ -45,11 +45,7 @@ router.use((req, _res, next) => {
 });
 
 router.use((req, res, next) => {
-  if (
-    req.method === "OPTIONS" ||
-    PUBLIC_API_PATHS.has(req.path) ||
-    req.path.startsWith("/sales/proposals/view/")
-  ) {
+  if (isPublicApiRequest(req)) {
     next();
     return;
   }

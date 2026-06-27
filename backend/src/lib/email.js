@@ -305,6 +305,51 @@ export async function sendHrmEmployeeCredentialsEmail({
 }
 
 /**
+ * Proposal email sent to lead/customer when a proposal is dispatched.
+ */
+export async function sendProposalEmail({
+  to,
+  recipientName,
+  proposalNumber,
+  proposalTitle,
+  totalAmount,
+  validUntil,
+  viewUrl,
+}) {
+  const subject = `Proposal ${proposalNumber}: ${proposalTitle}`;
+  const validLine = validUntil ? `\nValid until: ${validUntil}` : "";
+  const text = [
+    `Hi ${recipientName},`,
+    "",
+    `Please find your proposal "${proposalTitle}" (${proposalNumber}).`,
+    `Total: ₹${totalAmount.toLocaleString("en-IN")}${validLine}`,
+    "",
+    `View your proposal here: ${viewUrl}`,
+    "",
+    "Best regards,",
+    "Sales Team",
+  ].join("\n");
+
+  const html = wrapHtmlEmail({
+    title: `Proposal ${proposalNumber}`,
+    bodyHtml: `
+      <p style="margin:0 0 12px">Hi <strong>${recipientName}</strong>,</p>
+      <p style="margin:0 0 12px">Please find your proposal <strong>${proposalTitle}</strong> (${proposalNumber}).</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#71717a;border-bottom:1px solid #f4f4f5">Proposal</td><td style="padding:8px 0;text-align:right;font-weight:600;border-bottom:1px solid #f4f4f5">${proposalNumber}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a${validUntil ? ";border-bottom:1px solid #f4f4f5" : ""}">Total amount</td><td style="padding:8px 0;text-align:right;font-weight:600;font-size:16px;color:#18181b${validUntil ? ";border-bottom:1px solid #f4f4f5" : ""}">₹${totalAmount.toLocaleString("en-IN")}</td></tr>
+        ${validUntil ? `<tr><td style="padding:8px 0;color:#71717a">Valid until</td><td style="padding:8px 0;text-align:right;color:#dc2626;font-weight:500">${validUntil}</td></tr>` : ""}
+      </table>
+      <p style="margin:0;font-size:13px;color:#71717a">Click the button below to review your proposal online.</p>
+    `,
+    ctaLabel: "View Proposal",
+    ctaHref: viewUrl,
+  });
+
+  return sendEmail({ to, subject, text, html });
+}
+
+/**
  * Password reset / change verification OTP.
  */
 export async function sendPasswordOtpEmail({ to, name, otp, purpose }) {

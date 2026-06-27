@@ -92,7 +92,7 @@ export function LeadAddableSelect({
         type: configType,
         value: valueSlug,
         label: labelText,
-      });
+      }) as { value: string };
       selectExistingOrNew(created.value);
       toast.success(`Added "${labelText}"`);
     } catch (err) {

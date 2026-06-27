@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion } from "framer-motion";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -17,21 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { useCreateProposal, useListLeads, useListCustomers } from "@/api/sales";
+import { useCreateProposal, useUpdateProposal, useGetProposal, useSendProposal, useListLeads, useListCustomers } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { SalesPageHeader } from "@/modules/sales/components";
 import { useSalesStaff } from "@/modules/sales/use-sales-staff";
 import type { User } from "@/api/generated/api.schemas";
-import { readSearchParam } from "@/modules/sales/utils";
+import { readSearchParam, resolveFinalTotal } from "@/modules/sales/utils";
+import { TotalAmountAdjustFields, proposalAdjustPayload } from "@/modules/sales/components";
 
 function calcTotals(items: ProposalLineItem[], discount: number) {
   let subtotal = 0;
@@ -49,18 +42,137 @@ function calcTotals(items: ProposalLineItem[], discount: number) {
 
 const emptyItem = (): ProposalLineItem => ({
   id: crypto.randomUUID(),
+  name: "",
   description: "",
   quantity: 1,
   unitPrice: 0,
   taxPercent: 18,
 });
 
+const lineItemNumberInputClass =
+  "h-8 text-xs tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+
+function ProposalLineItemCard({
+  index,
+  item,
+  onChange,
+  onRemove,
+  canRemove,
+}: {
+  index: number;
+  item: ProposalLineItem;
+  onChange: (patch: Partial<ProposalLineItem>) => void;
+  onRemove: () => void;
+  canRemove: boolean;
+}) {
+  const line = item.quantity * item.unitPrice;
+  const lineTotal = line + line * (item.taxPercent / 100);
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-background border text-xs font-mono text-muted-foreground">
+          {index + 1}
+        </span>
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Item name</Label>
+            <Input
+              className="h-8 text-xs"
+              value={item.name}
+              onChange={(e) => onChange({ name: e.target.value })}
+              placeholder="e.g. UI Design"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Description</Label>
+            <Input
+              className="h-8 text-xs"
+              value={item.description}
+              onChange={(e) => onChange({ description: e.target.value })}
+              placeholder="Brief description"
+            />
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
+          onClick={onRemove}
+          disabled={!canRemove}
+          aria-label="Remove line item"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 pl-0 sm:pl-11">
+        <div className="space-y-1">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Qty</Label>
+          <Input
+            type="number"
+            min={1}
+            step={1}
+            className={lineItemNumberInputClass}
+            value={item.quantity}
+            onChange={(e) =>
+              onChange({ quantity: e.target.value === "" ? 0 : Number(e.target.value) })
+            }
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit price</Label>
+          <Input
+            type="number"
+            min={0}
+            step="any"
+            className={lineItemNumberInputClass}
+            value={item.unitPrice}
+            onChange={(e) =>
+              onChange({ unitPrice: e.target.value === "" ? 0 : Number(e.target.value) })
+            }
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax %</Label>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            step="any"
+            className={lineItemNumberInputClass}
+            value={item.taxPercent}
+            onChange={(e) =>
+              onChange({ taxPercent: e.target.value === "" ? 0 : Number(e.target.value) })
+            }
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Line total</Label>
+          <div className="flex h-8 items-center justify-end rounded-md border border-border/60 bg-background px-2 text-xs font-semibold tabular-nums">
+            {formatCurrency(lineTotal)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ProposalCreate() {
   const [, navigate] = useLocation();
+  const submitMode = useRef<"draft" | "send">("draft");
   const createProposal = useCreateProposal();
+  const updateProposal = useUpdateProposal();
+  const sendProposal = useSendProposal();
   const { staff } = useSalesStaff();
   const { data: leadsData } = useListLeads({ limit: 200 });
   const { data: customersData } = useListCustomers();
+
+  const editIdStr = readSearchParam("editId");
+  const editId = editIdStr ? Number(editIdStr) : null;
+  const isEditing = editId !== null;
+  const { data: editData, isLoading: editLoading } = useGetProposal(editId ?? 0, isEditing);
 
   const prefillLeadId = readSearchParam("leadId");
   const prefillCustomerId = readSearchParam("customerId");
@@ -72,6 +184,9 @@ export default function ProposalCreate() {
   const [clientId, setClientId] = useState(prefillLeadId ?? prefillCustomerId ?? "");
   const [items, setItems] = useState<ProposalLineItem[]>([emptyItem()]);
   const [discount, setDiscount] = useState(0);
+  const [totalAdjustment, setTotalAdjustment] = useState(0);
+  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
+  const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [taxRate, setTaxRate] = useState(18);
   const [validUntil, setValidUntil] = useState(
     () => new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
@@ -80,20 +195,57 @@ export default function ProposalCreate() {
   const [notes, setNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
+  const [hydrated, setHydrated] = useState(false);
+
+  // Pre-fill form when editing
+  useEffect(() => {
+    if (isEditing && editData && !hydrated) {
+      setTitle(editData.title ?? "");
+      if (editData.leadId) { setClientType("lead"); setClientId(String(editData.leadId)); }
+      else if (editData.customerId) { setClientType("customer"); setClientId(String(editData.customerId)); }
+      setDiscount(editData.discount ?? 0);
+      setTotalAdjustment(editData.totalAdjustment ?? 0);
+      setAdjustedTotal(editData.adjustedTotal ?? null);
+      setUseCustomTotal(editData.adjustedTotal != null);
+      setValidUntil(editData.validUntil ? new Date(editData.validUntil).toISOString().slice(0, 10) : "");
+      setTerms(editData.terms ?? "");
+      setNotes(editData.clientNote ?? "");
+      setInternalNotes(editData.internalNotes ?? "");
+      setAssignedTo(editData.assignedTo ? String(editData.assignedTo) : "");
+      if (editData.items?.length) {
+        setItems(editData.items.map((item: { name?: string; description: string; quantity: number; unitPrice: number; taxPercent: number }) => ({
+          id: crypto.randomUUID(),
+          name: item.name ?? "",
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          taxPercent: item.taxPercent ?? 18,
+        })));
+        setTaxRate(editData.items[0]?.taxPercent ?? 18);
+      }
+      setHydrated(true);
+    }
+  }, [isEditing, editData, hydrated]);
 
   useEffect(() => {
-    if (prefillLeadId) {
-      setClientType("lead");
-      setClientId(prefillLeadId);
-    } else if (prefillCustomerId) {
-      setClientType("customer");
-      setClientId(prefillCustomerId);
+    if (!isEditing) {
+      if (prefillLeadId) { setClientType("lead"); setClientId(prefillLeadId); }
+      else if (prefillCustomerId) { setClientType("customer"); setClientId(prefillCustomerId); }
     }
-  }, [prefillLeadId, prefillCustomerId]);
+  }, [isEditing, prefillLeadId, prefillCustomerId]);
 
   const leads = leadsData?.leads ?? [];
   const customers = customersData?.customers ?? [];
   const totals = useMemo(() => calcTotals(items, discount), [items, discount]);
+  const finalTotal = useMemo(
+    () =>
+      resolveFinalTotal(
+        totals.total,
+        totalAdjustment,
+        useCustomTotal ? adjustedTotal : null,
+      ),
+    [totals.total, totalAdjustment, useCustomTotal, adjustedTotal],
+  );
 
   const updateItem = (id: string, patch: Partial<ProposalLineItem>) => {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
@@ -105,44 +257,70 @@ export default function ProposalCreate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) {
-      toast.error("Title is required");
-      return;
-    }
-    if (!clientId) {
-      toast.error("Select a lead or customer");
-      return;
-    }
-    const validItems = items.filter((i) => i.description.trim());
-    if (validItems.length === 0) {
-      toast.error("Add at least one line item with a description");
-      return;
-    }
+    if (!title.trim()) { toast.error("Title is required"); return; }
+    if (!clientId && !isEditing) { toast.error("Select a lead or customer"); return; }
+    const validItems = items.filter((i) => i.name.trim() || i.description.trim());
+    if (validItems.length === 0) { toast.error("Add at least one line item with a description"); return; }
+    const payload = {
+      title: title.trim(),
+      items: validItems.map((i, idx) => ({
+        itemId: String(idx + 1),
+        name: i.name.trim(),
+        description: i.description,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        taxPercent: i.taxPercent,
+      })),
+      discount,
+      ...proposalAdjustPayload(totalAdjustment, useCustomTotal, adjustedTotal),
+      validUntil: validUntil || undefined,
+      clientNote: notes.trim() || undefined,
+      terms: terms.trim() || undefined,
+      internalNotes: internalNotes.trim() || undefined,
+      assignedTo: assignedTo ? Number(assignedTo) : undefined,
+    };
+    const shouldSend = submitMode.current === "send";
     try {
-      const proposal = await createProposal.mutateAsync({
-        title: title.trim(),
-        leadId: clientType === "lead" ? Number(clientId) : undefined,
-        customerId: clientType === "customer" ? Number(clientId) : undefined,
-        assignedTo: assignedTo ? Number(assignedTo) : undefined,
-        items: validItems.map((i, idx) => ({
-          itemId: String(idx + 1),
-          description: i.description,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          taxPercent: i.taxPercent,
-        })),
-        discount,
-        validUntil: validUntil || undefined,
-        clientNote: notes.trim() || undefined,
-        terms: terms.trim() || undefined,
-        internalNotes: internalNotes.trim() || undefined,
-      });
-      toast.success(`Proposal ${proposal.number} created`);
-      navigate(`/sales/proposals/${proposal.id}`);
+      let savedId: number;
+      if (isEditing && editId) {
+        await updateProposal.mutateAsync({ id: editId, ...payload });
+        savedId = editId;
+        if (!shouldSend) toast.success("Proposal updated");
+      } else {
+        const proposal = await createProposal.mutateAsync({
+          ...payload,
+          leadId: clientType === "lead" ? Number(clientId) : undefined,
+          customerId: clientType === "customer" ? Number(clientId) : undefined,
+        });
+        savedId = proposal.id;
+        if (!shouldSend) toast.success(`Proposal ${proposal.number} created`);
+      }
+
+      if (shouldSend) {
+        const result = await sendProposal.mutateAsync({ id: savedId });
+        const emailSent = (result as { emailSent?: boolean; sentToEmail?: string })?.emailSent;
+        const to = (result as { sentToEmail?: string })?.sentToEmail;
+        toast.success(isEditing ? "Proposal updated & sent" : "Proposal created & sent", {
+          description: emailSent ? `Email delivered to ${to}` : "Status updated — no email on file for this client.",
+        });
+      }
+
+      navigate(`/sales/proposals/${savedId}`);
     } catch (err) {
-      toastApiError(err, "Failed to create proposal");
+      toastApiError(err, shouldSend
+        ? "Failed to save & send proposal"
+        : isEditing ? "Failed to update proposal" : "Failed to create proposal"
+      );
     }
   };
+
+  if (isEditing && editLoading && !hydrated) {
+    return (
+      <PortalPageShell>
+        <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">Loading proposal…</div>
+      </PortalPageShell>
+    );
+  }
 
   return (
     <PortalPageShell>
@@ -154,16 +332,17 @@ export default function ProposalCreate() {
         transition={{ duration: 0.25 }}
       >
         <SalesPageHeader
-          title="Create proposal"
-          description="Build a new proposal with line items, tax, and discounts."
+          title={isEditing ? "Edit proposal" : "Create proposal"}
+          description={isEditing ? "Update line items, pricing, and details." : "Build a new proposal with line items, tax, and discounts."}
           breadcrumbs={[
             { label: "Sales", href: "/sales" },
             { label: "Proposals", href: "/sales/proposals" },
-            { label: "Create" },
+            ...(isEditing && editId ? [{ label: `#${editId}`, href: `/sales/proposals/${editId}` }] : []),
+            { label: isEditing ? "Edit" : "Create" },
           ]}
           actions={
             <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/sales/proposals">
+              <Link href={isEditing && editId ? `/sales/proposals/${editId}` : "/sales/proposals"}>
                 <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 Cancel
               </Link>
@@ -258,89 +437,29 @@ export default function ProposalCreate() {
             </Card>
 
             <Card>
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm">Line items</CardTitle>
-                <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={addRow}>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
+                <div>
+                  <CardTitle className="text-sm">Line items</CardTitle>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {items.length} {items.length === 1 ? "item" : "items"}
+                  </p>
+                </div>
+                <Button type="button" variant="outline" size="sm" className="h-7 text-xs shrink-0" onClick={addRow}>
                   <Plus className="h-3 w-3 mr-1" />
                   Add row
                 </Button>
               </CardHeader>
-              <CardContent className="p-0 sm:p-0">
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs min-w-[200px]">Description</TableHead>
-                        <TableHead className="text-xs w-20">Qty</TableHead>
-                        <TableHead className="text-xs w-28">Unit price</TableHead>
-                        <TableHead className="text-xs w-20">Tax %</TableHead>
-                        <TableHead className="text-xs w-28 text-right">Line total</TableHead>
-                        <TableHead className="w-10" />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {items.map((item) => {
-                        const line = item.quantity * item.unitPrice;
-                        const lineTax = line * (item.taxPercent / 100);
-                        const lineTotal = line + lineTax;
-                        return (
-                          <TableRow key={item.id}>
-                            <TableCell>
-                              <Input
-                                className="h-8 text-xs"
-                                value={item.description}
-                                onChange={(e) => updateItem(item.id, { description: e.target.value })}
-                                placeholder="Service description"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min={1}
-                                className="h-8 text-xs"
-                                value={item.quantity}
-                                onChange={(e) => updateItem(item.id, { quantity: Number(e.target.value) })}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min={0}
-                                className="h-8 text-xs"
-                                value={item.unitPrice}
-                                onChange={(e) => updateItem(item.id, { unitPrice: Number(e.target.value) })}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                min={0}
-                                max={100}
-                                className="h-8 text-xs"
-                                value={item.taxPercent}
-                                onChange={(e) => updateItem(item.id, { taxPercent: Number(e.target.value) })}
-                              />
-                            </TableCell>
-                            <TableCell className="text-xs text-right font-medium tabular-nums">
-                              {formatCurrency(lineTotal)}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => removeRow(item.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+              <CardContent className="space-y-3">
+                {items.map((item, idx) => (
+                  <ProposalLineItemCard
+                    key={item.id}
+                    index={idx}
+                    item={item}
+                    onChange={(patch) => updateItem(item.id, patch)}
+                    onRemove={() => removeRow(item.id)}
+                    canRemove={items.length > 1}
+                  />
+                ))}
               </CardContent>
             </Card>
 
@@ -405,14 +524,40 @@ export default function ProposalCreate() {
                     <span className="text-muted-foreground">Tax</span>
                     <span className="font-medium tabular-nums">{formatCurrency(totals.tax)}</span>
                   </div>
-                  <div className="flex justify-between text-base font-bold pt-1 border-t">
-                    <span>Total</span>
-                    <span className="tabular-nums text-primary">{formatCurrency(totals.total)}</span>
-                  </div>
+                  <TotalAmountAdjustFields
+                    calculatedTotal={totals.total}
+                    totalAdjustment={totalAdjustment}
+                    onTotalAdjustmentChange={setTotalAdjustment}
+                    adjustedTotal={adjustedTotal}
+                    onAdjustedTotalChange={setAdjustedTotal}
+                    useCustomTotal={useCustomTotal}
+                    onUseCustomTotalChange={setUseCustomTotal}
+                    finalTotal={finalTotal}
+                  />
                 </div>
-                <Button type="submit" className="w-full" disabled={createProposal.isPending}>
-                  {createProposal.isPending ? "Saving…" : "Save proposal"}
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => { submitMode.current = "draft"; }}
+                    disabled={createProposal.isPending || updateProposal.isPending || sendProposal.isPending}
+                  >
+                    {(createProposal.isPending || updateProposal.isPending) && submitMode.current === "draft"
+                      ? "Saving…"
+                      : isEditing ? "Save changes" : "Save draft"}
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="w-full gap-1.5"
+                    onClick={() => { submitMode.current = "send"; }}
+                    disabled={createProposal.isPending || updateProposal.isPending || sendProposal.isPending}
+                  >
+                    {sendProposal.isPending || ((createProposal.isPending || updateProposal.isPending) && submitMode.current === "send")
+                      ? "Sending…"
+                      : <><Send className="h-3.5 w-3.5" />Save & Send</>}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>

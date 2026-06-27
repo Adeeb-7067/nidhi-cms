@@ -84,6 +84,7 @@ export interface FollowUp {
 
 export interface ProposalItem {
   itemId: string;
+  name: string;
   description: string;
   quantity: number;
   unitPrice: number;
@@ -101,20 +102,78 @@ export interface Proposal {
   status: ProposalStatus;
   items: ProposalItem[];
   discount: number;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
   validUntil: string | null;
   clientNote: string;
   terms: string;
   internalNotes: string;
   revision: number;
+  viewToken: string;
   sentAt: string | null;
   seenAt: string | null;
   approvedAt: string | null;
   declinedAt: string | null;
   declinedReason: string | null;
   counterOfferNote: string | null;
+  approvalNote: string | null;
+  clientSignature: string | null;
   projectId: number | null;
+  emailSent?: boolean;
+  sentToEmail?: string | null;
+  lead?: ProposalLead | null;
+  customer?: ProposalCustomer | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProposalCompanySettings {
+  companyName: string;
+  logoUrl: string | null;
+  sealUrl: string | null;
+  address: string | null;
+}
+
+export interface ProposalComment {
+  id: number;
+  proposalId: number;
+  authorName: string;
+  authorType: "client" | "staff";
+  authorId: number | null;
+  content: string;
+  createdAt: string;
+}
+
+export type PublicProposal = Omit<Proposal, "internalNotes" | "viewToken"> & {
+  companySettings: ProposalCompanySettings | null;
+};
+
+export interface ProposalLog {
+  id: number;
+  proposalId: number;
+  event: "viewed" | "approved" | "declined" | "counter_offer";
+  ip: string | null;
+  userAgent: string | null;
+  reason: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface ProposalLead {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  status: string;
+}
+
+export interface ProposalCustomer {
+  id: number;
+  companyName: string;
+  contactPerson: string;
+  email: string;
+  phone: string | null;
 }
 
 export interface Customer {
@@ -142,6 +201,9 @@ export interface Installment {
   customerId: number;
   name: string;
   dueAmount: number;
+  calculatedAmount?: number | null;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
   paidAmount: number;
   dueDate: string;
   status: InstallmentStatus;
@@ -157,6 +219,9 @@ export interface SalesInvoice {
   installmentId: number | null;
   proposalId: number | null;
   amount: number;
+  calculatedAmount?: number | null;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
   paidAmount: number;
   status: InvoiceStatus;
   dueDate: string;
@@ -459,6 +524,19 @@ export function useListProposals(
   });
 }
 
+export function useGetPublicProposal(token: string) {
+  return useQuery<PublicProposal>({
+    queryKey: ["public-proposal", token],
+    queryFn: async () => {
+      const res = await fetch(apiUrl(`/api/sales/proposals/view/${token}`));
+      if (!res.ok) throw new Error("Proposal not found");
+      return res.json() as Promise<PublicProposal>;
+    },
+    enabled: !!token,
+    staleTime: 0,
+  });
+}
+
 export function useGetProposal(id: number, enabled = true) {
   return useQuery<Proposal>({
     queryKey: salesKeys.proposal(id),
@@ -478,6 +556,8 @@ export function useCreateProposal() {
       assignedTo?: number;
       items?: ProposalItem[];
       discount?: number;
+      totalAdjustment?: number;
+      adjustedTotal?: number | null;
       validUntil?: string;
       clientNote?: string;
       terms?: string;
@@ -503,6 +583,20 @@ export function useUpdateProposal() {
   });
 }
 
+export function useDeleteProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ deleted: boolean; id: number }>(apiUrl(`/api/sales/proposals/${id}`), {
+        method: "DELETE",
+      }),
+    onSuccess: (_data, id) => {
+      qc.removeQueries({ queryKey: salesKeys.proposal(id) });
+      qc.invalidateQueries({ queryKey: ["sales-proposals"] });
+    },
+  });
+}
+
 function proposalAction(action: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -523,6 +617,82 @@ export const useApproveProposal = () => proposalAction("approve");
 export const useDeclineProposal = () => proposalAction("decline");
 export const useCounterProposal = () => proposalAction("counter");
 export const useReviseProposal = () => proposalAction("revise");
+
+export function useGetProposalLogs(id: number, enabled = true) {
+  return useQuery<{ logs: ProposalLog[] }>({
+    queryKey: ["proposal-logs", id],
+    queryFn: () => customFetch(apiUrl(`/api/sales/proposals/${id}/logs`)),
+    enabled: enabled && !!id,
+    staleTime: 10_000,
+    refetchInterval: 30_000,
+  });
+}
+
+function publicProposalAction(token: string, action: "approve" | "decline" | "counter") {
+  return useMutation({
+    mutationFn: (body: { reason?: string; note?: string; signature?: string }) =>
+      fetch(apiUrl(`/api/sales/proposals/public/${token}/${action}`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { message?: string }).message ?? "Action failed");
+        }
+        return res.json() as Promise<PublicProposal>;
+      }),
+  });
+}
+
+export const usePublicApproveProposal = (token: string) => publicProposalAction(token, "approve");
+export const usePublicDeclineProposal = (token: string) => publicProposalAction(token, "decline");
+export const usePublicCounterProposal = (token: string) => publicProposalAction(token, "counter");
+
+export function usePublicProposalComments(token: string) {
+  return useQuery<{ comments: ProposalComment[] }>({
+    queryKey: ["proposal-comments-public", token],
+    queryFn: () =>
+      fetch(apiUrl(`/api/sales/proposals/public/${token}/comments`))
+        .then((r) => r.json()),
+    enabled: !!token,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAddPublicComment(token: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { content: string; authorName?: string }) =>
+      fetch(apiUrl(`/api/sales/proposals/public/${token}/comments`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then((r) => r.json() as Promise<ProposalComment>),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["proposal-comments-public", token] }),
+  });
+}
+
+export function useProposalComments(id: number, enabled = true) {
+  return useQuery<{ comments: ProposalComment[] }>({
+    queryKey: ["proposal-comments", id],
+    queryFn: () => customFetch(apiUrl(`/api/sales/proposals/${id}/comments`)),
+    enabled: enabled && !!id,
+    refetchInterval: 15_000,
+  });
+}
+
+export function useAddStaffComment(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { content: string }) =>
+      customFetch<ProposalComment>(apiUrl(`/api/sales/proposals/${id}/comments`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["proposal-comments", id] }),
+  });
+}
 
 // ─── Customers ────────────────────────────────────────────────────────────
 
@@ -633,6 +803,9 @@ export function useCreateInstallment() {
       name: string;
       dueAmount: number;
       dueDate: string;
+      calculatedAmount?: number;
+      totalAdjustment?: number;
+      adjustedTotal?: number | null;
     }) =>
       customFetch<Installment>(apiUrl("/api/sales/installments"), {
         method: "POST",
@@ -650,7 +823,10 @@ export function useUpdateInstallment() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-installments"] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.installment(vars.id) });
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+    },
   });
 }
 
@@ -690,6 +866,9 @@ export function useCreateInvoice() {
       projectId?: number;
       installmentId?: number;
       proposalId?: number;
+      calculatedAmount?: number;
+      totalAdjustment?: number;
+      adjustedTotal?: number | null;
     }) =>
       customFetch<SalesInvoice>(apiUrl("/api/sales/invoices"), {
         method: "POST",
@@ -702,7 +881,18 @@ export function useCreateInvoice() {
 export function useUpdateInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: number; amount?: number; dueDate?: string; status?: InvoiceStatus }) =>
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      amount?: number;
+      calculatedAmount?: number;
+      totalAdjustment?: number;
+      adjustedTotal?: number | null;
+      dueDate?: string;
+      status?: InvoiceStatus;
+    }) =>
       customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -717,10 +907,20 @@ export function useUpdateInvoice() {
 export function useCreateInvoiceFromProposal() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ proposalId, dueDate }: { proposalId: number; dueDate?: string }) =>
+    mutationFn: ({
+      proposalId,
+      dueDate,
+      totalAdjustment,
+      adjustedTotal,
+    }: {
+      proposalId: number;
+      dueDate?: string;
+      totalAdjustment?: number;
+      adjustedTotal?: number | null;
+    }) =>
       customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/from-proposal/${proposalId}`), {
         method: "POST",
-        body: JSON.stringify({ dueDate }),
+        body: JSON.stringify({ dueDate, totalAdjustment, adjustedTotal }),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["sales-invoices"] });

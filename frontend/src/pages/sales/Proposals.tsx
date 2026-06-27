@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { Plus, FileText } from "lucide-react";
+import { Plus, FileText, Send, Pencil, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
@@ -14,7 +16,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useListProposals, type ProposalStatus } from "@/api/sales";
+import {
+  useListProposals,
+  useSendProposal,
+  useDeleteProposal,
+  type ProposalStatus,
+  type Proposal,
+} from "@/api/sales";
 import { PROPOSAL_STATUS_LABELS, formatCurrency } from "@/modules/sales/constants";
 import {
   SalesPageHeader,
@@ -23,6 +31,7 @@ import {
   ExecutiveAvatar,
   SalesEmptyState,
 } from "@/modules/sales/components";
+import { resolveProposalTotal } from "@/modules/sales/utils";
 
 const STATUS_ORDER: (ProposalStatus | "all")[] = [
   "all",
@@ -36,17 +45,17 @@ const STATUS_ORDER: (ProposalStatus | "all")[] = [
   "expired",
 ];
 
-function calcTotal(items: { quantity: number; unitPrice: number; taxPercent: number }[], discount: number) {
-  const subtotal = items.reduce((s, i) => s + i.quantity * i.unitPrice * (1 + i.taxPercent / 100), 0);
-  return subtotal * (1 - (discount ?? 0) / 100);
-}
-
 export default function Proposals() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [sendingId, setSendingId] = useState<number | null>(null);
 
   const { data, isLoading, isError, refetch } = useListProposals();
+  const sendProposal = useSendProposal();
+  const deleteProposal = useDeleteProposal();
+
   const allProposals = data?.proposals ?? [];
 
   const filtered = useMemo(() => {
@@ -70,6 +79,35 @@ export default function Proposals() {
     return counts;
   }, [allProposals]);
 
+  const handleSend = async (p: Proposal) => {
+    setSendingId(p.id);
+    try {
+      const result = await sendProposal.mutateAsync({ id: p.id });
+      const emailSent = (result as { emailSent?: boolean; sentToEmail?: string })?.emailSent;
+      const to = (result as { sentToEmail?: string })?.sentToEmail;
+      toast.success("Proposal sent", {
+        description: emailSent ? `Email delivered to ${to}` : "Status updated — no email on file.",
+      });
+    } catch (err) {
+      toastApiError(err, "Failed to send proposal");
+    } finally {
+      setSendingId(null);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    try {
+      await deleteProposal.mutateAsync(id);
+      toast.success("Proposal deleted");
+    } catch (err) {
+      toastApiError(err, "Failed to delete proposal");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const deletingProposal = deletingId !== null ? allProposals.find((p) => p.id === deletingId) : null;
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -88,6 +126,38 @@ export default function Proposals() {
           </Button>
         }
       />
+
+      {/* Delete confirmation dialog */}
+      {deletingProposal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-background rounded-xl shadow-xl border w-full max-w-sm mx-4 p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 h-9 w-9 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 className="h-4 w-4 text-red-600" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Delete proposal?</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  This will permanently delete <strong>{deletingProposal.number}</strong> and all its audit history. This cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setDeletingId(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleteProposal.isPending}
+                onClick={() => handleDelete(deletingProposal.id)}
+              >
+                {deleteProposal.isPending ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <SalesFilterBar
         search={search}
@@ -143,16 +213,19 @@ export default function Proposals() {
                   <TableHead className="text-xs text-right">Total</TableHead>
                   <TableHead className="text-xs">Valid until</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((p) => {
-                  const total = calcTotal(p.items, p.discount);
+                  const total = resolveProposalTotal(p).finalTotal;
                   const forLabel = p.leadId
                     ? `Lead #${p.leadId}`
                     : p.customerId
                     ? `Customer #${p.customerId}`
                     : "—";
+                  const canSend = ["draft", "revised", "counter_offer"].includes(p.status);
+                  const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
                   return (
                     <TableRow key={p.id} className="hover:bg-muted/30">
                       <TableCell>
@@ -187,6 +260,42 @@ export default function Proposals() {
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {format(new Date(p.createdAt), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-1">
+                          {canSend && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title="Send proposal"
+                              disabled={sendingId === p.id}
+                              onClick={(e) => { e.stopPropagation(); handleSend(p); }}
+                            >
+                              <Send className="h-3.5 w-3.5 text-primary" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Edit proposal"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/sales/proposals/create?editId=${p.id}`); }}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          {canDelete && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title="Delete proposal"
+                              onClick={(e) => { e.stopPropagation(); setDeletingId(p.id); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

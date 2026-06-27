@@ -7,6 +7,11 @@ import {
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+import {
+  resolveFinalTotal,
+  parseAdjustedTotal,
+  parseTotalAdjustment,
+} from "../../utils/sales-totals.js";
 
 async function listInstallments(req, res) {
   const { customerId, projectId, status } = req.query;
@@ -38,13 +43,21 @@ async function createInstallment(req, res) {
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = new Date(body.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+  const calculatedAmount =
+    body.calculatedAmount != null ? Number(body.calculatedAmount) : Number(body.dueAmount);
+  const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
+  const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
+  const dueAmount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
   const id = await getNextSequence("sales_installments");
   const installment = await SalesInstallments.create({
     id,
     projectId: Number(body.projectId),
     customerId: Number(body.customerId),
     name: String(body.name).trim(),
-    dueAmount: Number(body.dueAmount),
+    dueAmount,
+    calculatedAmount: Math.round(calculatedAmount),
+    totalAdjustment,
+    adjustedTotal,
     paidAmount: 0,
     dueDate,
     status: "pending",
@@ -66,7 +79,28 @@ async function updateInstallment(req, res) {
   const body = req.body;
   const updates = {};
   if (body.name !== undefined) updates.name = optionalString(body.name);
-  if (body.dueAmount !== undefined) updates.dueAmount = Number(body.dueAmount);
+  if (body.dueAmount !== undefined || body.calculatedAmount !== undefined || body.totalAdjustment !== undefined || body.adjustedTotal !== undefined) {
+    const calculatedAmount =
+      body.calculatedAmount != null
+        ? Number(body.calculatedAmount)
+        : installment.calculatedAmount ?? installment.dueAmount;
+    const totalAdjustment =
+      body.totalAdjustment !== undefined
+        ? parseTotalAdjustment(body.totalAdjustment)
+        : installment.totalAdjustment ?? 0;
+    const adjustedTotal =
+      body.adjustedTotal !== undefined
+        ? parseAdjustedTotal(body.adjustedTotal)
+        : installment.adjustedTotal ?? null;
+    if (body.dueAmount !== undefined && body.calculatedAmount === undefined && body.totalAdjustment === undefined && body.adjustedTotal === undefined) {
+      updates.dueAmount = Number(body.dueAmount);
+    } else {
+      updates.calculatedAmount = Math.round(calculatedAmount);
+      updates.totalAdjustment = totalAdjustment;
+      updates.adjustedTotal = adjustedTotal;
+      updates.dueAmount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+    }
+  }
   if (body.paidAmount !== undefined) updates.paidAmount = Number(body.paidAmount);
   if (body.dueDate !== undefined) {
     const d = new Date(body.dueDate);

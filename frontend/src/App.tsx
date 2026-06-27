@@ -17,6 +17,7 @@ import { AppLoadingScreen } from "@/components/loading";
 
 const Login = React.lazy(() => import("@/pages/login"));
 const ForgotPassword = React.lazy(() => import("@/pages/auth/forgot-password"));
+const PublicProposalView = React.lazy(() => import("@/pages/sales/PublicProposalView"));
 
 function getHttpStatus(error: Error): number | undefined {
   return (error as Error & { response?: { status?: number } }).response?.status;
@@ -42,28 +43,33 @@ const queryClient = new QueryClient({
   },
 });
 
-function Router() {
+/** Auth-required routes — wrapped in all auth/realtime providers */
+function AuthenticatedApp() {
   return (
-    <Switch>
-      <Route path="/login">
-        <React.Suspense fallback={<AppLoadingScreen message="Loading sign in" />}>
-          <Login />
-        </React.Suspense>
-      </Route>
-      <Route path="/forgot-password">
-        <React.Suspense fallback={<AppLoadingScreen message="Loading" />}>
-          <ForgotPassword />
-        </React.Suspense>
-      </Route>
-
-      <Route path="/">
-        <Redirect to="/login" />
-      </Route>
-
-      <Route>
-        <AuthenticatedShell />
-      </Route>
-    </Switch>
+    <AuthProvider>
+      <RealtimeProvider>
+        <PresenceProvider>
+          <Switch>
+            <Route path="/login">
+              <React.Suspense fallback={<AppLoadingScreen message="Loading sign in" />}>
+                <Login />
+              </React.Suspense>
+            </Route>
+            <Route path="/forgot-password">
+              <React.Suspense fallback={<AppLoadingScreen message="Loading" />}>
+                <ForgotPassword />
+              </React.Suspense>
+            </Route>
+            <Route path="/">
+              <Redirect to="/login" />
+            </Route>
+            <Route>
+              <AuthenticatedShell />
+            </Route>
+          </Switch>
+        </PresenceProvider>
+      </RealtimeProvider>
+    </AuthProvider>
   );
 }
 
@@ -76,13 +82,18 @@ function App() {
             base={isElectron() ? "" : import.meta.env.BASE_URL.replace(/\/$/, "")}
             hook={isElectron() ? useHashLocation : undefined}
           >
-            <AuthProvider>
-              <RealtimeProvider>
-                <PresenceProvider>
-                  <Router />
-                </PresenceProvider>
-              </RealtimeProvider>
-            </AuthProvider>
+            <Switch>
+              {/* Public proposal view — no auth providers, accessible without login */}
+              <Route path="/proposal/:id/:token">
+                <React.Suspense fallback={<AppLoadingScreen message="Loading proposal" />}>
+                  <PublicProposalView />
+                </React.Suspense>
+              </Route>
+              {/* Everything else — auth, realtime, presence */}
+              <Route>
+                <AuthenticatedApp />
+              </Route>
+            </Switch>
           </WouterRouter>
           <UpdateNotificationBanner />
           <AppToaster />

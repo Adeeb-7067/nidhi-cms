@@ -42,3 +42,8 @@ export {
   ReceiptPreview,
   RevenueChartCard,
 } from "./financial-kit";
+export {
+  TotalAmountAdjustFields,
+  totalAdjustPayload,
+  proposalAdjustPayload,
+} from "./total-amount-adjust";

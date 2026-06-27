@@ -6,6 +6,12 @@ import {
   parseIdParam,
   parsePagination,
 } from "../../utils/route-errors.js";
+import {
+  calcLineItemsTotal,
+  resolveFinalTotal,
+  parseAdjustedTotal,
+  parseTotalAdjustment,
+} from "../../utils/sales-totals.js";
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
@@ -41,6 +47,11 @@ async function createInvoice(req, res) {
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = new Date(body.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+  const calculatedAmount =
+    body.calculatedAmount != null ? Number(body.calculatedAmount) : Number(body.amount);
+  const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
+  const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
+  const amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
   const [number, id] = await Promise.all([nextInvoiceNumber(), getNextSequence("sales_invoices")]);
   const invoice = await SalesInvoices.create({
     id,
@@ -49,7 +60,10 @@ async function createInvoice(req, res) {
     projectId: body.projectId ? Number(body.projectId) : null,
     installmentId: body.installmentId ? Number(body.installmentId) : null,
     proposalId: body.proposalId ? Number(body.proposalId) : null,
-    amount: Number(body.amount),
+    amount,
+    calculatedAmount: Math.round(calculatedAmount),
+    totalAdjustment,
+    adjustedTotal,
     paidAmount: 0,
     status: "unpaid",
     dueDate,
@@ -70,7 +84,28 @@ async function updateInvoice(req, res) {
   if (!invoice) notFound("Invoice");
   const body = req.body;
   const updates = {};
-  if (body.amount !== undefined) updates.amount = Number(body.amount);
+  if (body.amount !== undefined || body.calculatedAmount !== undefined || body.totalAdjustment !== undefined || body.adjustedTotal !== undefined) {
+    const calculatedAmount =
+      body.calculatedAmount != null
+        ? Number(body.calculatedAmount)
+        : invoice.calculatedAmount ?? invoice.amount;
+    const totalAdjustment =
+      body.totalAdjustment !== undefined
+        ? parseTotalAdjustment(body.totalAdjustment)
+        : invoice.totalAdjustment ?? 0;
+    const adjustedTotal =
+      body.adjustedTotal !== undefined
+        ? parseAdjustedTotal(body.adjustedTotal)
+        : invoice.adjustedTotal ?? null;
+    if (body.amount !== undefined && body.calculatedAmount === undefined && body.totalAdjustment === undefined && body.adjustedTotal === undefined) {
+      updates.amount = Number(body.amount);
+    } else {
+      updates.calculatedAmount = Math.round(calculatedAmount);
+      updates.totalAdjustment = totalAdjustment;
+      updates.adjustedTotal = adjustedTotal;
+      updates.amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+    }
+  }
   if (body.dueDate !== undefined) {
     const d = new Date(body.dueDate);
     if (isNaN(d.getTime())) badRequest("dueDate is invalid.", "dueDate");
@@ -91,14 +126,16 @@ async function createInvoiceFromProposal(req, res) {
       "customerId"
     );
   }
-  let amount = 0;
-  for (const item of proposal.items) {
-    const lineTotal = item.quantity * item.unitPrice;
-    amount += lineTotal + lineTotal * (item.taxPercent / 100);
-  }
-  const discountAmt = amount * (proposal.discount / 100);
-  amount = Math.round((amount - discountAmt) * 100) / 100;
+  let calculatedAmount = calcLineItemsTotal(proposal.items, proposal.discount);
+  calculatedAmount = resolveFinalTotal(
+    calculatedAmount,
+    proposal.totalAdjustment ?? 0,
+    proposal.adjustedTotal ?? null
+  );
   const body = req.body;
+  const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
+  const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
+  const amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
   const dueDate = body.dueDate
     ? new Date(body.dueDate)
     : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days default
@@ -110,6 +147,9 @@ async function createInvoiceFromProposal(req, res) {
     projectId: proposal.projectId ?? null,
     proposalId,
     amount,
+    calculatedAmount: Math.round(calculatedAmount),
+    totalAdjustment,
+    adjustedTotal,
     paidAmount: 0,
     status: "unpaid",
     dueDate,

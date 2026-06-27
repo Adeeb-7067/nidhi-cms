@@ -22,6 +22,11 @@ const STALE_SESSION_HOURS = 24;
 // Do NOT set too low: brief network/API outages must not end active work sessions.
 const HEARTBEAT_STALE_MINUTES = 10;
 
+// Record when this server process started so the stale-heartbeat cleanup uses a grace window
+// on startup — prevents a server restart from immediately killing sessions that had heartbeats
+// right before the downtime.
+const SERVER_STARTED_AT = Date.now();
+
 // Single S3 client shared across the purge run — avoid per-file client construction.
 let _s3Client = null;
 function getS3Client() {
@@ -122,7 +127,13 @@ async function runWorkDaySessionCleanup() {
 async function runHeartbeatStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
-  const cutoff = new Date(Date.now() - HEARTBEAT_STALE_MINUTES * 60 * 1000);
+  // Use the more lenient of the two cutoffs: the normal rolling window, or a window
+  // anchored to server start. This prevents a restart from immediately closing sessions
+  // whose last heartbeat was just before the server went down.
+  const staleMs = HEARTBEAT_STALE_MINUTES * 60 * 1000;
+  const normalCutoff = Date.now() - staleMs;
+  const startupCutoff = SERVER_STARTED_AT - staleMs;
+  const cutoff = new Date(Math.min(normalCutoff, startupCutoff));
   const { closed } = await closeStaleHeartbeatSessions(cutoff);
 
   if (closed > 0) {

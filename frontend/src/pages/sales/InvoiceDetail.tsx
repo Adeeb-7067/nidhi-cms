@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
@@ -10,6 +12,7 @@ import {
   useGetCustomer,
   useListPayments,
   useGetInstallment,
+  useUpdateInvoice,
 } from "@/api/sales";
 import { toInvoicePreview, paymentToPartial } from "@/modules/sales/adapters";
 import {
@@ -18,12 +21,18 @@ import {
   InvoicePreview,
   PaymentHistoryTable,
   RecordPaymentDialog,
+  TotalAmountAdjustFields,
+  totalAdjustPayload,
 } from "@/modules/sales/components";
 
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/sales/invoices/:id");
   const invoiceId = Number(params?.id);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const updateInvoice = useUpdateInvoice();
+  const [totalAdjustment, setTotalAdjustment] = useState(0);
+  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
+  const [useCustomTotal, setUseCustomTotal] = useState(false);
 
   const { data: invoice, isLoading, isError } = useGetInvoice(invoiceId, !!invoiceId);
   const { data: customer } = useGetCustomer(invoice?.customerId ?? 0, !!invoice?.customerId);
@@ -32,6 +41,40 @@ export default function InvoiceDetailPage() {
     invoiceId ? { invoiceId } : undefined,
     !!invoiceId,
   );
+
+  useEffect(() => {
+    if (!invoice) return;
+    setTotalAdjustment(invoice.totalAdjustment ?? 0);
+    setAdjustedTotal(invoice.adjustedTotal ?? null);
+    setUseCustomTotal(invoice.adjustedTotal != null);
+  }, [invoice?.id, invoice?.totalAdjustment, invoice?.adjustedTotal]);
+
+  const calculatedAmount = invoice?.calculatedAmount ?? invoice?.amount ?? 0;
+  const finalAmount = invoice
+    ? totalAdjustPayload(calculatedAmount, totalAdjustment, useCustomTotal, adjustedTotal).amount
+    : 0;
+
+  const handleSaveAmount = async () => {
+    if (!invoice) return;
+    const payload = totalAdjustPayload(
+      calculatedAmount,
+      totalAdjustment,
+      useCustomTotal,
+      adjustedTotal,
+    );
+    try {
+      await updateInvoice.mutateAsync({
+        id: invoice.id,
+        amount: payload.amount,
+        calculatedAmount: payload.calculatedAmount,
+        totalAdjustment: payload.totalAdjustment ?? 0,
+        adjustedTotal: payload.adjustedTotal,
+      });
+      toast.success("Invoice amount updated");
+    } catch (err) {
+      toastApiError(err, "Failed to update invoice amount");
+    }
+  };
 
   if (isLoading) {
     return (
@@ -100,6 +143,35 @@ export default function InvoiceDetailPage() {
               </CardContent>
             </Card>
           )}
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Adjust amount</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <TotalAmountAdjustFields
+              calculatedTotal={calculatedAmount}
+              totalAdjustment={totalAdjustment}
+              onTotalAdjustmentChange={setTotalAdjustment}
+              adjustedTotal={adjustedTotal}
+              onAdjustedTotalChange={setAdjustedTotal}
+              useCustomTotal={useCustomTotal}
+              onUseCustomTotalChange={setUseCustomTotal}
+              finalTotal={finalAmount}
+              compact
+            />
+            {invoice.status !== "paid" && (
+              <Button
+                size="sm"
+                className="w-full h-8"
+                onClick={handleSaveAmount}
+                disabled={updateInvoice.isPending || finalAmount === invoice.amount}
+              >
+                {updateInvoice.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                Save amount
+              </Button>
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">

@@ -141,10 +141,9 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       logout: "Work session ended — you logged out.",
       admin_terminated: "Work session ended — an administrator ended your session.",
     };
-    const unsubscribe = window.electron.onSessionEnded(({ stopReason, silent }) => {
+    const unsubscribe = window.electron.onSessionEnded(({ stopReason }) => {
       queryClient.setQueryData(activeSessionQueryKey(), { session: null });
       queryClient.invalidateQueries({ queryKey: ["work-sessions"] });
-      if (silent) return;
       const message = SESSION_END_MESSAGES[stopReason];
       if (message) {
         toast.info(message, { duration: 8_000 });

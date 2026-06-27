@@ -23,6 +23,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  TotalAmountAdjustFields,
+  totalAdjustPayload,
+} from "./total-amount-adjust";
+import { resolveProposalTotal } from "@/modules/sales/utils";
+import {
   useCreateCustomer,
   useCreateInstallment,
   useCreateInvoice,
@@ -636,27 +641,50 @@ export function CreateInstallmentDialog({
   const [projectId, setProjectId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [name, setName] = useState("");
-  const [dueAmount, setDueAmount] = useState("");
+  const [baseAmount, setBaseAmount] = useState("");
+  const [totalAdjustment, setTotalAdjustment] = useState(0);
+  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
+  const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [dueDate, setDueDate] = useState("");
+
+  const calculatedAmount = Number(baseAmount) || 0;
+  const finalDueAmount = totalAdjustPayload(
+    calculatedAmount,
+    totalAdjustment,
+    useCustomTotal,
+    adjustedTotal,
+  ).dueAmount;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!projectId || !customerId || !name.trim() || !dueAmount || !dueDate) {
+    if (!projectId || !customerId || !name.trim() || !baseAmount || !dueDate) {
       toast.error("All fields are required");
       return;
     }
     try {
+      const payload = totalAdjustPayload(
+        calculatedAmount,
+        totalAdjustment,
+        useCustomTotal,
+        adjustedTotal,
+      );
       await createInstallment.mutateAsync({
         projectId: Number(projectId),
         customerId: Number(customerId),
         name: name.trim(),
-        dueAmount: Number(dueAmount),
+        dueAmount: payload.dueAmount,
+        calculatedAmount: payload.calculatedAmount,
+        totalAdjustment: payload.totalAdjustment ?? 0,
+        adjustedTotal: payload.adjustedTotal,
         dueDate,
       });
       toast.success("Installment created");
       onOpenChange(false);
       setName("");
-      setDueAmount("");
+      setBaseAmount("");
+      setTotalAdjustment(0);
+      setAdjustedTotal(null);
+      setUseCustomTotal(false);
     } catch (err) {
       toastApiError(err, "Failed to create installment");
     }
@@ -694,13 +722,24 @@ export function CreateInstallmentDialog({
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Milestone 1 — Design" />
           </SalesField>
           <div className="grid grid-cols-2 gap-3">
-            <SalesField label="Due amount (₹)">
-              <Input type="number" min={0} value={dueAmount} onChange={(e) => setDueAmount(e.target.value)} placeholder="0" />
+            <SalesField label="Base amount (₹)">
+              <Input type="number" min={0} value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} placeholder="0" />
             </SalesField>
             <SalesField label="Due date">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </SalesField>
           </div>
+          <TotalAmountAdjustFields
+            calculatedTotal={calculatedAmount}
+            totalAdjustment={totalAdjustment}
+            onTotalAdjustmentChange={setTotalAdjustment}
+            adjustedTotal={adjustedTotal}
+            onAdjustedTotalChange={setAdjustedTotal}
+            useCustomTotal={useCustomTotal}
+            onUseCustomTotalChange={setUseCustomTotal}
+            finalTotal={finalDueAmount}
+            compact
+          />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={createInstallment.isPending}>
@@ -732,32 +771,68 @@ export function CreateInvoiceDialog({
     query: { queryKey: getListProjectsQueryKey(projectParams), enabled: open },
   });
   const [customerId, setCustomerId] = useState("");
-  const [amount, setAmount] = useState("");
+  const [baseAmount, setBaseAmount] = useState("");
+  const [totalAdjustment, setTotalAdjustment] = useState(0);
+  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
+  const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
   const [proposalId, setProposalId] = useState("");
 
+  const calculatedAmount = Number(baseAmount) || 0;
+  const finalAmount = totalAdjustPayload(
+    calculatedAmount,
+    totalAdjustment,
+    useCustomTotal,
+    adjustedTotal,
+  ).amount;
+
   useEffect(() => {
     if (!open) return;
     setCustomerId("");
-    setAmount("");
+    setBaseAmount("");
+    setTotalAdjustment(0);
+    setAdjustedTotal(null);
+    setUseCustomTotal(false);
     setDueDate("");
     setProjectId("");
     setInstallmentId("");
     setProposalId("");
   }, [open]);
 
+  useEffect(() => {
+    if (!proposalId || proposalId === "none") return;
+    const proposal = (proposalsData?.proposals ?? []).find((p) => String(p.id) === proposalId);
+    if (!proposal) return;
+    const { finalTotal } = resolveProposalTotal(proposal);
+    setBaseAmount(String(finalTotal));
+    setTotalAdjustment(0);
+    setAdjustedTotal(null);
+    setUseCustomTotal(false);
+    if (proposal.customerId) setCustomerId(String(proposal.customerId));
+    if (proposal.projectId) setProjectId(String(proposal.projectId));
+  }, [proposalId, proposalsData?.proposals]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerId || !amount || !dueDate) {
+    if (!customerId || !baseAmount || !dueDate) {
       toast.error("Customer, amount, and due date are required");
       return;
     }
     try {
+      const payload = totalAdjustPayload(
+        calculatedAmount,
+        totalAdjustment,
+        useCustomTotal,
+        adjustedTotal,
+      );
       const inv = await createInvoice.mutateAsync({
         customerId: Number(customerId),
-        amount: Number(amount),
+        amount: payload.amount,
+        calculatedAmount: payload.calculatedAmount,
+        totalAdjustment: payload.totalAdjustment ?? 0,
+        adjustedTotal: payload.adjustedTotal,
         dueDate,
         projectId: projectId ? Number(projectId) : undefined,
         installmentId: installmentId ? Number(installmentId) : undefined,
@@ -790,13 +865,24 @@ export function CreateInvoiceDialog({
             </Select>
           </SalesField>
           <div className="grid grid-cols-2 gap-3">
-            <SalesField label="Amount (₹)">
-              <Input type="number" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" />
+            <SalesField label="Base amount (₹)">
+              <Input type="number" min={0} value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} placeholder="0" />
             </SalesField>
             <SalesField label="Due date">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </SalesField>
           </div>
+          <TotalAmountAdjustFields
+            calculatedTotal={calculatedAmount}
+            totalAdjustment={totalAdjustment}
+            onTotalAdjustmentChange={setTotalAdjustment}
+            adjustedTotal={adjustedTotal}
+            onAdjustedTotalChange={setAdjustedTotal}
+            useCustomTotal={useCustomTotal}
+            onUseCustomTotalChange={setUseCustomTotal}
+            finalTotal={finalAmount}
+            compact
+          />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <SalesField label="Project" hint="Optional">
               <Select value={projectId || "none"} onValueChange={(v) => setProjectId(v === "none" ? "" : v)}>
@@ -856,6 +942,35 @@ export function InvoiceFromProposalDialog({
   const { data: proposalsData } = useListProposals({ status: "approved" }, open);
   const [proposalId, setProposalId] = useState("");
   const [dueDate, setDueDate] = useState("");
+  const [totalAdjustment, setTotalAdjustment] = useState(0);
+  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
+  const [useCustomTotal, setUseCustomTotal] = useState(false);
+
+  const selectedProposal = (proposalsData?.proposals ?? []).find(
+    (p) => String(p.id) === proposalId && p.status === "approved",
+  );
+  const calculatedAmount = selectedProposal ? resolveProposalTotal(selectedProposal).finalTotal : 0;
+  const finalAmount = totalAdjustPayload(
+    calculatedAmount,
+    totalAdjustment,
+    useCustomTotal,
+    adjustedTotal,
+  ).amount;
+
+  useEffect(() => {
+    if (!open) return;
+    setProposalId("");
+    setDueDate("");
+    setTotalAdjustment(0);
+    setAdjustedTotal(null);
+    setUseCustomTotal(false);
+  }, [open]);
+
+  useEffect(() => {
+    setTotalAdjustment(0);
+    setAdjustedTotal(null);
+    setUseCustomTotal(false);
+  }, [proposalId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -864,9 +979,17 @@ export function InvoiceFromProposalDialog({
       return;
     }
     try {
+      const payload = totalAdjustPayload(
+        calculatedAmount,
+        totalAdjustment,
+        useCustomTotal,
+        adjustedTotal,
+      );
       const inv = await createFromProposal.mutateAsync({
         proposalId: Number(proposalId),
         dueDate: dueDate || undefined,
+        totalAdjustment: payload.totalAdjustment ?? 0,
+        adjustedTotal: payload.adjustedTotal,
       });
       toast.success(`Invoice ${inv.number} created from proposal`);
       onOpenChange(false);
@@ -899,6 +1022,19 @@ export function InvoiceFromProposalDialog({
           <SalesField label="Due date" hint="Optional — leave blank to set it on the invoice later.">
             <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
           </SalesField>
+          {selectedProposal && (
+            <TotalAmountAdjustFields
+              calculatedTotal={calculatedAmount}
+              totalAdjustment={totalAdjustment}
+              onTotalAdjustmentChange={setTotalAdjustment}
+              adjustedTotal={adjustedTotal}
+              onAdjustedTotalChange={setAdjustedTotal}
+              useCustomTotal={useCustomTotal}
+              onUseCustomTotalChange={setUseCustomTotal}
+              finalTotal={finalAmount}
+              compact
+            />
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={createFromProposal.isPending}>

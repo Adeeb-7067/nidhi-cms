@@ -41,10 +41,20 @@ router.post("/sales/follow-ups/:id/complete", ...guard, wrap(followupsCtrl.compl
 // ── Proposals ─────────────────────────────────────────────────────────────
 router.get("/sales/proposals", ...guard, wrap(proposalsCtrl.listProposals));
 router.post("/sales/proposals", ...guard, wrap(proposalsCtrl.createProposal));
-// Public view — no auth (must come before /:id to avoid token being parsed as id)
+// Public routes — no auth (must come before /:id)
 router.get("/sales/proposals/view/:token", wrap(proposalsCtrl.viewProposal));
+router.get("/sales/proposals/public/:token/comments", wrap(proposalsCtrl.listPublicComments));
+router.post("/sales/proposals/public/:token/comments", wrap(proposalsCtrl.addPublicComment));
+router.post("/sales/proposals/public/:token/approve", wrap(proposalsCtrl.publicApproveProposal));
+router.post("/sales/proposals/public/:token/decline", wrap(proposalsCtrl.publicDeclineProposal));
+router.post("/sales/proposals/public/:token/counter", wrap(proposalsCtrl.publicCounterProposal));
+// Authenticated routes
 router.get("/sales/proposals/:id", ...guard, wrap(proposalsCtrl.getProposalById));
 router.patch("/sales/proposals/:id", ...guard, wrap(proposalsCtrl.updateProposal));
+router.delete("/sales/proposals/:id", ...guard, wrap(proposalsCtrl.deleteProposal));
+router.get("/sales/proposals/:id/logs", ...guard, wrap(proposalsCtrl.getProposalLogs));
+router.get("/sales/proposals/:id/comments", ...guard, wrap(proposalsCtrl.listProposalComments));
+router.post("/sales/proposals/:id/comments", ...guard, wrap(proposalsCtrl.addStaffComment));
 router.post("/sales/proposals/:id/send", ...guard, wrap(proposalsCtrl.sendProposal));
 router.post("/sales/proposals/:id/approve", ...guard, wrap(proposalsCtrl.approveProposal));
 router.post("/sales/proposals/:id/decline", ...guard, wrap(proposalsCtrl.declineProposal));

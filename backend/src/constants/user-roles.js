@@ -18,13 +18,13 @@ const devPortalStaffRoles = ["manager", "developer", "tester", "qa", "freelancer
 
 /** Screenshot / work-session monitoring (Electron + attendance). */
 const monitorableStaffRoles = ["manager", "developer", "tester", "qa", "freelancer"];
-
-/** HRM admin roles (email login). */
+ 
+/** HRM admin roles (email login). */ 
 const hrmAdminRoles = ["super_admin", "hr"];
 
 /** Roles QA can assign bugs to. */
 const bugAssigneeRoles = developerStaffRoles;
- 
+
 function isDeveloperRole(role) { 
   return developerStaffRoles.includes(role);
 }
@@ -42,13 +42,12 @@ function isStaffEmployeeRole(role) {
 }
 
 function isHrmEmployeeRole(role) {
-  return hrmEmployeeRoles.includes(role);
+  return hrmEmployeeRoles.includes(role); 
 }
 
 function isBugAssigneeRole(role) {
   return bugAssigneeRoles.includes(role);
 }
-
 
 function isHrmAdminRole(role) {
   return hrmAdminRoles.includes(role);

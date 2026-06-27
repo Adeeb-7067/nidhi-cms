@@ -14,7 +14,8 @@ const proposalStatuses = [
 const proposalItemSchema = new Schema(
   {
     itemId: { type: String, required: true },
-    description: { type: String, required: true },
+    name: { type: String, default: "" },
+    description: { type: String, default: "" },
     quantity: { type: Number, required: true, min: 0.01 },
     unitPrice: { type: Number, required: true, min: 0 },
     taxPercent: { type: Number, default: 18, min: 0, max: 100 },
@@ -33,6 +34,8 @@ const proposalSchema = new Schema(
     status: { type: String, enum: proposalStatuses, default: "draft", required: true, index: true },
     items: { type: [proposalItemSchema], default: [] },
     discount: { type: Number, default: 0, min: 0, max: 100 },
+    totalAdjustment: { type: Number, default: 0 },
+    adjustedTotal: { type: Number, default: null, min: 0 },
     validUntil: { type: Date, default: null },
     clientNote: { type: String, default: "" },
     terms: { type: String, default: "" },
@@ -45,6 +48,8 @@ const proposalSchema = new Schema(
     declinedAt: { type: Date, default: null },
     declinedReason: { type: String, default: null },
     counterOfferNote: { type: String, default: null },
+    approvalNote: { type: String, default: null },
+    clientSignature: { type: String, default: null },
     projectId: { type: Number, ref: "Projects", default: null },
   },
   { timestamps: true }

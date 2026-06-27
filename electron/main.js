@@ -692,7 +692,7 @@ ipcMain.on('cms:screenshot-config', (_, { enabled, intervalMs, sessionId, apiBas
   if (typeof accessToken === 'string' && accessToken.trim()) {
     cachedAccessToken = accessToken.trim();
   }
-  if (!enabled || !sessionId) {
+  if (!sessionId) {
     cachedAccessToken = null;
   }
   blurSensitiveAppsEnabled = Boolean(blurSensitiveApps);

@@ -6,7 +6,13 @@ import { requireHrmAccess } from "../middlewares/hrm-permission.js";
 import * as hrm from "../controllers/hrm.controller.js";
 
 const router = Router();
-router.use(requireAuth, requireHrmAccess);
+
+// Only apply HRM auth to /hrm/* — this router is mounted on the global API router
+// without a path prefix, so skip unrelated requests (e.g. public sales proposal links).
+router.use((req, res, next) => {
+  if (!req.path.startsWith("/hrm")) return next("router");
+  next();
+}, requireAuth, requireHrmAccess);
 const perm = requirePermission;
 
 router.get("/hrm/departments", perm("hrm_departments", "view"), asyncHandler(hrm.getDepartments));

@@ -238,9 +238,9 @@ export const mockProposals: Proposal[] = [
     customerName: "Agrolink Manufacturing Pvt. Ltd.",
     status: "sent",
     items: [
-      { id: "1", description: "Custom ERP Module Development", quantity: 1, unitPrice: 1200000, taxPercent: 18 },
-      { id: "2", description: "Mobile App (iOS + Android)", quantity: 1, unitPrice: 850000, taxPercent: 18 },
-      { id: "3", description: "12 Months Support & AMC", quantity: 1, unitPrice: 200000, taxPercent: 18 },
+      { id: "1", name: "ERP Module", description: "Custom ERP Module Development", quantity: 1, unitPrice: 1200000, taxPercent: 18 },
+      { id: "2", name: "Mobile App", description: "Mobile App (iOS + Android)", quantity: 1, unitPrice: 850000, taxPercent: 18 },
+      { id: "3", name: "AMC Support", description: "12 Months Support & AMC", quantity: 1, unitPrice: 200000, taxPercent: 18 },
     ],
     discount: 5,
     validUntil: "2026-06-30",
@@ -259,8 +259,8 @@ export const mockProposals: Proposal[] = [
     customerName: "Bright Solutions",
     status: "approved",
     items: [
-      { id: "1", description: "CRM Integration & API Development", quantity: 1, unitPrice: 450000, taxPercent: 18 },
-      { id: "2", description: "Data Migration", quantity: 1, unitPrice: 80000, taxPercent: 18 },
+      { id: "1", name: "CRM Integration", description: "CRM Integration & API Development", quantity: 1, unitPrice: 450000, taxPercent: 18 },
+      { id: "2", name: "Data Migration", description: "Data Migration", quantity: 1, unitPrice: 80000, taxPercent: 18 },
     ],
     discount: 0,
     validUntil: "2026-06-15",
@@ -286,7 +286,7 @@ export const mockProposals: Proposal[] = [
     customerName: "Home7emirates LLC",
     status: "draft",
     items: [
-      { id: "1", description: "Mobile App MVP", quantity: 1, unitPrice: 350000, taxPercent: 18 },
+      { id: "1", name: "Mobile App MVP", description: "Mobile App MVP", quantity: 1, unitPrice: 350000, taxPercent: 18 },
     ],
     discount: 0,
     validUntil: "2026-07-01",

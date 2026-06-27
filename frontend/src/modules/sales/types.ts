@@ -106,6 +106,7 @@ export interface FollowUp {
 
 export interface ProposalLineItem {
   id: string;
+  name: string;
   description: string;
   quantity: number;
   unitPrice: number;
