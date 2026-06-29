@@ -5,6 +5,7 @@ import {
   SalesInvoices,
   SalesPayments,
   SalesFollowUps,
+  usersTable,
 } from "../../models/schema/index.js";
 
 async function getDashboard(req, res) {
@@ -118,4 +119,99 @@ async function getRevenueTrend(req, res) {
   res.json({ trend: data.map((d) => ({ date: d._id, revenue: d.revenue })) });
 }
 
-export { getDashboard, getPipeline, getRevenueTrend };
+async function getReports(req, res) {
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const [
+    leadsBySourceRows,
+    leadsByStatusRows,
+    executiveRows,
+    paymentsByMonth,
+    invoicesByMonth,
+    paymentTotals,
+    invoiceTotals,
+  ] = await Promise.all([
+    SalesLeads.aggregate([
+      { $group: { _id: { $ifNull: ["$source", "other"] }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]),
+    SalesLeads.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+    SalesPayments.aggregate([
+      { $group: { _id: "$recordedBy", revenue: { $sum: "$amount" }, payments: { $sum: 1 } } },
+      { $sort: { revenue: -1 } },
+      { $limit: 12 },
+    ]),
+    SalesPayments.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+          collected: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    SalesInvoices.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+          billed: { $sum: "$amount" },
+          paid: { $sum: "$paidAmount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
+    SalesPayments.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }]),
+    SalesInvoices.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalBilled: { $sum: "$amount" },
+          totalPaid: { $sum: "$paidAmount" },
+        },
+      },
+    ]),
+  ]);
+
+  const userIds = executiveRows.map((r) => r._id).filter(Boolean);
+  const users = userIds.length
+    ? await usersTable.find({ id: { $in: userIds } }).select({ id: 1, name: 1 }).lean()
+    : [];
+  const userMap = new Map(users.map((u) => [u.id, u.name]));
+
+  const invoiceSummary = invoiceTotals[0] ?? { totalBilled: 0, totalPaid: 0 };
+  const totalPaid = paymentTotals[0]?.total ?? 0;
+  const totalOutstanding = Math.max(0, invoiceSummary.totalBilled - invoiceSummary.totalPaid);
+
+  const billedByMonth = new Map(invoicesByMonth.map((r) => [r._id, r]));
+  const monthlyCollections = paymentsByMonth.map((row) => {
+    const inv = billedByMonth.get(row._id);
+    const billed = inv?.billed ?? 0;
+    const paidOnInvoices = inv?.paid ?? 0;
+    return {
+      month: row._id,
+      collected: row.collected,
+      outstanding: Math.max(0, billed - paidOnInvoices),
+    };
+  });
+
+  res.json({
+    leadsBySource: leadsBySourceRows.map((r) => ({ source: r._id, count: r.count })),
+    leadsByStatus: leadsByStatusRows.map((r) => ({ status: r._id, count: r.count })),
+    executivePerformance: executiveRows.map((r) => ({
+      userId: r._id,
+      name: userMap.get(r._id) ?? `User #${r._id}`,
+      revenue: r.revenue,
+      payments: r.payments,
+    })),
+    monthlyCollections,
+    outstandingVsPaid: [
+      { name: "Paid", value: totalPaid },
+      { name: "Outstanding", value: totalOutstanding },
+    ],
+  });
+}
+
+export { getDashboard, getPipeline, getRevenueTrend, getReports };

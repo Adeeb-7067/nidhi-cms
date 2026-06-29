@@ -219,11 +219,13 @@ export default function HrmWfhPage() {
                   placeholder="e.g. home repair appointment"
                 />
               </HrmField>
-              <HrmField label={LEGACY_WFH_LABELS.contactPhone}>
+              <HrmField label={LEGACY_WFH_LABELS.contactPhone} hint="e.g. +91 98765 43210">
                 <Input
+                  type="tel"
+                  inputMode="tel"
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="Reachable number during WFH"
+                  placeholder="+91 98765 43210"
                 />
               </HrmField>
             </div>
@@ -238,6 +240,11 @@ export default function HrmWfhPage() {
                   }
                   if (endDate < startDate) {
                     toast.error("End date cannot be before start date");
+                    return;
+                  }
+                  const phoneVal = phoneNumber.trim();
+                  if (phoneVal && !/^[+]?[\d\s\-().]{7,20}$/.test(phoneVal)) {
+                    toast.error("Enter a valid phone number (digits, spaces, +, -, parentheses)");
                     return;
                   }
                   try {

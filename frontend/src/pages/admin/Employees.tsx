@@ -109,7 +109,7 @@ import {
   prevEmployeeFormTab,
   type EmployeeFormTab,
 } from "@/components/admin/EmployeeFormTabs";
-import { getAdminEmployeeDetailHref } from "@/lib/employee-routes";
+import { getStaffProfileHref } from "@/lib/employee-routes";
 
 type EmployeeFormValues = TeamEmployeeFormValues;
 
@@ -177,7 +177,7 @@ function EmployeePresenceDetailCell({ user }: { user: User }) {
 
 export default function AdminEmployees() {
   const [, setLocation] = useLocation();
-  const { impersonate, isImpersonating } = useAuth();
+  const { impersonate, isImpersonating, user: viewer } = useAuth();
   const { getPresence } = usePresence();
   const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
   const [previewEmployeeId, setPreviewEmployeeId] = useState("");
@@ -188,20 +188,25 @@ export default function AdminEmployees() {
   const [employeeFormTab, setEmployeeFormTab] = useState<EmployeeFormTab>("personal");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [statusFilter, setStatusFilter] = useState("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
   useEffect(() => {
     resetPage();
-  }, [search, resetPage]);
+  }, [search, statusFilter, resetPage]);
 
-  const { data, isLoading } = useListUsers(
-    { staff: "1", search, page, limit: apiLimit },
-    {
-      query: listQueryOptions({
-        queryKey: getListUsersQueryKey({ staff: "1", search, page, limit: apiLimit }),
-      }),
-    },
-  );
+  const listParams = {
+    staff: "1",
+    search,
+    page,
+    limit: apiLimit,
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+  } as Parameters<typeof useListUsers>[0];
+  const { data, isLoading } = useListUsers(listParams, {
+    query: listQueryOptions({
+      queryKey: getListUsersQueryKey(listParams),
+    }),
+  });
 
   const pageUserIds = useMemo(() => data?.users?.map((u) => u.id) ?? [], [data?.users]);
   useRefreshPresenceForUserIds(pageUserIds);
@@ -549,19 +554,15 @@ export default function AdminEmployees() {
         setEmployeeFormTab("personal");
         void result;
       } else {
-        if (!values.password?.trim()) {
-          form.setError("password", { message: "Login password is required for new employees" });
-          setEmployeeFormTab("personal");
-          return;
-        }
         const result = await saveTeamEmployee.mutateAsync({
           values,
           departmentNameById,
-          password: values.password.trim(),
+          password: values.password?.trim() || undefined,
         });
         toast.success(`Employee created! ID: ${result.employeeId ?? "assigned"}`);
         setIsDialogOpen(false);
         setEmployeeFormTab("personal");
+        resetPage();
       }
       form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
@@ -577,6 +578,7 @@ export default function AdminEmployees() {
       await deleteUserMutation.mutateAsync({ id: deleteId });
       toast.success("Employee deactivated");
       setDeleteId(null);
+      resetPage();
       queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
     } catch (error: any) {
       toastApiError(error, "Failed to delete employee");
@@ -730,7 +732,7 @@ export default function AdminEmployees() {
             title="Open employee profile"
             onClick={(e) => {
               e.stopPropagation();
-              setLocation(getAdminEmployeeDetailHref(user.id));
+              setLocation(getStaffProfileHref(user.id, user.role, viewer?.role));
             }}
           >
             <Eye className="h-3 w-3 mr-1" />
@@ -752,7 +754,14 @@ export default function AdminEmployees() {
           <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditUser(user); }}>
             <Edit className="h-3 w-3" />
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+            title={user.status !== "active" ? "Already deactivated" : "Deactivate employee"}
+            disabled={user.status !== "active"}
+            onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}
+          >
             <Trash2 className="h-3 w-3" />
           </Button>
         </div>
@@ -781,6 +790,7 @@ export default function AdminEmployees() {
                 setEditUser(null);
                 setPreviewEmployeeId("");
                 setEmployeeFormTab("personal");
+                form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
               } else {
                 setIsDialogOpen(true);
               }
@@ -851,6 +861,7 @@ export default function AdminEmployees() {
                         setEditUser(null);
                         setPreviewEmployeeId("");
                         setEmployeeFormTab("personal");
+                        form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
                       }}
                     >
                       Cancel
@@ -937,17 +948,29 @@ export default function AdminEmployees() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsContent value="list" className="space-y-4 m-0">
           <PortalContentCard>
+              <div className="flex items-center gap-2 px-1 pb-3">
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-8 w-36 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All employees</SelectItem>
+                    <SelectItem value="active">Active only</SelectItem>
+                    <SelectItem value="inactive">Inactive only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {isLoading ? (
                 <PageTableSkeleton rows={8} columns={6} showToolbar />
               ) : (
-                <AdvancedTable 
-                  data={data?.users || []} 
-                  columns={columns} 
-                  searchKey="name" 
-                  searchPlaceholder="Filter employees..." 
+                <AdvancedTable
+                  data={data?.users || []}
+                  columns={columns}
+                  searchKey="name"
+                  searchPlaceholder="Filter employees..."
                   filename="EmployeesExport"
                   viewStorageKey="employees"
-                  onRowClick={(user) => setLocation(getAdminEmployeeDetailHref(user.id))}
+                  onRowClick={(user) => setLocation(getStaffProfileHref(user.id, user.role, viewer?.role))}
                 />
               )}
           </PortalContentCard>

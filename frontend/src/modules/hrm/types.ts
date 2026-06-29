@@ -165,6 +165,8 @@ export type HrmAttendanceSummary = {
   missingClockOut?: boolean;
   source?: string;
   persisted?: boolean;
+  firstClockIn?: string | null;
+  lastClockOut?: string | null;
 };
 
 export type HrmAttendanceVarianceRow = HrmAttendanceSummary & {
@@ -199,6 +201,8 @@ export type HrmSettings = {
   hrmMaxFreeLates: number;
   hrmElectronOnlyClock: boolean;
   hrmLeaveCarryForwardStartYear: number;
+  /** Default task titles applied to every new onboarding record. */
+  hrmOnboardingChecklistTemplate?: string[];
 };
 
 export type HrmAuditLog = {

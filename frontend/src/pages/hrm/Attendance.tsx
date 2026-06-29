@@ -79,7 +79,8 @@ export default function HrmAttendancePage() {
   const canAdmin = useHrmPermission("attendance", "view");
   const canApprove = useHrmPermission("attendance", "approve");
   const canManage = useHrmPermission("attendance", "edit") || canApprove;
-  const [periodMode, setPeriodMode] = useState<"today" | "yesterday" | "month">("today");
+  const [periodMode, setPeriodMode] = useState<"today" | "yesterday" | "date" | "month">("today");
+  const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateSort, setDateSort] = useState<"newest" | "oldest">("newest");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualMode, setManualMode] = useState<"clock_in" | "clock_out">("clock_in");
@@ -108,17 +109,15 @@ export default function HrmAttendancePage() {
   const todayStr = format(new Date(), "yyyy-MM-dd");
   const yesterdayStr = format(subDays(new Date(), 1), "yyyy-MM-dd");
   const startDate =
-    canAdmin && periodMode === "today"
-      ? todayStr
-      : canAdmin && periodMode === "yesterday"
-        ? yesterdayStr
-        : format(startOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
+    canAdmin && periodMode === "today" ? todayStr :
+    canAdmin && periodMode === "yesterday" ? yesterdayStr :
+    canAdmin && periodMode === "date" ? customDate :
+    format(startOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
   const endDate =
-    canAdmin && (periodMode === "today" || periodMode === "yesterday")
-      ? periodMode === "today"
-        ? todayStr
-        : yesterdayStr
-      : format(endOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
+    canAdmin && periodMode === "today" ? todayStr :
+    canAdmin && periodMode === "yesterday" ? yesterdayStr :
+    canAdmin && periodMode === "date" ? customDate :
+    format(endOfMonth(new Date(`${month}-01`)), "yyyy-MM-dd");
   const deptNum = departmentId !== "all" ? Number(departmentId) : undefined;
   const selfOnly = !canAdmin;
   const filterUserId =
@@ -167,7 +166,9 @@ export default function HrmAttendancePage() {
 
   const rows = useMemo(() => {
     let list = data?.summaries ?? [];
-    if (statusFilter !== "all") {
+    if (statusFilter === "full_day") {
+      list = list.filter((r) => isPresentLikeStatus(r.status));
+    } else if (statusFilter !== "all") {
       list = list.filter((r) => normalizeAttendanceStatus(r.status) === statusFilter);
     }
     list = [...list].sort((a, b) => {
@@ -546,7 +547,7 @@ export default function HrmAttendancePage() {
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading} />
 
-        {canAdmin && (periodMode === "today" || periodMode === "yesterday") && (
+        {canAdmin && (periodMode === "today" || periodMode === "yesterday" || periodMode === "date") && (
           <HrmInsightBanner title="Work mode summary" icon={Grid3X3}>
             <p className="text-xs text-muted-foreground">
               {workModeSummary.onsite} onsite · {workModeSummary.wfh} WFH
@@ -559,16 +560,25 @@ export default function HrmAttendancePage() {
 
         <HrmFilterBar>
           {canAdmin && (
-            <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as "today" | "yesterday" | "month")}>
+            <Select value={periodMode} onValueChange={(v) => setPeriodMode(v as "today" | "yesterday" | "date" | "month")}>
               <SelectTrigger className="h-9 w-36 bg-background">
                 <SelectValue placeholder="Period" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="today">Today</SelectItem>
                 <SelectItem value="yesterday">Yesterday</SelectItem>
+                <SelectItem value="date">Specific date</SelectItem>
                 <SelectItem value="month">Full month</SelectItem>
               </SelectContent>
             </Select>
+          )}
+          {canAdmin && periodMode === "date" && (
+            <Input
+              type="date"
+              value={customDate}
+              onChange={(e) => setCustomDate(e.target.value)}
+              className="h-9 w-40 shrink-0 bg-background"
+            />
           )}
           {canAdmin && (
             <Select value={dateSort} onValueChange={(v) => setDateSort(v as "newest" | "oldest")}>
@@ -586,7 +596,7 @@ export default function HrmAttendancePage() {
               type="month"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
-              className="h-9 min-w-[12rem] w-48 shrink-0 bg-background"
+              className="h-9 w-40 shrink-0 bg-background"
             />
           )}
           {canAdmin && (
@@ -619,12 +629,14 @@ export default function HrmAttendancePage() {
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-40 bg-background">
+                <SelectTrigger className="h-9 w-44 bg-background">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All statuses</SelectItem>
-                  {PRIMARY_ATTENDANCE_STATUSES.map((k) => (
+                  <SelectItem value="full_day">Full day</SelectItem>
+                  <SelectItem value="half_day">Half day</SelectItem>
+                  {PRIMARY_ATTENDANCE_STATUSES.filter((k) => k !== "half_day").map((k) => (
                     <SelectItem key={k} value={k}>
                       {ATTENDANCE_STATUS_LABELS[k]}
                     </SelectItem>

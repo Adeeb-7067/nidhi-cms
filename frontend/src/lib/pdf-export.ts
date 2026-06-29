@@ -6,7 +6,7 @@ const PDF_MARGIN = { top: 14, right: 10, bottom: 14, left: 10 };
 
 /** Use landscape when many columns so content is not clipped horizontally. */
 export function shouldUseLandscapePdf(columnCount: number): boolean {
-  return columnCount > 5;
+  return columnCount > 4;
 }
 
 export function createExportPdf(columnCount: number): jsPDF {

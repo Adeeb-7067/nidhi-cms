@@ -212,6 +212,7 @@ export default function HrmExitPage() {
       id: "reason",
       header: "Reason",
       cell: (r) => <span className="text-xs">{r.reason}</span>,
+      exportValue: (r) => r.reason,
     },
     {
       id: "resigned",
@@ -219,6 +220,7 @@ export default function HrmExitPage() {
       cell: (r) => (
         <span className="text-xs tabular-nums">{format(new Date(r.resignationDate), "MMM d, yyyy")}</span>
       ),
+      exportValue: (r) => format(new Date(r.resignationDate), "MMM d, yyyy"),
     },
     {
       id: "lwd",
@@ -226,6 +228,7 @@ export default function HrmExitPage() {
       cell: (r) => (
         <span className="text-xs tabular-nums">{format(new Date(r.lastWorkingDay), "MMM d, yyyy")}</span>
       ),
+      exportValue: (r) => format(new Date(r.lastWorkingDay), "MMM d, yyyy"),
     },
     {
       id: "notice",
@@ -235,6 +238,7 @@ export default function HrmExitPage() {
           {r.noticeDaysRemaining}d
         </HrmRefStatusPill>
       ),
+      exportValue: (r) => `${r.noticeDaysRemaining}d`,
     },
     {
       id: "stage",
@@ -244,6 +248,7 @@ export default function HrmExitPage() {
           {r.stageLabel} ({r.stage}/{r.stageCount})
         </span>
       ),
+      exportValue: (r) => `${r.stageLabel} (${r.stage}/${r.stageCount})`,
     },
   ], []);
 

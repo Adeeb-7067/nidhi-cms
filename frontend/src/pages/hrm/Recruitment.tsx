@@ -61,6 +61,7 @@ import {
   useToggleOnboardingTask,
   useUpdateCandidate,
 } from "@/api/hrm";
+import { useCreateEmployeeFromCandidate } from "@/api/team-employees";
 import type { HrmCandidate } from "@/modules/hrm/types";
 
 type CandidateForm = {
@@ -100,12 +101,14 @@ export default function HrmRecruitmentPage() {
   const deleteCandidate = useDeleteCandidate();
   const startOnboarding = useStartOnboarding();
   const toggleTask = useToggleOnboardingTask();
+  const createEmployeeFromCandidate = useCreateEmployeeFromCandidate();
 
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<HrmCandidate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HrmCandidate | null>(null);
   const [onboardingCandidateId, setOnboardingCandidateId] = useState<number | null>(null);
   const [form, setForm] = useState<CandidateForm>(emptyForm());
+  const [hireConfirmCandidate, setHireConfirmCandidate] = useState<HrmCandidate | null>(null);
 
   const candidates = data?.candidates ?? [];
   const departments = deptData?.departments ?? [];
@@ -158,6 +161,11 @@ export default function HrmRecruitmentPage() {
       toast.error("Name, email, and position are required");
       return;
     }
+    const phoneVal = form.phone.trim();
+    if (phoneVal && !/^[+]?[\d\s\-().]{7,20}$/.test(phoneVal)) {
+      toast.error("Enter a valid phone number (digits, spaces, +, -, parentheses)");
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       email: form.email.trim(),
@@ -187,8 +195,30 @@ export default function HrmRecruitmentPage() {
   const handleStageChange = (candidate: HrmCandidate, stage: string) => {
     updateCandidate.mutate(
       { id: candidate.id, stage },
-      { onSuccess: () => toast.success("Stage updated") },
+      {
+        onSuccess: () => {
+          toast.success("Stage updated");
+          if ((stage === "hired" || stage === "onboarding") && candidate.hiredUserId == null) {
+            setHireConfirmCandidate({ ...candidate, stage });
+          }
+        },
+      },
     );
+  };
+
+  const handleCreateEmployee = async () => {
+    if (!hireConfirmCandidate) return;
+    try {
+      await createEmployeeFromCandidate.mutateAsync({
+        name: hireConfirmCandidate.name,
+        email: hireConfirmCandidate.email,
+        phoneNumber: hireConfirmCandidate.phone ?? undefined,
+      });
+      toast.success(`Employee account created for ${hireConfirmCandidate.name} — complete details in Team → Employees`);
+      setHireConfirmCandidate(null);
+    } catch {
+      // error toast handled by hook
+    }
   };
 
   const handleStartOnboarding = (candidate: HrmCandidate) => {
@@ -379,8 +409,14 @@ export default function HrmRecruitmentPage() {
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 />
               </HrmField>
-              <HrmField label="Phone">
-                <Input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} />
+              <HrmField label="Phone" hint="e.g. +91 98765 43210">
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="+91 98765 43210"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                />
               </HrmField>
               <HrmField label="Position">
                 <Input
@@ -525,6 +561,58 @@ export default function HrmRecruitmentPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Auto-create employee account when stage → Hired / Onboarding */}
+        <Dialog
+          open={hireConfirmCandidate != null}
+          onOpenChange={(open) => !open && setHireConfirmCandidate(null)}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create employee account?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Stage changed to{" "}
+              <strong>{RECRUITMENT_STAGE_LABELS[hireConfirmCandidate?.stage ?? ""] ?? ""}</strong>.
+              Create a Team employee account now with this candidate's details pre-filled?
+            </p>
+            <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1 text-sm">
+              <p>
+                <span className="text-muted-foreground">Name: </span>
+                {hireConfirmCandidate?.name}
+              </p>
+              <p>
+                <span className="text-muted-foreground">Email: </span>
+                {hireConfirmCandidate?.email}
+              </p>
+              {hireConfirmCandidate?.phone && (
+                <p>
+                  <span className="text-muted-foreground">Phone: </span>
+                  {hireConfirmCandidate.phone}
+                </p>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              You can fill in role, department, and full details from{" "}
+              <Link href="/admin/employees" className="text-primary underline-offset-2 hover:underline">
+                Team → Employees
+              </Link>{" "}
+              afterward.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setHireConfirmCandidate(null)}>
+                Skip
+              </Button>
+              <Button
+                className={portalActionButtonClass()}
+                disabled={createEmployeeFromCandidate.isPending}
+                onClick={() => void handleCreateEmployee()}
+              >
+                {createEmployeeFromCandidate.isPending ? "Creating…" : "Create employee"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </HrmPageShell>
     </HrmGate>
   );

@@ -15,20 +15,7 @@ import {
 } from "./payslip-view-model";
 import { HrmPayslipDownloadButton } from "./HrmPayslipDownloadButton";
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
-function fiscalYearLabel(periodLabel: string): string {
-  const parts = periodLabel.trim().split(" ");
-  if (parts.length !== 2) return "";
-  const mIdx = MONTH_NAMES.indexOf(parts[0]);
-  const yr = parseInt(parts[1], 10);
-  if (mIdx === -1 || Number.isNaN(yr)) return "";
-  const fy = mIdx >= 3 ? yr : yr - 1;
-  return `FY ${fy}-${String(fy + 1).slice(2)}`;
-}
 
 function DetailLine({ label, value }: { label: string; value: string }) {
   return (
@@ -52,15 +39,13 @@ function PayTable({
   rows,
   totalLabel,
   totalAmount,
-  totalYtd,
 }: {
   title: string;
   icon: typeof Wallet;
   tone: "earn" | "deduct";
-  rows: { label: string; amount: number; ytd: number }[];
+  rows: { label: string; amount: number }[];
   totalLabel: string;
   totalAmount: number;
-  totalYtd: number;
 }) {
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -77,19 +62,15 @@ function PayTable({
         <thead>
           <tr className="bg-slate-50 text-slate-500">
             <th className="px-3 py-2 text-left font-bold">{title}</th>
-            <th className="px-2 py-2 text-right font-bold">AMOUNT (₹)</th>
-            <th className="px-3 py-2 text-right font-bold">YTD (₹)</th>
+            <th className="px-3 py-2 text-right font-bold">AMOUNT (₹)</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => (
             <tr key={row.label} className="border-t border-slate-100">
               <td className="px-3 py-2 text-slate-700">{row.label}</td>
-              <td className="px-2 py-2 text-right tabular-nums text-slate-800">
+              <td className="px-3 py-2 text-right tabular-nums text-slate-800">
                 {inrDecimal(row.amount)}
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums text-slate-600">
-                {inrDecimal(row.ytd)}
               </td>
             </tr>
           ))}
@@ -100,8 +81,7 @@ function PayTable({
             )}
           >
             <td className="px-3 py-2.5">{totalLabel}</td>
-            <td className="px-2 py-2.5 text-right tabular-nums">{inrDecimal(totalAmount)}</td>
-            <td className="px-3 py-2.5 text-right tabular-nums">{inrDecimal(totalYtd)}</td>
+            <td className="px-3 py-2.5 text-right tabular-nums">{inrDecimal(totalAmount)}</td>
           </tr>
         </tbody>
       </table>
@@ -119,9 +99,6 @@ export function HrmPayslipDocument({
   className?: string;
   showDownload?: boolean;
 }) {
-  const grossYtd = data.earnings.reduce((s, e) => s + e.ytd, 0);
-  const deductYtd = data.deductions.reduce((s, d) => s + d.ytd, 0);
-  const tdsYtd = data.deductions.find((d) => d.label.includes("TDS"))?.ytd ?? 0;
   const watermarkText = data.company.watermarkText || data.company.brandName;
 
   return (
@@ -230,7 +207,6 @@ export function HrmPayslipDocument({
             rows={data.earnings}
             totalLabel="GROSS EARNINGS"
             totalAmount={data.grossEarnings}
-            totalYtd={grossYtd}
           />
           <PayTable
             title="DEDUCTIONS"
@@ -239,7 +215,6 @@ export function HrmPayslipDocument({
             rows={data.deductions}
             totalLabel="TOTAL DEDUCTIONS"
             totalAmount={data.totalDeductions}
-            totalYtd={deductYtd}
           />
         </div>
 
@@ -261,25 +236,8 @@ export function HrmPayslipDocument({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {grossYtd > 0 ? (
-            <div className="rounded-lg border border-slate-200 p-3">
-              <div className="mb-2 border-b-2 border-[#3f7f2d] pb-1 text-[11px] font-extrabold tracking-wide text-slate-700">
-                YEAR TO DATE SUMMARY
-                {fiscalYearLabel(data.periodLabel) ? (
-                  <span className="ml-1 font-medium text-slate-500">
-                    · {fiscalYearLabel(data.periodLabel)}
-                  </span>
-                ) : null}
-              </div>
-              <DetailLine label="Total Earnings (YTD)" value={inrMoney(grossYtd)} />
-              <DetailLine label="Total Deductions (YTD)" value={inrMoney(deductYtd)} />
-              {tdsYtd > 0 ? (
-                <DetailLine label="Total Tax Paid (YTD)" value={inrMoney(tdsYtd)} />
-              ) : null}
-            </div>
-          ) : null}
-          <div className={cn("rounded-lg border border-slate-200 p-3", grossYtd > 0 ? "" : "md:col-span-2")}>
+        <div className="mt-4">
+          <div className="rounded-lg border border-slate-200 p-3">
             <div className="mb-2 border-b-2 border-[#3f7f2d] pb-1 text-[11px] font-extrabold tracking-wide text-slate-700">
               COMPANY AUTHORIZED SIGNATORY
             </div>

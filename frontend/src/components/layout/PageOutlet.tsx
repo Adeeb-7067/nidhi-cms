@@ -1,9 +1,16 @@
 import React from "react";
-import { Switch, Route, Redirect } from "wouter";
+import { Switch, Route, Redirect, useRoute } from "wouter";
 import { RoleGate } from "./RoleGate";
 import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, INTERNAL_STAFF_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import NotFound from "@/pages/not-found";
+
+function SalesTeamProfileRedirect() {
+  const [, params] = useRoute("/sales/team/:id/profile");
+  const id = params?.id;
+  if (!id) return <Redirect to="/sales/team" replace />;
+  return <Redirect to={`/admin/employees/${id}`} replace />;
+}
 
 const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
 const AdminScreenshots = React.lazy(() => import("@/pages/admin/Screenshots"));
@@ -153,7 +160,7 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/employees/:id">
-        <RoleGate allowedRoles={["super_admin"]} module="hrm_employees">
+        <RoleGate allowedRoles={INTERNAL_STAFF_ROLES}>
           <HrmEmployeeDetail />
         </RoleGate>
       </Route>
@@ -296,6 +303,9 @@ export function PageOutlet() {
         <RoleGate allowedRoles={INTERNAL_STAFF_ROLES}>
           <SalesProducts />
         </RoleGate>
+      </Route>
+      <Route path="/sales/team/:id/profile">
+        <SalesTeamProfileRedirect />
       </Route>
       <Route path="/sales/team">
         <RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}>

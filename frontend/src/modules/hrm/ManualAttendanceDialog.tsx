@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -25,15 +25,10 @@ import { useAdminOverrideAttendance } from "@/api/hrm";
 
 type EmployeeOption = { id: number; name: string; employeeId?: string | null };
 
-function minutesFromTimeToNow(time24: string, dateKey: string) {
-  const now = new Date();
-  const todayKey = format(now, "yyyy-MM-dd");
-  const [h, m] = time24.split(":").map(Number);
-  const base = new Date(`${dateKey}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`);
-  if (dateKey < todayKey) return 480;
-  if (dateKey > todayKey) return 0;
-  const diff = Math.floor((now.getTime() - base.getTime()) / 60000);
-  return Math.max(15, Math.min(diff, 720));
+function parseTimeToMinutes(t: string): number | null {
+  const parts = t.split(":").map(Number);
+  if (parts.length !== 2 || parts.some(isNaN)) return null;
+  return parts[0] * 60 + parts[1];
 }
 
 export function ManualAttendanceDialog({
@@ -51,13 +46,25 @@ export function ManualAttendanceDialog({
   const [mode, setMode] = useState<"clock_in" | "clock_out">(defaultMode);
   const [userId, setUserId] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [time, setTime] = useState("09:00");
-  const [hours, setHours] = useState("8");
+  const [clockIn, setClockIn] = useState("09:00");
+  const [clockOut, setClockOut] = useState(format(new Date(), "HH:mm"));
   const [reason, setReason] = useState("");
 
   useEffect(() => {
-    if (open) setMode(defaultMode);
+    if (open) {
+      setMode(defaultMode);
+      setClockOut(format(new Date(), "HH:mm"));
+    }
   }, [open, defaultMode]);
+
+  const activeMinutes = useMemo(() => {
+    const inMin = parseTimeToMinutes(clockIn);
+    const outMin = parseTimeToMinutes(clockOut);
+    if (inMin == null || outMin == null) return 0;
+    return Math.max(0, outMin - inMin);
+  }, [clockIn, clockOut]);
+
+  const activeHours = Math.round((activeMinutes / 60) * 10) / 10;
 
   const handleSubmit = async () => {
     const uid = Number(userId);
@@ -65,12 +72,8 @@ export function ManualAttendanceDialog({
       toast.error("Employee, date, and reason are required");
       return;
     }
-    const activeMinutes =
-      mode === "clock_in"
-        ? minutesFromTimeToNow(time, date)
-        : Math.round(Number(hours) * 60);
-    if (mode === "clock_out" && (!Number.isFinite(activeMinutes) || activeMinutes <= 0)) {
-      toast.error("Enter valid active hours for clock-out");
+    if (activeMinutes <= 0) {
+      toast.error("Clock-out time must be after clock-in time");
       return;
     }
     try {
@@ -85,7 +88,7 @@ export function ManualAttendanceDialog({
       onOpenChange(false);
       setReason("");
     } catch {
-      // mutation hook shows error
+      // mutation hook shows error toast
     }
   };
 
@@ -114,23 +117,21 @@ export function ManualAttendanceDialog({
           <HrmField label="Date">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </HrmField>
-          {mode === "clock_in" ? (
-            <HrmField label="Clock-in time" hint="Active hours are calculated from this time until now.">
-              <TimePicker12h value={time} onChange={setTime} />
+          <div className="grid grid-cols-2 gap-3">
+            <HrmField label="Clock-in time">
+              <TimePicker12h value={clockIn} onChange={setClockIn} />
             </HrmField>
-          ) : (
-            <HrmField label="Total active hours">
-              <Input
-                type="number"
-                min={0}
-                step={0.1}
-                value={hours}
-                onChange={(e) => setHours(e.target.value)}
-              />
+            <HrmField label="Clock-out time">
+              <TimePicker12h value={clockOut} onChange={setClockOut} />
             </HrmField>
+          </div>
+          {activeMinutes > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Active duration: <span className="font-medium text-foreground">{activeHours} h</span>
+            </p>
           )}
           <HrmField label="Reason (required)">
-            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} />
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. employee forgot to clock in" />
           </HrmField>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">

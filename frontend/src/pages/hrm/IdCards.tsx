@@ -213,11 +213,13 @@ export default function HrmIdCardsPage() {
       id: "name",
       header: "Name",
       cell: (e) => <span className="text-xs font-semibold">{e.name}</span>,
+      exportValue: (e) => e.name,
     },
     {
       id: "designation",
       header: "Designation",
       cell: (e) => <span className="text-xs">{e.designation ?? "—"}</span>,
+      exportValue: (e) => e.designation ?? "—",
     },
     {
       id: "department",

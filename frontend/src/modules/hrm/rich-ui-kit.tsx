@@ -111,7 +111,8 @@ export function HrmRatingStars({
   onChange?: (value: number) => void;
   size?: "sm" | "md";
 }) {
-  const iconClass = size === "md" ? "h-5 w-5" : "h-4 w-4";
+  const iconSize = size === "md" ? "h-5 w-5" : "h-4 w-4";
+  const btnSize = size === "md" ? "h-7 w-7" : "h-6 w-6";
   return (
     <span className="inline-flex items-center gap-0.5" role={editable ? "group" : undefined}>
       {Array.from({ length: max }, (_, i) => {
@@ -122,14 +123,15 @@ export function HrmRatingStars({
             type="button"
             disabled={!editable}
             className={cn(
-              "rounded p-0.5 transition-colors",
+              "inline-flex items-center justify-center rounded transition-colors",
+              btnSize,
               editable ? "cursor-pointer hover:scale-110" : "cursor-default",
               filled ? "text-amber-500" : "text-muted-foreground/30",
             )}
             onClick={() => editable && onChange?.(i + 1)}
             aria-label={`${i + 1} star${i === 0 ? "" : "s"}`}
           >
-            <Star className={cn(iconClass, filled && "fill-current")} />
+            <Star className={cn(iconSize, filled && "fill-current")} />
           </button>
         );
       })}

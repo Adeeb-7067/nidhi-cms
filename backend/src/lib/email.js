@@ -350,6 +350,52 @@ export async function sendProposalEmail({
 }
 
 /**
+ * Payment reminder email for a sales customer with outstanding balance.
+ */
+export async function sendCustomerPaymentReminderEmail({
+  to,
+  recipientName,
+  companyName,
+  outstandingAmount,
+  message,
+}) {
+  const appUrl = resolveAppUrl().replace(/\/$/, "");
+  const formattedAmount = `₹${Number(outstandingAmount).toLocaleString("en-IN")}`;
+  const bodyMessage =
+    message?.trim() ||
+    "You have a pending payment on your account. Please review your invoices and arrange payment at your earliest convenience.";
+  const subject = `Payment reminder — ${companyName}`;
+  const text = [
+    `Hi ${recipientName},`,
+    "",
+    bodyMessage,
+    "",
+    `Outstanding balance: ${formattedAmount}`,
+    "",
+    `Sign in to your client portal: ${appUrl}/login`,
+    "",
+    "If you have already made this payment, please disregard this message.",
+  ].join("\n");
+
+  const html = wrapHtmlEmail({
+    title: "Payment reminder",
+    bodyHtml: `
+      <p style="margin:0 0 12px">Hi <strong>${recipientName}</strong>,</p>
+      <p style="margin:0 0 12px">${bodyMessage}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;font-size:14px">
+        <tr><td style="padding:8px 0;color:#71717a">Company</td><td style="padding:8px 0;text-align:right;font-weight:600">${companyName}</td></tr>
+        <tr><td style="padding:8px 0;color:#71717a">Outstanding</td><td style="padding:8px 0;text-align:right;font-weight:600;color:#dc2626">${formattedAmount}</td></tr>
+      </table>
+      <p style="margin:0;font-size:13px;color:#71717a">Contact our sales team if you need assistance or a copy of your statement.</p>
+    `,
+    ctaLabel: "Open client portal",
+    ctaHref: `${appUrl}/login`,
+  });
+
+  return sendEmail({ to, subject, text, html });
+}
+
+/**
  * Password reset / change verification OTP.
  */
 export async function sendPasswordOtpEmail({ to, name, otp, purpose }) {

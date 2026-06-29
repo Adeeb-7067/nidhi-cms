@@ -81,6 +81,8 @@ router.get("/hrm/payroll/runs/:id/checklist", perm("hrm_payroll", "view"), async
 router.patch("/hrm/payroll/lines/:lineId", perm("hrm_payroll", "edit"), asyncHandler(hrm.patchPayrollLine));
 router.post("/hrm/payroll/runs/:id/review", perm("hrm_payroll", "edit"), asyncHandler(hrm.postPayrollReview));
 router.post("/hrm/payroll/runs/:id/finalize", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollFinalize));
+router.post("/hrm/payroll/runs/:id/revert", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollRevert));
+router.post("/hrm/payroll/runs/:id/regenerate-payslips", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollRegeneratePayslips));
 router.post("/hrm/payroll/runs/:id/paid", perm("hrm_payroll", "finalize"), asyncHandler(hrm.postPayrollPaid));
 router.get("/hrm/payroll/runs/:id/export", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollExport));
 router.get("/hrm/payroll/runs/:id/export/bank", perm("hrm_payroll", "export"), asyncHandler(hrm.getPayrollBankExport));

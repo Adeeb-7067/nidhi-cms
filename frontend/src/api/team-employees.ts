@@ -27,12 +27,11 @@ export async function fetchTeamEmployee(id: number, signal?: AbortSignal) {
 export async function createTeamEmployee(
   values: TeamEmployeeFormValues,
   departmentNameById: Map<number, string>,
-  password: string,
+  password?: string,
 ) {
-  const payload = {
-    ...buildTeamEmployeePayload(values, departmentNameById),
-    password: password.trim(),
-  };
+  const payload: Record<string, unknown> = buildTeamEmployeePayload(values, departmentNameById);
+  const trimmed = password?.trim() ?? "";
+  if (trimmed) payload.password = trimmed;
   return customFetch<TeamEmployeeRecord>(apiUrl("/api/users"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -58,6 +57,37 @@ export async function updateTeamEmployee(
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+/** Minimal POST to /api/users seeded from a recruitment candidate. */
+export function useCreateEmployeeFromCandidate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      name: string;
+      email: string;
+      phoneNumber?: string;
+      role?: string;
+      status?: string;
+    }) =>
+      customFetch<TeamEmployeeRecord>(apiUrl("/api/users"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "developer",
+          status: "active",
+          ...payload,
+        }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "employees"] });
+      qc.invalidateQueries({ queryKey: ["permissions"] });
+    },
+    onError: (error) => {
+      toastApiError(error, "Failed to create employee account");
+    },
   });
 }
 
@@ -90,14 +120,13 @@ export function useSaveTeamEmployee() {
       if (id != null) {
         return updateTeamEmployee(id, values, departmentNameById, password, baseline);
       }
-      const pwd = password?.trim() ?? "";
-      if (!pwd) throw new Error("Password is required for new employees");
-      return createTeamEmployee(values, departmentNameById, pwd);
+      return createTeamEmployee(values, departmentNameById, password);
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
       qc.invalidateQueries({ queryKey: ["hrm", "employees"] });
       qc.invalidateQueries({ queryKey: ["permissions"] });
+      qc.invalidateQueries({ queryKey: ["sales-team"] });
       if (vars.id != null) {
         qc.invalidateQueries({ queryKey: teamEmployeeQueryKey(vars.id) });
         qc.invalidateQueries({ queryKey: hrmEmployeeQueryKey(vars.id) });

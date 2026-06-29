@@ -105,6 +105,7 @@ export default function HrmAuditPage() {
               ? "Loading activity…"
               : `${hrmRefCountSubtitle(logs.length, "event")} · system activity trail`
           }
+          breadcrumbs={[{ label: "HRM", href: "/hrm" }, { label: "Audit logs" }]}
           actions={<HrmRefRefreshButton onClick={() => void refetch()} loading={isFetching} />}
         />
 

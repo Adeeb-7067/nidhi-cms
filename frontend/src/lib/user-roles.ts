@@ -27,6 +27,14 @@ export const STAFF_EMPLOYEE_ROLES: UserRole[] = [
   "tester",
   "qa",
   "freelancer",
+  "bde",
+];
+
+/** Everyone listed on Admin → Team (non-client internal accounts). */
+export const ADMIN_STAFF_ROLES: UserRole[] = [
+  "super_admin",
+  "hr",
+  ...STAFF_EMPLOYEE_ROLES,
 ];
 
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */

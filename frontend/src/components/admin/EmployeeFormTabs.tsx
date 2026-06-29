@@ -149,6 +149,7 @@ export function EmployeeFormTabs({
   hrmDepartments,
   managerOptions,
   shiftTemplates,
+  lockRole,
   onSyncDisplayName,
 }: {
   form: UseFormReturn<TeamEmployeeFormValues>;
@@ -161,6 +162,7 @@ export function EmployeeFormTabs({
   hrmDepartments: Dept[];
   managerOptions: Manager[];
   shiftTemplates: ShiftTemplate[];
+  lockRole?: string;
   onSyncDisplayName?: () => void;
 }) {
   const copyPermanentToCurrent = () => {
@@ -289,7 +291,7 @@ export function EmployeeFormTabs({
                   />
                 </FormControl>
                 <FormDescription>
-                  {editUser ? "Leave blank to keep the current password." : "Required for new employees."}
+                  {editUser ? "Leave blank to keep the current password." : "Optional — leave blank to set later."}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
@@ -552,20 +554,31 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>CMS role</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  {lockRole ? (
                     <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select role" />
-                      </SelectTrigger>
+                      <Input
+                        className={employeeFormInputClass}
+                        readOnly
+                        disabled
+                        value={cmsRoleOptions.find((r) => r.value === lockRole)?.label ?? lockRole.toUpperCase()}
+                      />
                     </FormControl>
-                    <SelectContent>
-                      {cmsRoleOptions.map((r) => (
-                        <SelectItem key={r.value} value={r.value}>
-                          {r.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  ) : (
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className={employeeFormSelectTriggerClass}>
+                          <SelectValue placeholder="Select role" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {cmsRoleOptions.map((r) => (
+                          <SelectItem key={r.value} value={r.value}>
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <FormMessage />
                 </FormItem>
               )}

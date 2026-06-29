@@ -138,7 +138,7 @@ function buildDeductionRows(payRollData) {
     rows.push({ label: "Attendance Deductions", amount: attendanceDed });
   }
   if (unpaidLeaveDed > 0) {
-    rows.push({ label: "Unpaid Leave Deduction", amount: unpaidLeaveDed });
+    rows.push({ label: "LOP Deduction", amount: unpaidLeaveDed });
   }
   const pf = Number(payRollData?.pfDeductionAmount ?? 0);
   const tds = Number(payRollData?.tdsDeductionAmount ?? 0);
@@ -673,7 +673,7 @@ const generatePaySlipHtml = (
     }
     .footer-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 18px;
       margin-top: 18px;
     }
@@ -846,17 +846,6 @@ const generatePaySlipHtml = (
       </div>
     </div>
 
-    <div class="accounts">
-      <div class="account-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-        <span><strong>PF A/C Number :</strong> ${escapeHtml(pfAccount)}</span>
-      </div>
-      <div class="account-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        <span><strong>UAN Number :</strong> ${escapeHtml(uanNumber)}</span>
-      </div>
-    </div>
-
     <div class="tables">
       <div class="table-wrap">
         <div class="table-head earn">
@@ -890,20 +879,17 @@ const generatePaySlipHtml = (
             <tr>
               <th>DEDUCTIONS</th>
               <th class="num">AMOUNT (₹)</th>
-              <th class="num">YTD (₹)</th>
             </tr>
           </thead>
           <tbody>
-            ${tableRows(
+            ${tableRowsAmountOnly(
               deductionRows.length
                 ? deductionRows
                 : [{ label: "Total Deductions", amount: totalDeductions }],
-              ytdFactor,
             )}
             <tr class="total-row deduct">
               <td>TOTAL DEDUCTIONS</td>
               <td class="num">${formatAmount(totalDeductions)}</td>
-              <td class="num">${formatAmount(totalDeductions * ytdFactor)}</td>
             </tr>
           </tbody>
         </table>
@@ -927,14 +913,6 @@ const generatePaySlipHtml = (
     </div>
 
     <div class="footer-grid">
-      <div class="footer-panel">
-        <div class="footer-title">YEAR TO DATE SUMMARY</div>
-        <div class="footer-row"><span>Total Earnings (YTD)</span><strong>${formatInr(grossEarnings * ytdFactor)}</strong></div>
-        <div class="footer-row"><span>Total Deductions (YTD)</span><strong>${formatInr(totalDeductions * ytdFactor)}</strong></div>
-        <div class="footer-row"><span>Total Taxable Income (YTD)</span><strong>${formatInr(Math.max(0, grossEarnings * ytdFactor - totalDeductions * ytdFactor))}</strong></div>
-        <div class="footer-row"><span>Total Tax Paid (YTD)</span><strong>${formatInr((deductionRows.find((r) => r.label.includes("TDS"))?.amount ?? 0) * ytdFactor)}</strong></div>
-      </div>
-
       <div class="footer-panel">
         <div class="footer-title">COMPANY AUTHORIZED SIGNATORY</div>
         <div class="sign-box">
@@ -985,7 +963,7 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
     totalLate: line.lateCount ?? 0,
     totalLeaveOrAbsent: line.lopDays ?? 0,
     approvedLeaveDaysUsed: 0,
-    unpaidLeaveDays: line.lopDays ?? 0,
+    unpaidLeaveDays: 0,
     employeeId: {
       firstName: nameParts[0] ?? "",
       lastName: nameParts.slice(1).join(" ") ?? "",
@@ -995,8 +973,8 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
       joiningDate: emp.joiningDate,
       salary: {
         basicSalary: salary.basic ?? 0,
-        netSalary: salary.net ?? line.gross ?? 0,
-        allowances: salary.allowances ?? 0,
+        netSalary: salary.gross ?? line.gross ?? 0,
+        allowances: (salary.hra ?? 0) + (salary.allowances ?? 0),
         bankAccount: { accountNumber: "—" },
       },
       panNumber: "—",

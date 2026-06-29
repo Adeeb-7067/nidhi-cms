@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { format } from "date-fns";
 import { Home } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
@@ -6,6 +7,11 @@ import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import { HrmAttendanceBadge } from "./components";
 import { attendanceDisplayLabel, isPresentLikeStatus, resolveAttendanceDisplayStatus } from "./constants";
 import type { HrmAttendanceSummary } from "./types";
+
+function formatClockTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try { return format(new Date(iso), "h:mm a"); } catch { return "—"; }
+}
 
 export function attendanceStatusSuffix(r: HrmAttendanceSummary) {
   return (
@@ -37,6 +43,18 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
       header: "Date",
       accessorKey: "date",
       cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
+    },
+    {
+      id: "clockIn",
+      header: "Clock in",
+      cell: (r) => <span className="tabular-nums text-xs">{formatClockTime(r.firstClockIn)}</span>,
+      exportValue: (r) => formatClockTime(r.firstClockIn),
+    },
+    {
+      id: "clockOut",
+      header: "Clock out",
+      cell: (r) => <span className="tabular-nums text-xs">{formatClockTime(r.lastClockOut)}</span>,
+      exportValue: (r) => formatClockTime(r.lastClockOut),
     },
     {
       id: "status",

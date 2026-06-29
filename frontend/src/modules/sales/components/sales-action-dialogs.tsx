@@ -29,6 +29,9 @@ import {
 import { resolveProposalTotal } from "@/modules/sales/utils";
 import {
   useCreateCustomer,
+  useUpdateCustomer,
+  useRemindCustomer,
+  useProvisionCustomerPortal,
   useCreateInstallment,
   useCreateInvoice,
   useCreateInvoiceFromProposal,
@@ -44,6 +47,7 @@ import {
   type LeadStatus,
   type FollowUpType,
   type PaymentMethod,
+  type Customer,
   type CustomerType,
   type CustomerStatus,
 } from "@/api/sales";
@@ -83,41 +87,80 @@ function SalesField({
 
 // ─── Customer ───────────────────────────────────────────────────────────────
 
+const EMPTY_CUSTOMER_FORM = {
+  companyName: "",
+  contactPerson: "",
+  email: "",
+  phone: "",
+  location: "",
+  gstin: "",
+  website: "",
+  type: "corporate" as CustomerType,
+  status: "active" as CustomerStatus,
+};
+
+function customerToFormValues(customer: Customer) {
+  return {
+    companyName: customer.companyName,
+    contactPerson: customer.contactPerson,
+    email: customer.email,
+    phone: customer.phone ?? "",
+    location: customer.location ?? "",
+    gstin: customer.gstin ?? "",
+    website: customer.website ?? "",
+    type: customer.type,
+    status: customer.status,
+  };
+}
+
+function CustomerFormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 export function CustomerFormModal({
   open,
   onOpenChange,
+  customer,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  customer?: Customer | null;
   onSuccess?: () => void;
 }) {
+  const isEdit = customer != null;
   const createCustomer = useCreateCustomer();
-  const [companyName, setCompanyName] = useState("");
-  const [contactPerson, setContactPerson] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [location, setLocation] = useState("");
-  const [gstin, setGstin] = useState("");
-  const [website, setWebsite] = useState("");
-  const [type, setType] = useState<CustomerType>("corporate");
-  const [status, setStatus] = useState<CustomerStatus>("active");
+  const updateCustomer = useUpdateCustomer();
+  const isPending = createCustomer.isPending || updateCustomer.isPending;
 
-  const reset = () => {
-    setCompanyName("");
-    setContactPerson("");
-    setEmail("");
-    setPhone("");
-    setLocation("");
-    setGstin("");
-    setWebsite("");
-    setType("corporate");
-    setStatus("active");
-  };
+  const [companyName, setCompanyName] = useState(EMPTY_CUSTOMER_FORM.companyName);
+  const [contactPerson, setContactPerson] = useState(EMPTY_CUSTOMER_FORM.contactPerson);
+  const [email, setEmail] = useState(EMPTY_CUSTOMER_FORM.email);
+  const [phone, setPhone] = useState(EMPTY_CUSTOMER_FORM.phone);
+  const [location, setLocation] = useState(EMPTY_CUSTOMER_FORM.location);
+  const [gstin, setGstin] = useState(EMPTY_CUSTOMER_FORM.gstin);
+  const [website, setWebsite] = useState(EMPTY_CUSTOMER_FORM.website);
+  const [type, setType] = useState<CustomerType>(EMPTY_CUSTOMER_FORM.type);
+  const [status, setStatus] = useState<CustomerStatus>(EMPTY_CUSTOMER_FORM.status);
 
   useEffect(() => {
-    if (!open) reset();
-  }, [open]);
+    if (!open) return;
+    const values = customer ? customerToFormValues(customer) : EMPTY_CUSTOMER_FORM;
+    setCompanyName(values.companyName);
+    setContactPerson(values.contactPerson);
+    setEmail(values.email);
+    setPhone(values.phone);
+    setLocation(values.location);
+    setGstin(values.gstin);
+    setWebsite(values.website);
+    setType(values.type);
+    setStatus(values.status);
+  }, [open, customer]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,24 +168,29 @@ export function CustomerFormModal({
       toast.error("Company name, contact person, and email are required");
       return;
     }
+    const payload = {
+      companyName: companyName.trim(),
+      contactPerson: contactPerson.trim(),
+      email: email.trim(),
+      phone: phone.trim() || null,
+      location: location.trim() || null,
+      gstin: gstin.trim() || null,
+      website: website.trim() || null,
+      type,
+      status,
+    };
     try {
-      await createCustomer.mutateAsync({
-        companyName: companyName.trim(),
-        contactPerson: contactPerson.trim(),
-        email: email.trim(),
-        phone: phone.trim() || null,
-        location: location.trim() || null,
-        gstin: gstin.trim() || null,
-        website: website.trim() || null,
-        type,
-        status,
-      });
-      toast.success("Customer created");
-      reset();
+      if (isEdit && customer) {
+        await updateCustomer.mutateAsync({ id: customer.id, ...payload });
+        toast.success(`Customer "${payload.companyName}" updated`);
+      } else {
+        await createCustomer.mutateAsync(payload);
+        toast.success(`Customer "${payload.companyName}" created`);
+      }
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, "Failed to create customer");
+      toastApiError(err, isEdit ? "Failed to update customer" : "Failed to create customer");
     }
   };
 
@@ -150,47 +198,62 @@ export function CustomerFormModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
-          <DialogTitle>Add customer</DialogTitle>
-          <DialogDescription>Create a new customer record in the sales database.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit customer" : "Add customer"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update company profile, contact details, and classification."
+              : "Create a new customer record in the sales database."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
-          <DialogBody className="px-6 py-4 space-y-4">
-            <SalesField label="Company name">
-              <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Acme Corp" required />
-            </SalesField>
-            <SalesField label="Contact person">
-              <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Jane Smith" required />
-            </SalesField>
-            <SalesField label="Email">
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@acme.com" required />
-            </SalesField>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <SalesField label="Phone">
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+          <DialogBody className="px-6 py-4 space-y-5 max-h-[min(70vh,560px)] overflow-y-auto">
+            <CustomerFormSection title="Company & contact">
+              <SalesField label="Company name">
+                <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Acme Corp" required />
               </SalesField>
-              <SalesField label="Location">
-                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Mumbai" />
+              <SalesField label="Contact person">
+                <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Jane Smith" required />
               </SalesField>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <SalesField label="GSTIN">
-                <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="Optional" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <SalesField label="Email">
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@acme.com" required />
+                </SalesField>
+                <SalesField label="Phone">
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+                </SalesField>
+              </div>
+            </CustomerFormSection>
+
+            <CustomerFormSection title="Address & web">
+              <SalesField label="Location / address">
+                <Textarea
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  rows={2}
+                  placeholder="Street, city, state, pin code…"
+                />
               </SalesField>
               <SalesField label="Website">
                 <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://acme.com" />
               </SalesField>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <SalesField label="Type">
-                <Select value={type} onValueChange={(v) => setType(v as CustomerType)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {CUSTOMER_TYPE_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SalesField>
+            </CustomerFormSection>
+
+            <CustomerFormSection title="Tax & classification">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <SalesField label="GSTIN">
+                  <Input value={gstin} onChange={(e) => setGstin(e.target.value)} placeholder="Optional" />
+                </SalesField>
+                <SalesField label="Customer type">
+                  <Select value={type} onValueChange={(v) => setType(v as CustomerType)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CUSTOMER_TYPE_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SalesField>
+              </div>
               <SalesField label="Status">
                 <Select value={status} onValueChange={(v) => setStatus(v as CustomerStatus)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
@@ -201,15 +264,183 @@ export function CustomerFormModal({
                   </SelectContent>
                 </Select>
               </SalesField>
-            </div>
+            </CustomerFormSection>
+
+            {isEdit && (customer?.leadId || customer?.clientId || customer?.portalUserId) ? (
+              <CustomerFormSection title="Linked records">
+                <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                  {customer.leadId ? <p>Source lead: #{customer.leadId}</p> : null}
+                  {customer.clientId ? <p>Client record: #{customer.clientId}</p> : null}
+                  {customer.portalUserId ? <p>Portal user: #{customer.portalUserId}</p> : null}
+                  <p className="text-[10px]">These links are set during lead conversion and cannot be edited here.</p>
+                </div>
+              </CustomerFormSection>
+            ) : null}
           </DialogBody>
           <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={createCustomer.isPending}>
-              {createCustomer.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create customer
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEdit ? "Save changes" : "Create customer"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CustomerRemindDialog({
+  open,
+  onOpenChange,
+  customerId,
+  customerEmail,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customerId: number;
+  customerEmail: string;
+}) {
+  const remindCustomer = useRemindCustomer();
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (open) setMessage("");
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const result = await remindCustomer.mutateAsync({
+        id: customerId,
+        message: message.trim() || undefined,
+      });
+      if (result.emailSent) {
+        toast.success(`Payment reminder emailed to ${customerEmail}`);
+      } else {
+        toast.warning(
+          `Reminder logged but email was not sent${result.emailReason ? ` (${result.emailReason})` : ""}. Configure SMTP to enable delivery.`,
+        );
+      }
+      onOpenChange(false);
+    } catch (err) {
+      toastApiError(err, "Failed to send reminder");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border-border">
+        <DialogHeader>
+          <DialogTitle>Send payment reminder</DialogTitle>
+          <DialogDescription>
+            Notify {customerEmail} about their outstanding balance.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <SalesField label="Message" hint="Leave blank to use the default reminder text.">
+            <Textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              rows={3}
+              placeholder="You have a pending payment. Please review your account."
+            />
+          </SalesField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={remindCustomer.isPending}>
+              {remindCustomer.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send reminder
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function CustomerProvisionPortalDialog({
+  open,
+  onOpenChange,
+  customerId,
+  defaultEmail,
+  defaultCompany,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customerId: number;
+  defaultEmail?: string | null;
+  defaultCompany?: string | null;
+  onSuccess?: () => void;
+}) {
+  const provisionPortal = useProvisionCustomerPortal();
+  const [portalEmail, setPortalEmail] = useState(defaultEmail ?? "");
+  const [password, setPassword] = useState("");
+  const [companyName, setCompanyName] = useState(defaultCompany ?? "");
+  const [industry, setIndustry] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setPortalEmail(defaultEmail ?? "");
+    setCompanyName(defaultCompany ?? "");
+    setPassword("");
+    setIndustry("");
+  }, [open, defaultEmail, defaultCompany]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!portalEmail.trim() || password.length < 8) {
+      toast.error("Portal email and password (min 8 chars) are required");
+      return;
+    }
+    try {
+      await provisionPortal.mutateAsync({
+        id: customerId,
+        portalEmail: portalEmail.trim(),
+        password,
+        companyName: companyName.trim() || undefined,
+        industry: industry.trim() || undefined,
+      });
+      toast.success("Client portal access enabled");
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, "Failed to provision portal access");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px] bg-card border-border">
+        <DialogHeader>
+          <DialogTitle>Enable client portal</DialogTitle>
+          <DialogDescription>
+            Creates a client record and portal login for this customer.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <SalesField label="Portal login email">
+            <Input type="email" value={portalEmail} onChange={(e) => setPortalEmail(e.target.value)} required />
+          </SalesField>
+          <SalesField label="Portal password" hint="Minimum 8 characters.">
+            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+          </SalesField>
+          <SalesField label="Company name">
+            <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Optional override" />
+          </SalesField>
+          <SalesField label="Industry">
+            <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g. Technology" />
+          </SalesField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={provisionPortal.isPending}>
+              {provisionPortal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Enable portal
             </Button>
           </DialogFooter>
         </form>

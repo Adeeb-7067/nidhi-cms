@@ -17,6 +17,8 @@ export {
 } from "./LeadDetailSections";
 export {
   CustomerFormModal,
+  CustomerRemindDialog,
+  CustomerProvisionPortalDialog,
   FollowUpDialog,
   LeadReminderDialog,
   ConvertLeadDialog,

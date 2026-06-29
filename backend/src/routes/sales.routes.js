@@ -11,6 +11,7 @@ import * as invoicesCtrl from "../controllers/sales/invoices.controller.js";
 import * as paymentsCtrl from "../controllers/sales/payments.controller.js";
 import * as productsCtrl from "../controllers/sales/products.controller.js";
 import * as dashboardCtrl from "../controllers/sales/dashboard.controller.js";
+import * as teamCtrl from "../controllers/sales/team.controller.js";
 
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
@@ -66,6 +67,8 @@ router.get("/sales/customers", ...guard, wrap(customersCtrl.listCustomers));
 router.post("/sales/customers", ...guard, wrap(customersCtrl.createCustomer));
 router.get("/sales/customers/:id", ...guard, wrap(customersCtrl.getCustomerById));
 router.patch("/sales/customers/:id", ...guard, wrap(customersCtrl.updateCustomer));
+router.delete("/sales/customers/:id", ...guard, wrap(customersCtrl.deleteCustomer));
+router.post("/sales/customers/:id/provision-portal", ...guard, wrap(customersCtrl.provisionCustomerPortal));
 router.get("/sales/customers/:id/statement", ...guard, wrap(customersCtrl.getCustomerStatement));
 router.post("/sales/customers/:id/remind", ...guard, wrap(customersCtrl.remindCustomer));
 
@@ -97,5 +100,8 @@ router.patch("/sales/products/:id", ...guard, wrap(productsCtrl.updateProduct));
 router.get("/sales/dashboard", ...guard, wrap(dashboardCtrl.getDashboard));
 router.get("/sales/dashboard/pipeline", ...guard, wrap(dashboardCtrl.getPipeline));
 router.get("/sales/dashboard/revenue-trend", ...guard, wrap(dashboardCtrl.getRevenueTrend));
+router.get("/sales/reports", ...guard, wrap(dashboardCtrl.getReports));
+router.get("/sales/team", ...guard, wrap(teamCtrl.getSalesTeam));
+router.get("/sales/team/:userId", ...guard, wrap(teamCtrl.getSalesTeamMember));
 
 export default router;

@@ -742,6 +742,52 @@ export async function markPayrollRunPaid(runId, actorId) {
 
 
 
+export async function revertPayrollRun(runId, actorId) {
+  const run = await payrollRunsTable.findOne({ id: runId });
+  if (!run) notFound("Payroll run");
+  if (run.status === "paid") conflict("Paid payroll cannot be reverted.");
+  if (run.status !== "finalized") conflict("Only finalized payroll can be reverted.");
+
+  const { startDate, endDate } = monthBounds(run.year, run.month);
+  const updated = await runInTx(async (session) => {
+    const sessOpts = session ? { session } : {};
+    await dailyAttendanceTable.updateMany(
+      { date: { $gte: startDate, $lte: endDate } },
+      { $set: { lockedForPayroll: false } },
+      sessOpts,
+    );
+    let query = payrollRunsTable.findOneAndUpdate(
+      { id: runId, status: "finalized" },
+      { $set: { status: "reviewed" }, $unset: { finalizedAt: "", finalizedBy: "" } },
+      { new: true },
+    );
+    if (session) query = query.session(session);
+    return query;
+  });
+
+  if (!updated) conflict("Payroll run could not be reverted.");
+
+  await logHrmAudit({
+    actorId,
+    action: "payroll_reverted",
+    entityType: "payroll_run",
+    entityId: runId,
+    severity: "high",
+    metadata: { year: run.year, month: run.month },
+  });
+
+  return updated;
+}
+
+
+
+export async function regeneratePayslipsForRun(runId) {
+  const run = await payrollRunsTable.findOne({ id: runId }).lean();
+  if (!run) notFound("Payroll run");
+  await syncPayslipsForRun(runId);
+  return { ok: true, runId, month: run.month, year: run.year };
+}
+
 export async function listPayrollRuns() {
 
   return payrollRunsTable.find().sort({ year: -1, month: -1 }).lean();

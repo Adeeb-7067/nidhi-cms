@@ -3,6 +3,9 @@ import {
   SalesInstallments,
   SalesInvoices,
   SalesPayments,
+  SalesProposals,
+  clientsTable,
+  usersTable,
   getNextSequence,
 } from "../../models/schema/index.js";
 import { paginateModel } from "../../utils/mongo-list.js";
@@ -13,6 +16,37 @@ import {
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+import { createClientPortalUser, updateClientPortalEmail } from "../../services/client-portal.js";
+import { sendCustomerPaymentReminderEmail } from "../../lib/email.js";
+
+async function syncLinkedClientRecord(customer, updates) {
+  if (!customer.clientId) return;
+  const clientUpdates = {};
+  if (updates.companyName !== undefined) clientUpdates.companyName = updates.companyName;
+  if (updates.contactPerson !== undefined) clientUpdates.contactPerson = updates.contactPerson;
+  if (updates.email !== undefined) clientUpdates.email = updates.email;
+  if (updates.phone !== undefined) clientUpdates.phone = updates.phone;
+  if (updates.location !== undefined) clientUpdates.address = updates.location;
+  if (updates.gstin !== undefined) clientUpdates.gstNumber = updates.gstin;
+  if (updates.website !== undefined) clientUpdates.website = updates.website;
+  if (Object.keys(clientUpdates).length) {
+    await clientsTable.updateOne({ id: customer.clientId }, { $set: clientUpdates });
+  }
+  if (updates.email !== undefined && customer.portalUserId) {
+    await updateClientPortalEmail({ userId: customer.portalUserId, email: updates.email });
+  }
+}
+
+function computeCustomerFinancials(invoices) {
+  const financials = new Map();
+  for (const inv of invoices) {
+    if (!financials.has(inv.customerId)) financials.set(inv.customerId, { totalSales: 0, outstanding: 0 });
+    const entry = financials.get(inv.customerId);
+    entry.totalSales += inv.amount;
+    entry.outstanding += Math.max(0, inv.amount - inv.paidAmount);
+  }
+  return financials;
+}
 
 async function listCustomers(req, res) {
   const { status, type, search } = req.query;
@@ -36,13 +70,7 @@ async function listCustomers(req, res) {
         .select({ customerId: 1, amount: 1, paidAmount: 1 })
         .lean()
     : [];
-  const financials = new Map();
-  for (const inv of invoices) {
-    if (!financials.has(inv.customerId)) financials.set(inv.customerId, { totalSales: 0, outstanding: 0 });
-    const entry = financials.get(inv.customerId);
-    entry.totalSales += inv.amount;
-    entry.outstanding += Math.max(0, inv.amount - inv.paidAmount);
-  }
+  const financials = computeCustomerFinancials(invoices);
   const customers = items.map((c) => ({
     ...c,
     totalSales: financials.get(c.id)?.totalSales ?? 0,
@@ -106,8 +134,98 @@ async function updateCustomer(req, res) {
   if (body.location !== undefined) updates.location = optionalString(body.location) ?? null;
   if (body.gstin !== undefined) updates.gstin = optionalString(body.gstin) ?? null;
   if (body.website !== undefined) updates.website = optionalString(body.website) ?? null;
+
+  if (Object.keys(updates).length) {
+    await syncLinkedClientRecord(customer, updates);
+  }
+
   const updated = await SalesCustomers.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   res.json(updated);
+}
+
+async function deleteCustomer(req, res) {
+  const id = parseIdParam(req.params.id, "customer id");
+  const customer = await SalesCustomers.findOne({ id }).lean();
+  if (!customer) notFound("Customer");
+
+  const [proposals, invoices, installments, payments] = await Promise.all([
+    SalesProposals.countDocuments({ customerId: id }),
+    SalesInvoices.countDocuments({ customerId: id }),
+    SalesInstallments.countDocuments({ customerId: id }),
+    SalesPayments.countDocuments({ customerId: id }),
+  ]);
+  if (proposals + invoices + installments + payments > 0) {
+    badRequest(
+      "Cannot delete a customer with billing history. Set status to inactive instead.",
+      "customerId"
+    );
+  }
+
+  await SalesCustomers.deleteOne({ id });
+  res.json({ success: true });
+}
+
+async function provisionCustomerPortal(req, res) {
+  const id = parseIdParam(req.params.id, "customer id");
+  const customer = await SalesCustomers.findOne({ id }).lean();
+  if (!customer) notFound("Customer");
+  if (customer.clientId || customer.portalUserId) {
+    badRequest("This customer already has portal access.", "portal");
+  }
+
+  const body = req.body;
+  const portalEmail = optionalString(body.portalEmail ?? customer.email);
+  const portalPassword = optionalString(body.password);
+  if (!portalEmail) badRequest("Portal login email is required.", "portalEmail");
+  if (!portalPassword || portalPassword.length < 8) {
+    badRequest("Portal password must be at least 8 characters.", "password");
+  }
+
+  let clientId = null;
+  let portalUserId = null;
+  try {
+    portalUserId = await createClientPortalUser({
+      name: customer.contactPerson,
+      email: portalEmail,
+      password: portalPassword,
+      setByUserId: req.user.id,
+      setByLabel: req.user.name,
+    });
+    const clientSeqId = await getNextSequence("clients");
+    const client = await clientsTable.create({
+      id: clientSeqId,
+      companyName: optionalString(body.companyName) ?? customer.companyName,
+      contactPerson: customer.contactPerson,
+      email: portalEmail.toLowerCase(),
+      phone: customer.phone ?? null,
+      address: customer.location ?? null,
+      gstNumber: customer.gstin ?? null,
+      industry: optionalString(body.industry) ?? null,
+      website: customer.website ?? null,
+      tier: "Standard",
+      status: "active",
+      portalLogin: true,
+      userId: portalUserId,
+      createdBy: req.user.id,
+    });
+    clientId = client.id;
+    const updated = await SalesCustomers.findOneAndUpdate(
+      { id },
+      { $set: { clientId, portalUserId, email: portalEmail.toLowerCase() } },
+      { new: true }
+    ).lean();
+    res.status(201).json({
+      success: true,
+      customerId: id,
+      clientId,
+      portalUserId,
+      customer: updated,
+    });
+  } catch (err) {
+    if (clientId) await clientsTable.deleteOne({ id: clientId }).catch(() => {});
+    if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
+    throw err;
+  }
 }
 
 async function getCustomerStatement(req, res) {
@@ -135,8 +253,31 @@ async function remindCustomer(req, res) {
   if (!customer) notFound("Customer");
   const message =
     optionalString(req.body.message) ?? "You have a pending payment. Please review your account.";
-  // Notification dispatch hook — plug in email/SMS service here
-  res.json({ success: true, sentTo: customer.email, message });
+
+  const invoices = await SalesInvoices.find({ customerId: id })
+    .select({ amount: 1, paidAmount: 1 })
+    .lean();
+  const outstanding = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+  if (outstanding <= 0) {
+    badRequest("This customer has no outstanding balance.", "outstanding");
+  }
+
+  const emailResult = await sendCustomerPaymentReminderEmail({
+    to: customer.email,
+    recipientName: customer.contactPerson,
+    companyName: customer.companyName,
+    outstandingAmount: outstanding,
+    message,
+  });
+
+  res.json({
+    success: true,
+    sentTo: customer.email,
+    message,
+    outstanding,
+    emailSent: emailResult.sent === true,
+    emailReason: emailResult.reason ?? null,
+  });
 }
 
 export {
@@ -144,6 +285,8 @@ export {
   createCustomer,
   getCustomerById,
   updateCustomer,
+  deleteCustomer,
+  provisionCustomerPortal,
   getCustomerStatement,
   remindCustomer,
 };

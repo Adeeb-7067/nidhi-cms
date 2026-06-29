@@ -199,23 +199,27 @@ export default function HrmAssetsPage() {
     {
       id: "tag",
       header: "Tag",
+      className: "w-28",
       cell: (a) => <span className="font-mono text-[11px]">{a.tag}</span>,
       exportValue: (a) => a.tag,
     },
     {
       id: "category",
       header: "Category",
+      className: "w-32",
       cell: (a) => (
-        <div className="flex items-center gap-2">
-          <Laptop className="size-3.5 text-muted-foreground" />
-          <span className="text-xs">{a.category}</span>
-        </div>
+        <span className="inline-flex items-center gap-1.5 text-xs">
+          <Laptop className="size-3.5 shrink-0 text-muted-foreground" />
+          {a.category}
+        </span>
       ),
+      exportValue: (a) => a.category,
     },
     {
       id: "brand",
-      header: "Brand",
+      header: "Brand / model",
       cell: (a) => <span className="text-xs font-medium">{a.brand}</span>,
+      exportValue: (a) => a.brand,
     },
     {
       id: "assigned",
@@ -226,22 +230,27 @@ export default function HrmAssetsPage() {
     {
       id: "condition",
       header: "Condition",
+      className: "w-28",
       cell: (a) => <span className="text-xs">{ASSET_CONDITION_LABELS[a.condition] ?? a.condition}</span>,
+      exportValue: (a) => ASSET_CONDITION_LABELS[a.condition] ?? a.condition,
     },
     {
       id: "cost",
       header: "Cost",
+      className: "w-28 text-right",
       cell: (a) => <span className="text-xs tabular-nums">{inrMoney(a.cost ?? 0)}</span>,
       exportValue: (a) => inrMoney(a.cost ?? 0),
     },
     {
       id: "status",
       header: "Status",
+      className: "w-28",
       cell: (a) => (
         <HrmRefStatusPill tone={assetStatusTone(a.status)}>
           {ASSET_STATUS_LABELS[a.status] ?? a.status}
         </HrmRefStatusPill>
       ),
+      exportValue: (a) => ASSET_STATUS_LABELS[a.status] ?? a.status,
     },
   ], []);
 

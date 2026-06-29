@@ -286,6 +286,9 @@ export const salesKeys = {
   dashboard: () => ["sales-dashboard"] as const,
   pipeline: () => ["sales-pipeline"] as const,
   revenueTrend: (period?: string) => ["sales-revenue-trend", period] as const,
+  reports: () => ["sales-reports"] as const,
+  team: (params?: object) => ["sales-team", params] as const,
+  teamMember: (id?: number | null) => ["sales-team-member", id] as const,
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────
@@ -697,7 +700,7 @@ export function useAddStaffComment(id: number) {
 // ─── Customers ────────────────────────────────────────────────────────────
 
 export function useListCustomers(
-  params?: { status?: CustomerStatus; type?: CustomerType; search?: string; page?: number },
+  params?: { status?: CustomerStatus; type?: CustomerType; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -744,6 +747,39 @@ export function useUpdateCustomer() {
   });
 }
 
+export function useDeleteCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ success: boolean }>(apiUrl(`/api/sales/customers/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-customers"] }),
+  });
+}
+
+export function useProvisionCustomerPortal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      portalEmail: string;
+      password: string;
+      companyName?: string;
+      industry?: string;
+    }) =>
+      customFetch<{ success: boolean; customerId: number; clientId: number; portalUserId: number; customer: Customer }>(
+        apiUrl(`/api/sales/customers/${id}/provision-portal`),
+        { method: "POST", body: JSON.stringify(body) }
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.customer(vars.id) });
+      qc.invalidateQueries({ queryKey: ["sales-customers"] });
+    },
+  });
+}
+
 export function useGetCustomerStatement(id: number, enabled = true) {
   return useQuery<{
     customer: Customer;
@@ -761,7 +797,14 @@ export function useGetCustomerStatement(id: number, enabled = true) {
 export function useRemindCustomer() {
   return useMutation({
     mutationFn: ({ id, message }: { id: number; message?: string }) =>
-      customFetch(apiUrl(`/api/sales/customers/${id}/remind`), {
+      customFetch<{
+        success: boolean;
+        sentTo: string;
+        message: string;
+        outstanding: number;
+        emailSent: boolean;
+        emailReason?: string | null;
+      }>(apiUrl(`/api/sales/customers/${id}/remind`), {
         method: "POST",
         body: JSON.stringify({ message }),
       }),
@@ -1035,5 +1078,116 @@ export function useSalesRevenueTrend(period?: "week" | "month" | "year", enabled
     queryFn: () => customFetch(apiUrl(`/api/sales/dashboard/revenue-trend?period=${p}`)),
     enabled,
     staleTime: 60_000,
+  });
+}
+
+export interface SalesReports {
+  leadsBySource: { source: string; count: number }[];
+  leadsByStatus: { status: string; count: number }[];
+  executivePerformance: { userId: number; name: string; revenue: number; payments: number }[];
+  monthlyCollections: { month: string; collected: number; outstanding: number }[];
+  outstandingVsPaid: { name: string; value: number }[];
+}
+
+export function useSalesReports(enabled = true) {
+  return useQuery<SalesReports>({
+    queryKey: salesKeys.reports(),
+    queryFn: () => customFetch(apiUrl("/api/sales/reports")),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export interface SalesTeamMember {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  employeeId: string | null;
+  designation: string;
+  role: "bde";
+  status?: string;
+  phoneNumber?: string | null;
+  joiningDate?: string | null;
+  department?: string | null;
+  subType?: string | null;
+  linkedinUrl?: string | null;
+  createdAt?: string | null;
+  lastLoginAt?: string | null;
+  lastSeenAt?: string | null;
+  presenceStatus?: string | null;
+  isActiveNow?: boolean;
+  revenue: number;
+  dealsClosed: number;
+  pendingFollowUps: number;
+}
+
+export interface SalesTeamListParams {
+  status?: string;
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export interface SalesTeamMemberDetail {
+  member: Record<string, unknown> & SalesTeamMember;
+  stats: {
+    revenue: number;
+    dealsClosed: number;
+    pendingFollowUps: number;
+    leadCount: number;
+    proposalCount: number;
+  };
+  leadsByStatus: { status: string; count: number }[];
+  proposalsByStatus: { status: string; count: number }[];
+  recentLeads: {
+    id: number;
+    name: string;
+    company: string | null;
+    status: string;
+    priority: string;
+    expectedValue: number;
+    createdAt: string | null;
+  }[];
+  recentProposals: {
+    id: number;
+    title: string;
+    status: string;
+    totalAmount: number;
+    createdAt: string | null;
+  }[];
+  followUps: {
+    id: number;
+    leadId: number;
+    type: string;
+    status: string;
+    scheduledAt: string | null;
+    notes: string;
+  }[];
+}
+
+export function useSalesTeam(params?: SalesTeamListParams, enabled = true) {
+  const qs = new URLSearchParams(
+    Object.entries(params ?? {}).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, String(v)])
+  ).toString();
+  return useQuery<{
+    team: SalesTeamMember[];
+    totals: { count: number; revenue: number; dealsClosed: number; pendingFollowUps: number };
+    summary?: { total: number; active: number; inactive: number };
+    pagination?: { page: number; limit: number; total: number; totalPages: number };
+  }>({
+    queryKey: salesKeys.team(params),
+    queryFn: () => customFetch(apiUrl(`/api/sales/team${qs ? `?${qs}` : ""}`)),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useSalesTeamMember(userId: number | null, enabled = true) {
+  return useQuery<SalesTeamMemberDetail>({
+    queryKey: salesKeys.teamMember(userId),
+    queryFn: () => customFetch(apiUrl(`/api/sales/team/${userId}`)),
+    enabled: enabled && userId != null && userId > 0,
+    staleTime: 30_000,
   });
 }

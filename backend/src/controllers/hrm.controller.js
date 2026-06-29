@@ -43,7 +43,7 @@ import {
 } from "../services/hrm/leave-accrual.service.js";
 import * as employeesService from "../services/hrm/employees.service.js";
 import * as dashboardService from "../services/hrm/dashboard.service.js";
-import { badRequest, notFound, parseIdParam, parsePagination } from "../utils/route-errors.js";
+import { badRequest, forbidden, notFound, parseIdParam, parsePagination } from "../utils/route-errors.js";
 
 const MAX_DATE_RANGE_DAYS = 93;
 
@@ -139,7 +139,12 @@ async function getWfhRequests(req, res) {
 async function postWfhRequest(req, res) {
   const userId = req.body.userId != null ? parseIdParam(String(req.body.userId), "user id") : req.user.id;
   await assertCanAccessUser(req, userId);
-  await assertHrmEmployeeUser(userId);
+  // Allow both HRM employees (manager/developer/tester/qa) AND HRM admins (super_admin/hr)
+  // to apply WFH for themselves — only external roles (client, freelancer, bde) are excluded.
+  const wfhUser = await usersTable.findOne({ id: userId }, { role: 1 }).lean();
+  if (!wfhUser || (!hrmEmployeeRoles.includes(wfhUser.role) && !isHrmAdminRole(wfhUser.role))) {
+    forbidden("WFH requests are for company employees only.");
+  }
   const request = await wfhService.applyWfhRequest(userId, req.body, req.user.id);
   res.status(201).json(request);
 }
@@ -353,6 +358,16 @@ async function patchPayrollLine(req, res) {
 async function postPayrollFinalize(req, res) {
   const runId = parseIdParam(req.params.id, "payroll run id");
   res.json(await payrollService.finalizePayrollRun(runId, req.user.id));
+}
+
+async function postPayrollRevert(req, res) {
+  const runId = parseIdParam(req.params.id, "payroll run id");
+  res.json(await payrollService.revertPayrollRun(runId, req.user.id));
+}
+
+async function postPayrollRegeneratePayslips(req, res) {
+  const runId = parseIdParam(req.params.id, "payroll run id");
+  res.json(await payrollService.regeneratePayslipsForRun(runId));
 }
 
 async function postPayrollPaid(req, res) {
@@ -857,6 +872,8 @@ export {
   getPayrollChecklistByPeriod,
   patchPayrollLine,
   postPayrollFinalize,
+  postPayrollRevert,
+  postPayrollRegeneratePayslips,
   postPayrollPaid,
   getPayrollExport,
   getPayrollBankExport,

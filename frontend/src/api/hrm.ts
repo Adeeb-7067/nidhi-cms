@@ -861,6 +861,26 @@ export function useFinalizePayrollRun() {
   });
 }
 
+export function useRevertPayrollRun() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (runId: number) =>
+      customFetch(apiUrl(`/api/hrm/payroll/runs/${runId}/revert`), { method: "POST" }),
+    onSuccess: () => invalidatePayrollSlipQueries(qc),
+    meta: { errorMessage: "Could not revert payroll" },
+  });
+}
+
+export function useRegeneratePayslips() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (runId: number) =>
+      customFetch(apiUrl(`/api/hrm/payroll/runs/${runId}/regenerate-payslips`), { method: "POST" }),
+    onSuccess: () => invalidatePayrollSlipQueries(qc),
+    meta: { errorMessage: "Could not regenerate payslips" },
+  });
+}
+
 export function useMarkPayrollRunPaid() {
   const qc = useQueryClient();
   return useHrmMutation({

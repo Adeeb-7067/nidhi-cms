@@ -103,6 +103,7 @@ export default function HrmCalendarPage() {
           {format(new Date(`${r.date}T12:00:00`), "MMM d")}
         </span>
       ),
+      exportValue: (r) => format(new Date(`${r.date}T12:00:00`), "MMM d, yyyy"),
     },
     {
       id: "type",
@@ -112,12 +113,18 @@ export default function HrmCalendarPage() {
           {r.type.replace(/_/g, " ")}
         </Badge>
       ),
+      exportValue: (r) => r.type.replace(/_/g, " "),
     },
-    { id: "title", header: "Title", accessorKey: "title" },
+    {
+      id: "title",
+      header: "Title",
+      accessorKey: "title",
+    },
     {
       id: "description",
       header: "Details",
       cell: (r) => <span className="text-muted-foreground">{r.description || "—"}</span>,
+      exportValue: (r) => r.description || "",
     },
   ], []);
 

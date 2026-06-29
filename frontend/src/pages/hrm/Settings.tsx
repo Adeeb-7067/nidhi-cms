@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useForm } from "react-hook-form";
 import {
@@ -9,6 +9,11 @@ import {
   Clock,
   CalendarDays,
   ExternalLink,
+  ClipboardList,
+  ChevronUp,
+  ChevronDown,
+  X,
+  Plus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +64,17 @@ type SettingsForm = Pick<
 
 const FORM_ID = "hrm-settings-form";
 const fieldControlClass = "h-9 bg-background";
+
+const DEFAULT_CHECKLIST_TASKS = [
+  "Send welcome email and joining details",
+  "Set up workstation and equipment",
+  "Create IT accounts (email, Slack, tools)",
+  "Complete HR onboarding paperwork",
+  "Introduce to team and buddy",
+  "Review company handbook and policies",
+  "Schedule 1-on-1 with manager",
+  "Complete compliance training",
+];
 
 function SettingsSectionHeader({
   icon: Icon,
@@ -149,9 +165,51 @@ export default function HrmSettingsPage() {
   const shiftTemplates = shiftData?.templates ?? [];
   const isDirty = form.formState.isDirty;
 
+  const [checklistTasks, setChecklistTasks] = useState<string[]>([]);
+  const [newTask, setNewTask] = useState("");
+  const [checklistDirty, setChecklistDirty] = useState(false);
+
   useEffect(() => {
-    if (data) form.reset(data);
+    if (data) {
+      form.reset(data);
+      setChecklistTasks(data.hrmOnboardingChecklistTemplate ?? DEFAULT_CHECKLIST_TASKS);
+      setChecklistDirty(false);
+    }
   }, [data, form]);
+
+  const addTask = () => {
+    const t = newTask.trim();
+    if (!t) return;
+    setChecklistTasks((prev) => [...prev, t]);
+    setNewTask("");
+    setChecklistDirty(true);
+  };
+
+  const removeTask = (i: number) => {
+    setChecklistTasks((prev) => prev.filter((_, idx) => idx !== i));
+    setChecklistDirty(true);
+  };
+
+  const moveTask = (i: number, dir: -1 | 1) => {
+    setChecklistTasks((prev) => {
+      const next = [...prev];
+      const j = i + dir;
+      if (j < 0 || j >= next.length) return prev;
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+    setChecklistDirty(true);
+  };
+
+  const saveChecklist = async () => {
+    try {
+      await updateSettings.mutateAsync({ hrmOnboardingChecklistTemplate: checklistTasks });
+      setChecklistDirty(false);
+      toast.success("Onboarding checklist template saved");
+    } catch {
+      // error toast handled by hook
+    }
+  };
 
   const onSubmit = async (values: SettingsForm) => {
     if (!values.hrmWeekendDays?.length) {
@@ -254,6 +312,10 @@ export default function HrmSettingsPage() {
                 <HrmTabsTrigger value="leave">
                   <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
                   Leave policy
+                </HrmTabsTrigger>
+                <HrmTabsTrigger value="onboarding">
+                  <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
+                  Onboarding
                 </HrmTabsTrigger>
               </HrmTabsList>
 
@@ -425,6 +487,100 @@ export default function HrmSettingsPage() {
                         </SelectContent>
                       </Select>
                     </HrmField>
+                  </div>
+                </PortalContentCard>
+              </TabsContent>
+
+              <TabsContent value="onboarding">
+                <PortalContentCard contentClassName="p-5">
+                  <SettingsSectionHeader
+                    icon={ClipboardList}
+                    title="Onboarding checklist template"
+                    description="Default tasks auto-applied to every new onboarding record. Add, remove, or reorder as needed."
+                  />
+
+                  <div className="space-y-4">
+                    {checklistTasks.length === 0 ? (
+                      <p className="rounded-lg border border-dashed border-border/60 py-6 text-center text-sm text-muted-foreground">
+                        No tasks yet — add your first task below.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {checklistTasks.map((task, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className="flex-1 rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-sm">
+                              {task}
+                            </span>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-muted-foreground"
+                              disabled={i === 0}
+                              onClick={() => moveTask(i, -1)}
+                              aria-label="Move up"
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-muted-foreground"
+                              disabled={i === checklistTasks.length - 1}
+                              onClick={() => moveTask(i, 1)}
+                              aria-label="Move down"
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                              onClick={() => removeTask(i)}
+                              aria-label="Remove task"
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Add a checklist task…"
+                        value={newTask}
+                        onChange={(e) => setNewTask(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addTask();
+                          }
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-9 shrink-0 px-3"
+                        disabled={!newTask.trim()}
+                        onClick={addTask}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <Button
+                      type="button"
+                      size="sm"
+                      className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")}
+                      disabled={updateSettings.isPending || !checklistDirty}
+                      onClick={() => void saveChecklist()}
+                    >
+                      {updateSettings.isPending ? "Saving…" : "Save checklist"}
+                    </Button>
                   </div>
                 </PortalContentCard>
               </TabsContent>

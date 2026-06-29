@@ -414,9 +414,20 @@ export function AdvancedTable<T>({
                         {activeColumns.map((col) => (
                           <TableCell
                             key={col.id}
-                            className={cn("py-3 align-top", col.className)}
+                            className={cn(
+                              "py-3",
+                              col.id === "actions" ? "align-middle" : "align-top",
+                              col.className,
+                            )}
                           >
-                            <div className="whitespace-normal break-words text-sm leading-snug min-w-[80px] max-w-[420px]">
+                            <div
+                              className={cn(
+                                "text-sm leading-snug",
+                                col.id === "actions"
+                                  ? "whitespace-nowrap"
+                                  : "whitespace-normal break-words min-w-[80px] max-w-[420px]",
+                              )}
+                            >
                               {col.cell
                                 ? col.cell(item)
                                 : col.accessorKey

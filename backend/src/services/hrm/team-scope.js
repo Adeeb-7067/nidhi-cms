@@ -1,6 +1,5 @@
 import { usersTable } from "../../models/schema/index.js";
-import { hrmEmployeeRoles, isHrmAdminRole, isHrmEmployeeRole } from "../../constants/user-roles.js";
-import { forbidden, notFound } from "../../utils/route-errors.js";
+import { adminStaffRoles, hrmEmployeeRoles, isHrmAdminRole, isHrmEmployeeRole } from "../../constants/user-roles.js";import { forbidden, notFound } from "../../utils/route-errors.js";
 import { userHasPermission } from "../permissions.service.js";
 
 export async function assertHrmEmployeeUser(userId) {
@@ -51,10 +50,18 @@ export async function resolveAttendanceScopedUserIds(req, requestedUserId) {
 export async function assertCanAccessUser(req, targetUserId) {
   if (!req.user) forbidden("Unauthorized");
   if (req.user.id === targetUserId) return;
-  if (isHrmAdminRole(req.user.role)) return;
+  if (req.user.role === "super_admin" || isHrmAdminRole(req.user.role)) return;
   if (await userHasPermission(req.user.id, "hrm_employees", "view")) return;
-  if (req.user.role === "manager") {
-    const reports = await getDirectReportIds(req.user.id);
+  if (await userHasPermission(req.user.id, "admin_team", "view")) return;
+
+  const target = await usersTable.findOne({ id: targetUserId }, { role: 1 }).lean();
+  if (!target) notFound("User");
+
+  if (adminStaffRoles.includes(target.role)) {
+    if (await userHasPermission(req.user.id, "sales_team", "view")) return;
+  }
+
+  if (req.user.role === "manager") {    const reports = await getDirectReportIds(req.user.id);
     if (reports.includes(targetUserId)) return;
   }
   forbidden("You cannot access this employee's data.");

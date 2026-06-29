@@ -46,6 +46,11 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
   const firstSessionStart = ctx.firstSessionMap.get(`${user.id}:${date}`) ?? null;
   const daySessions = ctx.sessionsByUserDay.get(`${user.id}:${date}`) ?? [];
   const missingClockOut = detectMissingClockOut(daySessions);
+  const firstClockIn = firstSessionStart ? new Date(firstSessionStart).toISOString() : null;
+  const lastSession = daySessions.length > 0
+    ? [...daySessions].sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt)).at(-1)
+    : null;
+  const lastClockOut = lastSession?.endedAt ? new Date(lastSession.endedAt).toISOString() : null;
 
   let { status, compliance, ...refs } = resolveAttendanceStatus({
     date,
@@ -90,6 +95,8 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
     threshold: ctx.shortfallThreshold,
     missingClockOut,
     shiftName: effectiveShift?.name ?? null,
+    firstClockIn,
+    lastClockOut,
     ...refs,
   };
 

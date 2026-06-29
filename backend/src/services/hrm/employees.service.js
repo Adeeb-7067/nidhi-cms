@@ -1,7 +1,7 @@
 import { usersTable, departmentsTable, payrollLinesTable, payrollRunsTable, sessionsTable, credentialHistoryTable, candidatesTable, onboardingRecordsTable, getNextSequence } from "../../models/schema/index.js";
 import { shiftTemplatesTable } from "../../models/schema/hrm/shifts.js";
 import crypto from "crypto";
-import { hrmEmployeeRoles } from "../../constants/user-roles.js";
+import { adminStaffRoles, hrmEmployeeRoles, isHrmEmployeeRole } from "../../constants/user-roles.js";
 import { formatUser } from "../../mappers/user-format.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import { badRequest, notFound, conflict } from "../../utils/route-errors.js";
@@ -16,6 +16,9 @@ import { getAttendanceDailySummaries } from "./attendance.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
 import { countDocuments } from "./documents.service.js";
 import { getSalaryStructureForUser } from "./payroll.service.js";
+
+/** All CMS team members that can open the shared employee profile detail page. */
+const teamProfileRoles = adminStaffRoles;
 
 const EMPLOYEE_LIST_PROJECTION = {
   id: 1,
@@ -212,11 +215,12 @@ export async function assertOnboardingEligibleEmployee(userId) {
 }
 
 export async function getHrmEmployeeDetail(userId) {
-  const user = await usersTable.findOne({ id: userId, role: { $in: hrmEmployeeRoles } }).lean();
+  const user = await usersTable.findOne({ id: userId, role: { $in: teamProfileRoles } }).lean();
   if (!user) notFound("Employee");
 
   const [employees] = await enrichEmployees([user]);
   const employee = employees;
+  const isHrmTrackedEmployee = isHrmEmployeeRole(user.role);
 
   const now = new Date();
   const year = now.getFullYear();
@@ -224,14 +228,18 @@ export async function getHrmEmployeeDetail(userId) {
   const { startDate, endDate } = monthBounds(year, month);
 
   const [{ summaries }, balances, leaveRequests, documentCount, structure, latestRun] = await Promise.all([
-    getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] }),
-    listLeaveBalances(userId, year),
-    listLeaveRequests({ userIds: [userId] }),
+    isHrmTrackedEmployee
+      ? getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] })
+      : Promise.resolve({ summaries: [] }),
+    isHrmTrackedEmployee ? listLeaveBalances(userId, year) : Promise.resolve([]),
+    isHrmTrackedEmployee ? listLeaveRequests({ userIds: [userId] }) : Promise.resolve([]),
     countDocuments(userId),
-    getSalaryStructureForUser(userId),
-    payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
-      .sort({ year: -1, month: -1 })
-      .lean(),
+    isHrmTrackedEmployee ? getSalaryStructureForUser(userId) : Promise.resolve(null),
+    isHrmTrackedEmployee
+      ? payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
+          .sort({ year: -1, month: -1 })
+          .lean()
+      : Promise.resolve(null),
   ]);
 
   const userSummaries = summaries.filter((s) => s.userId === userId);

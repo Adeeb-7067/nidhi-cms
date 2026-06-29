@@ -25,7 +25,7 @@ export default function HrmEmployeesPage() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState<string>("all");
-  const [status, setStatus] = useState<string>("active");
+  const [status, setStatus] = useState<string>("all");
 
   const { data: deptData } = useHrmDepartments();
   const { data, isLoading, isError, error, refetch } = useHrmEmployees({

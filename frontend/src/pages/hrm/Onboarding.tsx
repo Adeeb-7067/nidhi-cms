@@ -161,13 +161,15 @@ export default function HrmOnboardingPage() {
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    // Capture before any state resets so async closure is safe
+    const target = deleteTarget;
+    setDeleteTarget(null);
+    setDetailId(null);
     try {
-      await deleteRecord.mutateAsync(deleteTarget.id);
+      await deleteRecord.mutateAsync(target.id);
       toast.success("Onboarding removed");
-      if (detailId === deleteTarget.id) setDetailId(null);
-      setDeleteTarget(null);
     } catch {
-      // mutation toast
+      // error toast handled by useHrmMutation
     }
   };
 
@@ -189,25 +191,35 @@ export default function HrmOnboardingPage() {
       cell: (r) => (
         <span className="text-xs tabular-nums">{format(new Date(r.startDate), "MMM d, yyyy")}</span>
       ),
+      exportValue: (r) => format(new Date(r.startDate), "MMM d, yyyy"),
     },
     {
       id: "buddy",
       header: "Buddy",
       cell: (r) => <span className="text-xs">{r.buddyName ?? "—"}</span>,
+      exportValue: (r) => r.buddyName ?? "",
     },
     {
       id: "progress",
       header: "Progress",
       cell: (r) => <OnboardingProgress value={r.progress} />,
+      exportValue: (r) => `${r.progress}%`,
     },
     {
       id: "tasks",
       header: "Tasks",
-      cell: (r) => (
-        <span className="text-xs tabular-nums">
-          {r.tasks.filter((t) => t.completed).length}/{r.tasks.length}
-        </span>
-      ),
+      cell: (r) => {
+        const tasks = r.tasks ?? [];
+        return (
+          <span className="text-xs tabular-nums">
+            {tasks.filter((t) => t.completed).length}/{tasks.length}
+          </span>
+        );
+      },
+      exportValue: (r) => {
+        const tasks = r.tasks ?? [];
+        return `${tasks.filter((t) => t.completed).length}/${tasks.length}`;
+      },
     },
     {
       id: "status",
@@ -217,6 +229,7 @@ export default function HrmOnboardingPage() {
           {r.status === "complete" ? "Complete" : "Active"}
         </Badge>
       ),
+      exportValue: (r) => (r.status === "complete" ? "Complete" : "Active"),
     },
     {
       id: "actions",
@@ -383,7 +396,7 @@ export default function HrmOnboardingPage() {
                 )}
 
                 <ul className="space-y-1.5">
-                  {selected.tasks.map((task, i) => (
+                  {(selected.tasks ?? []).map((task, i) => (
                     <li key={i}>
                       <button
                         type="button"
@@ -410,6 +423,11 @@ export default function HrmOnboardingPage() {
                       </button>
                     </li>
                   ))}
+                  {(selected.tasks ?? []).length === 0 && (
+                    <p className="py-4 text-center text-sm text-muted-foreground">
+                      No checklist tasks yet.
+                    </p>
+                  )}
                 </ul>
 
                 {canDelete ? (
@@ -417,7 +435,11 @@ export default function HrmOnboardingPage() {
                     size="sm"
                     variant="outline"
                     className="w-full text-destructive"
-                    onClick={() => setDeleteTarget(selected)}
+                    onClick={() => {
+                      // Close detail dialog first so AlertDialog never stacks on top of it
+                      setDetailId(null);
+                      setDeleteTarget(selected);
+                    }}
                   >
                     <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                     Remove onboarding

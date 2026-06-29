@@ -27,6 +27,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -60,6 +70,8 @@ import {
   payrollBankExportUrl,
   useFinalizePayrollRun,
   useMarkPayrollRunPaid,
+  useRevertPayrollRun,
+  useRegeneratePayslips,
   useGeneratePayrollRun,
   useHrmPayrollChecklistByPeriod,
   useHrmPayrollRunLines,
@@ -81,6 +93,7 @@ export default function HrmPayrollPage() {
   const [statusFilter, setStatusFilter] = useState<PayrollStatusFilter>("ALL");
   const [search, setSearch] = useState("");
   const [structuresOpen, setStructuresOpen] = useState(false);
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
   const [structEmployeeKey, setStructEmployeeKey] = useState("");
   const [structBasic, setStructBasic] = useState("");
   const [structHra, setStructHra] = useState("");
@@ -113,6 +126,8 @@ export default function HrmPayrollPage() {
   );
   const generate = useGeneratePayrollRun();
   const finalize = useFinalizePayrollRun();
+  const revert = useRevertPayrollRun();
+  const regenerate = useRegeneratePayslips();
   const markPaid = useMarkPayrollRunPaid();
   const review = useReviewPayrollRun();
   const updateLine = useUpdatePayrollLine();
@@ -280,6 +295,20 @@ export default function HrmPayrollPage() {
     );
   };
 
+  const resetStructureForm = () => {
+    setStructEmployeeKey("");
+    setStructBasic("");
+    setStructHra("");
+    setStructAllowances("");
+    setStructPfEmployee("");
+    setStructTds("");
+    setStructBankName("");
+    setStructAccountNumber("");
+    setStructIfsc("");
+    setStructPan("");
+    setStructBankHints({ bankName: "", accountNumber: "", ifsc: "", pan: "" });
+  };
+
   const handleSaveStructure = () => {
     const userId = Number(structEmployeeKey);
     const basic = Number(structBasic);
@@ -303,6 +332,7 @@ export default function HrmPayrollPage() {
       {
         onSuccess: () => {
           toast.success("Salary structure saved");
+          resetStructureForm();
           void refetchChecklist();
         },
       },
@@ -384,13 +414,7 @@ export default function HrmPayrollPage() {
                       </DropdownMenuItem>
                     )}
                     {(isDraft || isReviewed) && runId && (
-                      <DropdownMenuItem
-                        onClick={() =>
-                          finalize.mutate(runId, {
-                            onSuccess: () => toast.success("Payroll finalized — payslips published"),
-                          })
-                        }
-                      >
+                      <DropdownMenuItem onClick={() => setFinalizeConfirmOpen(true)}>
                         Finalize & publish payslips
                       </DropdownMenuItem>
                     )}
@@ -401,6 +425,30 @@ export default function HrmPayrollPage() {
                         }
                       >
                         Mark as paid
+                      </DropdownMenuItem>
+                    )}
+                    {isFinalized && runId && (
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() =>
+                          revert.mutate(runId, {
+                            onSuccess: () => toast.success("Payroll reverted to reviewed — you can now edit and re-finalize"),
+                          })
+                        }
+                      >
+                        Revert finalization
+                      </DropdownMenuItem>
+                    )}
+                    {runId && (isFinalized || isPaid) && (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          regenerate.mutate(runId, {
+                            onSuccess: () => toast.success("Payslips regenerated with latest template"),
+                          })
+                        }
+                        disabled={regenerate.isPending}
+                      >
+                        Regenerate payslips
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => void handleExport()}>
@@ -467,9 +515,19 @@ export default function HrmPayrollPage() {
               },
               {
                 key: "gross",
-                header: "Contract net",
+                header: "Gross salary",
                 className: "text-right",
                 render: (r) => <span className="text-xs tabular-nums">{inrMoney(r.gross)}</span>,
+              },
+              {
+                key: "deductions",
+                header: "Deductions",
+                className: "text-right",
+                render: (r) => (
+                  <span className="text-xs tabular-nums text-destructive">
+                    {r.deductions > 0 ? `−${inrMoney(r.deductions)}` : "—"}
+                  </span>
+                ),
               },
               {
                 key: "net",
@@ -484,7 +542,7 @@ export default function HrmPayrollPage() {
                 header: "Attendance",
                 render: (r) => (
                   <span className="text-[10px] text-muted-foreground">
-                    {r.paidDays} paid · {r.lopDays} LOP · {r.lateCount} late
+                    {r.paidDays} paid · {r.lopDays} LOP
                   </span>
                 ),
               },
@@ -513,14 +571,46 @@ export default function HrmPayrollPage() {
                   />
                   {payrollStatusPill(lineIsPaid())}
                 </div>
-                <HrmRefDetailSection title="Pay summary" className="mt-4">
-                  <HrmRefDetailRow label="Contract net" value={inrMoney(r.gross)} />
-                  <HrmRefDetailRow label="Net to disburse" value={inrMoney(r.net)} />
+                <HrmRefDetailSection title="Pay breakdown" className="mt-4">
                   <HrmRefDetailRow label="Period" value={periodLabel} />
                   <HrmRefDetailRow
                     label="Attendance"
                     value={`${r.paidDays} paid · ${r.lopDays} LOP · ${r.lateCount} late`}
                   />
+                  <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Gross salary</span>
+                      <span className="font-medium tabular-nums">{inrMoney(r.gross)}</span>
+                    </div>
+                    {(r.pfEmployee ?? 0) > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>PF (employee)</span>
+                        <span className="tabular-nums text-destructive">−{inrMoney(r.pfEmployee!)}</span>
+                      </div>
+                    )}
+                    {(r.tds ?? 0) > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>TDS</span>
+                        <span className="tabular-nums text-destructive">−{inrMoney(r.tds!)}</span>
+                      </div>
+                    )}
+                    {(r.lopDeduction ?? 0) > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>LOP deduction ({r.lopDays}d)</span>
+                        <span className="tabular-nums text-destructive">−{inrMoney(r.lopDeduction!)}</span>
+                      </div>
+                    )}
+                    {r.deductions > 0 && (
+                      <div className="flex justify-between border-t border-border/40 pt-1.5 text-sm">
+                        <span className="text-muted-foreground">Total deductions</span>
+                        <span className="font-medium tabular-nums text-destructive">−{inrMoney(r.deductions)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between border-t border-border pt-1.5 text-sm font-bold">
+                      <span>Net pay</span>
+                      <span className="tabular-nums text-primary">{inrMoney(r.net)}</span>
+                    </div>
+                  </div>
                 </HrmRefDetailSection>
                 {isDraft ? (
                   <div className="mt-4">
@@ -620,9 +710,12 @@ export default function HrmPayrollPage() {
                     />
                   </div>
                 ))}
-                <div className="flex items-end sm:col-span-2">
+                <div className="flex items-end gap-2 sm:col-span-2">
                   <Button className="w-full sm:w-auto" disabled={upsertStructure.isPending} onClick={handleSaveStructure}>
                     {LEGACY_PAYROLL_LABELS.saveStructure}
+                  </Button>
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={resetStructureForm}>
+                    Reset
                   </Button>
                 </div>
               </div>
@@ -634,6 +727,46 @@ export default function HrmPayrollPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <AlertDialog open={finalizeConfirmOpen} onOpenChange={setFinalizeConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Finalize & publish payslips?</AlertDialogTitle>
+              <AlertDialogDescription className="space-y-2">
+                <span className="block">
+                  This will lock the payroll for <strong>{periodLabel}</strong> and publish payslips
+                  to all employees. Attendance records will be locked for this period.
+                </span>
+                <span className="block text-muted-foreground">
+                  If you need to make corrections after finalizing, use <strong>Revert finalization</strong> from
+                  the same menu — it unlocks everything so you can edit and re-finalize.
+                </span>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={finalize.isPending}
+                onClick={() => {
+                  if (!runId) return;
+                  finalize.mutate(runId, {
+                    onSuccess: () => {
+                      toast.success("Payroll finalized — payslips published", {
+                        description: "Need to make a change? Use Revert finalization from the ⋯ menu.",
+                        duration: 6000,
+                      });
+                    },
+                  });
+                }}
+              >
+                {finalize.isPending ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin" />
+                ) : null}
+                Yes, finalize
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </HrmPageShell>
     </HrmGate>
   );

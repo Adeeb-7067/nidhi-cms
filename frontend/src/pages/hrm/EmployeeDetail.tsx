@@ -20,7 +20,6 @@ import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalContentCard, PortalTablePanel } from "@/components/layout/portal-page-kit";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageShell,
   HrmInlineEmptyState,
@@ -64,18 +63,22 @@ import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { buildLeaveBalanceColumns } from "@/modules/hrm/hrm-table-columns";
 import type { HrmAttendanceSummary, HrmLeaveRequest } from "@/modules/hrm/types";
 import { formatCurrency } from "@/modules/finance/constants";
-import { isAdminTeamEmployeeDetail, parseEmployeeDetailId } from "@/lib/employee-routes";
+import { isAdminTeamEmployeeDetail, isSalesTeamEmployeeDetail, parseEmployeeDetailId } from "@/lib/employee-routes";
+import { isHrmEmployeeRole } from "@/lib/user-roles";
+import { StaffProfileAccessGate } from "@/modules/hrm/StaffProfileAccessGate";
 
 export default function HrmEmployeeDetailPage() {
   const [location] = useLocation();
   const [, adminParams] = useRoute("/admin/employees/:id");
   const [, hrmParams] = useRoute("/hrm/employees/:id");
+  const [, salesParams] = useRoute("/sales/team/:id/profile");
   const employeeId =
     parseEmployeeDetailId(location) ??
-    Number(adminParams?.id ?? hrmParams?.id ?? NaN);
+    Number(adminParams?.id ?? hrmParams?.id ?? salesParams?.id ?? NaN);
   const fromAdminTeam = isAdminTeamEmployeeDetail(location);
-  const backHref = fromAdminTeam ? "/admin/employees" : "/hrm/employees";
-  const backLabel = fromAdminTeam ? "Back to team" : "Back to employees";
+  const fromSalesTeam = isSalesTeamEmployeeDetail(location);
+  const backHref = fromSalesTeam ? "/sales/team" : fromAdminTeam ? "/admin/employees" : "/hrm/employees";
+  const backLabel = fromSalesTeam ? "Back to sales team" : fromAdminTeam ? "Back to team" : "Back to employees";
 
   const canEdit = useHrmPermission("employees", "edit");
   const queryClient = useQueryClient();
@@ -85,6 +88,7 @@ export default function HrmEmployeeDetailPage() {
   const { data, isLoading, isFetching, isError, error, refetch } = useHrmEmployee(employeeId);
   const employee = data?.employee?.id === employeeId ? data.employee : undefined;
   const overview = data?.employee?.id === employeeId ? data.overview : undefined;
+  const showHrmTabs = isHrmEmployeeRole(employee?.role);
 
   useEffect(() => {
     setActiveTab("overview");
@@ -282,7 +286,7 @@ export default function HrmEmployeeDetailPage() {
 
   if (isError) {
     return (
-      <HrmGate module="employees">
+      <StaffProfileAccessGate employeeId={employeeId}>
         <HrmPageShell>
           <HrmInlineEmptyState
             icon={User}
@@ -290,7 +294,7 @@ export default function HrmEmployeeDetailPage() {
             description={getApiErrorMessage(error, "This employee may not exist or the request failed.")}
           />
         </HrmPageShell>
-      </HrmGate>
+      </StaffProfileAccessGate>
     );
   }
 
@@ -304,7 +308,7 @@ export default function HrmEmployeeDetailPage() {
 
   if (isLoading || (isFetching && !employee)) {
     return (
-      <HrmGate module="employees">
+      <StaffProfileAccessGate employeeId={employeeId}>
         <HrmPageShell className="space-y-4">
           <Skeleton className="h-8 w-48" />
           <Skeleton className="h-36 w-full rounded-xl" />
@@ -314,12 +318,12 @@ export default function HrmEmployeeDetailPage() {
             ))}
           </div>
         </HrmPageShell>
-      </HrmGate>
+      </StaffProfileAccessGate>
     );
   }
 
   return (
-    <HrmGate module="employees">
+    <StaffProfileAccessGate employeeId={employeeId}>
       <HrmPageShell>
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Employee profile</p>
@@ -341,9 +345,13 @@ export default function HrmEmployeeDetailPage() {
           <HrmTabsList>
             <HrmTabsTrigger value="overview">Overview</HrmTabsTrigger>
             <HrmTabsTrigger value="file">Employee file</HrmTabsTrigger>
-            <HrmTabsTrigger value="attendance">Attendance</HrmTabsTrigger>
-            <HrmTabsTrigger value="leave">Leaves</HrmTabsTrigger>
-            <HrmTabsTrigger value="payroll">Payroll</HrmTabsTrigger>
+            {showHrmTabs ? (
+              <>
+                <HrmTabsTrigger value="attendance">Attendance</HrmTabsTrigger>
+                <HrmTabsTrigger value="leave">Leaves</HrmTabsTrigger>
+                <HrmTabsTrigger value="payroll">Payroll</HrmTabsTrigger>
+              </>
+            ) : null}
             <HrmTabsTrigger value="work">Work activity</HrmTabsTrigger>
           </HrmTabsList>
 
@@ -665,6 +673,6 @@ export default function HrmEmployeeDetailPage() {
           </TabsContent>
         </Tabs>
       </HrmPageShell>
-    </HrmGate>
+    </StaffProfileAccessGate>
   );
 }
