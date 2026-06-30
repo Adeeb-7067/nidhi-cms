@@ -57,13 +57,18 @@ export default function FollowUps() {
   const [search, setSearch] = useState("");
   const [view, setView] = useState("list");
 
-  const { data, isLoading, isError, refetch } = useListFollowUps();
+  const { data, isLoading, isError, refetch } = useListFollowUps({ limit: 500 });
   const allFollowUps = data?.followUps ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     if (!q) return allFollowUps;
-    return allFollowUps.filter((f) => f.notes.toLowerCase().includes(q));
+    return allFollowUps.filter(
+      (f) =>
+        (f.notes?.toLowerCase().includes(q) ?? false) ||
+        String(f.leadId).includes(q) ||
+        f.type.toLowerCase().includes(q),
+    );
   }, [allFollowUps, search]);
 
   const overdue = filtered.filter((f) => f.status === "overdue");

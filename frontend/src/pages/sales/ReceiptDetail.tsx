@@ -1,18 +1,40 @@
+import { useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, Printer } from "lucide-react";
+import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { useGetReceipt } from "@/api/sales";
+import { useGetSettings } from "@/api/generated/api";
 import { toReceiptPreview } from "@/modules/sales/adapters";
+import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import { formatPaymentMethod } from "@/modules/sales/utils";
-import { SalesPageHeader, SalesEmptyState, ReceiptPreview } from "@/modules/sales/components";
+import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
+import { SalesPageHeader, SalesEmptyState, ReceiptDocument } from "@/modules/sales/components";
 
 export default function ReceiptDetailPage() {
   const [, params] = useRoute("/sales/receipts/:id");
   const receiptId = Number(params?.id);
+  const docRef = useRef<HTMLDivElement>(null);
+  const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, isError } = useGetReceipt(receiptId, !!receiptId);
+  const { data: orgSettings } = useGetSettings();
+  const company = resolveDocumentCompany(orgSettings);
+
+  const handleDownloadPdf = async () => {
+    if (!docRef.current || !data?.payment) return;
+    setDownloading(true);
+    try {
+      await downloadElementAsPdf(docRef.current, data.payment.receiptNumber);
+      toast.success("Receipt PDF downloaded");
+    } catch {
+      toast.error("Failed to generate receipt PDF");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -34,7 +56,7 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer);
+  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer, company);
 
   return (
     <PortalPageShell>
@@ -54,9 +76,19 @@ export default function ReceiptDetailPage() {
                 Back
               </Link>
             </Button>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => window.print()}>
-              <Printer className="h-3.5 w-3.5" />
-              Print
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={downloading}
+              onClick={handleDownloadPdf}
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download PDF
             </Button>
           </>
         }
@@ -67,8 +99,8 @@ export default function ReceiptDetailPage() {
         {data.payment.transactionId ? ` · ${data.payment.transactionId}` : ""}
       </p>
 
-      <div className="print:p-0">
-        <ReceiptPreview receipt={receipt} printMode />
+      <div ref={docRef} className="flex justify-center">
+        <ReceiptDocument receipt={receipt} />
       </div>
     </PortalPageShell>
   );

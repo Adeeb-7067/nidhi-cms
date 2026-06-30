@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Plus, Users, Upload, Pencil, Eye, Trash2 } from "lucide-react";
+import { Plus, Users, Upload, Pencil, Eye, Trash2, ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiUrl } from "@/lib/api-base";
+import { customFetch } from "@/api/custom-fetch";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -29,7 +32,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { useDeleteLead, useListLeads, type Lead, type LeadStatus } from "@/api/sales";
+import { useDeleteLead, useListLeads, salesKeys, type Lead, type LeadStatus } from "@/api/sales";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_ORDER,
@@ -44,15 +47,78 @@ import {
   SalesEmptyState,
   LeadFormModal,
   BulkLeadActions,
+  LeadImportDialog,
 } from "@/modules/sales/components";
+
+const PAGE_SIZE = 20;
+
+function csvCell(value: string | number | null | undefined): string {
+  const s = value == null ? "" : String(value);
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
+function downloadLeadsCsv(leads: Lead[]) {
+  const header = ["ID", "Name", "Email", "Company", "Source", "Status", "Priority", "Expected Value", "Created"];
+  const rows = leads.map((l) => [
+    l.id,
+    l.name,
+    l.email ?? "",
+    l.company ?? "",
+    l.source ?? "",
+    l.status,
+    l.priority,
+    l.expectedValue,
+    format(new Date(l.createdAt), "yyyy-MM-dd"),
+  ]);
+  const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `leads-${format(new Date(), "yyyy-MM-dd")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 export default function SalesLeads() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<LeadStatus | "all">("all");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Lead | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const qc = useQueryClient();
+
+  useEffect(() => { setPage(1); }, [search, statusTab]);
+
+  const listParams = {
+    search: search || undefined,
+    status: statusTab !== "all" ? statusTab : undefined,
+    page,
+    limit: PAGE_SIZE,
+  };
+
+  const exportLeads = async () => {
+    setExporting(true);
+    try {
+      const exportParams = { ...listParams, page: 1, limit: 1000 };
+      const qs = new URLSearchParams(
+        Object.entries(exportParams).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
+      ).toString();
+      const result = await qc.fetchQuery({
+        queryKey: salesKeys.leads(exportParams),
+        queryFn: () => customFetch<{ leads: Lead[]; total: number }>(apiUrl(`/api/sales/leads?${qs}`)),
+      });
+      downloadLeadsCsv(result.leads);
+      toast.success(`Exported ${result.leads.length} lead${result.leads.length === 1 ? "" : "s"}`);
+    } catch (err) {
+      toastApiError(err, "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const deleteLead = useDeleteLead();
 
@@ -87,13 +153,11 @@ export default function SalesLeads() {
     }
   };
 
-  const { data, isLoading, isError, refetch } = useListLeads({
-    search: search || undefined,
-    status: statusTab !== "all" ? statusTab : undefined,
-  });
+  const { data, isLoading, isError, refetch } = useListLeads(listParams);
   const filtered = data?.leads ?? [];
 
   const totalCount = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
   const toggleAll = () => {
@@ -121,7 +185,17 @@ export default function SalesLeads() {
         ]}
         actions={
           <>
-            <Button size="sm" variant="outline" className="h-8 gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              disabled={exporting || isLoading}
+              onClick={() => void exportLeads()}
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => setImportOpen(true)}>
               <Upload className="h-3.5 w-3.5" />
               Import CSV
             </Button>
@@ -137,6 +211,7 @@ export default function SalesLeads() {
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name, company, email…"
+        onExport={() => void exportLeads()}
       />
 
       <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as LeadStatus | "all")}>
@@ -198,7 +273,7 @@ export default function SalesLeads() {
         />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto print:overflow-visible">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
@@ -238,7 +313,9 @@ export default function SalesLeads() {
                     </TableCell>
                     <TableCell>
                       <div className="min-w-0">
-                        <p className="text-xs font-medium">{lead.name}</p>
+                        <Link href={`/sales/leads/${lead.id}`} className="text-xs font-medium hover:text-primary hover:underline transition-colors">
+                          {lead.name}
+                        </Link>
                         <p className="text-[10px] text-muted-foreground">{lead.email ?? "—"}</p>
                       </div>
                     </TableCell>
@@ -312,8 +389,25 @@ export default function SalesLeads() {
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {totalPages} · {totalCount} lead{totalCount === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      <LeadImportDialog open={importOpen} onOpenChange={setImportOpen} />
 
       <LeadFormModal
         open={drawerOpen}

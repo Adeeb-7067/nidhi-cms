@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, IndianRupee, Receipt } from "lucide-react";
+import { Plus, IndianRupee, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
@@ -23,6 +23,8 @@ import {
   RecordPaymentDialog,
 } from "@/modules/sales/components";
 
+const PAGE_SIZE = 20;
+
 const METHOD_LABELS: Record<string, string> = {
   bank_transfer: "Bank Transfer",
   upi: "UPI",
@@ -33,24 +35,24 @@ const METHOD_LABELS: Record<string, string> = {
 
 export default function Payments() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [recordOpen, setRecordOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useListPayments();
+  useEffect(() => { setPage(1); }, [search]);
+
+  const listParams = {
+    search: search || undefined,
+    page,
+    limit: PAGE_SIZE,
+  };
+
+  const { data, isLoading, isError, refetch } = useListPayments(listParams);
   const { data: dashData } = useSalesDashboard();
-  const allPayments = data?.payments ?? [];
+  const payments = data?.payments ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return allPayments;
-    return allPayments.filter(
-      (p) =>
-        p.receiptNumber.toLowerCase().includes(q) ||
-        p.paymentMethod.toLowerCase().includes(q) ||
-        (p.transactionId ?? "").toLowerCase().includes(q),
-    );
-  }, [allPayments, search]);
-
-  const collected = allPayments.reduce((s, p) => s + p.amount, 0);
+  const collected = dashData?.totalRevenue ?? payments.reduce((s, p) => s + p.amount, 0);
 
   return (
     <PortalPageShell>
@@ -72,7 +74,7 @@ export default function Payments() {
       <PortalKpiGrid
         items={[
           { title: "Collected", value: formatCurrency(collected), icon: IndianRupee, accent: "green", delay: 0 },
-          { title: "Payments logged", value: allPayments.length, icon: Receipt, accent: "blue", delay: 1 },
+          { title: "Payments logged", value: total, icon: Receipt, accent: "blue", delay: 1 },
           { title: "Outstanding", value: formatCurrency(dashData?.outstanding ?? 0), icon: IndianRupee, accent: "red", alert: true, delay: 2 },
           { title: "Pending invoices", value: dashData?.pendingInvoices ?? "—", icon: Receipt, accent: "amber", delay: 3 },
         ]}
@@ -86,7 +88,7 @@ export default function Payments() {
         </div>
       ) : isError ? (
         <SalesEmptyState icon={IndianRupee} title="Failed to load payments" description="Could not fetch payment records." actionLabel="Retry" onAction={() => refetch()} />
-      ) : filtered.length === 0 ? (
+      ) : total === 0 ? (
         <SalesEmptyState icon={IndianRupee} title="No payments found" description="Record a payment against an invoice." actionLabel="Record payment" onAction={() => setRecordOpen(true)} />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -104,7 +106,7 @@ export default function Payments() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
+              {payments.map((p) => (
                 <TableRow key={p.id} className="hover:bg-muted/30">
                   <TableCell className="text-xs font-mono text-primary">{p.receiptNumber}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">
@@ -126,6 +128,21 @@ export default function Payments() {
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {totalPages} · {total} payment{total === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

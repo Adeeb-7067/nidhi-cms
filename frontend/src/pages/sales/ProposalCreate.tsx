@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateProposal, useUpdateProposal, useGetProposal, useSendProposal, useListLeads, useListCustomers } from "@/api/sales";
+import { useCreateProposal, useUpdateProposal, useGetProposal, useSendProposal, useListLeads, useListCustomers, useListProducts, useSalesSettings, type SalesProduct } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { SalesPageHeader } from "@/modules/sales/components";
@@ -55,18 +55,32 @@ const lineItemNumberInputClass =
 function ProposalLineItemCard({
   index,
   item,
+  products,
   onChange,
   onRemove,
   canRemove,
 }: {
   index: number;
   item: ProposalLineItem;
+  products: SalesProduct[];
   onChange: (patch: Partial<ProposalLineItem>) => void;
   onRemove: () => void;
   canRemove: boolean;
 }) {
   const line = item.quantity * item.unitPrice;
   const lineTotal = line + line * (item.taxPercent / 100);
+
+  const applyProduct = (productId: string) => {
+    if (productId === "custom") return;
+    const product = products.find((p) => String(p.id) === productId);
+    if (!product) return;
+    onChange({
+      name: product.name,
+      description: product.description ?? "",
+      unitPrice: product.price,
+      taxPercent: product.taxPercent,
+    });
+  };
 
   return (
     <div className="rounded-xl border border-border/60 bg-muted/15 p-3 sm:p-4 space-y-3">
@@ -75,6 +89,24 @@ function ProposalLineItemCard({
           {index + 1}
         </span>
         <div className="min-w-0 flex-1 space-y-2">
+          {products.length > 0 && (
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">From catalog</Label>
+              <Select onValueChange={applyProduct}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Pick a product (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="custom" className="text-xs">Custom line item</SelectItem>
+                  {products.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)} className="text-xs">
+                      {p.name} — {formatCurrency(p.price)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="space-y-1">
             <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Item name</Label>
             <Input
@@ -162,16 +194,19 @@ function ProposalLineItemCard({
 export default function ProposalCreate() {
   const [, navigate] = useLocation();
   const submitMode = useRef<"draft" | "send">("draft");
+  const editIdStr = readSearchParam("editId");
+  const editId = editIdStr ? Number(editIdStr) : null;
+  const isEditing = editId !== null;
+
   const createProposal = useCreateProposal();
   const updateProposal = useUpdateProposal();
   const sendProposal = useSendProposal();
   const { staff } = useSalesStaff();
   const { data: leadsData } = useListLeads({ limit: 200 });
-  const { data: customersData } = useListCustomers();
-
-  const editIdStr = readSearchParam("editId");
-  const editId = editIdStr ? Number(editIdStr) : null;
-  const isEditing = editId !== null;
+  const { data: customersData } = useListCustomers({ limit: 200 });
+  const { data: productsData } = useListProducts({ status: "active" });
+  const { data: appSettings } = useSalesSettings(!isEditing);
+  const catalogProducts = productsData?.products ?? [];
   const { data: editData, isLoading: editLoading } = useGetProposal(editId ?? 0, isEditing);
 
   const prefillLeadId = readSearchParam("leadId");
@@ -196,6 +231,16 @@ export default function ProposalCreate() {
   const [internalNotes, setInternalNotes] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    if (isEditing || !appSettings) return;
+    setTaxRate(appSettings.defaultTax);
+    setItems((prev) =>
+      prev.length === 1 && !prev[0].name
+        ? [{ ...emptyItem(), taxPercent: appSettings.defaultTax }]
+        : prev,
+    );
+  }, [appSettings, isEditing]);
 
   // Pre-fill form when editing
   useEffect(() => {
@@ -455,6 +500,7 @@ export default function ProposalCreate() {
                     key={item.id}
                     index={idx}
                     item={item}
+                    products={catalogProducts}
                     onChange={(patch) => updateItem(item.id, patch)}
                     onRemove={() => removeRow(item.id)}
                     canRemove={items.length > 1}

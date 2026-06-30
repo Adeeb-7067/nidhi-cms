@@ -12,16 +12,24 @@ import {
   CheckCheck,
   Receipt,
   CalendarClock,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { cn } from "@/lib/utils";
-import { mockNotifications } from "@/modules/sales/mock-data";
-import type { SalesNotification, SalesNotificationType } from "@/modules/sales/types";
+import type { SalesNotificationType } from "@/modules/sales/types";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import {
+  useSalesNotifications,
+  useMarkSalesNotificationRead,
+  useMarkAllSalesNotificationsRead,
+  type SalesAlertNotification,
+} from "@/api/sales";
 
 const typeIcons: Record<SalesNotificationType, typeof Bell> = {
   lead_assigned: UserPlus,
@@ -40,14 +48,22 @@ const priorityStyles = {
   high: "bg-red-500/10 text-red-600 border-red-500/25",
 };
 
+function normalizeType(type: string): SalesNotificationType {
+  const key = type.replace(/^sales_/, "") as SalesNotificationType;
+  return typeIcons[key] ? key : "outstanding_reminder";
+}
+
 function NotificationRow({
   n,
   onMarkRead,
+  marking,
 }: {
-  n: SalesNotification;
+  n: SalesAlertNotification;
   onMarkRead: (id: number) => void;
+  marking: boolean;
 }) {
-  const Icon = typeIcons[n.type] ?? Bell;
+  const displayType = normalizeType(n.type);
+  const Icon = typeIcons[displayType] ?? Bell;
   const inner = (
     <Card
       className={cn(
@@ -87,6 +103,7 @@ function NotificationRow({
             variant="ghost"
             size="sm"
             className="h-7 text-xs shrink-0 self-center"
+            disabled={marking}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -108,32 +125,39 @@ function NotificationRow({
 
 export default function SalesNotifications() {
   const [filter, setFilter] = useState<"all" | "unread">("all");
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const { data, isLoading, isError, refetch } = useSalesNotifications({
+    unreadOnly: filter === "unread",
+    limit: 100,
+  });
+  const markRead = useMarkSalesNotificationRead();
+  const markAllRead = useMarkAllSalesNotificationsRead();
 
-  const filtered = useMemo(
-    () =>
-      filter === "unread" ? notifications.filter((n) => !n.isRead) : notifications,
-    [filter, notifications],
+  const notifications = data?.notifications ?? [];
+
+  const stats = useMemo(
+    () => ({
+      total: data?.total ?? notifications.length,
+      unread: data?.unreadCount ?? notifications.filter((n) => !n.isRead).length,
+      read: (data?.total ?? notifications.length) - (data?.unreadCount ?? 0),
+    }),
+    [data, notifications],
   );
 
-  const stats = useMemo(() => {
-    const unread = notifications.filter((n) => !n.isRead).length;
-    return {
-      total: notifications.length,
-      unread,
-      read: notifications.length - unread,
-    };
-  }, [notifications]);
-
-  const markRead = (id: number) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)),
-    );
+  const handleMarkRead = async (id: number) => {
+    try {
+      await markRead.mutateAsync(id);
+    } catch (err) {
+      toastApiError(err, "Failed to mark as read");
+    }
   };
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    toast.success("All marked as read (demo)");
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllRead.mutateAsync();
+      toast.success("All marked as read");
+    } catch (err) {
+      toastApiError(err, "Failed to mark all as read");
+    }
   };
 
   return (
@@ -147,8 +171,18 @@ export default function SalesNotifications() {
         ]}
         actions={
           stats.unread > 0 ? (
-            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={markAllRead}>
-              <CheckCheck className="h-3.5 w-3.5" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={markAllRead.isPending}
+              onClick={() => void handleMarkAllRead()}
+            >
+              {markAllRead.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCheck className="h-3.5 w-3.5" />
+              )}
               Mark all read
             </Button>
           ) : undefined
@@ -167,35 +201,49 @@ export default function SalesNotifications() {
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "unread")}>
         <TabsList className="h-8">
-          <TabsTrigger value="all" className="text-xs">
-            All
-          </TabsTrigger>
+          <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
           <TabsTrigger value="unread" className="text-xs">
             Unread {stats.unread > 0 && `(${stats.unread})`}
           </TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState
+          icon={Bell}
+          title="Failed to load notifications"
+          description="Could not fetch sales alerts."
+          actionLabel="Retry"
+          onAction={() => refetch()}
+        />
+      ) : notifications.length === 0 ? (
         <SalesEmptyState
           icon={Bell}
           title={filter === "unread" ? "All caught up" : "No notifications"}
           description={
             filter === "unread"
               ? "You have no unread sales notifications."
-              : "Notifications will appear here."
+              : "Alerts for overdue follow-ups, invoices, and payments appear here."
           }
         />
       ) : (
         <div className="space-y-2">
-          {filtered.map((n, i) => (
+          {notifications.map((n, i) => (
             <motion.div
               key={n.id}
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
             >
-              <NotificationRow n={n} onMarkRead={markRead} />
+              <NotificationRow
+                n={n}
+                onMarkRead={(id) => void handleMarkRead(id)}
+                marking={markRead.isPending}
+              />
             </motion.div>
           ))}
         </div>

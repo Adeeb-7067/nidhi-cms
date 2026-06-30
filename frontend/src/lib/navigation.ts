@@ -62,6 +62,7 @@ import {
   HRM_EMPLOYEE_ROLES,
   MONITORABLE_STAFF_ROLES,
   INTERNAL_STAFF_ROLES,
+  SALES_STAFF_ROLES,
   isDevPortalRole,
   isDeveloperRole,
   isQaStaffRole,
@@ -205,8 +206,8 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Products", href: "/sales/products", icon: Package, roles: [...INTERNAL_STAFF_ROLES], group: "Catalog" },
         { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: [...INTERNAL_STAFF_ROLES], group: "Insights" },
         { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: [...INTERNAL_STAFF_ROLES], group: "Insights" },
-        { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin"], group: "Team" },
-        { title: "Automation", href: "/sales/settings", icon: Settings, roles: ["super_admin"], group: "Team" },
+        { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: [...SALES_STAFF_ROLES, "hr"], group: "Team" },
+        { title: "Automation", href: "/sales/settings", icon: Settings, roles: [...HRM_ADMIN_ROLES], group: "Team" },
       ],
     },
 

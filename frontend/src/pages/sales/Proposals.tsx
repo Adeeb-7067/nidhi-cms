@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { Plus, FileText, Send, Pencil, Trash2 } from "lucide-react";
+import { Plus, FileText, Send, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import {
   useListProposals,
   useSendProposal,
   useDeleteProposal,
+  useSalesDashboard,
   type ProposalStatus,
   type Proposal,
 } from "@/api/sales";
@@ -32,6 +33,8 @@ import {
   SalesEmptyState,
 } from "@/modules/sales/components";
 import { resolveProposalTotal } from "@/modules/sales/utils";
+
+const PAGE_SIZE = 20;
 
 const STATUS_ORDER: (ProposalStatus | "all")[] = [
   "all",
@@ -49,35 +52,37 @@ export default function Proposals() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
 
-  const { data, isLoading, isError, refetch } = useListProposals();
+  useEffect(() => { setPage(1); }, [search, statusTab]);
+
+  const listParams = {
+    search: search || undefined,
+    status: statusTab === "all" ? undefined : (statusTab as ProposalStatus),
+    page,
+    limit: PAGE_SIZE,
+  };
+
+  const { data, isLoading, isError, refetch } = useListProposals(listParams);
+  const { data: dashData } = useSalesDashboard();
   const sendProposal = useSendProposal();
   const deleteProposal = useDeleteProposal();
 
-  const allProposals = data?.proposals ?? [];
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return allProposals.filter((p) => {
-      const matchesSearch =
-        !q ||
-        p.title.toLowerCase().includes(q) ||
-        p.number.toLowerCase().includes(q);
-      const matchesStatus = statusTab === "all" || p.status === statusTab;
-      return matchesSearch && matchesStatus;
-    });
-  }, [allProposals, search, statusTab]);
+  const proposals = data?.proposals ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allProposals.length };
+    const pbs = dashData?.proposalByStatus ?? {};
+    const counts: Record<string, number> = { all: dashData?.totalProposals ?? total };
     for (const s of STATUS_ORDER) {
       if (s === "all") continue;
-      counts[s] = allProposals.filter((p) => p.status === s).length;
+      counts[s] = pbs[s] ?? 0;
     }
     return counts;
-  }, [allProposals]);
+  }, [dashData, total]);
 
   const handleSend = async (p: Proposal) => {
     setSendingId(p.id);
@@ -106,7 +111,7 @@ export default function Proposals() {
     }
   };
 
-  const deletingProposal = deletingId !== null ? allProposals.find((p) => p.id === deletingId) : null;
+  const deletingProposal = deletingId !== null ? proposals.find((p) => p.id === deletingId) : null;
 
   return (
     <PortalPageShell>
@@ -191,7 +196,7 @@ export default function Proposals() {
           actionLabel="Retry"
           onAction={() => refetch()}
         />
-      ) : filtered.length === 0 ? (
+      ) : total === 0 ? (
         <SalesEmptyState
           icon={FileText}
           title="No proposals found"
@@ -217,7 +222,7 @@ export default function Proposals() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((p) => {
+                {proposals.map((p) => {
                   const total = resolveProposalTotal(p).finalTotal;
                   const forLabel = p.leadId
                     ? `Lead #${p.leadId}`
@@ -303,6 +308,21 @@ export default function Proposals() {
               </TableBody>
             </Table>
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {totalPages} · {total} proposal{total === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </PortalPageShell>

@@ -6,7 +6,7 @@ import { apiUrl } from "@/lib/api-base";
 
 export type LeadStatus =
   | "new" | "contacted" | "follow_up" | "interested"
-  | "proposal_sent" | "approved" | "converted" | "lost";
+  | "project_planning" | "proposal_sent" | "approved" | "converted" | "lost";
 export type LeadPriority = "low" | "medium" | "high" | "urgent";
 export type ProposalStatus =
   | "draft" | "sent" | "seen" | "approved"
@@ -52,6 +52,7 @@ export interface Lead {
   description: string | null;
   reminder: { date: string; note: string } | null;
   tags: string[];
+  projectPlanningDoc: string | null;
   customerId: number | null;
   clientId: number | null;
   proposalId: number | null;
@@ -262,6 +263,33 @@ export interface SalesDashboard {
   outstanding: number;
   pendingInvoices: number;
   invoiceByStatus: Record<string, { count: number; amount: number }>;
+  proposalByStatus?: Record<string, number>;
+  leadsBySource?: { source: string; count: number }[];
+}
+
+export interface SalesAppSettings {
+  proposalPrefix: string;
+  proposalNextNumber: number;
+  defaultTax: number;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+  reminderHours: number;
+  overdueAlerts: boolean;
+  updatedAt: string | null;
+}
+
+export interface SalesAlertNotification {
+  id: number;
+  type: string;
+  title: string;
+  body: string;
+  entityType: string | null;
+  entityId: number | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+  priority: "low" | "medium" | "high";
+  href: string;
 }
 
 // ─── Query Keys ───────────────────────────────────────────────────────────
@@ -287,6 +315,8 @@ export const salesKeys = {
   pipeline: () => ["sales-pipeline"] as const,
   revenueTrend: (period?: string) => ["sales-revenue-trend", period] as const,
   reports: () => ["sales-reports"] as const,
+  settings: () => ["sales-settings"] as const,
+  notifications: (params?: object) => ["sales-notifications", params] as const,
   team: (params?: object) => ["sales-team", params] as const,
   teamMember: (id?: number | null) => ["sales-team-member", id] as const,
 };
@@ -313,6 +343,9 @@ export function useAddSalesConfig() {
   });
 }
 
+/** @alias useAddSalesConfig */
+export const useCreateSalesConfig = useAddSalesConfig;
+
 export function useDeleteSalesConfig() {
   const qc = useQueryClient();
   return useMutation({
@@ -321,6 +354,62 @@ export function useDeleteSalesConfig() {
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: salesKeys.config((data as { type: string }).type) });
     },
+  });
+}
+
+export function useSalesSettings(enabled = true) {
+  return useQuery<SalesAppSettings>({
+    queryKey: salesKeys.settings(),
+    queryFn: () => customFetch(apiUrl("/api/sales/settings")),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpdateSalesSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<SalesAppSettings>) =>
+      customFetch<SalesAppSettings>(apiUrl("/api/sales/settings"), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: salesKeys.settings() }),
+  });
+}
+
+export function useSalesNotifications(params?: { unreadOnly?: boolean; page?: number; limit?: number }, enabled = true) {
+  const qs = new URLSearchParams(
+    Object.entries(params ?? {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return useQuery<{
+    notifications: SalesAlertNotification[];
+    unreadCount: number;
+    total: number;
+    page: number;
+    limit: number;
+  }>({
+    queryKey: salesKeys.notifications(params),
+    queryFn: () => customFetch(apiUrl(`/api/sales/notifications${qs ? `?${qs}` : ""}`)),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useMarkSalesNotificationRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/sales/notifications/${id}/read`), { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-notifications"] }),
+  });
+}
+
+export function useMarkAllSalesNotificationsRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => customFetch(apiUrl("/api/sales/notifications/mark-all-read"), { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-notifications"] }),
   });
 }
 
@@ -363,6 +452,18 @@ export function useCreateLead() {
   return useMutation({
     mutationFn: (body: Partial<Lead> & { name: string }) =>
       customFetch<Lead>(apiUrl("/api/sales/leads"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-leads"] }),
+  });
+}
+
+export function useImportLeads() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (leads: Partial<Lead>[]) =>
+      customFetch<{ created: number; errors: { row: number; message: string }[]; leads: Lead[] }>(
+        apiUrl("/api/sales/leads/import"),
+        { method: "POST", body: JSON.stringify({ leads }) },
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-leads"] }),
   });
 }
@@ -456,7 +557,7 @@ export function useSetLeadReminder() {
 // ─── Follow-ups ───────────────────────────────────────────────────────────
 
 export function useListFollowUps(
-  params?: { leadId?: number; status?: FollowUpStatus; executiveId?: number },
+  params?: { leadId?: number; status?: FollowUpStatus; executiveId?: number; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -513,7 +614,7 @@ export function useCompleteFollowUp() {
 // ─── Proposals ────────────────────────────────────────────────────────────
 
 export function useListProposals(
-  params?: { status?: ProposalStatus; assignedTo?: number; leadId?: number; customerId?: number },
+  params?: { status?: ProposalStatus; assignedTo?: number; leadId?: number; customerId?: number; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -814,7 +915,7 @@ export function useRemindCustomer() {
 // ─── Installments ─────────────────────────────────────────────────────────
 
 export function useListInstallments(
-  params?: { customerId?: number; projectId?: number; status?: InstallmentStatus },
+  params?: { customerId?: number; projectId?: number; status?: InstallmentStatus; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -876,7 +977,7 @@ export function useUpdateInstallment() {
 // ─── Invoices ─────────────────────────────────────────────────────────────
 
 export function useListInvoices(
-  params?: { status?: InvoiceStatus; customerId?: number; projectId?: number; page?: number },
+  params?: { status?: InvoiceStatus; customerId?: number; projectId?: number; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -975,7 +1076,7 @@ export function useCreateInvoiceFromProposal() {
 // ─── Payments ─────────────────────────────────────────────────────────────
 
 export function useListPayments(
-  params?: { invoiceId?: number; customerId?: number; page?: number },
+  params?: { invoiceId?: number; customerId?: number; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(

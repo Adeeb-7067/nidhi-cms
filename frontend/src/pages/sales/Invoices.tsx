@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, Receipt, FileDown } from "lucide-react";
+import { Plus, Receipt, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
@@ -16,6 +16,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useListInvoices, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -25,39 +26,50 @@ import {
   InvoiceFromProposalDialog,
 } from "@/modules/sales/components";
 
+const PAGE_SIZE = 20;
+
 type InvoiceStatus = "paid" | "unpaid" | "partial" | "overdue";
 
 const STATUS_TABS: (InvoiceStatus | "all")[] = ["all", "unpaid", "partial", "paid", "overdue"];
 
 export default function Invoices() {
+  const initialStatus = readSearchParam("status");
   const [search, setSearch] = useState("");
-  const [statusTab, setStatusTab] = useState<string>("all");
+  const [statusTab, setStatusTab] = useState<string>(
+    initialStatus && STATUS_TABS.includes(initialStatus as InvoiceStatus | "all") ? initialStatus : "all",
+  );
+  const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [fromProposalOpen, setFromProposalOpen] = useState(false);
 
-  const { data: invData, isLoading, isError, refetch } = useListInvoices();
-  const { data: dashData } = useSalesDashboard();
-  const allInvoices = invData?.invoices ?? [];
+  useEffect(() => { setPage(1); }, [search, statusTab]);
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return allInvoices.filter((inv) => {
-      const matchesSearch = !q || inv.number.toLowerCase().includes(q);
-      const matchesStatus = statusTab === "all" || inv.status === statusTab;
-      return matchesSearch && matchesStatus;
-    });
-  }, [allInvoices, search, statusTab]);
+  const listParams = {
+    search: search || undefined,
+    status: statusTab === "all" ? undefined : (statusTab as InvoiceStatus),
+    page,
+    limit: PAGE_SIZE,
+  };
+
+  const { data: invData, isLoading, isError, refetch } = useListInvoices(listParams);
+  const { data: dashData } = useSalesDashboard();
+  const invoices = invData?.invoices ?? [];
+  const total = invData?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const statusCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: allInvoices.length };
+    const ibs = dashData?.invoiceByStatus ?? {};
+    const counts: Record<string, number> = {
+      all: Object.values(ibs).reduce((sum, v) => sum + (v.count ?? 0), 0),
+    };
     for (const s of STATUS_TABS) {
       if (s === "all") continue;
-      counts[s] = allInvoices.filter((i) => i.status === s).length;
+      counts[s] = ibs[s]?.count ?? 0;
     }
     return counts;
-  }, [allInvoices]);
+  }, [dashData]);
 
-  const totalDue = allInvoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+  const totalDue = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
   const paidCount = dashData?.invoiceByStatus?.paid?.count ?? statusCounts.paid ?? 0;
   const unpaidCount = dashData?.invoiceByStatus?.unpaid?.count ?? statusCounts.unpaid ?? 0;
 
@@ -91,7 +103,7 @@ export default function Invoices() {
 
       <PortalKpiGrid
         items={[
-          { title: "Total invoices", value: dashData?.pendingInvoices != null ? allInvoices.length : "—", icon: Receipt, accent: "blue", delay: 0 },
+          { title: "Total invoices", value: statusCounts.all || total, icon: Receipt, accent: "blue", delay: 0 },
           { title: "Paid", value: paidCount, icon: Receipt, accent: "green", delay: 1 },
           { title: "Unpaid", value: unpaidCount, icon: Receipt, accent: "amber", delay: 2 },
           { title: "Outstanding", value: formatCurrency(dashData?.outstanding ?? totalDue), icon: Receipt, accent: "red", alert: true, delay: 3 },
@@ -116,7 +128,7 @@ export default function Invoices() {
         </div>
       ) : isError ? (
         <SalesEmptyState icon={Receipt} title="Failed to load invoices" description="Could not fetch invoices." actionLabel="Retry" onAction={() => refetch()} />
-      ) : filtered.length === 0 ? (
+      ) : total === 0 ? (
         <SalesEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="New invoice" onAction={() => setCreateOpen(true)} />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -135,7 +147,7 @@ export default function Invoices() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((inv) => (
+              {invoices.map((inv) => (
                 <TableRow key={inv.id} className="hover:bg-muted/30">
                   <TableCell className="text-xs font-mono">
                     <Link href={`/sales/invoices/${inv.id}`} className="hover:text-primary">{inv.number}</Link>
@@ -162,6 +174,21 @@ export default function Invoices() {
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
+              <span className="text-xs text-muted-foreground">
+                Page {page} of {totalPages} · {total} invoice{total === 1 ? "" : "s"}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

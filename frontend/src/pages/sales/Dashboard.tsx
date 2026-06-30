@@ -30,8 +30,8 @@ import {
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useSalesDashboard, useSalesPipeline, useSalesRevenueTrend, useListFollowUps } from "@/api/sales";
-import { formatCompactCurrency, formatCurrency } from "@/modules/sales/constants";
+import { useSalesDashboard, useSalesRevenueTrend, useListFollowUps, useSalesTeam } from "@/api/sales";
+import { formatCompactCurrency, formatCurrency, formatLeadSourceLabel } from "@/modules/sales/constants";
 import {
   SalesFilterBar,
   SalesPipelineFlow,
@@ -40,6 +40,7 @@ import {
   SalesDualLineChart,
   SalesStatusBadge,
   SalesEmptyState,
+  ExecutiveAvatar,
 } from "@/modules/sales/components";
 import { toast } from "sonner";
 
@@ -57,9 +58,9 @@ export default function SalesDashboard() {
   const [trendPeriod, setTrendPeriod] = useState<"week" | "month" | "year">("month");
 
   const { data: dash, isLoading: dashLoading } = useSalesDashboard();
-  const { data: pipelineData } = useSalesPipeline();
   const { data: trendData, isLoading: trendLoading } = useSalesRevenueTrend(trendPeriod);
-  const { data: fuData, isLoading: fuLoading } = useListFollowUps();
+  const { data: fuData, isLoading: fuLoading } = useListFollowUps({ limit: 50 });
+  const { data: teamData } = useSalesTeam({ limit: 8 });
 
   const leadCount =
     leadPeriod === "today"
@@ -84,6 +85,32 @@ export default function SalesDashboard() {
     value: v.amount,
   }));
 
+  const leadsSourceData = (dash?.leadsBySource ?? []).map((row) => ({
+    name: formatLeadSourceLabel(row.source),
+    count: row.count,
+    value: row.count,
+  }));
+
+  const exportDashboardCsv = () => {
+    if (!dash) { toast.error("Dashboard data not loaded yet"); return; }
+    const rows = [
+      ["Metric", "Value"],
+      ["Revenue (month)", dash.totalRevenue ?? 0],
+      ["Outstanding", dash.outstanding ?? 0],
+      ["Leads today", dash.leads?.today ?? 0],
+      ["Leads this week", dash.leads?.thisWeek ?? 0],
+      ["Leads this month", dash.leads?.thisMonth ?? 0],
+      ["Total proposals", dash.totalProposals ?? 0],
+      ["Pending invoices", dash.pendingInvoices ?? 0],
+    ];
+    const csv = rows.map((r) => r.join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `sales-summary-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -95,14 +122,14 @@ export default function SalesDashboard() {
             size="sm"
             variant="outline"
             className="h-8"
-            onClick={() => toast.success("Summary report export started (demo)")}
+            onClick={exportDashboardCsv}
           >
             Export summary
           </Button>
         }
       />
 
-      <SalesFilterBar onExport={() => toast.success("Export started (demo)")} />
+      <SalesFilterBar onExport={exportDashboardCsv} />
 
       <motion.div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -161,8 +188,12 @@ export default function SalesDashboard() {
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <ChartGridCell colSpan={4}>
-          <ChartPanel title="Leads by source" description="Source breakdown not available yet" icon={Target} accent="blue" viewAllHref="/sales/leads">
-            <NoDataPlaceholder label="Lead source data not in API — add aggregation endpoint" />
+          <ChartPanel title="Leads by source" description={`${dash?.leads?.total ?? 0} total leads`} icon={Target} accent="blue" viewAllHref="/sales/leads">
+            {leadsSourceData.length > 0 ? (
+              <SalesDonutPanel data={leadsSourceData} />
+            ) : (
+              <NoDataPlaceholder label="No lead source data yet" />
+            )}
           </ChartPanel>
         </ChartGridCell>
         <ChartGridCell colSpan={4}>
@@ -211,8 +242,8 @@ export default function SalesDashboard() {
         <ChartGridCell colSpan={4}>
           <ChartPanel title="Proposal outcomes" description="Accept / decline rates" icon={FileText} accent="amber">
             {dash ? (() => {
-              const approved = dash.invoiceByStatus?.approved?.count ?? 0;
-              const declined = dash.invoiceByStatus?.declined?.count ?? 0;
+              const approved = dash.proposalByStatus?.approved ?? 0;
+              const declined = dash.proposalByStatus?.declined ?? 0;
               const total = approved + declined;
               const acceptRate = total ? Math.round((approved / total) * 100) : 0;
               const rejectRate = total ? 100 - acceptRate : 0;
@@ -241,8 +272,39 @@ export default function SalesDashboard() {
         </ChartGridCell>
 
         <ChartGridCell colSpan={8}>
-          <ChartPanel title="Top performing executives" description="Breakdown not available via API yet" icon={Users} accent="blue" viewAllHref="/sales/team">
-            <NoDataPlaceholder label="Executive leaderboard requires user-aggregation endpoint" />
+          <ChartPanel title="Top performing executives" description="Ranked by revenue generated" icon={Users} accent="blue" viewAllHref="/sales/team">
+            {(() => {
+              const members = [...(teamData?.team ?? [])].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
+              if (!members.length) return <NoDataPlaceholder label="No team members found" />;
+              return (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="text-xs w-8">#</TableHead>
+                      <TableHead className="text-xs">Executive</TableHead>
+                      <TableHead className="text-xs text-right">Revenue</TableHead>
+                      <TableHead className="text-xs text-right">Deals</TableHead>
+                      <TableHead className="text-xs text-right">Follow-ups</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {members.map((m, i) => (
+                      <TableRow key={m.id}>
+                        <TableCell className="text-xs font-bold text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell>
+                          <Link href={`/sales/team/${m.id}/profile`}>
+                            <ExecutiveAvatar name={m.name} />
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(m.revenue)}</TableCell>
+                        <TableCell className="text-xs text-right">{m.dealsClosed}</TableCell>
+                        <TableCell className="text-xs text-right text-amber-600">{m.pendingFollowUps}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              );
+            })()}
           </ChartPanel>
         </ChartGridCell>
       </div>

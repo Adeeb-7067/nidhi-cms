@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useRoute } from "wouter";
 import { format } from "date-fns";
 import SignaturePad from "signature_pad";
+import { toast } from "sonner";
 import {
-  CheckCircle2, Clock, FileText, AlertCircle, XCircle,
-  MessageSquare, Send, Building2, User, Phone, Mail, MapPin,
-  ThumbsUp, ThumbsDown, ChevronRight, RotateCcw, PenLine,
+  CheckCircle2, Clock, AlertCircle, XCircle,
+  MessageSquare, Send, Phone, Mail,
+  ThumbsDown, ChevronRight, RotateCcw, PenLine, Download, Loader2,
 } from "lucide-react";
 import {
   useGetPublicProposal,
@@ -15,8 +16,10 @@ import {
   usePublicProposalComments,
   useAddPublicComment,
 } from "@/api/sales";
-import { resolveProposalTotal, numberToWords } from "@/modules/sales/utils";
+import { resolveProposalTotal } from "@/modules/sales/utils";
 import { formatCurrency, COMPANY_BILLING } from "@/modules/sales/constants";
+import { ProposalDocument } from "@/modules/sales/components/ProposalDocument";
+import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 
 /* ─── Design tokens ────────────────────────────────────────────────────────── */
 // SK Logo palette: deep royal blue + warm orange + deep green
@@ -504,6 +507,9 @@ export default function PublicProposalView() {
   const [actionState, setActionState] = useState<ActionState>("idle");
   const [doneEvent, setDoneEvent] = useState<"approved" | "declined" | "counter_offer" | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>("summary");
+  const [downloading, setDownloading] = useState(false);
+  const docRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<HTMLDivElement>(null);
 
   const handleApprove = async (note: string, signature: string) => {
     try {
@@ -520,6 +526,21 @@ export default function PublicProposalView() {
   const handleCounter = async (note: string) => {
     try { await counter.mutateAsync({ note }); setDoneEvent("counter_offer"); setActionState("done"); refetch(); }
     catch { setActionState("idle"); }
+  };
+
+  const handleDownloadPdf = async () => {
+    const target = pdfRef.current ?? docRef.current;
+    if (!target || !proposal) return;
+    setDownloading(true);
+    try {
+      await downloadElementAsPdf(target, proposal.number, { singlePage: true });
+      toast.success("Proposal PDF downloaded");
+    } catch (err) {
+      console.error("Proposal PDF export failed:", err);
+      toast.error("Failed to generate proposal PDF");
+    } finally {
+      setDownloading(false);
+    }
   };
 
   /* Loading */
@@ -556,7 +577,7 @@ export default function PublicProposalView() {
   }
 
   /* Derived */
-  const { subtotal, tax, calculated, finalTotal, adjustmentDelta } = resolveProposalTotal(proposal);
+  const { subtotal, tax, finalTotal } = resolveProposalTotal(proposal);
   const isPastValidity = !!(proposal.validUntil && new Date(proposal.validUntil) < new Date());
   const canAct = ["sent", "seen"].includes(proposal.status);
   const currentStatus: "approved" | "declined" | "counter_offer" | null =
@@ -604,13 +625,29 @@ export default function PublicProposalView() {
               <p className="text-xs mt-0.5" style={{ color: subtle }}>{COMPANY_BILLING.email}</p>
             </div>
           </div>
-          {/* Status chip */}
-          <div
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold"
-            style={{ background: sCfg.chip, color: sCfg.text }}
-          >
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: sCfg.dot }} />
-            {sCfg.label}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={downloading}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors hover:opacity-80 disabled:opacity-50"
+              style={{ background: "#F1F5F9", color: muted, border: `1px solid ${border}` }}
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download PDF
+            </button>
+            {/* Status chip */}
+            <div
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold"
+              style={{ background: sCfg.chip, color: sCfg.text }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: sCfg.dot }} />
+              {sCfg.label}
+            </div>
           </div>
         </div>
 
@@ -620,316 +657,21 @@ export default function PublicProposalView() {
           {/* ════════════════════════════════════════════════════════════════
               LEFT – Document
           ════════════════════════════════════════════════════════════════ */}
-          <div className="flex-1 min-w-0 space-y-0 rounded-2xl overflow-hidden shadow-sm" style={{ background: "#fff", border: `1px solid ${border}` }}>
-
-            {/* Letterhead */}
-            <div className="flex items-start justify-between gap-6 px-8 py-7" style={{ borderBottom: `3px solid ${primary}` }}>
-              {/* Company identity */}
-              <div className="flex items-start gap-4 min-w-0">
-                {company?.logoUrl
-                  ? <img src={company.logoUrl} alt="logo" className="h-14 object-contain flex-shrink-0" />
-                  : (
-                    <div
-                      className="h-14 w-14 rounded-xl flex-shrink-0 flex items-center justify-center text-white font-black text-xl"
-                      style={{ background: primary }}
-                    >
-                      SK
-                    </div>
-                  )
-                }
-                <div className="min-w-0">
-                  <h2 className="font-extrabold text-lg leading-tight truncate" style={{ color: dark }}>{companyName}</h2>
-                  <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>
-                    {company?.address ?? COMPANY_BILLING.address}
-                  </p>
-                  <div className="flex flex-wrap gap-3 mt-1.5">
-                    <span className="text-xs" style={{ color: muted }}>{COMPANY_BILLING.phone}</span>
-                    <span className="text-xs" style={{ color: muted }}>{COMPANY_BILLING.email}</span>
-                    <span className="text-xs font-mono" style={{ color: subtle }}>GSTIN: {COMPANY_BILLING.gstin}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Proposal label */}
-              <div className="flex-shrink-0 text-right">
-                <p
-                  className="text-3xl font-black uppercase tracking-wide"
-                  style={{ color: primary, letterSpacing: "0.05em" }}
-                >
-                  Proposal
-                </p>
-                <p className="text-sm font-mono font-semibold mt-1" style={{ color: muted }}>{proposal.number}</p>
-                {proposal.revision > 1 && (
-                  <span
-                    className="inline-block mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `${primary}15`, color: primary }}
-                  >
-                    Revision {proposal.revision}
-                  </span>
-                )}
-              </div>
+          <div className="flex-1 min-w-0 space-y-5">
+            <div ref={docRef}>
+              <ProposalDocument
+                proposal={proposal}
+                currentStatus={currentStatus}
+                statusChip={sCfg}
+              />
             </div>
 
-            {/* Proposal title */}
-            <div className="px-8 py-4" style={{ borderBottom: `1px solid ${border}`, background: `${primary}08` }}>
-              <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: primary }}>Subject</p>
-              <h1 className="text-base font-bold" style={{ color: dark }}>{proposal.title}</h1>
-            </div>
-
-            {/* Bill To / Proposal Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2" style={{ borderBottom: `1px solid ${border}` }}>
-              {/* Bill To */}
-              <div className="px-8 py-6" style={{ borderRight: `1px solid ${border}` }}>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: primary }}>
-                  Prepared For
-                </p>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-8 w-8 rounded-lg flex items-center justify-center font-bold text-sm flex-shrink-0" style={{ background: `${primary}15`, color: primary }}>
-                      {clientName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold leading-tight" style={{ color: dark }}>{clientName}</p>
-                      {clientCompany && <p className="text-xs" style={{ color: muted }}>{clientCompany}</p>}
-                    </div>
-                  </div>
-                  {clientEmail && (
-                    <div className="flex items-center gap-2 pl-0.5">
-                      <Mail className="h-3.5 w-3.5 flex-shrink-0" style={{ color: subtle }} />
-                      <span className="text-xs" style={{ color: muted }}>{clientEmail}</span>
-                    </div>
-                  )}
-                  {clientPhone && (
-                    <div className="flex items-center gap-2 pl-0.5">
-                      <Phone className="h-3.5 w-3.5 flex-shrink-0" style={{ color: subtle }} />
-                      <span className="text-xs" style={{ color: muted }}>{clientPhone}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Meta */}
-              <div className="px-8 py-6">
-                <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: primary }}>
-                  Proposal Details
-                </p>
-                <div className="space-y-2.5">
-                  <MetaRow label="Proposal No." value={proposal.number} mono />
-                  {proposal.sentAt && <MetaRow label="Date Issued" value={format(new Date(proposal.sentAt), "dd MMM yyyy")} />}
-                  {proposal.validUntil && (
-                    <MetaRow
-                      label="Valid Until"
-                      value={format(new Date(proposal.validUntil), "dd MMM yyyy")}
-                      valueStyle={{ color: isPastValidity ? orange : dark, fontWeight: 600 }}
-                      suffix={isPastValidity ? " (Expired)" : undefined}
-                    />
-                  )}
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs" style={{ color: subtle }}>Status</span>
-                    <span
-                      className="text-[11px] font-semibold px-2.5 py-1 rounded-full"
-                      style={{ background: sCfg.chip, color: sCfg.text }}
-                    >
-                      {sCfg.label}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Items Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr style={{ background: dark }}>
-                    <th className="text-center py-3.5 px-5 text-[10px] font-black uppercase tracking-widest w-14" style={{ color: "#6B7280" }}>#</th>
-                    <th className="text-left py-3.5 px-4 text-[10px] font-black uppercase tracking-widest" style={{ color: "#fff" }}>Item</th>
-                    <th className="text-right py-3.5 px-4 text-[10px] font-black uppercase tracking-widest" style={{ color: "#6B7280" }}>Qty</th>
-                    <th className="text-right py-3.5 px-4 text-[10px] font-black uppercase tracking-widest" style={{ color: "#6B7280" }}>Rate</th>
-                    <th className="text-right py-3.5 px-4 text-[10px] font-black uppercase tracking-widest" style={{ color: "#6B7280" }}>Tax</th>
-                    <th className="text-right py-3.5 px-6 text-[10px] font-black uppercase tracking-widest" style={{ color: "#fff" }}>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {proposal.items.map((item, idx) => {
-                    const line    = item.quantity * item.unitPrice;
-                    const lineTax = line * (item.taxPercent / 100);
-                    const isEven  = idx % 2 === 0;
-                    return (
-                      <tr
-                        key={item.itemId ?? idx}
-                        style={{
-                          background: isEven ? "#fff" : "#F5F8FF",
-                          borderBottom: `1px solid ${border}`,
-                        }}
-                      >
-                        <td className="text-center py-4 px-5 text-xs font-bold tabular-nums align-top pt-5" style={{ color: primary }}>
-                          {idx + 1}
-                        </td>
-                        <td className="py-4 px-4">
-                          <p className="font-semibold text-sm" style={{ color: dark }}>
-                            {item.name || <span style={{ color: subtle, fontWeight: 400 }}>—</span>}
-                          </p>
-                          {item.description && (
-                            <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>
-                              {item.description}
-                            </p>
-                          )}
-                        </td>
-                        <td className="py-4 px-4 text-right tabular-nums align-top pt-5" style={{ color: muted }}>
-                          {item.quantity}
-                        </td>
-                        <td className="py-4 px-4 text-right tabular-nums align-top pt-5" style={{ color: muted }}>
-                          {formatCurrency(item.unitPrice)}
-                        </td>
-                        <td className="py-4 px-4 text-right text-xs align-top pt-5" style={{ color: subtle }}>
-                          {item.taxPercent > 0 ? `GST ${item.taxPercent}%` : "—"}
-                        </td>
-                        <td className="py-4 px-6 text-right font-bold tabular-nums align-top pt-5" style={{ color: dark }}>
-                          {formatCurrency(line + lineTax)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Totals */}
-            <div className="px-8 py-6 flex justify-end" style={{ borderTop: `1px solid ${border}` }}>
-              <div className="w-full max-w-xs">
-                <div className="space-y-2.5 pb-4" style={{ borderBottom: `1px solid ${border}` }}>
-                  <TotRow label="Subtotal" val={formatCurrency(subtotal)} />
-                  <TotRow label="Tax (GST)" val={formatCurrency(tax)} />
-                  {proposal.discount > 0 && (
-                    <TotRow
-                      label={`Discount (${proposal.discount}%)`}
-                      val={`− ${formatCurrency(calculated - (subtotal + tax))}`}
-                      valColor={orange}
-                    />
-                  )}
-                  {adjustmentDelta !== 0 && (
-                    <TotRow
-                      label="Amount Adjustment"
-                      val={`${adjustmentDelta > 0 ? "+ " : "− "}${formatCurrency(Math.abs(adjustmentDelta))}`}
-                      valColor={primary}
-                    />
-                  )}
-                </div>
-
-                {/* Grand total */}
-                <div
-                  className="flex items-center justify-between mt-4 px-5 py-4 rounded-xl"
-                  style={{ background: dark }}
-                >
-                  <span className="text-sm font-semibold" style={{ color: "#9CA3AF" }}>Total Amount</span>
-                  <span className="text-xl font-black tabular-nums" style={{ color: orange }}>
-                    {formatCurrency(finalTotal)}
-                  </span>
-                </div>
-
-                {/* In words */}
-                <div
-                  className="mt-3 px-4 py-3 rounded-xl"
-                  style={{ background: `${primary}08`, border: `1px solid ${primary}20` }}
-                >
-                  <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>Amount in Words</p>
-                  <p className="text-xs italic mt-1 leading-relaxed" style={{ color: dark }}>
-                    {numberToWords(finalTotal)}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Note + Terms */}
-            {(proposal.clientNote || proposal.terms) && (
-              <div
-                className="px-8 py-6 space-y-5"
-                style={{ borderTop: `1px solid ${border}` }}
-              >
-                {proposal.clientNote && (
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: primary }}>Note</p>
-                    <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: dark }}>{proposal.clientNote}</p>
-                  </div>
-                )}
-                {proposal.terms && (
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: primary }}>Terms &amp; Conditions</p>
-                    <p className="text-sm leading-relaxed whitespace-pre-line" style={{ color: muted }}>{proposal.terms}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Seal + Signature */}
-            <div
-              className="flex items-end justify-between px-8 py-6"
-              style={{ borderTop: `1px dashed ${border}`, background: rowAlt }}
-            >
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>
-                  For {companyName}
-                </p>
-                <div
-                  className="h-px w-32 mb-2"
-                  style={{ background: muted }}
-                />
-                <p className="text-xs font-semibold" style={{ color: dark }}>Authorised Signatory</p>
-                {(company?.address ?? COMPANY_BILLING.address) && (
-                  <div className="flex items-center gap-1 mt-1">
-                    <MapPin className="h-3 w-3 flex-shrink-0" style={{ color: subtle }} />
-                    <p className="text-xs" style={{ color: muted }}>{company?.address ?? COMPANY_BILLING.address}</p>
-                  </div>
-                )}
-              </div>
-              {company?.sealUrl && (
-                <img src={company.sealUrl} alt="Official seal" className="h-20 w-20 object-contain" style={{ opacity: 0.9 }} />
-              )}
-            </div>
-
-            {/* Status banner */}
-            {currentStatus && (
-              <div
-                className="flex items-start gap-4 px-8 py-5"
-                style={{
-                  borderTop: `1px solid ${border}`,
-                  background: currentStatus === "approved" ? "#ECFDF5" : currentStatus === "declined" ? "#FEF2F2" : "#FFFBEB",
-                }}
-              >
-                {currentStatus === "approved" && (
-                  <>
-                    <CheckCircle2 className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: green }} />
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: green }}>Proposal Accepted</p>
-                      <p className="text-xs mt-0.5" style={{ color: green }}>Our team will reach out to you shortly. Thank you!</p>
-                    </div>
-                  </>
-                )}
-                {currentStatus === "declined" && (
-                  <>
-                    <XCircle className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: red }} />
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: red }}>Proposal Declined</p>
-                      <p className="text-xs mt-0.5" style={{ color: red }}>Thank you for letting us know. Feel free to reach out to explore alternatives.</p>
-                    </div>
-                  </>
-                )}
-                {currentStatus === "counter_offer" && (
-                  <>
-                    <MessageSquare className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: orange }} />
-                    <div>
-                      <p className="text-sm font-bold" style={{ color: orange }}>Counter Offer Received</p>
-                      <p className="text-xs mt-0.5" style={{ color: orange }}>We'll review your counter and respond within 24 hours.</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Action buttons */}
             {canAct && actionState === "idle" && (
-              <div className="px-8 py-6" style={{ borderTop: `1px solid ${border}` }}>
+              <div
+                data-pdf-hide
+                className="rounded-2xl overflow-hidden shadow-sm px-8 py-6"
+                style={{ background: "#fff", border: `1px solid ${border}` }}
+              >
                 {isPastValidity && (
                   <div
                     className="flex items-start gap-3 rounded-xl px-4 py-3 mb-5"
@@ -947,6 +689,7 @@ export default function PublicProposalView() {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
+                    type="button"
                     onClick={() => setActionState("approving")}
                     className="flex-1 h-12 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2.5 transition-all hover:opacity-90 hover:shadow-lg shadow-md"
                     style={{ background: green }}
@@ -955,6 +698,7 @@ export default function PublicProposalView() {
                     Accept Proposal
                   </button>
                   <button
+                    type="button"
                     onClick={() => setActionState("countering")}
                     className="flex-1 h-12 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2.5 transition-all hover:opacity-90 hover:shadow-md"
                     style={{ background: orange }}
@@ -963,6 +707,7 @@ export default function PublicProposalView() {
                     Counter Offer
                   </button>
                   <button
+                    type="button"
                     onClick={() => setActionState("declining")}
                     className="flex-1 h-12 rounded-xl text-sm font-bold flex items-center justify-center gap-2.5 transition-all hover:bg-red-50"
                     style={{ color: red, border: `1.5px solid ${red}` }}
@@ -1115,33 +860,20 @@ export default function PublicProposalView() {
           </p>
         </div>
       </div>
-    </div>
-  );
-}
 
-/* ─── Small helpers ─────────────────────────────────────────────────────────── */
-function MetaRow({ label, value, mono, valueStyle, suffix }: {
-  label: string; value: string; mono?: boolean;
-  valueStyle?: React.CSSProperties; suffix?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <span className="text-xs flex-shrink-0" style={{ color: subtle }}>{label}</span>
-      <span
-        className={`text-xs font-semibold text-right min-w-0 truncate ${mono ? "font-mono" : ""}`}
-        style={{ color: dark, ...valueStyle }}
+      <div
+        ref={pdfRef}
+        className="fixed top-0 w-[794px] pointer-events-none"
+        style={{ left: -10000 }}
+        aria-hidden
       >
-        {value}{suffix}
-      </span>
-    </div>
-  );
-}
-
-function TotRow({ label, val, valColor }: { label: string; val: string; valColor?: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm" style={{ color: muted }}>{label}</span>
-      <span className="text-sm font-semibold tabular-nums" style={{ color: valColor ?? dark }}>{val}</span>
+        <ProposalDocument
+          proposal={proposal}
+          currentStatus={currentStatus}
+          statusChip={sCfg}
+          compact
+        />
+      </div>
     </div>
   );
 }

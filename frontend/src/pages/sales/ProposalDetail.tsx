@@ -7,7 +7,7 @@ import {
   ArrowLeft, Copy, ExternalLink, FileText, Globe, History,
   Link2, Mail, Monitor, Send, CheckCircle2, XCircle, Clock,
   AlertTriangle, MessageSquare, User, Building2, Phone, AtSign,
-  RefreshCw, Eye, Shield, Pencil, Trash2, TrendingUp,
+  RefreshCw, Eye, Shield, Pencil, Download, Loader2, Trash2, TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,12 +18,15 @@ import {
   useGetProposal, useGetProposalLogs, useSendProposal,
   useApproveProposal, useDeclineProposal, useCounterProposal, useReviseProposal,
   useDeleteProposal, useProposalComments, useAddStaffComment,
-  type ProposalComment, type ProposalLog,
+  type ProposalComment, type ProposalLog, type PublicProposal,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import { resolveProposalTotal } from "@/modules/sales/utils";
+import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
+import { useGetSettings } from "@/api/generated/api";
+import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import {
-  SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState,
+  SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState, ProposalDocument,
 } from "@/modules/sales/components";
 
 /* ─── Design tokens (match public view palette) ───────────────────────────── */
@@ -130,9 +133,12 @@ export default function ProposalDetail() {
   const proposalId = Number(params?.id);
   const [showFullToken, setShowFullToken] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const pdfRef = useRef<HTMLDivElement>(null);
 
   const { data: proposal, isLoading, isError } = useGetProposal(proposalId, !!proposalId);
   const { data: logsData } = useGetProposalLogs(proposalId, !!proposalId);
+  const { data: orgSettings } = useGetSettings();
   const logs = logsData?.logs ?? [];
 
   const sendProposal    = useSendProposal();
@@ -216,6 +222,48 @@ export default function ProposalDetail() {
     }
   };
 
+  const statusConfig = {
+    sent: { label: "Awaiting Response", chip: `${P.blue}15`, text: P.blue, dot: P.blue },
+    seen: { label: "Awaiting Response", chip: `${P.blue}15`, text: P.blue, dot: P.blue },
+    approved: { label: "Accepted", chip: "#ECFDF5", text: P.green, dot: P.green },
+    declined: { label: "Declined", chip: "#FEF2F2", text: P.red, dot: P.red },
+    counter_offer: { label: "Counter Offer Sent", chip: "#FFFBEB", text: P.orange, dot: P.orange },
+    expired: { label: "Expired", chip: "#F9FAFB", text: P.muted, dot: P.subtle },
+    draft: { label: "Draft", chip: "#F9FAFB", text: P.muted, dot: P.subtle },
+    revised: { label: "Revised", chip: "#EEF2FF", text: "#4338CA", dot: "#4338CA" },
+  } as const;
+  const sCfg = statusConfig[proposal.status as keyof typeof statusConfig] ?? statusConfig.sent;
+  const pdfCurrentStatus = ["approved", "declined", "counter_offer"].includes(proposal.status)
+    ? (proposal.status as "approved" | "declined" | "counter_offer")
+    : null;
+  const orgBranding = resolveDocumentCompany(orgSettings);
+  const proposalForPdf = {
+    ...proposal,
+    companySettings: {
+      companyName: orgBranding.companyName,
+      logoUrl: orgBranding.logoUrl,
+      sealUrl: orgBranding.sealUrl,
+      address: orgBranding.address,
+    },
+  } as PublicProposal;
+
+  const handleDownloadPdf = async () => {
+    if (!pdfRef.current || !proposal) {
+      toast.error("Proposal document is not ready for PDF export");
+      return;
+    }
+    setDownloading(true);
+    try {
+      await downloadElementAsPdf(pdfRef.current, proposal.number, { singlePage: true });
+      toast.success("Proposal PDF downloaded");
+    } catch (err) {
+      console.error("Proposal PDF export failed:", err);
+      toast.error("Failed to generate proposal PDF");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <PortalPageShell>
       {/* ── Delete confirm dialog ── */}
@@ -267,6 +315,20 @@ export default function ProposalDetail() {
             </Button>
             <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
               <Link href={`/sales/proposals/create?editId=${proposal.id}`}><Pencil className="h-3.5 w-3.5" />Edit</Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              disabled={downloading}
+              onClick={handleDownloadPdf}
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+              Download PDF
             </Button>
             {["draft", "revised", "declined", "expired"].includes(proposal.status) && (
               <Button
@@ -872,6 +934,20 @@ export default function ProposalDetail() {
           {/* Discussion */}
           <StaffDiscussionCard proposalId={proposalId} />
         </div>
+      </div>
+
+      <div
+        ref={pdfRef}
+        className="fixed top-0 w-[794px] pointer-events-none"
+        style={{ left: -10000 }}
+        aria-hidden
+      >
+        <ProposalDocument
+          proposal={proposalForPdf}
+          currentStatus={pdfCurrentStatus}
+          statusChip={sCfg}
+          compact
+        />
       </div>
     </PortalPageShell>
   );

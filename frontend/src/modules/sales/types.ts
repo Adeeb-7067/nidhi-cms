@@ -3,6 +3,7 @@ export type LeadStatus =
   | "contacted"
   | "follow_up"
   | "interested"
+  | "project_planning"
   | "proposal_sent"
   | "approved"
   | "converted"
@@ -218,6 +219,8 @@ export interface PaymentReceipt {
   companyName: string;
   companyAddress: string;
   companyGstin: string;
+  logoUrl?: string | null;
+  sealUrl?: string | null;
 }
 
 export interface SalesInvoice {

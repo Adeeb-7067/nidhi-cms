@@ -128,7 +128,32 @@ export default function Reports() {
   const outstandingVsPaid = reports?.outstandingVsPaid ?? [];
   const loading = pipelineLoading || reportsLoading;
 
-  const exportReport = () => toast.success("Export uses live data — download charts via browser print for now");
+  const exportReport = () => {
+    if (!reports && !pipeline) {
+      toast.error("Report data not loaded yet");
+      return;
+    }
+    const rows: string[][] = [["Section", "Label", "Value"]];
+    for (const row of conversionData) {
+      rows.push(["Conversion", row.stage, String(row.count)]);
+    }
+    for (const row of leadsBySource) {
+      rows.push(["Leads by source", row.name, String(row.count)]);
+    }
+    for (const row of performanceData) {
+      rows.push(["Executive", row.name, String(row.revenue)]);
+    }
+    for (const row of monthlyCollections) {
+      rows.push(["Collections", row.month, String(row.collected)]);
+    }
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = `sales-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast.success("Report exported as CSV");
+  };
 
   return (
     <PortalPageShell>

@@ -5,6 +5,7 @@ export { SalesEmptyState } from "./SalesEmptyState";
 export { UserAvatarGroup, ExecutiveAvatar } from "./UserAvatarGroup";
 export { SalesPageHeader } from "./SalesPageHeader";
 export { LeadFormModal } from "./LeadFormModal";
+export { LeadImportDialog } from "./LeadImportDialog";
 export { LeadAddableSelect } from "./LeadAddableSelect";
 export {
   LeadDetailHero,
@@ -44,6 +45,9 @@ export {
   ReceiptPreview,
   RevenueChartCard,
 } from "./financial-kit";
+export { InvoiceDocument } from "./InvoiceDocument";
+export { ProposalDocument } from "./ProposalDocument";
+export { ReceiptDocument } from "./ReceiptDocument";
 export {
   TotalAmountAdjustFields,
   totalAdjustPayload,

@@ -864,7 +864,7 @@ export function CreateInstallmentDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const createInstallment = useCreateInstallment();
-  const { data: customersData } = useListCustomers(undefined, open);
+  const { data: customersData } = useListCustomers({ limit: 200 }, open);
   const projectParams = { limit: 200 };
   const { data: projectsData } = useListProjects(projectParams, {
     query: { queryKey: getListProjectsQueryKey(projectParams), enabled: open },
@@ -994,9 +994,9 @@ export function CreateInvoiceDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const createInvoice = useCreateInvoice();
-  const { data: customersData } = useListCustomers(undefined, open);
-  const { data: proposalsData } = useListProposals(undefined, open);
-  const { data: installmentsData } = useListInstallments(undefined, open);
+  const { data: customersData } = useListCustomers({ limit: 200 }, open);
+  const { data: proposalsData } = useListProposals({ limit: 200 }, open);
+  const { data: installmentsData } = useListInstallments({ limit: 200 }, open);
   const projectParams = { limit: 200 };
   const { data: projectsData } = useListProjects(projectParams, {
     query: { queryKey: getListProjectsQueryKey(projectParams), enabled: open },
@@ -1170,7 +1170,7 @@ export function InvoiceFromProposalDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const createFromProposal = useCreateInvoiceFromProposal();
-  const { data: proposalsData } = useListProposals({ status: "approved" }, open);
+  const { data: proposalsData } = useListProposals({ status: "approved", limit: 200 }, open);
   const [proposalId, setProposalId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [totalAdjustment, setTotalAdjustment] = useState(0);
@@ -1293,12 +1293,19 @@ export function RecordPaymentDialog({
   onSuccess?: (paymentId: number) => void;
 }) {
   const recordPayment = useRecordPayment();
-  const { data: invoicesData } = useListInvoices(undefined, open);
+  const { data: invoicesData } = useListInvoices({ limit: 500 }, open);
   const unpaid = (invoicesData?.invoices ?? []).filter((i) => i.status !== "paid");
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ? String(defaultInvoiceId) : "");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setInvoiceId(defaultInvoiceId ? String(defaultInvoiceId) : "");
+    setAmount("");
+    setTransactionId("");
+  }, [open, defaultInvoiceId]);
 
   const selectedInvoice = unpaid.find((i) => String(i.id) === invoiceId);
   const maxAmount = selectedInvoice

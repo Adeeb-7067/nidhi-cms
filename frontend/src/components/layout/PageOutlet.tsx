@@ -1,7 +1,7 @@
 import React from "react";
 import { Switch, Route, Redirect, useRoute } from "wouter";
 import { RoleGate } from "./RoleGate";
-import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, INTERNAL_STAFF_ROLES, MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
+import { DEV_PORTAL_STAFF_ROLES, HRM_ADMIN_ROLES, HRM_EMPLOYEE_ROLES, INTERNAL_STAFF_ROLES, MONITORABLE_STAFF_ROLES, SALES_STAFF_ROLES } from "@/lib/user-roles";
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import NotFound from "@/pages/not-found";
 
@@ -308,7 +308,7 @@ export function PageOutlet() {
         <SalesTeamProfileRedirect />
       </Route>
       <Route path="/sales/team">
-        <RoleGate allowedRoles={[...HRM_ADMIN_ROLES]}>
+        <RoleGate allowedRoles={[...SALES_STAFF_ROLES, "hr"]}>
           <SalesTeam />
         </RoleGate>
       </Route>

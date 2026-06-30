@@ -25,6 +25,7 @@ const leadStyles: Record<LeadStatus, string> = {
   contacted: "bg-amber-500/10 text-amber-700 border-amber-500/25",
   follow_up: "bg-orange-500/10 text-orange-700 border-orange-500/25",
   interested: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
+  project_planning: "bg-orange-600/10 text-orange-800 border-orange-600/25",
   proposal_sent: "bg-violet-500/10 text-violet-700 border-violet-500/25",
   approved: "bg-teal-500/10 text-teal-700 border-teal-500/25",
   converted: "bg-cyan-500/10 text-cyan-700 border-cyan-500/25",

@@ -5,7 +5,8 @@ import type {
   Installment,
 } from "@/api/sales";
 import type { PartialPayment, PaymentReceipt, SalesInvoice } from "./types";
-import { calcRemaining } from "./constants";
+import { COMPANY_BILLING, calcRemaining } from "./constants";
+import type { DocumentCompanyBranding } from "./company-branding";
 import { formatPaymentMethod } from "./utils";
 
 export function toInvoicePreview(
@@ -47,8 +48,15 @@ export function toReceiptPreview(
   payment: SalesPayment,
   invoice: ApiInvoice,
   customer: Customer,
+  company?: DocumentCompanyBranding,
 ): PaymentReceipt {
   const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
+  const branding = company ?? {
+    companyName: COMPANY_BILLING.name,
+    address: COMPANY_BILLING.address,
+    logoUrl: null,
+    sealUrl: null,
+  };
   return {
     id: payment.id,
     number: payment.receiptNumber,
@@ -61,9 +69,11 @@ export function toReceiptPreview(
     paymentMethod: formatPaymentMethod(payment.paymentMethod),
     transactionId: payment.transactionId ?? "—",
     generatedAt: payment.createdAt,
-    companyName: "Content Management Hub",
-    companyAddress: "India",
-    companyGstin: "—",
+    companyName: branding.companyName,
+    companyAddress: branding.address,
+    companyGstin: COMPANY_BILLING.gstin,
+    logoUrl: branding.logoUrl,
+    sealUrl: branding.sealUrl,
   };
 }
 
