@@ -2,7 +2,7 @@ export { SalesStatusBadge } from "./SalesStatusBadge";
 export { SalesFilterBar } from "./SalesFilterBar";
 export { ActivityTimeline } from "./ActivityTimeline";
 export { SalesEmptyState } from "./SalesEmptyState";
-export { UserAvatarGroup, ExecutiveAvatar } from "./UserAvatarGroup";
+export { UserAvatarGroup, ExecutiveAvatar, LeadTeamAvatars } from "./UserAvatarGroup";
 export { SalesPageHeader } from "./SalesPageHeader";
 export { LeadFormModal } from "./LeadFormModal";
 export { LeadImportDialog } from "./LeadImportDialog";

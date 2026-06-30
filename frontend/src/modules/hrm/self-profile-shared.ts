@@ -1,6 +1,12 @@
 import * as z from "zod";
-import { mapUserToTeamEmployeeForm } from "@/modules/admin/employee-form-shared";
+import {
+  enrichEmployeeFormFromHrmDocuments,
+  mapUserToTeamEmployeeForm,
+  type TeamEmployeeFormValues,
+} from "@/modules/admin/employee-form-shared";
 import { normalizePhoneForSubmit, optionalPhoneZod } from "@/lib/phone-input";
+import type { HrmEmployeeDocument } from "@/modules/hrm/types";
+import { usesEmployeeSelfProfileOnPage } from "@/lib/user-roles";
 
 const addressSchema = z.object({
   street: z.string().optional(),
@@ -52,8 +58,7 @@ type AuthUserLike = {
 /** Extended employee self-service form — company HRM employees only (not freelancers/clients). */
 export function usesEmployeeSelfProfile(user: AuthUserLike | null | undefined): boolean {
   if (!user) return false;
-  if (user.role === "super_admin" || user.role === "client" || user.role === "freelancer") return false;
-  return Boolean(user.employeeId?.trim());
+  return usesEmployeeSelfProfileOnPage(user.role, user.employeeId);
 }
 
 export function defaultSelfProfileFormValues(): SelfProfileFormValues {
@@ -92,13 +97,10 @@ export function defaultSelfProfileFormValues(): SelfProfileFormValues {
 
 type UserLike = Record<string, unknown>;
 
-/**
- * Hydrate self-profile form from a user record — uses the same mapper as admin team employee form
- * so every field stays in sync with HR/admin data entry.
- */
-export function mapUserToSelfProfileForm(user: UserLike): SelfProfileFormValues {
-  const team = mapUserToTeamEmployeeForm(user, null);
-
+function teamValuesToSelfProfile(
+  team: TeamEmployeeFormValues,
+  user: UserLike,
+): SelfProfileFormValues {
   return {
     firstName: team.firstName ?? "",
     lastName: team.lastName ?? "",
@@ -130,6 +132,21 @@ export function mapUserToSelfProfileForm(user: UserLike): SelfProfileFormValues 
     bankBranch: team.bankBranch ?? "",
     bankIfsc: team.bankIfsc ?? "",
   };
+}
+
+/**
+ * Hydrate self-profile form from a user record — uses the same mapper as admin team employee form
+ * so every field stays in sync with HR/admin data entry.
+ */
+export function mapUserToSelfProfileForm(
+  user: UserLike,
+  documents?: HrmEmployeeDocument[],
+): SelfProfileFormValues {
+  const team = mapUserToTeamEmployeeForm(user, null);
+  const enriched = documents?.length
+    ? enrichEmployeeFormFromHrmDocuments(team, documents)
+    : team;
+  return teamValuesToSelfProfile(enriched, user);
 }
 
 /** Payload for PATCH /auth/me — mirrors team employee personal fields (no HR/admin keys). */
@@ -178,6 +195,11 @@ export function buildSelfProfilePayload(values: SelfProfileFormValues) {
 }
 
 /** Stable key for form hydration — changes when server profile data changes. */
-export function selfProfileHydrateKey(user: UserLike): string {
-  return JSON.stringify(mapUserToSelfProfileForm(user));
+export function selfProfileHydrateKey(
+  user: UserLike,
+  documents?: HrmEmployeeDocument[],
+): string {
+  const docKey =
+    documents?.map((d) => `${d.category ?? ""}:${d.fileUrl ?? ""}`).join("|") ?? "";
+  return JSON.stringify({ form: mapUserToSelfProfileForm(user, documents), docKey });
 }

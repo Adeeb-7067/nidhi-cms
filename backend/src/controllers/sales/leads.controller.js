@@ -25,14 +25,21 @@ async function logActivity(leadId, actorId, type, description, meta = {}) {
 }
 
 async function hydrateAssignees(leads) {
-  const userIds = [...new Set(leads.map((l) => l.assignedTo).filter(Boolean))];
-  if (!userIds.length) return leads.map((l) => ({ ...l, assignedToUser: null }));
+  const userIds = [...new Set([
+    ...leads.map((l) => l.assignedTo).filter(Boolean),
+    ...leads.map((l) => l.createdBy).filter(Boolean),
+  ])];
+  if (!userIds.length) return leads.map((l) => ({ ...l, assignedToUser: null, createdByUser: null }));
   const users = await usersTable
     .find({ id: { $in: userIds } })
     .select({ id: 1, name: 1, avatarUrl: 1 })
     .lean();
   const map = new Map(users.map((u) => [u.id, u]));
-  return leads.map((l) => ({ ...l, assignedToUser: l.assignedTo ? (map.get(l.assignedTo) ?? null) : null }));
+  return leads.map((l) => ({
+    ...l,
+    assignedToUser: l.assignedTo ? (map.get(l.assignedTo) ?? null) : null,
+    createdByUser: l.createdBy ? (map.get(l.createdBy) ?? null) : null,
+  }));
 }
 
 async function listLeads(req, res) {
@@ -103,20 +110,26 @@ async function getLeadById(req, res) {
   if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
     notFound("Lead");
   }
-  const [activities, followUps, assignedUser] = await Promise.all([
+  const [activities, followUps, assignedUser, createdByUser] = await Promise.all([
     SalesLeadActivity.find({ leadId: id }).sort({ createdAt: -1 }).limit(50).lean(),
     SalesFollowUps.find({ leadId: id }).sort({ scheduledAt: 1 }).lean(),
     lead.assignedTo
       ? usersTable.findOne({ id: lead.assignedTo }).select({ id: 1, name: 1, avatarUrl: 1 }).lean()
       : null,
+    lead.createdBy
+      ? usersTable.findOne({ id: lead.createdBy }).select({ id: 1, name: 1, avatarUrl: 1 }).lean()
+      : null,
   ]);
-  res.json({ ...lead, activities, followUps, assignedToUser: assignedUser });
+  res.json({ ...lead, activities, followUps, assignedToUser: assignedUser, createdByUser });
 }
 
 async function updateLead(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const existing = await SalesLeads.findOne({ id }).lean();
   if (!existing) notFound("Lead");
+  if (req.user.role === "bde" && existing.assignedTo !== req.user.id && existing.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
   const body = req.body;
   const updates = {};
   if (body.name !== undefined) updates.name = optionalString(body.name);
@@ -133,21 +146,55 @@ async function updateLead(req, res) {
   if (body.expectedValue !== undefined) updates.expectedValue = Number(body.expectedValue) || 0;
   if (body.description !== undefined) updates.description = optionalString(body.description) ?? null;
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
-  if (body.projectPlanningDoc !== undefined) updates.projectPlanningDoc = optionalString(body.projectPlanningDoc) ?? null;
 
-  // Auto-advance: when a project planning doc is set and lead is at project_planning stage, move to proposal_sent
-  if (updates.projectPlanningDoc && (existing.status === "project_planning" || updates.status === "project_planning")) {
-    updates.status = "proposal_sent";
+  // ── Planning doc: add one ──────────────────────────────────────────────────
+  if (body.addPlanningDoc) {
+    const { name, url } = body.addPlanningDoc;
+    if (!name || !url) badRequest("addPlanningDoc requires name and url.", "addPlanningDoc");
+    const isFirst = !(existing.planningDocs?.length > 0);
+    const mongoOp = {
+      $push: { planningDocs: { name: String(name).trim(), url: String(url), uploadedAt: new Date() } },
+    };
+    // Auto-advance on first doc when at project_planning stage
+    if (isFirst && existing.status === "project_planning") {
+      mongoOp.$set = { status: "proposal_sent" };
+    }
+    const lead = await SalesLeads.findOneAndUpdate({ id }, mongoOp, { new: true }).lean();
+    if (!lead) notFound("Lead");
+    await logActivity(id, req.user.id, "document_uploaded",
+      `Planning document uploaded: "${name}"`,
+      { docUrl: url, docName: name }
+    );
+    if (mongoOp.$set?.status) {
+      await logActivity(id, req.user.id, "status_change",
+        `Status changed from "project_planning" to "proposal_sent"`,
+        { from: "project_planning", to: "proposal_sent" }
+      );
+    }
+    return res.json(lead);
+  }
+
+  // ── Planning doc: remove one ───────────────────────────────────────────────
+  if (body.removePlanningDoc) {
+    const url = String(body.removePlanningDoc);
+    const docToRemove = existing.planningDocs?.find((d) => d.url === url);
+    const lead = await SalesLeads.findOneAndUpdate(
+      { id },
+      { $pull: { planningDocs: { url } } },
+      { new: true }
+    ).lean();
+    if (!lead) notFound("Lead");
+    if (docToRemove) {
+      await logActivity(id, req.user.id, "document_removed",
+        `Planning document removed: "${docToRemove.name}"`,
+        { docUrl: url }
+      );
+    }
+    return res.json(lead);
   }
 
   const lead = await SalesLeads.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   if (!lead) notFound("Lead");
-  if (updates.projectPlanningDoc && !existing.projectPlanningDoc) {
-    await logActivity(id, req.user.id, "document_uploaded",
-      "Project Planning document uploaded",
-      { docUrl: updates.projectPlanningDoc }
-    );
-  }
   if (updates.status && updates.status !== existing.status) {
     await logActivity(id, req.user.id, "status_change",
       `Status changed from "${existing.status}" to "${updates.status}"`,
@@ -172,14 +219,21 @@ async function bulkUpdateLeads(req, res) {
   if (status) update.status = status;
   if (assignedTo !== undefined) update.assignedTo = assignedTo ? Number(assignedTo) : null;
   if (Object.keys(update).length === 0) badRequest("At least one field to update is required.");
-  await SalesLeads.updateMany({ id: { $in: ids } }, { $set: update });
-  res.json({ success: true, updated: ids.length });
+  // BDE: restrict bulk operations to their own leads only
+  const filter = req.user.role === "bde"
+    ? { id: { $in: ids }, $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] }
+    : { id: { $in: ids } };
+  const result = await SalesLeads.updateMany(filter, { $set: update });
+  res.json({ success: true, updated: result.modifiedCount });
 }
 
 async function convertLead(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+  if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
   if (lead.status === "converted") badRequest("This lead has already been converted.", "status");
   // Guard against partial-failure retries: if a customer already exists for this lead
   // (created by a prior attempt that failed at the final updateOne), block re-conversion.
@@ -282,6 +336,9 @@ async function setReminder(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+  if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
 
   const { date, note } = req.body;
   if (!date) badRequest("date is required.", "date");
@@ -300,6 +357,9 @@ async function deleteLead(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+  if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
   if (lead.status === "converted" && lead.customerId) {
     badRequest("Cannot delete a converted lead. Manage the customer record instead.", "status");
   }

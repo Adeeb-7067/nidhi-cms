@@ -17,6 +17,7 @@ export default function ReceiptDetailPage() {
   const [, params] = useRoute("/sales/receipts/:id");
   const receiptId = Number(params?.id);
   const docRef = useRef<HTMLDivElement>(null);
+  const pdfRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, isError } = useGetReceipt(receiptId, !!receiptId);
@@ -24,10 +25,11 @@ export default function ReceiptDetailPage() {
   const company = resolveDocumentCompany(orgSettings);
 
   const handleDownloadPdf = async () => {
-    if (!docRef.current || !data?.payment) return;
+    const target = pdfRef.current ?? docRef.current;
+    if (!target || !data?.payment) return;
     setDownloading(true);
     try {
-      await downloadElementAsPdf(docRef.current, data.payment.receiptNumber);
+      await downloadElementAsPdf(target, data.payment.receiptNumber, { singlePage: true, widthPx: 794 });
       toast.success("Receipt PDF downloaded");
     } catch {
       toast.error("Failed to generate receipt PDF");
@@ -101,6 +103,14 @@ export default function ReceiptDetailPage() {
 
       <div ref={docRef} className="flex justify-center">
         <ReceiptDocument receipt={receipt} />
+      </div>
+
+      <div
+        ref={pdfRef}
+        className="fixed left-[-10000px] top-0 w-[794px] pointer-events-none"
+        aria-hidden
+      >
+        <ReceiptDocument receipt={receipt} compact />
       </div>
     </PortalPageShell>
   );

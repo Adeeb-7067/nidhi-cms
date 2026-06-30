@@ -101,7 +101,6 @@ import {
   enrichEmployeeFormFromHrmDocuments,
   storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
-  unwrapUserListRows,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
 import {
@@ -299,7 +298,7 @@ export default function AdminEmployees() {
   }, [hrmDepartments]);
   const defaultDepartmentId = hrmDepartments[0]?.id ?? null;
   const managerOptions = useMemo(() => {
-    const rows = unwrapUserListRows(managerPoolData).filter((u) => u.status === "active") as User[];
+    const rows = (managerPoolData?.users ?? []).filter((u) => u.status === "active");
     if (!editUser) return rows;
     return rows.filter((u) => u.id !== editUser.id);
   }, [managerPoolData, editUser]);

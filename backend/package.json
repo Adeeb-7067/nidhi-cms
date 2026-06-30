@@ -14,7 +14,8 @@
     "clean-db": "node --env-file=.env ./scripts/clean-db.js",
     "sync-prod-local": "node --env-file=.env ./scripts/sync-prod-to-local.mjs --confirm",
     "test": "node --test --experimental-test-module-mocks tests/unit/**/*.test.js",
-    "test:watch": "node --test --watch --experimental-test-module-mocks tests/unit/**/*.test.js"
+    "test:watch": "node --test --watch --experimental-test-module-mocks tests/unit/**/*.test.js",
+    "audit:imports": "node ./scripts/audit-imports.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1048.0",

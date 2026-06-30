@@ -533,7 +533,7 @@ export default function PublicProposalView() {
     if (!target || !proposal) return;
     setDownloading(true);
     try {
-      await downloadElementAsPdf(target, proposal.number, { singlePage: true });
+      await downloadElementAsPdf(target, proposal.number, { widthPx: 794 });
       toast.success("Proposal PDF downloaded");
     } catch (err) {
       console.error("Proposal PDF export failed:", err);
@@ -871,7 +871,7 @@ export default function PublicProposalView() {
           proposal={proposal}
           currentStatus={currentStatus}
           statusChip={sCfg}
-          compact
+          forPdf
         />
       </div>
     </div>

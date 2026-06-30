@@ -192,6 +192,9 @@ async function updateProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
+  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
+    notFound("Proposal");
+  }
   const body = req.body;
   const updates = {};
   if (body.title !== undefined) updates.title = optionalString(body.title);
@@ -328,6 +331,9 @@ async function deleteProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
+  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
+    notFound("Proposal");
+  }
   if (!["draft", "revised", "declined", "expired"].includes(proposal.status)) {
     badRequest("Only draft, revised, declined, or expired proposals can be deleted.", "status");
   }

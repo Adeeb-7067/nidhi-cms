@@ -44,11 +44,14 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 export const UserRole = {
   super_admin: 'super_admin',
+  hr: 'hr',
+  manager: 'manager',
   developer: 'developer',
   tester: 'tester',
   qa: 'qa',
   client: 'client',
   freelancer: 'freelancer',
+  bde: 'bde',
 } as const;
 
 export type UserStatus = typeof UserStatus[keyof typeof UserStatus];
@@ -137,11 +140,14 @@ export type UserInputRole = typeof UserInputRole[keyof typeof UserInputRole];
 
 export const UserInputRole = {
   super_admin: 'super_admin',
+  hr: 'hr',
+  manager: 'manager',
   developer: 'developer',
   tester: 'tester',
   qa: 'qa',
   client: 'client',
   freelancer: 'freelancer',
+  bde: 'bde',
 } as const;
 
 export interface UserInput {
@@ -163,11 +169,14 @@ export type UserUpdateRole = typeof UserUpdateRole[keyof typeof UserUpdateRole];
 
 export const UserUpdateRole = {
   super_admin: 'super_admin',
+  hr: 'hr',
+  manager: 'manager',
   developer: 'developer',
   tester: 'tester',
   qa: 'qa',
   client: 'client',
   freelancer: 'freelancer',
+  bde: 'bde',
 } as const;
 
 export type UserUpdateStatus = typeof UserUpdateStatus[keyof typeof UserUpdateStatus];
@@ -401,30 +410,6 @@ export const BugFinalStatus = {
   resolved: 'resolved',
 } as const;
 
-export type BugIssuesItemQaStatus = typeof BugIssuesItemQaStatus[keyof typeof BugIssuesItemQaStatus];
-
-
-export const BugIssuesItemQaStatus = {
-  open: 'open',
-  fixed: 'fixed',
-} as const;
-
-export type BugIssuesItemDevStatus = typeof BugIssuesItemDevStatus[keyof typeof BugIssuesItemDevStatus];
-
-
-export const BugIssuesItemDevStatus = {
-  open: 'open',
-  fixed: 'fixed',
-} as const;
-
-export type BugIssuesItemFinalStatus = typeof BugIssuesItemFinalStatus[keyof typeof BugIssuesItemFinalStatus];
-
-
-export const BugIssuesItemFinalStatus = {
-  open: 'open',
-  resolved: 'resolved',
-} as const;
-
 export type BugPlatform = typeof BugPlatform[keyof typeof BugPlatform];
 
 
@@ -437,7 +422,7 @@ export const BugPlatform = {
 } as const;
 
 export interface BugAttachment {
-  url?: string;
+  url: string;
   /** @nullable */
   name?: string | null;
   /** @nullable */
@@ -448,12 +433,14 @@ export interface BugAttachment {
   createdAt?: string | null;
 }
 
-export type BugIssuesItem = {
-  issueKey?: string;
-  title?: string;
-  qaStatus?: BugIssuesItemQaStatus;
-  devStatus?: BugIssuesItemDevStatus;
-  finalStatus?: BugIssuesItemFinalStatus;
+export type BugAssigneesItem = {
+  id: number;
+  name: string;
+  role: string;
+  /** @nullable */
+  avatarUrl: string | null;
+  /** @nullable */
+  employeeId: string | null;
 };
 
 export interface Bug {
@@ -464,11 +451,17 @@ export interface Bug {
   reporterId: number;
   reporterName: string;
   /** @nullable */
+  reporterRole?: string | null;
+  /** @nullable */
   assigneeId?: number | null;
   /** @nullable */
   assigneeName?: string | null;
   /** @nullable */
   assigneeRole?: string | null;
+  assigneeIds?: number[];
+  assignees?: BugAssigneesItem[];
+  /** @nullable */
+  issueKey?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -484,7 +477,7 @@ export interface Bug {
   qaStatus?: BugQaStatus;
   devStatus?: BugDevStatus;
   finalStatus?: BugFinalStatus;
-  issues?: BugIssuesItem[];
+  issues?: Bug[];
   /** @nullable */
   buildVersion?: string | null;
   platform: BugPlatform;
@@ -495,6 +488,8 @@ export interface Bug {
   /** @nullable */
   attachmentUrl?: string | null;
   attachments?: BugAttachment[];
+  /** @nullable */
+  latestComment?: string | null;
   /** @nullable */
   parentBugId?: number | null;
   childCount?: number;
@@ -994,14 +989,14 @@ export interface BugBatchInput {
 }
 
 export interface BugAssignee {
-  id?: number;
-  name?: string;
+  id: number;
+  name: string;
   /** @nullable */
-  role?: string | null;
+  role: string | null;
   /** @nullable */
-  avatarUrl?: string | null;
+  avatarUrl: string | null;
   /** @nullable */
-  employeeId?: string | null;
+  employeeId: string | null;
 }
 
 export type BugInputSeverity = typeof BugInputSeverity[keyof typeof BugInputSeverity];
@@ -1048,6 +1043,30 @@ export const BugInputStatus = {
   closed: 'closed',
 } as const;
 
+export type BugInputQaStatus = typeof BugInputQaStatus[keyof typeof BugInputQaStatus];
+
+
+export const BugInputQaStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugInputDevStatus = typeof BugInputDevStatus[keyof typeof BugInputDevStatus];
+
+
+export const BugInputDevStatus = {
+  open: 'open',
+  fixed: 'fixed',
+} as const;
+
+export type BugInputFinalStatus = typeof BugInputFinalStatus[keyof typeof BugInputFinalStatus];
+
+
+export const BugInputFinalStatus = {
+  open: 'open',
+  resolved: 'resolved',
+} as const;
+
 export interface BugInput {
   projectId: number;
   title: string;
@@ -1065,6 +1084,9 @@ export interface BugInput {
   attachments?: BugAttachment[];
   initialComment?: string;
   status?: BugInputStatus;
+  qaStatus?: BugInputQaStatus;
+  devStatus?: BugInputDevStatus;
+  finalStatus?: BugInputFinalStatus;
 }
 
 export type BugUpdateSeverity = typeof BugUpdateSeverity[keyof typeof BugUpdateSeverity];
@@ -2204,6 +2226,10 @@ export type ListUsersParams = {
 role?: string;
 subType?: string;
 search?: string;
+/**
+ * When "true" or "1", restrict to internal staff roles only.
+ */
+staff?: string;
 page?: number;
 limit?: number;
 };
@@ -2296,6 +2322,8 @@ export type ListBugsParams = {
 projectId?: number;
 status?: string;
 severity?: string;
+priority?: string;
+search?: string;
 page?: number;
 limit?: number;
 assigneeId?: number;

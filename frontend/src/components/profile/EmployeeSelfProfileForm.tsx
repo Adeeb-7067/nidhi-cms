@@ -31,6 +31,7 @@ import {
   EMPLOYEE_MARITAL_STATUSES,
 } from "@/modules/hrm/employee-profile-types";
 import { LEGACY_EMPLOYEE_LABELS as L } from "@/modules/hrm/hrm-legacy-labels";
+import type { HrmEmployeeDocument } from "@/modules/hrm/types";
 import {
   buildSelfProfilePayload,
   mapUserToSelfProfileForm,
@@ -41,6 +42,8 @@ import {
 
 type Props = {
   user: Record<string, unknown>;
+  employeeDocuments?: HrmEmployeeDocument[];
+  employeeDocumentsLoading?: boolean;
   /** Bumped after a successful save so the form reloads server values once. */
   syncVersion: number;
   saving: boolean;
@@ -91,13 +94,20 @@ function AddressFields({
   );
 }
 
-export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: Props) {
-  const hydrateKey = selfProfileHydrateKey(user);
+export function EmployeeSelfProfileForm({
+  user,
+  employeeDocuments,
+  employeeDocumentsLoading,
+  syncVersion,
+  saving,
+  onSave,
+}: Props) {
+  const hydrateKey = selfProfileHydrateKey(user, employeeDocuments);
   const lastHydrateKeyRef = useRef<string | null>(null);
 
   const form = useForm<SelfProfileFormValues>({
     resolver: zodResolver(selfProfileSchema),
-    defaultValues: mapUserToSelfProfileForm(user),
+    defaultValues: mapUserToSelfProfileForm(user, employeeDocuments),
     shouldUnregister: false,
   });
 
@@ -106,7 +116,7 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
     const key = `${hydrateKey}:${syncVersion}`;
     if (lastHydrateKeyRef.current === key) return;
     lastHydrateKeyRef.current = key;
-    form.reset(mapUserToSelfProfileForm(user));
+    form.reset(mapUserToSelfProfileForm(user, employeeDocuments));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when server snapshot changes
   }, [hydrateKey, syncVersion]);
 
@@ -415,6 +425,7 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
                       <FormLabel>{label}</FormLabel>
                       <FormControl>
                         <FileUploader
+                          key={`${name}-${field.value || "empty"}`}
                           variant="choose-file"
                           category="hrm"
                           accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -434,7 +445,9 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
               userId={Number(user.id)}
               canUpload
               canDelete
-              fetchEnabled={profileTab === "social"}
+              fetchEnabled
+              documents={employeeDocuments}
+              documentsLoading={employeeDocumentsLoading}
             />
           </TabsContent>
 
@@ -475,7 +488,7 @@ export function EmployeeSelfProfileForm({ user, syncVersion, saving, onSave }: P
           <Button
             type="button"
             variant="outline"
-            onClick={() => form.reset(mapUserToSelfProfileForm(user))}
+            onClick={() => form.reset(mapUserToSelfProfileForm(user, employeeDocuments))}
           >
             Reset
           </Button>

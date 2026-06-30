@@ -4,9 +4,21 @@ export const PHONE_NUMBER_LENGTH = 10;
 
 const PHONE_DIGITS_ONLY = /^\d{10}$/;
 
-/** Strip non-digits and cap at 10 characters for controlled inputs. */
+/** Strip non-digits, normalize common Indian prefixes, cap at 10 characters. */
 export function sanitizePhoneDigits(value: string): string {
-  return value.replace(/\D/g, "").slice(0, PHONE_NUMBER_LENGTH);
+  let digits = value.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    digits = digits.slice(2);
+  } else if (digits.length === 11 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  return digits.slice(0, PHONE_NUMBER_LENGTH);
+}
+
+/** Hydrate form fields — blank legacy values that are not exactly 10 digits. */
+export function normalizePhoneForForm(value: string | null | undefined): string {
+  const digits = sanitizePhoneDigits(value ?? "");
+  return PHONE_DIGITS_ONLY.test(digits) ? digits : "";
 }
 
 /** Returns an error message when value is non-empty but not exactly 10 digits. */

@@ -143,18 +143,6 @@ type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 /**
  * @summary Health check
  */
-export type healthCheckResponse200 = {
-  data: HealthStatus
-  status: 200
-}
-
-export type healthCheckResponseSuccess = (healthCheckResponse200) & {
-  headers: Headers;
-};
-;
-
-export type healthCheckResponse = (healthCheckResponseSuccess)
-
 export const getHealthCheckUrl = () => {
 
 
@@ -163,9 +151,9 @@ export const getHealthCheckUrl = () => {
   return `/healthz`
 }
 
-export const healthCheck = async ( options?: RequestInit): Promise<healthCheckResponse> => {
+export const healthCheck = async ( options?: RequestInit): Promise<HealthStatus> => {
   
-  return customFetch<healthCheckResponse>(getHealthCheckUrl(),
+  return customFetch<HealthStatus>(getHealthCheckUrl(),
   {      
     ...options,
     method: 'GET'
@@ -254,25 +242,6 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 /**
  * @summary Login with email/password or employeeId/password
  */
-export type loginResponse200 = {
-  data: AuthResult
-  status: 200
-}
-
-export type loginResponse401 = {
-  data: void
-  status: 401
-}
-
-export type loginResponseSuccess = (loginResponse200) & {
-  headers: Headers;
-};
-export type loginResponseError = (loginResponse401) & {
-  headers: Headers;
-};
-
-export type loginResponse = (loginResponseSuccess | loginResponseError)
-
 export const getLoginUrl = () => {
 
 
@@ -281,9 +250,9 @@ export const getLoginUrl = () => {
   return `/auth/login`
 }
 
-export const login = async (loginInput: LoginInput, options?: RequestInit): Promise<loginResponse> => {
+export const login = async (loginInput: LoginInput, options?: RequestInit): Promise<AuthResult> => {
   
-  return customFetch<loginResponse>(getLoginUrl(),
+  return customFetch<AuthResult>(getLoginUrl(),
   {      
     ...options,
     method: 'POST',
@@ -344,18 +313,6 @@ export const useLogin = <TError = ErrorType<void>,
 /**
  * @summary Logout current session
  */
-export type logoutResponse200 = {
-  data: void
-  status: 200
-}
-
-export type logoutResponseSuccess = (logoutResponse200) & {
-  headers: Headers;
-};
-;
-
-export type logoutResponse = (logoutResponseSuccess)
-
 export const getLogoutUrl = () => {
 
 
@@ -364,9 +321,9 @@ export const getLogoutUrl = () => {
   return `/auth/logout`
 }
 
-export const logout = async ( options?: RequestInit): Promise<logoutResponse> => {
+export const logout = async ( options?: RequestInit): Promise<void> => {
   
-  return customFetch<logoutResponse>(getLogoutUrl(),
+  return customFetch<void>(getLogoutUrl(),
   {      
     ...options,
     method: 'POST'
@@ -426,18 +383,6 @@ export const useLogout = <TError = ErrorType<unknown>,
 /**
  * @summary Refresh access token
  */
-export type refreshTokenResponse200 = {
-  data: AuthResult
-  status: 200
-}
-
-export type refreshTokenResponseSuccess = (refreshTokenResponse200) & {
-  headers: Headers;
-};
-;
-
-export type refreshTokenResponse = (refreshTokenResponseSuccess)
-
 export const getRefreshTokenUrl = () => {
 
 
@@ -446,9 +391,9 @@ export const getRefreshTokenUrl = () => {
   return `/auth/refresh`
 }
 
-export const refreshToken = async (refreshTokenInput: RefreshTokenInput, options?: RequestInit): Promise<refreshTokenResponse> => {
+export const refreshToken = async (refreshTokenInput: RefreshTokenInput, options?: RequestInit): Promise<AuthResult> => {
   
-  return customFetch<refreshTokenResponse>(getRefreshTokenUrl(),
+  return customFetch<AuthResult>(getRefreshTokenUrl(),
   {      
     ...options,
     method: 'POST',
@@ -509,18 +454,6 @@ export const useRefreshToken = <TError = ErrorType<unknown>,
 /**
  * @summary Request password reset OTP by email
  */
-export type forgotPasswordResponse200 = {
-  data: void
-  status: 200
-}
-
-export type forgotPasswordResponseSuccess = (forgotPasswordResponse200) & {
-  headers: Headers;
-};
-;
-
-export type forgotPasswordResponse = (forgotPasswordResponseSuccess)
-
 export const getForgotPasswordUrl = () => {
 
 
@@ -529,9 +462,9 @@ export const getForgotPasswordUrl = () => {
   return `/auth/forgot-password`
 }
 
-export const forgotPassword = async (forgotPasswordInput: ForgotPasswordInput, options?: RequestInit): Promise<forgotPasswordResponse> => {
+export const forgotPassword = async (forgotPasswordInput: ForgotPasswordInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<forgotPasswordResponse>(getForgotPasswordUrl(),
+  return customFetch<void>(getForgotPasswordUrl(),
   {      
     ...options,
     method: 'POST',
@@ -592,18 +525,6 @@ export const useForgotPassword = <TError = ErrorType<unknown>,
 /**
  * @summary Verify password reset OTP
  */
-export type verifyResetOtpResponse200 = {
-  data: void
-  status: 200
-}
-
-export type verifyResetOtpResponseSuccess = (verifyResetOtpResponse200) & {
-  headers: Headers;
-};
-;
-
-export type verifyResetOtpResponse = (verifyResetOtpResponseSuccess)
-
 export const getVerifyResetOtpUrl = () => {
 
 
@@ -612,9 +533,9 @@ export const getVerifyResetOtpUrl = () => {
   return `/auth/verify-reset-otp`
 }
 
-export const verifyResetOtp = async (verifyResetOtpInput: VerifyResetOtpInput, options?: RequestInit): Promise<verifyResetOtpResponse> => {
+export const verifyResetOtp = async (verifyResetOtpInput: VerifyResetOtpInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<verifyResetOtpResponse>(getVerifyResetOtpUrl(),
+  return customFetch<void>(getVerifyResetOtpUrl(),
   {      
     ...options,
     method: 'POST',
@@ -675,18 +596,6 @@ export const useVerifyResetOtp = <TError = ErrorType<unknown>,
 /**
  * @summary Reset password using email OTP (or legacy token)
  */
-export type resetPasswordResponse200 = {
-  data: void
-  status: 200
-}
-
-export type resetPasswordResponseSuccess = (resetPasswordResponse200) & {
-  headers: Headers;
-};
-;
-
-export type resetPasswordResponse = (resetPasswordResponseSuccess)
-
 export const getResetPasswordUrl = () => {
 
 
@@ -695,9 +604,9 @@ export const getResetPasswordUrl = () => {
   return `/auth/reset-password`
 }
 
-export const resetPassword = async (resetPasswordInput: ResetPasswordInput, options?: RequestInit): Promise<resetPasswordResponse> => {
+export const resetPassword = async (resetPasswordInput: ResetPasswordInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<resetPasswordResponse>(getResetPasswordUrl(),
+  return customFetch<void>(getResetPasswordUrl(),
   {      
     ...options,
     method: 'POST',
@@ -758,18 +667,6 @@ export const useResetPassword = <TError = ErrorType<unknown>,
 /**
  * @summary Send OTP to verify in-app password change
  */
-export type requestChangePasswordOtpResponse200 = {
-  data: void
-  status: 200
-}
-
-export type requestChangePasswordOtpResponseSuccess = (requestChangePasswordOtpResponse200) & {
-  headers: Headers;
-};
-;
-
-export type requestChangePasswordOtpResponse = (requestChangePasswordOtpResponseSuccess)
-
 export const getRequestChangePasswordOtpUrl = () => {
 
 
@@ -778,9 +675,9 @@ export const getRequestChangePasswordOtpUrl = () => {
   return `/auth/change-password/request-otp`
 }
 
-export const requestChangePasswordOtp = async ( options?: RequestInit): Promise<requestChangePasswordOtpResponse> => {
+export const requestChangePasswordOtp = async ( options?: RequestInit): Promise<void> => {
   
-  return customFetch<requestChangePasswordOtpResponse>(getRequestChangePasswordOtpUrl(),
+  return customFetch<void>(getRequestChangePasswordOtpUrl(),
   {      
     ...options,
     method: 'POST'
@@ -840,18 +737,6 @@ export const useRequestChangePasswordOtp = <TError = ErrorType<unknown>,
 /**
  * @summary List support tickets
  */
-export type listTicketsResponse200 = {
-  data: TicketListResult
-  status: 200
-}
-
-export type listTicketsResponseSuccess = (listTicketsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listTicketsResponse = (listTicketsResponseSuccess)
-
 export const getListTicketsUrl = (params?: ListTicketsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -867,9 +752,9 @@ export const getListTicketsUrl = (params?: ListTicketsParams,) => {
   return stringifiedParams.length > 0 ? `/tickets?${stringifiedParams}` : `/tickets`
 }
 
-export const listTickets = async (params?: ListTicketsParams, options?: RequestInit): Promise<listTicketsResponse> => {
+export const listTickets = async (params?: ListTicketsParams, options?: RequestInit): Promise<TicketListResult> => {
   
-  return customFetch<listTicketsResponse>(getListTicketsUrl(params),
+  return customFetch<TicketListResult>(getListTicketsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -958,18 +843,6 @@ export function useListTickets<TData = Awaited<ReturnType<typeof listTickets>>, 
 /**
  * @summary Create a new ticket
  */
-export type createTicketResponse201 = {
-  data: Ticket
-  status: 201
-}
-
-export type createTicketResponseSuccess = (createTicketResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createTicketResponse = (createTicketResponseSuccess)
-
 export const getCreateTicketUrl = () => {
 
 
@@ -978,9 +851,9 @@ export const getCreateTicketUrl = () => {
   return `/tickets`
 }
 
-export const createTicket = async (ticketInput: TicketInput, options?: RequestInit): Promise<createTicketResponse> => {
+export const createTicket = async (ticketInput: TicketInput, options?: RequestInit): Promise<Ticket> => {
   
-  return customFetch<createTicketResponse>(getCreateTicketUrl(),
+  return customFetch<Ticket>(getCreateTicketUrl(),
   {      
     ...options,
     method: 'POST',
@@ -1041,18 +914,6 @@ export const useCreateTicket = <TError = ErrorType<unknown>,
 /**
  * @summary Update ticket
  */
-export type updateTicketResponse200 = {
-  data: Ticket
-  status: 200
-}
-
-export type updateTicketResponseSuccess = (updateTicketResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateTicketResponse = (updateTicketResponseSuccess)
-
 export const getUpdateTicketUrl = (id: number,) => {
 
 
@@ -1062,9 +923,9 @@ export const getUpdateTicketUrl = (id: number,) => {
 }
 
 export const updateTicket = async (id: number,
-    ticketUpdate: TicketUpdate, options?: RequestInit): Promise<updateTicketResponse> => {
+    ticketUpdate: TicketUpdate, options?: RequestInit): Promise<Ticket> => {
   
-  return customFetch<updateTicketResponse>(getUpdateTicketUrl(id),
+  return customFetch<Ticket>(getUpdateTicketUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -1125,18 +986,6 @@ export const useUpdateTicket = <TError = ErrorType<unknown>,
 /**
  * @summary Update the current user's FCM token for push notifications
  */
-export type updateFcmTokenResponse200 = {
-  data: void
-  status: 200
-}
-
-export type updateFcmTokenResponseSuccess = (updateFcmTokenResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateFcmTokenResponse = (updateFcmTokenResponseSuccess)
-
 export const getUpdateFcmTokenUrl = () => {
 
 
@@ -1145,9 +994,9 @@ export const getUpdateFcmTokenUrl = () => {
   return `/auth/fcm-token`
 }
 
-export const updateFcmToken = async (fcmTokenInput: FcmTokenInput, options?: RequestInit): Promise<updateFcmTokenResponse> => {
+export const updateFcmToken = async (fcmTokenInput: FcmTokenInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<updateFcmTokenResponse>(getUpdateFcmTokenUrl(),
+  return customFetch<void>(getUpdateFcmTokenUrl(),
   {      
     ...options,
     method: 'POST',
@@ -1208,18 +1057,6 @@ export const useUpdateFcmToken = <TError = ErrorType<unknown>,
 /**
  * @summary Get current authenticated user
  */
-export type getMeResponse200 = {
-  data: User
-  status: 200
-}
-
-export type getMeResponseSuccess = (getMeResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getMeResponse = (getMeResponseSuccess)
-
 export const getGetMeUrl = () => {
 
 
@@ -1228,9 +1065,9 @@ export const getGetMeUrl = () => {
   return `/auth/me`
 }
 
-export const getMe = async ( options?: RequestInit): Promise<getMeResponse> => {
+export const getMe = async ( options?: RequestInit): Promise<User> => {
   
-  return customFetch<getMeResponse>(getGetMeUrl(),
+  return customFetch<User>(getGetMeUrl(),
   {      
     ...options,
     method: 'GET'
@@ -1319,18 +1156,6 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 /**
  * @summary Update own profile (name, designation, avatarUrl)
  */
-export type updateMyProfileResponse200 = {
-  data: User
-  status: 200
-}
-
-export type updateMyProfileResponseSuccess = (updateMyProfileResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateMyProfileResponse = (updateMyProfileResponseSuccess)
-
 export const getUpdateMyProfileUrl = () => {
 
 
@@ -1339,9 +1164,9 @@ export const getUpdateMyProfileUrl = () => {
   return `/auth/me`
 }
 
-export const updateMyProfile = async (updateMyProfileInput: UpdateMyProfileInput, options?: RequestInit): Promise<updateMyProfileResponse> => {
+export const updateMyProfile = async (updateMyProfileInput: UpdateMyProfileInput, options?: RequestInit): Promise<User> => {
   
-  return customFetch<updateMyProfileResponse>(getUpdateMyProfileUrl(),
+  return customFetch<User>(getUpdateMyProfileUrl(),
   {      
     ...options,
     method: 'PATCH',
@@ -1402,18 +1227,6 @@ export const useUpdateMyProfile = <TError = ErrorType<unknown>,
 /**
  * @summary List all users (admin only)
  */
-export type listUsersResponse200 = {
-  data: UserListResult
-  status: 200
-}
-
-export type listUsersResponseSuccess = (listUsersResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listUsersResponse = (listUsersResponseSuccess)
-
 export const getListUsersUrl = (params?: ListUsersParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -1429,9 +1242,9 @@ export const getListUsersUrl = (params?: ListUsersParams,) => {
   return stringifiedParams.length > 0 ? `/users?${stringifiedParams}` : `/users`
 }
 
-export const listUsers = async (params?: ListUsersParams, options?: RequestInit): Promise<listUsersResponse> => {
+export const listUsers = async (params?: ListUsersParams, options?: RequestInit): Promise<UserListResult> => {
   
-  return customFetch<listUsersResponse>(getListUsersUrl(params),
+  return customFetch<UserListResult>(getListUsersUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1520,18 +1333,6 @@ export function useListUsers<TData = Awaited<ReturnType<typeof listUsers>>, TErr
 /**
  * @summary Create a new user (admin only)
  */
-export type createUserResponse201 = {
-  data: User
-  status: 201
-}
-
-export type createUserResponseSuccess = (createUserResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createUserResponse = (createUserResponseSuccess)
-
 export const getCreateUserUrl = () => {
 
 
@@ -1540,9 +1341,9 @@ export const getCreateUserUrl = () => {
   return `/users`
 }
 
-export const createUser = async (userInput: UserInput, options?: RequestInit): Promise<createUserResponse> => {
+export const createUser = async (userInput: UserInput, options?: RequestInit): Promise<User> => {
   
-  return customFetch<createUserResponse>(getCreateUserUrl(),
+  return customFetch<User>(getCreateUserUrl(),
   {      
     ...options,
     method: 'POST',
@@ -1603,18 +1404,6 @@ export const useCreateUser = <TError = ErrorType<unknown>,
 /**
  * @summary Get user by ID
  */
-export type getUserResponse200 = {
-  data: User
-  status: 200
-}
-
-export type getUserResponseSuccess = (getUserResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getUserResponse = (getUserResponseSuccess)
-
 export const getGetUserUrl = (id: number,) => {
 
 
@@ -1623,9 +1412,9 @@ export const getGetUserUrl = (id: number,) => {
   return `/users/${id}`
 }
 
-export const getUser = async (id: number, options?: RequestInit): Promise<getUserResponse> => {
+export const getUser = async (id: number, options?: RequestInit): Promise<User> => {
   
-  return customFetch<getUserResponse>(getGetUserUrl(id),
+  return customFetch<User>(getGetUserUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -1714,18 +1503,6 @@ export function useGetUser<TData = Awaited<ReturnType<typeof getUser>>, TError =
 /**
  * @summary Update user
  */
-export type updateUserResponse200 = {
-  data: User
-  status: 200
-}
-
-export type updateUserResponseSuccess = (updateUserResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateUserResponse = (updateUserResponseSuccess)
-
 export const getUpdateUserUrl = (id: number,) => {
 
 
@@ -1735,9 +1512,9 @@ export const getUpdateUserUrl = (id: number,) => {
 }
 
 export const updateUser = async (id: number,
-    userUpdate: UserUpdate, options?: RequestInit): Promise<updateUserResponse> => {
+    userUpdate: UserUpdate, options?: RequestInit): Promise<User> => {
   
-  return customFetch<updateUserResponse>(getUpdateUserUrl(id),
+  return customFetch<User>(getUpdateUserUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -1798,18 +1575,6 @@ export const useUpdateUser = <TError = ErrorType<unknown>,
 /**
  * @summary Deactivate user
  */
-export type deleteUserResponse200 = {
-  data: void
-  status: 200
-}
-
-export type deleteUserResponseSuccess = (deleteUserResponse200) & {
-  headers: Headers;
-};
-;
-
-export type deleteUserResponse = (deleteUserResponseSuccess)
-
 export const getDeleteUserUrl = (id: number,) => {
 
 
@@ -1818,9 +1583,9 @@ export const getDeleteUserUrl = (id: number,) => {
   return `/users/${id}`
 }
 
-export const deleteUser = async (id: number, options?: RequestInit): Promise<deleteUserResponse> => {
+export const deleteUser = async (id: number, options?: RequestInit): Promise<void> => {
   
-  return customFetch<deleteUserResponse>(getDeleteUserUrl(id),
+  return customFetch<void>(getDeleteUserUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -1880,18 +1645,6 @@ export const useDeleteUser = <TError = ErrorType<unknown>,
 /**
  * @summary Bulk user presence (live + last seen)
  */
-export type getPresenceResponse200 = {
-  data: PresenceMapResult
-  status: 200
-}
-
-export type getPresenceResponseSuccess = (getPresenceResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getPresenceResponse = (getPresenceResponseSuccess)
-
 export const getGetPresenceUrl = (params?: GetPresenceParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -1907,9 +1660,9 @@ export const getGetPresenceUrl = (params?: GetPresenceParams,) => {
   return stringifiedParams.length > 0 ? `/presence?${stringifiedParams}` : `/presence`
 }
 
-export const getPresence = async (params?: GetPresenceParams, options?: RequestInit): Promise<getPresenceResponse> => {
+export const getPresence = async (params?: GetPresenceParams, options?: RequestInit): Promise<PresenceMapResult> => {
   
-  return customFetch<getPresenceResponse>(getGetPresenceUrl(params),
+  return customFetch<PresenceMapResult>(getGetPresenceUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -1998,18 +1751,6 @@ export function useGetPresence<TData = Awaited<ReturnType<typeof getPresence>>, 
 /**
  * @summary Current user presence
  */
-export type getMyPresenceResponse200 = {
-  data: UserPresence
-  status: 200
-}
-
-export type getMyPresenceResponseSuccess = (getMyPresenceResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getMyPresenceResponse = (getMyPresenceResponseSuccess)
-
 export const getGetMyPresenceUrl = () => {
 
 
@@ -2018,9 +1759,9 @@ export const getGetMyPresenceUrl = () => {
   return `/presence/me`
 }
 
-export const getMyPresence = async ( options?: RequestInit): Promise<getMyPresenceResponse> => {
+export const getMyPresence = async ( options?: RequestInit): Promise<UserPresence> => {
   
-  return customFetch<getMyPresenceResponse>(getGetMyPresenceUrl(),
+  return customFetch<UserPresence>(getGetMyPresenceUrl(),
   {      
     ...options,
     method: 'GET'
@@ -2109,18 +1850,6 @@ export function useGetMyPresence<TData = Awaited<ReturnType<typeof getMyPresence
 /**
  * @summary Refresh activity timestamp (also sent via socket)
  */
-export type postPresenceHeartbeatResponse200 = {
-  data: UserPresence
-  status: 200
-}
-
-export type postPresenceHeartbeatResponseSuccess = (postPresenceHeartbeatResponse200) & {
-  headers: Headers;
-};
-;
-
-export type postPresenceHeartbeatResponse = (postPresenceHeartbeatResponseSuccess)
-
 export const getPostPresenceHeartbeatUrl = () => {
 
 
@@ -2129,9 +1858,9 @@ export const getPostPresenceHeartbeatUrl = () => {
   return `/presence/heartbeat`
 }
 
-export const postPresenceHeartbeat = async ( options?: RequestInit): Promise<postPresenceHeartbeatResponse> => {
+export const postPresenceHeartbeat = async ( options?: RequestInit): Promise<UserPresence> => {
   
-  return customFetch<postPresenceHeartbeatResponse>(getPostPresenceHeartbeatUrl(),
+  return customFetch<UserPresence>(getPostPresenceHeartbeatUrl(),
   {      
     ...options,
     method: 'POST'
@@ -2191,18 +1920,6 @@ export const usePostPresenceHeartbeat = <TError = ErrorType<unknown>,
 /**
  * @summary Admin reset a user's password
  */
-export type resetUserPasswordResponse200 = {
-  data: void
-  status: 200
-}
-
-export type resetUserPasswordResponseSuccess = (resetUserPasswordResponse200) & {
-  headers: Headers;
-};
-;
-
-export type resetUserPasswordResponse = (resetUserPasswordResponseSuccess)
-
 export const getResetUserPasswordUrl = (id: number,) => {
 
 
@@ -2212,9 +1929,9 @@ export const getResetUserPasswordUrl = (id: number,) => {
 }
 
 export const resetUserPassword = async (id: number,
-    passwordResetInput: PasswordResetInput, options?: RequestInit): Promise<resetUserPasswordResponse> => {
+    passwordResetInput: PasswordResetInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<resetUserPasswordResponse>(getResetUserPasswordUrl(id),
+  return customFetch<void>(getResetUserPasswordUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -2275,18 +1992,6 @@ export const useResetUserPassword = <TError = ErrorType<unknown>,
 /**
  * @summary Get credential history for a user (admin only)
  */
-export type getUserCredentialsResponse200 = {
-  data: CredentialHistory[]
-  status: 200
-}
-
-export type getUserCredentialsResponseSuccess = (getUserCredentialsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getUserCredentialsResponse = (getUserCredentialsResponseSuccess)
-
 export const getGetUserCredentialsUrl = (id: number,) => {
 
 
@@ -2295,9 +2000,9 @@ export const getGetUserCredentialsUrl = (id: number,) => {
   return `/users/${id}/credentials`
 }
 
-export const getUserCredentials = async (id: number, options?: RequestInit): Promise<getUserCredentialsResponse> => {
+export const getUserCredentials = async (id: number, options?: RequestInit): Promise<CredentialHistory[]> => {
   
-  return customFetch<getUserCredentialsResponse>(getGetUserCredentialsUrl(id),
+  return customFetch<CredentialHistory[]>(getGetUserCredentialsUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -2386,18 +2091,6 @@ export function useGetUserCredentials<TData = Awaited<ReturnType<typeof getUserC
 /**
  * @summary Reveal decrypted password from credential history (admin only)
  */
-export type revealCredentialResponse200 = {
-  data: CredentialRevealResult
-  status: 200
-}
-
-export type revealCredentialResponseSuccess = (revealCredentialResponse200) & {
-  headers: Headers;
-};
-;
-
-export type revealCredentialResponse = (revealCredentialResponseSuccess)
-
 export const getRevealCredentialUrl = (id: number,
     credId: number,) => {
 
@@ -2408,9 +2101,9 @@ export const getRevealCredentialUrl = (id: number,
 }
 
 export const revealCredential = async (id: number,
-    credId: number, options?: RequestInit): Promise<revealCredentialResponse> => {
+    credId: number, options?: RequestInit): Promise<CredentialRevealResult> => {
   
-  return customFetch<revealCredentialResponse>(getRevealCredentialUrl(id,credId),
+  return customFetch<CredentialRevealResult>(getRevealCredentialUrl(id,credId),
   {      
     ...options,
     method: 'POST'
@@ -2470,18 +2163,6 @@ export const useRevealCredential = <TError = ErrorType<unknown>,
 /**
  * @summary Change own password
  */
-export type changeMyPasswordResponse200 = {
-  data: void
-  status: 200
-}
-
-export type changeMyPasswordResponseSuccess = (changeMyPasswordResponse200) & {
-  headers: Headers;
-};
-;
-
-export type changeMyPasswordResponse = (changeMyPasswordResponseSuccess)
-
 export const getChangeMyPasswordUrl = () => {
 
 
@@ -2490,9 +2171,9 @@ export const getChangeMyPasswordUrl = () => {
   return `/users/me/password`
 }
 
-export const changeMyPassword = async (changePasswordInput: ChangePasswordInput, options?: RequestInit): Promise<changeMyPasswordResponse> => {
+export const changeMyPassword = async (changePasswordInput: ChangePasswordInput, options?: RequestInit): Promise<void> => {
   
-  return customFetch<changeMyPasswordResponse>(getChangeMyPasswordUrl(),
+  return customFetch<void>(getChangeMyPasswordUrl(),
   {      
     ...options,
     method: 'PATCH',
@@ -2553,18 +2234,6 @@ export const useChangeMyPassword = <TError = ErrorType<unknown>,
 /**
  * @summary List all clients
  */
-export type listClientsResponse200 = {
-  data: ClientListResult
-  status: 200
-}
-
-export type listClientsResponseSuccess = (listClientsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listClientsResponse = (listClientsResponseSuccess)
-
 export const getListClientsUrl = (params?: ListClientsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -2580,9 +2249,9 @@ export const getListClientsUrl = (params?: ListClientsParams,) => {
   return stringifiedParams.length > 0 ? `/clients?${stringifiedParams}` : `/clients`
 }
 
-export const listClients = async (params?: ListClientsParams, options?: RequestInit): Promise<listClientsResponse> => {
+export const listClients = async (params?: ListClientsParams, options?: RequestInit): Promise<ClientListResult> => {
   
-  return customFetch<listClientsResponse>(getListClientsUrl(params),
+  return customFetch<ClientListResult>(getListClientsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -2671,18 +2340,6 @@ export function useListClients<TData = Awaited<ReturnType<typeof listClients>>, 
 /**
  * @summary Create a new client
  */
-export type createClientResponse201 = {
-  data: Client
-  status: 201
-}
-
-export type createClientResponseSuccess = (createClientResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createClientResponse = (createClientResponseSuccess)
-
 export const getCreateClientUrl = () => {
 
 
@@ -2691,9 +2348,9 @@ export const getCreateClientUrl = () => {
   return `/clients`
 }
 
-export const createClient = async (clientInput: ClientInput, options?: RequestInit): Promise<createClientResponse> => {
+export const createClient = async (clientInput: ClientInput, options?: RequestInit): Promise<Client> => {
   
-  return customFetch<createClientResponse>(getCreateClientUrl(),
+  return customFetch<Client>(getCreateClientUrl(),
   {      
     ...options,
     method: 'POST',
@@ -2754,18 +2411,6 @@ export const useCreateClient = <TError = ErrorType<unknown>,
 /**
  * @summary List all companies
  */
-export type listCompaniesResponse200 = {
-  data: CompanyListResult
-  status: 200
-}
-
-export type listCompaniesResponseSuccess = (listCompaniesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listCompaniesResponse = (listCompaniesResponseSuccess)
-
 export const getListCompaniesUrl = (params?: ListCompaniesParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -2781,9 +2426,9 @@ export const getListCompaniesUrl = (params?: ListCompaniesParams,) => {
   return stringifiedParams.length > 0 ? `/companies?${stringifiedParams}` : `/companies`
 }
 
-export const listCompanies = async (params?: ListCompaniesParams, options?: RequestInit): Promise<listCompaniesResponse> => {
+export const listCompanies = async (params?: ListCompaniesParams, options?: RequestInit): Promise<CompanyListResult> => {
   
-  return customFetch<listCompaniesResponse>(getListCompaniesUrl(params),
+  return customFetch<CompanyListResult>(getListCompaniesUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -2872,18 +2517,6 @@ export function useListCompanies<TData = Awaited<ReturnType<typeof listCompanies
 /**
  * @summary Get company by ID
  */
-export type getCompanyResponse200 = {
-  data: Company
-  status: 200
-}
-
-export type getCompanyResponseSuccess = (getCompanyResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getCompanyResponse = (getCompanyResponseSuccess)
-
 export const getGetCompanyUrl = (id: number,) => {
 
 
@@ -2892,9 +2525,9 @@ export const getGetCompanyUrl = (id: number,) => {
   return `/companies/${id}`
 }
 
-export const getCompany = async (id: number, options?: RequestInit): Promise<getCompanyResponse> => {
+export const getCompany = async (id: number, options?: RequestInit): Promise<Company> => {
   
-  return customFetch<getCompanyResponse>(getGetCompanyUrl(id),
+  return customFetch<Company>(getGetCompanyUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -2983,18 +2616,6 @@ export function useGetCompany<TData = Awaited<ReturnType<typeof getCompany>>, TE
 /**
  * @summary List projects for a company
  */
-export type listCompanyProjectsResponse200 = {
-  data: ListCompanyProjects200
-  status: 200
-}
-
-export type listCompanyProjectsResponseSuccess = (listCompanyProjectsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listCompanyProjectsResponse = (listCompanyProjectsResponseSuccess)
-
 export const getListCompanyProjectsUrl = (id: number,) => {
 
 
@@ -3003,9 +2624,9 @@ export const getListCompanyProjectsUrl = (id: number,) => {
   return `/companies/${id}/projects`
 }
 
-export const listCompanyProjects = async (id: number, options?: RequestInit): Promise<listCompanyProjectsResponse> => {
+export const listCompanyProjects = async (id: number, options?: RequestInit): Promise<ListCompanyProjects200> => {
   
-  return customFetch<listCompanyProjectsResponse>(getListCompanyProjectsUrl(id),
+  return customFetch<ListCompanyProjects200>(getListCompanyProjectsUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3094,18 +2715,6 @@ export function useListCompanyProjects<TData = Awaited<ReturnType<typeof listCom
 /**
  * @summary Company-level dashboard cards
  */
-export type getCompanyAnalyticsResponse200 = {
-  data: CompanyAnalyticsResult
-  status: 200
-}
-
-export type getCompanyAnalyticsResponseSuccess = (getCompanyAnalyticsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getCompanyAnalyticsResponse = (getCompanyAnalyticsResponseSuccess)
-
 export const getGetCompanyAnalyticsUrl = () => {
 
 
@@ -3114,9 +2723,9 @@ export const getGetCompanyAnalyticsUrl = () => {
   return `/analytics/companies`
 }
 
-export const getCompanyAnalytics = async ( options?: RequestInit): Promise<getCompanyAnalyticsResponse> => {
+export const getCompanyAnalytics = async ( options?: RequestInit): Promise<CompanyAnalyticsResult> => {
   
-  return customFetch<getCompanyAnalyticsResponse>(getGetCompanyAnalyticsUrl(),
+  return customFetch<CompanyAnalyticsResult>(getGetCompanyAnalyticsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -3205,18 +2814,6 @@ export function useGetCompanyAnalytics<TData = Awaited<ReturnType<typeof getComp
 /**
  * @summary Get client by ID
  */
-export type getClientResponse200 = {
-  data: Client
-  status: 200
-}
-
-export type getClientResponseSuccess = (getClientResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getClientResponse = (getClientResponseSuccess)
-
 export const getGetClientUrl = (id: number,) => {
 
 
@@ -3225,9 +2822,9 @@ export const getGetClientUrl = (id: number,) => {
   return `/clients/${id}`
 }
 
-export const getClient = async (id: number, options?: RequestInit): Promise<getClientResponse> => {
+export const getClient = async (id: number, options?: RequestInit): Promise<Client> => {
   
-  return customFetch<getClientResponse>(getGetClientUrl(id),
+  return customFetch<Client>(getGetClientUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3316,18 +2913,6 @@ export function useGetClient<TData = Awaited<ReturnType<typeof getClient>>, TErr
 /**
  * @summary Update client
  */
-export type updateClientResponse200 = {
-  data: Client
-  status: 200
-}
-
-export type updateClientResponseSuccess = (updateClientResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateClientResponse = (updateClientResponseSuccess)
-
 export const getUpdateClientUrl = (id: number,) => {
 
 
@@ -3337,9 +2922,9 @@ export const getUpdateClientUrl = (id: number,) => {
 }
 
 export const updateClient = async (id: number,
-    clientUpdate: ClientUpdate, options?: RequestInit): Promise<updateClientResponse> => {
+    clientUpdate: ClientUpdate, options?: RequestInit): Promise<Client> => {
   
-  return customFetch<updateClientResponse>(getUpdateClientUrl(id),
+  return customFetch<Client>(getUpdateClientUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -3400,18 +2985,6 @@ export const useUpdateClient = <TError = ErrorType<unknown>,
 /**
  * @summary List projects (filtered by role)
  */
-export type listProjectsResponse200 = {
-  data: ProjectListResult
-  status: 200
-}
-
-export type listProjectsResponseSuccess = (listProjectsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listProjectsResponse = (listProjectsResponseSuccess)
-
 export const getListProjectsUrl = (params?: ListProjectsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -3427,9 +3000,9 @@ export const getListProjectsUrl = (params?: ListProjectsParams,) => {
   return stringifiedParams.length > 0 ? `/projects?${stringifiedParams}` : `/projects`
 }
 
-export const listProjects = async (params?: ListProjectsParams, options?: RequestInit): Promise<listProjectsResponse> => {
+export const listProjects = async (params?: ListProjectsParams, options?: RequestInit): Promise<ProjectListResult> => {
   
-  return customFetch<listProjectsResponse>(getListProjectsUrl(params),
+  return customFetch<ProjectListResult>(getListProjectsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -3518,18 +3091,6 @@ export function useListProjects<TData = Awaited<ReturnType<typeof listProjects>>
 /**
  * @summary Create a new project (admin only)
  */
-export type createProjectResponse201 = {
-  data: Project
-  status: 201
-}
-
-export type createProjectResponseSuccess = (createProjectResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createProjectResponse = (createProjectResponseSuccess)
-
 export const getCreateProjectUrl = () => {
 
 
@@ -3538,9 +3099,9 @@ export const getCreateProjectUrl = () => {
   return `/projects`
 }
 
-export const createProject = async (projectInput: ProjectInput, options?: RequestInit): Promise<createProjectResponse> => {
+export const createProject = async (projectInput: ProjectInput, options?: RequestInit): Promise<Project> => {
   
-  return customFetch<createProjectResponse>(getCreateProjectUrl(),
+  return customFetch<Project>(getCreateProjectUrl(),
   {      
     ...options,
     method: 'POST',
@@ -3601,18 +3162,6 @@ export const useCreateProject = <TError = ErrorType<unknown>,
 /**
  * @summary Get project by ID
  */
-export type getProjectResponse200 = {
-  data: Project
-  status: 200
-}
-
-export type getProjectResponseSuccess = (getProjectResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectResponse = (getProjectResponseSuccess)
-
 export const getGetProjectUrl = (id: number,) => {
 
 
@@ -3621,9 +3170,9 @@ export const getGetProjectUrl = (id: number,) => {
   return `/projects/${id}`
 }
 
-export const getProject = async (id: number, options?: RequestInit): Promise<getProjectResponse> => {
+export const getProject = async (id: number, options?: RequestInit): Promise<Project> => {
   
-  return customFetch<getProjectResponse>(getGetProjectUrl(id),
+  return customFetch<Project>(getGetProjectUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3712,18 +3261,6 @@ export function useGetProject<TData = Awaited<ReturnType<typeof getProject>>, TE
 /**
  * @summary Update project
  */
-export type updateProjectResponse200 = {
-  data: Project
-  status: 200
-}
-
-export type updateProjectResponseSuccess = (updateProjectResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateProjectResponse = (updateProjectResponseSuccess)
-
 export const getUpdateProjectUrl = (id: number,) => {
 
 
@@ -3733,9 +3270,9 @@ export const getUpdateProjectUrl = (id: number,) => {
 }
 
 export const updateProject = async (id: number,
-    projectUpdate: ProjectUpdate, options?: RequestInit): Promise<updateProjectResponse> => {
+    projectUpdate: ProjectUpdate, options?: RequestInit): Promise<Project> => {
   
-  return customFetch<updateProjectResponse>(getUpdateProjectUrl(id),
+  return customFetch<Project>(getUpdateProjectUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -3796,18 +3333,6 @@ export const useUpdateProject = <TError = ErrorType<unknown>,
 /**
  * @summary Delete project (admin only)
  */
-export type deleteProjectResponse200 = {
-  data: void
-  status: 200
-}
-
-export type deleteProjectResponseSuccess = (deleteProjectResponse200) & {
-  headers: Headers;
-};
-;
-
-export type deleteProjectResponse = (deleteProjectResponseSuccess)
-
 export const getDeleteProjectUrl = (id: number,) => {
 
 
@@ -3816,9 +3341,9 @@ export const getDeleteProjectUrl = (id: number,) => {
   return `/projects/${id}`
 }
 
-export const deleteProject = async (id: number, options?: RequestInit): Promise<deleteProjectResponse> => {
+export const deleteProject = async (id: number, options?: RequestInit): Promise<void> => {
   
-  return customFetch<deleteProjectResponse>(getDeleteProjectUrl(id),
+  return customFetch<void>(getDeleteProjectUrl(id),
   {      
     ...options,
     method: 'DELETE'
@@ -3878,18 +3403,6 @@ export const useDeleteProject = <TError = ErrorType<unknown>,
 /**
  * @summary Get project team members
  */
-export type getProjectMembersResponse200 = {
-  data: ProjectMember[]
-  status: 200
-}
-
-export type getProjectMembersResponseSuccess = (getProjectMembersResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectMembersResponse = (getProjectMembersResponseSuccess)
-
 export const getGetProjectMembersUrl = (id: number,) => {
 
 
@@ -3898,9 +3411,9 @@ export const getGetProjectMembersUrl = (id: number,) => {
   return `/projects/${id}/members`
 }
 
-export const getProjectMembers = async (id: number, options?: RequestInit): Promise<getProjectMembersResponse> => {
+export const getProjectMembers = async (id: number, options?: RequestInit): Promise<ProjectMember[]> => {
   
-  return customFetch<getProjectMembersResponse>(getGetProjectMembersUrl(id),
+  return customFetch<ProjectMember[]>(getGetProjectMembersUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -3989,18 +3502,6 @@ export function useGetProjectMembers<TData = Awaited<ReturnType<typeof getProjec
 /**
  * @summary Add member to project
  */
-export type addProjectMemberResponse201 = {
-  data: ProjectMember
-  status: 201
-}
-
-export type addProjectMemberResponseSuccess = (addProjectMemberResponse201) & {
-  headers: Headers;
-};
-;
-
-export type addProjectMemberResponse = (addProjectMemberResponseSuccess)
-
 export const getAddProjectMemberUrl = (id: number,) => {
 
 
@@ -4010,9 +3511,9 @@ export const getAddProjectMemberUrl = (id: number,) => {
 }
 
 export const addProjectMember = async (id: number,
-    projectMemberInput: ProjectMemberInput, options?: RequestInit): Promise<addProjectMemberResponse> => {
+    projectMemberInput: ProjectMemberInput, options?: RequestInit): Promise<ProjectMember> => {
   
-  return customFetch<addProjectMemberResponse>(getAddProjectMemberUrl(id),
+  return customFetch<ProjectMember>(getAddProjectMemberUrl(id),
   {      
     ...options,
     method: 'POST',
@@ -4073,18 +3574,6 @@ export const useAddProjectMember = <TError = ErrorType<unknown>,
 /**
  * @summary Remove member from project
  */
-export type removeProjectMemberResponse200 = {
-  data: void
-  status: 200
-}
-
-export type removeProjectMemberResponseSuccess = (removeProjectMemberResponse200) & {
-  headers: Headers;
-};
-;
-
-export type removeProjectMemberResponse = (removeProjectMemberResponseSuccess)
-
 export const getRemoveProjectMemberUrl = (id: number,
     userId: number,) => {
 
@@ -4095,9 +3584,9 @@ export const getRemoveProjectMemberUrl = (id: number,
 }
 
 export const removeProjectMember = async (id: number,
-    userId: number, options?: RequestInit): Promise<removeProjectMemberResponse> => {
+    userId: number, options?: RequestInit): Promise<void> => {
   
-  return customFetch<removeProjectMemberResponse>(getRemoveProjectMemberUrl(id,userId),
+  return customFetch<void>(getRemoveProjectMemberUrl(id,userId),
   {      
     ...options,
     method: 'DELETE'
@@ -4157,18 +3646,6 @@ export const useRemoveProjectMember = <TError = ErrorType<unknown>,
 /**
  * @summary Get APK release schedules for a project
  */
-export type getApkSchedulesResponse200 = {
-  data: ApkSchedule[]
-  status: 200
-}
-
-export type getApkSchedulesResponseSuccess = (getApkSchedulesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getApkSchedulesResponse = (getApkSchedulesResponseSuccess)
-
 export const getGetApkSchedulesUrl = (id: number,) => {
 
 
@@ -4177,9 +3654,9 @@ export const getGetApkSchedulesUrl = (id: number,) => {
   return `/projects/${id}/apk-schedules`
 }
 
-export const getApkSchedules = async (id: number, options?: RequestInit): Promise<getApkSchedulesResponse> => {
+export const getApkSchedules = async (id: number, options?: RequestInit): Promise<ApkSchedule[]> => {
   
-  return customFetch<getApkSchedulesResponse>(getGetApkSchedulesUrl(id),
+  return customFetch<ApkSchedule[]>(getGetApkSchedulesUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -4268,18 +3745,6 @@ export function useGetApkSchedules<TData = Awaited<ReturnType<typeof getApkSched
 /**
  * @summary Create APK release schedule
  */
-export type createApkScheduleResponse201 = {
-  data: ApkSchedule
-  status: 201
-}
-
-export type createApkScheduleResponseSuccess = (createApkScheduleResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createApkScheduleResponse = (createApkScheduleResponseSuccess)
-
 export const getCreateApkScheduleUrl = (id: number,) => {
 
 
@@ -4289,9 +3754,9 @@ export const getCreateApkScheduleUrl = (id: number,) => {
 }
 
 export const createApkSchedule = async (id: number,
-    apkScheduleInput: ApkScheduleInput, options?: RequestInit): Promise<createApkScheduleResponse> => {
+    apkScheduleInput: ApkScheduleInput, options?: RequestInit): Promise<ApkSchedule> => {
   
-  return customFetch<createApkScheduleResponse>(getCreateApkScheduleUrl(id),
+  return customFetch<ApkSchedule>(getCreateApkScheduleUrl(id),
   {      
     ...options,
     method: 'POST',
@@ -4352,18 +3817,6 @@ export const useCreateApkSchedule = <TError = ErrorType<unknown>,
 /**
  * @summary Get project milestones
  */
-export type getProjectMilestonesResponse200 = {
-  data: Milestone[]
-  status: 200
-}
-
-export type getProjectMilestonesResponseSuccess = (getProjectMilestonesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectMilestonesResponse = (getProjectMilestonesResponseSuccess)
-
 export const getGetProjectMilestonesUrl = (id: number,) => {
 
 
@@ -4372,9 +3825,9 @@ export const getGetProjectMilestonesUrl = (id: number,) => {
   return `/projects/${id}/milestones`
 }
 
-export const getProjectMilestones = async (id: number, options?: RequestInit): Promise<getProjectMilestonesResponse> => {
+export const getProjectMilestones = async (id: number, options?: RequestInit): Promise<Milestone[]> => {
   
-  return customFetch<getProjectMilestonesResponse>(getGetProjectMilestonesUrl(id),
+  return customFetch<Milestone[]>(getGetProjectMilestonesUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -4463,18 +3916,6 @@ export function useGetProjectMilestones<TData = Awaited<ReturnType<typeof getPro
 /**
  * @summary Create a milestone
  */
-export type createMilestoneResponse201 = {
-  data: Milestone
-  status: 201
-}
-
-export type createMilestoneResponseSuccess = (createMilestoneResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createMilestoneResponse = (createMilestoneResponseSuccess)
-
 export const getCreateMilestoneUrl = (id: number,) => {
 
 
@@ -4484,9 +3925,9 @@ export const getCreateMilestoneUrl = (id: number,) => {
 }
 
 export const createMilestone = async (id: number,
-    milestoneInput: MilestoneInput, options?: RequestInit): Promise<createMilestoneResponse> => {
+    milestoneInput: MilestoneInput, options?: RequestInit): Promise<Milestone> => {
   
-  return customFetch<createMilestoneResponse>(getCreateMilestoneUrl(id),
+  return customFetch<Milestone>(getCreateMilestoneUrl(id),
   {      
     ...options,
     method: 'POST',
@@ -4547,18 +3988,6 @@ export const useCreateMilestone = <TError = ErrorType<unknown>,
 /**
  * @summary Update a milestone
  */
-export type updateMilestoneResponse200 = {
-  data: Milestone
-  status: 200
-}
-
-export type updateMilestoneResponseSuccess = (updateMilestoneResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateMilestoneResponse = (updateMilestoneResponseSuccess)
-
 export const getUpdateMilestoneUrl = (id: number,
     milestoneId: number,) => {
 
@@ -4570,9 +3999,9 @@ export const getUpdateMilestoneUrl = (id: number,
 
 export const updateMilestone = async (id: number,
     milestoneId: number,
-    milestoneUpdate: MilestoneUpdate, options?: RequestInit): Promise<updateMilestoneResponse> => {
+    milestoneUpdate: MilestoneUpdate, options?: RequestInit): Promise<Milestone> => {
   
-  return customFetch<updateMilestoneResponse>(getUpdateMilestoneUrl(id,milestoneId),
+  return customFetch<Milestone>(getUpdateMilestoneUrl(id,milestoneId),
   {      
     ...options,
     method: 'PATCH',
@@ -4633,18 +4062,6 @@ export const useUpdateMilestone = <TError = ErrorType<unknown>,
 /**
  * @summary Get audit history for a project
  */
-export type getProjectHistoryResponse200 = {
-  data: AuditLog[]
-  status: 200
-}
-
-export type getProjectHistoryResponseSuccess = (getProjectHistoryResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectHistoryResponse = (getProjectHistoryResponseSuccess)
-
 export const getGetProjectHistoryUrl = (id: number,) => {
 
 
@@ -4653,9 +4070,9 @@ export const getGetProjectHistoryUrl = (id: number,) => {
   return `/projects/${id}/history`
 }
 
-export const getProjectHistory = async (id: number, options?: RequestInit): Promise<getProjectHistoryResponse> => {
+export const getProjectHistory = async (id: number, options?: RequestInit): Promise<AuditLog[]> => {
   
-  return customFetch<getProjectHistoryResponse>(getGetProjectHistoryUrl(id),
+  return customFetch<AuditLog[]>(getGetProjectHistoryUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -4744,18 +4161,6 @@ export function useGetProjectHistory<TData = Awaited<ReturnType<typeof getProjec
 /**
  * @summary Get daily logs for a project
  */
-export type getProjectLogsResponse200 = {
-  data: LogListResult
-  status: 200
-}
-
-export type getProjectLogsResponseSuccess = (getProjectLogsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectLogsResponse = (getProjectLogsResponseSuccess)
-
 export const getGetProjectLogsUrl = (id: number,) => {
 
 
@@ -4764,9 +4169,9 @@ export const getGetProjectLogsUrl = (id: number,) => {
   return `/projects/${id}/logs`
 }
 
-export const getProjectLogs = async (id: number, options?: RequestInit): Promise<getProjectLogsResponse> => {
+export const getProjectLogs = async (id: number, options?: RequestInit): Promise<LogListResult> => {
   
-  return customFetch<getProjectLogsResponse>(getGetProjectLogsUrl(id),
+  return customFetch<LogListResult>(getGetProjectLogsUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -4855,18 +4260,6 @@ export function useGetProjectLogs<TData = Awaited<ReturnType<typeof getProjectLo
 /**
  * @summary Monthly daily-log compliance calendar for a developer
  */
-export type getLogComplianceCalendarResponse200 = {
-  data: LogComplianceCalendar
-  status: 200
-}
-
-export type getLogComplianceCalendarResponseSuccess = (getLogComplianceCalendarResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getLogComplianceCalendarResponse = (getLogComplianceCalendarResponseSuccess)
-
 export const getGetLogComplianceCalendarUrl = (params: GetLogComplianceCalendarParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -4882,9 +4275,9 @@ export const getGetLogComplianceCalendarUrl = (params: GetLogComplianceCalendarP
   return stringifiedParams.length > 0 ? `/logs/compliance-calendar?${stringifiedParams}` : `/logs/compliance-calendar`
 }
 
-export const getLogComplianceCalendar = async (params: GetLogComplianceCalendarParams, options?: RequestInit): Promise<getLogComplianceCalendarResponse> => {
+export const getLogComplianceCalendar = async (params: GetLogComplianceCalendarParams, options?: RequestInit): Promise<LogComplianceCalendar> => {
   
-  return customFetch<getLogComplianceCalendarResponse>(getGetLogComplianceCalendarUrl(params),
+  return customFetch<LogComplianceCalendar>(getGetLogComplianceCalendarUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -4973,18 +4366,6 @@ export function useGetLogComplianceCalendar<TData = Awaited<ReturnType<typeof ge
 /**
  * @summary Daily log hours summary vs required policy
  */
-export type getDailyLogSummaryResponse200 = {
-  data: DailyLogSummary
-  status: 200
-}
-
-export type getDailyLogSummaryResponseSuccess = (getDailyLogSummaryResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getDailyLogSummaryResponse = (getDailyLogSummaryResponseSuccess)
-
 export const getGetDailyLogSummaryUrl = (params?: GetDailyLogSummaryParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -5000,9 +4381,9 @@ export const getGetDailyLogSummaryUrl = (params?: GetDailyLogSummaryParams,) => 
   return stringifiedParams.length > 0 ? `/logs/daily-summary?${stringifiedParams}` : `/logs/daily-summary`
 }
 
-export const getDailyLogSummary = async (params?: GetDailyLogSummaryParams, options?: RequestInit): Promise<getDailyLogSummaryResponse> => {
+export const getDailyLogSummary = async (params?: GetDailyLogSummaryParams, options?: RequestInit): Promise<DailyLogSummary> => {
   
-  return customFetch<getDailyLogSummaryResponse>(getGetDailyLogSummaryUrl(params),
+  return customFetch<DailyLogSummary>(getGetDailyLogSummaryUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -5091,18 +4472,6 @@ export function useGetDailyLogSummary<TData = Awaited<ReturnType<typeof getDaily
 /**
  * @summary List daily logs (own logs for dev/QA; all team logs for super admin)
  */
-export type listMyLogsResponse200 = {
-  data: LogListResult
-  status: 200
-}
-
-export type listMyLogsResponseSuccess = (listMyLogsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listMyLogsResponse = (listMyLogsResponseSuccess)
-
 export const getListMyLogsUrl = (params?: ListMyLogsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -5118,9 +4487,9 @@ export const getListMyLogsUrl = (params?: ListMyLogsParams,) => {
   return stringifiedParams.length > 0 ? `/logs?${stringifiedParams}` : `/logs`
 }
 
-export const listMyLogs = async (params?: ListMyLogsParams, options?: RequestInit): Promise<listMyLogsResponse> => {
+export const listMyLogs = async (params?: ListMyLogsParams, options?: RequestInit): Promise<LogListResult> => {
   
-  return customFetch<listMyLogsResponse>(getListMyLogsUrl(params),
+  return customFetch<LogListResult>(getListMyLogsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -5209,18 +4578,6 @@ export function useListMyLogs<TData = Awaited<ReturnType<typeof listMyLogs>>, TE
 /**
  * @summary Create a daily log entry
  */
-export type createLogResponse201 = {
-  data: DailyLog
-  status: 201
-}
-
-export type createLogResponseSuccess = (createLogResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createLogResponse = (createLogResponseSuccess)
-
 export const getCreateLogUrl = () => {
 
 
@@ -5229,9 +4586,9 @@ export const getCreateLogUrl = () => {
   return `/logs`
 }
 
-export const createLog = async (logInput: LogInput, options?: RequestInit): Promise<createLogResponse> => {
+export const createLog = async (logInput: LogInput, options?: RequestInit): Promise<DailyLog> => {
   
-  return customFetch<createLogResponse>(getCreateLogUrl(),
+  return customFetch<DailyLog>(getCreateLogUrl(),
   {      
     ...options,
     method: 'POST',
@@ -5292,18 +4649,6 @@ export const useCreateLog = <TError = ErrorType<unknown>,
 /**
  * @summary Get log by ID
  */
-export type getLogResponse200 = {
-  data: DailyLog
-  status: 200
-}
-
-export type getLogResponseSuccess = (getLogResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getLogResponse = (getLogResponseSuccess)
-
 export const getGetLogUrl = (id: number,) => {
 
 
@@ -5312,9 +4657,9 @@ export const getGetLogUrl = (id: number,) => {
   return `/logs/${id}`
 }
 
-export const getLog = async (id: number, options?: RequestInit): Promise<getLogResponse> => {
+export const getLog = async (id: number, options?: RequestInit): Promise<DailyLog> => {
   
-  return customFetch<getLogResponse>(getGetLogUrl(id),
+  return customFetch<DailyLog>(getGetLogUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -5403,18 +4748,6 @@ export function useGetLog<TData = Awaited<ReturnType<typeof getLog>>, TError = E
 /**
  * @summary Update a log entry (staff may only edit logs dated today; super admin anytime)
  */
-export type updateLogResponse200 = {
-  data: DailyLog
-  status: 200
-}
-
-export type updateLogResponseSuccess = (updateLogResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateLogResponse = (updateLogResponseSuccess)
-
 export const getUpdateLogUrl = (id: number,) => {
 
 
@@ -5424,9 +4757,9 @@ export const getUpdateLogUrl = (id: number,) => {
 }
 
 export const updateLog = async (id: number,
-    logUpdate: LogUpdate, options?: RequestInit): Promise<updateLogResponse> => {
+    logUpdate: LogUpdate, options?: RequestInit): Promise<DailyLog> => {
   
-  return customFetch<updateLogResponse>(getUpdateLogUrl(id),
+  return customFetch<DailyLog>(getUpdateLogUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -5487,18 +4820,6 @@ export const useUpdateLog = <TError = ErrorType<unknown>,
 /**
  * @summary Get bugs for a project
  */
-export type getProjectBugsResponse200 = {
-  data: BugListResult
-  status: 200
-}
-
-export type getProjectBugsResponseSuccess = (getProjectBugsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectBugsResponse = (getProjectBugsResponseSuccess)
-
 export const getGetProjectBugsUrl = (id: number,) => {
 
 
@@ -5507,9 +4828,9 @@ export const getGetProjectBugsUrl = (id: number,) => {
   return `/projects/${id}/bugs`
 }
 
-export const getProjectBugs = async (id: number, options?: RequestInit): Promise<getProjectBugsResponse> => {
+export const getProjectBugs = async (id: number, options?: RequestInit): Promise<BugListResult> => {
   
-  return customFetch<getProjectBugsResponse>(getGetProjectBugsUrl(id),
+  return customFetch<BugListResult>(getGetProjectBugsUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -5598,18 +4919,6 @@ export function useGetProjectBugs<TData = Awaited<ReturnType<typeof getProjectBu
 /**
  * @summary List bugs (filtered by role)
  */
-export type listBugsResponse200 = {
-  data: BugListResult
-  status: 200
-}
-
-export type listBugsResponseSuccess = (listBugsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listBugsResponse = (listBugsResponseSuccess)
-
 export const getListBugsUrl = (params?: ListBugsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -5625,9 +4934,9 @@ export const getListBugsUrl = (params?: ListBugsParams,) => {
   return stringifiedParams.length > 0 ? `/bugs?${stringifiedParams}` : `/bugs`
 }
 
-export const listBugs = async (params?: ListBugsParams, options?: RequestInit): Promise<listBugsResponse> => {
+export const listBugs = async (params?: ListBugsParams, options?: RequestInit): Promise<BugListResult> => {
   
-  return customFetch<listBugsResponse>(getListBugsUrl(params),
+  return customFetch<BugListResult>(getListBugsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -5716,18 +5025,6 @@ export function useListBugs<TData = Awaited<ReturnType<typeof listBugs>>, TError
 /**
  * @summary Create a single bug report
  */
-export type createBugResponse201 = {
-  data: Bug
-  status: 201
-}
-
-export type createBugResponseSuccess = (createBugResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createBugResponse = (createBugResponseSuccess)
-
 export const getCreateBugUrl = () => {
 
 
@@ -5736,9 +5033,9 @@ export const getCreateBugUrl = () => {
   return `/bugs`
 }
 
-export const createBug = async (bugInput: BugInput, options?: RequestInit): Promise<createBugResponse> => {
+export const createBug = async (bugInput: BugInput, options?: RequestInit): Promise<Bug> => {
   
-  return customFetch<createBugResponse>(getCreateBugUrl(),
+  return customFetch<Bug>(getCreateBugUrl(),
   {      
     ...options,
     method: 'POST',
@@ -5799,18 +5096,6 @@ export const useCreateBug = <TError = ErrorType<unknown>,
 /**
  * @summary Create a batch of bugs under one parent report
  */
-export type createBugBatchResponse201 = {
-  data: Bug
-  status: 201
-}
-
-export type createBugBatchResponseSuccess = (createBugBatchResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createBugBatchResponse = (createBugBatchResponseSuccess)
-
 export const getCreateBugBatchUrl = () => {
 
 
@@ -5819,9 +5104,9 @@ export const getCreateBugBatchUrl = () => {
   return `/bugs/batch`
 }
 
-export const createBugBatch = async (bugBatchInput: BugBatchInput, options?: RequestInit): Promise<createBugBatchResponse> => {
+export const createBugBatch = async (bugBatchInput: BugBatchInput, options?: RequestInit): Promise<Bug> => {
   
-  return customFetch<createBugBatchResponse>(getCreateBugBatchUrl(),
+  return customFetch<Bug>(getCreateBugBatchUrl(),
   {      
     ...options,
     method: 'POST',
@@ -5882,18 +5167,6 @@ export const useCreateBugBatch = <TError = ErrorType<unknown>,
 /**
  * @summary Get bug by ID
  */
-export type getBugResponse200 = {
-  data: Bug
-  status: 200
-}
-
-export type getBugResponseSuccess = (getBugResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getBugResponse = (getBugResponseSuccess)
-
 export const getGetBugUrl = (id: number,) => {
 
 
@@ -5902,9 +5175,9 @@ export const getGetBugUrl = (id: number,) => {
   return `/bugs/${id}`
 }
 
-export const getBug = async (id: number, options?: RequestInit): Promise<getBugResponse> => {
+export const getBug = async (id: number, options?: RequestInit): Promise<Bug> => {
   
-  return customFetch<getBugResponse>(getGetBugUrl(id),
+  return customFetch<Bug>(getGetBugUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -5993,18 +5266,6 @@ export function useGetBug<TData = Awaited<ReturnType<typeof getBug>>, TError = E
 /**
  * @summary Update bug
  */
-export type updateBugResponse200 = {
-  data: Bug
-  status: 200
-}
-
-export type updateBugResponseSuccess = (updateBugResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateBugResponse = (updateBugResponseSuccess)
-
 export const getUpdateBugUrl = (id: number,) => {
 
 
@@ -6014,9 +5275,9 @@ export const getUpdateBugUrl = (id: number,) => {
 }
 
 export const updateBug = async (id: number,
-    bugUpdate: BugUpdate, options?: RequestInit): Promise<updateBugResponse> => {
+    bugUpdate: BugUpdate, options?: RequestInit): Promise<Bug> => {
   
-  return customFetch<updateBugResponse>(getUpdateBugUrl(id),
+  return customFetch<Bug>(getUpdateBugUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -6077,18 +5338,6 @@ export const useUpdateBug = <TError = ErrorType<unknown>,
 /**
  * @summary Assign bug to a developer (QA or super admin)
  */
-export type assignBugResponse200 = {
-  data: Bug
-  status: 200
-}
-
-export type assignBugResponseSuccess = (assignBugResponse200) & {
-  headers: Headers;
-};
-;
-
-export type assignBugResponse = (assignBugResponseSuccess)
-
 export const getAssignBugUrl = (id: number,) => {
 
 
@@ -6098,9 +5347,9 @@ export const getAssignBugUrl = (id: number,) => {
 }
 
 export const assignBug = async (id: number,
-    assignBugBody: AssignBugBody, options?: RequestInit): Promise<assignBugResponse> => {
+    assignBugBody: AssignBugBody, options?: RequestInit): Promise<Bug> => {
   
-  return customFetch<assignBugResponse>(getAssignBugUrl(id),
+  return customFetch<Bug>(getAssignBugUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -6161,18 +5410,6 @@ export const useAssignBug = <TError = ErrorType<unknown>,
 /**
  * @summary List work tasks (role-filtered)
  */
-export type listTasksResponse200 = {
-  data: TaskListResult
-  status: 200
-}
-
-export type listTasksResponseSuccess = (listTasksResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listTasksResponse = (listTasksResponseSuccess)
-
 export const getListTasksUrl = (params?: ListTasksParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -6188,9 +5425,9 @@ export const getListTasksUrl = (params?: ListTasksParams,) => {
   return stringifiedParams.length > 0 ? `/tasks?${stringifiedParams}` : `/tasks`
 }
 
-export const listTasks = async (params?: ListTasksParams, options?: RequestInit): Promise<listTasksResponse> => {
+export const listTasks = async (params?: ListTasksParams, options?: RequestInit): Promise<TaskListResult> => {
   
-  return customFetch<listTasksResponse>(getListTasksUrl(params),
+  return customFetch<TaskListResult>(getListTasksUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -6279,18 +5516,6 @@ export function useListTasks<TData = Awaited<ReturnType<typeof listTasks>>, TErr
 /**
  * @summary Create and assign a task (super admin)
  */
-export type createTaskResponse201 = {
-  data: WorkTask
-  status: 201
-}
-
-export type createTaskResponseSuccess = (createTaskResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createTaskResponse = (createTaskResponseSuccess)
-
 export const getCreateTaskUrl = () => {
 
 
@@ -6299,9 +5524,9 @@ export const getCreateTaskUrl = () => {
   return `/tasks`
 }
 
-export const createTask = async (taskInput: TaskInput, options?: RequestInit): Promise<createTaskResponse> => {
+export const createTask = async (taskInput: TaskInput, options?: RequestInit): Promise<WorkTask> => {
   
-  return customFetch<createTaskResponse>(getCreateTaskUrl(),
+  return customFetch<WorkTask>(getCreateTaskUrl(),
   {      
     ...options,
     method: 'POST',
@@ -6362,18 +5587,6 @@ export const useCreateTask = <TError = ErrorType<unknown>,
 /**
  * @summary Get task by ID
  */
-export type getTaskResponse200 = {
-  data: WorkTask
-  status: 200
-}
-
-export type getTaskResponseSuccess = (getTaskResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getTaskResponse = (getTaskResponseSuccess)
-
 export const getGetTaskUrl = (id: number,) => {
 
 
@@ -6382,9 +5595,9 @@ export const getGetTaskUrl = (id: number,) => {
   return `/tasks/${id}`
 }
 
-export const getTask = async (id: number, options?: RequestInit): Promise<getTaskResponse> => {
+export const getTask = async (id: number, options?: RequestInit): Promise<WorkTask> => {
   
-  return customFetch<getTaskResponse>(getGetTaskUrl(id),
+  return customFetch<WorkTask>(getGetTaskUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -6473,18 +5686,6 @@ export function useGetTask<TData = Awaited<ReturnType<typeof getTask>>, TError =
 /**
  * @summary Update task
  */
-export type updateTaskResponse200 = {
-  data: WorkTask
-  status: 200
-}
-
-export type updateTaskResponseSuccess = (updateTaskResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateTaskResponse = (updateTaskResponseSuccess)
-
 export const getUpdateTaskUrl = (id: number,) => {
 
 
@@ -6494,9 +5695,9 @@ export const getUpdateTaskUrl = (id: number,) => {
 }
 
 export const updateTask = async (id: number,
-    taskUpdate: TaskUpdate, options?: RequestInit): Promise<updateTaskResponse> => {
+    taskUpdate: TaskUpdate, options?: RequestInit): Promise<WorkTask> => {
   
-  return customFetch<updateTaskResponse>(getUpdateTaskUrl(id),
+  return customFetch<WorkTask>(getUpdateTaskUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -6557,18 +5758,6 @@ export const useUpdateTask = <TError = ErrorType<unknown>,
 /**
  * @summary List project members eligible for assignment
  */
-export type listAssignableMembersResponse200 = {
-  data: AssignableMemberList
-  status: 200
-}
-
-export type listAssignableMembersResponseSuccess = (listAssignableMembersResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listAssignableMembersResponse = (listAssignableMembersResponseSuccess)
-
 export const getListAssignableMembersUrl = (id: number,
     params?: ListAssignableMembersParams,) => {
   const normalizedParams = new URLSearchParams();
@@ -6586,9 +5775,9 @@ export const getListAssignableMembersUrl = (id: number,
 }
 
 export const listAssignableMembers = async (id: number,
-    params?: ListAssignableMembersParams, options?: RequestInit): Promise<listAssignableMembersResponse> => {
+    params?: ListAssignableMembersParams, options?: RequestInit): Promise<AssignableMemberList> => {
   
-  return customFetch<listAssignableMembersResponse>(getListAssignableMembersUrl(id,params),
+  return customFetch<AssignableMemberList>(getListAssignableMembersUrl(id,params),
   {      
     ...options,
     method: 'GET'
@@ -6683,18 +5872,6 @@ export function useListAssignableMembers<TData = Awaited<ReturnType<typeof listA
 /**
  * @summary Get APK releases for a project
  */
-export type getApkReleasesResponse200 = {
-  data: ApkRelease[]
-  status: 200
-}
-
-export type getApkReleasesResponseSuccess = (getApkReleasesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getApkReleasesResponse = (getApkReleasesResponseSuccess)
-
 export const getGetApkReleasesUrl = (id: number,) => {
 
 
@@ -6703,9 +5880,9 @@ export const getGetApkReleasesUrl = (id: number,) => {
   return `/projects/${id}/apk-releases`
 }
 
-export const getApkReleases = async (id: number, options?: RequestInit): Promise<getApkReleasesResponse> => {
+export const getApkReleases = async (id: number, options?: RequestInit): Promise<ApkRelease[]> => {
   
-  return customFetch<getApkReleasesResponse>(getGetApkReleasesUrl(id),
+  return customFetch<ApkRelease[]>(getGetApkReleasesUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -6794,18 +5971,6 @@ export function useGetApkReleases<TData = Awaited<ReturnType<typeof getApkReleas
 /**
  * @summary Upload a new APK release
  */
-export type createApkReleaseResponse201 = {
-  data: ApkRelease
-  status: 201
-}
-
-export type createApkReleaseResponseSuccess = (createApkReleaseResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createApkReleaseResponse = (createApkReleaseResponseSuccess)
-
 export const getCreateApkReleaseUrl = (id: number,) => {
 
 
@@ -6815,9 +5980,9 @@ export const getCreateApkReleaseUrl = (id: number,) => {
 }
 
 export const createApkRelease = async (id: number,
-    apkReleaseInput: ApkReleaseInput, options?: RequestInit): Promise<createApkReleaseResponse> => {
+    apkReleaseInput: ApkReleaseInput, options?: RequestInit): Promise<ApkRelease> => {
   
-  return customFetch<createApkReleaseResponse>(getCreateApkReleaseUrl(id),
+  return customFetch<ApkRelease>(getCreateApkReleaseUrl(id),
   {      
     ...options,
     method: 'POST',
@@ -6878,18 +6043,6 @@ export const useCreateApkRelease = <TError = ErrorType<unknown>,
 /**
  * @summary Get APK release by ID
  */
-export type getApkReleaseResponse200 = {
-  data: ApkRelease
-  status: 200
-}
-
-export type getApkReleaseResponseSuccess = (getApkReleaseResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getApkReleaseResponse = (getApkReleaseResponseSuccess)
-
 export const getGetApkReleaseUrl = (id: number,) => {
 
 
@@ -6898,9 +6051,9 @@ export const getGetApkReleaseUrl = (id: number,) => {
   return `/apk-releases/${id}`
 }
 
-export const getApkRelease = async (id: number, options?: RequestInit): Promise<getApkReleaseResponse> => {
+export const getApkRelease = async (id: number, options?: RequestInit): Promise<ApkRelease> => {
   
-  return customFetch<getApkReleaseResponse>(getGetApkReleaseUrl(id),
+  return customFetch<ApkRelease>(getGetApkReleaseUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -6989,18 +6142,6 @@ export function useGetApkRelease<TData = Awaited<ReturnType<typeof getApkRelease
 /**
  * @summary Latest message preview per project discussion thread
  */
-export type listProjectCommentPreviewsResponse200 = {
-  data: ListProjectCommentPreviews200
-  status: 200
-}
-
-export type listProjectCommentPreviewsResponseSuccess = (listProjectCommentPreviewsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listProjectCommentPreviewsResponse = (listProjectCommentPreviewsResponseSuccess)
-
 export const getListProjectCommentPreviewsUrl = () => {
 
 
@@ -7009,9 +6150,9 @@ export const getListProjectCommentPreviewsUrl = () => {
   return `/comments/project-previews`
 }
 
-export const listProjectCommentPreviews = async ( options?: RequestInit): Promise<listProjectCommentPreviewsResponse> => {
+export const listProjectCommentPreviews = async ( options?: RequestInit): Promise<ListProjectCommentPreviews200> => {
   
-  return customFetch<listProjectCommentPreviewsResponse>(getListProjectCommentPreviewsUrl(),
+  return customFetch<ListProjectCommentPreviews200>(getListProjectCommentPreviewsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -7100,18 +6241,6 @@ export function useListProjectCommentPreviews<TData = Awaited<ReturnType<typeof 
 /**
  * @summary Mentionable users in the company team channel
  */
-export type listCompanyTeamMentionCandidatesResponse200 = {
-  data: ListCompanyTeamMentionCandidates200
-  status: 200
-}
-
-export type listCompanyTeamMentionCandidatesResponseSuccess = (listCompanyTeamMentionCandidatesResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listCompanyTeamMentionCandidatesResponse = (listCompanyTeamMentionCandidatesResponseSuccess)
-
 export const getListCompanyTeamMentionCandidatesUrl = () => {
 
 
@@ -7120,9 +6249,9 @@ export const getListCompanyTeamMentionCandidatesUrl = () => {
   return `/comments/company-team/mention-candidates`
 }
 
-export const listCompanyTeamMentionCandidates = async ( options?: RequestInit): Promise<listCompanyTeamMentionCandidatesResponse> => {
+export const listCompanyTeamMentionCandidates = async ( options?: RequestInit): Promise<ListCompanyTeamMentionCandidates200> => {
   
-  return customFetch<listCompanyTeamMentionCandidatesResponse>(getListCompanyTeamMentionCandidatesUrl(),
+  return customFetch<ListCompanyTeamMentionCandidates200>(getListCompanyTeamMentionCandidatesUrl(),
   {      
     ...options,
     method: 'GET'
@@ -7211,18 +6340,6 @@ export function useListCompanyTeamMentionCandidates<TData = Awaited<ReturnType<t
 /**
  * @summary Get comments for a thread
  */
-export type listCommentsResponse200 = {
-  data: CommentListResult
-  status: 200
-}
-
-export type listCommentsResponseSuccess = (listCommentsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listCommentsResponse = (listCommentsResponseSuccess)
-
 export const getListCommentsUrl = (params: ListCommentsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -7238,9 +6355,9 @@ export const getListCommentsUrl = (params: ListCommentsParams,) => {
   return stringifiedParams.length > 0 ? `/comments?${stringifiedParams}` : `/comments`
 }
 
-export const listComments = async (params: ListCommentsParams, options?: RequestInit): Promise<listCommentsResponse> => {
+export const listComments = async (params: ListCommentsParams, options?: RequestInit): Promise<CommentListResult> => {
   
-  return customFetch<listCommentsResponse>(getListCommentsUrl(params),
+  return customFetch<CommentListResult>(getListCommentsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -7329,18 +6446,6 @@ export function useListComments<TData = Awaited<ReturnType<typeof listComments>>
 /**
  * @summary Post a comment
  */
-export type createCommentResponse201 = {
-  data: Comment
-  status: 201
-}
-
-export type createCommentResponseSuccess = (createCommentResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createCommentResponse = (createCommentResponseSuccess)
-
 export const getCreateCommentUrl = () => {
 
 
@@ -7349,9 +6454,9 @@ export const getCreateCommentUrl = () => {
   return `/comments`
 }
 
-export const createComment = async (commentInput: CommentInput, options?: RequestInit): Promise<createCommentResponse> => {
+export const createComment = async (commentInput: CommentInput, options?: RequestInit): Promise<Comment> => {
   
-  return customFetch<createCommentResponse>(getCreateCommentUrl(),
+  return customFetch<Comment>(getCreateCommentUrl(),
   {      
     ...options,
     method: 'POST',
@@ -7412,18 +6517,6 @@ export const useCreateComment = <TError = ErrorType<unknown>,
 /**
  * @summary Edit a comment
  */
-export type updateCommentResponse200 = {
-  data: Comment
-  status: 200
-}
-
-export type updateCommentResponseSuccess = (updateCommentResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateCommentResponse = (updateCommentResponseSuccess)
-
 export const getUpdateCommentUrl = (id: number,) => {
 
 
@@ -7433,9 +6526,9 @@ export const getUpdateCommentUrl = (id: number,) => {
 }
 
 export const updateComment = async (id: number,
-    commentUpdate: CommentUpdate, options?: RequestInit): Promise<updateCommentResponse> => {
+    commentUpdate: CommentUpdate, options?: RequestInit): Promise<Comment> => {
   
-  return customFetch<updateCommentResponse>(getUpdateCommentUrl(id),
+  return customFetch<Comment>(getUpdateCommentUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -7496,18 +6589,6 @@ export const useUpdateComment = <TError = ErrorType<unknown>,
 /**
  * @summary List 1:1 conversations for the current user
  */
-export type listDirectConversationsResponse200 = {
-  data: DirectConversationListResult
-  status: 200
-}
-
-export type listDirectConversationsResponseSuccess = (listDirectConversationsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listDirectConversationsResponse = (listDirectConversationsResponseSuccess)
-
 export const getListDirectConversationsUrl = () => {
 
 
@@ -7516,9 +6597,9 @@ export const getListDirectConversationsUrl = () => {
   return `/direct-conversations`
 }
 
-export const listDirectConversations = async ( options?: RequestInit): Promise<listDirectConversationsResponse> => {
+export const listDirectConversations = async ( options?: RequestInit): Promise<DirectConversationListResult> => {
   
-  return customFetch<listDirectConversationsResponse>(getListDirectConversationsUrl(),
+  return customFetch<DirectConversationListResult>(getListDirectConversationsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -7607,18 +6688,6 @@ export function useListDirectConversations<TData = Awaited<ReturnType<typeof lis
 /**
  * @summary Start or open a 1:1 conversation (admin only)
  */
-export type createDirectConversationResponse201 = {
-  data: CreateDirectConversation201
-  status: 201
-}
-
-export type createDirectConversationResponseSuccess = (createDirectConversationResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createDirectConversationResponse = (createDirectConversationResponseSuccess)
-
 export const getCreateDirectConversationUrl = () => {
 
 
@@ -7627,9 +6696,9 @@ export const getCreateDirectConversationUrl = () => {
   return `/direct-conversations`
 }
 
-export const createDirectConversation = async (directConversationCreateInput: DirectConversationCreateInput, options?: RequestInit): Promise<createDirectConversationResponse> => {
+export const createDirectConversation = async (directConversationCreateInput: DirectConversationCreateInput, options?: RequestInit): Promise<CreateDirectConversation201> => {
   
-  return customFetch<createDirectConversationResponse>(getCreateDirectConversationUrl(),
+  return customFetch<CreateDirectConversation201>(getCreateDirectConversationUrl(),
   {      
     ...options,
     method: 'POST',
@@ -7690,18 +6759,6 @@ export const useCreateDirectConversation = <TError = ErrorType<unknown>,
 /**
  * @summary Users an admin can start a 1:1 chat with
  */
-export type listDirectConversationContactsResponse200 = {
-  data: DirectConversationContactsResult
-  status: 200
-}
-
-export type listDirectConversationContactsResponseSuccess = (listDirectConversationContactsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listDirectConversationContactsResponse = (listDirectConversationContactsResponseSuccess)
-
 export const getListDirectConversationContactsUrl = () => {
 
 
@@ -7710,9 +6767,9 @@ export const getListDirectConversationContactsUrl = () => {
   return `/direct-conversations/contacts`
 }
 
-export const listDirectConversationContacts = async ( options?: RequestInit): Promise<listDirectConversationContactsResponse> => {
+export const listDirectConversationContacts = async ( options?: RequestInit): Promise<DirectConversationContactsResult> => {
   
-  return customFetch<listDirectConversationContactsResponse>(getListDirectConversationContactsUrl(),
+  return customFetch<DirectConversationContactsResult>(getListDirectConversationContactsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -7801,18 +6858,6 @@ export function useListDirectConversationContacts<TData = Awaited<ReturnType<typ
 /**
  * @summary List notifications for current user
  */
-export type listNotificationsResponse200 = {
-  data: NotificationListResult
-  status: 200
-}
-
-export type listNotificationsResponseSuccess = (listNotificationsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listNotificationsResponse = (listNotificationsResponseSuccess)
-
 export const getListNotificationsUrl = (params?: ListNotificationsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -7828,9 +6873,9 @@ export const getListNotificationsUrl = (params?: ListNotificationsParams,) => {
   return stringifiedParams.length > 0 ? `/notifications?${stringifiedParams}` : `/notifications`
 }
 
-export const listNotifications = async (params?: ListNotificationsParams, options?: RequestInit): Promise<listNotificationsResponse> => {
+export const listNotifications = async (params?: ListNotificationsParams, options?: RequestInit): Promise<NotificationListResult> => {
   
-  return customFetch<listNotificationsResponse>(getListNotificationsUrl(params),
+  return customFetch<NotificationListResult>(getListNotificationsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -7919,18 +6964,6 @@ export function useListNotifications<TData = Awaited<ReturnType<typeof listNotif
 /**
  * @summary Mark all notifications as read
  */
-export type markAllNotificationsReadResponse200 = {
-  data: void
-  status: 200
-}
-
-export type markAllNotificationsReadResponseSuccess = (markAllNotificationsReadResponse200) & {
-  headers: Headers;
-};
-;
-
-export type markAllNotificationsReadResponse = (markAllNotificationsReadResponseSuccess)
-
 export const getMarkAllNotificationsReadUrl = () => {
 
 
@@ -7939,9 +6972,9 @@ export const getMarkAllNotificationsReadUrl = () => {
   return `/notifications/mark-all-read`
 }
 
-export const markAllNotificationsRead = async ( options?: RequestInit): Promise<markAllNotificationsReadResponse> => {
+export const markAllNotificationsRead = async ( options?: RequestInit): Promise<void> => {
   
-  return customFetch<markAllNotificationsReadResponse>(getMarkAllNotificationsReadUrl(),
+  return customFetch<void>(getMarkAllNotificationsReadUrl(),
   {      
     ...options,
     method: 'POST'
@@ -8001,18 +7034,6 @@ export const useMarkAllNotificationsRead = <TError = ErrorType<unknown>,
 /**
  * @summary Mark a notification as read
  */
-export type markNotificationReadResponse200 = {
-  data: void
-  status: 200
-}
-
-export type markNotificationReadResponseSuccess = (markNotificationReadResponse200) & {
-  headers: Headers;
-};
-;
-
-export type markNotificationReadResponse = (markNotificationReadResponseSuccess)
-
 export const getMarkNotificationReadUrl = (id: number,) => {
 
 
@@ -8021,9 +7042,9 @@ export const getMarkNotificationReadUrl = (id: number,) => {
   return `/notifications/${id}/read`
 }
 
-export const markNotificationRead = async (id: number, options?: RequestInit): Promise<markNotificationReadResponse> => {
+export const markNotificationRead = async (id: number, options?: RequestInit): Promise<void> => {
   
-  return customFetch<markNotificationReadResponse>(getMarkNotificationReadUrl(id),
+  return customFetch<void>(getMarkNotificationReadUrl(id),
   {      
     ...options,
     method: 'POST'
@@ -8083,18 +7104,6 @@ export const useMarkNotificationRead = <TError = ErrorType<unknown>,
 /**
  * @summary List resource requests
  */
-export type listRequestsResponse200 = {
-  data: RequestListResult
-  status: 200
-}
-
-export type listRequestsResponseSuccess = (listRequestsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listRequestsResponse = (listRequestsResponseSuccess)
-
 export const getListRequestsUrl = (params?: ListRequestsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -8110,9 +7119,9 @@ export const getListRequestsUrl = (params?: ListRequestsParams,) => {
   return stringifiedParams.length > 0 ? `/requests?${stringifiedParams}` : `/requests`
 }
 
-export const listRequests = async (params?: ListRequestsParams, options?: RequestInit): Promise<listRequestsResponse> => {
+export const listRequests = async (params?: ListRequestsParams, options?: RequestInit): Promise<RequestListResult> => {
   
-  return customFetch<listRequestsResponse>(getListRequestsUrl(params),
+  return customFetch<RequestListResult>(getListRequestsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -8201,18 +7210,6 @@ export function useListRequests<TData = Awaited<ReturnType<typeof listRequests>>
 /**
  * @summary Create a resource request
  */
-export type createRequestResponse201 = {
-  data: ResourceRequest
-  status: 201
-}
-
-export type createRequestResponseSuccess = (createRequestResponse201) & {
-  headers: Headers;
-};
-;
-
-export type createRequestResponse = (createRequestResponseSuccess)
-
 export const getCreateRequestUrl = () => {
 
 
@@ -8221,9 +7218,9 @@ export const getCreateRequestUrl = () => {
   return `/requests`
 }
 
-export const createRequest = async (resourceRequestInput: ResourceRequestInput, options?: RequestInit): Promise<createRequestResponse> => {
+export const createRequest = async (resourceRequestInput: ResourceRequestInput, options?: RequestInit): Promise<ResourceRequest> => {
   
-  return customFetch<createRequestResponse>(getCreateRequestUrl(),
+  return customFetch<ResourceRequest>(getCreateRequestUrl(),
   {      
     ...options,
     method: 'POST',
@@ -8284,18 +7281,6 @@ export const useCreateRequest = <TError = ErrorType<unknown>,
 /**
  * @summary Get request by ID
  */
-export type getRequestResponse200 = {
-  data: ResourceRequest
-  status: 200
-}
-
-export type getRequestResponseSuccess = (getRequestResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getRequestResponse = (getRequestResponseSuccess)
-
 export const getGetRequestUrl = (id: number,) => {
 
 
@@ -8304,9 +7289,9 @@ export const getGetRequestUrl = (id: number,) => {
   return `/requests/${id}`
 }
 
-export const getRequest = async (id: number, options?: RequestInit): Promise<getRequestResponse> => {
+export const getRequest = async (id: number, options?: RequestInit): Promise<ResourceRequest> => {
   
-  return customFetch<getRequestResponse>(getGetRequestUrl(id),
+  return customFetch<ResourceRequest>(getGetRequestUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -8395,18 +7380,6 @@ export function useGetRequest<TData = Awaited<ReturnType<typeof getRequest>>, TE
 /**
  * @summary Update request status (admin approve/reject)
  */
-export type updateRequestResponse200 = {
-  data: ResourceRequest
-  status: 200
-}
-
-export type updateRequestResponseSuccess = (updateRequestResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateRequestResponse = (updateRequestResponseSuccess)
-
 export const getUpdateRequestUrl = (id: number,) => {
 
 
@@ -8416,9 +7389,9 @@ export const getUpdateRequestUrl = (id: number,) => {
 }
 
 export const updateRequest = async (id: number,
-    resourceRequestUpdate: ResourceRequestUpdate, options?: RequestInit): Promise<updateRequestResponse> => {
+    resourceRequestUpdate: ResourceRequestUpdate, options?: RequestInit): Promise<ResourceRequest> => {
   
-  return customFetch<updateRequestResponse>(getUpdateRequestUrl(id),
+  return customFetch<ResourceRequest>(getUpdateRequestUrl(id),
   {      
     ...options,
     method: 'PATCH',
@@ -8479,18 +7452,6 @@ export const useUpdateRequest = <TError = ErrorType<unknown>,
 /**
  * @summary Get admin dashboard KPI stats
  */
-export type getDashboardStatsResponse200 = {
-  data: DashboardStats
-  status: 200
-}
-
-export type getDashboardStatsResponseSuccess = (getDashboardStatsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getDashboardStatsResponse = (getDashboardStatsResponseSuccess)
-
 export const getGetDashboardStatsUrl = () => {
 
 
@@ -8499,9 +7460,9 @@ export const getGetDashboardStatsUrl = () => {
   return `/analytics/dashboard`
 }
 
-export const getDashboardStats = async ( options?: RequestInit): Promise<getDashboardStatsResponse> => {
+export const getDashboardStats = async ( options?: RequestInit): Promise<DashboardStats> => {
   
-  return customFetch<getDashboardStatsResponse>(getGetDashboardStatsUrl(),
+  return customFetch<DashboardStats>(getGetDashboardStatsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -8590,18 +7551,6 @@ export function useGetDashboardStats<TData = Awaited<ReturnType<typeof getDashbo
 /**
  * @summary Get analytics for a specific project
  */
-export type getProjectAnalyticsResponse200 = {
-  data: ProjectAnalytics
-  status: 200
-}
-
-export type getProjectAnalyticsResponseSuccess = (getProjectAnalyticsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getProjectAnalyticsResponse = (getProjectAnalyticsResponseSuccess)
-
 export const getGetProjectAnalyticsUrl = (id: number,) => {
 
 
@@ -8610,9 +7559,9 @@ export const getGetProjectAnalyticsUrl = (id: number,) => {
   return `/analytics/projects/${id}`
 }
 
-export const getProjectAnalytics = async (id: number, options?: RequestInit): Promise<getProjectAnalyticsResponse> => {
+export const getProjectAnalytics = async (id: number, options?: RequestInit): Promise<ProjectAnalytics> => {
   
-  return customFetch<getProjectAnalyticsResponse>(getGetProjectAnalyticsUrl(id),
+  return customFetch<ProjectAnalytics>(getGetProjectAnalyticsUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -8701,18 +7650,6 @@ export function useGetProjectAnalytics<TData = Awaited<ReturnType<typeof getProj
 /**
  * @summary Get team utilisation analytics
  */
-export type getTeamAnalyticsResponse200 = {
-  data: TeamAnalytics
-  status: 200
-}
-
-export type getTeamAnalyticsResponseSuccess = (getTeamAnalyticsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getTeamAnalyticsResponse = (getTeamAnalyticsResponseSuccess)
-
 export const getGetTeamAnalyticsUrl = (params?: GetTeamAnalyticsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -8728,9 +7665,9 @@ export const getGetTeamAnalyticsUrl = (params?: GetTeamAnalyticsParams,) => {
   return stringifiedParams.length > 0 ? `/analytics/team?${stringifiedParams}` : `/analytics/team`
 }
 
-export const getTeamAnalytics = async (params?: GetTeamAnalyticsParams, options?: RequestInit): Promise<getTeamAnalyticsResponse> => {
+export const getTeamAnalytics = async (params?: GetTeamAnalyticsParams, options?: RequestInit): Promise<TeamAnalytics> => {
   
-  return customFetch<getTeamAnalyticsResponse>(getGetTeamAnalyticsUrl(params),
+  return customFetch<TeamAnalytics>(getGetTeamAnalyticsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -8819,18 +7756,6 @@ export function useGetTeamAnalytics<TData = Awaited<ReturnType<typeof getTeamAna
 /**
  * @summary Get bug severity and status analytics
  */
-export type getBugAnalyticsResponse200 = {
-  data: BugAnalytics
-  status: 200
-}
-
-export type getBugAnalyticsResponseSuccess = (getBugAnalyticsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getBugAnalyticsResponse = (getBugAnalyticsResponseSuccess)
-
 export const getGetBugAnalyticsUrl = (params?: GetBugAnalyticsParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -8846,9 +7771,9 @@ export const getGetBugAnalyticsUrl = (params?: GetBugAnalyticsParams,) => {
   return stringifiedParams.length > 0 ? `/analytics/bugs?${stringifiedParams}` : `/analytics/bugs`
 }
 
-export const getBugAnalytics = async (params?: GetBugAnalyticsParams, options?: RequestInit): Promise<getBugAnalyticsResponse> => {
+export const getBugAnalytics = async (params?: GetBugAnalyticsParams, options?: RequestInit): Promise<BugAnalytics> => {
   
-  return customFetch<getBugAnalyticsResponse>(getGetBugAnalyticsUrl(params),
+  return customFetch<BugAnalytics>(getGetBugAnalyticsUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -8937,18 +7862,6 @@ export function useGetBugAnalytics<TData = Awaited<ReturnType<typeof getBugAnaly
 /**
  * @summary List generated reports
  */
-export type listReportsResponse200 = {
-  data: Report[]
-  status: 200
-}
-
-export type listReportsResponseSuccess = (listReportsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type listReportsResponse = (listReportsResponseSuccess)
-
 export const getListReportsUrl = () => {
 
 
@@ -8957,9 +7870,9 @@ export const getListReportsUrl = () => {
   return `/reports`
 }
 
-export const listReports = async ( options?: RequestInit): Promise<listReportsResponse> => {
+export const listReports = async ( options?: RequestInit): Promise<Report[]> => {
   
-  return customFetch<listReportsResponse>(getListReportsUrl(),
+  return customFetch<Report[]>(getListReportsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -9048,18 +7961,6 @@ export function useListReports<TData = Awaited<ReturnType<typeof listReports>>, 
 /**
  * @summary Request report generation
  */
-export type generateReportResponse202 = {
-  data: Report
-  status: 202
-}
-
-export type generateReportResponseSuccess = (generateReportResponse202) & {
-  headers: Headers;
-};
-;
-
-export type generateReportResponse = (generateReportResponseSuccess)
-
 export const getGenerateReportUrl = () => {
 
 
@@ -9068,9 +7969,9 @@ export const getGenerateReportUrl = () => {
   return `/reports`
 }
 
-export const generateReport = async (reportInput: ReportInput, options?: RequestInit): Promise<generateReportResponse> => {
+export const generateReport = async (reportInput: ReportInput, options?: RequestInit): Promise<Report> => {
   
-  return customFetch<generateReportResponse>(getGenerateReportUrl(),
+  return customFetch<Report>(getGenerateReportUrl(),
   {      
     ...options,
     method: 'POST',
@@ -9131,18 +8032,6 @@ export const useGenerateReport = <TError = ErrorType<unknown>,
 /**
  * @summary Get download URL for a report
  */
-export type downloadReportResponse200 = {
-  data: DownloadUrl
-  status: 200
-}
-
-export type downloadReportResponseSuccess = (downloadReportResponse200) & {
-  headers: Headers;
-};
-;
-
-export type downloadReportResponse = (downloadReportResponseSuccess)
-
 export const getDownloadReportUrl = (id: number,) => {
 
 
@@ -9151,9 +8040,9 @@ export const getDownloadReportUrl = (id: number,) => {
   return `/reports/${id}/download`
 }
 
-export const downloadReport = async (id: number, options?: RequestInit): Promise<downloadReportResponse> => {
+export const downloadReport = async (id: number, options?: RequestInit): Promise<DownloadUrl> => {
   
-  return customFetch<downloadReportResponse>(getDownloadReportUrl(id),
+  return customFetch<DownloadUrl>(getDownloadReportUrl(id),
   {      
     ...options,
     method: 'GET'
@@ -9242,18 +8131,6 @@ export function useDownloadReport<TData = Awaited<ReturnType<typeof downloadRepo
 /**
  * @summary Global search across projects, clients, employees, and bugs
  */
-export type globalSearchResponse200 = {
-  data: SearchResult
-  status: 200
-}
-
-export type globalSearchResponseSuccess = (globalSearchResponse200) & {
-  headers: Headers;
-};
-;
-
-export type globalSearchResponse = (globalSearchResponseSuccess)
-
 export const getGlobalSearchUrl = (params: GlobalSearchParams,) => {
   const normalizedParams = new URLSearchParams();
 
@@ -9269,9 +8146,9 @@ export const getGlobalSearchUrl = (params: GlobalSearchParams,) => {
   return stringifiedParams.length > 0 ? `/search?${stringifiedParams}` : `/search`
 }
 
-export const globalSearch = async (params: GlobalSearchParams, options?: RequestInit): Promise<globalSearchResponse> => {
+export const globalSearch = async (params: GlobalSearchParams, options?: RequestInit): Promise<SearchResult> => {
   
-  return customFetch<globalSearchResponse>(getGlobalSearchUrl(params),
+  return customFetch<SearchResult>(getGlobalSearchUrl(params),
   {      
     ...options,
     method: 'GET'
@@ -9360,18 +8237,6 @@ export function useGlobalSearch<TData = Awaited<ReturnType<typeof globalSearch>>
 /**
  * @summary Get company settings
  */
-export type getSettingsResponse200 = {
-  data: CompanySettings
-  status: 200
-}
-
-export type getSettingsResponseSuccess = (getSettingsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type getSettingsResponse = (getSettingsResponseSuccess)
-
 export const getGetSettingsUrl = () => {
 
 
@@ -9380,9 +8245,9 @@ export const getGetSettingsUrl = () => {
   return `/settings`
 }
 
-export const getSettings = async ( options?: RequestInit): Promise<getSettingsResponse> => {
+export const getSettings = async ( options?: RequestInit): Promise<CompanySettings> => {
   
-  return customFetch<getSettingsResponse>(getGetSettingsUrl(),
+  return customFetch<CompanySettings>(getGetSettingsUrl(),
   {      
     ...options,
     method: 'GET'
@@ -9471,18 +8336,6 @@ export function useGetSettings<TData = Awaited<ReturnType<typeof getSettings>>, 
 /**
  * @summary Update company settings (admin only)
  */
-export type updateSettingsResponse200 = {
-  data: CompanySettings
-  status: 200
-}
-
-export type updateSettingsResponseSuccess = (updateSettingsResponse200) & {
-  headers: Headers;
-};
-;
-
-export type updateSettingsResponse = (updateSettingsResponseSuccess)
-
 export const getUpdateSettingsUrl = () => {
 
 
@@ -9491,9 +8344,9 @@ export const getUpdateSettingsUrl = () => {
   return `/settings`
 }
 
-export const updateSettings = async (companySettingsUpdate: CompanySettingsUpdate, options?: RequestInit): Promise<updateSettingsResponse> => {
+export const updateSettings = async (companySettingsUpdate: CompanySettingsUpdate, options?: RequestInit): Promise<CompanySettings> => {
   
-  return customFetch<updateSettingsResponse>(getUpdateSettingsUrl(),
+  return customFetch<CompanySettings>(getUpdateSettingsUrl(),
   {      
     ...options,
     method: 'PATCH',

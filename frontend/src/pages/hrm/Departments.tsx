@@ -51,10 +51,10 @@ export default function HrmDepartmentsPage() {
   });
   const staffOptions = useMemo(
     () =>
-      (staffData?.data?.users ?? [])
-        .filter((u: User) => u.status === "active")
+      (staffData?.users ?? [])
+        .filter((u) => u.status === "active")
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [staffData?.data?.users],
+    [staffData?.users],
   );
 
   const [open, setOpen] = useState(false);

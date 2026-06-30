@@ -1,5 +1,4 @@
 import { format } from "date-fns";
-import { CheckCircle2 } from "lucide-react";
 import { COMPANY_BILLING, formatCurrency } from "../constants";
 import { numberToWords } from "../utils";
 import type { PaymentReceipt } from "../types";
@@ -26,65 +25,74 @@ function DetailRow({ label, value, mono }: { label: string; value: string; mono?
   );
 }
 
-export function ReceiptDocument({ receipt }: { receipt: PaymentReceipt }) {
+export function ReceiptDocument({ receipt, compact = false }: { receipt: PaymentReceipt; compact?: boolean }) {
+  const padX = compact ? "px-6" : "px-8";
+  const padYHead = compact ? "py-5" : "py-7";
+  const padYBody = compact ? "py-5" : "py-6";
+  const logoH = compact ? "h-10" : "h-12";
+  const logoBox = compact ? "h-10 w-10 text-base" : "h-12 w-12 text-lg";
+  const titleSize = compact ? "text-xl" : "text-2xl";
+  const amountSize = compact ? "text-2xl" : "text-3xl";
+  const sealSize = compact ? "h-14 w-14" : "h-16 w-16";
+
   return (
     <div
-      className="mx-auto max-w-2xl rounded-2xl overflow-hidden shadow-sm bg-white"
+      className={`w-full rounded-2xl shadow-sm bg-white ${compact ? "overflow-visible max-w-none" : "overflow-hidden max-w-2xl mx-auto"}`}
       style={{ border: `1px solid ${border}`, fontFamily: "system-ui, sans-serif" }}
     >
-      <div className="px-8 py-7" style={{ borderBottom: `3px solid ${primary}` }}>
+      <div className={`${padX} ${padYHead}`} style={{ borderBottom: `3px solid ${primary}` }}>
         <div className="flex items-start justify-between gap-6">
           <div className="flex items-start gap-4 min-w-0">
             {receipt.logoUrl ? (
               <img
                 src={receipt.logoUrl}
                 alt={`${receipt.companyName} logo`}
-                className="h-12 w-auto max-w-[120px] object-contain flex-shrink-0"
+                className={`${logoH} w-auto max-w-[120px] object-contain flex-shrink-0`}
               />
             ) : (
               <div
-                className="h-12 w-12 rounded-xl flex items-center justify-center text-white font-black text-lg flex-shrink-0"
+                className={`${logoBox} rounded-xl flex items-center justify-center text-white font-black flex-shrink-0`}
                 style={{ background: primary }}
               >
                 SK
               </div>
             )}
             <div className="min-w-0">
-              <h2 className="font-extrabold text-lg leading-tight" style={{ color: dark }}>
+              <h2 className={`font-extrabold leading-tight break-words ${compact ? "text-base" : "text-lg"}`} style={{ color: dark }}>
                 {receipt.companyName}
               </h2>
-              <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>
+              <p className={`${compact ? "text-[10px]" : "text-xs"} mt-1 leading-relaxed break-words`} style={{ color: muted }}>
                 {receipt.companyAddress}
               </p>
-              <p className="text-xs font-mono mt-1" style={{ color: subtle }}>
+              <p className={`${compact ? "text-[10px]" : "text-xs"} font-mono mt-1 break-all`} style={{ color: subtle }}>
                 GSTIN: {receipt.companyGstin}
               </p>
             </div>
           </div>
           <div className="text-right flex-shrink-0">
             <p
-              className="text-2xl font-black uppercase tracking-wide"
+              className={`${titleSize} font-black uppercase tracking-wide`}
               style={{ color: primary, letterSpacing: "0.04em" }}
             >
               Receipt
             </p>
-            <p className="text-sm font-mono font-semibold mt-1" style={{ color: muted }}>
+            <p className={`${compact ? "text-xs" : "text-sm"} font-mono font-semibold mt-1 break-all`} style={{ color: muted }}>
               {receipt.number}
             </p>
           </div>
         </div>
         <div
-          className="mt-5 inline-flex items-center gap-2 rounded-full px-4 py-1.5"
+          className={`mt-4 inline-flex items-center gap-2 rounded-full ${compact ? "px-3 py-1" : "px-4 py-1.5"}`}
           style={{ background: "#ECFDF5", border: `1px solid #BBF7D0` }}
         >
-          <CheckCircle2 className="h-4 w-4" style={{ color: green }} />
-          <span className="text-sm font-semibold" style={{ color: green }}>
+          <span className="text-sm font-bold" style={{ color: green }} aria-hidden>✓</span>
+          <span className={`${compact ? "text-xs" : "text-sm"} font-semibold`} style={{ color: green }}>
             Payment received
           </span>
         </div>
       </div>
 
-      <div className="px-8 py-6 space-y-5">
+      <div className={`${padX} ${padYBody} space-y-5`}>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: primary }}>
@@ -119,7 +127,7 @@ export function ReceiptDocument({ receipt }: { receipt: PaymentReceipt }) {
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: green }}>
             Amount received
           </p>
-          <p className="text-3xl font-black tabular-nums mt-2" style={{ color: green }}>
+          <p className={`${amountSize} font-black tabular-nums mt-2`} style={{ color: green }}>
             {formatCurrency(receipt.amountPaid)}
           </p>
           <p className="text-xs mt-3" style={{ color: muted }}>
@@ -144,7 +152,7 @@ export function ReceiptDocument({ receipt }: { receipt: PaymentReceipt }) {
       </div>
 
       <div
-        className="px-8 py-6 flex items-end justify-between gap-6"
+        className={`${padX} ${compact ? "py-5" : "py-6"} flex items-end justify-between gap-6`}
         style={{ borderTop: `1px dashed ${border}`, background: rowAlt }}
       >
         <div>
@@ -162,7 +170,7 @@ export function ReceiptDocument({ receipt }: { receipt: PaymentReceipt }) {
             <img
               src={receipt.sealUrl}
               alt="Official seal"
-              className="h-16 w-16 object-contain ml-auto"
+              className={`${sealSize} object-contain ml-auto`}
               style={{ opacity: 0.92 }}
             />
           ) : (
@@ -176,7 +184,7 @@ export function ReceiptDocument({ receipt }: { receipt: PaymentReceipt }) {
         </div>
       </div>
 
-      <div className="px-8 py-4 text-center text-[11px]" style={{ borderTop: `1px solid ${border}`, color: subtle }}>
+      <div className={`${padX} py-4 text-center text-[11px] break-words`} style={{ borderTop: `1px solid ${border}`, color: subtle }}>
         {COMPANY_BILLING.phone} · {COMPANY_BILLING.email}
       </div>
     </div>

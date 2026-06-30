@@ -3,7 +3,6 @@ import { Link } from "wouter";
 import { format, startOfYear, endOfYear, subMonths, subYears, startOfMonth } from "date-fns";
 import {
   Briefcase,
-  Download,
   ExternalLink,
   FileText,
   KeyRound,
@@ -19,7 +18,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
-import { BRAND } from "@/lib/brand";
 import { useAuth } from "@/contexts/AuthContext";
 import { useListUsers, getListUsersQueryKey } from "@/api";
 import { listQueryOptions } from "@/lib/list-query-options";
@@ -34,6 +32,15 @@ import type {
 } from "@/api/sales";
 import { useAssignCustomerAdmin } from "@/api/sales";
 import { resolveProposalTotal } from "@/modules/sales/utils";
+import { useGetSettings } from "@/api/generated/api";
+import { resolveDocumentCompany } from "@/modules/sales/company-branding";
+import { COMPANY_BILLING } from "@/modules/sales/constants";
+import {
+  buildCustomerStatementLedger,
+  formatStatementSummaryAmount,
+  formatStatementTableAmount,
+} from "@/modules/sales/customer-statement-ledger";
+import { downloadCustomerStatementPdf } from "@/modules/sales/customer-statement-pdf";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -745,127 +752,6 @@ export function CustomerProposalsSection({
 
 type PeriodPreset = "all" | "this_year" | "last_year" | "last_6m" | "last_3m" | "this_month" | "custom";
 
-function buildLedger(
-  invoices: SalesInvoice[],
-  payments: SalesPayment[],
-  from: Date | null,
-  to: Date | null,
-) {
-  type LedgerRow = {
-    key: string;
-    date: string;
-    details: string;
-    amount: number;
-    payment: number;
-    balance: number;
-    href?: string;
-  };
-
-  // Balance accumulated before the from-date window
-  let beginningBalance = 0;
-  if (from) {
-    for (const inv of invoices) {
-      if (new Date(inv.createdAt) < from) beginningBalance += inv.amount;
-    }
-    for (const pay of payments) {
-      if (new Date(pay.createdAt) < from) beginningBalance -= pay.amount;
-    }
-    beginningBalance = Math.max(0, beginningBalance);
-  }
-
-  // Combine + sort entries within the window
-  const entries = [
-    ...invoices
-      .filter((i) => {
-        const d = new Date(i.createdAt);
-        if (from && d < from) return false;
-        if (to && d > to) return false;
-        return true;
-      })
-      .map((i) => ({ sortKey: new Date(i.createdAt).getTime(), type: "invoice" as const, data: i })),
-    ...payments
-      .filter((p) => {
-        const d = new Date(p.createdAt);
-        if (from && d < from) return false;
-        if (to && d > to) return false;
-        return true;
-      })
-      .map((p) => ({ sortKey: new Date(p.createdAt).getTime(), type: "payment" as const, data: p })),
-  ].sort((a, b) => a.sortKey - b.sortKey);
-
-  let balance = beginningBalance;
-  const rows: LedgerRow[] = [];
-
-  for (const entry of entries) {
-    if (entry.type === "invoice") {
-      const inv = entry.data as SalesInvoice;
-      balance += inv.amount;
-      rows.push({
-        key: `inv-${inv.id}`,
-        date: inv.createdAt,
-        details: `Invoice ${inv.number}`,
-        amount: inv.amount,
-        payment: 0,
-        balance,
-        href: `/sales/invoices/${inv.id}`,
-      });
-    } else {
-      const pay = entry.data as SalesPayment;
-      balance -= pay.amount;
-      rows.push({
-        key: `pay-${pay.id}`,
-        date: pay.createdAt,
-        details: `Payment ${pay.receiptNumber}`,
-        amount: 0,
-        payment: pay.amount,
-        balance: Math.max(0, balance),
-        href: `/sales/receipts/${pay.id}`,
-      });
-    }
-  }
-
-  const invoicedInPeriod = rows.reduce((s, r) => s + r.amount, 0);
-  const paidInPeriod = rows.reduce((s, r) => s + r.payment, 0);
-  const balanceDue = Math.max(0, beginningBalance + invoicedInPeriod - paidInPeriod);
-
-  return { beginningBalance, rows, invoicedInPeriod, paidInPeriod, balanceDue };
-}
-
-function downloadStatementCsv(
-  customer: Customer,
-  from: Date | null,
-  to: Date | null,
-  rows: ReturnType<typeof buildLedger>["rows"],
-  summary: { beginningBalance: number; invoicedInPeriod: number; paidInPeriod: number; balanceDue: number },
-) {
-  const lines = [
-    `Customer Statement — ${customer.companyName}`,
-    `Generated,${format(new Date(), "yyyy-MM-dd")}`,
-    from ? `Period from,${format(from, "yyyy-MM-dd")}` : "Period,All time",
-    to ? `Period to,${format(to, "yyyy-MM-dd")}` : "",
-    "",
-    "Account Summary",
-    `Beginning Balance,${summary.beginningBalance}`,
-    `Invoiced Amount,${summary.invoicedInPeriod}`,
-    `Amount Paid,${summary.paidInPeriod}`,
-    `Balance Due,${summary.balanceDue}`,
-    "",
-    "Transactions",
-    "Date,Details,Amount,Payment,Balance",
-    `${from ? format(from, "yyyy-MM-dd") : ""},Beginning Balance,,,${summary.beginningBalance}`,
-    ...rows.map((r) =>
-      `${format(new Date(r.date), "yyyy-MM-dd")},${r.details},${r.amount || ""},${r.payment || ""},${r.balance}`,
-    ),
-  ].filter((l) => l !== "");
-  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `statement-${customer.companyName.replace(/\s+/g, "-").toLowerCase()}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function StatementSummaryRow({
   label,
   value,
@@ -906,6 +792,9 @@ export function CustomerStatementSection({
   const [period, setPeriod] = useState<PeriodPreset>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const { data: orgSettings } = useGetSettings();
+  const company = resolveDocumentCompany(orgSettings);
 
   function applyPreset(preset: PeriodPreset) {
     const now = new Date();
@@ -941,7 +830,7 @@ export function CustomerStatementSection({
   const allPayments = payments;
 
   const ledger = useMemo(
-    () => buildLedger(allInvoices, allPayments, from, to),
+    () => buildCustomerStatementLedger(allInvoices, allPayments, from, to),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allInvoices, allPayments, fromDate, toDate],
   );
@@ -960,6 +849,26 @@ export function CustomerStatementSection({
     if (toDate) return `Showing all invoices and payments through ${toDate}`;
     return "Showing all invoices and payments";
   }, [fromDate, toDate]);
+
+  const handleDownloadPdf = () => {
+    setPdfLoading(true);
+    try {
+      downloadCustomerStatementPdf({
+        customer,
+        company,
+        companyGstin: COMPANY_BILLING.gstin,
+        ledger,
+        periodLabel,
+        showingText,
+        fromDate,
+      });
+      toast.success("Statement PDF downloaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to generate PDF");
+    } finally {
+      setPdfLoading(false);
+    }
+  };
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -1060,11 +969,17 @@ export function CustomerStatementSection({
               <Button
                 variant="outline"
                 size="sm"
-                className="h-8 w-8 p-0"
-                onClick={() => downloadStatementCsv(customer, from, to, ledger.rows, ledger)}
-                title="Download CSV"
+                className="h-8 gap-1.5 text-xs"
+                onClick={handleDownloadPdf}
+                disabled={pdfLoading}
+                title="Download PDF"
               >
-                <Download className="h-3.5 w-3.5" />
+                {pdfLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <FileText className="h-3.5 w-3.5" />
+                )}
+                PDF
               </Button>
               <Button
                 variant="outline"
@@ -1083,28 +998,24 @@ export function CustomerStatementSection({
       </Card>
 
       {/* ── Statement document ── */}
-      <div ref={printRef} className="rounded-xl border bg-card shadow-sm overflow-hidden">
-        {/* Document header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 px-6 pt-6 pb-5 border-b bg-muted/20">
-          <div>
-            <h1 className="text-base font-bold text-foreground leading-tight">Customer Statement</h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              For <span className="font-semibold text-foreground">{customer.companyName}</span>
-            </p>
-          </div>
-          <div className="text-left sm:text-right space-y-0.5">
-            <p className="text-sm font-semibold text-foreground">{BRAND.name}</p>
-            <p className="text-xs text-muted-foreground">{periodLabel}</p>
-          </div>
+      <div ref={printRef} className="rounded-xl border bg-white shadow-sm overflow-hidden text-foreground">
+        {/* Issuer letterhead */}
+        <div className="px-8 pt-8 pb-6 border-b">
+          <p className="text-sm font-bold leading-snug">{company.companyName}</p>
+          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed max-w-md">
+            {company.address}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            GSTIN Number: {COMPANY_BILLING.gstin}
+          </p>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="px-8 py-6 space-y-5">
           {/* To / Account Summary */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            {/* Customer info */}
-            <div className="space-y-1.5">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">To</p>
-              <p className="text-sm font-bold text-foreground">{customer.companyName}</p>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">To</p>
+              <p className="text-sm font-bold">{customer.companyName}</p>
               {customer.location ? (
                 <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
                   {customer.location}
@@ -1115,61 +1026,56 @@ export function CustomerStatementSection({
               ) : null}
             </div>
 
-            {/* Account Summary box */}
-            <div className="rounded-lg border bg-muted/10 p-4 space-y-0.5">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-bold text-foreground">Account Summary</p>
-                <p className="text-[10px] text-muted-foreground">{periodLabel}</p>
+            <div className="space-y-1 sm:text-right">
+              <div className="flex items-start justify-between sm:justify-end gap-4 sm:block">
+                <p className="text-sm font-bold">Account Summary</p>
+                <p className="text-[11px] text-muted-foreground sm:mt-1">{periodLabel}</p>
               </div>
               <StatementSummaryRow
                 label="Beginning Balance"
-                value={formatCurrency(ledger.beginningBalance)}
+                value={formatStatementSummaryAmount(ledger.beginningBalance)}
               />
               <StatementSummaryRow
                 label="Invoiced Amount"
-                value={formatCurrency(ledger.invoicedInPeriod)}
+                value={formatStatementSummaryAmount(ledger.invoicedInPeriod)}
               />
               <StatementSummaryRow
                 label="Amount Paid"
-                value={formatCurrency(ledger.paidInPeriod)}
+                value={formatStatementSummaryAmount(ledger.paidInPeriod)}
               />
-              <div className="border-t border-border/60 mt-1 pt-1">
-                <StatementSummaryRow
-                  label="Balance Due"
-                  value={formatCurrency(ledger.balanceDue)}
-                  bold
-                  alert={ledger.balanceDue > 0}
-                />
-              </div>
+              <StatementSummaryRow
+                label="Balance Due"
+                value={formatStatementSummaryAmount(ledger.balanceDue)}
+                bold
+                alert={ledger.balanceDue > 0}
+              />
             </div>
           </div>
 
-          {/* Showing range label */}
-          <p className="text-[11px] text-center text-muted-foreground border-y py-2">{showingText}</p>
+          <p className="text-[11px] text-center text-muted-foreground py-1">{showingText}</p>
 
-          {/* Chronological ledger */}
-          <div className="rounded-lg border overflow-hidden">
+          {/* Ledger table */}
+          <div className="border rounded-md overflow-hidden">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/40">
-                  <TableHead className="text-xs font-semibold">Date</TableHead>
+                <TableRow className="bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="text-xs font-semibold w-[100px]">Date</TableHead>
                   <TableHead className="text-xs font-semibold">Details</TableHead>
-                  <TableHead className="text-xs font-semibold text-right">Amount</TableHead>
-                  <TableHead className="text-xs font-semibold text-right">Payments</TableHead>
-                  <TableHead className="text-xs font-semibold text-right">Balance</TableHead>
+                  <TableHead className="text-xs font-semibold text-right w-[90px]">Amount</TableHead>
+                  <TableHead className="text-xs font-semibold text-right w-[90px]">Payments</TableHead>
+                  <TableHead className="text-xs font-semibold text-right w-[100px]">Balance</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {/* Beginning balance row */}
-                <TableRow className="bg-muted/20">
-                  <TableCell className="text-xs text-muted-foreground">
+                <TableRow className="bg-muted/20 hover:bg-muted/20">
+                  <TableCell className="text-xs text-muted-foreground py-2">
                     {fromDate || format(new Date(allInvoices[0]?.createdAt ?? new Date()), "yyyy-MM-dd")}
                   </TableCell>
-                  <TableCell className="text-xs italic text-muted-foreground">Beginning Balance</TableCell>
-                  <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
-                  <TableCell className="text-xs text-right text-muted-foreground">—</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-semibold">
-                    {formatCurrency(ledger.beginningBalance)}
+                  <TableCell className="text-xs text-muted-foreground py-2">Beginning Balance</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums py-2">0.00</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums py-2">0.00</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium py-2">
+                    {formatStatementTableAmount(ledger.beginningBalance)}
                   </TableCell>
                 </TableRow>
 
@@ -1181,68 +1087,44 @@ export function CustomerStatementSection({
                   </TableRow>
                 ) : null}
 
-                {ledger.rows.map((row, i) => (
-                  <TableRow key={row.key} className={i % 2 === 1 ? "bg-muted/10" : ""}>
-                    <TableCell className="text-xs text-muted-foreground">
+                {ledger.rows.map((row) => (
+                  <TableRow key={row.key}>
+                    <TableCell className="text-xs text-muted-foreground py-2 align-top">
                       {format(new Date(row.date), "yyyy-MM-dd")}
                     </TableCell>
-                    <TableCell className="text-xs">
+                    <TableCell className="text-xs py-2 align-top leading-relaxed">
                       {row.href ? (
-                        <Link href={row.href} className="text-primary hover:underline font-medium">
+                        <Link href={row.href} className="text-primary hover:underline">
                           {row.details}
                         </Link>
                       ) : (
                         row.details
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {row.amount > 0 ? (
-                        <span className="font-medium">{formatCurrency(row.amount)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="text-xs text-right tabular-nums py-2 align-top">
+                      {row.amount > 0 ? formatStatementTableAmount(row.amount) : ""}
                     </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {row.payment > 0 ? (
-                        <span className="text-emerald-600 font-medium">{formatCurrency(row.payment)}</span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell className="text-xs text-right tabular-nums py-2 align-top">
+                      {row.payment > 0 ? formatStatementTableAmount(row.payment) : ""}
                     </TableCell>
                     <TableCell
                       className={cn(
-                        "text-xs text-right tabular-nums font-semibold",
-                        row.balance > 0 ? "text-destructive" : "text-emerald-600",
+                        "text-xs text-right tabular-nums font-medium py-2 align-top",
+                        row.balance < 0 && "text-amber-700",
+                        row.balance > 0 && "text-foreground",
                       )}
                     >
-                      {formatCurrency(row.balance)}
+                      {formatStatementTableAmount(row.balance)}
                     </TableCell>
                   </TableRow>
                 ))}
-
-                {/* Total row */}
-                {ledger.rows.length > 0 ? (
-                  <TableRow className="bg-muted/30 font-semibold border-t-2">
-                    <TableCell className="text-xs" colSpan={2}>Total</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {formatCurrency(ledger.invoicedInPeriod)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-emerald-600">
-                      {formatCurrency(ledger.paidInPeriod)}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-xs text-right tabular-nums",
-                        ledger.balanceDue > 0 ? "text-destructive" : "text-emerald-600",
-                      )}
-                    >
-                      {formatCurrency(ledger.balanceDue)}
-                    </TableCell>
-                  </TableRow>
-                ) : null}
               </TableBody>
             </Table>
           </div>
+
+          <p className="text-sm font-bold text-right pt-2">
+            Balance Due {formatStatementSummaryAmount(ledger.balanceDue)}
+          </p>
         </div>
       </div>
     </div>

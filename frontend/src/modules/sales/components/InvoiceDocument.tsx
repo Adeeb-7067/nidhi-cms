@@ -24,7 +24,7 @@ function DocRow({ label, value, mono }: { label: string; value: string; mono?: b
     <div className="flex items-center justify-between gap-4">
       <span className="text-xs flex-shrink-0" style={{ color: subtle }}>{label}</span>
       <span
-        className={`text-xs font-semibold text-right min-w-0 truncate ${mono ? "font-mono" : ""}`}
+        className={`text-xs font-semibold text-right min-w-0 break-words ${mono ? "font-mono" : ""}`}
         style={{ color: dark }}
       >
         {value}
@@ -74,7 +74,7 @@ export function InvoiceDocument({
 
   return (
     <div
-      className="rounded-2xl overflow-hidden shadow-sm bg-white"
+      className={`rounded-2xl shadow-sm bg-white ${compact ? "overflow-visible" : "overflow-hidden"}`}
       style={{ border: `1px solid ${border}`, fontFamily: "system-ui, sans-serif" }}
     >
       {/* Letterhead */}

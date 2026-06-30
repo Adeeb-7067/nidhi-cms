@@ -34,6 +34,12 @@ export interface SalesUser {
   avatarUrl: string | null;
 }
 
+export interface PlanningDoc {
+  name: string;
+  url: string;
+  uploadedAt: string;
+}
+
 export interface Lead {
   id: number;
   name: string;
@@ -48,11 +54,13 @@ export interface Lead {
   priority: LeadPriority;
   assignedTo: number | null;
   assignedToUser: SalesUser | null;
+  createdBy: number | null;
+  createdByUser: SalesUser | null;
   expectedValue: number;
   description: string | null;
   reminder: { date: string; note: string } | null;
   tags: string[];
-  projectPlanningDoc: string | null;
+  planningDocs: PlanningDoc[];
   customerId: number | null;
   clientId: number | null;
   proposalId: number | null;
@@ -585,6 +593,36 @@ export function useUpdateLead() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["sales-leads"] });
       qc.invalidateQueries({ queryKey: salesKeys.lead(vars.id) });
+    },
+  });
+}
+
+export function useAddPlanningDoc(leadId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (doc: { name: string; url: string }) =>
+      customFetch<Lead>(apiUrl(`/api/sales/leads/${leadId}`), {
+        method: "PATCH",
+        body: JSON.stringify({ addPlanningDoc: doc }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-leads"] });
+      qc.invalidateQueries({ queryKey: salesKeys.lead(leadId) });
+    },
+  });
+}
+
+export function useRemovePlanningDoc(leadId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) =>
+      customFetch<Lead>(apiUrl(`/api/sales/leads/${leadId}`), {
+        method: "PATCH",
+        body: JSON.stringify({ removePlanningDoc: url }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["sales-leads"] });
+      qc.invalidateQueries({ queryKey: salesKeys.lead(leadId) });
     },
   });
 }

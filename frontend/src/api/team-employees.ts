@@ -46,7 +46,7 @@ export async function updateTeamEmployee(
   password?: string,
   baseline?: TeamEmployeeFormValues,
 ) {
-  const payload = baseline
+  const payload: Record<string, unknown> = baseline
     ? buildTeamEmployeePatchPayload(values, departmentNameById, baseline)
     : buildTeamEmployeePayload(values, departmentNameById);
   const trimmedPassword = password?.trim() ?? "";

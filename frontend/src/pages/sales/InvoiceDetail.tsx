@@ -92,7 +92,7 @@ export default function InvoiceDetailPage() {
     if (!target || !invoice) return;
     setDownloading(true);
     try {
-      await downloadElementAsPdf(target, invoice.number, { singlePage: true });
+      await downloadElementAsPdf(target, invoice.number, { singlePage: true, widthPx: 794 });
       toast.success("Invoice PDF downloaded");
     } catch {
       toast.error("Failed to generate invoice PDF");

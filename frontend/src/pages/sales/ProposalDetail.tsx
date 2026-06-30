@@ -255,7 +255,7 @@ export default function ProposalDetail() {
     }
     setDownloading(true);
     try {
-      await downloadElementAsPdf(pdfRef.current, proposal.number, { singlePage: true });
+      await downloadElementAsPdf(pdfRef.current, proposal.number, { widthPx: 794 });
       toast.success("Proposal PDF downloaded");
     } catch (err) {
       console.error("Proposal PDF export failed:", err);
@@ -948,7 +948,7 @@ export default function ProposalDetail() {
           proposal={proposalForPdf}
           currentStatus={pdfCurrentStatus}
           statusChip={sCfg}
-          compact
+          forPdf
         />
       </div>
     </PortalPageShell>

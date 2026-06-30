@@ -48,6 +48,9 @@ export default defineConfig({
           useQuery: true,
           useMutation: true,
         },
+        fetch: {
+          includeHttpResponseReturnType: false,
+        },
       },
       prettier: false,
     },

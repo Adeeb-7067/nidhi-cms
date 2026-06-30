@@ -281,6 +281,7 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     });
 
     socketInstance.on(
+      "work_session_ended",
       (data: { title?: string; body?: string; stopReason?: string; entityId?: number }) => {
         if (isElectron() && window.electron) {
           window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });

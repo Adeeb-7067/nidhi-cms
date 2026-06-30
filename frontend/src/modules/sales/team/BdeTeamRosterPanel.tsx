@@ -529,7 +529,6 @@ export function BdeTeamRosterPanel({
       {pagination ? (
         <DataPagination
           page={pagination.page}
-          totalPages={pagination.totalPages}
           total={pagination.total}
           limit={limit}
           onPageChange={setPage}

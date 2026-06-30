@@ -26,7 +26,15 @@ const leadSchema = new Schema(
     description: { type: String, default: null },
     reminder: { type: reminderSchema, default: null },
     tags: { type: [String], default: [] },
-    projectPlanningDoc: { type: String, default: null },
+    planningDocs: {
+      type: [{
+        name: { type: String, required: true },
+        url: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now },
+      }],
+      default: [],
+      _id: false,
+    },
     customerId: { type: Number, ref: "SalesCustomers", default: null },
     clientId: { type: Number, ref: "Clients", default: null },
     proposalId: { type: Number, ref: "SalesProposals", default: null },

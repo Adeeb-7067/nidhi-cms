@@ -155,7 +155,7 @@ export default function HrmIdCardsPage() {
     },
   });
 
-  const company = useMemo(() => toCompanyBranding(orgSettings?.data), [orgSettings?.data]);
+  const company = useMemo(() => toCompanyBranding(orgSettings), [orgSettings]);
 
   const { data, isLoading, refetch, isFetching } = useHrmEmployees({
     status: "active",

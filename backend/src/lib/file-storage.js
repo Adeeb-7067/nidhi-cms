@@ -50,7 +50,11 @@ function resolvePublicFileUrl(storedUrl, req) {
   return storedUrl;
 }
 function validateStoredFileUrl(url, fieldName = "fileUrl") {
-  assertValidStoredFileUrl(url, fieldName);
+  if (!url) return;
+  const trimmed = String(url).trim();
+  // Existing records may still reference local uploads served by the API.
+  if (trimmed.startsWith("/uploads/")) return;
+  assertValidStoredFileUrl(trimmed, fieldName);
 }
 function validateStoredFileUrls(urls, fieldName = "attachments") {
   if (!urls?.length) return;

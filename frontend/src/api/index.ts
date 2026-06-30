@@ -1,5 +1,6 @@
 export * from "./generated/api";
 export * from "./generated/api.schemas";
+export { useDeleteClient } from "./clients";
 export { createBugBatch, deleteBug, deleteBugIssue, fetchBugsExport, type BugBatchInput, type BugBatchItem, type BugsExportResult } from "./bugs-batch";
 export {
   forgotPasswordOtp,

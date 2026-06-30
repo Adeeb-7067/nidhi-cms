@@ -1,4 +1,4 @@
-import { SalesInstallments, SalesInvoices, getNextSequence } from "../../models/schema/index.js";
+import { SalesInstallments, SalesInvoices, SalesCustomers, getNextSequence } from "../../models/schema/index.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -21,6 +21,16 @@ async function listInstallments(req, res) {
   if (projectId) filter.projectId = Number(projectId);
   if (invoiceId) filter.invoiceId = Number(invoiceId);
   if (status) filter.status = status;
+  // BDE scope: only see installments for their own customers
+  if (req.user.role === "bde") {
+    const myCustomers = await SalesCustomers.find({ assignedAdminId: req.user.id }).select({ id: 1 }).lean();
+    const myIds = myCustomers.map((c) => c.id);
+    if (filter.customerId != null) {
+      if (!myIds.includes(Number(filter.customerId))) filter.customerId = -1;
+    } else {
+      filter.customerId = { $in: myIds };
+    }
+  }
   await SalesInstallments.updateMany(
     { status: "pending", dueDate: { $lt: new Date() } },
     { $set: { status: "overdue" } }
@@ -78,10 +88,17 @@ async function createInstallment(req, res) {
   res.status(201).json(installment.toObject());
 }
 
+async function assertBdeInstallmentAccess(installment, user) {
+  if (user.role !== "bde") return;
+  const mine = await SalesCustomers.findOne({ id: installment.customerId, assignedAdminId: user.id }).lean();
+  if (!mine) notFound("Installment");
+}
+
 async function getInstallmentById(req, res) {
   const id = parseIdParam(req.params.id, "installment id");
   const installment = await SalesInstallments.findOne({ id }).lean();
   if (!installment) notFound("Installment");
+  await assertBdeInstallmentAccess(installment, req.user);
   res.json(installment);
 }
 
@@ -89,6 +106,7 @@ async function updateInstallment(req, res) {
   const id = parseIdParam(req.params.id, "installment id");
   const installment = await SalesInstallments.findOne({ id }).lean();
   if (!installment) notFound("Installment");
+  await assertBdeInstallmentAccess(installment, req.user);
   const body = req.body;
   const updates = {};
   if (body.name !== undefined) updates.name = optionalString(body.name);

@@ -199,9 +199,21 @@ async function patchClientsById(req, res) {
   if (!client) notFound("Client company");
   res.json(await formatClient(client));
 }
+async function deleteClientsById(req, res) {
+  const id = parseIdParam(req.params.id, "client id");
+  const client = await clientsTable.findOne({ id }).lean();
+  if (!client) notFound("Client company");
+  await clientsTable.deleteOne({ id });
+  if (client.userId) {
+    await usersTable.deleteOne({ id: client.userId }).catch(() => {});
+  }
+  res.json({ success: true });
+}
+
 export {
   getClients,
   getClientsById,
   patchClientsById,
-  postClients
+  postClients,
+  deleteClientsById,
 };

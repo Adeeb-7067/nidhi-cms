@@ -113,10 +113,17 @@ async function createInvoice(req, res) {
   res.status(201).json(invoice.toObject());
 }
 
+async function assertBdeInvoiceAccess(invoice, user) {
+  if (user.role !== "bde") return;
+  const mine = await SalesCustomers.findOne({ id: invoice.customerId, assignedAdminId: user.id }).lean();
+  if (!mine) notFound("Invoice");
+}
+
 async function getInvoiceById(req, res) {
   const id = parseIdParam(req.params.id, "invoice id");
   const invoice = await SalesInvoices.findOne({ id }).lean();
   if (!invoice) notFound("Invoice");
+  await assertBdeInvoiceAccess(invoice, req.user);
   res.json(invoice);
 }
 
@@ -124,6 +131,7 @@ async function updateInvoice(req, res) {
   const id = parseIdParam(req.params.id, "invoice id");
   const invoice = await SalesInvoices.findOne({ id }).lean();
   if (!invoice) notFound("Invoice");
+  await assertBdeInvoiceAccess(invoice, req.user);
   const body = req.body;
   const updates = {};
 
@@ -186,6 +194,9 @@ async function createInvoiceFromProposal(req, res) {
   const proposalId = parseIdParam(req.params.proposalId, "proposal id");
   const proposal = await SalesProposals.findOne({ id: proposalId }).lean();
   if (!proposal) notFound("Proposal");
+  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
+    notFound("Proposal");
+  }
   if (!proposal.customerId) {
     badRequest(
       "Proposal has no linked customer. Convert the lead to a customer first.",

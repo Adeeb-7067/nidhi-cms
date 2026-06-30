@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, startOfMonth, endOfMonth, subDays } from "date-fns";
 import { Link } from "wouter";
-import { AlertTriangle, ClipboardEdit, Grid3X3, UserCheck, UserX, CalendarClock, Home, ClipboardList, Clock, Pencil, LogIn, LogOut } from "lucide-react";
+import { AlertTriangle, ClipboardEdit, Grid3X3, UserCheck, UserX, CalendarClock, Home, ClipboardList, Clock, Pencil, LogIn, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -594,12 +594,35 @@ export default function HrmAttendancePage() {
             </Select>
           )}
           {(!canAdmin || periodMode === "month") && (
-            <Input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="h-9 w-40 shrink-0 bg-background"
-            />
+            <div className="flex items-center h-9 rounded-md border bg-background px-1 gap-0.5 shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  const d = new Date(`${month}-01`);
+                  d.setMonth(d.getMonth() - 1);
+                  setMonth(format(d, "yyyy-MM"));
+                }}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <span className="text-sm font-medium px-1 min-w-[100px] text-center">
+                {format(new Date(`${month}-01`), "MMMM, yyyy")}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  const d = new Date(`${month}-01`);
+                  d.setMonth(d.getMonth() + 1);
+                  setMonth(format(d, "yyyy-MM"));
+                }}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
           )}
           {canAdmin && (
             <>

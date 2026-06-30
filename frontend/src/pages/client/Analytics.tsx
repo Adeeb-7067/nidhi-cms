@@ -53,7 +53,7 @@ export default function ClientAnalytics() {
       <PortalPageShell>
         <DashboardPageHeader
           title="Reports & Analytics"
-          subtitle="You don't have access to this section. Ask your Client Admin to enable it."
+          description="You don't have access to this section. Ask your Client Admin to enable it."
         />
       </PortalPageShell>
     );

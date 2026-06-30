@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useListClients, useCreateClient, useUpdateClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
+import { useListClients, useCreateClient, useUpdateClient, useDeleteClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -251,7 +251,7 @@ export default function AdminClients() {
   useRefreshPresenceForUserIds(pagePortalUserIds);
   const createClientMutation = useCreateClient();
   const updateClientMutation = useUpdateClient();
-  const deleteClientMutation = { mutateAsync: async (_: { id: number }) => {}, isPending: false }; // Mock: useDeleteClient does not exist in generated spec
+  const deleteClientMutation = useDeleteClient();
 
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});

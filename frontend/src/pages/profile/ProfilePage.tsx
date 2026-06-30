@@ -3,6 +3,7 @@ import { Link } from "wouter";
 import { getGetMeQueryKey } from "@/api";
 import { patchSelfProfile } from "@/api/self-profile";
 import { teamEmployeeQueryKey, useTeamEmployeeProfile } from "@/api/team-employees";
+import { useHrmDocuments } from "@/api/hrm";
 import { useAuth } from "@/contexts/AuthContext";
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import { EmployeeSelfProfileForm } from "@/components/profile/EmployeeSelfProfileForm";
@@ -22,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { FileUploader } from "@/components/ui/file-uploader";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -45,6 +47,11 @@ import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
 import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
 import { formatLastLogin } from "@/lib/presence";
 import {
+  normalizePhoneForForm,
+  normalizePhoneForSubmit,
+  phoneValidationError,
+} from "@/lib/phone-input";
+import {
   buildSelfProfilePayload,
   usesEmployeeSelfProfile,
 } from "@/modules/hrm/self-profile-shared";
@@ -58,6 +65,7 @@ const ROLE_STYLES: Record<string, string> = {
   client: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25",
   hr: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/25",
   manager: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25",
+  bde: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25",
 };
 
 function formatProfileDate(value: string | null | undefined) {
@@ -81,16 +89,28 @@ export default function ProfilePage() {
     isError: employeeRecordError,
   } = useTeamEmployeeProfile(user?.id, isEmployeeProfile);
 
-  const employeeRecordReady =
-    !isEmployeeProfile || (fullEmployeeRecord != null && !isFetchingEmployeeRecord);
+  const {
+    data: employeeDocumentsData,
+    isFetching: isFetchingEmployeeDocuments,
+  } = useHrmDocuments(user?.id, {
+    enabled: isEmployeeProfile && user?.id != null && user.id > 0,
+  });
 
-  const employeeProfileSource = fullEmployeeRecord as Record<string, unknown> | undefined;
+  const employeeRecordReady =
+    !isEmployeeProfile ||
+    (fullEmployeeRecord != null &&
+      !isFetchingEmployeeRecord &&
+      !isFetchingEmployeeDocuments);
+
+  const employeeProfileSource = (fullEmployeeRecord ?? user) as Record<string, unknown>;
+  const employeeProfileLoadDegraded = isEmployeeProfile && employeeRecordError;
 
   const [profileForm, setProfileForm] = useState({
     name: "",
     email: "",
     designation: "",
     avatarUrl: "",
+    phoneNumber: "",
   });
 
   React.useEffect(() => {
@@ -100,6 +120,7 @@ export default function ProfilePage() {
         email: user.email || "",
         designation: user.designation || "",
         avatarUrl: user.avatarUrl || "",
+        phoneNumber: normalizePhoneForForm(user.phoneNumber),
       });
     }
   }, [user]);
@@ -111,6 +132,15 @@ export default function ProfilePage() {
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const phoneErr = phoneValidationError(profileForm.phoneNumber);
+    if (phoneErr) {
+      toast({
+        title: "Invalid phone number",
+        description: phoneErr,
+        variant: "destructive",
+      });
+      return;
+    }
     setIsSavingProfile(true);
     try {
       const updated = await patchSelfProfile({
@@ -118,6 +148,7 @@ export default function ProfilePage() {
         email: profileForm.email.trim().toLowerCase(),
         designation: profileForm.designation.trim() || undefined,
         avatarUrl: profileForm.avatarUrl.trim() || undefined,
+        phoneNumber: normalizePhoneForSubmit(profileForm.phoneNumber) || "",
       });
       queryClient.setQueryData(getGetMeQueryKey(), updated);
       toast({
@@ -144,6 +175,7 @@ export default function ProfilePage() {
       queryClient.setQueryData(getGetMeQueryKey(), updated);
       if (user?.id) {
         queryClient.setQueryData(teamEmployeeQueryKey(user.id), updated);
+        queryClient.invalidateQueries({ queryKey: ["hrm", "documents", user.id] });
       }
       setProfileSyncVersion((v) => v + 1);
       toast({
@@ -306,6 +338,12 @@ export default function ProfilePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {employeeProfileLoadDegraded ? (
+                  <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                    Some profile details could not be refreshed from the server. Showing your last
+                    saved account data — you can still update and save.
+                  </p>
+                ) : null}
                 {!employeeRecordReady ? (
                   <div className="space-y-4">
                     <Skeleton className="h-10 w-full" />
@@ -313,18 +351,16 @@ export default function ProfilePage() {
                     <Skeleton className="h-32 w-full" />
                     <p className="text-center text-sm text-muted-foreground">Loading your employee profile…</p>
                   </div>
-                ) : employeeRecordError ? (
-                  <p className="py-6 text-center text-sm text-destructive">
-                    Could not load your full profile. Refresh the page or try again later.
-                  </p>
-                ) : employeeProfileSource ? (
+                ) : (
                   <EmployeeSelfProfileForm
                     user={employeeProfileSource}
+                    employeeDocuments={employeeDocumentsData?.documents}
+                    employeeDocumentsLoading={isFetchingEmployeeDocuments}
                     syncVersion={profileSyncVersion}
                     saving={isSavingProfile}
                     onSave={handleStaffProfileSave}
                   />
-                ) : null}
+                )}
               </CardContent>
             </Card>
           ) : (
@@ -369,6 +405,16 @@ export default function ProfilePage() {
                         placeholder="e.g. Senior Developer"
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Phone</Label>
+                      <PhoneInput
+                        id="phone"
+                        value={profileForm.phoneNumber}
+                        onChange={(e) =>
+                          setProfileForm({ ...profileForm, phoneNumber: e.target.value })
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -398,6 +444,7 @@ export default function ProfilePage() {
                           email: user.email || "",
                           designation: user.designation || "",
                           avatarUrl: user.avatarUrl || "",
+                          phoneNumber: normalizePhoneForForm(user.phoneNumber),
                         })
                       }
                     >

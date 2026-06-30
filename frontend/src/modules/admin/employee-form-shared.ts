@@ -9,7 +9,7 @@ import {
   normalizeEmployeeMaritalStatus,
   splitDisplayName,
 } from "@/modules/hrm/employee-profile-types";
-import { optionalPhoneZod, sanitizePhoneDigits, normalizePhoneForSubmit } from "@/lib/phone-input";
+import { normalizePhoneForForm, normalizePhoneForSubmit, optionalPhoneZod } from "@/lib/phone-input";
 
 const addressSchema = z.object({
   street: z.string().optional(),
@@ -276,19 +276,6 @@ function matchEmployeeOption<T extends string>(value: unknown, options: readonly
   return (found ?? fallback) as T;
 }
 
-/** Orval types wrap list payloads; the API returns a flat `{ users }` object at runtime. */
-export function unwrapUserListRows(payload: unknown): Array<Record<string, unknown>> {
-  if (!payload || typeof payload !== "object") return [];
-  const root = payload as Record<string, unknown>;
-  const nested = root.data;
-  if (nested && typeof nested === "object") {
-    const users = (nested as Record<string, unknown>).users;
-    if (Array.isArray(users)) return users as Array<Record<string, unknown>>;
-  }
-  if (Array.isArray(root.users)) return root.users as Array<Record<string, unknown>>;
-  return [];
-}
-
 /** Stable key for edit-dialog hydration — changes when server profile or department list updates. */
 export function teamEmployeeEditHydrateKey(
   user: UserLike,
@@ -345,7 +332,7 @@ export function mapUserToTeamEmployeeForm(
     wfhMonthlyLimit: (user.wfhMonthlyLimit as number) ?? 4,
     leaveAccrualDaysPerMonth:
       user.leaveAccrualDaysPerMonth != null ? String(user.leaveAccrualDaysPerMonth) : "",
-    phoneNumber: sanitizePhoneDigits((user.phoneNumber as string) ?? ""),
+    phoneNumber: normalizePhoneForForm((user.phoneNumber as string) ?? ""),
     joiningDate: dateInput(user.joiningDate),
     exitDate: dateInput(user.exitDate),
     probationEndDate: dateInput(user.probationEndDate),

@@ -41,7 +41,7 @@ export const ADMIN_STAFF_ROLES: UserRole[] = [
 export const IMPERSONATABLE_STAFF_ROLES: UserRole[] = [...ADMIN_STAFF_ROLES];
 
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */
-export const HRM_EMPLOYEE_ROLES: UserRole[] = ["manager", "developer", "tester", "qa"];
+export const HRM_EMPLOYEE_ROLES: UserRole[] = ["manager", "developer", "tester", "qa", "bde"];
 
 /** Screenshot / attendance monitoring — mirrors developer for freelancers. */
 export const MONITORABLE_STAFF_ROLES: UserRole[] = [
@@ -69,6 +69,33 @@ export const ALL_AUTHENTICATED_ROLES: UserRole[] = [
   ...INTERNAL_STAFF_ROLES,
   "client",
 ];
+
+/** Roles that can open /profile (matches PageOutlet RoleGate). */
+export const PROFILE_PAGE_ROLES: UserRole[] = [
+  "super_admin",
+  "hr",
+  "bde",
+  ...DEV_PORTAL_STAFF_ROLES,
+  "client",
+];
+
+/**
+ * Always use the compact account form on /profile — even when employeeId is set.
+ * Company HRM staff with employeeId get the full self-service employee form instead.
+ */
+export const SIMPLE_PROFILE_ONLY_ROLES: UserRole[] = ["super_admin", "client", "freelancer"];
+
+export function usesSimpleProfileOnly(role: UserRole | string | undefined): boolean {
+  return !!role && SIMPLE_PROFILE_ONLY_ROLES.includes(role as UserRole);
+}
+
+export function usesEmployeeSelfProfileOnPage(
+  role: UserRole | string | undefined,
+  employeeId?: string | null,
+): boolean {
+  if (!role || usesSimpleProfileOnly(role)) return false;
+  return Boolean(employeeId?.trim());
+}
 
 export function isHrmAdminRole(role: UserRole | string | undefined): boolean {
   return !!role && HRM_ADMIN_ROLES.includes(role as UserRole);

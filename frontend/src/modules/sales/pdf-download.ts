@@ -70,11 +70,45 @@ function stripSvgIcons(root: HTMLElement): void {
   root.querySelectorAll("svg").forEach((svg) => svg.remove());
 }
 
+/** Prevent clipped text and hidden overflow in PDF captures. */
+function normalizeCloneForPdf(root: HTMLElement): void {
+  root.style.overflow = "visible";
+  root.style.maxHeight = "none";
+
+  root.querySelectorAll("*").forEach((node) => {
+    const el = node as HTMLElement;
+    if (el.classList?.contains("truncate")) {
+      el.classList.remove("truncate");
+      el.style.overflow = "visible";
+      el.style.textOverflow = "clip";
+      el.style.whiteSpace = "normal";
+      el.style.wordBreak = "break-word";
+    }
+    Array.from(el.classList ?? []).forEach((cls) => {
+      if (cls.startsWith("line-clamp-")) el.classList.remove(cls);
+    });
+    if (el.style.overflow === "hidden") el.style.overflow = "visible";
+    const computed = window.getComputedStyle(el);
+    if (computed.overflow === "hidden" || computed.overflowX === "hidden" || computed.overflowY === "hidden") {
+      el.style.overflow = "visible";
+    }
+    if (computed.textOverflow === "ellipsis") {
+      el.style.textOverflow = "clip";
+      el.style.whiteSpace = "normal";
+      el.style.wordBreak = "break-word";
+    }
+    if (computed.maxHeight && computed.maxHeight !== "none") {
+      el.style.maxHeight = "none";
+    }
+  });
+}
+
 function prepareClone(clone: HTMLElement, captureWidth: number): void {
   clone.querySelectorAll("[data-pdf-hide]").forEach((node) => {
     (node as HTMLElement).style.display = "none";
   });
   stripSvgIcons(clone);
+  normalizeCloneForPdf(clone);
   clone.style.width = `${captureWidth}px`;
   clone.style.maxWidth = `${captureWidth}px`;
   clone.style.boxSizing = "border-box";
@@ -85,12 +119,13 @@ function prepareClone(clone: HTMLElement, captureWidth: number): void {
   clone.style.visibility = "visible";
   clone.style.transform = "none";
   clone.style.background = "#ffffff";
+  clone.style.overflow = "visible";
 }
 
 export type PdfDownloadOptions = {
   /** Scale content to fit on one A4 page (no page breaks). */
   singlePage?: boolean;
-  /** Margin in mm when using singlePage (default 8). */
+  /** Margin in mm (default 10). */
   marginMm?: number;
   /** Fixed capture width in px (default 794 for A4). */
   widthPx?: number;
@@ -122,12 +157,67 @@ async function renderCanvas(
       node.style.visibility = "visible";
       node.style.transform = "none";
       node.style.background = "#ffffff";
+      node.style.overflow = "visible";
+      normalizeCloneForPdf(node);
       node.querySelectorAll("*").forEach((el) => {
         const htmlEl = el as HTMLElement;
         if (htmlEl.style.opacity === "0") htmlEl.style.opacity = "1";
       });
     },
   });
+}
+
+function addCanvasToPdf(
+  pdf: jsPDF,
+  canvas: HTMLCanvasElement,
+  options: { singlePage?: boolean; marginMm: number },
+): void {
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = options.marginMm;
+  const contentW = pageWidth - margin * 2;
+  const contentH = pageHeight - margin * 2;
+
+  if (options.singlePage) {
+    const naturalH = (canvas.height * contentW) / canvas.width;
+    let renderW = contentW;
+    let renderH = naturalH;
+    if (naturalH > contentH) {
+      renderH = contentH;
+      renderW = (canvas.width * renderH) / canvas.height;
+    }
+    const x = (pageWidth - renderW) / 2;
+    const y = margin;
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, renderW, renderH);
+    return;
+  }
+
+  const fullImgH = (canvas.height * contentW) / canvas.width;
+  if (fullImgH <= contentH) {
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, contentW, fullImgH);
+    return;
+  }
+
+  const pageHeightPx = (contentH / fullImgH) * canvas.height;
+  let srcY = 0;
+  let pageIndex = 0;
+
+  while (srcY < canvas.height - 0.5) {
+    if (pageIndex > 0) pdf.addPage();
+    const slicePx = Math.min(pageHeightPx, canvas.height - srcY);
+    const sliceCanvas = document.createElement("canvas");
+    sliceCanvas.width = canvas.width;
+    sliceCanvas.height = Math.ceil(slicePx);
+    const ctx = sliceCanvas.getContext("2d");
+    if (!ctx) break;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+    ctx.drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+    const sliceHmm = (slicePx * contentW) / canvas.width;
+    pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, contentW, sliceHmm);
+    srcY += slicePx;
+    pageIndex += 1;
+  }
 }
 
 /** Capture a DOM node and save as a PDF. */
@@ -137,7 +227,7 @@ export async function downloadElementAsPdf(
   options?: PdfDownloadOptions,
 ): Promise<void> {
   const source = resolveCaptureRoot(element);
-  const captureWidth = options?.widthPx ?? Math.max(source.offsetWidth || element.offsetWidth || 0, A4_CONTENT_PX);
+  const captureWidth = options?.widthPx ?? A4_CONTENT_PX;
   const clone = source.cloneNode(true) as HTMLElement;
   prepareClone(clone, captureWidth);
 
@@ -193,38 +283,12 @@ export async function downloadElementAsPdf(
     }
 
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
+    const marginMm = options?.marginMm ?? 10;
 
-    if (options?.singlePage) {
-      const margin = options.marginMm ?? 8;
-      const maxW = pageWidth - margin * 2;
-      const maxH = pageHeight - margin * 2;
-      const naturalH = (canvas.height * maxW) / canvas.width;
-      let renderW = maxW;
-      let renderH = naturalH;
-      if (naturalH > maxH) {
-        renderH = maxH;
-        renderW = (canvas.width * renderH) / canvas.height;
-      }
-      const x = (pageWidth - renderW) / 2;
-      const y = margin;
-      pdf.addImage(imgData, "PNG", x, y, renderW, renderH);
-    } else {
-      const imgHeight = (canvas.height * pageWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-        heightLeft -= pageHeight;
-      }
-    }
+    addCanvasToPdf(pdf, canvas, {
+      singlePage: options?.singlePage,
+      marginMm,
+    });
 
     pdf.save(`${sanitizeFilename(filename)}.pdf`);
   } finally {

@@ -6,9 +6,9 @@ import { format } from "date-fns";
 import {
   ArrowLeft, Activity, Bell, Briefcase, Building2, Calendar,
   CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock,
-  Download, ExternalLink, FileText, FolderOpen, Mail, MapPin,
+  Download, ExternalLink, FileText, FileImage, FolderOpen, Mail, MapPin,
   MessageSquare, Pencil, Phone, Plus, Radio, RefreshCw, Send,
-  StickyNote, Tag, TrendingUp, User, UserCheck,
+  StickyNote, Tag, Trash2, TrendingUp, User, UserCheck, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,8 +18,11 @@ import {
   useGetLead,
   useListProposals,
   useUpdateLead,
+  useAddPlanningDoc,
+  useRemovePlanningDoc,
   useSendProposal,
   type LeadActivity,
+  type PlanningDoc,
 } from "@/api/sales";
 import { apiUrl } from "@/lib/api-base";
 import type { SalesActivity } from "@/modules/sales/types";
@@ -109,6 +112,7 @@ const ACTIVITY_TYPE_MAP: Record<string, SalesActivity["type"]> = {
   email_sent:          "note",
   created:             "lead",
   document_uploaded:   "note",
+  document_removed:    "note",
 };
 
 function mapActivity(a: LeadActivity): SalesActivity {
@@ -128,105 +132,217 @@ function resolveFileUrl(url: string) {
   return apiUrl(url.startsWith("/") ? url : `/${url}`);
 }
 
-/* ─── Project Planning Doc ─────────────────────────────────────────────────── */
-function ProjectPlanningDoc({ leadId, currentDoc, onDocChange }: {
-  leadId: number; currentDoc: string | null; onDocChange: (url: string | null) => void;
-}) {
-  const [saving,    setSaving]    = useState(false);
-  const [replacing, setReplacing] = useState(false);
-  const updateLead = useUpdateLead();
+/* ─── Project Planning Docs ─────────────────────────────────────────────────── */
+const ACCEPTED_TYPES = "application/pdf,image/jpeg,image/png,image/webp,image/gif";
 
-  const saveDoc = async (url: string | null) => {
-    setSaving(true);
+function isImageUrl(url: string) {
+  return /\.(jpe?g|png|webp|gif)(\?|$)/i.test(url);
+}
+
+function DocIcon({ url }: { url: string }) {
+  if (isImageUrl(url)) return <FileImage className="h-4 w-4" style={{ color: P.blue }} />;
+  return <FileText className="h-4 w-4" style={{ color: P.orange }} />;
+}
+
+function PlanningDocRow({
+  doc,
+  onRemove,
+  removing,
+}: {
+  doc: PlanningDoc;
+  onRemove: () => void;
+  removing: boolean;
+}) {
+  const url = resolveFileUrl(doc.url);
+  const isImg = isImageUrl(doc.url);
+  return (
+    <div
+      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
+      style={{ background: isImg ? "#EFF6FF" : "#FFF7ED", border: `1px solid ${isImg ? "#BFDBFE" : "#FED7AA"}` }}
+    >
+      <div
+        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
+        style={{ background: isImg ? "#DBEAFE" : "#FFEDD5" }}
+      >
+        <DocIcon url={doc.url} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold truncate" style={{ color: P.dark }}>{doc.name}</p>
+        <p className="text-[10px] mt-0.5" style={{ color: P.muted }}>
+          {isImg ? "Image" : "PDF"} · {new Date(doc.uploadedAt).toLocaleDateString()}
+        </p>
+      </div>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-colors"
+        style={{ color: P.blue }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Download className="h-3 w-3" />View
+      </a>
+      <button
+        disabled={removing}
+        onClick={onRemove}
+        className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-40"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+interface PendingUpload {
+  file: File;
+  uploadedUrl: string;
+  name: string;
+}
+
+function ProjectPlanningDocs({ leadId, docs, leadStatus }: {
+  leadId: number;
+  docs: PlanningDoc[];
+  leadStatus: string;
+}) {
+  const [pendingName, setPendingName]   = useState("");
+  const [pendingUpload, setPendingUpload] = useState<PendingUpload | null>(null);
+  const [removingUrl, setRemovingUrl]   = useState<string | null>(null);
+  const [uploaderKey, setUploaderKey]   = useState(0);
+
+  const addDoc    = useAddPlanningDoc(leadId);
+  const removeDoc = useRemovePlanningDoc(leadId);
+
+  const handleUploadComplete = (url: string, meta?: { fileName: string }) => {
+    if (!url) return;
+    const rawName = meta?.fileName ?? url.split("/").pop() ?? "Document";
+    const nameWithoutExt = rawName.replace(/\.[^/.]+$/, "");
+    setPendingUpload({ file: new File([], rawName), uploadedUrl: url, name: nameWithoutExt });
+    setPendingName(nameWithoutExt);
+  };
+
+  const confirmAdd = async () => {
+    if (!pendingUpload) return;
+    const name = pendingName.trim() || pendingUpload.name;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await updateLead.mutateAsync({ id: leadId, projectPlanningDoc: url } as any);
-      onDocChange(url);
-      if (url) toast.success("Document saved — pipeline advanced to Proposal Sent.");
-      else toast.success("Document removed.");
+      await addDoc.mutateAsync({ name, url: pendingUpload.uploadedUrl });
+      const isFirst = docs.length === 0;
+      if (isFirst && leadStatus === "project_planning") {
+        toast.success("Document saved — pipeline advanced to Proposal Sent.");
+      } else {
+        toast.success(`"${name}" added.`);
+      }
+      setPendingUpload(null);
+      setPendingName("");
+      setUploaderKey((k) => k + 1);
     } catch (err) {
       toastApiError(err, "Failed to save document.");
-    } finally {
-      setSaving(false);
-      setReplacing(false);
     }
   };
 
-  const resolvedUrl = currentDoc ? resolveFileUrl(currentDoc) : null;
+  const cancelPending = () => {
+    setPendingUpload(null);
+    setPendingName("");
+    setUploaderKey((k) => k + 1);
+  };
+
+  const handleRemove = async (url: string) => {
+    setRemovingUrl(url);
+    try {
+      await removeDoc.mutateAsync(url);
+      toast.success("Document removed.");
+    } catch (err) {
+      toastApiError(err, "Failed to remove document.");
+    } finally {
+      setRemovingUrl(null);
+    }
+  };
 
   return (
     <div className="rounded-2xl h-full" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
+      {/* Header */}
       <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
         <FolderOpen className="h-4 w-4" style={{ color: P.orange }} />
-        <h3 className="text-sm font-bold" style={{ color: P.dark }}>Project Planning Doc</h3>
-        {resolvedUrl && !replacing && (
+        <h3 className="text-sm font-bold" style={{ color: P.dark }}>Project Planning Docs</h3>
+        {docs.length > 0 && (
+          <span
+            className="ml-1 flex items-center justify-center h-4 min-w-4 rounded-full px-1 text-[9px] font-bold"
+            style={{ background: P.orange, color: "#fff" }}
+          >
+            {docs.length}
+          </span>
+        )}
+        {docs.length > 0 && (
           <span className="ml-auto flex items-center gap-1 text-[10px] font-semibold" style={{ color: P.green }}>
-            <CheckCircle2 className="h-3.5 w-3.5" />Uploaded
+            <CheckCircle2 className="h-3.5 w-3.5" />{docs.length} file{docs.length !== 1 ? "s" : ""}
           </span>
         )}
       </div>
+
       <div className="p-5 space-y-3">
-        {resolvedUrl && !replacing ? (
-          <>
-            <div
-              className="flex items-center gap-3 rounded-xl px-3 py-3"
-              style={{ background: "#FFF7ED", border: "1px solid #FED7AA" }}
-            >
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0" style={{ background: "#FFEDD5" }}>
-                <FileText className="h-4 w-4" style={{ color: P.orange }} />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold" style={{ color: P.dark }}>Project Planning PDF</p>
-                <p className="text-[10px] mt-0.5" style={{ color: P.muted }}>Document on file</p>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button size="sm" variant="outline" className="flex-1 h-8 text-xs gap-1.5" asChild>
-                <a href={resolvedUrl} target="_blank" rel="noopener noreferrer">
-                  <Download className="h-3.5 w-3.5" />View
-                </a>
-              </Button>
-              <Button size="sm" variant="outline" className="h-8 text-xs" disabled={saving} onClick={() => setReplacing(true)}>
-                Replace
-              </Button>
+        {/* Existing docs list */}
+        {docs.length > 0 && (
+          <div className="space-y-2">
+            {docs.map((doc) => (
+              <PlanningDocRow
+                key={doc.url}
+                doc={doc}
+                onRemove={() => void handleRemove(doc.url)}
+                removing={removingUrl === doc.url}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Pending confirmation */}
+        {pendingUpload ? (
+          <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: P.green }}>
+              File uploaded — give it a name
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                className="flex-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                placeholder="Document name…"
+                value={pendingName}
+                onChange={(e) => setPendingName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void confirmAdd(); }}
+                autoFocus
+              />
               <Button
-                size="sm" variant="outline"
-                className="h-8 text-xs text-destructive hover:text-destructive"
-                disabled={saving}
-                onClick={() => void saveDoc(null)}
+                size="sm"
+                className="h-7 text-xs px-3"
+                disabled={addDoc.isPending}
+                onClick={() => void confirmAdd()}
               >
-                Remove
+                {addDoc.isPending ? "Saving…" : "Add"}
               </Button>
+              <button
+                onClick={cancelPending}
+                className="flex items-center justify-center h-7 w-7 rounded-lg hover:bg-muted/50 text-muted-foreground transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </>
+          </div>
         ) : (
           <>
-            <p className="text-xs leading-relaxed" style={{ color: P.muted }}>
-              {replacing
-                ? "Upload a new PDF to replace the current document."
-                : <>Upload the project planning PDF to auto-advance the pipeline to{" "}
-                    <span className="font-medium" style={{ color: P.dark }}>Proposal Sent</span>.</>
-              }
-            </p>
+            {/* Upload hint */}
+            {docs.length === 0 && (
+              <p className="text-xs leading-relaxed" style={{ color: P.muted }}>
+                Upload the project planning PDF or images to auto-advance the pipeline to{" "}
+                <span className="font-medium" style={{ color: P.dark }}>Proposal Sent</span>.
+              </p>
+            )}
+            {/* Upload zone */}
             <FileUploader
-              accept="application/pdf"
+              key={uploaderKey}
+              accept={ACCEPTED_TYPES}
               category="misc"
               variant="dropzone"
-              label="Upload Project Planning PDF"
+              label={docs.length > 0 ? "Add another document or image" : "Upload PDF or image (max 50MB)"}
               maxSizeMB={50}
-              onUploadComplete={(url) => {
-                if (url) void saveDoc(url);
-                else if (replacing) setReplacing(false);
-              }}
+              onUploadComplete={handleUploadComplete}
             />
-            {replacing && (
-              <Button size="sm" variant="ghost" className="h-7 w-full text-xs" onClick={() => setReplacing(false)}>
-                Cancel
-              </Button>
-            )}
-            {saving && (
-              <p className="text-center text-xs animate-pulse" style={{ color: P.muted }}>Saving…</p>
-            )}
           </>
         )}
       </div>
@@ -247,7 +363,6 @@ export default function LeadDetail() {
   const [editOpen,          setEditOpen]          = useState(false);
   const [descExpanded,      setDescExpanded]      = useState(false);
   const [notesExpanded,     setNotesExpanded]     = useState(false);
-  const [localDoc,          setLocalDoc]          = useState<string | null | undefined>(undefined);
   const [sendingProposalId, setSendingProposalId] = useState<number | null>(null);
   const [proposalOpen,      setProposalOpen]      = useState(false);
 
@@ -256,10 +371,9 @@ export default function LeadDetail() {
   const updateLead   = useUpdateLead();
   const sendProposal = useSendProposal();
 
-  const rawActivities      = lead?.activities ?? [];
-  const activities         = rawActivities.map(mapActivity);
-  const proposals          = proposalsData?.proposals ?? [];
-  const projectPlanningDoc = localDoc !== undefined ? localDoc : (lead?.projectPlanningDoc ?? null);
+  const rawActivities = lead?.activities ?? [];
+  const activities    = rawActivities.map(mapActivity);
+  const proposals     = proposalsData?.proposals ?? [];
 
   const approveLead = async () => {
     try {
@@ -870,11 +984,11 @@ export default function LeadDetail() {
               </div>
             </div>
 
-            {/* Project Planning Doc */}
-            <ProjectPlanningDoc
+            {/* Project Planning Docs */}
+            <ProjectPlanningDocs
               leadId={leadId}
-              currentDoc={projectPlanningDoc}
-              onDocChange={(url) => setLocalDoc(url)}
+              docs={lead?.planningDocs ?? []}
+              leadStatus={lead?.status ?? ""}
             />
           </div>
         </TabsContent>

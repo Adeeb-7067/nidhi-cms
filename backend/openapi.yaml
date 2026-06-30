@@ -314,6 +314,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: staff
+          in: query
+          description: When "true" or "1", restrict to internal staff roles only.
+          schema:
+            type: string
         - name: page
           in: query
           schema:
@@ -1241,6 +1246,14 @@ paths:
           in: query
           schema:
             type: string
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
         - name: page
           in: query
           schema:
@@ -2161,7 +2174,7 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, tester, qa, client, freelancer]
+          enum: [super_admin, hr, manager, developer, tester, qa, client, freelancer, bde]
         subType:
           type: ["string", "null"]
         designation:
@@ -2233,7 +2246,7 @@ components:
           type: string
         role:
           type: string
-          enum: [super_admin, developer, tester, qa, client, freelancer]
+          enum: [super_admin, hr, manager, developer, tester, qa, client, freelancer, bde]
         subType:
           type: string
         designation:
@@ -2262,7 +2275,7 @@ components:
           description: New login password (super_admin only, min 8 chars). Omit to keep current password.
         role:
           type: string
-          enum: [super_admin, developer, tester, qa, client, freelancer]
+          enum: [super_admin, hr, manager, developer, tester, qa, client, freelancer, bde]
         subType:
           type: string
         designation:
@@ -3002,11 +3015,35 @@ components:
           type: integer
         reporterName:
           type: string
+        reporterRole:
+          type: ["string", "null"]
         assigneeId:
           type: ["integer", "null"]
         assigneeName:
           type: ["string", "null"]
         assigneeRole:
+          type: ["string", "null"]
+        assigneeIds:
+          type: array
+          items:
+            type: integer
+        assignees:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+              role:
+                type: string
+              avatarUrl:
+                type: ["string", "null"]
+              employeeId:
+                type: ["string", "null"]
+            required: [id, name, role, avatarUrl, employeeId]
+        issueKey:
           type: ["string", "null"]
         title:
           type: string
@@ -3039,21 +3076,7 @@ components:
         issues:
           type: array
           items:
-            type: object
-            properties:
-              issueKey:
-                type: string
-              title:
-                type: string
-              qaStatus:
-                type: string
-                enum: [open, fixed]
-              devStatus:
-                type: string
-                enum: [open, fixed]
-              finalStatus:
-                type: string
-                enum: [open, resolved]
+            $ref: "#/components/schemas/Bug"
         buildVersion:
           type: ["string", "null"]
         platform:
@@ -3071,6 +3094,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BugAttachment"
+        latestComment:
+          type: ["string", "null"]
         parentBugId:
           type: ["integer", "null"]
         childCount:
@@ -3136,6 +3161,7 @@ components:
           type: ["string", "null"]
         employeeId:
           type: ["string", "null"]
+      required: [id, name, role, avatarUrl, employeeId]
 
     BugAttachment:
       type: object
@@ -3150,6 +3176,7 @@ components:
           type: ["integer", "null"]
         createdAt:
           type: ["string", "null"]
+      required: [url]
 
     BugInput:
       type: object
@@ -3194,6 +3221,15 @@ components:
         status:
           type: string
           enum: [reported, assigned, in_progress, fixed, pending_qa_verification, reopened, closed]
+        qaStatus:
+          type: string
+          enum: [open, fixed]
+        devStatus:
+          type: string
+          enum: [open, fixed]
+        finalStatus:
+          type: string
+          enum: [open, resolved]
       required: [projectId, title, priority]
 
     BugUpdate:

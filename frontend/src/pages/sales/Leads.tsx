@@ -43,7 +43,7 @@ import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
-  ExecutiveAvatar,
+  LeadTeamAvatars,
   SalesEmptyState,
   LeadFormModal,
   BulkLeadActions,
@@ -286,7 +286,7 @@ export default function SalesLeads() {
                   <TableHead className="text-xs">Source</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Priority</TableHead>
-                  <TableHead className="text-xs">Executive</TableHead>
+                  <TableHead className="text-xs">Team</TableHead>
                   <TableHead className="text-xs text-right">Expected value</TableHead>
                   <TableHead className="text-xs">Next reminder</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
@@ -330,11 +330,10 @@ export default function SalesLeads() {
                       <SalesStatusBadge variant="priority" value={lead.priority} />
                     </TableCell>
                     <TableCell>
-                      {lead.assignedToUser ? (
-                        <ExecutiveAvatar name={lead.assignedToUser.name} />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
+                      <LeadTeamAvatars
+                        assigned={lead.assignedToUser}
+                        creator={lead.createdByUser}
+                      />
                     </TableCell>
                     <TableCell className="text-xs text-right font-medium tabular-nums">
                       {formatCompactCurrency(lead.expectedValue)}

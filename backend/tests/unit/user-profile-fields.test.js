@@ -90,7 +90,7 @@ describe("formatUserProfileFields", () => {
     assert.equal(out.salary, undefined);
     assert.equal(out.aadharNumber, undefined);
     assert.equal(out.panNumber, undefined);
-    assert.equal(out.idProofUrl, undefined);
+    assert.equal(out.idProofUrl, "https://example.com/id.pdf");
     assert.equal(out.firstName, "John");
     assert.equal(out.lastName, "Smith");
   });

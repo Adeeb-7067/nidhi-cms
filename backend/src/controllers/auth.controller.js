@@ -7,6 +7,7 @@ import {
   staffEmployeeRoles,
 } from "../models/schema/index.js";
 import { verifyPassword, hashPassword } from "../lib/password.js";
+import { validateStoredFileUrl } from "../lib/file-storage.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
 import {
   issuePasswordOtp,

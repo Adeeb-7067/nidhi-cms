@@ -325,6 +325,9 @@ async function updateCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const customer = await SalesCustomers.findOne({ id }).lean();
   if (!customer) notFound("Customer");
+  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
+    notFound("Customer");
+  }
   const body = req.body;
   const updates = {};
   if (body.companyName !== undefined) updates.companyName = optionalString(body.companyName);
@@ -366,6 +369,9 @@ async function deleteCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const customer = await SalesCustomers.findOne({ id }).lean();
   if (!customer) notFound("Customer");
+  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
+    notFound("Customer");
+  }
 
   const [proposals, invoices, installments, payments] = await Promise.all([
     SalesProposals.countDocuments({ customerId: id }),
@@ -388,6 +394,9 @@ async function provisionCustomerPortal(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const customer = await SalesCustomers.findOne({ id }).lean();
   if (!customer) notFound("Customer");
+  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
+    notFound("Customer");
+  }
   if (customer.clientId || customer.portalUserId) {
     badRequest("This customer already has portal access.", "portal");
   }

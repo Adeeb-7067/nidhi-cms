@@ -57,7 +57,7 @@ async function createFollowUp(req, res) {
     status: "scheduled",
     scheduledAt,
     notes: optionalString(body.notes) ?? "",
-    executiveId: body.executiveId ? Number(body.executiveId) : req.user.id,
+    executiveId: req.user.role === "bde" ? req.user.id : (body.executiveId ? Number(body.executiveId) : req.user.id),
   });
   const actId = await getNextSequence("sales_lead_activity");
   await SalesLeadActivity.create({
@@ -75,6 +75,9 @@ async function updateFollowUp(req, res) {
   const id = parseIdParam(req.params.id, "follow-up id");
   const followUp = await SalesFollowUps.findOne({ id }).lean();
   if (!followUp) notFound("Follow-up");
+  if (req.user.role === "bde" && followUp.executiveId !== req.user.id) {
+    notFound("Follow-up");
+  }
   const body = req.body;
   const updates = {};
   if (body.type !== undefined) updates.type = body.type;
@@ -85,7 +88,10 @@ async function updateFollowUp(req, res) {
     updates.scheduledAt = d;
   }
   if (body.notes !== undefined) updates.notes = optionalString(body.notes) ?? "";
-  if (body.executiveId !== undefined) updates.executiveId = body.executiveId ? Number(body.executiveId) : null;
+  // BDE cannot reassign a follow-up to another executive
+  if (body.executiveId !== undefined && req.user.role !== "bde") {
+    updates.executiveId = body.executiveId ? Number(body.executiveId) : null;
+  }
   const updated = await SalesFollowUps.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   res.json(updated);
 }
@@ -94,6 +100,9 @@ async function completeFollowUp(req, res) {
   const id = parseIdParam(req.params.id, "follow-up id");
   const followUp = await SalesFollowUps.findOne({ id }).lean();
   if (!followUp) notFound("Follow-up");
+  if (req.user.role === "bde" && followUp.executiveId !== req.user.id) {
+    notFound("Follow-up");
+  }
   await SalesFollowUps.updateOne({ id }, { $set: { status: "completed", completedAt: new Date() } });
   res.json({ success: true });
 }

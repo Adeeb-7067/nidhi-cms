@@ -8,13 +8,36 @@ import {
   usersTable,
 } from "../../models/schema/index.js";
 
+async function getBdeScope(userId) {
+  const myCustomers = await SalesCustomers.find({ assignedAdminId: userId }).select({ id: 1 }).lean();
+  const myCustomerIds = myCustomers.map((c) => c.id);
+  return {
+    leadFilter: { $or: [{ assignedTo: userId }, { createdBy: userId }] },
+    proposalFilter: { assignedTo: userId },
+    followUpFilter: { executiveId: userId },
+    paymentFilter: { recordedBy: userId },
+    customerFilter: { assignedAdminId: userId, status: "active" },
+    invoiceFilter: { customerId: { $in: myCustomerIds } },
+  };
+}
+
 async function getDashboard(req, res) {
+  const isBde = req.user.role === "bde";
+  const scope = isBde ? await getBdeScope(req.user.id) : null;
+
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const startOfWeek = new Date(now);
   startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
   startOfWeek.setHours(0, 0, 0, 0);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const lf = scope?.leadFilter ?? {};
+  const pf = scope?.proposalFilter ?? {};
+  const fuf = scope?.followUpFilter ?? {};
+  const pyf = scope?.paymentFilter ?? {};
+  const cf = scope?.customerFilter ?? { status: "active" };
+  const invF = scope?.invoiceFilter ?? {};
 
   const [
     totalLeads,
@@ -29,19 +52,21 @@ async function getDashboard(req, res) {
     paymentAgg,
     proposalAgg,
   ] = await Promise.all([
-    SalesLeads.countDocuments({}),
-    SalesLeads.countDocuments({ createdAt: { $gte: startOfToday } }),
-    SalesLeads.countDocuments({ createdAt: { $gte: startOfWeek } }),
-    SalesLeads.countDocuments({ createdAt: { $gte: startOfMonth } }),
-    SalesFollowUps.countDocuments({ status: { $in: ["scheduled", "overdue"] } }),
-    SalesProposals.countDocuments({}),
-    SalesCustomers.countDocuments({ status: "active" }),
+    SalesLeads.countDocuments(lf),
+    SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfToday } }),
+    SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfWeek } }),
+    SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfMonth } }),
+    SalesFollowUps.countDocuments({ ...fuf, status: { $in: ["scheduled", "overdue"] } }),
+    SalesProposals.countDocuments(pf),
+    SalesCustomers.countDocuments(cf),
     SalesLeads.aggregate([
+      { $match: lf },
       { $group: { _id: { $ifNull: ["$source", "other"] }, count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: 8 },
     ]),
     SalesInvoices.aggregate([
+      { $match: invF },
       {
         $group: {
           _id: "$status",
@@ -51,8 +76,14 @@ async function getDashboard(req, res) {
         },
       },
     ]),
-    SalesPayments.aggregate([{ $group: { _id: null, totalRevenue: { $sum: "$amount" } } }]),
-    SalesProposals.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
+    SalesPayments.aggregate([
+      { $match: pyf },
+      { $group: { _id: null, totalRevenue: { $sum: "$amount" } } },
+    ]),
+    SalesProposals.aggregate([
+      { $match: pf },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
   ]);
 
   const invoiceByStatus = {};
@@ -96,7 +127,11 @@ async function getPipeline(req, res) {
     "new", "contacted", "follow_up", "interested",
     "proposal_sent", "approved", "converted", "lost",
   ];
+  const matchStage = req.user.role === "bde"
+    ? { $match: { $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] } }
+    : { $match: {} };
   const counts = await SalesLeads.aggregate([
+    matchStage,
     { $group: { _id: "$status", count: { $sum: 1 } } },
   ]);
   const pipeline = Object.fromEntries(stages.map((s) => [s, 0]));
@@ -123,8 +158,11 @@ async function getRevenueTrend(req, res) {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     groupFormat = "%Y-%m-%d";
   }
+  const payMatch = req.user.role === "bde"
+    ? { createdAt: { $gte: startDate }, recordedBy: req.user.id }
+    : { createdAt: { $gte: startDate } };
   const data = await SalesPayments.aggregate([
-    { $match: { createdAt: { $gte: startDate } } },
+    { $match: payMatch },
     {
       $group: {
         _id: { $dateToString: { format: groupFormat, date: "$createdAt" } },

@@ -331,13 +331,13 @@ export function BugDetailSheet({
                     isAssignee={isAssignee}
                     disabled={updateMutation.isPending}
                     onQaChange={(v) =>
-                      void patchStatus({ qaStatus: v }, activeIssue.issueKey)
+                      void patchStatus({ qaStatus: v }, activeIssue.issueKey ?? undefined)
                     }
                     onDevChange={(v) =>
-                      void patchStatus({ devStatus: v }, activeIssue.issueKey)
+                      void patchStatus({ devStatus: v }, activeIssue.issueKey ?? undefined)
                     }
                     onFinalChange={(v) =>
-                      void patchStatus({ finalStatus: v }, activeIssue.issueKey)
+                      void patchStatus({ finalStatus: v }, activeIssue.issueKey ?? undefined)
                     }
                   />
                 )}

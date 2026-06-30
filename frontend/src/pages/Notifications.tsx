@@ -209,7 +209,7 @@ export default function NotificationsPage() {
       )}
 
       <DataPagination
-        page={data?.page ?? page}
+        page={page}
         total={data?.total ?? 0}
         limit={limit}
         loadedRowCount={notifications.length}

@@ -10,6 +10,8 @@ const leadActivityTypes = [
   "converted",
   "reminder_set",
   "field_updated",
+  "document_uploaded",
+  "document_removed",
 ];
 
 const leadActivitySchema = new Schema(

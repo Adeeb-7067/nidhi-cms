@@ -32,7 +32,7 @@ function MetaRow({
     <div className="flex items-center justify-between gap-4">
       <span className="text-xs flex-shrink-0" style={{ color: subtle }}>{label}</span>
       <span
-        className={`text-xs font-semibold text-right min-w-0 truncate ${mono ? "font-mono" : ""}`}
+        className={`text-xs font-semibold text-right min-w-0 break-words ${mono ? "font-mono" : ""}`}
         style={{ color: dark, ...valueStyle }}
       >
         {value}
@@ -56,12 +56,15 @@ export function ProposalDocument({
   currentStatus,
   statusChip,
   compact = false,
+  forPdf = false,
 }: {
   proposal: PublicProposal;
   currentStatus: "approved" | "declined" | "counter_offer" | null;
   statusChip: StatusChip;
   /** Tighter layout for single-page PDF export. */
   compact?: boolean;
+  /** Full content, multi-page PDF export — no truncation or hidden rows. */
+  forPdf?: boolean;
 }) {
   const items = proposal.items ?? [];
   const { subtotal, tax, calculated, finalTotal, adjustmentDelta } = resolveProposalTotal({
@@ -77,26 +80,22 @@ export function ProposalDocument({
   const clientEmail = proposal.lead?.email ?? proposal.customer?.email ?? null;
   const clientPhone = proposal.lead?.phone ?? proposal.customer?.phone ?? null;
 
-  const padX = compact ? "px-5" : "px-8";
-  const padYHead = compact ? "py-4" : "py-7";
-  const padYSection = compact ? "py-4" : "py-6";
-  const padYSubject = compact ? "py-2.5" : "py-4";
-  const logoH = compact ? "h-10" : "h-14";
-  const logoBox = compact ? "h-10 w-10 text-base" : "h-14 w-14 text-xl";
-  const titleSize = compact ? "text-2xl" : "text-3xl";
-  const maxItemRows = compact ? 6 : items.length;
-  const visibleItems = items.slice(0, maxItemRows);
-  const hiddenItemCount = items.length - visibleItems.length;
-  const noteText = compact && proposal.clientNote && proposal.clientNote.length > 280
-    ? `${proposal.clientNote.slice(0, 280).trim()}…`
-    : proposal.clientNote;
-  const termsText = compact && proposal.terms && proposal.terms.length > 400
-    ? `${proposal.terms.slice(0, 400).trim()}…`
-    : proposal.terms;
+  const padX = forPdf || compact ? "px-5" : "px-8";
+  const padYHead = forPdf || compact ? "py-4" : "py-7";
+  const padYSection = forPdf || compact ? "py-4" : "py-6";
+  const padYSubject = forPdf || compact ? "py-2.5" : "py-4";
+  const logoH = forPdf || compact ? "h-10" : "h-14";
+  const logoBox = forPdf || compact ? "h-10 w-10 text-base" : "h-14 w-14 text-xl";
+  const titleSize = forPdf || compact ? "text-2xl" : "text-3xl";
+  const isTight = forPdf || compact;
+  const visibleItems = forPdf ? items : items.slice(0, isTight ? 6 : items.length);
+  const hiddenItemCount = forPdf ? 0 : items.length - visibleItems.length;
+  const noteText = proposal.clientNote;
+  const termsText = proposal.terms;
 
   return (
     <div
-      className="rounded-2xl overflow-hidden shadow-sm bg-white"
+      className={`rounded-2xl shadow-sm bg-white ${forPdf || compact ? "overflow-visible" : "overflow-hidden"}`}
       style={{ border: `1px solid ${border}`, fontFamily: "system-ui, sans-serif" }}
     >
       <div className={`flex items-start justify-between gap-6 ${padX} ${padYHead}`} style={{ borderBottom: `3px solid ${primary}` }}>
@@ -112,7 +111,7 @@ export function ProposalDocument({
             </div>
           )}
           <div className="min-w-0">
-            <h2 className={`font-extrabold leading-tight truncate ${compact ? "text-base" : "text-lg"}`} style={{ color: dark }}>{companyName}</h2>
+            <h2 className={`font-extrabold leading-tight break-words ${isTight ? "text-base" : "text-lg"}`} style={{ color: dark }}>{companyName}</h2>
             <p className={`${compact ? "text-[10px]" : "text-xs"} mt-1 leading-relaxed`} style={{ color: muted }}>
               {company?.address ?? COMPANY_BILLING.address}
             </p>
@@ -216,10 +215,10 @@ export function ProposalDocument({
             {visibleItems.map((item, idx) => {
               const line = item.quantity * item.unitPrice;
               const lineTax = line * (item.taxPercent / 100);
-              const cellPad = compact ? "py-2 px-3" : "py-4 px-4";
-              const cellPadFirst = compact ? "py-2 px-3" : "py-4 px-5";
-              const cellPadLast = compact ? "py-2 px-4" : "py-4 px-6";
-              const alignTop = compact ? "align-top pt-2" : "align-top pt-5";
+              const cellPad = isTight ? "py-2 px-3" : "py-4 px-4";
+              const cellPadFirst = isTight ? "py-2 px-3" : "py-4 px-5";
+              const cellPadLast = isTight ? "py-2 px-4" : "py-4 px-6";
+              const alignTop = isTight ? "align-top pt-2" : "align-top pt-5";
               return (
                 <tr
                   key={item.itemId ?? idx}
@@ -230,11 +229,10 @@ export function ProposalDocument({
                   </td>
                   <td className={cellPad}>
                     <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`} style={{ color: dark }}>{item.name || "—"}</p>
-                    {item.description && !compact && (
-                      <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>{item.description}</p>
-                    )}
-                    {item.description && compact && (
-                      <p className="text-[10px] mt-0.5 leading-snug line-clamp-1" style={{ color: muted }}>{item.description}</p>
+                    {item.description && (
+                      <p className={`${forPdf ? "text-xs" : isTight ? "text-[10px]" : "text-xs"} mt-1 leading-relaxed break-words`} style={{ color: muted }}>
+                        {item.description}
+                      </p>
                     )}
                   </td>
                   <td className={`${cellPad} text-right tabular-nums ${alignTop}`} style={{ color: muted }}>{item.quantity}</td>
@@ -302,7 +300,7 @@ export function ProposalDocument({
           {noteText && (
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: primary }}>Note</p>
-              <p className={`${compact ? "text-xs line-clamp-4" : "text-sm"} leading-relaxed whitespace-pre-line`} style={{ color: dark }}>{noteText}</p>
+              <p className={`${forPdf ? "text-sm" : isTight ? "text-xs" : "text-sm"} leading-relaxed whitespace-pre-line break-words`} style={{ color: dark }}>{noteText}</p>
             </div>
           )}
           {termsText && (
@@ -310,7 +308,7 @@ export function ProposalDocument({
               <p className="text-[10px] font-black uppercase tracking-widest mb-2" style={{ color: primary }}>
                 Terms &amp; Conditions
               </p>
-              <p className={`${compact ? "text-xs line-clamp-5" : "text-sm"} leading-relaxed whitespace-pre-line`} style={{ color: muted }}>{termsText}</p>
+              <p className={`${forPdf ? "text-sm" : isTight ? "text-xs" : "text-sm"} leading-relaxed whitespace-pre-line break-words`} style={{ color: muted }}>{termsText}</p>
             </div>
           )}
         </div>
