@@ -2,6 +2,7 @@ import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { optionalPhoneZod, normalizePhoneForSubmit } from "@/lib/phone-input";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -25,6 +26,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import {
@@ -57,7 +59,7 @@ const optionalEmail = z
 const schema = z.object({
   name: z.string().min(1, "Name is required"),
   email: optionalEmail,
-  phone: z.string().optional(),
+  phone: optionalPhoneZod,
   company: z.string().optional(),
   address: z.string().optional(),
   position: z.string().optional(),
@@ -154,7 +156,7 @@ function buildLeadPayload(values: FormValues) {
   return {
     name: values.name.trim(),
     email: values.email?.trim() || null,
-    phone: values.phone?.trim() || null,
+    phone: normalizePhoneForSubmit(values.phone) || null,
     company: values.company?.trim() || null,
     address: values.address?.trim() || null,
     position: values.position?.trim() || null,
@@ -289,7 +291,7 @@ export function LeadFormModal({
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <PhoneInput {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

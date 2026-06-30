@@ -75,6 +75,9 @@ export function formatSettings(settings) {
     hrmMaxFreeLates: settings.hrmMaxFreeLates ?? 3,
     hrmElectronOnlyClock: settings.hrmElectronOnlyClock ?? false,
     hrmLeaveCarryForwardStartYear: settings.hrmLeaveCarryForwardStartYear ?? 2026,
+    hrmOnboardingChecklistTemplate: Array.isArray(settings.hrmOnboardingChecklistTemplate)
+      ? settings.hrmOnboardingChecklistTemplate.map((t) => String(t).trim()).filter(Boolean)
+      : [],
     updatedAt: settings.updatedAt.toISOString()
   };
 }

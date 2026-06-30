@@ -78,6 +78,58 @@ export const EMPLOYEE_TYPES = ["FULL-TIME", "PART-TIME", "INTERN"] as const;
 export const HR_EMPLOYMENT_STATUSES = ["Active", "Inactive", "Resigned", "Terminated"] as const;
 export const EMPLOYEE_POSITIONS = ["HR", "MANAGER", "TEAM_LEADER", "EMPLOYEE", "ADMIN"] as const;
 export const EMPLOYEE_BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""] as const;
+
+function matchEmployeeOption<T extends string>(value: unknown, options: readonly T[]): T | "" {
+  if (value == null || value === "") return "";
+  const str = String(value).trim();
+  if (!str) return "";
+  if (options.includes(str as T)) return str as T;
+  const lower = str.toLowerCase();
+  const found = options.find((o) => o && o.toLowerCase() === lower);
+  return (found ?? "") as T | "";
+}
+
+export function normalizeEmployeeGender(value: unknown): string {
+  return matchEmployeeOption(value, EMPLOYEE_GENDERS);
+}
+
+export function normalizeEmployeeMaritalStatus(value: unknown): string {
+  return matchEmployeeOption(value, EMPLOYEE_MARITAL_STATUSES);
+}
+
+export function normalizeEmployeeBloodGroup(value: unknown): string {
+  const compact = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  if (!compact) return "";
+  const aliases: Record<string, (typeof EMPLOYEE_BLOOD_GROUPS)[number]> = {
+    APLUS: "A+",
+    APOSITIVE: "A+",
+    AMINUS: "A-",
+    ANEGATIVE: "A-",
+    BPLUS: "B+",
+    BPOSITIVE: "B+",
+    BMINUS: "B-",
+    BNEGATIVE: "B-",
+    ABPLUS: "AB+",
+    ABPOSITIVE: "AB+",
+    ABMINUS: "AB-",
+    ABNEGATIVE: "AB-",
+    OPLUS: "O+",
+    OPOSITIVE: "O+",
+    OMINUS: "O-",
+    ONEGATIVE: "O-",
+  };
+  if (aliases[compact]) return aliases[compact];
+  return matchEmployeeOption(value, EMPLOYEE_BLOOD_GROUPS.filter(Boolean) as unknown as readonly string[]);
+}
+
+export function coerceEmployeeId(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
 export const EMPLOYEE_WEEK_DAYS = [
   "Monday",
   "Tuesday",

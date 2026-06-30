@@ -70,8 +70,8 @@ export const HRM_ACTION_LABELS: Record<HrmAction, string> = {
 
 export const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
   present: "Present",
-  onsite: "Onsite",
-  late: "Onsite",
+  onsite: "Late",
+  late: "Late",
   absent: "Absent",
   on_leave: "On leave",
   wfh: "WFH",
@@ -79,7 +79,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<string, string> = {
   holiday: "Holiday",
   weekend: "Weekend",
   short: "Half day",
-  scheduled: "Scheduled",
+  scheduled: "Not clocked in",
 };
 
 /** Primary statuses for filters, corrections, and reports. */
@@ -99,8 +99,17 @@ export function normalizeAttendanceStatus(status: string): string {
 }
 
 export function isPresentLikeStatus(status: string): boolean {
-  return ["present", "onsite", "late", "wfh"].includes(status);
+  return ["present", "onsite", "late", "wfh", "half_day", "short"].includes(status);
 }
+
+const SIMPLIFIED_PRESENT_DISPLAY = new Set([
+  "present",
+  "onsite",
+  "late",
+  "wfh",
+  "half_day",
+  "short",
+]);
 
 /** Satyakabir "Scheduled" — global WFH day awaiting clock-in. */
 export function resolveAttendanceDisplayStatus(
@@ -116,8 +125,19 @@ export function attendanceDisplayLabel(
   options?: { globalWfh?: boolean },
 ): string {
   const key = resolveAttendanceDisplayStatus(status, options);
-  if (key === "scheduled") return "Scheduled";
   return ATTENDANCE_STATUS_LABELS[key] ?? ATTENDANCE_STATUS_LABELS[status] ?? status;
+}
+
+/** One plain label for tables — no suffixes or internal codes. */
+export function simpleAttendanceStatusLabel(row: {
+  status: string;
+  globalWfh?: boolean;
+  forgivenLate?: boolean;
+}): string {
+  const display = resolveAttendanceDisplayStatus(row.status, { globalWfh: row.globalWfh });
+  if (display === "scheduled") return ATTENDANCE_STATUS_LABELS.scheduled;
+  if (SIMPLIFIED_PRESENT_DISPLAY.has(display)) return "Present";
+  return attendanceDisplayLabel(row.status, { globalWfh: row.globalWfh });
 }
 
 export const LEAVE_STATUS_LABELS: Record<string, string> = {

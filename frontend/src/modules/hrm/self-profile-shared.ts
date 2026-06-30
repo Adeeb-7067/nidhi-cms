@@ -1,5 +1,6 @@
 import * as z from "zod";
 import { mapUserToTeamEmployeeForm } from "@/modules/admin/employee-form-shared";
+import { normalizePhoneForSubmit, optionalPhoneZod } from "@/lib/phone-input";
 
 const addressSchema = z.object({
   street: z.string().optional(),
@@ -16,7 +17,7 @@ export const selfProfileSchema = z.object({
   email: z.string().email("Invalid email address"),
   designation: z.string().optional(),
   avatarUrl: z.string().optional(),
-  phoneNumber: z.string().optional(),
+  phoneNumber: optionalPhoneZod,
   dob: z.string().optional(),
   gender: z.string().optional(),
   maritalStatus: z.string().optional(),
@@ -143,7 +144,7 @@ export function buildSelfProfilePayload(values: SelfProfileFormValues) {
     email: values.email.trim().toLowerCase(),
     designation: values.designation?.trim() || undefined,
     avatarUrl: values.avatarUrl?.trim() || undefined,
-    phoneNumber: values.phoneNumber?.trim() ?? "",
+    phoneNumber: normalizePhoneForSubmit(values.phoneNumber) || "",
     dob: values.dob || null,
     gender: values.gender?.trim() ?? "",
     maritalStatus: values.maritalStatus?.trim() ?? "",

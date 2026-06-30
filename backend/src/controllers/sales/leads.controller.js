@@ -48,6 +48,17 @@ async function listLeads(req, res) {
     const re = { $regex: search.trim(), $options: "i" };
     filter.$or = [{ name: re }, { company: re }, { email: re }, { phone: re }];
   }
+  // BDE scope: only see leads assigned to or created by them
+  if (req.user.role === "bde") {
+    delete filter.assignedTo;
+    const bdeCon = { $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] };
+    if (filter.$or) {
+      filter.$and = [{ $or: filter.$or }, bdeCon];
+      delete filter.$or;
+    } else {
+      filter.$or = bdeCon.$or;
+    }
+  }
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesLeads,
     filter,
@@ -89,6 +100,9 @@ async function getLeadById(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+  if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
   const [activities, followUps, assignedUser] = await Promise.all([
     SalesLeadActivity.find({ leadId: id }).sort({ createdAt: -1 }).limit(50).lean(),
     SalesFollowUps.find({ leadId: id }).sort({ scheduledAt: 1 }).lean(),

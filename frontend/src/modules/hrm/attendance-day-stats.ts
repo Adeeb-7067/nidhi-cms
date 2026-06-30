@@ -56,16 +56,21 @@ export function deriveTodayAttendanceStats(
       counts.scheduled += 1;
       continue;
     }
+    if (isPresentLikeStatus(s.status)) {
+      counts.present += 1;
+      continue;
+    }
     const key = s.status === "late" ? "onsite" : s.status;
     if (counts[key] != null) counts[key] += 1;
   }
 
-  const pipelineStages = Object.entries(counts)
-    .filter(([, value]) => value > 0)
-    .map(([key, value]) => ({
-      label: TODAY_STATUS_LABELS[key] ?? key,
-      value,
-    }));
+  const pipelineStages = [
+    { label: "Present", value: counts.present },
+    { label: TODAY_STATUS_LABELS.scheduled, value: counts.scheduled },
+    { label: TODAY_STATUS_LABELS.absent, value: counts.absent },
+    { label: TODAY_STATUS_LABELS.on_leave, value: counts.on_leave },
+    { label: TODAY_STATUS_LABELS.half_day, value: counts.half_day },
+  ].filter((stage) => stage.value > 0);
 
   const toPerson = (s: HrmAttendanceSummary): HrmDashboardOnLeavePerson => ({
     userId: s.userId,

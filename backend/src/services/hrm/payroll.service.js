@@ -26,6 +26,8 @@ import { HttpError } from "../../lib/http-error.js";
 import { conflict, notFound, badRequest } from "../../utils/route-errors.js";
 
 import { getAttendanceDailySummaries } from "./attendance.service.js";
+import { getHrmPolicyContext } from "./hrm-date-utils.js";
+import { companyHolidaysTable } from "../../models/schema/hrm/holidays.js";
 
 import { logHrmAudit } from "./hrm-audit.service.js";
 
@@ -39,10 +41,11 @@ import { encryptIntoFields, decryptFromFields, maskTail } from "../../lib/hrm-cr
 
 import {
   aggregateAttendanceForPayroll,
+  buildLeavePayrollByDate,
   computePayrollLineAmounts,
   evaluatePayrollReadiness,
 } from "./payroll-compute.js";
-import { generatePayslipHtmlFromCms } from "./payslip-template.js";
+import { generatePayslipHtmlFromCms, resolvePublicAssetUrl } from "./payslip-template.js";
 
 const PAYROLL_LINE_EDITABLE = ["paidDays", "lopDays", "lateCount", "gross", "deductions", "lopDeduction", "notes"];
 
@@ -508,16 +511,48 @@ export async function generatePayrollRun(year, month, actorId) {
 
   const { summaries } = await getAttendanceDailySummaries({ startDate, endDate });
 
+  const { weekendDays } = await getHrmPolicyContext();
+  const holidays = await companyHolidaysTable
+    .find({ date: { $gte: startDate, $lte: endDate } })
+    .lean();
+  const holidayDates = new Set(holidays.map((h) => h.date));
+
   // Bulk-load all salary structures in one query instead of one per employee.
   const staffIds = staff.map((u) => u.id);
   const allStructures = await salaryStructuresTable.find({ userId: { $in: staffIds } }).lean();
   const structureByUserId = new Map(allStructures.map((s) => [s.userId, s]));
 
+  const approvedLeaves = await leaveRequestsTable
+    .find({
+      userId: { $in: staffIds },
+      status: "approved",
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate },
+    })
+    .lean();
+  const leavesByUserId = new Map();
+  for (const req of approvedLeaves) {
+    const list = leavesByUserId.get(req.userId) ?? [];
+    list.push(req);
+    leavesByUserId.set(req.userId, list);
+  }
+
   for (const user of staff) {
 
     const userSummaries = summaries.filter((s) => s.userId === user.id);
 
-    const counts = aggregateAttendanceForPayroll(userSummaries);
+    const leavePayrollByDate = buildLeavePayrollByDate(leavesByUserId.get(user.id) ?? [], {
+      startDate,
+      endDate,
+      weekendDays,
+      holidayDates,
+    });
+
+    const counts = aggregateAttendanceForPayroll(userSummaries, {
+      startDate,
+      endDate,
+      leavePayrollByDate,
+    });
 
     const structure = structureByUserId.get(user.id);
 
@@ -534,8 +569,6 @@ export async function generatePayrollRun(year, month, actorId) {
       tds: structure?.tds ?? 0,
 
     });
-
-
 
     const lineId = await getNextSequence("payroll_lines");
 
@@ -808,11 +841,11 @@ export async function getPayrollRunLines(runId) {
 
   return lines.map((l) => ({
     ...l,
-    employeeName: userMap.get(l.userId)?.name,
+    employeeName: userMap.get(l.userId)?.name, 
     employeeId: userMap.get(l.userId)?.employeeId,
     payslipId: slipByLineId.get(l.id) ?? null,
   }));
-}
+} 
 
 /** Admin salary-slip archive — optional period filter or all periods. */
 export async function listAdminPayslips({ year, month, allPeriods = false, limit = 500 } = {}) {
@@ -827,7 +860,7 @@ export async function listAdminPayslips({ year, month, allPeriods = false, limit
     .limit(Math.min(Number(limit) || 500, 500))
     .lean();
   if (!slips.length) return [];
-
+ 
   const lineIds = slips.map((s) => s.payrollLineId);
   const userIds = [...new Set(slips.map((s) => s.userId))];
   const [lines, users] = await Promise.all([
@@ -887,21 +920,30 @@ export async function updatePayrollLine(lineId, body) {
 
   }
 
+  const attendanceFieldsTouched =
+    body.paidDays !== undefined || body.lopDays !== undefined || body.lateCount !== undefined;
 
-
-  const gross = patch.gross ?? line.gross;
-
-  const lopDeduction = patch.lopDeduction ?? line.lopDeduction ?? 0;
-
-  const pfEmployee = patch.pfEmployee ?? line.pfEmployee ?? 0;
-
-  const tds = patch.tds ?? line.tds ?? 0;
-
-  const deductions = patch.deductions ?? (pfEmployee + tds + lopDeduction);
-
-  patch.net = Math.max(0, Math.round((gross - deductions) * 100) / 100);
-
-  patch.deductions = Math.round(deductions * 100) / 100;
+  if (attendanceFieldsTouched) {
+    const structure = await salaryStructuresTable.findOne({ userId: line.userId }).lean();
+    const amounts = computePayrollLineAmounts({
+      gross: structure?.gross ?? 0,
+      paidDays: patch.paidDays ?? line.paidDays,
+      lopDays: patch.lopDays ?? line.lopDays,
+      lateCount: patch.lateCount ?? line.lateCount ?? 0,
+      pfEmployee: patch.pfEmployee ?? line.pfEmployee ?? 0,
+      esiEmployee: structure?.esiEmployee ?? 0,
+      tds: patch.tds ?? line.tds ?? 0,
+    });
+    Object.assign(patch, amounts);
+  } else {
+    const gross = patch.gross ?? line.gross;
+    const lopDeduction = patch.lopDeduction ?? line.lopDeduction ?? 0;
+    const pfEmployee = patch.pfEmployee ?? line.pfEmployee ?? 0;
+    const tds = patch.tds ?? line.tds ?? 0;
+    const deductions = patch.deductions ?? pfEmployee + tds + lopDeduction;
+    patch.net = Math.max(0, Math.round((gross - deductions) * 100) / 100);
+    patch.deductions = Math.round(deductions * 100) / 100;
+  }
 
 
 
@@ -972,6 +1014,7 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     month: slip.month,
     year: slip.year,
     companyName: settings.companyName ?? "Company",
+    sealUrl: resolvePublicAssetUrl(settings.sealUrl),
     employeeName: user?.name ?? "Employee",
     employeeId: user?.employeeId ?? null,
     department: user?.department ?? null,

@@ -1,5 +1,15 @@
 import * as z from "zod";
-import { splitDisplayName } from "@/modules/hrm/employee-profile-types";
+import {
+  coerceEmployeeId,
+  EMPLOYEE_POSITIONS,
+  EMPLOYEE_TYPES,
+  HR_EMPLOYMENT_STATUSES,
+  normalizeEmployeeBloodGroup,
+  normalizeEmployeeGender,
+  normalizeEmployeeMaritalStatus,
+  splitDisplayName,
+} from "@/modules/hrm/employee-profile-types";
+import { optionalPhoneZod, sanitizePhoneDigits, normalizePhoneForSubmit } from "@/lib/phone-input";
 
 const addressSchema = z.object({
   street: z.string().optional(),
@@ -35,7 +45,7 @@ export const teamEmployeeSchema = z
     shiftId: z.number().nullable().optional(),
     wfhMonthlyLimit: z.coerce.number().min(0),
     leaveAccrualDaysPerMonth: z.string().optional(),
-    phoneNumber: z.string().optional(),
+    phoneNumber: optionalPhoneZod,
     joiningDate: z.string().optional(),
     exitDate: z.string().optional(),
     probationEndDate: z.string().optional(),
@@ -194,6 +204,91 @@ function dateInput(value: unknown) {
   return d.toISOString().split("T")[0];
 }
 
+type ProfileDocumentRow = { type?: string; fileUrl?: string; name?: string };
+
+type HrmDocumentRow = { category?: string; name?: string; fileUrl?: string };
+
+function pickStoredUrl(...candidates: Array<string | null | undefined>): string {
+  for (const candidate of candidates) {
+    const value = typeof candidate === "string" ? candidate.trim() : "";
+    if (value) return value;
+  }
+  return "";
+}
+
+function profileDocumentUrl(docs: ProfileDocumentRow[], ...types: string[]): string {
+  const wanted = new Set(types.map((t) => t.toLowerCase()));
+  const match = docs.find((doc) => {
+    const type = String(doc.type ?? "").toLowerCase();
+    const name = String(doc.name ?? "").toLowerCase();
+    return [...wanted].some((t) => type.includes(t) || name.includes(t));
+  });
+  return match?.fileUrl?.trim() ?? "";
+}
+
+/** Fill resume / proof upload fields from HRM document library when profile URLs are empty. */
+export function enrichEmployeeFormFromHrmDocuments(
+  values: TeamEmployeeFormValues,
+  documents: HrmDocumentRow[],
+): TeamEmployeeFormValues {
+  if (!documents.length) return values;
+
+  const next = { ...values };
+  const fileUrl = (doc?: HrmDocumentRow) => doc?.fileUrl?.trim() ?? "";
+  const name = (doc?: HrmDocumentRow) => String(doc?.name ?? "").toLowerCase();
+
+  if (!next.resumeUrl?.trim()) {
+    const resumeDoc = documents.find(
+      (doc) => doc.category === "resume" || /resume/i.test(doc.name ?? ""),
+    );
+    if (resumeDoc) next.resumeUrl = fileUrl(resumeDoc);
+  }
+
+  const proofDocs = documents.filter(
+    (doc) =>
+      doc.category === "id_proof" ||
+      /id\s*proof|address\s*proof|aadhaar|aadhar|pan|passport/i.test(doc.name ?? ""),
+  );
+
+  if (!next.idProofUrl?.trim()) {
+    const idDoc =
+      proofDocs.find((doc) => /id\s*proof|aadhaar|aadhar|pan|passport/i.test(name(doc))) ??
+      proofDocs[0];
+    if (idDoc) next.idProofUrl = fileUrl(idDoc);
+  }
+
+  if (!next.addressProofUrl?.trim()) {
+    const addressDoc =
+      proofDocs.find((doc) => /address/i.test(name(doc))) ??
+      proofDocs.find((doc) => fileUrl(doc) && fileUrl(doc) !== next.idProofUrl);
+    if (addressDoc) next.addressProofUrl = fileUrl(addressDoc);
+  }
+
+  return next;
+}
+
+function matchEmployeeOption<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
+  if (value == null || value === "") return fallback;
+  const str = String(value).trim();
+  if (options.includes(str as T)) return str as T;
+  const lower = str.toLowerCase();
+  const found = options.find((o) => o.toLowerCase() === lower);
+  return (found ?? fallback) as T;
+}
+
+/** Orval types wrap list payloads; the API returns a flat `{ users }` object at runtime. */
+export function unwrapUserListRows(payload: unknown): Array<Record<string, unknown>> {
+  if (!payload || typeof payload !== "object") return [];
+  const root = payload as Record<string, unknown>;
+  const nested = root.data;
+  if (nested && typeof nested === "object") {
+    const users = (nested as Record<string, unknown>).users;
+    if (Array.isArray(users)) return users as Array<Record<string, unknown>>;
+  }
+  if (Array.isArray(root.users)) return root.users as Array<Record<string, unknown>>;
+  return [];
+}
+
 /** Stable key for edit-dialog hydration — changes when server profile or department list updates. */
 export function teamEmployeeEditHydrateKey(
   user: UserLike,
@@ -217,8 +312,11 @@ export function mapUserToTeamEmployeeForm(
   const curr = (user.currentAddress as TeamEmployeeFormValues["currentAddress"]) ?? {};
   const salary = (user.salary as Record<string, unknown> | undefined) ?? {};
   const bank = (salary.bankAccount as Record<string, string> | undefined) ?? {};
+  const profileDocs = Array.isArray(user.profileDocuments)
+    ? (user.profileDocuments as ProfileDocumentRow[])
+    : [];
 
-  let departmentId = (user.departmentId as number | null) ?? defaultDepartmentId;
+  let departmentId = coerceEmployeeId(user.departmentId) ?? defaultDepartmentId;
   if (departmentId == null && departments?.length) {
     const legacyName = user.department as string | undefined;
     if (legacyName) {
@@ -240,25 +338,26 @@ export function mapUserToTeamEmployeeForm(
     designation: (user.designation as string) ?? "",
     subType: (user.subType as string) ?? "",
     departmentId,
-    reportingManagerId: (user.reportingManagerId as number | null) ?? (user.managerId as number | null) ?? null,
-    teamleaderId: (user.teamleaderId as number | null) ?? null,
-    shiftId: (user.shiftId as number | null) ?? null,
+    reportingManagerId:
+      coerceEmployeeId(user.reportingManagerId) ?? coerceEmployeeId(user.managerId) ?? null,
+    teamleaderId: coerceEmployeeId(user.teamleaderId),
+    shiftId: coerceEmployeeId(user.shiftId),
     wfhMonthlyLimit: (user.wfhMonthlyLimit as number) ?? 4,
     leaveAccrualDaysPerMonth:
       user.leaveAccrualDaysPerMonth != null ? String(user.leaveAccrualDaysPerMonth) : "",
-    phoneNumber: (user.phoneNumber as string) ?? "",
+    phoneNumber: sanitizePhoneDigits((user.phoneNumber as string) ?? ""),
     joiningDate: dateInput(user.joiningDate),
     exitDate: dateInput(user.exitDate),
     probationEndDate: dateInput(user.probationEndDate),
     linkedinUrl: (user.linkedinUrl as string) ?? social.linkedin ?? "",
     dob: dateInput(user.dob),
-    gender: (user.gender as string) ?? "",
-    maritalStatus: (user.maritalStatus as string) ?? "",
-    bloodGroup: (user.bloodGroup as string) ?? "",
+    gender: normalizeEmployeeGender(user.gender),
+    maritalStatus: normalizeEmployeeMaritalStatus(user.maritalStatus),
+    bloodGroup: normalizeEmployeeBloodGroup(user.bloodGroup),
     bio: (user.bio as string) ?? "",
-    employeeType: (user.employeeType as string) ?? "FULL-TIME",
-    hrEmploymentStatus: (user.hrEmploymentStatus as string) ?? "Active",
-    position: (user.position as string) ?? "EMPLOYEE",
+    employeeType: matchEmployeeOption(user.employeeType, EMPLOYEE_TYPES, "FULL-TIME"),
+    hrEmploymentStatus: matchEmployeeOption(user.hrEmploymentStatus, HR_EMPLOYMENT_STATUSES, "Active"),
+    position: matchEmployeeOption(user.position, EMPLOYEE_POSITIONS, "EMPLOYEE"),
     aadharNumber: user.aadharNumber != null ? String(user.aadharNumber) : "",
     panNumber: (user.panNumber as string) ?? "",
     lateChargePercentage: (user.lateChargePercentage as number) ?? 100,
@@ -289,9 +388,18 @@ export function mapUserToTeamEmployeeForm(
     bankName: bank.bankName ?? "",
     bankBranch: bank.branchName ?? "",
     bankIfsc: bank.ifsc ?? "",
-    resumeUrl: (user.resumeUrl as string) ?? "",
-    idProofUrl: (user.idProofUrl as string) ?? "",
-    addressProofUrl: (user.addressProofUrl as string) ?? "",
+    resumeUrl: pickStoredUrl(
+      user.resumeUrl as string,
+      profileDocumentUrl(profileDocs, "resume"),
+    ),
+    idProofUrl: pickStoredUrl(
+      user.idProofUrl as string,
+      profileDocumentUrl(profileDocs, "id proof", "id_proof"),
+    ),
+    addressProofUrl: pickStoredUrl(
+      user.addressProofUrl as string,
+      profileDocumentUrl(profileDocs, "address proof", "address_proof"),
+    ),
   };
 }
 
@@ -327,7 +435,7 @@ export function buildTeamEmployeePayload(
       values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
         ? null
         : Number(values.leaveAccrualDaysPerMonth),
-    phoneNumber: values.phoneNumber,
+    phoneNumber: normalizePhoneForSubmit(values.phoneNumber) || undefined,
     joiningDate: values.joiningDate || null,
     exitDate: values.exitDate || null,
     probationEndDate: values.probationEndDate || null,

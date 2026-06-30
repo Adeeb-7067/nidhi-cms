@@ -13,6 +13,7 @@ export type PayslipViewModel = {
     email?: string;
     phone?: string;
     logoUrl: string;
+    sealUrl?: string | null;
     watermarkText: string;
   };
   employee: {
@@ -142,6 +143,7 @@ export function hrmPayslipToViewModel(detail: HrmPayslipDetail): PayslipViewMode
       legalName: detail.companyName,
       addressLine: "",
       logoUrl: BRAND.logoSrc,
+      sealUrl: detail.sealUrl ?? null,
       watermarkText: detail.companyName,
     },
     employee: {

@@ -99,6 +99,10 @@ async function listProposals(req, res) {
       ];
     }
   }
+  // BDE scope: only see proposals assigned to them
+  if (req.user.role === "bde") {
+    filter.assignedTo = req.user.id;
+  }
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesProposals,
     filter,
@@ -158,6 +162,9 @@ async function getProposalById(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   let proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
+  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
+    notFound("Proposal");
+  }
 
   // Back-fill viewToken for proposals created before the field was added
   if (!proposal.viewToken) {

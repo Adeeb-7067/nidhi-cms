@@ -242,6 +242,13 @@ export function HrmPayslipDocument({
               COMPANY AUTHORIZED SIGNATORY
             </div>
             <div className="flex min-h-[88px] flex-col items-end justify-end gap-2">
+              {data.company.sealUrl ? (
+                <img
+                  src={data.company.sealUrl}
+                  alt="Official seal"
+                  className="h-20 w-20 object-contain opacity-90"
+                />
+              ) : null}
               <div className="w-40 border-b border-dashed border-slate-300" />
               <div className="text-right text-[10px] text-slate-600">Authorized Signatory</div>
               <div className="text-right text-[10px] text-slate-400">{data.company.legalName}</div>

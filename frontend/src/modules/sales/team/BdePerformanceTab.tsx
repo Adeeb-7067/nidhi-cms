@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Trophy, Target, Users, Phone } from "lucide-react";
+import { Trophy, Target, Users, Phone, CheckCircle2, AlertCircle, Clock, MinusCircle } from "lucide-react";
 import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Table,
   TableBody,
@@ -12,16 +14,84 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useSalesTeam, type SalesTeamMember } from "@/api/sales";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useSalesTeam, useAllBdeTargets, type SalesTeamMember, type BdeTarget } from "@/api/sales";
 import { formatCompactCurrency } from "@/modules/sales/constants";
 import { SalesEmptyState, ExecutiveAvatar } from "@/modules/sales/components";
+import { cn } from "@/lib/utils";
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+type TargetStatus = "completed" | "on_track" | "behind" | "no_target";
+
+function getTargetStatus(pct: number, hasTarget: boolean): TargetStatus {
+  if (!hasTarget) return "no_target";
+  if (pct >= 100) return "completed";
+  if (pct >= 50) return "on_track";
+  return "behind";
+}
+
+const STATUS_CONFIG: Record<TargetStatus, { label: string; icon: React.ElementType; classes: string }> = {
+  completed: { label: "Completed", icon: CheckCircle2, classes: "text-emerald-600 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30" },
+  on_track: { label: "On track", icon: Clock, classes: "text-blue-600 border-blue-300 bg-blue-50 dark:bg-blue-950/30" },
+  behind: { label: "Behind", icon: AlertCircle, classes: "text-red-500 border-red-300 bg-red-50 dark:bg-red-950/30" },
+  no_target: { label: "No target", icon: MinusCircle, classes: "text-muted-foreground border-border" },
+};
+
+function StatusBadge({ status }: { status: TargetStatus }) {
+  const cfg = STATUS_CONFIG[status];
+  const Icon = cfg.icon;
+  return (
+    <Badge variant="outline" className={cn("text-[10px] gap-1 py-0.5", cfg.classes)}>
+      <Icon className="h-2.5 w-2.5" />
+      {cfg.label}
+    </Badge>
+  );
+}
+
+function TargetCell({
+  actual,
+  target,
+  format,
+}: {
+  actual: number;
+  target: number | null;
+  format: (v: number) => string;
+}) {
+  if (target == null) return <span className="text-muted-foreground/40">—</span>;
+  const pct = target > 0 ? Math.min(100, Math.round((actual / target) * 100)) : 0;
+  return (
+    <div className="space-y-1 min-w-[90px]">
+      <div className="flex justify-between text-[10px]">
+        <span className="font-medium tabular-nums">{format(actual)}</span>
+        <span className="text-muted-foreground tabular-nums">/{format(target)}</span>
+      </div>
+      <Progress value={pct} className="h-1" />
+      <p className="text-[10px] text-muted-foreground tabular-nums text-right">{pct}%</p>
+    </div>
+  );
+}
 
 export function BdePerformanceTab({
   onSelectMember,
 }: {
   onSelectMember?: (member: SalesTeamMember) => void;
 }) {
+  const now = new Date();
+  const [targetMonth, setTargetMonth] = useState(now.getMonth() + 1);
+  const [targetYear, setTargetYear] = useState(now.getFullYear());
+
   const { data, isLoading, isError } = useSalesTeam({ status: "active" });
+  const { data: targetsData, isLoading: targetsLoading } = useAllBdeTargets(targetMonth, targetYear);
 
   const team = data?.team ?? [];
   const totals = data?.totals ?? { count: 0, revenue: 0, dealsClosed: 0, pendingFollowUps: 0 };
@@ -32,6 +102,33 @@ export function BdePerformanceTab({
   );
 
   const maxRevenue = sorted[0]?.revenue ?? 1;
+
+  // Map userId → target for quick lookup
+  const targetByUserId = useMemo(() => {
+    const map = new Map<number, BdeTarget>();
+    for (const t of targetsData?.targets ?? []) map.set(t.userId, t);
+    return map;
+  }, [targetsData?.targets]);
+
+  // Summarize target statuses for the banner
+  const targetSummary = useMemo(() => {
+    const counts = { completed: 0, on_track: 0, behind: 0, no_target: 0 };
+    for (const m of sorted) {
+      const t = targetByUserId.get(m.id);
+      const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
+      if (!hasAny) { counts.no_target++; continue; }
+      const revPct = t.revenueTarget != null ? (m.revenue / t.revenueTarget) * 100 : 100;
+      const dealsPct = t.dealsTarget != null ? (m.dealsClosed / t.dealsTarget) * 100 : 100;
+      const leadsPct = t.leadsTarget != null ? (m.leadCount / t.leadsTarget) * 100 : 100;
+      const worstPct = Math.min(revPct, dealsPct, leadsPct);
+      const s = getTargetStatus(worstPct, true);
+      counts[s]++;
+    }
+    return counts;
+  }, [sorted, targetByUserId]);
+
+  const currentYear = now.getFullYear();
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
   if (isLoading) {
     return (
@@ -68,6 +165,139 @@ export function BdePerformanceTab({
           { title: "Deals closed", value: totals.dealsClosed, icon: Target, accent: "violet", delay: 2 },
         ]}
       />
+
+      {/* ── Monthly Target Progress ── */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Monthly target progress
+              </CardTitle>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                How each BDE is tracking against their assigned targets
+              </p>
+            </div>
+            {/* Month / Year selectors */}
+            <div className="flex items-center gap-2">
+              <Select value={String(targetMonth)} onValueChange={(v) => setTargetMonth(Number(v))}>
+                <SelectTrigger className="h-7 w-28 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((name, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)} className="text-xs">{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={String(targetYear)} onValueChange={(v) => setTargetYear(Number(v))}>
+                <SelectTrigger className="h-7 w-20 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {/* Status summary pills */}
+          {!targetsLoading && (
+            <div className="flex flex-wrap gap-2 mt-2">
+              {(Object.entries(targetSummary) as [TargetStatus, number][])
+                .filter(([, count]) => count > 0)
+                .map(([status, count]) => {
+                  const cfg = STATUS_CONFIG[status];
+                  const Icon = cfg.icon;
+                  return (
+                    <span key={status} className={cn("inline-flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5", cfg.classes)}>
+                      <Icon className="h-2.5 w-2.5" />
+                      {count} {cfg.label.toLowerCase()}
+                    </span>
+                  );
+                })}
+            </div>
+          )}
+        </CardHeader>
+        <CardContent className="p-0">
+          {targetsLoading ? (
+            <div className="space-y-2 p-4">
+              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Employee</TableHead>
+                    <TableHead className="text-xs">Revenue target</TableHead>
+                    <TableHead className="text-xs">Deals target</TableHead>
+                    <TableHead className="text-xs">Leads target</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((exec) => {
+                    const t = targetByUserId.get(exec.id);
+                    const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
+
+                    // Overall status = worst metric
+                    let worstPct = 100;
+                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (exec.revenue / t.revenueTarget) * 100 : 0);
+                    if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (exec.dealsClosed / t.dealsTarget) * 100 : 0);
+                    if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (exec.leadCount / t.leadsTarget) * 100 : 0);
+                    const status = getTargetStatus(worstPct, hasAny);
+
+                    return (
+                      <TableRow
+                        key={exec.id}
+                        className={cn(
+                          onSelectMember ? "cursor-pointer" : undefined,
+                          status === "completed" && "bg-emerald-50/40 dark:bg-emerald-950/10",
+                          status === "behind" && "bg-red-50/40 dark:bg-red-950/10",
+                        )}
+                        onClick={() => onSelectMember?.(exec)}
+                      >
+                        <TableCell>
+                          <ExecutiveAvatar name={exec.name} />
+                          <p className="text-[10px] text-muted-foreground pl-9">{exec.email}</p>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <TargetCell
+                            actual={exec.revenue}
+                            target={t?.revenueTarget ?? null}
+                            format={formatCompactCurrency}
+                          />
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <TargetCell
+                            actual={exec.dealsClosed}
+                            target={t?.dealsTarget ?? null}
+                            format={(v) => String(v)}
+                          />
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <TargetCell
+                            actual={exec.leadCount}
+                            target={t?.leadsTarget ?? null}
+                            format={(v) => String(v)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={status} />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

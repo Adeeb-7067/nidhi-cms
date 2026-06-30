@@ -287,6 +287,7 @@ function buildPayslipFigures(payRollData, companyData) {
     companyData?.logoUrl ||
     process.env.DEFAULT_LOGO_URL ||
     `${(process.env.FRONTEND_URL || process.env.API_PUBLIC_URL || "http://localhost:5173").replace(/\/$/, "")}/logo.png`;
+  const sealUrl = companyData?.sealUrl ?? null;
   const addressLine = [
     addr.street,
     addr.city,
@@ -325,6 +326,7 @@ function buildPayslipFigures(payRollData, companyData) {
     brandName,
     watermarkText,
     logoUrl,
+    sealUrl,
     addressLine,
     employeeName,
     pfAccount,
@@ -363,6 +365,7 @@ const generatePaySlipHtml = (
     brandName,
     watermarkText,
     logoUrl,
+    sealUrl,
     addressLine,
     employeeName,
     pfAccount,
@@ -741,6 +744,15 @@ const generatePaySlipHtml = (
       opacity: 0.85;
       transform: rotate(-12deg);
     }
+    .seal-img {
+      position: absolute;
+      right: 12px;
+      bottom: 4px;
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      opacity: 0.92;
+    }
     .disclaimer {
       margin-top: 16px;
       border: 1px solid #e5e7eb;
@@ -917,7 +929,11 @@ const generatePaySlipHtml = (
         <div class="footer-title">COMPANY AUTHORIZED SIGNATORY</div>
         <div class="sign-box">
           <div class="sign-area">
-            <div class="stamp">${escapeHtml(brandName)}<br/>AUTHORIZED</div>
+            ${
+              sealUrl
+                ? `<img class="seal-img" src="${escapeHtml(sealUrl)}" alt="Official seal" />`
+                : `<div class="stamp">${escapeHtml(brandName)}<br/>AUTHORIZED</div>`
+            }
             <div class="sign-line">
               Authorized Signatory<br/>
               ${escapeHtml(companyName)}
@@ -996,9 +1012,11 @@ function resolvePublicAssetUrl(pathOrUrl) {
 function buildCmsCompanyPayload(settings) {
   const addr = settings?.address;
   const logoUrl = resolvePublicAssetUrl(settings?.logoUrl) || resolvePublicAssetUrl("/logo.png");
+  const sealUrl = resolvePublicAssetUrl(settings?.sealUrl);
   return {
     companyName: settings?.companyName ?? "Company",
     logoUrl,
+    sealUrl,
     email: settings?.email ?? "",
     phone: settings?.phone ?? "",
     address:

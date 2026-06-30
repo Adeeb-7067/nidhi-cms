@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, FileText, KeyRound, FilePlus, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, KeyRound, FilePlus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -20,32 +20,36 @@ import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   useGetCustomer,
+  useGetCustomerHub,
   useGetCustomerStatement,
   useListProposals,
   useListPayments,
   useDeleteCustomer,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { installmentCardData } from "@/modules/sales/adapters";
 import {
   SalesPageHeader,
   SalesStatusBadge,
   SalesEmptyState,
-  InstallmentCard,
-  FinancialSummaryCard,
   CustomerFormModal,
   CustomerRemindDialog,
   CustomerProvisionPortalDialog,
+  ProposalFormSheet,
 } from "@/modules/sales/components";
+import {
+  CustomerAdminSection,
+  CustomerCredentialsSection,
+  CustomerInstallmentsSection,
+  CustomerInventorySection,
+  CustomerOverviewExtras,
+  CustomerProjectsSection,
+  CustomerProposalsSection,
+  CustomerStatementSection,
+  CustomerTasksSection,
+  CustomerTeamSection,
+  CustomerTicketsSection,
+} from "@/modules/sales/components/customer-detail-sections";
 
 export default function CustomerDetail() {
   const [, navigate] = useLocation();
@@ -56,10 +60,12 @@ export default function CustomerDetail() {
   const [remindOpen, setRemindOpen] = useState(false);
   const [portalOpen, setPortalOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [proposalOpen, setProposalOpen] = useState(false);
 
   const deleteCustomer = useDeleteCustomer();
 
   const { data: customer, isLoading, isError } = useGetCustomer(customerId, !!customerId);
+  const { data: hub, isLoading: hubLoading } = useGetCustomerHub(customerId, !!customerId);
   const { data: proposalsData } = useListProposals({ customerId }, !!customerId);
   const { data: paymentsData } = useListPayments({ customerId }, !!customerId);
   const { data: statement, isLoading: statementLoading } = useGetCustomerStatement(
@@ -105,6 +111,11 @@ export default function CustomerDetail() {
     }
   };
 
+  const ticketCount = hub?.tickets.length ?? 0;
+  const taskCount = hub?.tasks.length ?? 0;
+  const teamCount = hub?.teamMembers.length ?? 0;
+  const projectCount = hub?.projects.length ?? 0;
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -117,11 +128,9 @@ export default function CustomerDetail() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
-              <Link href={`/sales/proposals/create?customerId=${customer.id}`}>
-                <FilePlus className="h-3.5 w-3.5" />
-                New proposal
-              </Link>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setProposalOpen(true)}>
+              <FilePlus className="h-3.5 w-3.5" />
+              New proposal
             </Button>
             {!customer.clientId && !customer.portalUserId ? (
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setPortalOpen(true)}>
@@ -163,16 +172,26 @@ export default function CustomerDetail() {
             Lead #{customer.leadId}
           </Link>
         ) : null}
+        {customer.clientId ? (
+          <Link href={`/admin/clients`} className="text-xs text-primary hover:underline">
+            Client #{customer.clientId}
+          </Link>
+        ) : null}
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-9 flex-wrap">
-          <TabsTrigger value="overview" className="text-xs">Overview</TabsTrigger>
+        <TabsList className="h-auto flex-wrap justify-start gap-1 p-1">
+          <TabsTrigger value="overview" className="text-xs">Customer info</TabsTrigger>
           <TabsTrigger value="proposals" className="text-xs">Proposals ({proposals.length})</TabsTrigger>
-          <TabsTrigger value="invoices" className="text-xs">Invoices ({invoices.length})</TabsTrigger>
-          <TabsTrigger value="payments" className="text-xs">Payments ({payments.length})</TabsTrigger>
-          <TabsTrigger value="financial" className="text-xs">Installments ({installments.length})</TabsTrigger>
+          <TabsTrigger value="projects" className="text-xs">Projects ({projectCount})</TabsTrigger>
+          <TabsTrigger value="admin" className="text-xs">Custom admin</TabsTrigger>
+          <TabsTrigger value="team" className="text-xs">Team ({teamCount})</TabsTrigger>
+          <TabsTrigger value="credentials" className="text-xs">Credentials</TabsTrigger>
+          <TabsTrigger value="tickets" className="text-xs">Tickets ({ticketCount})</TabsTrigger>
+          <TabsTrigger value="tasks" className="text-xs">Tasks ({taskCount})</TabsTrigger>
+          <TabsTrigger value="inventory" className="text-xs">Inventory</TabsTrigger>
           <TabsTrigger value="statement" className="text-xs">Statement</TabsTrigger>
+          <TabsTrigger value="installments" className="text-xs">Installments ({installments.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -199,7 +218,7 @@ export default function CustomerDetail() {
 
           <Card className="mt-4">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Contact</CardTitle>
+              <CardTitle className="text-sm">Customer information</CardTitle>
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setEditOpen(true)}>
                 Edit profile
               </Button>
@@ -241,218 +260,87 @@ export default function CustomerDetail() {
               </p>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        <TabsContent value="proposals" className="mt-4 space-y-2">
-          {proposals.length === 0 ? (
-            <SalesEmptyState title="No proposals" description="No proposals linked to this customer." />
-          ) : (
-            proposals.map((p) => (
-              <Link key={p.id} href={`/sales/proposals/${p.id}`}>
-                <Card className="hover:border-primary/30">
-                  <CardContent className="p-4 flex justify-between items-center">
-                    <div>
-                      <p className="text-sm font-medium">{p.title}</p>
-                      <p className="text-xs text-muted-foreground">{p.number}</p>
+          <CustomerOverviewExtras
+            proposalsCount={proposals.length}
+            invoicesCount={invoices.length}
+            paymentsCount={payments.length}
+          />
+
+          {proposals.length > 0 ? (
+            <Card className="mt-4">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Recent proposals</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {proposals.slice(0, 5).map((p) => (
+                  <Link key={p.id} href={`/sales/proposals/${p.id}`}>
+                    <div className="flex items-center justify-between rounded-lg border px-3 py-2 hover:border-primary/30">
+                      <div>
+                        <p className="text-sm font-medium">{p.title}</p>
+                        <p className="text-xs text-muted-foreground">{p.number}</p>
+                      </div>
+                      <SalesStatusBadge variant="proposal" value={p.status} />
                     </div>
-                    <SalesStatusBadge variant="proposal" value={p.status} />
-                  </CardContent>
-                </Card>
-              </Link>
-            ))
-          )}
+                  </Link>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
         </TabsContent>
 
-        <TabsContent value="invoices" className="mt-4 space-y-2">
-          {invoices.length === 0 ? (
-            <SalesEmptyState title="No invoices" description="Invoices appear after billing is set up." />
-          ) : (
-            invoices.map((inv) => (
-              <Link key={inv.id} href={`/sales/invoices/${inv.id}`}>
-                <Card className="hover:border-primary/30">
-                  <CardContent className="p-4 flex justify-between items-center gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium font-mono">{inv.number}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {inv.installmentId ? `Installment #${inv.installmentId}` : "Direct invoice"}
-                      </p>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <SalesStatusBadge variant="invoice" value={inv.status} />
-                      <p className="text-xs font-bold mt-1 tabular-nums">{formatCurrency(inv.amount)}</p>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))
-          )}
+        <TabsContent value="proposals" className="mt-4">
+          <CustomerProposalsSection proposals={proposals} customerId={customer.id} />
         </TabsContent>
 
-        <TabsContent value="payments" className="mt-4">
-          {payments.length === 0 ? (
-            <SalesEmptyState title="No payments" description="No payment records for this customer." />
-          ) : (
-            <div className="rounded-xl border overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Receipt</TableHead>
-                    <TableHead className="text-xs">Invoice</TableHead>
-                    <TableHead className="text-xs text-right">Amount</TableHead>
-                    <TableHead className="text-xs">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.map((pay) => (
-                    <TableRow key={pay.id}>
-                      <TableCell className="text-xs font-mono">
-                        <Link href={`/sales/receipts/${pay.id}`} className="text-primary hover:underline">
-                          {pay.receiptNumber}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">{pay.invoiceNumber ?? `#${pay.invoiceId}`}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">{formatCurrency(pay.amount)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(pay.createdAt), "MMM d, yyyy")}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+        <TabsContent value="projects" className="mt-4">
+          <CustomerProjectsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
         </TabsContent>
 
-        <TabsContent value="financial" className="mt-4">
-          {installments.length === 0 ? (
-            <SalesEmptyState title="No installments" description="Create installment plans from approved proposals." />
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {installments.map((inst) => (
-                <InstallmentCard
-                  key={inst.id}
-                  installment={installmentCardData(inst)}
-                  href={`/sales/installments/${inst.id}`}
-                  compact
-                />
-              ))}
-            </div>
-          )}
+        <TabsContent value="admin" className="mt-4">
+          <CustomerAdminSection customer={customer} hub={hub} hubLoading={hubLoading} />
         </TabsContent>
 
-        <TabsContent value="statement" className="mt-4 space-y-4">
-          {statementLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-24 w-full rounded-xl" />
-              <Skeleton className="h-48 w-full rounded-xl" />
-            </div>
-          ) : statement ? (
-            <>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <FinancialSummaryCard
-                  title="Total billed"
-                  value={formatCurrency(statement.summary.totalBilled)}
-                  icon={FileText}
-                  accent="blue"
-                />
-                <FinancialSummaryCard
-                  title="Total paid"
-                  value={formatCurrency(statement.summary.totalPaid)}
-                  icon={FileText}
-                  accent="green"
-                />
-                <FinancialSummaryCard
-                  title="Outstanding"
-                  value={formatCurrency(statement.summary.outstanding)}
-                  icon={FileText}
-                  accent="red"
-                  alert={statement.summary.outstanding > 0}
-                />
-              </div>
+        <TabsContent value="team" className="mt-4">
+          <CustomerTeamSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+        </TabsContent>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Invoice ledger</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {statement.invoices.length === 0 ? (
-                    <p className="px-4 pb-4 text-sm text-muted-foreground">No invoices on record.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">Invoice</TableHead>
-                          <TableHead className="text-xs">Date</TableHead>
-                          <TableHead className="text-xs text-right">Amount</TableHead>
-                          <TableHead className="text-xs text-right">Paid</TableHead>
-                          <TableHead className="text-xs">Status</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {statement.invoices.map((inv) => (
-                          <TableRow key={inv.id}>
-                            <TableCell className="text-xs font-mono">
-                              <Link href={`/sales/invoices/${inv.id}`} className="text-primary hover:underline">
-                                {inv.number}
-                              </Link>
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {format(new Date(inv.createdAt), "MMM d, yyyy")}
-                            </TableCell>
-                            <TableCell className="text-xs text-right tabular-nums">{formatCurrency(inv.amount)}</TableCell>
-                            <TableCell className="text-xs text-right tabular-nums">{formatCurrency(inv.paidAmount)}</TableCell>
-                            <TableCell>
-                              <SalesStatusBadge variant="invoice" value={inv.status} />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+        <TabsContent value="credentials" className="mt-4">
+          <CustomerCredentialsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+        </TabsContent>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Payment history</CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {statement.payments.length === 0 ? (
-                    <p className="px-4 pb-4 text-sm text-muted-foreground">No payments recorded.</p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="text-xs">Receipt</TableHead>
-                          <TableHead className="text-xs">Invoice</TableHead>
-                          <TableHead className="text-xs text-right">Amount</TableHead>
-                          <TableHead className="text-xs">Date</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {statement.payments.map((pay) => (
-                          <TableRow key={pay.id}>
-                            <TableCell className="text-xs font-mono">{pay.receiptNumber}</TableCell>
-                            <TableCell className="text-xs font-mono">#{pay.invoiceId}</TableCell>
-                            <TableCell className="text-xs text-right tabular-nums">{formatCurrency(pay.amount)}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {format(new Date(pay.createdAt), "MMM d, yyyy")}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </>
-          ) : (
-            <SalesEmptyState title="Statement unavailable" description="Could not load the account statement." />
-          )}
+        <TabsContent value="tickets" className="mt-4">
+          <CustomerTicketsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+        </TabsContent>
+
+        <TabsContent value="tasks" className="mt-4">
+          <CustomerTasksSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+        </TabsContent>
+
+        <TabsContent value="inventory" className="mt-4">
+          <CustomerInventorySection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+        </TabsContent>
+
+        <TabsContent value="statement" className="mt-4">
+          <CustomerStatementSection
+            customer={customer}
+            statement={statement}
+            statementLoading={statementLoading}
+            payments={payments}
+          />
+        </TabsContent>
+
+        <TabsContent value="installments" className="mt-4">
+          <CustomerInstallmentsSection
+            installments={installments}
+            payments={payments}
+            invoices={invoices}
+          />
         </TabsContent>
       </Tabs>
 
       <CustomerFormModal open={editOpen} onOpenChange={setEditOpen} customer={customer} />
+      <ProposalFormSheet open={proposalOpen} onOpenChange={setProposalOpen} defaultCustomerId={customer.id} />
       <CustomerRemindDialog
         open={remindOpen}
         onOpenChange={setRemindOpen}

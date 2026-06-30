@@ -4,6 +4,8 @@ import { toast } from "sonner";
 import { CheckCircle, ClipboardList, Clock, Home, Plus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { phoneValidationError, normalizePhoneForSubmit } from "@/lib/phone-input";
 import {
   Dialog,
   DialogContent,
@@ -219,13 +221,10 @@ export default function HrmWfhPage() {
                   placeholder="e.g. home repair appointment"
                 />
               </HrmField>
-              <HrmField label={LEGACY_WFH_LABELS.contactPhone} hint="e.g. +91 98765 43210">
-                <Input
-                  type="tel"
-                  inputMode="tel"
+              <HrmField label={LEGACY_WFH_LABELS.contactPhone} hint="10-digit mobile number">
+                <PhoneInput
                   value={phoneNumber}
                   onChange={(e) => setPhoneNumber(e.target.value)}
-                  placeholder="+91 98765 43210"
                 />
               </HrmField>
             </div>
@@ -242,9 +241,9 @@ export default function HrmWfhPage() {
                     toast.error("End date cannot be before start date");
                     return;
                   }
-                  const phoneVal = phoneNumber.trim();
-                  if (phoneVal && !/^[+]?[\d\s\-().]{7,20}$/.test(phoneVal)) {
-                    toast.error("Enter a valid phone number (digits, spaces, +, -, parentheses)");
+                  const phoneErr = phoneValidationError(phoneNumber);
+                  if (phoneErr) {
+                    toast.error(phoneErr);
                     return;
                   }
                   try {
@@ -252,7 +251,7 @@ export default function HrmWfhPage() {
                       startDate,
                       endDate,
                       reason,
-                      phoneNumber: phoneNumber.trim() || undefined,
+                      phoneNumber: normalizePhoneForSubmit(phoneNumber) || undefined,
                     });
                     toast.success("WFH request submitted");
                     setReason("");

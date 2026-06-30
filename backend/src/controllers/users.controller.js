@@ -199,7 +199,9 @@ async function getUsersById(req, res) {
   const user = await usersTable.findOne({ id }).lean();
   if (!user) notFound("User");
   const includeSensitive =
-    req.user.role === "super_admin" || req.user.id === id;
+    req.user.role === "super_admin" ||
+    adminStaffRoles.includes(req.user.role) ||
+    req.user.id === id;
   res.json(formatUser(user, { withPresence: true, includeSensitive }));
 }
 async function adminSetUserPassword(userId, newPassword, adminUser) {

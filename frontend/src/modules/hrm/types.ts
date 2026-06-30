@@ -521,6 +521,7 @@ export type HrmPayslipDetail = {
   month: number;
   year: number;
   companyName: string;
+  sealUrl?: string | null;
   employeeName: string;
   employeeId: string | null;
   department: string | null;

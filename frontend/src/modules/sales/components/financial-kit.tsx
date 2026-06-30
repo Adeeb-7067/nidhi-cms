@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import {
   AlertCircle,
   ArrowRight,
@@ -150,12 +150,22 @@ export function InstallmentCard({
   href?: string;
   compact?: boolean;
 }) {
+  const [, navigate] = useLocation();
   const remaining = calcRemaining(installment.dueAmount, installment.paidAmount);
   const projectLabel =
     installment.projectName ??
-    (`projectId` in installment ? `Project #${(installment as { projectId: number }).projectId}` : null);
-  const content = (
-    <Card className={cn("transition-colors hover:border-primary/30", href && "cursor-pointer")}>
+    (installment.projectId ? `Project #${installment.projectId}` : null);
+  const invoiceLabel = installment.invoiceNumber ?? (installment.invoiceId ? `INV-${installment.invoiceId}` : null);
+
+  const handleCardClick = () => {
+    if (href) navigate(href);
+  };
+
+  return (
+    <Card
+      className={cn("transition-colors hover:border-primary/30", href && "cursor-pointer")}
+      onClick={href ? handleCardClick : undefined}
+    >
       <CardContent className={cn("p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2 mb-2">
           <div>
@@ -167,20 +177,30 @@ export function InstallmentCard({
           <SalesStatusBadge variant="installment" value={installment.status} />
         </div>
         <InstallmentProgress paid={installment.paidAmount} total={installment.dueAmount} />
-        <div className="mt-3 flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <Calendar className="h-3 w-3" />
-            Due {format(new Date(installment.dueDate), "MMM d, yyyy")}
-          </span>
-          {installment.invoiceNumber && (
-            <span className="font-mono">{installment.invoiceNumber}</span>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-3 text-[10px] text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Due {format(new Date(installment.dueDate), "MMM d, yyyy")}
+            </span>
+            {remaining > 0 && <OutstandingBadge amount={remaining} showLabel={false} />}
+          </div>
+          {invoiceLabel && installment.invoiceId && (
+            <button
+              className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/sales/invoices/${installment.invoiceId}`);
+              }}
+            >
+              <Receipt className="h-2.5 w-2.5" />
+              {invoiceLabel}
+            </button>
           )}
-          {remaining > 0 && <OutstandingBadge amount={remaining} showLabel={false} />}
         </div>
       </CardContent>
     </Card>
   );
-  return href ? <Link href={href}>{content}</Link> : content;
 }
 
 export function PaymentHistoryTable({

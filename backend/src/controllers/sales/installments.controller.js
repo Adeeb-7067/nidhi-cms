@@ -1,4 +1,4 @@
-import { SalesInstallments, getNextSequence } from "../../models/schema/index.js";
+import { SalesInstallments, SalesInvoices, getNextSequence } from "../../models/schema/index.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -14,13 +14,13 @@ import {
 } from "../../utils/sales-totals.js";
 
 async function listInstallments(req, res) {
-  const { customerId, projectId, status } = req.query;
+  const { customerId, projectId, invoiceId, status } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (customerId) filter.customerId = Number(customerId);
   if (projectId) filter.projectId = Number(projectId);
+  if (invoiceId) filter.invoiceId = Number(invoiceId);
   if (status) filter.status = status;
-  // Bulk overdue update before returning results
   await SalesInstallments.updateMany(
     { status: "pending", dueDate: { $lt: new Date() } },
     { $set: { status: "overdue" } }
@@ -36,13 +36,25 @@ async function listInstallments(req, res) {
 
 async function createInstallment(req, res) {
   const body = req.body;
-  if (!body.projectId) badRequest("projectId is required.", "projectId");
-  if (!body.customerId) badRequest("customerId is required.", "customerId");
   if (!body.name) badRequest("name is required.", "name");
   if (body.dueAmount == null) badRequest("dueAmount is required.", "dueAmount");
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = new Date(body.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+
+  // Resolve customerId from invoice when not explicitly provided
+  let customerId = body.customerId ? Number(body.customerId) : null;
+  let projectId = body.projectId ? Number(body.projectId) : null;
+  let invoiceId = body.invoiceId ? Number(body.invoiceId) : null;
+
+  if (invoiceId && !customerId) {
+    const inv = await SalesInvoices.findOne({ id: invoiceId }).lean();
+    if (!inv) badRequest("invoiceId references a non-existent invoice.", "invoiceId");
+    customerId = inv.customerId;
+    if (!projectId && inv.projectId) projectId = inv.projectId;
+  }
+  if (!customerId) badRequest("customerId is required.", "customerId");
+
   const calculatedAmount =
     body.calculatedAmount != null ? Number(body.calculatedAmount) : Number(body.dueAmount);
   const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
@@ -51,8 +63,9 @@ async function createInstallment(req, res) {
   const id = await getNextSequence("sales_installments");
   const installment = await SalesInstallments.create({
     id,
-    projectId: Number(body.projectId),
-    customerId: Number(body.customerId),
+    invoiceId,
+    projectId,
+    customerId,
     name: String(body.name).trim(),
     dueAmount,
     calculatedAmount: Math.round(calculatedAmount),

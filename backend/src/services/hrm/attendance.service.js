@@ -1,4 +1,5 @@
 import { dailyLogsTable, usersTable, notificationsTable, getNextSequence } from "../../models/schema/index.js";
+import { workSessionsTable } from "../../models/schema/WorkSession.js";
 import { notifyUser, broadcast } from "../../lib/realtime.js";
 import { runInTx } from "../../lib/db-tx.js";
 
@@ -13,15 +14,17 @@ import { attendanceCorrectionsTable } from "../../models/schema/hrm/attendance.j
 import { buildAttendanceContext } from "./attendance-context.js";
 
 import { isPresentLikeStatus, PRIMARY_ATTENDANCE_STATUSES } from "../../constants/attendance-status.js";
-import { dailyAttendanceToSummary } from "./attendance-engine.js";
+import { dailyAttendanceToSummary, detectMissingClockOut } from "./attendance-engine.js";
 
 import { computeUserDaySummary, materializeUserAttendanceDay } from "./attendance-materialize.service.js";
 
-import { eachDateInRange, getHrmPolicyContext, workDayKeyForDate, normalizeDateKey } from "./hrm-date-utils.js";
+import { eachDateInRange, getHrmPolicyContext, workDayKeyForDate, normalizeDateKey, zonedDateTimeToUtc } from "./hrm-date-utils.js";
 
 import { logHrmAudit } from "./hrm-audit.service.js";
 import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { canUserReviewLeaveRequest } from "./leave-approval.js";
+import { workDayKey } from "../work-session-policy.js";
+import { queryWindowForDateRange } from "../work-sessions.service.js";
 
 
 
@@ -49,6 +52,107 @@ async function loadPersistedSummaries(userIds, startDate, endDate, userMetaById)
 
   );
 
+}
+
+
+
+function enrichSummaryWithSessionClocks(summary, ctx, userId, date) {
+  const firstSessionStart = ctx.firstSessionMap.get(`${userId}:${date}`);
+  const daySessions = ctx.sessionsByUserDay.get(`${userId}:${date}`) ?? [];
+  if (!firstSessionStart && daySessions.length === 0) return summary;
+
+  const lastSession = daySessions.length > 0
+    ? [...daySessions].sort((a, b) => new Date(a.startedAt) - new Date(b.startedAt)).at(-1)
+    : null;
+
+  return {
+    ...summary,
+    firstClockIn: firstSessionStart
+      ? new Date(firstSessionStart).toISOString()
+      : summary.firstClockIn ?? null,
+    lastClockOut: lastSession?.endedAt
+      ? new Date(lastSession.endedAt).toISOString()
+      : summary.lastClockOut ?? null,
+    missingClockOut: summary.missingClockOut ?? detectMissingClockOut(daySessions),
+  };
+}
+
+async function loadSessionsForUserDay(userId, date, timezone) {
+  const { start, end } = queryWindowForDateRange(date, date);
+  const sessions = await workSessionsTable
+    .find({ userId, startedAt: { $gte: start, $lte: end } })
+    .sort({ startedAt: 1 })
+    .lean();
+  return sessions.filter((s) => workDayKey(s.startedAt, timezone) === date);
+}
+
+/** Create or update work sessions when HR records a manual clock-in/out. */
+async function recordAdminManualClockSessions(userId, date, body, timezone) {
+  const { badRequest } = await import("../../utils/route-errors.js");
+  const mode = body.mode;
+  const clockIn = body.clockIn?.trim() || null;
+  const clockOut = body.clockOut?.trim() || null;
+
+  if (mode === "clock_in") {
+    if (!clockIn) badRequest("Clock-in time is required.");
+    const startedAt = zonedDateTimeToUtc(date, clockIn, timezone);
+    if (!startedAt) badRequest("Invalid clock-in time.");
+
+    await workSessionsTable.updateMany(
+      { userId, isActive: true },
+      { $set: { isActive: false, endedAt: startedAt, stopReason: "admin_manual" } },
+    );
+
+    const endedAt = clockOut ? zonedDateTimeToUtc(date, clockOut, timezone) : null;
+    if (clockOut && !endedAt) badRequest("Invalid clock-out time.");
+    if (endedAt && endedAt <= startedAt) badRequest("Clock-out time must be after clock-in time.");
+
+    const id = await getNextSequence("workSession");
+    await workSessionsTable.create({
+      id,
+      userId,
+      startedAt,
+      endedAt: endedAt ?? null,
+      isActive: !endedAt,
+      stopReason: endedAt ? "admin_manual" : null,
+      lastHeartbeatAt: endedAt ?? startedAt,
+      pausePeriods: [],
+      deviceInfo: "admin_manual",
+    });
+    return;
+  }
+
+  if (mode === "clock_out") {
+    if (!clockOut) badRequest("Clock-out time is required.");
+    const endedAt = zonedDateTimeToUtc(date, clockOut, timezone);
+    if (!endedAt) badRequest("Invalid clock-out time.");
+
+    const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+    if (active) {
+      if (endedAt <= new Date(active.startedAt)) {
+        badRequest("Clock-out time must be after the session start.");
+      }
+      await workSessionsTable.findOneAndUpdate(
+        { id: active.id, userId, isActive: true },
+        { $set: { isActive: false, endedAt, stopReason: "admin_manual" } },
+      );
+      return;
+    }
+
+    const daySessions = await loadSessionsForUserDay(userId, date, timezone);
+    const openSession = [...daySessions].reverse().find((s) => !s.endedAt || s.isActive);
+    const target = openSession ?? daySessions.at(-1);
+    if (!target) badRequest("No work session found for this date to clock out.");
+
+    if (endedAt <= new Date(target.startedAt)) {
+      badRequest("Clock-out time must be after the session start.");
+    }
+
+    await workSessionsTable.findOneAndUpdate(
+      { id: target.id, userId },
+      { $set: { isActive: false, endedAt, stopReason: "admin_manual" } },
+    );
+  }
 }
 
 
@@ -125,7 +229,7 @@ export async function getAttendanceDailySummaries({
         )
       ) {
 
-        summaries.push(persisted);
+        summaries.push(enrichSummaryWithSessionClocks(persisted, ctx, user.id, date));
 
         continue;
 
@@ -643,8 +747,18 @@ export async function adminOverrideAttendance(userId, dateInput, body, actorId) 
     badRequest("Valid attendance status is required.");
   }
 
-  const { summary } = await resolveDaySummaryForAdmin(userId, date);
-  const userMeta = await loadUserMeta(userId);
+  let { summary, userMeta } = await resolveDaySummaryForAdmin(userId, date);
+  let sessionCtx = null;
+
+  if (body.mode === "clock_in" || body.mode === "clock_out") {
+    await recordAdminManualClockSessions(userId, date, body, summary.timezone);
+    sessionCtx = await buildAttendanceContext({ startDate: date, endDate: date, userIds: [userId] });
+    const employee = sessionCtx.users.find((u) => u.id === userId);
+    if (employee) {
+      summary = await computeUserDaySummary(employee, date, sessionCtx, new Map());
+    }
+  }
+
   const activeMinutes =
     body.activeMinutes != null ? Number(body.activeMinutes) : summary.activeMinutes;
   if (!Number.isFinite(activeMinutes) || activeMinutes < 0) {
@@ -707,10 +821,14 @@ export async function adminOverrideAttendance(userId, dateInput, body, actorId) 
       status: body.status,
       activeMinutes,
       reason: body.reason.trim(),
+      mode: body.mode ?? null,
+      clockIn: body.clockIn ?? null,
+      clockOut: body.clockOut ?? null,
     },
   });
 
-  return result;
+  const freshCtx = sessionCtx ?? await buildAttendanceContext({ startDate: date, endDate: date, userIds: [userId] });
+  return enrichSummaryWithSessionClocks(result, freshCtx, userId, date);
 }
 
 

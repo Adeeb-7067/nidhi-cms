@@ -21,6 +21,10 @@ async function listFollowUps(req, res) {
   if (leadId) filter.leadId = Number(leadId);
   if (status) filter.status = status;
   if (executiveId) filter.executiveId = Number(executiveId);
+  // BDE scope: only see their own follow-ups
+  if (req.user.role === "bde") {
+    filter.executiveId = req.user.id;
+  }
   // Auto-mark overdue on read — bulk op is fast and keeps status accurate
   const now = new Date();
   await SalesFollowUps.updateMany(

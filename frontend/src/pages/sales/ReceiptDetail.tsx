@@ -45,7 +45,7 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  if (isError || !data?.payment || !data.invoice || !data.customer) {
+  if (isError || !data?.payment || !data.invoice) {
     return (
       <SalesEmptyState
         title="Receipt not found"
@@ -56,7 +56,7 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer, company);
+  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer ?? null, company, data.installment?.name);
 
   return (
     <PortalPageShell>

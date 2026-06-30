@@ -517,7 +517,11 @@ export function BdeTeamRosterPanel({
             filename="BdeTeamExport"
             viewStorageKey="sales-bde-team"
             showRowDetails
-            onRowClick={(member) => setLocation(getAdminEmployeeDetailHref(member.id))}
+            onRowClick={(member) =>
+              onOpenSalesDetail
+                ? onOpenSalesDetail(member)
+                : setLocation(getAdminEmployeeDetailHref(member.id))
+            }
           />
         )}
       </PortalContentCard>

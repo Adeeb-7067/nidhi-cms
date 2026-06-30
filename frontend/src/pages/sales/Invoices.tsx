@@ -22,8 +22,8 @@ import {
   SalesFilterBar,
   SalesStatusBadge,
   SalesEmptyState,
-  CreateInvoiceDialog,
   InvoiceFromProposalDialog,
+  InvoiceFormSheet,
 } from "@/modules/sales/components";
 
 const PAGE_SIZE = 20;
@@ -192,7 +192,7 @@ export default function Invoices() {
         </div>
       )}
 
-      <CreateInvoiceDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <InvoiceFormSheet open={createOpen} onOpenChange={setCreateOpen} />
       <InvoiceFromProposalDialog open={fromProposalOpen} onOpenChange={setFromProposalOpen} />
     </PortalPageShell>
   );

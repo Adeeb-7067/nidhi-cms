@@ -98,6 +98,11 @@ router.get("/hrm/recruitment/candidates", perm("hrm_recruitment", "view"), async
 router.post("/hrm/recruitment/candidates", perm("hrm_recruitment", "create"), asyncHandler(hrm.postCandidate));
 router.patch("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchCandidate));
 router.delete("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "delete"), asyncHandler(hrm.deleteCandidate));
+router.post(
+  "/hrm/recruitment/candidates/:id/create-employee",
+  perm("hrm_recruitment", "edit"),
+  asyncHandler(hrm.postCreateEmployeeFromCandidate),
+);
 router.post("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_onboarding", "create"), asyncHandler(hrm.postOnboarding));
 router.get("/hrm/recruitment/candidates/:id/onboarding", perm("hrm_onboarding", "view"), asyncHandler(hrm.getOnboardingTasks));
 

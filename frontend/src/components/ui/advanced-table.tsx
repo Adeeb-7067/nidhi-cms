@@ -168,6 +168,16 @@ export function AdvancedTable<T>({
     columns.reduce((acc, col) => ({ ...acc, [col.id]: true }), {}),
   );
 
+  useEffect(() => {
+    setVisibleColumns((prev) => {
+      const next = { ...prev };
+      for (const col of columns) {
+        if (next[col.id] === undefined) next[col.id] = true;
+      }
+      return next;
+    });
+  }, [columns]);
+
   const filteredData = useMemo(() => {
     if (!searchQuery || !searchKey) return data;
     const lowerQuery = searchQuery.toLowerCase();

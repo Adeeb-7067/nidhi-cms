@@ -5,6 +5,11 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { PasswordInput } from "@/components/ui/password-input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { normalizePhoneForSubmit, phoneValidationError, sanitizePhoneDigits } from "@/lib/phone-input";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import {
@@ -62,6 +67,8 @@ import {
   useUpdateCandidate,
 } from "@/api/hrm";
 import { useCreateEmployeeFromCandidate } from "@/api/team-employees";
+import type { CreateEmployeeFromCandidateResult } from "@/api/team-employees";
+import { HRM_EMPLOYEE_ROLES, formatStaffRoleLabel } from "@/lib/user-roles";
 import type { HrmCandidate } from "@/modules/hrm/types";
 
 type CandidateForm = {
@@ -109,6 +116,12 @@ export default function HrmRecruitmentPage() {
   const [onboardingCandidateId, setOnboardingCandidateId] = useState<number | null>(null);
   const [form, setForm] = useState<CandidateForm>(emptyForm());
   const [hireConfirmCandidate, setHireConfirmCandidate] = useState<HrmCandidate | null>(null);
+  const [hireRole, setHireRole] = useState("developer");
+  const [hirePassword, setHirePassword] = useState("");
+  const [hireStartOnboarding, setHireStartOnboarding] = useState(true);
+  const [hireCreatedResult, setHireCreatedResult] = useState<CreateEmployeeFromCandidateResult | null>(
+    null,
+  );
 
   const candidates = data?.candidates ?? [];
   const departments = deptData?.departments ?? [];
@@ -145,7 +158,7 @@ export default function HrmRecruitmentPage() {
     setForm({
       name: candidate.name,
       email: candidate.email,
-      phone: candidate.phone ?? "",
+      phone: sanitizePhoneDigits(candidate.phone ?? ""),
       position: candidate.position,
       departmentId: candidate.departmentId != null ? String(candidate.departmentId) : "none",
       notes: candidate.notes ?? "",
@@ -161,15 +174,15 @@ export default function HrmRecruitmentPage() {
       toast.error("Name, email, and position are required");
       return;
     }
-    const phoneVal = form.phone.trim();
-    if (phoneVal && !/^[+]?[\d\s\-().]{7,20}$/.test(phoneVal)) {
-      toast.error("Enter a valid phone number (digits, spaces, +, -, parentheses)");
+    const phoneErr = phoneValidationError(form.phone);
+    if (phoneErr) {
+      toast.error(phoneErr);
       return;
     }
     const payload = {
       name: form.name.trim(),
       email: form.email.trim(),
-      phone: form.phone.trim() || undefined,
+      phone: normalizePhoneForSubmit(form.phone) || undefined,
       position: form.position.trim(),
       departmentId: form.departmentId === "none" ? null : Number(form.departmentId),
       notes: form.notes.trim() || undefined,
@@ -192,6 +205,22 @@ export default function HrmRecruitmentPage() {
     }
   };
 
+  const openHireDialog = (candidate: HrmCandidate, options?: { startOnboarding?: boolean }) => {
+    setHireRole("developer");
+    setHirePassword("");
+    setHireStartOnboarding(
+      options?.startOnboarding ?? candidate.stage === "onboarding",
+    );
+    setHireCreatedResult(null);
+    setHireConfirmCandidate(candidate);
+  };
+
+  const closeHireDialog = () => {
+    setHireConfirmCandidate(null);
+    setHireCreatedResult(null);
+    setHirePassword("");
+  };
+
   const handleStageChange = (candidate: HrmCandidate, stage: string) => {
     updateCandidate.mutate(
       { id: candidate.id, stage },
@@ -199,7 +228,7 @@ export default function HrmRecruitmentPage() {
         onSuccess: () => {
           toast.success("Stage updated");
           if ((stage === "hired" || stage === "onboarding") && candidate.hiredUserId == null) {
-            setHireConfirmCandidate({ ...candidate, stage });
+            openHireDialog({ ...candidate, stage });
           }
         },
       },
@@ -208,20 +237,40 @@ export default function HrmRecruitmentPage() {
 
   const handleCreateEmployee = async () => {
     if (!hireConfirmCandidate) return;
+    const trimmedPassword = hirePassword.trim();
+    if (trimmedPassword && trimmedPassword.length < 8) {
+      toast.error("Password must be at least 8 characters, or leave blank to auto-generate");
+      return;
+    }
     try {
-      await createEmployeeFromCandidate.mutateAsync({
-        name: hireConfirmCandidate.name,
-        email: hireConfirmCandidate.email,
-        phoneNumber: hireConfirmCandidate.phone ?? undefined,
+      const result = await createEmployeeFromCandidate.mutateAsync({
+        candidateId: hireConfirmCandidate.id,
+        role: hireRole,
+        password: trimmedPassword || undefined,
+        startOnboarding: hireStartOnboarding,
       });
-      toast.success(`Employee account created for ${hireConfirmCandidate.name} — complete details in Team → Employees`);
-      setHireConfirmCandidate(null);
+      setHireCreatedResult(result);
+      if (result.alreadyExisted) {
+        toast.info("Employee account already exists for this candidate");
+      } else if (result.temporaryPassword) {
+        toast.success("Employee created — copy the temporary password below");
+      } else {
+        toast.success(`Employee account created for ${hireConfirmCandidate.name}`);
+      }
+      if (result.onboardingRecord && hireStartOnboarding) {
+        setOnboardingCandidateId(hireConfirmCandidate.id);
+      }
     } catch {
       // error toast handled by hook
     }
   };
 
   const handleStartOnboarding = (candidate: HrmCandidate) => {
+    if (!candidate.hiredUserId) {
+      openHireDialog(candidate, { startOnboarding: true });
+      toast.info("Create the employee account first, then onboarding will start automatically");
+      return;
+    }
     startOnboarding.mutate(candidate.id, {
       onSuccess: () => {
         toast.success("Onboarding started — open Onboarding to track checklist");
@@ -409,11 +458,8 @@ export default function HrmRecruitmentPage() {
                   onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
                 />
               </HrmField>
-              <HrmField label="Phone" hint="e.g. +91 98765 43210">
-                <Input
-                  type="tel"
-                  inputMode="tel"
-                  placeholder="+91 98765 43210"
+              <HrmField label="Phone" hint="10-digit mobile number">
+                <PhoneInput
                   value={form.phone}
                   onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
                 />
@@ -562,54 +608,152 @@ export default function HrmRecruitmentPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Auto-create employee account when stage → Hired / Onboarding */}
-        <Dialog
-          open={hireConfirmCandidate != null}
-          onOpenChange={(open) => !open && setHireConfirmCandidate(null)}
-        >
-          <DialogContent>
+        {/* Create employee when stage → Hired / Onboarding or Onboard without account */}
+        <Dialog open={hireConfirmCandidate != null} onOpenChange={(open) => !open && closeHireDialog()}>
+          <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Create employee account?</DialogTitle>
+              <DialogTitle>
+                {hireCreatedResult ? "Employee account ready" : "Create employee account"}
+              </DialogTitle>
             </DialogHeader>
-            <p className="text-sm text-muted-foreground">
-              Stage changed to{" "}
-              <strong>{RECRUITMENT_STAGE_LABELS[hireConfirmCandidate?.stage ?? ""] ?? ""}</strong>.
-              Create a Team employee account now with this candidate's details pre-filled?
-            </p>
-            <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1 text-sm">
-              <p>
-                <span className="text-muted-foreground">Name: </span>
-                {hireConfirmCandidate?.name}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Email: </span>
-                {hireConfirmCandidate?.email}
-              </p>
-              {hireConfirmCandidate?.phone && (
-                <p>
-                  <span className="text-muted-foreground">Phone: </span>
-                  {hireConfirmCandidate.phone}
+            {!hireCreatedResult ? (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Stage:{" "}
+                  <strong>{RECRUITMENT_STAGE_LABELS[hireConfirmCandidate?.stage ?? ""] ?? ""}</strong>.
+                  Create a Team login for this candidate. Leave password blank to auto-generate a
+                  temporary one.
                 </p>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              You can fill in role, department, and full details from{" "}
-              <Link href="/admin/employees" className="text-primary underline-offset-2 hover:underline">
-                Team → Employees
-              </Link>{" "}
-              afterward.
-            </p>
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1 text-sm">
+                  <p>
+                    <span className="text-muted-foreground">Name: </span>
+                    {hireConfirmCandidate?.name}
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Email: </span>
+                    {hireConfirmCandidate?.email}
+                  </p>
+                  {hireConfirmCandidate?.position && (
+                    <p>
+                      <span className="text-muted-foreground">Role applied: </span>
+                      {hireConfirmCandidate.position}
+                    </p>
+                  )}
+                  {hireConfirmCandidate?.phone && (
+                    <p>
+                      <span className="text-muted-foreground">Phone: </span>
+                      {hireConfirmCandidate.phone}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  <HrmField label="Staff role">
+                    <Select value={hireRole} onValueChange={setHireRole}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {HRM_EMPLOYEE_ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {formatStaffRoleLabel(role)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </HrmField>
+                  <HrmField
+                    label="Login password (optional)"
+                    hint="Min 8 characters, or leave blank to auto-generate"
+                  >
+                    <PasswordInput
+                      value={hirePassword}
+                      onChange={(e) => setHirePassword(e.target.value)}
+                      placeholder="Auto-generate if empty"
+                      autoComplete="new-password"
+                    />
+                  </HrmField>
+                  {canOnboard ? (
+                    <div className="flex items-start gap-2">
+                      <Checkbox
+                        id="hire-start-onboarding"
+                        checked={hireStartOnboarding}
+                        onCheckedChange={(v) => setHireStartOnboarding(v === true)}
+                      />
+                      <Label htmlFor="hire-start-onboarding" className="text-sm font-normal leading-snug">
+                        Start onboarding checklist after creating the account
+                      </Label>
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-3 text-sm">
+                <p className="text-muted-foreground">
+                  {hireCreatedResult.alreadyExisted
+                    ? "This candidate is already linked to an employee account."
+                    : "Share these login details with the new hire. They will be prompted to change the password on first login."}
+                </p>
+                <div className="rounded-lg border border-border/60 bg-muted/20 px-4 py-3 space-y-1">
+                  <p>
+                    <span className="text-muted-foreground">Employee ID: </span>
+                    <span className="font-mono font-medium">
+                      {String(hireCreatedResult.user?.employeeId ?? "—")}
+                    </span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Email: </span>
+                    {String(hireCreatedResult.user?.email ?? hireConfirmCandidate?.email ?? "—")}
+                  </p>
+                  {hireCreatedResult.temporaryPassword ? (
+                    <p>
+                      <span className="text-muted-foreground">Temporary password: </span>
+                      <span className="font-mono font-semibold text-foreground">
+                        {hireCreatedResult.temporaryPassword}
+                      </span>
+                    </p>
+                  ) : null}
+                </div>
+                {hireCreatedResult.onboardingRecord ? (
+                  <p className="text-xs text-muted-foreground">
+                    Onboarding checklist started — track progress on the{" "}
+                    <Link href="/hrm/onboarding" className="text-primary underline-offset-2 hover:underline">
+                      Onboarding
+                    </Link>{" "}
+                    page.
+                  </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  Complete profile, department, and documents in{" "}
+                  <Link href="/admin/employees" className="text-primary underline-offset-2 hover:underline">
+                    Team → Employees
+                  </Link>
+                  .
+                </p>
+              </div>
+            )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setHireConfirmCandidate(null)}>
-                Skip
-              </Button>
-              <Button
-                className={portalActionButtonClass()}
-                disabled={createEmployeeFromCandidate.isPending}
-                onClick={() => void handleCreateEmployee()}
-              >
-                {createEmployeeFromCandidate.isPending ? "Creating…" : "Create employee"}
-              </Button>
+              {hireCreatedResult ? (
+                <Button className={portalActionButtonClass()} onClick={closeHireDialog}>
+                  Done
+                </Button>
+              ) : (
+                <>
+                  <Button variant="outline" onClick={closeHireDialog}>
+                    Skip for now
+                  </Button>
+                  <Button
+                    className={portalActionButtonClass()}
+                    disabled={createEmployeeFromCandidate.isPending}
+                    onClick={() => void handleCreateEmployee()}
+                  >
+                    {createEmployeeFromCandidate.isPending
+                      ? "Creating…"
+                      : hireStartOnboarding && canOnboard
+                        ? "Create & start onboarding"
+                        : "Create employee"}
+                  </Button>
+                </>
+              )}
             </DialogFooter>
           </DialogContent>
         </Dialog>

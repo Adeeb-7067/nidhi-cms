@@ -1,34 +1,116 @@
-import { isPaidAttendanceStatus } from "../../constants/attendance-status.js";
+import { eachDateInRange, getDayOfWeek } from "./hrm-date-utils.js";
 
-/** Days in month for daily-rate LOP (platform convention: gross / 30). */
+/** Days in month for daily-rate pay (platform convention: gross / 30). */
 export const PAYROLL_DAYS_IN_MONTH = 30;
 
-/**
- * Derive paid / LOP / late counts from attendance summaries for one employee.
- */
-export function aggregateAttendanceForPayroll(summaries) {
-  let paidDays = 0;
-  let lopDays = 0;
-  let lateCount = 0;
-
-  for (const s of summaries) {
-    if (isPaidAttendanceStatus(s.status) && s.compliance !== "absent") {
-      paidDays += 1;
-    }
-    if (s.status === "absent" || s.compliance === "short") {
-      lopDays += 1;
-    }
-    if (s.status === "late" || s.status === "onsite") {
-      lateCount += 1;
-    }
+/** Count Sundays in a calendar range (YYYY-MM-DD, inclusive). */
+export function countSundaysInRange(startDate, endDate) {
+  let count = 0;
+  for (const date of eachDateInRange(startDate, endDate)) {
+    if (getDayOfWeek(date) === 0) count += 1;
   }
+  return count;
+}
 
-  return { paidDays, lopDays, lateCount };
+const PAYROLL_PAID_STATUSES = new Set(["present", "holiday"]);
+
+function addLeaveFraction(byDate, date, paid, lop) {
+  const row = byDate.get(date) ?? { paid: 0, lop: 0 };
+  row.paid += paid;
+  row.lop += lop;
+  byDate.set(date, row);
 }
 
 /**
- * Compute payroll line amounts from structure + attendance counts.
- * Pure — no DB access.
+ * Map each calendar date in a pay period to paid-leave vs LOP fractions from approved requests.
+ * Paid portion = days covered by leave balance; LOP = unpaid overflow on the request.
+ */
+export function buildLeavePayrollByDate(
+  leaveRequests,
+  { startDate, endDate, weekendDays, holidayDates = new Set() },
+) {
+  const byDate = new Map();
+
+  for (const req of leaveRequests ?? []) {
+    if (req.status !== "approved") continue;
+    if (req.endDate < startDate || req.startDate > endDate) continue;
+
+    const paidTotal = Math.max(0, Number(req.days ?? 0) - Number(req.lopDays ?? 0));
+    const lopTotal = Math.max(0, Number(req.lopDays ?? 0));
+    const dayPart = req.dayPart ?? "full";
+
+    if (dayPart !== "full") {
+      const date = req.startDate;
+      if (date < startDate || date > endDate) continue;
+      if (weekendDays.includes(getDayOfWeek(date))) continue;
+      if (holidayDates.has(date)) continue;
+      addLeaveFraction(byDate, date, paidTotal, lopTotal);
+      continue;
+    }
+
+    const workingDates = [];
+    for (const date of eachDateInRange(req.startDate, req.endDate)) {
+      if (weekendDays.includes(getDayOfWeek(date))) continue;
+      if (holidayDates.has(date)) continue;
+      workingDates.push(date);
+    }
+
+    for (let i = 0; i < workingDates.length; i++) {
+      const date = workingDates[i];
+      if (date < startDate || date > endDate) continue;
+      const paid = i < paidTotal ? 1 : 0;
+      const lop = i >= paidTotal && i < paidTotal + lopTotal ? 1 : 0;
+      addLeaveFraction(byDate, date, paid, lop);
+    }
+  }
+
+  return byDate;
+}
+
+/**
+ * Derive paid / LOP counts from attendance summaries for one employee.
+ * - All Sundays in the pay period are paid automatically.
+ * - Present / holiday days are paid.
+ * - Approved leave from balance (paid leave quota) counts as paid days.
+ * - Only unpaid leave (LOP on the request) is deducted.
+ * - Absent days are unpaid with no LOP line.
+ */
+export function aggregateAttendanceForPayroll(
+  summaries,
+  { startDate, endDate, leavePayrollByDate },
+) {
+  const sundayDates = new Set(
+    eachDateInRange(startDate, endDate).filter((d) => getDayOfWeek(d) === 0),
+  );
+
+  let paidDays = sundayDates.size;
+  let lopDays = 0;
+
+  for (const s of summaries) {
+    if (sundayDates.has(s.date)) continue;
+
+    if (s.status === "on_leave") {
+      const leave = leavePayrollByDate?.get(s.date);
+      if (leave) {
+        paidDays += leave.paid;
+        lopDays += leave.lop;
+      }
+      continue;
+    }
+    if (PAYROLL_PAID_STATUSES.has(s.status)) {
+      paidDays += 1;
+    }
+  }
+
+  return {
+    paidDays: Math.round(paidDays * 100) / 100,
+    lopDays: Math.round(lopDays * 100) / 100,
+    lateCount: 0,
+  };
+}
+
+/**
+ * Attendance-based pay: earn (gross/30 × paidDays), deduct LOP for unpaid leave days + statutory.
  */
 export function computePayrollLineAmounts({
   gross = 0,
@@ -41,16 +123,17 @@ export function computePayrollLineAmounts({
   daysInMonth = PAYROLL_DAYS_IN_MONTH,
 }) {
   const dailyRate = gross / daysInMonth;
+  const earned = Math.round(dailyRate * paidDays * 100) / 100;
   const lopDeduction = Math.round(dailyRate * lopDays * 100) / 100;
   const statutory = (pfEmployee ?? 0) + (esiEmployee ?? 0) + (tds ?? 0);
   const deductions = Math.round((statutory + lopDeduction) * 100) / 100;
-  const net = Math.max(0, Math.round((gross - deductions) * 100) / 100);
+  const net = Math.max(0, Math.round((earned - deductions) * 100) / 100);
 
   return {
     paidDays,
     lopDays,
     lateCount,
-    gross,
+    gross: earned,
     lopDeduction,
     pfEmployee: pfEmployee ?? 0,
     tds: tds ?? 0,

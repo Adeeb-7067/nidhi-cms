@@ -5,6 +5,7 @@ import { Progress } from "./progress";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { apiUrl } from "@/lib/api-base";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import { cn } from "@/lib/utils";
 
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
@@ -52,7 +53,8 @@ export function FileUploader({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    setCurrentFileUrl(value || null);
+    const resolved = value?.trim() ? resolveFileUrl(value.trim()) : "";
+    setCurrentFileUrl(resolved || null);
     if (!value) setDisplayName(null);
   }, [value]);
 
@@ -167,7 +169,8 @@ export function FileUploader({
               {isUploading ? `Uploading… ${progress}%` : "Choose file"}
             </span>
             <span className="min-w-0 truncate text-muted-foreground">
-              {displayName ?? (currentFileUrl ? "File ready" : "No file chosen")}
+              {displayName ??
+                (currentFileUrl ? currentFileUrl.split("/").pop() ?? "File attached" : "No file chosen")}
             </span>
           </button>
           {isUploading ? <Progress value={progress} className="h-1" /> : null}

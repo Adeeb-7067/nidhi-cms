@@ -32,6 +32,7 @@ import {
   ConvertLeadDialog,
   LeadFormModal,
   LeadPipelineStrip,
+  ProposalFormSheet,
 } from "@/modules/sales/components";
 import {
   formatCurrency,
@@ -248,6 +249,7 @@ export default function LeadDetail() {
   const [notesExpanded,     setNotesExpanded]     = useState(false);
   const [localDoc,          setLocalDoc]          = useState<string | null | undefined>(undefined);
   const [sendingProposalId, setSendingProposalId] = useState<number | null>(null);
+  const [proposalOpen,      setProposalOpen]      = useState(false);
 
   const { data: lead, isLoading, isError } = useGetLead(leadId, !!leadId);
   const { data: proposalsData, refetch: refetchProposals } = useListProposals({ leadId }, !!leadId);
@@ -338,7 +340,7 @@ export default function LeadDetail() {
           <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setEditOpen(true)}>
             <Pencil className="h-3.5 w-3.5" />Edit
           </Button>
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => navigate(`/sales/proposals/create?leadId=${lead.id}`)}>
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setProposalOpen(true)}>
             <FileText className="h-3.5 w-3.5" />Generate proposal
           </Button>
         </div>
@@ -723,7 +725,7 @@ export default function LeadDetail() {
             </div>
             <Button
               size="sm" className="h-8 gap-1.5 text-xs"
-              onClick={() => navigate(`/sales/proposals/create?leadId=${lead.id}`)}
+              onClick={() => setProposalOpen(true)}
             >
               <Plus className="size-3.5" />New proposal
             </Button>
@@ -739,7 +741,7 @@ export default function LeadDetail() {
                 <p className="text-xs" style={{ color: P.subtle }}>Create a proposal to start quoting this lead.</p>
                 <Button
                   size="sm" className="h-8 text-xs mt-1"
-                  onClick={() => navigate(`/sales/proposals/create?leadId=${lead.id}`)}
+                  onClick={() => setProposalOpen(true)}
                 >
                   Create proposal
                 </Button>
@@ -901,7 +903,7 @@ export default function LeadDetail() {
               <UserCheck className="h-3.5 w-3.5 mr-1.5" />Convert
             </Button>
           )}
-          <Button size="sm" onClick={() => navigate(`/sales/proposals/create?leadId=${lead.id}`)}>
+          <Button size="sm" onClick={() => setProposalOpen(true)}>
             <FileText className="h-3.5 w-3.5 mr-1.5" />Generate proposal
           </Button>
         </div>
@@ -909,6 +911,7 @@ export default function LeadDetail() {
 
       {/* ── Dialogs ── */}
       <LeadFormModal open={editOpen} onOpenChange={setEditOpen} lead={lead} />
+      <ProposalFormSheet open={proposalOpen} onOpenChange={setProposalOpen} defaultLeadId={lead.id} />
       <FollowUpDialog open={followUpOpen} onOpenChange={setFollowUpOpen} leadId={leadId} />
       <LeadReminderDialog
         open={reminderOpen}

@@ -18,6 +18,8 @@ const customerSchema = new Schema(
     leadId: { type: Number, ref: "SalesLeads", default: null, index: true },
     clientId: { type: Number, ref: "Clients", default: null, index: true },
     portalUserId: { type: Number, ref: "Users", default: null, index: true },
+    /** Internal staff admin assigned by super admin to manage this customer. */
+    assignedAdminId: { type: Number, ref: "Users", default: null, index: true },
   },
   { timestamps: true }
 );

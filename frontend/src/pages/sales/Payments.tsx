@@ -97,22 +97,33 @@ export default function Payments() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Receipt #</TableHead>
                 <TableHead className="text-xs">Invoice</TableHead>
-                <TableHead className="text-xs">Customer</TableHead>
+                <TableHead className="text-xs">Installment</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Invoice status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
                 <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs text-right">View</TableHead>
+                <TableHead className="text-xs text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payments.map((p) => (
                 <TableRow key={p.id} className="hover:bg-muted/30">
                   <TableCell className="text-xs font-mono text-primary">{p.receiptNumber}</TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">
-                    {p.invoiceNumber ?? `INV #${p.invoiceId}`}
+                  <TableCell className="text-xs font-mono">
+                    <Link
+                      href={`/sales/invoices/${p.invoiceId}`}
+                      className="hover:text-primary hover:underline underline-offset-2"
+                    >
+                      {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                    </Link>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">Customer #{p.customerId}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {p.installmentId ? (
+                      <span className="font-mono text-[11px]">Inst #{p.installmentId}</span>
+                    ) : (
+                      <span className="text-muted-foreground/50">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs">{METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="invoice" value={p.invoiceStatus as "paid" | "partial" | "unpaid" | "overdue"} />
@@ -120,9 +131,14 @@ export default function Payments() {
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{format(new Date(p.createdAt), "MMM d, yyyy")}</TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <Link href={`/sales/invoices/${p.invoiceId}`}>Invoice</Link>
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

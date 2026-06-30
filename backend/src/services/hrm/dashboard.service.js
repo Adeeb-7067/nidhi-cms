@@ -73,15 +73,30 @@ export function buildAttendanceTrendPoints(summaries) {
 
 /** Donut / pipeline slices for today's attendance mix. */
 export function buildTodayStatusBreakdown(summaries) {
-  const counts = { present: 0, onsite: 0, late: 0, wfh: 0, absent: 0, on_leave: 0, half_day: 0 };
+  const counts = { present: 0, absent: 0, on_leave: 0, scheduled: 0 };
   for (const s of summaries) {
-    const key = s.status === "late" ? "onsite" : s.status;
-    if (counts[key] != null) counts[key] += 1;
+    if (["weekend", "holiday"].includes(s.status)) continue;
+    if (s.globalWfh && s.status === "absent") {
+      counts.scheduled += 1;
+      continue;
+    }
+    if (isPresentLikeStatus(s.status)) {
+      counts.present += 1;
+      continue;
+    }
+    if (s.status === "on_leave") counts.on_leave += 1;
+    else if (s.status === "absent") counts.absent += 1;
   }
+  const labels = {
+    present: "Present",
+    absent: "Absent",
+    on_leave: "On leave",
+    scheduled: "Not clocked in",
+  };
   return Object.entries(counts)
     .filter(([, value]) => value > 0)
     .map(([key, value]) => ({
-      name: TODAY_STATUS_LABELS[key] ?? key,
+      name: labels[key] ?? key,
       value,
     }));
 }

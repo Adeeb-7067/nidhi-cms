@@ -7,14 +7,40 @@ import {
 import { notFound, badRequest, conflict } from "../../utils/route-errors.js";
 import { assertOnboardingEligibleEmployee } from "./employees.service.js";
 import { DEFAULT_ONBOARDING_TASKS, onboardingStatuses } from "../../constants/hrm-workflow.js";
+import { getOrCreateSettings } from "../company-settings.js";
 import { hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { logHrmAudit } from "./hrm-audit.service.js";
 
 export function buildDefaultOnboardingTasks(doneCount = 0) {
-  return DEFAULT_ONBOARDING_TASKS.map((title, idx) => ({
+  return buildDefaultOnboardingTasksFromTitles(DEFAULT_ONBOARDING_TASKS, doneCount);
+}
+
+export function buildDefaultOnboardingTasksFromTitles(titles, doneCount = 0) {
+  return titles.map((title, idx) => ({
     title,
     completed: idx < doneCount,
   }));
+}
+
+export async function resolveOnboardingTaskTitles() {
+  const settings = await getOrCreateSettings();
+  const template = settings.hrmOnboardingChecklistTemplate;
+  if (Array.isArray(template) && template.length > 0) {
+    const titles = template.map((t) => String(t).trim()).filter(Boolean);
+    if (titles.length > 0) return titles;
+  }
+  return DEFAULT_ONBOARDING_TASKS;
+}
+
+async function buildOnboardingTasks(doneCount = 0) {
+  const titles = await resolveOnboardingTaskTitles();
+  return buildDefaultOnboardingTasksFromTitles(titles, doneCount);
+}
+
+function assertBuddyNotSelf(userId, buddyId) {
+  if (buddyId != null && Number(buddyId) === Number(userId)) {
+    badRequest("Buddy cannot be the same employee.");
+  }
 }
 
 export function computeOnboardingProgress(tasks = []) {
@@ -84,7 +110,9 @@ export async function createOnboardingRecord(body, actorId = null) {
   await assertOnboardingEligibleEmployee(userId);
 
   if (body.buddyId != null) {
-    const buddy = await usersTable.findOne({ id: Number(body.buddyId), role: { $in: hrmEmployeeRoles } }).lean();
+    const buddyId = Number(body.buddyId);
+    assertBuddyNotSelf(userId, buddyId);
+    const buddy = await usersTable.findOne({ id: buddyId, role: { $in: hrmEmployeeRoles } }).lean();
     if (!buddy || buddy.status !== "active") notFound("Buddy employee");
   }
 
@@ -96,7 +124,7 @@ export async function createOnboardingRecord(body, actorId = null) {
     buddyId: body.buddyId ?? null,
     startDate: body.startDate ? new Date(body.startDate) : new Date(),
     status: "active",
-    tasks: buildDefaultOnboardingTasks(0),
+    tasks: await buildOnboardingTasks(0),
   });
 
   await logHrmAudit({
@@ -139,7 +167,7 @@ export async function createOnboardingFromCandidate(candidateId, actorId = null)
     candidateId,
     startDate: new Date(),
     status: "active",
-    tasks: buildDefaultOnboardingTasks(1),
+    tasks: await buildOnboardingTasks(1),
   });
 
   await candidatesTable.updateOne(
@@ -168,9 +196,11 @@ export async function updateOnboardingRecord(id, body, actorId = null) {
     if (body.buddyId == null) {
       patch.buddyId = null;
     } else {
-      const buddy = await usersTable.findOne({ id: Number(body.buddyId), status: "active" }).lean();
+      const buddyId = Number(body.buddyId);
+      assertBuddyNotSelf(record.userId, buddyId);
+      const buddy = await usersTable.findOne({ id: buddyId, status: "active" }).lean();
       if (!buddy) notFound("Buddy employee");
-      patch.buddyId = Number(body.buddyId);
+      patch.buddyId = buddyId;
     }
   }
   if (body.startDate !== undefined) patch.startDate = new Date(body.startDate);
@@ -198,11 +228,14 @@ export async function updateOnboardingRecord(id, body, actorId = null) {
 }
 
 export async function toggleOnboardingTask(recordId, taskIndex, actorId = null) {
-  const record = await onboardingRecordsTable.findOne({ id: recordId });
-  if (!record) notFound("Onboarding record");
+  const row = await onboardingRecordsTable.findOne({ id: recordId }).lean();
+  if (!row) notFound("Onboarding record");
 
   const idx = Number(taskIndex);
-  const tasks = [...(record.tasks ?? [])];
+  const tasks = (row.tasks ?? []).map((t) => ({
+    title: String(t.title),
+    completed: Boolean(t.completed),
+  }));
   if (Number.isNaN(idx) || idx < 0 || idx >= tasks.length) {
     badRequest("Invalid task index.");
   }

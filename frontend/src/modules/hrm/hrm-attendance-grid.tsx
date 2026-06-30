@@ -1,18 +1,21 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
-import { Home } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
-import { HrmAttendanceBadge } from "./components";
-import { attendanceDisplayLabel, isPresentLikeStatus, resolveAttendanceDisplayStatus } from "./constants";
+import { HrmAttendanceStatusPill } from "./components";
+import { simpleAttendanceStatusLabel } from "./constants";
 import type { HrmAttendanceSummary } from "./types";
 
 function formatClockTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  try { return format(new Date(iso), "h:mm a"); } catch { return "—"; }
+  try {
+    return format(new Date(iso), "h:mm a");
+  } catch {
+    return "—";
+  }
 }
 
+/** Extra detail for exports only — not shown in the main grid. */
 export function attendanceStatusSuffix(r: HrmAttendanceSummary) {
   return (
     (r.forgivenLate ? " (excused)" : "") +
@@ -28,6 +31,14 @@ function formatHoursFromMinutes(minutes: number) {
 }
 
 export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<HrmAttendanceSummary>[] {
+  const statusColumn: Column<HrmAttendanceSummary> = {
+    id: "status",
+    header: "Status",
+    accessorKey: "status",
+    cell: (r) => <HrmAttendanceStatusPill row={r} />,
+    exportValue: (r) => `${simpleAttendanceStatusLabel(r)}${attendanceStatusSuffix(r)}`,
+  };
+
   const cols: Column<HrmAttendanceSummary>[] = [];
   if (showEmployee) {
     cols.push({
@@ -35,7 +46,9 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
       header: "Employee",
       accessorKey: "userName",
       cell: (r) => <span className="font-medium">{r.userName}</span>,
+      exportValue: (r) => r.userName,
     });
+    cols.push(statusColumn);
   }
   cols.push(
     {
@@ -44,6 +57,7 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
       accessorKey: "date",
       cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
     },
+    ...(showEmployee ? [] : [statusColumn]),
     {
       id: "clockIn",
       header: "Clock in",
@@ -57,60 +71,17 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
       exportValue: (r) => formatClockTime(r.lastClockOut),
     },
     {
-      id: "status",
-      header: "Status",
-      cell: (r) => (
-        <HrmAttendanceBadge
-          status={resolveAttendanceDisplayStatus(r.status, { globalWfh: r.globalWfh })}
-          suffix={attendanceStatusSuffix(r)}
-        />
-      ),
-      exportValue: (r) =>
-        `${attendanceDisplayLabel(r.status, { globalWfh: r.globalWfh })}${attendanceStatusSuffix(r)}`,
-    },
-    {
-      id: "workMode",
-      header: "Work mode",
-      cell: (r) => {
-        if (r.status === "wfh" || r.globalWfh) {
-          return (
-            <Badge variant="outline" className="text-[10px] border-blue-500/20 bg-blue-500/10 text-blue-700">
-              <Home className="mr-1 inline h-3 w-3" />
-              WFH
-            </Badge>
-          );
-        }
-        if (isPresentLikeStatus(r.status) || r.status === "onsite") {
-          return (
-            <Badge variant="outline" className="text-[10px] border-teal-500/20 bg-teal-500/10 text-teal-700">
-              Onsite
-            </Badge>
-          );
-        }
-        return <span className="text-muted-foreground">—</span>;
-      },
-    },
-    {
       id: "active",
-      header: "Active",
+      header: "Hours",
       cell: (r) => formatHoursFromMinutes(r.activeMinutes),
       exportValue: (r) => String(Math.round((r.activeMinutes / 60) * 10) / 10),
     },
     {
       id: "expected",
       header: "Expected",
-      cell: (r) => (
-        <div>
-          <span>{formatHoursFromMinutes(r.expectedMinutes)}</span>
-          {r.shiftName ? (
-            <div className="text-xs text-muted-foreground">{r.shiftName}</div>
-          ) : null}
-        </div>
-      ),
-      exportValue: (r) =>
-        `${Math.round((r.expectedMinutes / 60) * 10) / 10}${r.shiftName ? ` (${r.shiftName})` : ""}`,
+      cell: (r) => formatHoursFromMinutes(r.expectedMinutes),
+      exportValue: (r) => String(Math.round((r.expectedMinutes / 60) * 10) / 10),
     },
-    { id: "sessions", header: "Sessions", accessorKey: "sessionCount" },
   );
   return cols;
 }

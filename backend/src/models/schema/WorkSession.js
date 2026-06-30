@@ -16,6 +16,7 @@ const workSessionSchema = new Schema({
       "session_expired",
       "day_ended",
       "admin_terminated",
+      "admin_manual",
       "system_sleep",
       "system_shutdown",
       "network_lost",

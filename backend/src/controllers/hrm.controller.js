@@ -443,6 +443,12 @@ async function deleteCandidate(req, res) {
   res.json(await recruitmentService.deleteCandidate(id));
 }
 
+async function postCreateEmployeeFromCandidate(req, res) {
+  const id = parseIdParam(req.params.id, "candidate id");
+  const result = await recruitmentService.createEmployeeFromCandidate(id, req.body ?? {}, req.user);
+  res.status(result.alreadyExisted ? 200 : 201).json(result);
+}
+
 async function postOnboarding(req, res) {
   const id = parseIdParam(req.params.id, "candidate id");
   const record = await recruitmentService.startOnboarding(id, req.user.id);
@@ -617,6 +623,14 @@ async function patchHrmSettings(req, res) {
   const update = {};
   for (const f of fields) {
     if (req.body[f] !== undefined) update[f] = req.body[f];
+  }
+  if (req.body.hrmOnboardingChecklistTemplate !== undefined) {
+    if (!Array.isArray(req.body.hrmOnboardingChecklistTemplate)) {
+      badRequest("hrmOnboardingChecklistTemplate must be an array of task titles.");
+    }
+    update.hrmOnboardingChecklistTemplate = req.body.hrmOnboardingChecklistTemplate
+      .map((t) => String(t).trim())
+      .filter(Boolean);
   }
   const updated = await companySettingsTable.findOneAndUpdate(
     { id: settings.id },
@@ -884,6 +898,7 @@ export {
   postCandidate,
   patchCandidate,
   deleteCandidate,
+  postCreateEmployeeFromCandidate,
   postOnboarding,
   getOnboardingTasks,
   patchOnboardingTask,

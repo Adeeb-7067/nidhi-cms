@@ -6,11 +6,20 @@ import {
   SalesProposals,
   clientsTable,
   usersTable,
+  projectsTable,
+  ticketsTable,
+  tasksTable,
+  clientTeamMembersTable,
+  credentialHistoryTable,
+  inventoryCredentialsTable,
   getNextSequence,
 } from "../../models/schema/index.js";
-import { paginateModel } from "../../utils/mongo-list.js";
+import { paginateModel, toIso } from "../../utils/mongo-list.js";
+import { formatProject } from "../../mappers/project-format.js";
+import { formatUser } from "../../mappers/user-format.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
@@ -18,6 +27,191 @@ import {
 } from "../../utils/route-errors.js";
 import { createClientPortalUser, updateClientPortalEmail } from "../../services/client-portal.js";
 import { sendCustomerPaymentReminderEmail } from "../../lib/email.js";
+
+async function loadStaffUser(userId) {
+  if (!userId) return null;
+  const user = await usersTable
+    .findOne({ id: userId })
+    .select({ id: 1, name: 1, email: 1, avatarUrl: 1, role: 1, designation: 1, phoneNumber: 1, status: 1 })
+    .lean();
+  return user ? formatUser(user) : null;
+}
+
+async function formatTeamMember(member) {
+  const user = await usersTable
+    .findOne({ id: member.userId })
+    .select({ id: 1, name: 1, email: 1, phoneNumber: 1, avatarUrl: 1, status: 1 })
+    .lean();
+  return {
+    id: member.id,
+    userId: member.userId,
+    name: user?.name ?? null,
+    email: user?.email ?? null,
+    phoneNumber: user?.phoneNumber ?? null,
+    title: member.title ?? null,
+    role: member.title ?? "Member",
+    status: member.status,
+    avatarUrl: user?.avatarUrl ?? null,
+    activatedAt: toIso(member.activatedAt),
+    lastLoginAt: toIso(user?.lastLoginAt),
+  };
+}
+
+async function getCustomerHub(req, res) {
+  const id = parseIdParam(req.params.id, "customer id");
+  const customer = await SalesCustomers.findOne({ id }).lean();
+  if (!customer) notFound("Customer");
+
+  const [assignedAdmin, client, paymentsForCustomer] = await Promise.all([
+    loadStaffUser(customer.assignedAdminId),
+    customer.clientId ? clientsTable.findOne({ id: customer.clientId }).lean() : null,
+    SalesPayments.find({ customerId: id }).sort({ createdAt: -1 }).limit(200).lean(),
+  ]);
+
+  let clientAdmin = null;
+  let projects = [];
+  let tickets = [];
+  let tasks = [];
+  let teamMembers = [];
+  let portalCredentials = [];
+  let inventoryCredentials = [];
+
+  if (client?.userId) {
+    clientAdmin = await loadStaffUser(client.userId);
+  }
+
+  const credentialUserId = customer.portalUserId ?? client?.userId ?? null;
+  if (credentialUserId) {
+    const credRows = await credentialHistoryTable
+      .find({ userId: credentialUserId })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+    portalCredentials = credRows.map((c) => ({
+      id: c.id,
+      label: c.setByLabel ?? "Portal login",
+      setByLabel: c.setByLabel ?? null,
+      createdAt: toIso(c.createdAt),
+    }));
+  }
+
+  if (customer.clientId) {
+    const companyId = customer.clientId;
+    const [projectRows, memberRows] = await Promise.all([
+      projectsTable
+        .find({ $or: [{ companyId }, { clientId: companyId }] })
+        .sort({ createdAt: -1 })
+        .lean(),
+      clientTeamMembersTable.find({ clientCompanyId: companyId }).sort({ createdAt: -1 }).lean(),
+    ]);
+
+    projects = await Promise.all(projectRows.map((p) => formatProject(p)));
+    teamMembers = await Promise.all(memberRows.map(formatTeamMember));
+
+    const projectIds = projectRows.map((p) => p.id);
+    const projectNameMap = new Map(projectRows.map((p) => [p.id, p.name]));
+
+    const ticketFilter = projectIds.length
+      ? { $or: [{ companyId }, { projectId: { $in: projectIds } }] }
+      : { companyId };
+    const ticketRows = await ticketsTable
+      .find(ticketFilter)
+      .sort({ updatedAt: -1 })
+      .limit(100)
+      .lean();
+
+    if (projectIds.length) {
+      const taskRows = await tasksTable
+        .find({ projectId: { $in: projectIds } })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .lean();
+      const assigneeIds = [...new Set(taskRows.map((t) => t.assigneeId).filter(Boolean))];
+      const assignees = assigneeIds.length
+        ? await usersTable.find({ id: { $in: assigneeIds } }).select({ id: 1, name: 1 }).lean()
+        : [];
+      const assigneeMap = new Map(assignees.map((u) => [u.id, u.name]));
+
+      tasks = taskRows.map((t) => ({
+        id: t.id,
+        taskNumber: t.taskNumber,
+        title: t.title,
+        projectId: t.projectId,
+        projectName: projectNameMap.get(t.projectId) ?? null,
+        assigneeId: t.assigneeId,
+        assigneeName: t.assigneeId ? assigneeMap.get(t.assigneeId) ?? null : null,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate ? toIso(t.dueDate) : null,
+        progress: t.status === "done" ? 100 : t.status === "in_progress" ? 50 : 0,
+        updatedAt: toIso(t.updatedAt),
+        createdAt: toIso(t.createdAt),
+      }));
+
+      const credInvRows = await inventoryCredentialsTable
+        .find({ projectId: { $in: projectIds }, deletedAt: null })
+        .sort({ updatedAt: -1 })
+        .limit(100)
+        .lean();
+      inventoryCredentials = credInvRows.map((c) => ({
+        id: c.id,
+        projectId: c.projectId,
+        projectName: projectNameMap.get(c.projectId) ?? null,
+        name: c.label,
+        username: c.username ?? null,
+        url: c.url ?? null,
+        category: c.type ?? null,
+        updatedAt: toIso(c.updatedAt),
+      }));
+    }
+
+    const ticketAssigneeIds = [...new Set(ticketRows.map((t) => t.assignedTo).filter(Boolean))];
+    const ticketAssignees = ticketAssigneeIds.length
+      ? await usersTable.find({ id: { $in: ticketAssigneeIds } }).select({ id: 1, name: 1 }).lean()
+      : [];
+    const ticketAssigneeMap = new Map(ticketAssignees.map((u) => [u.id, u.name]));
+
+    tickets = ticketRows.map((t) => ({
+      id: t.id,
+      subject: t.title,
+      priority: t.priority,
+      status: t.status,
+      assignedTo: t.assignedTo,
+      assignedToName: t.assignedTo ? ticketAssigneeMap.get(t.assignedTo) ?? null : null,
+      projectId: t.projectId,
+      createdAt: toIso(t.createdAt),
+      updatedAt: toIso(t.updatedAt),
+    }));
+  }
+
+  res.json({
+    assignedAdmin,
+    clientAdmin,
+    client: client
+      ? {
+          id: client.id,
+          companyName: client.companyName,
+          status: client.status,
+          tier: client.tier,
+          userId: client.userId,
+        }
+      : null,
+    projects,
+    teamMembers,
+    tickets,
+    tasks,
+    portalCredentials,
+    inventoryCredentials,
+    recentPayments: paymentsForCustomer.map((p) => ({
+      id: p.id,
+      amount: p.amount,
+      receiptNumber: p.receiptNumber,
+      invoiceId: p.invoiceId,
+      paymentMethod: p.paymentMethod,
+      createdAt: toIso(p.createdAt),
+    })),
+  });
+}
 
 async function syncLinkedClientRecord(customer, updates) {
   if (!customer.clientId) return;
@@ -57,6 +251,10 @@ async function listCustomers(req, res) {
   if (search?.trim()) {
     const re = { $regex: search.trim(), $options: "i" };
     filter.$or = [{ companyName: re }, { contactPerson: re }, { email: re }];
+  }
+  // BDE scope: only see customers assigned to them
+  if (req.user.role === "bde") {
+    filter.assignedAdminId = req.user.id;
   }
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesCustomers,
@@ -110,13 +308,17 @@ async function getCustomerById(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const customer = await SalesCustomers.findOne({ id }).lean();
   if (!customer) notFound("Customer");
-  const [installments, invoices] = await Promise.all([
+  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
+    notFound("Customer");
+  }
+  const [installments, invoices, assignedAdmin] = await Promise.all([
     SalesInstallments.find({ customerId: id }).sort({ dueDate: 1 }).lean(),
     SalesInvoices.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
+    loadStaffUser(customer.assignedAdminId),
   ]);
   const totalSales = invoices.reduce((s, i) => s + i.amount, 0);
   const outstanding = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
-  res.json({ ...customer, installments, invoices, totalSales, outstanding });
+  res.json({ ...customer, installments, invoices, totalSales, outstanding, assignedAdmin });
 }
 
 async function updateCustomer(req, res) {
@@ -134,13 +336,30 @@ async function updateCustomer(req, res) {
   if (body.location !== undefined) updates.location = optionalString(body.location) ?? null;
   if (body.gstin !== undefined) updates.gstin = optionalString(body.gstin) ?? null;
   if (body.website !== undefined) updates.website = optionalString(body.website) ?? null;
+  if (body.assignedAdminId !== undefined) {
+    if (req.user.role !== "super_admin") {
+      forbidden("Only super admin can assign a custom admin.");
+    }
+    const adminId = body.assignedAdminId === null || body.assignedAdminId === ""
+      ? null
+      : Number(body.assignedAdminId);
+    if (adminId != null && !Number.isFinite(adminId)) {
+      badRequest("Invalid assigned admin id.", "assignedAdminId");
+    }
+    if (adminId != null) {
+      const adminUser = await usersTable.findOne({ id: adminId }).select({ id: 1, status: 1 }).lean();
+      if (!adminUser) notFound("Assigned admin user");
+    }
+    updates.assignedAdminId = adminId;
+  }
 
   if (Object.keys(updates).length) {
     await syncLinkedClientRecord(customer, updates);
   }
 
   const updated = await SalesCustomers.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
-  res.json(updated);
+  const assignedAdmin = await loadStaffUser(updated.assignedAdminId);
+  res.json({ ...updated, assignedAdmin });
 }
 
 async function deleteCustomer(req, res) {
@@ -284,6 +503,7 @@ export {
   listCustomers,
   createCustomer,
   getCustomerById,
+  getCustomerHub,
   updateCustomer,
   deleteCustomer,
   provisionCustomerPortal,

@@ -33,7 +33,7 @@ export function toInvoicePreview(
 export function paymentToPartial(p: SalesPayment): PartialPayment {
   return {
     id: p.id,
-    installmentId: 0,
+    installmentId: p.installmentId ?? 0,
     amount: p.amount,
     mode: formatPaymentMethod(p.paymentMethod),
     transactionId: p.transactionId ?? "—",
@@ -47,8 +47,9 @@ export function paymentToPartial(p: SalesPayment): PartialPayment {
 export function toReceiptPreview(
   payment: SalesPayment,
   invoice: ApiInvoice,
-  customer: Customer,
+  customer: Customer | null | undefined,
   company?: DocumentCompanyBranding,
+  installmentName?: string | null,
 ): PaymentReceipt {
   const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
   const branding = company ?? {
@@ -61,8 +62,8 @@ export function toReceiptPreview(
     id: payment.id,
     number: payment.receiptNumber,
     invoiceNumber: invoice.number,
-    installmentName: invoice.installmentId ? `Installment #${invoice.installmentId}` : "—",
-    customerName: customer.companyName,
+    installmentName: installmentName ?? (payment.installmentId ? `Installment #${payment.installmentId}` : "—"),
+    customerName: customer?.companyName ?? `Customer #${payment.customerId}`,
     projectName: invoice.projectId ? `Project #${invoice.projectId}` : "—",
     amountPaid: payment.amount,
     remainingBalance: remaining,
@@ -85,7 +86,7 @@ export function installmentCardData(inst: Installment) {
     paidAmount: inst.paidAmount,
     dueDate: inst.dueDate,
     status: inst.status,
-    projectId: inst.projectId,
-    invoiceId: inst.invoiceId,
+    projectId: inst.projectId ?? undefined,
+    invoiceId: inst.invoiceId ?? undefined,
   };
 }

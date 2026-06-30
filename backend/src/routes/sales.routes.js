@@ -15,6 +15,7 @@ import * as paymentsCtrl from "../controllers/sales/payments.controller.js";
 import * as productsCtrl from "../controllers/sales/products.controller.js";
 import * as dashboardCtrl from "../controllers/sales/dashboard.controller.js";
 import * as teamCtrl from "../controllers/sales/team.controller.js";
+import * as targetsCtrl from "../controllers/sales/targets.controller.js";
 
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
@@ -81,6 +82,7 @@ router.get("/sales/customers/:id", ...p("sales_customers"), wrap(customersCtrl.g
 router.patch("/sales/customers/:id", ...p("sales_customers", "edit"), wrap(customersCtrl.updateCustomer));
 router.delete("/sales/customers/:id", ...p("sales_customers", "delete"), wrap(customersCtrl.deleteCustomer));
 router.post("/sales/customers/:id/provision-portal", ...p("sales_customers", "edit"), wrap(customersCtrl.provisionCustomerPortal));
+router.get("/sales/customers/:id/hub", ...p("sales_customers"), wrap(customersCtrl.getCustomerHub));
 router.get("/sales/customers/:id/statement", ...p("sales_customers"), wrap(customersCtrl.getCustomerStatement));
 router.post("/sales/customers/:id/remind", ...p("sales_customers", "edit"), wrap(customersCtrl.remindCustomer));
 
@@ -114,5 +116,11 @@ router.get("/sales/dashboard/revenue-trend", ...p("sales_dashboard"), wrap(dashb
 router.get("/sales/reports", ...p("sales_reports"), wrap(dashboardCtrl.getReports));
 router.get("/sales/team", ...p("sales_team"), wrap(teamCtrl.getSalesTeam));
 router.get("/sales/team/:userId", ...p("sales_team"), wrap(teamCtrl.getSalesTeamMember));
+
+// ── BDE Targets ───────────────────────────────────────────────────────────
+router.get("/sales/targets/me", requireAuth, wrap(targetsCtrl.getMyTarget));
+router.get("/sales/targets", ...p("sales_team"), wrap(targetsCtrl.getAllTargetsForMonth));
+router.get("/sales/team/:userId/targets", ...p("sales_team"), wrap(targetsCtrl.getBdeTargets));
+router.put("/sales/team/:userId/targets", ...p("sales_team"), wrap(targetsCtrl.upsertBdeTarget));
 
 export default router;

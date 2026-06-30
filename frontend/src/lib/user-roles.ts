@@ -37,6 +37,9 @@ export const ADMIN_STAFF_ROLES: UserRole[] = [
   ...STAFF_EMPLOYEE_ROLES,
 ];
 
+/** Super admin view-as: any active internal team member (clients use Admin → Clients). */
+export const IMPERSONATABLE_STAFF_ROLES: UserRole[] = [...ADMIN_STAFF_ROLES];
+
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */
 export const HRM_EMPLOYEE_ROLES: UserRole[] = ["manager", "developer", "tester", "qa"];
 
@@ -85,6 +88,10 @@ export function isDevPortalRole(role: UserRole | string | undefined): boolean {
 
 export function isStaffEmployeeRole(role: UserRole | string | undefined): boolean {
   return !!role && STAFF_EMPLOYEE_ROLES.includes(role as UserRole);
+}
+
+export function isImpersonatableStaffRole(role: UserRole | string | undefined): boolean {
+  return !!role && IMPERSONATABLE_STAFF_ROLES.includes(role as UserRole);
 }
 
 export function isHrmEmployeeRole(role: UserRole | string | undefined): boolean {

@@ -8,6 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { FileUploader } from "@/components/ui/file-uploader";
 import { EmployeeDocumentsPanel } from "@/modules/hrm/EmployeeDocumentsPanel";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ import {
   HR_EMPLOYMENT_STATUSES,
 } from "@/modules/hrm/employee-profile-types";
 import { LEGACY_EMPLOYEE_LABELS as L } from "@/modules/hrm/hrm-legacy-labels";
+import type { HrmEmployeeDocument } from "@/modules/hrm/types";
 import {
   FormFieldHint,
   FormRow,
@@ -151,6 +153,8 @@ export function EmployeeFormTabs({
   shiftTemplates,
   lockRole,
   onSyncDisplayName,
+  employeeDocuments,
+  employeeDocumentsLoading,
 }: {
   form: UseFormReturn<TeamEmployeeFormValues>;
   tab: EmployeeFormTab;
@@ -164,6 +168,8 @@ export function EmployeeFormTabs({
   shiftTemplates: ShiftTemplate[];
   lockRole?: string;
   onSyncDisplayName?: () => void;
+  employeeDocuments?: HrmEmployeeDocument[];
+  employeeDocumentsLoading?: boolean;
 }) {
   const copyPermanentToCurrent = () => {
     const permanent = form.getValues("permanentAddress");
@@ -305,7 +311,7 @@ export function EmployeeFormTabs({
                 <FormItem>
                   <FormLabel>{L.phone}</FormLabel>
                   <FormControl>
-                    <Input className={employeeFormInputClass} placeholder="+91 98765 43210" {...field} />
+                    <PhoneInput className={employeeFormInputClass} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1080,6 +1086,7 @@ export function EmployeeFormTabs({
                     <FormLabel>{label}</FormLabel>
                     <FormControl>
                       <FileUploader
+                        key={`${name}-${field.value || "empty"}`}
                         variant="choose-file"
                         category="hrm"
                         accept=".pdf,.jpg,.jpeg,.png,.webp"
@@ -1096,10 +1103,13 @@ export function EmployeeFormTabs({
           </div>
           {editUser?.id ? (
             <EmployeeDocumentsPanel
+              key={editUser.id}
               userId={editUser.id}
               canUpload
               canDelete
-              fetchEnabled={tab === "documents"}
+              fetchEnabled
+              documents={employeeDocuments}
+              documentsLoading={employeeDocumentsLoading}
               className="mt-4"
             />
           ) : (

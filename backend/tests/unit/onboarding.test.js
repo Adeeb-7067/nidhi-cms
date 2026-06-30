@@ -2,6 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildDefaultOnboardingTasks,
+  buildDefaultOnboardingTasksFromTitles,
   computeOnboardingProgress,
 } from "../../src/services/hrm/onboarding.service.js";
 import { DEFAULT_ONBOARDING_TASKS } from "../../src/constants/hrm-workflow.js";
@@ -37,5 +38,14 @@ describe("computeOnboardingProgress", () => {
   test("returns 100 when all done", () => {
     const tasks = buildDefaultOnboardingTasks(10);
     assert.equal(computeOnboardingProgress(tasks), 100);
+  });
+});
+
+describe("buildDefaultOnboardingTasksFromTitles", () => {
+  test("uses custom titles", () => {
+    const tasks = buildDefaultOnboardingTasksFromTitles(["A", "B"], 1);
+    assert.equal(tasks.length, 2);
+    assert.equal(tasks[0].completed, true);
+    assert.equal(tasks[1].completed, false);
   });
 });

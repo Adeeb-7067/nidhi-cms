@@ -90,7 +90,7 @@ import {
   isStaffEmployeeRole,
   staffRoleBadgeClass,
 } from "@/lib/user-roles";
-import { useHrmDepartments, useHrmShiftTemplates } from "@/api/hrm";
+import { useHrmDepartments, useHrmShiftTemplates, useHrmDocuments } from "@/api/hrm";
 import { useRoleTemplates, useAssignableCmsRoles } from "@/api/permissions";
 import { User } from "@/api";
 import { cn } from "@/lib/utils";
@@ -98,8 +98,10 @@ import {
   teamEmployeeSchema,
   defaultTeamEmployeeFormValues,
   mapUserToTeamEmployeeForm,
+  enrichEmployeeFormFromHrmDocuments,
   storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
+  unwrapUserListRows,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
 import {
@@ -113,8 +115,8 @@ import { getStaffProfileHref } from "@/lib/employee-routes";
 
 type EmployeeFormValues = TeamEmployeeFormValues;
 
-function canViewAsEmployee(user: User): boolean {
-  return user.status === "active" && isStaffEmployeeRole(user.role);
+function canViewAsEmployee(user: User, viewerId?: number): boolean {
+  return user.status === "active" && user.id !== viewerId;
 }
 
 function employeeRoleLabel(role: string): string {
@@ -297,10 +299,10 @@ export default function AdminEmployees() {
   }, [hrmDepartments]);
   const defaultDepartmentId = hrmDepartments[0]?.id ?? null;
   const managerOptions = useMemo(() => {
-    const rows = (managerPoolData?.users ?? []).filter((u) => u.status === "active");
+    const rows = unwrapUserListRows(managerPoolData).filter((u) => u.status === "active") as User[];
     if (!editUser) return rows;
     return rows.filter((u) => u.id !== editUser.id);
-  }, [managerPoolData?.users, editUser]);
+  }, [managerPoolData, editUser]);
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -408,67 +410,92 @@ export default function AdminEmployees() {
     isFetching: editProfileFetching,
     isError: editProfileError,
   } = useTeamEmployeeProfile(editUserId, employeeDialogOpen);
-
-  const editProfileReady =
-    !editUser || (editUserProfile != null && !editProfileFetching);
+  const { data: editUserDocumentsData, isFetching: editDocumentsFetching } = useHrmDocuments(
+    editUserId,
+    { enabled: employeeDialogOpen && !!editUserId },
+  );
 
   const lastEditHydrateKeyRef = useRef<string | null>(null);
   const createFormInitializedRef = useRef(false);
   const editBaselineRef = useRef<TeamEmployeeFormValues | null>(null);
+  const [editFormSynced, setEditFormSynced] = useState(false);
+
+  const editProfileReady =
+    !editUser ||
+    (editUserProfile != null &&
+      !editProfileFetching &&
+      !editDocumentsFetching &&
+      editFormSynced);
 
   useEffect(() => {
     if (!employeeDialogOpen) {
       lastEditHydrateKeyRef.current = null;
       createFormInitializedRef.current = false;
       editBaselineRef.current = null;
+      setEditFormSynced(false);
       return;
     }
 
     if (editUserId) {
-      if (!editUserProfile || editProfileFetching) return;
-      if (form.formState.isDirty) return;
-      const hydrateKey = teamEmployeeEditHydrateKey(
-        editUserProfile as User & Record<string, unknown>,
-        defaultDepartmentId,
-        hrmDepartments,
-      );
+      if (!editUserProfile || editProfileFetching || editDocumentsFetching) {
+        setEditFormSynced(false);
+        return;
+      }
+      const libraryDocs = editUserDocumentsData?.documents ?? [];
+      const hydrateKey = JSON.stringify({
+        profile: teamEmployeeEditHydrateKey(
+          editUserProfile as User & Record<string, unknown>,
+          defaultDepartmentId,
+          hrmDepartments,
+        ),
+        docs: libraryDocs.map((d) => `${d.category ?? ""}:${d.fileUrl ?? ""}`).join("|"),
+      });
       if (lastEditHydrateKeyRef.current === hydrateKey) return;
       lastEditHydrateKeyRef.current = hydrateKey;
-      const mapped = mapUserToTeamEmployeeForm(
-        editUserProfile as User & Record<string, unknown>,
-        defaultDepartmentId,
-        hrmDepartments,
-        cmsRoleOptions,
-        roleTemplateOptions,
+      const mapped = enrichEmployeeFormFromHrmDocuments(
+        mapUserToTeamEmployeeForm(
+          editUserProfile as User & Record<string, unknown>,
+          defaultDepartmentId,
+          hrmDepartments,
+          cmsRoleOptions,
+          roleTemplateOptions,
+        ),
+        libraryDocs,
       );
       editBaselineRef.current = {
         ...mapped,
         roleTemplateId: storedRoleTemplateId(editUserProfile as User & Record<string, unknown>),
       };
-      form.reset(mapped);
+      form.reset(mapped, { keepDirty: false, keepDefaultValues: false });
       setPreviewEmployeeId(String(editUserProfile.employeeId ?? editUser?.employeeId ?? ""));
+      setEditFormSynced(true);
       return;
     }
 
+    setEditFormSynced(true);
     if (createFormInitializedRef.current) return;
     createFormInitializedRef.current = true;
-    form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId));
+    form.reset(defaultTeamEmployeeFormValues(defaultDepartmentId), {
+      keepDirty: false,
+      keepDefaultValues: false,
+    });
   }, [
     employeeDialogOpen,
     editUserId,
     editUserProfile,
     editProfileFetching,
+    editDocumentsFetching,
+    editUserDocumentsData?.documents,
     defaultDepartmentId,
     hrmDepartments,
     cmsRoleOptions,
     roleTemplateOptions,
     editUser?.employeeId,
     form,
-    form.formState.isDirty,
   ]);
 
   useEffect(() => {
-    if (!employeeDialogOpen || !editUserId || !editUserProfile || form.formState.isDirty) return;
+    if (!employeeDialogOpen || !editUserId || !editUserProfile || !editFormSynced) return;
     if (!cmsRoleOptions.length && !roleTemplateOptions.length) return;
     const resolved = mapUserToTeamEmployeeForm(
       editUserProfile as User & Record<string, unknown>,
@@ -490,7 +517,7 @@ export default function AdminEmployees() {
     defaultDepartmentId,
     hrmDepartments,
     form,
-    form.formState.isDirty,
+    editFormSynced,
   ]);
 
   const syncDisplayNameFromParts = () => {
@@ -587,7 +614,7 @@ export default function AdminEmployees() {
 
   const handleViewAs = async (employee: User, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!canViewAsEmployee(employee)) return;
+    if (!canViewAsEmployee(employee, viewer?.id)) return;
     if (isImpersonating) {
       toast.error("Exit the current view-as session first.");
       return;
@@ -738,7 +765,7 @@ export default function AdminEmployees() {
             <Eye className="h-3 w-3 mr-1" />
             Profile
           </Button>
-          {canViewAsEmployee(user) && (
+          {canViewAsEmployee(user, viewer?.id) && (
             <Button
               size="sm"
               variant="ghost"
@@ -751,7 +778,7 @@ export default function AdminEmployees() {
               View as
             </Button>
           )}
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditUser(user); }}>
+          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditFormSynced(false); setEditUser(user); }}>
             <Edit className="h-3 w-3" />
           </Button>
           <Button
@@ -835,6 +862,7 @@ export default function AdminEmployees() {
                     </p>
                   ) : (
                     <EmployeeFormTabs
+                      key={editUser ? `edit-${editUser.id}` : "create"}
                       form={form}
                       tab={employeeFormTab}
                       onTabChange={setEmployeeFormTab}
@@ -846,6 +874,8 @@ export default function AdminEmployees() {
                       managerOptions={managerOptions}
                       shiftTemplates={shiftTemplates}
                       onSyncDisplayName={syncDisplayNameFromParts}
+                      employeeDocuments={editUserDocumentsData?.documents}
+                      employeeDocumentsLoading={editDocumentsFetching}
                     />
                   )}
                 </div>
@@ -1008,7 +1038,7 @@ export default function AdminEmployees() {
             <div className="flex flex-wrap gap-2 pt-1">
               <Badge variant="outline" className="text-[10px] py-0.5 bg-primary/5 font-medium capitalize">{selectedUser?.role?.replace('_', ' ')}</Badge>
               <Badge variant="outline" className={`text-[10px] py-0.5 border-green-500/20 bg-green-500/10 text-green-600 font-medium capitalize ${selectedUser?.status !== 'active' ? 'opacity-50' : ''}`}>{selectedUser?.status}</Badge>
-              {selectedUser && canViewAsEmployee(selectedUser) && (
+              {selectedUser && canViewAsEmployee(selectedUser, viewer?.id) && (
                 <Button
                   type="button"
                   size="sm"

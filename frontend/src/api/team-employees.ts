@@ -60,29 +60,46 @@ export async function updateTeamEmployee(
   });
 }
 
-/** Minimal POST to /api/users seeded from a recruitment candidate. */
+export type CreateEmployeeFromCandidateResult = {
+  user: TeamEmployeeRecord;
+  temporaryPassword?: string;
+  onboardingRecord?: { id: number } | null;
+  alreadyExisted?: boolean;
+  candidateId: number;
+};
+
+/** POST /api/hrm/recruitment/candidates/:id/create-employee — temp password when omitted. */
 export function useCreateEmployeeFromCandidate() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (payload: {
-      name: string;
-      email: string;
-      phoneNumber?: string;
+    mutationFn: ({
+      candidateId,
+      role,
+      password,
+      startOnboarding,
+    }: {
+      candidateId: number;
       role?: string;
-      status?: string;
+      password?: string;
+      startOnboarding?: boolean;
     }) =>
-      customFetch<TeamEmployeeRecord>(apiUrl("/api/users"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          role: "developer",
-          status: "active",
-          ...payload,
-        }),
-      }),
+      customFetch<CreateEmployeeFromCandidateResult>(
+        apiUrl(`/api/hrm/recruitment/candidates/${candidateId}/create-employee`),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...(role ? { role } : {}),
+            ...(password?.trim() ? { password: password.trim() } : {}),
+            ...(startOnboarding != null ? { startOnboarding } : {}),
+          }),
+        },
+      ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: getListUsersQueryKey() });
       qc.invalidateQueries({ queryKey: ["hrm", "employees"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
       qc.invalidateQueries({ queryKey: ["permissions"] });
     },
     onError: (error) => {
@@ -130,6 +147,7 @@ export function useSaveTeamEmployee() {
       if (vars.id != null) {
         qc.invalidateQueries({ queryKey: teamEmployeeQueryKey(vars.id) });
         qc.invalidateQueries({ queryKey: hrmEmployeeQueryKey(vars.id) });
+        qc.invalidateQueries({ queryKey: ["hrm", "documents", vars.id] });
       }
     },
     onError: (error, vars) => {

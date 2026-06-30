@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { useListUsers, getListUsersQueryKey, type User } from "@/api";
-import { useHrmDepartments, useHrmShiftTemplates } from "@/api/hrm";
+import { useHrmDepartments, useHrmShiftTemplates, useHrmDocuments } from "@/api/hrm";
 import { useRoleTemplates, useAssignableCmsRoles } from "@/api/permissions";
 import { useTeamEmployeeProfile, useSaveTeamEmployee } from "@/api/team-employees";
 import { getAccessToken } from "@/lib/auth-storage";
@@ -25,8 +25,10 @@ import {
   teamEmployeeSchema,
   defaultTeamEmployeeFormValues,
   mapUserToTeamEmployeeForm,
+  enrichEmployeeFormFromHrmDocuments,
   storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
+  unwrapUserListRows,
   type TeamEmployeeFormValues,
 } from "@/modules/admin/employee-form-shared";
 import {
@@ -83,10 +85,10 @@ export function BdeTeamFormDialog({
     return map;
   }, [hrmDepartments]);
   const managerOptions = useMemo(() => {
-    const rows = (managerPoolData?.users ?? []).filter((u) => u.status === "active");
+    const rows = unwrapUserListRows(managerPoolData).filter((u) => u.status === "active") as User[];
     if (!editUser) return rows;
     return rows.filter((u) => u.id !== editUser.id);
-  }, [managerPoolData?.users, editUser]);
+  }, [managerPoolData, editUser]);
 
   const form = useForm<TeamEmployeeFormValues>({
     resolver: zodResolver(teamEmployeeSchema),
@@ -96,62 +98,86 @@ export function BdeTeamFormDialog({
 
   const editUserId = editUser?.id;
   const { data: editUserProfile, isFetching: editProfileFetching } = useTeamEmployeeProfile(editUserId, open && !!editUserId);
+  const { data: editUserDocumentsData, isFetching: editDocumentsFetching } = useHrmDocuments(editUserId, {
+    enabled: open && !!editUserId,
+  });
   const lastEditHydrateKeyRef = useRef<string | null>(null);
   const createFormInitializedRef = useRef(false);
   const editBaselineRef = useRef<TeamEmployeeFormValues | null>(null);
+  const [editFormSynced, setEditFormSynced] = useState(false);
+
+  const editProfileReady =
+    !editUser ||
+    (editUserProfile != null && !editProfileFetching && !editDocumentsFetching && editFormSynced);
 
   useEffect(() => {
     if (!open) {
       lastEditHydrateKeyRef.current = null;
       createFormInitializedRef.current = false;
       editBaselineRef.current = null;
+      setEditFormSynced(false);
       setEmployeeFormTab("personal");
       setPreviewEmployeeId("");
       return;
     }
 
     if (editUserId) {
-      if (!editUserProfile || editProfileFetching) return;
-      if (form.formState.isDirty) return;
-      const hydrateKey = teamEmployeeEditHydrateKey(
-        editUserProfile as User & Record<string, unknown>,
-        defaultDepartmentId,
-        hrmDepartments,
-      );
+      if (!editUserProfile || editProfileFetching || editDocumentsFetching) {
+        setEditFormSynced(false);
+        return;
+      }
+      const libraryDocs = editUserDocumentsData?.documents ?? [];
+      const hydrateKey = JSON.stringify({
+        profile: teamEmployeeEditHydrateKey(
+          editUserProfile as User & Record<string, unknown>,
+          defaultDepartmentId,
+          hrmDepartments,
+        ),
+        docs: libraryDocs.map((d) => `${d.category ?? ""}:${d.fileUrl ?? ""}`).join("|"),
+      });
       if (lastEditHydrateKeyRef.current === hydrateKey) return;
       lastEditHydrateKeyRef.current = hydrateKey;
-      const mapped = mapUserToTeamEmployeeForm(
-        editUserProfile as User & Record<string, unknown>,
-        defaultDepartmentId,
-        hrmDepartments,
-        cmsRoleOptions,
-        roleTemplateOptions,
+      const mapped = enrichEmployeeFormFromHrmDocuments(
+        mapUserToTeamEmployeeForm(
+          editUserProfile as User & Record<string, unknown>,
+          defaultDepartmentId,
+          hrmDepartments,
+          cmsRoleOptions,
+          roleTemplateOptions,
+        ),
+        libraryDocs,
       );
       mapped.role = BDE_ROLE;
       editBaselineRef.current = {
         ...mapped,
         roleTemplateId: storedRoleTemplateId(editUserProfile as User & Record<string, unknown>),
       };
-      form.reset(mapped);
+      form.reset(mapped, { keepDirty: false, keepDefaultValues: false });
       setPreviewEmployeeId(String(editUserProfile.employeeId ?? editUser?.employeeId ?? ""));
+      setEditFormSynced(true);
       return;
     }
 
+    setEditFormSynced(true);
     if (createFormInitializedRef.current) return;
     createFormInitializedRef.current = true;
-    form.reset(defaultBdeFormValues(defaultDepartmentId));
+    form.reset(defaultBdeFormValues(defaultDepartmentId), {
+      keepDirty: false,
+      keepDefaultValues: false,
+    });
   }, [
     open,
     editUserId,
     editUserProfile,
     editProfileFetching,
+    editDocumentsFetching,
+    editUserDocumentsData?.documents,
     defaultDepartmentId,
     hrmDepartments,
     cmsRoleOptions,
     roleTemplateOptions,
     editUser?.employeeId,
     form,
-    form.formState.isDirty,
   ]);
 
   const watchedName = form.watch("name");
@@ -222,8 +248,6 @@ export function BdeTeamFormDialog({
     }
   };
 
-  const editProfileReady = !editUser || (editUserProfile != null && !editProfileFetching);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
@@ -245,6 +269,7 @@ export function BdeTeamFormDialog({
                 </div>
               ) : (
                 <EmployeeFormTabs
+                  key={editUser ? `edit-${editUser.id}` : "create"}
                   form={form}
                   tab={employeeFormTab}
                   onTabChange={setEmployeeFormTab}
@@ -257,6 +282,8 @@ export function BdeTeamFormDialog({
                   shiftTemplates={shiftTemplates}
                   lockRole={BDE_ROLE}
                   onSyncDisplayName={syncDisplayNameFromParts}
+                  employeeDocuments={editUserDocumentsData?.documents}
+                  employeeDocumentsLoading={editDocumentsFetching}
                 />
               )}
             </div>

@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
-import { Check, CheckCircle2, ClipboardList, Plus, Rocket, Trash2, UserPlus } from "lucide-react";
+import { CheckCircle2, ClipboardList, Plus, Rocket, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
@@ -53,7 +54,7 @@ import {
   useToggleOnboardingTask,
   useUpdateOnboardingRecord,
 } from "@/api/hrm";
-import type { HrmOnboardingRecord } from "@/modules/hrm/types";
+import type { HrmOnboardingRecord, HrmOnboardingTaskItem } from "@/modules/hrm/types";
 
 function OnboardingProgress({ value }: { value: number }) {
   return (
@@ -72,6 +73,7 @@ export default function HrmOnboardingPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<HrmOnboardingRecord | null>(null);
+  const [detailTasks, setDetailTasks] = useState<HrmOnboardingTaskItem[]>([]);
   const [userId, setUserId] = useState("");
   const [buddyId, setBuddyId] = useState("none");
   const [startDate, setStartDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -95,6 +97,22 @@ export default function HrmOnboardingPage() {
     [records, detailId],
   );
 
+  const buddyOptionsForCreate = useMemo(
+    () => buddyEmployees.filter((e) => !userId || e.id !== Number(userId)),
+    [buddyEmployees, userId],
+  );
+
+  const buddyOptionsForDetail = useMemo(
+    () => buddyEmployees.filter((e) => !selected || e.id !== selected.userId),
+    [buddyEmployees, selected],
+  );
+
+  const resetCreateForm = () => {
+    setUserId("");
+    setBuddyId("none");
+    setStartDate(format(new Date(), "yyyy-MM-dd"));
+  };
+
   const kpiItems = useMemo(() => {
     const active = records.filter((r) => r.status === "active").length;
     const complete = records.filter((r) => r.status === "complete").length;
@@ -112,40 +130,77 @@ export default function HrmOnboardingPage() {
 
   useEffect(() => {
     if (!createOpen) {
-      setUserId("");
-      setBuddyId("none");
+      resetCreateForm();
       return;
     }
     const recruitmentHire = eligibleEmployees.find((e) => e.recruitmentOnboarding);
     if (recruitmentHire) {
       setUserId(String(recruitmentHire.id));
+    } else if (eligibleEmployees.length === 1) {
+      setUserId(String(eligibleEmployees[0].id));
     }
   }, [createOpen, eligibleEmployees]);
+
+  useEffect(() => {
+    if (buddyId !== "none" && userId && buddyId === userId) {
+      setBuddyId("none");
+    }
+  }, [userId, buddyId]);
+
+  useEffect(() => {
+    setDetailTasks(selected?.tasks ?? []);
+  }, [selected]);
+
+  const detailProgress = useMemo(() => {
+    if (detailTasks.length === 0) return selected?.progress ?? 0;
+    const done = detailTasks.filter((t) => t.completed).length;
+    return Math.round((done / detailTasks.length) * 100);
+  }, [detailTasks, selected?.progress]);
 
   const handleCreate = async () => {
     if (!userId) {
       toast.error("Select an employee");
       return;
     }
+    if (!startDate.trim()) {
+      toast.error("Start date is required");
+      return;
+    }
     try {
-      await createRecord.mutateAsync({
+      const result = await createRecord.mutateAsync({
         userId: Number(userId),
         buddyId: buddyId === "none" ? null : Number(buddyId),
         startDate,
       });
       toast.success("Onboarding started");
       setCreateOpen(false);
-      setUserId("");
-      setBuddyId("none");
+      resetCreateForm();
+      if (result.record?.id) {
+        setDetailId(result.record.id);
+      }
     } catch {
       // mutation toast
     }
   };
 
   const handleToggleTask = (record: HrmOnboardingRecord, taskIndex: number) => {
+    const previous = detailTasks;
+    setDetailTasks((tasks) =>
+      tasks.map((task, i) =>
+        i === taskIndex ? { ...task, completed: !task.completed } : task,
+      ),
+    );
     toggleTask.mutate(
       { recordId: record.id, taskIndex },
-      { onSuccess: () => toast.success("Task updated") },
+      {
+        onSuccess: (data) => {
+          setDetailTasks(data.record.tasks ?? []);
+          toast.success("Task updated");
+        },
+        onError: () => {
+          setDetailTasks(previous);
+        },
+      },
     );
   };
 
@@ -294,7 +349,13 @@ export default function HrmOnboardingPage() {
           </p>
         ) : null}
 
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog
+          open={createOpen}
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+            if (!open) resetCreateForm();
+          }}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Start onboarding</DialogTitle>
@@ -305,22 +366,49 @@ export default function HrmOnboardingPage() {
             </p>
             <div className="space-y-4">
               <HrmField label="Employee">
-                <Select value={userId} onValueChange={setUserId} disabled={eligibleLoading}>
+                <Select
+                  value={userId || undefined}
+                  onValueChange={setUserId}
+                  disabled={eligibleLoading || eligibleEmployees.length === 0}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder={eligibleLoading ? "Loading employees…" : "Select employee"} />
+                    <SelectValue
+                      placeholder={
+                        eligibleLoading
+                          ? "Loading employees…"
+                          : eligibleEmployees.length === 0
+                            ? "No eligible employees"
+                            : "Select employee"
+                      }
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {eligibleEmployees.map((e) => (
-                      <SelectItem key={e.id} value={String(e.id)}>
-                        {e.name}
-                        {e.employeeId ? ` (${e.employeeId})` : ""}
-                        {e.recruitmentOnboarding ? " · Recruitment" : ""}
-                        {e.status !== "active" ? " · Inactive" : ""}
+                    {eligibleEmployees.length === 0 ? (
+                      <SelectItem value="__empty" disabled>
+                        No employees available for onboarding
                       </SelectItem>
-                    ))}
+                    ) : (
+                      eligibleEmployees.map((e) => (
+                        <SelectItem key={e.id} value={String(e.id)}>
+                          {e.name}
+                          {e.employeeId ? ` (${e.employeeId})` : ""}
+                          {e.recruitmentOnboarding ? " · Recruitment" : ""}
+                          {e.status !== "active" ? " · Inactive" : ""}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </HrmField>
+              {!eligibleLoading && eligibleEmployees.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Create the employee from{" "}
+                  <Link href="/hrm/recruitment" className="text-primary underline-offset-2 hover:underline">
+                    Recruitment
+                  </Link>{" "}
+                  or activate them in Team first. Employees who already have a checklist are hidden.
+                </p>
+              ) : null}
               <HrmField label="Buddy (optional)">
                 <Select value={buddyId} onValueChange={setBuddyId}>
                   <SelectTrigger>
@@ -328,7 +416,7 @@ export default function HrmOnboardingPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
-                    {buddyEmployees.map((e) => (
+                    {buddyOptionsForCreate.map((e) => (
                       <SelectItem key={e.id} value={String(e.id)}>
                         {e.name}
                       </SelectItem>
@@ -343,7 +431,9 @@ export default function HrmOnboardingPage() {
             <DialogFooter>
               <Button
                 className={portalActionButtonClass()}
-                disabled={createRecord.isPending}
+                disabled={
+                  createRecord.isPending || eligibleLoading || eligibleEmployees.length === 0 || !userId
+                }
                 onClick={() => void handleCreate()}
               >
                 Start checklist
@@ -359,6 +449,11 @@ export default function HrmOnboardingPage() {
             </DialogHeader>
             {selected ? (
               <div className="space-y-4">
+                {selected.candidateName ? (
+                  <p className="text-xs text-muted-foreground">
+                    Recruitment candidate: <span className="font-medium text-foreground">{selected.candidateName}</span>
+                  </p>
+                ) : null}
                 <div className="grid gap-2 text-sm sm:grid-cols-2">
                   <div>
                     <p className="text-[11px] text-muted-foreground">Start date</p>
@@ -366,7 +461,7 @@ export default function HrmOnboardingPage() {
                   </div>
                   <div>
                     <p className="text-[11px] text-muted-foreground">Progress</p>
-                    <OnboardingProgress value={selected.progress} />
+                    <OnboardingProgress value={detailProgress} />
                   </div>
                 </div>
 
@@ -381,7 +476,7 @@ export default function HrmOnboardingPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {buddyEmployees.map((e) => (
+                        {buddyOptionsForDetail.map((e) => (
                           <SelectItem key={e.id} value={String(e.id)}>
                             {e.name}
                           </SelectItem>
@@ -396,23 +491,18 @@ export default function HrmOnboardingPage() {
                 )}
 
                 <ul className="space-y-1.5">
-                  {(selected.tasks ?? []).map((task, i) => (
-                    <li key={i}>
-                      <button
-                        type="button"
-                        disabled={!canEdit || toggleTask.isPending}
-                        onClick={() => canEdit && handleToggleTask(selected, i)}
-                        className="flex w-full items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-left hover:bg-muted/40 disabled:opacity-60"
+                  {detailTasks.map((task, i) => (
+                    <li key={`${task.title}-${i}`}>
+                      <label
+                        className={`flex w-full items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-left ${
+                          canEdit ? "cursor-pointer hover:bg-muted/40" : "opacity-60"
+                        }`}
                       >
-                        <div
-                          className={`flex size-5 shrink-0 items-center justify-center rounded ${
-                            task.completed
-                              ? "bg-emerald-600 text-white"
-                              : "border border-border bg-background"
-                          }`}
-                        >
-                          {task.completed ? <Check className="size-3" /> : null}
-                        </div>
+                        <Checkbox
+                          checked={task.completed}
+                          disabled={!canEdit || toggleTask.isPending}
+                          onCheckedChange={() => handleToggleTask(selected, i)}
+                        />
                         <span
                           className={`text-sm ${
                             task.completed ? "text-muted-foreground line-through" : ""
@@ -420,10 +510,10 @@ export default function HrmOnboardingPage() {
                         >
                           {task.title}
                         </span>
-                      </button>
+                      </label>
                     </li>
                   ))}
-                  {(selected.tasks ?? []).length === 0 && (
+                  {detailTasks.length === 0 && (
                     <p className="py-4 text-center text-sm text-muted-foreground">
                       No checklist tasks yet.
                     </p>

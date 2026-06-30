@@ -11,3 +11,4 @@ export * from "./invoices.js";
 export * from "./payments.js";
 export * from "./products.js";
 export * from "./proposal-comments.js";
+export * from "./bde-targets.js";

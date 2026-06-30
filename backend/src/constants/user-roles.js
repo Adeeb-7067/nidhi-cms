@@ -13,6 +13,9 @@ const hrmEmployeeRoles = ["manager", "developer", "tester", "qa"];
 /** Shown on admin Team page and staff user listings. */
 const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde"];
 
+/** Super admin view-as: any active account on Admin → Team (clients use Admin → Clients). */
+const impersonatableStaffRoles = [...adminStaffRoles];
+
 /** Dev portal access: assigned projects, logs, tasks, bugs (non-QA workflows). */
 const devPortalStaffRoles = ["manager", "developer", "tester", "qa", "freelancer"];
 
@@ -41,6 +44,10 @@ function isStaffEmployeeRole(role) {
   return staffEmployeeRoles.includes(role);
 }
 
+function isImpersonatableStaffRole(role) {
+  return impersonatableStaffRoles.includes(role);
+}
+
 function isHrmEmployeeRole(role) {
   return hrmEmployeeRoles.includes(role); 
 }
@@ -65,8 +72,10 @@ export {
   isDevPortalStaffRole,
   isHrmAdminRole,
   isHrmEmployeeRole,
+  isImpersonatableStaffRole,
   isMonitorableStaffRole,
   isStaffEmployeeRole,
+  impersonatableStaffRoles,
   monitorableStaffRoles,
   staffEmployeeRoles,
   userRoles,

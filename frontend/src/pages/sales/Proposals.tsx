@@ -31,6 +31,7 @@ import {
   SalesStatusBadge,
   ExecutiveAvatar,
   SalesEmptyState,
+  ProposalFormSheet,
 } from "@/modules/sales/components";
 import { resolveProposalTotal } from "@/modules/sales/utils";
 
@@ -55,6 +56,8 @@ export default function Proposals() {
   const [page, setPage] = useState(1);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
 
   useEffect(() => { setPage(1); }, [search, statusTab]);
 
@@ -114,6 +117,7 @@ export default function Proposals() {
   const deletingProposal = deletingId !== null ? proposals.find((p) => p.id === deletingId) : null;
 
   return (
+    <>
     <PortalPageShell>
       <SalesPageHeader
         title="Proposals"
@@ -123,11 +127,9 @@ export default function Proposals() {
           { label: "Proposals" },
         ]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5" asChild>
-            <Link href="/sales/proposals/create">
-              <Plus className="h-3.5 w-3.5" />
-              New proposal
-            </Link>
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            New proposal
           </Button>
         }
       />
@@ -202,7 +204,7 @@ export default function Proposals() {
           title="No proposals found"
           description="Adjust filters or create a new proposal."
           actionLabel="Create proposal"
-          onAction={() => navigate("/sales/proposals/create")}
+          onAction={() => setCreateOpen(true)}
         />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
@@ -285,7 +287,7 @@ export default function Proposals() {
                             variant="ghost"
                             className="h-7 w-7"
                             title="Edit proposal"
-                            onClick={(e) => { e.stopPropagation(); navigate(`/sales/proposals/create?editId=${p.id}`); }}
+                            onClick={(e) => { e.stopPropagation(); setEditId(p.id); }}
                           >
                             <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
@@ -326,5 +328,8 @@ export default function Proposals() {
         </div>
       )}
     </PortalPageShell>
+    <ProposalFormSheet open={createOpen} onOpenChange={setCreateOpen} />
+    <ProposalFormSheet open={editId !== null} onOpenChange={(o) => { if (!o) setEditId(null); }} editId={editId} />
+  </>
   );
 }

@@ -52,6 +52,8 @@ import {
 } from "@/components/layout/portal-page-kit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { phoneValidationError, normalizePhoneForSubmit } from "@/lib/phone-input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -222,12 +224,17 @@ function AddMemberDialog({ open, onOpenChange }: AddMemberDialogProps) {
       toast.error("Password must be at least 8 characters.");
       return;
     }
+    const phoneErr = phoneValidationError(phoneNumber);
+    if (phoneErr) {
+      toast.error(phoneErr);
+      return;
+    }
     create.mutate(
       {
         name: name.trim(),
         email: email.trim(),
         title: title.trim() || undefined,
-        phoneNumber: phoneNumber.trim() || undefined,
+        phoneNumber: normalizePhoneForSubmit(phoneNumber) || undefined,
         sendInvitationEmail,
         permissions,
         ...(useCustomPassword ? { password: customPassword } : {}),
@@ -298,11 +305,10 @@ function AddMemberDialog({ open, onOpenChange }: AddMemberDialogProps) {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="ct-phone">Phone (optional)</Label>
-              <Input
+              <PhoneInput
                 id="ct-phone"
                 value={phoneNumber}
                 onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+1 555 123 4567"
               />
             </div>
           </div>
@@ -424,13 +430,18 @@ function EditMemberSheet({ member, onClose }: EditMemberSheetProps) {
       toast.error("Email cannot be blank.");
       return;
     }
+    const phoneErr = phoneValidationError(phoneNumber);
+    if (phoneErr) {
+      toast.error(phoneErr);
+      return;
+    }
     update.mutate(
       {
         id: member.id,
         name: name.trim(),
         email: email.trim(),
         title: title.trim() || null,
-        phoneNumber: phoneNumber.trim() || null,
+        phoneNumber: normalizePhoneForSubmit(phoneNumber) || null,
       },
       {
         onSuccess: () => toast.success("Team member updated."),
@@ -493,7 +504,7 @@ function EditMemberSheet({ member, onClose }: EditMemberSheetProps) {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="edit-phone">Phone</Label>
-                  <Input
+                  <PhoneInput
                     id="edit-phone"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}

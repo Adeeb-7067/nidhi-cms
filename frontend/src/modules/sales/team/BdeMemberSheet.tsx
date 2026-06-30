@@ -5,18 +5,22 @@ import {
   Calendar,
   ExternalLink,
   Mail,
+  Pencil,
   Phone,
+  Plus,
   Target,
   Trophy,
   Users,
 } from "lucide-react";
-import { useSalesTeamMember } from "@/api/sales";
+import { useSalesTeamMember, useBdeTargets, type BdeTarget } from "@/api/sales";
 import { formatCompactCurrency } from "@/modules/sales/constants";
 import { LEAD_STATUS_LABELS, PROPOSAL_STATUS_LABELS } from "@/modules/sales/constants";
 import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
 import { parsePresenceStatus } from "@/lib/presence";
 import { getAdminEmployeeDetailHref } from "@/lib/employee-routes";
 import { UserPresenceMeta } from "@/components/presence/UserPresenceMeta";
+import { useAuth } from "@/contexts/AuthContext";
+import { BdeTargetDialog } from "./BdeTargetDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,6 +40,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
 
 export function BdeMemberSheet({
   userId,
@@ -48,9 +64,23 @@ export function BdeMemberSheet({
   onOpenChange: (open: boolean) => void;
   onEdit?: (userId: number) => void;
 }) {
+  const { user } = useAuth();
+  const isAdmin = (user?.role as string) === "super_admin" || (user?.role as string) === "hr";
+
   const [tab, setTab] = useState("overview");
   const [, setLocation] = useLocation();
+  const [targetYear, setTargetYear] = useState(new Date().getFullYear());
+  const [targetDialogOpen, setTargetDialogOpen] = useState(false);
+  const [editingTarget, setEditingTarget] = useState<BdeTarget | null>(null);
+  const [editingMonth, setEditingMonth] = useState<number>(new Date().getMonth() + 1);
+  const [editingYear, setEditingYear] = useState<number>(new Date().getFullYear());
+
   const { data, isLoading, isError } = useSalesTeamMember(userId, open && userId != null);
+  const { data: targetsData, isLoading: targetsLoading } = useBdeTargets(
+    userId,
+    targetYear,
+    open && userId != null && tab === "targets",
+  );
 
   const member = data?.member;
   const stats = data?.stats;
@@ -64,7 +94,25 @@ export function BdeMemberSheet({
     [data?.proposalsByStatus],
   );
 
+  // Build a map of month → target for the current year
+  const targetByMonth = useMemo(() => {
+    const map = new Map<number, BdeTarget>();
+    for (const t of targetsData?.targets ?? []) map.set(t.month, t);
+    return map;
+  }, [targetsData?.targets]);
+
+  function openSetTarget(month: number, existing: BdeTarget | null) {
+    setEditingMonth(month);
+    setEditingYear(targetYear);
+    setEditingTarget(existing);
+    setTargetDialogOpen(true);
+  }
+
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+
   return (
+    <>
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         {isLoading ? (
@@ -82,7 +130,7 @@ export function BdeMemberSheet({
                 <AvatarWithPresence
                   name={String(member.name ?? "")}
                   avatarUrl={(member.avatarUrl as string | null) ?? null}
-                  presenceStatus={member.presenceStatus as string | undefined}
+                  presenceStatus={member.presenceStatus as "online" | "away" | "offline" | undefined}
                   avatarClassName="h-12 w-12"
                 />
                 <div className="min-w-0 flex-1">
@@ -134,6 +182,7 @@ export function BdeMemberSheet({
                 <TabsTrigger value="performance" className="text-xs">Performance</TabsTrigger>
                 <TabsTrigger value="pipeline" className="text-xs">Pipeline</TabsTrigger>
                 <TabsTrigger value="followups" className="text-xs">Follow-ups</TabsTrigger>
+                <TabsTrigger value="targets" className="text-xs">Targets</TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-4 mt-4">
@@ -213,80 +262,30 @@ export function BdeMemberSheet({
                 ) : null}
               </TabsContent>
 
-              <TabsContent value="pipeline" className="space-y-4 mt-4">
-                <div>
-                  <p className="text-xs font-medium mb-2">Recent leads</p>
-                  {(data?.recentLeads ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No assigned leads.</p>
-                  ) : (
-                    <div className="rounded-lg border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-[10px]">Lead</TableHead>
-                            <TableHead className="text-[10px]">Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data?.recentLeads.map((lead) => (
-                            <TableRow key={lead.id}>
-                              <TableCell className="text-xs">
-                                <Link href={`/sales/leads/${lead.id}`} className="hover:underline font-medium">
-                                  {lead.name}
-                                </Link>
-                                {lead.company ? (
-                                  <p className="text-[10px] text-muted-foreground">{lead.company}</p>
-                                ) : null}
-                              </TableCell>
-                              <TableCell className="text-[10px]">
-                                {LEAD_STATUS_LABELS[lead.status as keyof typeof LEAD_STATUS_LABELS] ?? lead.status}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-medium mb-2">Recent proposals</p>
-                  {(data?.recentProposals ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No assigned proposals.</p>
-                  ) : (
-                    <div className="rounded-lg border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-[10px]">Proposal</TableHead>
-                            <TableHead className="text-[10px] text-right">Amount</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {data?.recentProposals.map((proposal) => (
-                            <TableRow key={proposal.id}>
-                              <TableCell className="text-xs">
-                                <Link href={`/sales/proposals/${proposal.id}`} className="hover:underline font-medium">
-                                  {proposal.title}
-                                </Link>
-                                <p className="text-[10px] text-muted-foreground">
-                                  {PROPOSAL_STATUS_LABELS[proposal.status as keyof typeof PROPOSAL_STATUS_LABELS] ?? proposal.status}
-                                </p>
-                              </TableCell>
-                              <TableCell className="text-xs text-right tabular-nums">
-                                {formatCompactCurrency(proposal.totalAmount)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </div>
+              <TabsContent value="pipeline" className="mt-4">
+                {data?.recentLeads && data.recentLeads.length > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium mb-3">Recent leads</p>
+                    {data.recentLeads.map((lead) => (
+                      <Link key={lead.id} href={`/sales/leads/${lead.id}`}>
+                        <div className="rounded-lg border p-3 text-xs space-y-1 hover:border-primary/30">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-medium truncate">{lead.name}</span>
+                            <Badge variant="outline" className="text-[10px] shrink-0">{lead.status}</Badge>
+                          </div>
+                          {lead.company ? <p className="text-[10px] text-muted-foreground">{lead.company}</p> : null}
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No recent leads.</p>
+                )}
               </TabsContent>
 
               <TabsContent value="followups" className="mt-4">
-                {(data?.followUps ?? []).length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No follow-ups scheduled.</p>
+                {!data?.followUps || data.followUps.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No pending follow-ups.</p>
                 ) : (
                   <div className="space-y-2">
                     {data?.followUps.map((fu) => (
@@ -308,10 +307,123 @@ export function BdeMemberSheet({
                   </div>
                 )}
               </TabsContent>
+
+              {/* ── Targets Tab ── */}
+              <TabsContent value="targets" className="mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">Monthly targets for {String(member.name).split(" ")[0]}</p>
+                  <Select
+                    value={String(targetYear)}
+                    onValueChange={(v) => setTargetYear(Number(v))}
+                  >
+                    <SelectTrigger className="h-7 w-24 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {targetsLoading ? (
+                  <div className="space-y-2">
+                    {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Month</TableHead>
+                        <TableHead className="text-xs text-right">Revenue</TableHead>
+                        <TableHead className="text-xs text-right">Deals</TableHead>
+                        <TableHead className="text-xs text-right">Leads</TableHead>
+                        {isAdmin ? <TableHead className="text-xs w-8" /> : null}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {MONTH_NAMES.map((name, i) => {
+                        const month = i + 1;
+                        const target = targetByMonth.get(month);
+                        const isCurrentMonth =
+                          month === new Date().getMonth() + 1 && targetYear === currentYear;
+                        return (
+                          <TableRow
+                            key={month}
+                            className={isCurrentMonth ? "bg-primary/5 font-medium" : undefined}
+                          >
+                            <TableCell className="text-xs py-2">
+                              {name.slice(0, 3)}
+                              {isCurrentMonth ? (
+                                <Badge variant="secondary" className="ml-1.5 text-[9px] py-0 px-1">Now</Badge>
+                              ) : null}
+                            </TableCell>
+                            <TableCell className="text-xs text-right tabular-nums py-2">
+                              {target?.revenueTarget != null
+                                ? formatCompactCurrency(target.revenueTarget)
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </TableCell>
+                            <TableCell className="text-xs text-right tabular-nums py-2">
+                              {target?.dealsTarget != null
+                                ? target.dealsTarget
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </TableCell>
+                            <TableCell className="text-xs text-right tabular-nums py-2">
+                              {target?.leadsTarget != null
+                                ? target.leadsTarget
+                                : <span className="text-muted-foreground/50">—</span>}
+                            </TableCell>
+                            {isAdmin ? (
+                              <TableCell className="py-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => openSetTarget(month, target ?? null)}
+                                  title={target ? "Edit target" : "Set target"}
+                                >
+                                  {target ? (
+                                    <Pencil className="h-3 w-3" />
+                                  ) : (
+                                    <Plus className="h-3 w-3 text-muted-foreground" />
+                                  )}
+                                </Button>
+                              </TableCell>
+                            ) : null}
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+
+                {!isAdmin ? (
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    Targets are set by your admin.
+                  </p>
+                ) : null}
+              </TabsContent>
             </Tabs>
           </>
         )}
       </SheetContent>
     </Sheet>
+
+    {isAdmin && userId && member ? (
+      <BdeTargetDialog
+        open={targetDialogOpen}
+        onOpenChange={setTargetDialogOpen}
+        userId={userId}
+        bdeNam={String(member.name)}
+        existingTarget={editingTarget}
+        defaultMonth={editingMonth}
+        defaultYear={editingYear}
+      />
+    ) : null}
+  </>
   );
 }
+
+// Re-export dialog for use elsewhere
+export { BdeTargetDialog } from "./BdeTargetDialog";

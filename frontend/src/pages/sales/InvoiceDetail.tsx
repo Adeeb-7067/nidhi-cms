@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRoute } from "wouter";
-import { ArrowLeft, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -26,12 +26,15 @@ import {
   RecordPaymentDialog,
   TotalAmountAdjustFields,
   totalAdjustPayload,
+  InvoiceFormSheet,
+  PaymentScheduleCard,
 } from "@/modules/sales/components";
 
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/sales/invoices/:id");
   const invoiceId = Number(params?.id);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const docRef = useRef<HTMLDivElement>(null);
   const pdfRef = useRef<HTMLDivElement>(null);
@@ -158,6 +161,17 @@ export default function InvoiceDetailPage() {
               Download PDF
             </Button>
             {invoice.status !== "paid" && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => setEditOpen(true)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </Button>
+            )}
+            {invoice.status !== "paid" && (
               <Button size="sm" className="h-8" onClick={() => setPaymentOpen(true)}>
                 Record payment
               </Button>
@@ -167,7 +181,8 @@ export default function InvoiceDetailPage() {
       />
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 space-y-4 border-0 shadow-none bg-transparent p-0">
+        {/* Left column — invoice document + direct payment history */}
+        <div className="lg:col-span-2 space-y-4">
           <div ref={docRef}>
             <InvoiceDocument
               invoice={preview}
@@ -179,66 +194,101 @@ export default function InvoiceDetailPage() {
               payments={payments}
             />
           </div>
-          {payments.length > 0 && (
+          {/* Payments not linked to any installment */}
+          {payments.filter((p) => !p.installmentId).length > 0 && (
             <Card data-pdf-hide>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Payments against this invoice</CardTitle>
+                <CardTitle className="text-sm">Direct payments</CardTitle>
               </CardHeader>
               <CardContent>
-                <PaymentHistoryTable payments={payments} />
+                <PaymentHistoryTable payments={payments.filter((p) => !p.installmentId)} />
               </CardContent>
             </Card>
           )}
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Adjust amount</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <TotalAmountAdjustFields
-              calculatedTotal={calculatedAmount}
-              totalAdjustment={totalAdjustment}
-              onTotalAdjustmentChange={setTotalAdjustment}
-              adjustedTotal={adjustedTotal}
-              onAdjustedTotalChange={setAdjustedTotal}
-              useCustomTotal={useCustomTotal}
-              onUseCustomTotalChange={setUseCustomTotal}
-              finalTotal={finalAmount}
-              compact
-            />
-            {invoice.status !== "paid" && (
-              <Button
-                size="sm"
-                className="w-full h-8"
-                onClick={handleSaveAmount}
-                disabled={updateInvoice.isPending || finalAmount === invoice.amount}
-              >
-                {updateInvoice.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-                Save amount
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Links</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <Button variant="outline" size="sm" className="w-full h-8" asChild>
-              <Link href={`/sales/customers/${invoice.customerId}`}>View customer</Link>
-            </Button>
-            {installment && (
+        </div>
+
+        {/* Right column — schedule + adjust + links */}
+        <div className="space-y-4">
+          {/* Payment schedule with installments */}
+          <PaymentScheduleCard
+            invoiceId={invoiceId}
+            invoiceAmount={invoice.amount}
+            invoicePaidAmount={invoice.paidAmount}
+            onPaySuccess={(paymentId) => {
+              window.location.href = `/sales/receipts/${paymentId}`;
+            }}
+          />
+
+          {/* Direct payment (no installment) */}
+          {invoice.status !== "paid" && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Direct payment</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-[11px] text-muted-foreground mb-3">
+                  Record a payment against the full invoice (not tied to any installment).
+                </p>
+                <Button size="sm" className="w-full h-8" onClick={() => setPaymentOpen(true)}>
+                  Record payment
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Adjust amount */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Adjust amount</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <TotalAmountAdjustFields
+                calculatedTotal={calculatedAmount}
+                totalAdjustment={totalAdjustment}
+                onTotalAdjustmentChange={setTotalAdjustment}
+                adjustedTotal={adjustedTotal}
+                onAdjustedTotalChange={setAdjustedTotal}
+                useCustomTotal={useCustomTotal}
+                onUseCustomTotalChange={setUseCustomTotal}
+                finalTotal={finalAmount}
+                compact
+              />
+              {invoice.status !== "paid" && (
+                <Button
+                  size="sm"
+                  className="w-full h-8"
+                  onClick={handleSaveAmount}
+                  disabled={updateInvoice.isPending || finalAmount === invoice.amount}
+                >
+                  {updateInvoice.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                  Save amount
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Links */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Links</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
               <Button variant="outline" size="sm" className="w-full h-8" asChild>
-                <Link href={`/sales/installments/${installment.id}`}>View installment</Link>
+                <Link href={`/sales/customers/${invoice.customerId}`}>View customer</Link>
               </Button>
-            )}
-            {invoice.proposalId && (
-              <Button variant="outline" size="sm" className="w-full h-8" asChild>
-                <Link href={`/sales/proposals/${invoice.proposalId}`}>View proposal</Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+              {installment && (
+                <Button variant="outline" size="sm" className="w-full h-8" asChild>
+                  <Link href={`/sales/installments/${installment.id}`}>View installment</Link>
+                </Button>
+              )}
+              {invoice.proposalId && (
+                <Button variant="outline" size="sm" className="w-full h-8" asChild>
+                  <Link href={`/sales/proposals/${invoice.proposalId}`}>View proposal</Link>
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <RecordPaymentDialog
@@ -249,6 +299,7 @@ export default function InvoiceDetailPage() {
           window.location.href = `/sales/receipts/${paymentId}`;
         }}
       />
+      <InvoiceFormSheet open={editOpen} onOpenChange={setEditOpen} invoice={invoice} />
 
       <div
         ref={pdfRef}

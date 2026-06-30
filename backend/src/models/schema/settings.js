@@ -25,6 +25,8 @@ const companySettingsSchema = new Schema({
   hrmMaxFreeLates: { type: Number, default: 3, min: 0 },
   hrmElectronOnlyClock: { type: Boolean, default: false },
   hrmLeaveCarryForwardStartYear: { type: Number, default: 2026 },
+  /** Custom onboarding checklist titles (falls back to DEFAULT_ONBOARDING_TASKS when empty). */
+  hrmOnboardingChecklistTemplate: { type: [String], default: [] },
 }, { timestamps: { createdAt: false, updatedAt: true } });
 const CompanySettings = mongoose.models.CompanySettings || mongoose.model("CompanySettings", companySettingsSchema);
 const companySettingsTable = CompanySettings;

@@ -566,18 +566,24 @@ export function useAdminOverrideAttendance() {
       status,
       activeMinutes,
       reason,
+      mode,
+      clockIn,
+      clockOut,
     }: {
       userId: number;
       date: string;
       status: string;
       activeMinutes?: number;
       reason: string;
+      mode?: "clock_in" | "clock_out";
+      clockIn?: string;
+      clockOut?: string;
     }) =>
       customFetch<HrmAttendanceSummary>(
         apiUrl(`/api/hrm/attendance/daily/${userId}/${date}`),
         {
           method: "PATCH",
-          body: JSON.stringify({ status, activeMinutes, reason }),
+          body: JSON.stringify({ status, activeMinutes, reason, mode, clockIn, clockOut }),
         },
       ),
     onSuccess: () => {
@@ -1115,7 +1121,17 @@ export function useToggleOnboardingTask() {
         apiUrl(`/api/hrm/onboarding/${recordId}/tasks/${taskIndex}`),
         { method: "PATCH" },
       ),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      qc.setQueriesData<{ records: HrmOnboardingRecord[] }>(
+        { queryKey: ["hrm", "onboarding"] },
+        (old) => {
+          if (!old?.records) return old;
+          return {
+            ...old,
+            records: old.records.map((r) => (r.id === data.record.id ? data.record : r)),
+          };
+        },
+      );
       qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
       qc.invalidateQueries({ queryKey: ["hrm", "recruitment"] });
     },
@@ -1130,7 +1146,10 @@ export function useDeleteOnboardingRecord() {
       customFetch<{ deleted: boolean }>(apiUrl(`/api/hrm/onboarding/${id}`), {
         method: "DELETE",
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "onboarding", "eligible-employees"] });
+    },
     meta: { errorMessage: "Could not remove onboarding" },
   });
 }
@@ -1139,8 +1158,9 @@ export function useHrmDocuments(userId?: number, options?: { enabled?: boolean }
   const qs = userId ? `?userId=${userId}` : "";
   return useHrmQuery({
     queryKey: ["hrm", "documents", userId ?? "all"],
-    enabled: options?.enabled ?? true,
-    staleTime: QUERY_STALE.list,
+    enabled: (options?.enabled ?? true) && (userId == null || userId > 0),
+    staleTime: 0,
+    refetchOnMount: "always",
     queryFn: () =>
       customFetch<{ documents: HrmEmployeeDocument[] }>(apiUrl(`/api/hrm/documents${qs}`)),
     meta: { errorMessage: "Could not load documents" },

@@ -47,9 +47,24 @@ export {
 } from "./financial-kit";
 export { InvoiceDocument } from "./InvoiceDocument";
 export { ProposalDocument } from "./ProposalDocument";
+export {
+  CustomerAdminSection,
+  CustomerCredentialsSection,
+  CustomerInstallmentsSection,
+  CustomerInventorySection,
+  CustomerOverviewExtras,
+  CustomerProjectsSection,
+  CustomerStatementSection,
+  CustomerTasksSection,
+  CustomerTeamSection,
+  CustomerTicketsSection,
+} from "./customer-detail-sections";
 export { ReceiptDocument } from "./ReceiptDocument";
 export {
   TotalAmountAdjustFields,
   totalAdjustPayload,
   proposalAdjustPayload,
 } from "./total-amount-adjust";
+export { InvoiceFormSheet } from "./InvoiceFormSheet";
+export { ProposalFormSheet } from "./ProposalFormSheet";
+export { PaymentScheduleCard } from "./PaymentScheduleCard";

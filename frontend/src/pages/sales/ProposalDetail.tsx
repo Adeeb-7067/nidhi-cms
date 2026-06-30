@@ -26,7 +26,7 @@ import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 import { useGetSettings } from "@/api/generated/api";
 import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import {
-  SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState, ProposalDocument,
+  SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState, ProposalDocument, ProposalFormSheet,
 } from "@/modules/sales/components";
 
 /* ─── Design tokens (match public view palette) ───────────────────────────── */
@@ -134,6 +134,7 @@ export default function ProposalDetail() {
   const [showFullToken, setShowFullToken] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const { data: proposal, isLoading, isError } = useGetProposal(proposalId, !!proposalId);
@@ -265,6 +266,7 @@ export default function ProposalDetail() {
   };
 
   return (
+    <>
     <PortalPageShell>
       {/* ── Delete confirm dialog ── */}
       {deleteConfirm && (
@@ -313,8 +315,8 @@ export default function ProposalDetail() {
             <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
               <Link href="/sales/proposals"><ArrowLeft className="h-3.5 w-3.5" />Back</Link>
             </Button>
-            <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
-              <Link href={`/sales/proposals/create?editId=${proposal.id}`}><Pencil className="h-3.5 w-3.5" />Edit</Link>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setEditOpen(true)}>
+              <Pencil className="h-3.5 w-3.5" />Edit
             </Button>
             <Button
               variant="outline"
@@ -950,6 +952,8 @@ export default function ProposalDetail() {
         />
       </div>
     </PortalPageShell>
+    <ProposalFormSheet open={editOpen} onOpenChange={setEditOpen} editId={proposal.id} />
+  </>
   );
 }
 

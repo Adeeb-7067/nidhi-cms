@@ -515,7 +515,7 @@ export default function HrmPayrollPage() {
               },
               {
                 key: "gross",
-                header: "Gross salary",
+                header: "Earned",
                 className: "text-right",
                 render: (r) => <span className="text-xs tabular-nums">{inrMoney(r.gross)}</span>,
               },

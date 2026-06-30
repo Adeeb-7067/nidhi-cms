@@ -489,7 +489,9 @@ export function formatUserProfileFields(user, { includeSensitive = false } = {})
     workExperience: user.workExperience ?? [],
     profileDocuments: user.profileDocuments ?? [],
     awards: user.awards ?? [],
-    resumeUrl: user.resumeUrl ?? null,
+    resumeUrl: user.resumeUrl?.trim() || null,
+    idProofUrl: user.idProofUrl?.trim() || null,
+    addressProofUrl: user.addressProofUrl?.trim() || null,
     certificateUrls: user.certificateUrls ?? [],
     username: user.username ?? user.employeeId ?? null,
     position: user.position ?? "EMPLOYEE",
@@ -509,8 +511,6 @@ export function formatUserProfileFields(user, { includeSensitive = false } = {})
       salary: user.salary ?? null,
       aadharNumber: user.aadharNumber ?? null,
       panNumber: user.panNumber ?? null,
-      idProofUrl: user.idProofUrl ?? null,
-      addressProofUrl: user.addressProofUrl ?? null,
     };
   }
 

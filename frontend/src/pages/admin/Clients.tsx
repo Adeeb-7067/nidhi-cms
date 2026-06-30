@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useListClients, useCreateClient, useUpdateClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,7 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { optionalPhoneZod, normalizePhoneForSubmit } from "@/lib/phone-input";
 import { toast } from "sonner";
 import { toastApiError, getApiErrorMessage } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
@@ -80,7 +82,7 @@ const clientSchema = z.object({
   portalEmail: z.string().email("Invalid portal login email").optional().or(z.literal("")),
   password: z.string().min(8, "Password must be at least 8 characters").optional().or(z.literal("")),
   logoUrl: z.string().optional(),
-  phone: z.string().optional(),
+  phone: optionalPhoneZod,
   address: z.string().optional(),
   gstNumber: z.string().optional(),
   industry: z.string().optional(),
@@ -351,9 +353,10 @@ export default function AdminClients() {
 
   const onSubmit = async (values: ClientFormValues) => {
     try {
+      const phone = normalizePhoneForSubmit(values.phone) || "";
       if (editClient) {
         const { portalEmail, password, ...rest } = values;
-        const payload: Record<string, unknown> = { ...rest };
+        const payload: Record<string, unknown> = { ...rest, phone };
         const trimmedPortal = portalEmail?.trim();
         if (trimmedPortal && trimmedPortal !== (editClient.portalEmail ?? "").toLowerCase()) {
           payload.portalEmail = trimmedPortal;
@@ -369,7 +372,7 @@ export default function AdminClients() {
         }
         const portalEmail = values.portalEmail?.trim() || values.email;
         await createClientMutation.mutateAsync({
-          data: { ...values, portalEmail, password: values.password } as any,
+          data: { ...values, phone, portalEmail, password: values.password } as any,
         });
         toast.success("Company and portal login created");
         setIsDialogOpen(false);
@@ -731,7 +734,7 @@ export default function AdminClients() {
                     <FormItem>
                       <FormLabel>Phone</FormLabel>
                       <FormControl>
-                        <Input placeholder="+1 (555) 000-0000" {...field} />
+                        <PhoneInput {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

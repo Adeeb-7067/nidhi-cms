@@ -58,13 +58,15 @@ export function ManualAttendanceDialog({
   }, [open, defaultMode]);
 
   const activeMinutes = useMemo(() => {
+    if (mode === "clock_out") return undefined;
     const inMin = parseTimeToMinutes(clockIn);
     const outMin = parseTimeToMinutes(clockOut);
     if (inMin == null || outMin == null) return 0;
     return Math.max(0, outMin - inMin);
-  }, [clockIn, clockOut]);
+  }, [clockIn, clockOut, mode]);
 
-  const activeHours = Math.round((activeMinutes / 60) * 10) / 10;
+  const activeHours =
+    activeMinutes != null ? Math.round((activeMinutes / 60) * 10) / 10 : null;
 
   const handleSubmit = async () => {
     const uid = Number(userId);
@@ -72,16 +74,36 @@ export function ManualAttendanceDialog({
       toast.error("Employee, date, and reason are required");
       return;
     }
-    if (activeMinutes <= 0) {
-      toast.error("Clock-out time must be after clock-in time");
+
+    if (mode === "clock_in") {
+      if (!clockIn.trim()) {
+        toast.error("Clock-in time is required");
+        return;
+      }
+      if (clockOut.trim()) {
+        const inMin = parseTimeToMinutes(clockIn);
+        const outMin = parseTimeToMinutes(clockOut);
+        if (inMin == null || outMin == null || outMin <= inMin) {
+          toast.error("Clock-out time must be after clock-in time");
+          return;
+        }
+      }
+    } else if (!clockOut.trim()) {
+      toast.error("Clock-out time is required");
       return;
     }
+
     try {
       await adminOverride.mutateAsync({
         userId: uid,
         date,
         status: "present",
-        activeMinutes,
+        mode,
+        clockIn: mode === "clock_in" ? clockIn : undefined,
+        clockOut: mode === "clock_out" ? clockOut : clockOut.trim() || undefined,
+        activeMinutes: mode === "clock_in" && activeMinutes != null && activeMinutes > 0
+          ? activeMinutes
+          : undefined,
         reason: `${mode === "clock_in" ? "Manual clock-in" : "Manual clock-out"}: ${reason.trim()}`,
       });
       toast.success(mode === "clock_in" ? "Clock-in recorded" : "Clock-out recorded");
@@ -105,27 +127,39 @@ export function ManualAttendanceDialog({
                 <SelectValue placeholder="Select employee" />
               </SelectTrigger>
               <SelectContent>
-                {employees.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    {u.name}
-                    {u.employeeId ? ` (${u.employeeId})` : ""}
+                {employees.length === 0 ? (
+                  <SelectItem value="__none" disabled>
+                    No employees available
                   </SelectItem>
-                ))}
+                ) : (
+                  employees.map((u) => (
+                    <SelectItem key={u.id} value={String(u.id)}>
+                      {u.name}
+                      {u.employeeId ? ` (${u.employeeId})` : ""}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </HrmField>
           <HrmField label="Date">
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </HrmField>
-          <div className="grid grid-cols-2 gap-3">
-            <HrmField label="Clock-in time">
-              <TimePicker12h value={clockIn} onChange={setClockIn} />
-            </HrmField>
+          {mode === "clock_in" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <HrmField label="Clock-in time">
+                <TimePicker12h value={clockIn} onChange={setClockIn} />
+              </HrmField>
+              <HrmField label="Clock-out time (optional)">
+                <TimePicker12h value={clockOut} onChange={setClockOut} />
+              </HrmField>
+            </div>
+          ) : (
             <HrmField label="Clock-out time">
               <TimePicker12h value={clockOut} onChange={setClockOut} />
             </HrmField>
-          </div>
-          {activeMinutes > 0 && (
+          )}
+          {mode === "clock_in" && activeMinutes != null && activeMinutes > 0 && activeHours != null && (
             <p className="text-xs text-muted-foreground">
               Active duration: <span className="font-medium text-foreground">{activeHours} h</span>
             </p>
@@ -146,7 +180,7 @@ export function ManualAttendanceDialog({
           <Button
             className={portalActionButtonClass()}
             onClick={() => void handleSubmit()}
-            disabled={adminOverride.isPending}
+            disabled={adminOverride.isPending || employees.length === 0}
           >
             Save
           </Button>

@@ -8,7 +8,6 @@ import {
 } from "../models/schema/index.js";
 import { verifyPassword, hashPassword } from "../lib/password.js";
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from "../lib/jwt.js";
-import { validateStoredFileUrl } from "../lib/file-storage.js";
 import {
   issuePasswordOtp,
   verifyPasswordOtp,
@@ -308,13 +307,6 @@ async function postAuthImpersonateByUserId(req, res) {
   const target = await usersTable.findOne({ id: targetId });
   if (!target || target.status !== "active") {
     notFound("User (must be active)");
-  }
-  const allowedRoles = ["developer", "tester", "qa", "freelancer", "client"];
-  if (!allowedRoles.includes(target.role)) {
-    badRequest(
-      "View-as only works for developer, tester, QA, freelancer, or client portal accounts.",
-      "userId"
-    );
   }
   if (target.id === req.user.id) {
     badRequest("You cannot view the app as yourself.", "userId");

@@ -73,8 +73,7 @@ describe("buildTodayStatusBreakdown", () => {
       { status: "on_leave" },
     ]);
     assert.deepEqual(slices, [
-      { name: "Present", value: 1 },
-      { name: "Onsite", value: 1 },
+      { name: "Present", value: 2 },
       { name: "On leave", value: 1 },
     ]);
   });

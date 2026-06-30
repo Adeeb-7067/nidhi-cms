@@ -1,6 +1,7 @@
 import {
   SalesPayments,
   SalesInvoices,
+  SalesInstallments,
   SalesCustomers,
   getNextSequence,
 } from "../../models/schema/index.js";
@@ -12,6 +13,7 @@ async function listPayments(req, res) {
   const { page, limit } = parsePagination(req.query);
   const filter = {};
   if (req.query.invoiceId) filter.invoiceId = Number(req.query.invoiceId);
+  if (req.query.installmentId) filter.installmentId = Number(req.query.installmentId);
   if (req.query.customerId) filter.customerId = Number(req.query.customerId);
   if (search) {
     const q = String(search).trim();
@@ -23,13 +25,15 @@ async function listPayments(req, res) {
       ];
     }
   }
+  if (req.user.role === "bde") {
+    filter.recordedBy = req.user.id;
+  }
 
   const [payments, total] = await Promise.all([
     SalesPayments.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     SalesPayments.countDocuments(filter),
   ]);
 
-  // hydrate invoiceStatus from latest invoice state
   const invoiceIds = [...new Set(payments.map((p) => p.invoiceId))];
   const invoices = invoiceIds.length
     ? await SalesInvoices.find({ id: { $in: invoiceIds } }).lean()
@@ -57,16 +61,22 @@ function deriveInvoiceStatus(invoice, newPaidAmount) {
   return "unpaid";
 }
 
+function deriveInstallmentStatus(installment, newPaidAmount) {
+  if (newPaidAmount >= installment.dueAmount) return "paid";
+  if (newPaidAmount > 0) return "partial";
+  return "pending";
+}
+
 async function recordPayment(req, res) {
   const body = req.body;
   if (!body.invoiceId) badRequest("invoiceId is required.", "invoiceId");
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
   const invoiceId = Number(body.invoiceId);
+  const installmentId = body.installmentId ? Number(body.installmentId) : null;
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
 
-  // Allocate IDs before the transaction so the atomic counter isn't inside the tx
   const [receiptNumber, id] = await Promise.all([
     nextReceiptNumber(),
     getNextSequence("sales_payments"),
@@ -74,21 +84,49 @@ async function recordPayment(req, res) {
 
   let newStatus;
   await runInTx(async (session) => {
-    // Re-read inside the transaction so concurrent requests see each other's writes
     const invoice = await SalesInvoices.findOne({ id: invoiceId }).session(session).lean();
     if (!invoice) notFound("Invoice");
     if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
 
-    // Cap the applied amount at the remaining balance — store only what was actually credited
+    // If paying against a specific installment, validate and update it too
+    if (installmentId) {
+      const inst = await SalesInstallments.findOne({ id: installmentId }).session(session).lean();
+      if (!inst) notFound("Installment");
+      if (inst.invoiceId && inst.invoiceId !== invoiceId) {
+        badRequest("Installment does not belong to this invoice.", "installmentId");
+      }
+      if (inst.status === "paid") badRequest("This installment is already fully paid.", "installmentId");
+
+      const instRemaining = inst.dueAmount - inst.paidAmount;
+      const appliedToInst = Math.min(amount, instRemaining);
+      const newInstPaid = inst.paidAmount + appliedToInst;
+      const newInstStatus = deriveInstallmentStatus(inst, newInstPaid);
+
+      await SalesInstallments.updateOne(
+        { id: installmentId },
+        { $set: { paidAmount: newInstPaid, status: newInstStatus } },
+        { session }
+      );
+    }
+
+    // Update invoice paidAmount regardless
     const remaining = invoice.amount - invoice.paidAmount;
     const appliedAmount = Math.min(amount, remaining);
     const newPaidAmount = invoice.paidAmount + appliedAmount;
     newStatus = deriveInvoiceStatus(invoice, newPaidAmount);
 
     await SalesPayments.create(
-      [{ id, invoiceId, customerId: invoice.customerId, amount: appliedAmount,
-         paymentMethod: body.paymentMethod, transactionId: optionalString(body.transactionId) ?? null,
-         recordedBy: req.user.id, receiptNumber }],
+      [{
+        id,
+        invoiceId,
+        installmentId,
+        customerId: invoice.customerId,
+        amount: appliedAmount,
+        paymentMethod: body.paymentMethod,
+        transactionId: optionalString(body.transactionId) ?? null,
+        recordedBy: req.user.id,
+        receiptNumber,
+      }],
       { session }
     );
     await SalesInvoices.updateOne(
@@ -106,11 +144,14 @@ async function getReceiptById(req, res) {
   const id = parseIdParam(req.params.id, "payment id");
   const payment = await SalesPayments.findOne({ id }).lean();
   if (!payment) notFound("Receipt");
-  const [invoice, customer] = await Promise.all([
+  const [invoice, customer, installment] = await Promise.all([
     SalesInvoices.findOne({ id: payment.invoiceId }).lean(),
     SalesCustomers.findOne({ id: payment.customerId }).lean(),
+    payment.installmentId
+      ? SalesInstallments.findOne({ id: payment.installmentId }).lean()
+      : Promise.resolve(null),
   ]);
-  res.json({ payment, invoice, customer });
+  res.json({ payment, invoice, customer, installment });
 }
 
 export { listPayments, recordPayment, getReceiptById };

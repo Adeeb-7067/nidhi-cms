@@ -191,14 +191,117 @@ export interface Customer {
   leadId: number | null;
   clientId: number | null;
   portalUserId: number | null;
+  assignedAdminId?: number | null;
+  assignedAdmin?: StaffUserSummary | null;
   totalSales: number;
   outstanding: number;
   createdAt: string;
 }
 
+export interface StaffUserSummary {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+  role?: string;
+  designation?: string | null;
+  phoneNumber?: string | null;
+  status?: string;
+}
+
+export interface CustomerHubProject {
+  id: number;
+  name: string;
+  status: string;
+  pmId?: number | null;
+  pmName?: string | null;
+  deadline?: string | null;
+  type?: string | null;
+}
+
+export interface CustomerHubTeamMember {
+  id: number;
+  userId: number;
+  name: string | null;
+  email: string | null;
+  phoneNumber: string | null;
+  title: string | null;
+  role: string;
+  status: string;
+  avatarUrl?: string | null;
+}
+
+export interface CustomerHubTicket {
+  id: number;
+  subject: string;
+  priority: string;
+  status: string;
+  assignedTo: number | null;
+  assignedToName: string | null;
+  projectId: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface CustomerHubTask {
+  id: number;
+  taskNumber: string;
+  title: string;
+  projectId: number;
+  projectName: string | null;
+  assigneeId: number | null;
+  assigneeName: string | null;
+  status: string;
+  priority: string;
+  dueDate: string | null;
+  progress: number;
+  updatedAt: string | null;
+}
+
+export interface CustomerHubCredential {
+  id: number;
+  label?: string;
+  name?: string;
+  username?: string | null;
+  url?: string | null;
+  category?: string | null;
+  projectId?: number;
+  projectName?: string | null;
+  setByLabel?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface CustomerHubData {
+  assignedAdmin: StaffUserSummary | null;
+  clientAdmin: StaffUserSummary | null;
+  client: {
+    id: number;
+    companyName: string;
+    status: string;
+    tier: string;
+    userId: number | null;
+  } | null;
+  projects: CustomerHubProject[];
+  teamMembers: CustomerHubTeamMember[];
+  tickets: CustomerHubTicket[];
+  tasks: CustomerHubTask[];
+  portalCredentials: CustomerHubCredential[];
+  inventoryCredentials: CustomerHubCredential[];
+  recentPayments: {
+    id: number;
+    amount: number;
+    receiptNumber: string;
+    invoiceId: number;
+    paymentMethod: string;
+    createdAt: string | null;
+  }[];
+}
+
 export interface Installment {
   id: number;
-  projectId: number;
+  invoiceId: number | null;
+  projectId: number | null;
   customerId: number;
   name: string;
   dueAmount: number;
@@ -208,17 +311,19 @@ export interface Installment {
   paidAmount: number;
   dueDate: string;
   status: InstallmentStatus;
-  invoiceId: number | null;
   createdAt: string;
 }
 
 export interface SalesInvoice {
   id: number;
   number: string;
+  title: string | null;
   customerId: number;
   projectId: number | null;
   installmentId: number | null;
   proposalId: number | null;
+  lineItems: ProposalItem[];
+  notes: string | null;
   amount: number;
   calculatedAmount?: number | null;
   totalAdjustment?: number;
@@ -232,6 +337,8 @@ export interface SalesInvoice {
 export interface SalesPayment {
   id: number;
   invoiceId: number;
+  invoiceNumber: string | null;
+  installmentId: number | null;
   customerId: number;
   amount: number;
   paymentMethod: PaymentMethod;
@@ -319,6 +426,8 @@ export const salesKeys = {
   notifications: (params?: object) => ["sales-notifications", params] as const,
   team: (params?: object) => ["sales-team", params] as const,
   teamMember: (id?: number | null) => ["sales-team-member", id] as const,
+  bdeTargets: (userId?: number | null, year?: number) => ["sales-bde-targets", userId, year] as const,
+  myTarget: (month?: number, year?: number) => ["sales-my-target", month, year] as const,
 };
 
 // ─── Config ───────────────────────────────────────────────────────────────
@@ -816,9 +925,20 @@ export function useListCustomers(
 }
 
 export function useGetCustomer(id: number, enabled = true) {
-  return useQuery<Customer & { installments: Installment[]; invoices: SalesInvoice[] }>({
+  return useQuery<
+    Customer & { installments: Installment[]; invoices: SalesInvoice[]; assignedAdmin?: StaffUserSummary | null }
+  >({
     queryKey: salesKeys.customer(id),
     queryFn: () => customFetch(apiUrl(`/api/sales/customers/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 30_000,
+  });
+}
+
+export function useGetCustomerHub(id: number, enabled = true) {
+  return useQuery<CustomerHubData>({
+    queryKey: [...salesKeys.customer(id), "hub"],
+    queryFn: () => customFetch(apiUrl(`/api/sales/customers/${id}/hub`)),
     enabled: enabled && !!id,
     staleTime: 30_000,
   });
@@ -836,14 +956,30 @@ export function useCreateCustomer() {
 export function useUpdateCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: Partial<Customer> & { id: number }) =>
+    mutationFn: ({ id, ...body }: Partial<Customer> & { id: number; assignedAdminId?: number | null }) =>
       customFetch<Customer>(apiUrl(`/api/sales/customers/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.customer(vars.id) });
+      qc.invalidateQueries({ queryKey: [...salesKeys.customer(vars.id), "hub"] });
       qc.invalidateQueries({ queryKey: ["sales-customers"] });
+    },
+  });
+}
+
+export function useAssignCustomerAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, assignedAdminId }: { id: number; assignedAdminId: number | null }) =>
+      customFetch<Customer>(apiUrl(`/api/sales/customers/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify({ assignedAdminId }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.customer(vars.id) });
+      qc.invalidateQueries({ queryKey: [...salesKeys.customer(vars.id), "hub"] });
     },
   });
 }
@@ -876,6 +1012,7 @@ export function useProvisionCustomerPortal() {
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.customer(vars.id) });
+      qc.invalidateQueries({ queryKey: [...salesKeys.customer(vars.id), "hub"] });
       qc.invalidateQueries({ queryKey: ["sales-customers"] });
     },
   });
@@ -915,7 +1052,7 @@ export function useRemindCustomer() {
 // ─── Installments ─────────────────────────────────────────────────────────
 
 export function useListInstallments(
-  params?: { customerId?: number; projectId?: number; status?: InstallmentStatus; page?: number; limit?: number },
+  params?: { customerId?: number; projectId?: number; invoiceId?: number; status?: InstallmentStatus; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -942,11 +1079,12 @@ export function useCreateInstallment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      projectId: number;
-      customerId: number;
       name: string;
       dueAmount: number;
       dueDate: string;
+      invoiceId?: number;
+      projectId?: number;
+      customerId?: number;
       calculatedAmount?: number;
       totalAdjustment?: number;
       adjustedTotal?: number | null;
@@ -1000,20 +1138,25 @@ export function useGetInvoice(id: number, enabled = true) {
   });
 }
 
+export type InvoiceFormBody = {
+  customerId: number;
+  dueDate: string;
+  title?: string | null;
+  notes?: string | null;
+  projectId?: number | null;
+  installmentId?: number | null;
+  proposalId?: number | null;
+  lineItems?: ProposalItem[];
+  amount?: number;
+  calculatedAmount?: number;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
+};
+
 export function useCreateInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: {
-      customerId: number;
-      amount: number;
-      dueDate: string;
-      projectId?: number;
-      installmentId?: number;
-      proposalId?: number;
-      calculatedAmount?: number;
-      totalAdjustment?: number;
-      adjustedTotal?: number | null;
-    }) =>
+    mutationFn: (body: InvoiceFormBody) =>
       customFetch<SalesInvoice>(apiUrl("/api/sales/invoices"), {
         method: "POST",
         body: JSON.stringify(body),
@@ -1022,21 +1165,16 @@ export function useCreateInvoice() {
   });
 }
 
+export type InvoiceUpdateBody = Partial<InvoiceFormBody> & {
+  id: number;
+  status?: InvoiceStatus;
+  amount?: number;
+};
+
 export function useUpdateInvoice() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      ...body
-    }: {
-      id: number;
-      amount?: number;
-      calculatedAmount?: number;
-      totalAdjustment?: number;
-      adjustedTotal?: number | null;
-      dueDate?: string;
-      status?: InvoiceStatus;
-    }) =>
+    mutationFn: ({ id, ...body }: InvoiceUpdateBody) =>
       customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),
@@ -1076,7 +1214,7 @@ export function useCreateInvoiceFromProposal() {
 // ─── Payments ─────────────────────────────────────────────────────────────
 
 export function useListPayments(
-  params?: { invoiceId?: number; customerId?: number; search?: string; page?: number; limit?: number },
+  params?: { invoiceId?: number; installmentId?: number; customerId?: number; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -1095,6 +1233,7 @@ export function useRecordPayment() {
   return useMutation({
     mutationFn: (body: {
       invoiceId: number;
+      installmentId?: number;
       amount: number;
       paymentMethod: PaymentMethod;
       transactionId?: string;
@@ -1103,15 +1242,18 @@ export function useRecordPayment() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.invoiceId) });
       qc.invalidateQueries({ queryKey: ["sales-payments"] });
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      qc.invalidateQueries({ queryKey: salesKeys.dashboard() });
     },
   });
 }
 
 export function useGetReceipt(id: number, enabled = true) {
-  return useQuery<{ payment: SalesPayment; invoice: SalesInvoice; customer: Customer }>({
+  return useQuery<{ payment: SalesPayment; invoice: SalesInvoice; customer: Customer | null; installment: Installment | null }>({
     queryKey: salesKeys.payment(id),
     queryFn: () => customFetch(apiUrl(`/api/sales/payments/${id}`)),
     enabled: enabled && !!id,
@@ -1220,6 +1362,7 @@ export interface SalesTeamMember {
   isActiveNow?: boolean;
   revenue: number;
   dealsClosed: number;
+  leadCount: number;
   pendingFollowUps: number;
 }
 
@@ -1290,5 +1433,80 @@ export function useSalesTeamMember(userId: number | null, enabled = true) {
     queryFn: () => customFetch(apiUrl(`/api/sales/team/${userId}`)),
     enabled: enabled && userId != null && userId > 0,
     staleTime: 30_000,
+  });
+}
+
+// ─── BDE Targets ──────────────────────────────────────────────────────────
+
+export interface BdeTarget {
+  id: number;
+  userId: number;
+  month: number;
+  year: number;
+  revenueTarget: number | null;
+  dealsTarget: number | null;
+  leadsTarget: number | null;
+  setBy: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type UpsertBdeTargetBody = {
+  userId: number;
+  month: number;
+  year: number;
+  revenueTarget?: number | null;
+  dealsTarget?: number | null;
+  leadsTarget?: number | null;
+  notes?: string | null;
+};
+
+export function useBdeTargets(userId: number | null, year?: number, enabled = true) {
+  const y = year ?? new Date().getFullYear();
+  return useQuery<{ targets: BdeTarget[] }>({
+    queryKey: salesKeys.bdeTargets(userId, y),
+    queryFn: () => customFetch(apiUrl(`/api/sales/team/${userId}/targets?year=${y}`)),
+    enabled: enabled && userId != null && userId > 0,
+    staleTime: 60_000,
+  });
+}
+
+export function useMyBdeTarget(month?: number, year?: number) {
+  const now = new Date();
+  const m = month ?? now.getMonth() + 1;
+  const y = year ?? now.getFullYear();
+  return useQuery<{ target: BdeTarget | null }>({
+    queryKey: salesKeys.myTarget(m, y),
+    queryFn: () => customFetch(apiUrl(`/api/sales/targets/me?month=${m}&year=${y}`)),
+    staleTime: 60_000,
+  });
+}
+
+export function useAllBdeTargets(month?: number, year?: number, enabled = true) {
+  const now = new Date();
+  const m = month ?? now.getMonth() + 1;
+  const y = year ?? now.getFullYear();
+  return useQuery<{ targets: BdeTarget[]; month: number; year: number }>({
+    queryKey: ["sales-all-bde-targets", m, y],
+    queryFn: () => customFetch(apiUrl(`/api/sales/targets?month=${m}&year=${y}`)),
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
+export function useUpsertBdeTarget() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UpsertBdeTargetBody) =>
+      customFetch<BdeTarget>(apiUrl(`/api/sales/team/${body.userId}/targets`), {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.bdeTargets(vars.userId, vars.year) });
+      qc.invalidateQueries({ queryKey: salesKeys.myTarget(vars.month, vars.year) });
+      qc.invalidateQueries({ queryKey: ["sales-my-target"] });
+    },
   });
 }

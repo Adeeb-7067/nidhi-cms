@@ -56,9 +56,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 function getHomePath(role: string): string {
   if (role === "super_admin") return "/admin";
   if (role === "hr") return "/hrm";
+  if (role === "bde") return "/sales/bde";
   if (isDevPortalRole(role)) return "/dev";
   if (role === "client") return "/client";
-  return "/login";
+  return "/sales";
 }
 
 function prefetchPermissions(queryClient: ReturnType<typeof useQueryClient>) {
@@ -292,13 +293,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       const body = (await res.json().catch(() => ({}))) as {
         error?: string;
+        message?: string;
         accessToken?: string;
         refreshToken?: string;
         user?: User;
       };
 
       if (!res.ok || !body.accessToken || !body.refreshToken || !body.user) {
-        throw new Error(body.error ?? "Failed to start impersonation");
+        throw new Error(body.message ?? body.error ?? "Failed to start impersonation");
       }
 
       setImpersonationMeta({

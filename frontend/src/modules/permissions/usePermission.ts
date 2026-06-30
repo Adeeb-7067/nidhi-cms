@@ -78,8 +78,8 @@ export function usePermissions() {
     user && (user.role === "super_admin" || isHrmAdminRole(user.role)),
   );
 
-  /** Show nav links while permissions load; page gates still enforce access. */
-  const optimisticNav = isLoading && !data && !isPrivileged;
+  /** Show nav links while permissions load or when none are configured; page gates still enforce access. */
+  const optimisticNav = !isPrivileged && !data?.permissions?.length;
 
   const can = useCallback(
     (module: string, action: CmsAction) => {

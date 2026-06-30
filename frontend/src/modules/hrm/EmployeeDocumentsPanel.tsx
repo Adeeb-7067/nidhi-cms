@@ -24,6 +24,8 @@ export function EmployeeDocumentsPanel({
   canUpload = true,
   canDelete = true,
   fetchEnabled = true,
+  documents: documentsProp,
+  documentsLoading,
   className,
 }: {
   userId: number;
@@ -31,9 +33,22 @@ export function EmployeeDocumentsPanel({
   canDelete?: boolean;
   /** When false, skips the documents API until the panel is visible (e.g. inactive tab). */
   fetchEnabled?: boolean;
+  /** Preloaded list from the parent edit dialog (keeps in sync with profile hydration). */
+  documents?: HrmEmployeeDocument[];
+  documentsLoading?: boolean;
   className?: string;
 }) {
-  const { data, isLoading, refetch, isFetching } = useHrmDocuments(userId, { enabled: fetchEnabled });
+  const useInternalFetch = documentsProp == null;
+  const {
+    data,
+    isLoading: queryLoading,
+    isError,
+    error,
+    refetch,
+    isFetching,
+  } = useHrmDocuments(userId, {
+    enabled: fetchEnabled && useInternalFetch && userId > 0,
+  });
   const createDocument = useCreateDocument();
   const deleteDocument = useDeleteDocument();
 
@@ -41,7 +56,8 @@ export function EmployeeDocumentsPanel({
   const [category, setCategory] = useState("id_proof");
   const [fileUrl, setFileUrl] = useState("");
 
-  const documents = data?.documents ?? [];
+  const documents = documentsProp ?? data?.documents ?? [];
+  const loading = documentsLoading ?? (useInternalFetch && queryLoading);
 
   const handleUpload = async () => {
     if (!docName.trim() || !fileUrl) {
@@ -81,12 +97,48 @@ export function EmployeeDocumentsPanel({
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-foreground">Employee documents</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Upload ID proofs, certificates, contracts (PDF or image).
+          Saved files for this employee appear below. Use the form at the bottom to add more.
         </p>
       </div>
 
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Saved documents{documents.length ? ` (${documents.length})` : ""}
+        </p>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : isError ? (
+          <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-4 text-center text-xs text-destructive">
+            Could not load documents{error instanceof Error && error.message ? `: ${error.message}` : "."}
+          </p>
+        ) : documents.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border/60 bg-muted/10 px-3 py-5 text-center text-xs text-muted-foreground">
+            No documents yet. Upload below, or attach Resume / ID proof in the fields above and save the
+            employee — they will appear here too.
+          </p>
+        ) : (
+          documents.map((doc) => (
+            <DocumentRow
+              key={doc.id}
+              doc={doc}
+              canDelete={canDelete && doc.source !== "profile"}
+              deleting={deleteDocument.isPending}
+              onDelete={() => void handleDelete(doc)}
+            />
+          ))
+        )}
+        {isFetching && !loading ? (
+          <p className="text-center text-[10px] text-muted-foreground">Refreshing…</p>
+        ) : null}
+      </div>
+
       {canUpload ? (
-        <div className="space-y-3 rounded-lg border border-border/50 bg-muted/10 p-3 sm:p-4">
+        <div className="mt-5 space-y-3 rounded-lg border border-border/50 bg-muted/10 p-3 sm:p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Add new document
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <HrmField label="Document name">
               <Input
@@ -137,29 +189,6 @@ export function EmployeeDocumentsPanel({
           </Button>
         </div>
       ) : null}
-
-      <div className="mt-4 space-y-2">
-        {isLoading ? (
-          <div className="flex justify-center py-8">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : documents.length === 0 ? (
-          <p className="py-6 text-center text-xs text-muted-foreground">No documents uploaded yet.</p>
-        ) : (
-          documents.map((doc) => (
-            <DocumentRow
-              key={doc.id}
-              doc={doc}
-              canDelete={canDelete && doc.source !== "profile"}
-              deleting={deleteDocument.isPending}
-              onDelete={() => void handleDelete(doc)}
-            />
-          ))
-        )}
-        {isFetching && !isLoading ? (
-          <p className="text-center text-[10px] text-muted-foreground">Refreshing…</p>
-        ) : null}
-      </div>
     </div>
   );
 }
@@ -176,9 +205,7 @@ function DocumentRow({
   onDelete: () => void;
 }) {
   const href = doc.fileUrl ? resolveFileUrl(doc.fileUrl) : "";
-  const dateLabel = doc.createdAt
-    ? format(new Date(doc.createdAt), "d MMM yyyy")
-    : "—";
+  const dateLabel = doc.createdAt ? format(new Date(doc.createdAt), "d MMM yyyy") : "—";
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/50 bg-background px-3 py-2.5">

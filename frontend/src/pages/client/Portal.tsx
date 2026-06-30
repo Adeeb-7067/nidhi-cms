@@ -85,6 +85,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+function LockedSection({ title, description = "Ask your Client Admin to grant you access to this section.", className = "" }: { title: string; description?: string; className?: string }) {
+  return (
+    <div className={`flex items-center gap-3 rounded-xl border border-dashed border-border/60 bg-muted/10 p-5 ${className}`}>
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/40">
+        <Lock className="h-4 w-4 text-muted-foreground/50" />
+      </div>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-muted-foreground">{title}</p>
+        <p className="text-xs text-muted-foreground/60 mt-0.5">{description}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientPortal() {
   const { user } = useAuth();
   const team = useClientTeam();
@@ -308,8 +322,25 @@ export default function ClientPortal() {
     toast.success("Postman JSON copied to clipboard");
   };
 
-  if (isLoading || hubLoading) {
+  if (isLoading || hubLoading || team.isLoading) {
     return <DashboardSkeleton />;
+  }
+
+  if (!team.isClientUser) {
+    return (
+      <PortalPageShell>
+        <PortalPageHero
+          title={`Welcome, ${user?.name?.split(" ")[0] ?? "there"}`}
+          subtitle="Your client workspace"
+          badge="Client Portal"
+        />
+        <PortalEmptyState
+          icon={Users}
+          title="Account not linked"
+          description="Your account isn't linked to a client company yet. Please contact your account manager to activate portal access."
+        />
+      </PortalPageShell>
+    );
   }
 
   if (!projects.length || !project) {
@@ -459,7 +490,9 @@ export default function ClientPortal() {
           </div>
         </div>
       </div>
-      ) : null}
+      ) : (
+        <LockedSection title="Project Overview" className="rounded-2xl" />
+      )}
 
       {canSeeMilestones ? (
       <div className="mt-4">
@@ -472,7 +505,7 @@ export default function ClientPortal() {
       ) : null}
 
       {canSeeReports ? (
-      <motion.section
+        <motion.section
         className="grid grid-cols-1 gap-3 lg:grid-cols-12 items-stretch"
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -569,7 +602,9 @@ export default function ClientPortal() {
           </ChartPanel>
         </ChartGridCell>
       </motion.section>
-      ) : null}
+      ) : (
+        <LockedSection title="Reports & Analytics" />
+      )}
 
       {canSeeProgress ? (
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
@@ -602,7 +637,9 @@ export default function ClientPortal() {
           </p>
         </div>
       </div>
-      ) : null}
+      ) : (
+        <LockedSection title="Project Progress" />
+      )}
 
       <section className="grid gap-4 lg:grid-cols-12" aria-label="Project workspace">
         {/* Row 1: release + milestones | team */}
@@ -660,7 +697,9 @@ export default function ClientPortal() {
                 )}
               </CardContent>
             </Card>
-            ) : null}
+            ) : (
+              <LockedSection title="Latest Release" className="min-h-[180px] flex-1" />
+            )}
 
             {canSeeMilestones ? (
             <Card className="flex flex-col bg-card">
@@ -719,12 +758,16 @@ export default function ClientPortal() {
                 )}
               </CardContent>
             </Card>
-            ) : null}
+            ) : (
+              <LockedSection title="Project Milestones" className="min-h-[180px] flex-1" />
+            )}
         </div>
 
         {canSeeDevelopers ? (
           <ClientProjectTeamCard projectId={project?.id} className="lg:col-span-4 lg:row-start-1" />
-        ) : null}
+        ) : (
+          <LockedSection title="Development Team" className="lg:col-span-4 lg:row-start-1 min-h-[180px]" />
+        )}
 
         {/* Row 2: activity feed | assets + discussion — matched height */}
         {canSeeProgress ? (
@@ -736,7 +779,9 @@ export default function ClientPortal() {
             className="h-full min-h-0 flex-1"
           />
         </div>
-        ) : null}
+        ) : (
+          <LockedSection title="Project Activity" className="lg:col-span-8 lg:row-start-2 h-[120px]" />
+        )}
 
         <div className="flex h-[460px] flex-col gap-4 lg:col-span-4 lg:row-start-2 lg:h-[520px]">
 
@@ -840,7 +885,9 @@ export default function ClientPortal() {
               )}
             </CardContent>
           </Card>
-          ) : null}
+          ) : (
+            <LockedSection title="Assets & Deliverables" description="Ask your Client Admin to grant you access to project resources and links." className="shrink-0" />
+          )}
 
           {canSeeDiscussions ? (
           <Card className="flex min-h-0 flex-1 flex-col bg-card shadow-sm">
@@ -918,7 +965,23 @@ export default function ClientPortal() {
               )}
             </CardContent>
           </Card>
-          ) : null}
+          ) : (
+            <Card className="flex min-h-0 flex-1 flex-col bg-card shadow-sm">
+              <CardHeader className="pb-2 p-4 border-b flex flex-row items-center justify-between space-y-0 shrink-0">
+                <CardTitle className="flex items-center text-sm font-semibold">
+                  <MessageSquare className="mr-2 h-4 w-4 text-emerald-500" />
+                  Project Discussion
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-1 items-center justify-center">
+                <div className="text-center">
+                  <Lock className="mx-auto h-5 w-5 text-muted-foreground/30 mb-2" />
+                  <p className="text-xs font-medium text-muted-foreground">Discussion is restricted</p>
+                  <p className="text-[10px] text-muted-foreground/60 mt-0.5">Ask your Client Admin to grant access.</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
 

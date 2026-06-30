@@ -52,51 +52,10 @@ describe("detectMissingClockOut", () => {
   });
 });
 
-describe("resolveAttendanceStatus — half-day overlay", () => {
+describe("resolveAttendanceStatus — simplified rules", () => {
   const leaveHalf = { id: 9, dayPart: "first_half" };
 
-  test("half-day leave with work logged yields half_day/combined record", () => {
-    const result = resolveAttendanceStatus({
-      date: "2026-06-18",
-      weekendDays,
-      holiday: null,
-      leave: leaveHalf,
-      wfh: null,
-      globalWfhMode: false,
-      activeMinutes: 250,
-      expectedMinutes: 480,
-      threshold: 0,
-      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
-      shift,
-      timezone,
-      missingClockOut: false,
-    });
-    assert.equal(result.partialLeave, true);
-    assert.equal(result.leaveDayPart, "first_half");
-    assert.equal(result.status, "half_day");
-    assert.equal(result.compliance, "met");
-  });
-
-  test("on-time office work yields present", () => {
-    const result = resolveAttendanceStatus({
-      date: "2026-06-18",
-      weekendDays,
-      holiday: null,
-      leave: null,
-      wfh: null,
-      globalWfhMode: false,
-      activeMinutes: 480,
-      expectedMinutes: 480,
-      threshold: 0,
-      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
-      shift,
-      timezone,
-      missingClockOut: false,
-    });
-    assert.equal(result.status, "present");
-  });
-
-  test("late office work yields onsite", () => {
+  test("≥5 min active time yields present", () => {
     const result = resolveAttendanceStatus({
       date: "2026-06-18",
       weekendDays,
@@ -112,10 +71,29 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
       timezone,
       missingClockOut: false,
     });
-    assert.equal(result.status, "onsite");
+    assert.equal(result.status, "present");
   });
 
-  test("half-day leave with no work stays on_leave", () => {
+  test("late clock-in still yields present (no separate late status)", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: false,
+      activeMinutes: 480,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T08:30:00.000Z"),
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+  });
+
+  test("approved leave with no clock stays on_leave", () => {
     const result = resolveAttendanceStatus({
       date: "2026-06-18",
       weekendDays,
@@ -134,7 +112,26 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
     assert.equal(result.partialLeave, true);
   });
 
-  test("full-day leave blocks work status", () => {
+  test("approved leave with clock ≥5 min yields present", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: leaveHalf,
+      wfh: null,
+      globalWfhMode: false,
+      activeMinutes: 250,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+  });
+
+  test("full-day leave blocks work status when no clock", () => {
     const result = resolveAttendanceStatus({
       date: "2026-06-18",
       weekendDays,
@@ -142,7 +139,7 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
       leave: { id: 1, dayPart: "full" },
       wfh: null,
       globalWfhMode: false,
-      activeMinutes: 400,
+      activeMinutes: 0,
       expectedMinutes: 480,
       threshold: 0,
       firstSessionStart: null,
@@ -152,27 +149,7 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
     assert.equal(result.status, "on_leave");
   });
 
-  test("weekday with clock time but no shift uses expected minutes (not weekend)", () => {
-    const result = resolveAttendanceStatus({
-      date: "2026-06-18",
-      weekendDays,
-      holiday: null,
-      leave: null,
-      wfh: null,
-      globalWfhMode: false,
-      activeMinutes: 30,
-      expectedMinutes: 480,
-      threshold: 0,
-      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
-      shift: null,
-      timezone,
-      missingClockOut: false,
-    });
-    assert.equal(result.status, "present");
-    assert.equal(result.compliance, "short");
-  });
-
-  test("under minimum active minutes stays absent", () => {
+  test("under minimum active minutes on weekday is absent", () => {
     const result = resolveAttendanceStatus({
       date: "2026-06-18",
       weekendDays,
@@ -190,9 +167,9 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
     assert.equal(result.status, "absent");
   });
 
-  test("no expected minutes on weekday without work is absent", () => {
+  test("weekend without clock stays weekend", () => {
     const result = resolveAttendanceStatus({
-      date: "2026-06-18",
+      date: "2026-06-14",
       weekendDays,
       holiday: null,
       leave: null,
@@ -205,72 +182,46 @@ describe("resolveAttendanceStatus — half-day overlay", () => {
       shift: null,
       timezone,
     });
-    assert.equal(result.status, "absent");
+    assert.equal(result.status, "weekend");
   });
-});
 
-describe("resolveAttendanceStatus — global WFH (Satyakabir)", () => {
-  test("before clock-in stays absent with globalWfh flag (Scheduled in UI)", () => {
+  test("weekend with ≥5 min clock yields present", () => {
     const result = resolveAttendanceStatus({
-      date: "2026-06-18",
+      date: "2026-06-14",
       weekendDays,
       holiday: null,
       leave: null,
       wfh: null,
-      globalWfhMode: true,
-      activeMinutes: 0,
-      expectedMinutes: 480,
-      threshold: 0,
-      firstSessionStart: null,
-      shift,
-      timezone,
-      missingClockOut: false,
-    });
-    assert.equal(result.status, "absent");
-    assert.equal(result.globalWfh, true);
-    assert.equal(result.compliance, "absent");
-  });
-
-  test("after clock-in marks WFH even when late (no onsite penalty)", () => {
-    const result = resolveAttendanceStatus({
-      date: "2026-06-18",
-      weekendDays,
-      holiday: null,
-      leave: null,
-      wfh: null,
-      globalWfhMode: true,
-      activeMinutes: 480,
-      expectedMinutes: 480,
-      threshold: 0,
-      firstSessionStart: new Date("2026-06-18T05:30:00.000Z"),
-      shift,
-      timezone,
-      missingClockOut: false,
-    });
-    assert.equal(result.status, "wfh");
-    assert.equal(result.globalWfh, true);
-    assert.equal(result.compliance, "met");
-  });
-
-  test("approved individual WFH pre-marks wfh when global mode off", () => {
-    const result = resolveAttendanceStatus({
-      date: "2026-06-18",
-      weekendDays,
-      holiday: null,
-      leave: null,
-      wfh: { id: 42 },
       globalWfhMode: false,
-      activeMinutes: 0,
+      activeMinutes: 11,
+      expectedMinutes: 0,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-14T17:17:00.000Z"),
+      shift: null,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+  });
+
+  test("global WFH with clock ≥5 min yields present", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: true,
+      activeMinutes: 60,
       expectedMinutes: 480,
       threshold: 0,
-      firstSessionStart: null,
+      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
       shift,
       timezone,
       missingClockOut: false,
     });
-    assert.equal(result.status, "wfh");
-    assert.equal(result.wfhRequestId, 42);
-    assert.equal(result.globalWfh, false);
+    assert.equal(result.status, "present");
+    assert.equal(result.globalWfh, true);
   });
 });
 

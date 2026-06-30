@@ -68,3 +68,36 @@ export function minutesInTimezone(date, tz) {
   const minute = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
   return hour * 60 + minute;
 }
+
+/** Build a UTC instant for a local calendar date + HH:mm in an IANA timezone. */
+export function zonedDateTimeToUtc(dateKey, timeHHmm, timezone) {
+  const normalized = normalizeDateKey(dateKey);
+  if (!normalized || !timeHHmm) return null;
+  const [hour, minute] = String(timeHHmm).split(":").map((v) => Number(v));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+
+  const [ty, tm, td] = normalized.split("-").map(Number);
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  let guess = Date.UTC(ty, tm - 1, td, hour, minute, 0, 0);
+  for (let i = 0; i < 4; i++) {
+    const parts = formatter.formatToParts(new Date(guess));
+    const y = Number(parts.find((p) => p.type === "year")?.value);
+    const mo = Number(parts.find((p) => p.type === "month")?.value);
+    const d = Number(parts.find((p) => p.type === "day")?.value);
+    const h = Number(parts.find((p) => p.type === "hour")?.value);
+    const mi = Number(parts.find((p) => p.type === "minute")?.value);
+    const desired = Date.UTC(ty, tm - 1, td, hour, minute, 0, 0);
+    const actual = Date.UTC(y, mo - 1, d, h, mi, 0, 0);
+    guess += desired - actual;
+  }
+  return new Date(guess);
+}

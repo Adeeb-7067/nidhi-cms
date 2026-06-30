@@ -20,7 +20,14 @@ export const PAID_ATTENDANCE_STATUSES = new Set([
 ]);
 
 /** Statuses that count toward “present today” KPIs and charts. */
-export const PRESENT_LIKE_STATUSES = new Set(["present", "onsite", "late", "wfh"]);
+export const PRESENT_LIKE_STATUSES = new Set([
+  "present",
+  "onsite",
+  "late",
+  "wfh",
+  "half_day",
+  "short",
+]);
 
 /** Map legacy persisted statuses to the current primary set for API responses. */
 export function normalizeAttendanceStatus(status) {

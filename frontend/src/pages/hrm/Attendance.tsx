@@ -23,8 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useListUsers, getListUsersQueryKey } from "@/api/generated/api";
-import type { User } from "@/api/generated/api.schemas";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHero,
@@ -35,11 +33,12 @@ import {
   HrmField,
   HrmWorkflowBadge,
   HrmApprovalActions,
+  HrmAttendanceStatusPill,
   portalActionButtonClass,
   HrmInsightBanner,
 } from "@/modules/hrm/components";
 import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
-import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
+import { HrmAttendanceGridPanel, attendanceStatusSuffix } from "@/modules/hrm/hrm-attendance-grid";
 import type { HrmAttendanceCorrection, HrmAttendanceSummary } from "@/modules/hrm/types";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import type { HrmKpiItem } from "@/modules/hrm/components";
@@ -49,12 +48,13 @@ import {
   useHrmAttendanceDaily,
   useHrmAttendanceVariance,
   useHrmDepartments,
+  useHrmEmployees,
   useReviewAttendanceCorrection,
   useExcuseLateArrival,
   useAdminOverrideAttendance,
   useHrmSettings,
 } from "@/api/hrm";
-import { ATTENDANCE_STATUS_LABELS, PRIMARY_ATTENDANCE_STATUSES, isPresentLikeStatus, normalizeAttendanceStatus } from "@/modules/hrm/constants";
+import { ATTENDANCE_STATUS_LABELS, PRIMARY_ATTENDANCE_STATUSES, isPresentLikeStatus, normalizeAttendanceStatus, simpleAttendanceStatusLabel } from "@/modules/hrm/constants";
 import {
   LEGACY_ATTENDANCE_STATUS_OPTIONS,
   LEGACY_CORRECTION_LABELS,
@@ -67,12 +67,6 @@ import { toast } from "sonner";
 type AttendanceRow = HrmAttendanceSummary;
 
 const CLOCKABLE_ROLES = new Set(["manager", "developer", "tester", "qa", "freelancer"]);
-
-function staffUsersFromListResponse(
-  payload: { data?: { users?: User[] }; users?: User[] } | undefined,
-): User[] {
-  return payload?.data?.users ?? payload?.users ?? [];
-}
 
 export default function HrmAttendancePage() {
   const { user } = useAuth();
@@ -127,19 +121,18 @@ export default function HrmAttendancePage() {
         ? Number(employeeId)
         : undefined;
 
-  const staffParams = { staff: "true" as const, limit: 200 };
-  const { data: staffData } = useListUsers(staffParams, {
-    query: {
-      queryKey: getListUsersQueryKey(staffParams),
-      enabled: canAdmin,
-    },
-  });
+  const needEmployeeList = canAdmin || canManage;
+  const { data: hrmEmployeesData } = useHrmEmployees(
+    { status: "active", limit: 500 },
+    { enabled: needEmployeeList },
+  );
   const employeeOptions = useMemo(
     () =>
-      staffUsersFromListResponse(staffData)
-        .filter((u) => u.status === "active" && CLOCKABLE_ROLES.has(u.role))
+      (hrmEmployeesData?.employees ?? [])
+        .filter((e) => CLOCKABLE_ROLES.has(e.role))
+        .map((e) => ({ id: e.id, name: e.name, employeeId: e.employeeId }))
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [staffData],
+    [hrmEmployeesData],
   );
 
   const { data, isLoading } = useHrmAttendanceDaily(
@@ -426,6 +419,13 @@ export default function HrmAttendancePage() {
       cell: (r) => <span className="text-muted-foreground">{r.date}</span>,
     },
     {
+      id: "status",
+      header: "Status",
+      accessorKey: "status",
+      cell: (r) => <HrmAttendanceStatusPill row={r} />,
+      exportValue: (r) => `${simpleAttendanceStatusLabel(r)}${attendanceStatusSuffix(r)}`,
+    },
+    {
       id: "active",
       header: "Active",
       cell: (r) => `${Math.round((r.activeMinutes / 60) * 10) / 10}h`,
@@ -500,9 +500,11 @@ export default function HrmAttendancePage() {
           breadcrumbs={[{ label: "HRM", href: "/hrm" }, { label: "Attendance" }]}
           actions={
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")} onClick={() => setCorrectionOpen(true)}>
-                Request correction
-              </Button>
+              {selfOnly && (
+                <Button size="sm" className={portalActionButtonClass("bg-primary text-primary-foreground hover:bg-primary/90")} onClick={() => setCorrectionOpen(true)}>
+                  Request correction
+                </Button>
+              )}
               {canManage && (
                 <>
                   <Button

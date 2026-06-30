@@ -12,6 +12,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { phoneValidationError, normalizePhoneForSubmit } from "@/lib/phone-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -168,11 +170,16 @@ export function CustomerFormModal({
       toast.error("Company name, contact person, and email are required");
       return;
     }
+    const phoneErr = phoneValidationError(phone);
+    if (phoneErr) {
+      toast.error(phoneErr);
+      return;
+    }
     const payload = {
       companyName: companyName.trim(),
       contactPerson: contactPerson.trim(),
       email: email.trim(),
-      phone: phone.trim() || null,
+      phone: normalizePhoneForSubmit(phone) || null,
       location: location.trim() || null,
       gstin: gstin.trim() || null,
       website: website.trim() || null,
@@ -219,7 +226,7 @@ export function CustomerFormModal({
                   <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@acme.com" required />
                 </SalesField>
                 <SalesField label="Phone">
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+                  <PhoneInput value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </SalesField>
               </div>
             </CustomerFormSection>
@@ -669,13 +676,18 @@ export function ConvertLeadDialog({
       toast.error("Portal email and password (min 8 chars) are required");
       return;
     }
+    const phoneErr = phoneValidationError(phone);
+    if (phoneErr) {
+      toast.error(phoneErr);
+      return;
+    }
     try {
       const result = await convertLead.mutateAsync({
         id: leadId,
         portalEmail: portalEmail.trim(),
         password,
         companyName: companyName.trim() || undefined,
-        phone: phone.trim() || undefined,
+        phone: normalizePhoneForSubmit(phone) || undefined,
         address: address.trim() || undefined,
         website: website.trim() || undefined,
         industry: industry.trim() || undefined,
@@ -714,7 +726,7 @@ export function ConvertLeadDialog({
           </SalesField>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <SalesField label="Phone">
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98765 43210" />
+              <PhoneInput value={phone} onChange={(e) => setPhone(e.target.value)} />
             </SalesField>
             <SalesField label="Industry">
               <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="e.g. Technology" />

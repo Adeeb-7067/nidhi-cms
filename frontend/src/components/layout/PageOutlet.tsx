@@ -45,6 +45,7 @@ const ProfilePage = React.lazy(() => import("@/pages/profile/ProfilePage"));
 const NotificationsPage = React.lazy(() => import("@/pages/Notifications"));
 
 const SalesDashboard = React.lazy(() => import("@/pages/sales/Dashboard"));
+const BdeDashboard = React.lazy(() => import("@/pages/sales/BdeDashboard"));
 const SalesLeads = React.lazy(() => import("@/pages/sales/Leads"));
 const SalesLeadDetail = React.lazy(() => import("@/pages/sales/LeadDetail"));
 const SalesFollowUps = React.lazy(() => import("@/pages/sales/FollowUps"));
@@ -325,6 +326,11 @@ export function PageOutlet() {
       <Route path="/sales/notifications">
         <RoleGate allowedRoles={INTERNAL_STAFF_ROLES}>
           <SalesNotifications />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/bde">
+        <RoleGate allowedRoles={["bde"]}>
+          <BdeDashboard />
         </RoleGate>
       </Route>
       <Route path="/sales">
