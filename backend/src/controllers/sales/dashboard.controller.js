@@ -24,8 +24,10 @@ async function getDashboard(req, res) {
     activeFollowUps,
     totalProposals,
     activeCustomers,
+    leadsBySourceRows,
     invoiceAgg,
     paymentAgg,
+    proposalAgg,
   ] = await Promise.all([
     SalesLeads.countDocuments({}),
     SalesLeads.countDocuments({ createdAt: { $gte: startOfToday } }),
@@ -34,6 +36,11 @@ async function getDashboard(req, res) {
     SalesFollowUps.countDocuments({ status: { $in: ["scheduled", "overdue"] } }),
     SalesProposals.countDocuments({}),
     SalesCustomers.countDocuments({ status: "active" }),
+    SalesLeads.aggregate([
+      { $group: { _id: { $ifNull: ["$source", "other"] }, count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 8 },
+    ]),
     SalesInvoices.aggregate([
       {
         $group: {
@@ -45,15 +52,20 @@ async function getDashboard(req, res) {
       },
     ]),
     SalesPayments.aggregate([{ $group: { _id: null, totalRevenue: { $sum: "$amount" } } }]),
+    SalesProposals.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
   ]);
 
   const invoiceByStatus = {};
+  const proposalByStatus = {};
   let totalBilled = 0;
   let totalOutstanding = 0;
   for (const row of invoiceAgg) {
     invoiceByStatus[row._id] = { count: row.count, amount: row.totalAmount };
     totalBilled += row.totalAmount;
     totalOutstanding += Math.max(0, row.totalAmount - row.totalPaid);
+  }
+  for (const row of proposalAgg) {
+    proposalByStatus[row._id] = row.count;
   }
   const totalRevenue = paymentAgg[0]?.totalRevenue ?? 0;
   const pendingInvoices =
@@ -71,6 +83,11 @@ async function getDashboard(req, res) {
     outstanding: totalOutstanding,
     pendingInvoices,
     invoiceByStatus,
+    proposalByStatus,
+    leadsBySource: leadsBySourceRows.map((row) => ({
+      source: row._id,
+      count: row.count,
+    })),
   });
 }
 

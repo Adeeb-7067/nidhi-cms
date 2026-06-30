@@ -10,6 +10,7 @@ import {
   usersTable,
   getNextSequence,
 } from "../../models/schema/index.js";
+import { SalesPreferences } from "../../models/schema/sales/preferences.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -54,8 +55,14 @@ async function appendLog(proposalId, event, req, extra = {}) {
 
 async function nextProposalNumber() {
   const year = new Date().getFullYear();
-  const seq = await getNextSequence(`prop_num_${year}`);
-  return `PROP-${year}-${String(seq).padStart(4, "0")}`;
+  const prefs = await SalesPreferences.findOneAndUpdate(
+    { id: 1 },
+    { $inc: { proposalNextNumber: 1 } },
+    { upsert: true, new: false, setDefaultsOnInsert: true },
+  ).lean();
+  const prefix = prefs?.proposalPrefix ?? "PROP";
+  const seq = prefs?.proposalNextNumber ?? 1;
+  return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
 }
 
 function parseItems(rawItems) {
@@ -76,13 +83,22 @@ function calcTotal(items, discount, totalAdjustment = 0, adjustedTotal = null) {
 }
 
 async function listProposals(req, res) {
-  const { status, assignedTo, leadId, customerId } = req.query;
+  const { status, assignedTo, leadId, customerId, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (status) filter.status = status;
   if (assignedTo) filter.assignedTo = Number(assignedTo);
   if (leadId) filter.leadId = Number(leadId);
   if (customerId) filter.customerId = Number(customerId);
+  if (search) {
+    const q = String(search).trim();
+    if (q) {
+      filter.$or = [
+        { title: { $regex: q, $options: "i" } },
+        { number: { $regex: q, $options: "i" } },
+      ];
+    }
+  }
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesProposals,
     filter,

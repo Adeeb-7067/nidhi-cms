@@ -8,10 +8,21 @@ import { badRequest, notFound, parseIdParam, parsePagination, optionalString } f
 import { runInTx } from "../../lib/db-tx.js";
 
 async function listPayments(req, res) {
+  const { search } = req.query;
   const { page, limit } = parsePagination(req.query);
   const filter = {};
   if (req.query.invoiceId) filter.invoiceId = Number(req.query.invoiceId);
   if (req.query.customerId) filter.customerId = Number(req.query.customerId);
+  if (search) {
+    const q = String(search).trim();
+    if (q) {
+      filter.$or = [
+        { receiptNumber: { $regex: q, $options: "i" } },
+        { paymentMethod: { $regex: q, $options: "i" } },
+        { transactionId: { $regex: q, $options: "i" } },
+      ];
+    }
+  }
 
   const [payments, total] = await Promise.all([
     SalesPayments.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),

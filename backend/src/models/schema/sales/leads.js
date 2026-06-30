@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-const leadStatuses = ["new", "contacted", "follow_up", "interested", "proposal_sent", "approved", "converted", "lost"];
+const leadStatuses = ["new", "contacted", "follow_up", "interested", "project_planning", "proposal_sent", "approved", "converted", "lost"];
 const leadPriorities = ["low", "medium", "high", "urgent"];
 
 const reminderSchema = new Schema(
@@ -26,6 +26,7 @@ const leadSchema = new Schema(
     description: { type: String, default: null },
     reminder: { type: reminderSchema, default: null },
     tags: { type: [String], default: [] },
+    projectPlanningDoc: { type: String, default: null },
     customerId: { type: Number, ref: "SalesCustomers", default: null },
     clientId: { type: Number, ref: "Clients", default: null },
     proposalId: { type: Number, ref: "SalesProposals", default: null },

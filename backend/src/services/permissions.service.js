@@ -25,6 +25,7 @@ const SALES_BDE_GRANTS = salesModules.flatMap((module) => [
   { module, action: "view" },
   { module, action: "create" },
   { module, action: "edit" },
+  { module, action: "delete" },
 ]);
 
 const DEV_PORTAL_VIEW = [
@@ -59,6 +60,9 @@ const DEFAULT_TEMPLATES = [
       ...HRM_ADMIN_MODULES.flatMap((module) =>
         cmsActions.map((action) => ({ module, action })),
       ),
+      ...salesModules.map((module) => ({ module, action: "view" })),
+      { module: "sales_settings", action: "edit" },
+      { module: "sales_team", action: "view" },
       { module: "admin_team", action: "view" },
       { module: "admin_team", action: "edit" },
       { module: "monitor_attendance", action: "view" },

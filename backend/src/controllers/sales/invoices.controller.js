@@ -20,12 +20,16 @@ async function nextInvoiceNumber() {
 }
 
 async function listInvoices(req, res) {
-  const { status, customerId, projectId } = req.query;
+  const { status, customerId, projectId, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (status) filter.status = status;
   if (customerId) filter.customerId = Number(customerId);
   if (projectId) filter.projectId = Number(projectId);
+  if (search) {
+    const q = String(search).trim();
+    if (q) filter.number = { $regex: q, $options: "i" };
+  }
   // Auto-mark overdue on read
   await SalesInvoices.updateMany(
     { status: "unpaid", dueDate: { $lt: new Date() } },

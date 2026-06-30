@@ -6,6 +6,8 @@ import {
   clientsTable,
   usersTable,
   getNextSequence,
+  leadStatuses,
+  leadPriorities,
 } from "../../models/schema/index.js";
 import { createClientPortalUser } from "../../services/client-portal.js";
 import { paginateModel } from "../../utils/mongo-list.js";
@@ -117,8 +119,21 @@ async function updateLead(req, res) {
   if (body.expectedValue !== undefined) updates.expectedValue = Number(body.expectedValue) || 0;
   if (body.description !== undefined) updates.description = optionalString(body.description) ?? null;
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
+  if (body.projectPlanningDoc !== undefined) updates.projectPlanningDoc = optionalString(body.projectPlanningDoc) ?? null;
+
+  // Auto-advance: when a project planning doc is set and lead is at project_planning stage, move to proposal_sent
+  if (updates.projectPlanningDoc && (existing.status === "project_planning" || updates.status === "project_planning")) {
+    updates.status = "proposal_sent";
+  }
+
   const lead = await SalesLeads.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   if (!lead) notFound("Lead");
+  if (updates.projectPlanningDoc && !existing.projectPlanningDoc) {
+    await logActivity(id, req.user.id, "document_uploaded",
+      "Project Planning document uploaded",
+      { docUrl: updates.projectPlanningDoc }
+    );
+  }
   if (updates.status && updates.status !== existing.status) {
     await logActivity(id, req.user.id, "status_change",
       `Status changed from "${existing.status}" to "${updates.status}"`,
@@ -227,6 +242,8 @@ async function convertLead(req, res) {
 
 async function getLeadActivity(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
+  const lead = await SalesLeads.findOne({ id }).lean();
+  if (!lead) notFound("Lead");
   const { page, limit, skip } = parsePagination(req.query);
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesLeadActivity,
@@ -282,9 +299,65 @@ async function deleteLead(req, res) {
   res.json({ success: true, id });
 }
 
+async function importLeads(req, res) {
+  const rows = req.body?.leads;
+  if (!Array.isArray(rows) || rows.length === 0) badRequest("leads array is required.", "leads");
+  if (rows.length > 500) badRequest("Maximum 500 leads per import.", "leads");
+
+  const created = [];
+  const errors = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i] ?? {};
+    const name = optionalString(row.name);
+    if (!name) {
+      errors.push({ row: i + 1, message: "Name is required." });
+      continue;
+    }
+    const status = optionalString(row.status) ?? "new";
+    const priority = optionalString(row.priority) ?? "medium";
+    if (!leadStatuses.includes(status)) {
+      errors.push({ row: i + 1, message: `Invalid status "${status}".` });
+      continue;
+    }
+    if (!leadPriorities.includes(priority)) {
+      errors.push({ row: i + 1, message: `Invalid priority "${priority}".` });
+      continue;
+    }
+    try {
+      const id = await getNextSequence("sales_leads");
+      const lead = await SalesLeads.create({
+        id,
+        name,
+        email: optionalString(row.email)?.toLowerCase() ?? null,
+        phone: optionalString(row.phone) ?? null,
+        company: optionalString(row.company) ?? null,
+        address: optionalString(row.address) ?? null,
+        position: optionalString(row.position) ?? null,
+        source: optionalString(row.source) ?? null,
+        contactChannel: optionalString(row.contactChannel ?? row.channel) ?? null,
+        status,
+        priority,
+        assignedTo: row.assignedTo ? Number(row.assignedTo) : null,
+        expectedValue: Number(row.expectedValue) || 0,
+        description: optionalString(row.description) ?? null,
+        tags: Array.isArray(row.tags) ? row.tags.filter((t) => typeof t === "string") : [],
+        createdBy: req.user.id,
+      });
+      await logActivity(id, req.user.id, "created", `Lead imported by ${req.user.name}`);
+      created.push(lead.toObject());
+    } catch (err) {
+      errors.push({ row: i + 1, message: err.message ?? "Failed to create lead." });
+    }
+  }
+
+  res.status(201).json({ created: created.length, errors, leads: created });
+}
+
 export {
   listLeads,
   createLead,
+  importLeads,
   getLeadById,
   updateLead,
   bulkUpdateLeads,

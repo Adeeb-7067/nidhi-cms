@@ -1,4 +1,5 @@
 export * from "./config.js";
+export * from "./preferences.js";
 export * from "./leads.js";
 export * from "./lead-activity.js";
 export * from "./followups.js";
