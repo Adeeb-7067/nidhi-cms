@@ -15,6 +15,9 @@ import {
   Clock,
   LayoutGrid,
   List,
+  TrendingUp,
+  AlertTriangle,
+  BadgeIndianRupee,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -351,6 +354,85 @@ export function PayPeriodSummary({
           </div>
         </div>
       ) : null}
+    </Card>
+  );
+}
+
+export function OrgPayrollKpis({
+  totalActive,
+  structureRows,
+  loading,
+  className,
+}: {
+  totalActive: number;
+  structureRows: Array<{ gross: number; net: number }>;
+  loading?: boolean;
+  className?: string;
+}) {
+  const configured = structureRows.length;
+  const notConfigured = Math.max(0, totalActive - configured);
+  const monthlyCommitment = structureRows.reduce((s, r) => s + (r.gross ?? 0), 0);
+  const avgSalary = configured > 0 ? monthlyCommitment / configured : 0;
+
+  const items = [
+    {
+      label: "Active employees",
+      value: loading ? "—" : String(totalActive),
+      hint: "Org headcount",
+      icon: Users,
+      gradient: "from-blue-500 to-indigo-600",
+      iconBg: "bg-white/20",
+    },
+    {
+      label: "Monthly commitment",
+      value: loading ? "—" : inrMoney(monthlyCommitment),
+      hint: `${configured} employee${configured === 1 ? "" : "s"} salary configured`,
+      icon: BadgeIndianRupee,
+      gradient: "from-violet-500 to-purple-700",
+      iconBg: "bg-white/20",
+    },
+    {
+      label: "Avg salary",
+      value: loading ? "—" : avgSalary > 0 ? inrMoney(avgSalary) : "—",
+      hint: "Per employee / month",
+      icon: TrendingUp,
+      gradient: "from-emerald-500 to-teal-600",
+      iconBg: "bg-white/20",
+    },
+    {
+      label: "Not configured",
+      value: loading ? "—" : String(notConfigured),
+      hint: notConfigured > 0 ? "Salary not set — action needed" : "All employees configured",
+      icon: AlertTriangle,
+      gradient: notConfigured > 0 ? "from-amber-500 to-orange-600" : "from-green-500 to-emerald-600",
+      iconBg: "bg-white/20",
+    },
+  ];
+
+  return (
+    <Card className={cn("border-border/60 p-4 shadow-sm", className)}>
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Organisation payroll overview
+      </p>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className={cn(
+              "relative overflow-hidden rounded-xl bg-gradient-to-br px-4 py-4 shadow-sm",
+              item.gradient,
+            )}
+          >
+            <item.icon className="absolute -right-3 -top-3 size-20 text-white opacity-10" />
+            <div className={cn("mb-3 inline-flex size-8 items-center justify-center rounded-lg", item.iconBg)}>
+              <item.icon className="size-4 text-white" />
+            </div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-white/70">{item.label}</p>
+            <p className="mt-0.5 text-xl font-bold tabular-nums text-white">{item.value}</p>
+            <p className="mt-1 text-[10px] text-white/60">{item.hint}</p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }

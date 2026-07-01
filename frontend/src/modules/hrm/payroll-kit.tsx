@@ -274,10 +274,22 @@ export function PayrollReadinessBanner({
       )}
     >
       <p className="text-sm font-semibold text-foreground">Resolve before running payroll</p>
-      <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
-        {checklist.blockers.map((blocker) => (
-          <li key={blocker.code}>• {formatBlockerSummary(blocker.code, blocker.count)}</li>
-        ))}
+      <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+        {checklist.blockers.map((blocker) => {
+          const names = blocker.items
+            ?.map((i) => (i as { name?: string }).name)
+            .filter(Boolean) as string[] | undefined;
+          return (
+            <li key={blocker.code}>
+              <span>• {formatBlockerSummary(blocker.code, blocker.count)}</span>
+              {names && names.length > 0 && (
+                <span className="block ml-3 mt-0.5 text-xs text-muted-foreground/70">
+                  {names.join(", ")}
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
       <div className="mt-4 flex flex-wrap gap-2">
         <Button asChild variant="outline" size="sm" className={payrollOutlineButtonClass}>

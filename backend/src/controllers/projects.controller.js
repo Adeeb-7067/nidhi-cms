@@ -53,7 +53,7 @@ async function getProjects(req, res) {
   }
   if (clientId) query.clientId = parseInt(clientId);
   if (search) query.name = { $regex: search, $options: "i" };
-  if (isDevPortalStaffRole(req.user.role)) {
+  if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
     const memberRows = await projectMembersTable.find({ userId: req.user.id });
     const projectIds = memberRows.map((m) => m.projectId);
     if (!projectIds.length) {

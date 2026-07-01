@@ -46,12 +46,16 @@ export function encryptHrm(plaintext) {
   return { ciphertext: encrypted, iv, authTag };
 }
 
-/** Returns null when any part is missing — handles partially-populated legacy rows. */
+/** Returns null when any part is missing or decryption fails (key mismatch / corrupted data). */
 export function decryptHrm(parts) {
   if (!parts) return null;
   const { ciphertext, iv, authTag } = parts;
   if (!ciphertext || !iv || !authTag) return null;
-  return decryptSecret(ciphertext, iv, authTag);
+  try {
+    return decryptSecret(ciphertext, iv, authTag);
+  } catch {
+    return null;
+  }
 }
 
 /**

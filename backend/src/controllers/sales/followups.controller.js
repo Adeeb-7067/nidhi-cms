@@ -25,10 +25,12 @@ async function listFollowUps(req, res) {
   if (req.user.role === "bde") {
     filter.executiveId = req.user.id;
   }
-  // Auto-mark overdue on read — bulk op is fast and keeps status accurate
-  const now = new Date();
+  // Auto-mark overdue on read — compare against start of today so date-only
+  // follow-ups aren't immediately overdue the moment they're created.
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   await SalesFollowUps.updateMany(
-    { status: "scheduled", scheduledAt: { $lt: now } },
+    { status: "scheduled", scheduledAt: { $lt: startOfToday } },
     { $set: { status: "overdue" } }
   );
   const { items, total, page: pg, limit: lim } = await paginateModel(

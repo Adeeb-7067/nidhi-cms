@@ -8,6 +8,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/admin/employees", "admin_team"],
   ["/admin/roles", "roles_permissions"],
   ["/dev/tasks/", "dev_tasks"],
+  ["/dev/projects/", "dev_projects"],
   ["/dev/projects", "dev_projects"],
   ["/dev/logs", "dev_logs"],
   ["/dev/bugs", "dev_bugs"],

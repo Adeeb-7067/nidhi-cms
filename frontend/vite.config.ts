@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api": apiProxy,
+        "/uploads": apiProxy,
         "/socket.io": socketProxy,
       },
     },
@@ -100,6 +101,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: true,
       proxy: {
         "/api": apiProxy,
+        "/uploads": apiProxy,
         "/socket.io": { ...socketProxy, configure: undefined },
       },
     },

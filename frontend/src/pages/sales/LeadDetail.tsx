@@ -729,30 +729,29 @@ export default function LeadDetail() {
               {/* Reminder */}
               <button
                 type="button"
-                className="w-full text-left rounded-2xl transition-colors hover:opacity-90"
+                className="w-full text-left rounded-2xl transition-colors hover:bg-muted/30"
                 style={{ background: "#fff", border: `1px solid ${P.border}` }}
                 onClick={() => setReminderOpen(true)}
               >
-                <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <Bell className="h-4 w-4" style={{ color: P.orange }} />
-                  <h3 className="text-sm font-bold" style={{ color: P.dark }}>Reminder</h3>
-                  <span className="ml-auto text-xs" style={{ color: P.blue }}>
-                    {lead.reminder ? "Manage" : "Set"}
+                <div className="flex items-center gap-2 px-5 py-3" style={{ borderBottom: `1px solid ${P.border}` }}>
+                  <Bell className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="text-sm font-semibold" style={{ color: P.dark }}>Reminder</h3>
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {lead.reminder ? "Edit" : "Set"}
                   </span>
                 </div>
-                <div className="p-5">
+                <div className="px-5 py-3">
                   {lead.reminder ? (
-                    <div className="rounded-xl p-3" style={{ background: "#FFFBEB", border: "1px solid #FDE68A" }}>
-                      <p className="text-xs font-bold mb-1 flex items-center gap-1" style={{ color: "#92400E" }}>
-                        <Clock className="h-3 w-3" />
-                        {format(new Date(lead.reminder.date), "dd MMM yyyy")}
+                    <div className="text-sm">
+                      <p className="font-medium" style={{ color: P.dark }}>
+                        {format(new Date(lead.reminder.date), "dd MMM yyyy · h:mm a")}
                       </p>
-                      {lead.reminder.note && (
-                        <p className="text-xs line-clamp-2" style={{ color: "#78350F" }}>{lead.reminder.note}</p>
-                      )}
+                      {lead.reminder.note ? (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{lead.reminder.note}</p>
+                      ) : null}
                     </div>
                   ) : (
-                    <p className="text-sm" style={{ color: P.subtle }}>No reminder set — click to add one.</p>
+                    <p className="text-sm text-muted-foreground">No reminder set.</p>
                   )}
                 </div>
               </button>

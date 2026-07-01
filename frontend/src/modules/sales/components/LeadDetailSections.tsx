@@ -237,7 +237,7 @@ export function LeadDetailMetrics({ lead }: { lead: Lead }) {
         label="Next reminder"
         value={
           lead.reminder?.date
-            ? format(new Date(lead.reminder.date), "MMM d, yyyy")
+            ? format(new Date(lead.reminder.date), "MMM d, yyyy · h:mm a")
             : "Not set"
         }
         sub={lead.reminder?.note}
@@ -380,16 +380,18 @@ export function LeadReminderChip({
     <button
       type="button"
       onClick={onManage}
-      className="flex w-full items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-left transition-colors hover:bg-amber-500/10"
+      className="flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted/50"
     >
-      <Bell className="size-4 shrink-0 text-amber-600" />
+      <Bell className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0">
-        <p className="text-[10px] uppercase text-muted-foreground">Reminder</p>
-        <p className="text-sm font-medium truncate">
+        <p className="font-medium truncate">
           {reminder?.date
-            ? format(new Date(reminder.date), "MMM d, yyyy")
-            : "Set a reminder"}
+            ? format(new Date(reminder.date), "MMM d, yyyy · h:mm a")
+            : "Set reminder"}
         </p>
+        {reminder?.note ? (
+          <p className="text-xs text-muted-foreground truncate">{reminder.note}</p>
+        ) : null}
       </div>
     </button>
   );

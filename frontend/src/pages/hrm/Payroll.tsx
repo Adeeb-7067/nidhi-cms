@@ -53,6 +53,7 @@ import {
   PayPeriodSummary,
   PayrollFilterBar,
   HrmPayrollExplorer,
+  OrgPayrollKpis,
   payrollStatusPill,
   currentPayrollPeriod,
   deriveRunStatusFromPayrollRun,
@@ -119,7 +120,8 @@ export default function HrmPayrollPage() {
     isFetching: checklistFetching,
     refetch: refetchChecklist,
   } = useHrmPayrollChecklistByPeriod(period.year, period.month);
-  const { data: structures } = useHrmSalaryStructures({ enabled: structuresOpen });
+  const { data: structures, isError: structuresError } = useHrmSalaryStructures();
+  const { data: orgHeadcount, isLoading: orgHeadcountLoading } = useHrmEmployees({ status: "active", limit: 1 });
   const { data: employeesData } = useHrmEmployees(
     { status: "active", limit: 500 },
     { enabled: structuresOpen },
@@ -312,8 +314,12 @@ export default function HrmPayrollPage() {
   const handleSaveStructure = () => {
     const userId = Number(structEmployeeKey);
     const basic = Number(structBasic);
-    if (!Number.isFinite(userId) || userId < 1 || !Number.isFinite(basic) || basic <= 0) {
-      toast.error("Select an employee and enter a valid basic salary");
+    if (!Number.isFinite(userId) || userId < 1) {
+      toast.error("Select an employee first");
+      return;
+    }
+    if (!Number.isFinite(basic) || basic <= 0) {
+      toast.error("Enter a valid basic salary (must be greater than 0)");
       return;
     }
     upsertStructure.mutate(
@@ -345,6 +351,12 @@ export default function HrmPayrollPage() {
   return (
     <HrmGate module="payroll">
       <HrmPageShell className="space-y-4">
+        <OrgPayrollKpis
+          totalActive={orgHeadcount?.total ?? 0}
+          structureRows={structureRows}
+          loading={orgHeadcountLoading}
+        />
+
         <PayPeriodNavigator
           period={period}
           onChange={(next) => {
@@ -388,14 +400,14 @@ export default function HrmPayrollPage() {
                   size="sm"
                   className="h-8 gap-1.5"
                   onClick={handleRunPayroll}
-                  disabled={generate.isPending || payrollBlocked}
+                  disabled={!canRunPayroll}
                 >
                   {generate.isPending ? (
                     <Loader2 className="size-3.5 animate-spin" />
                   ) : (
                     <Play className="size-3.5" />
                   )}
-                  Run payroll
+                  {isDraft ? "Re-run payroll" : "Run payroll"}
                 </Button>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={handleRefresh} disabled={isRefreshing}>
                   <RefreshCw className={isRefreshing ? "size-3.5 animate-spin" : "size-3.5"} />
@@ -514,6 +526,16 @@ export default function HrmPayrollPage() {
                 ),
               },
               {
+                key: "totalSalary",
+                header: "Total salary",
+                className: "text-right",
+                render: (r) => (
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {r.totalSalary != null ? inrMoney(r.totalSalary) : "—"}
+                  </span>
+                ),
+              },
+              {
                 key: "gross",
                 header: "Earned",
                 className: "text-right",
@@ -578,8 +600,14 @@ export default function HrmPayrollPage() {
                     value={`${r.paidDays} paid · ${r.lopDays} LOP · ${r.lateCount} late`}
                   />
                   <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
+                    {r.totalSalary != null && r.totalSalary > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Total salary</span>
+                        <span className="tabular-nums text-muted-foreground">{inrMoney(r.totalSalary)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Gross salary</span>
+                      <span className="text-muted-foreground">Earned ({r.paidDays}d)</span>
                       <span className="font-medium tabular-nums">{inrMoney(r.gross)}</span>
                     </div>
                     {(r.pfEmployee ?? 0) > 0 && (
@@ -677,6 +705,11 @@ export default function HrmPayrollPage() {
               <DialogTitle>{LEGACY_PAYROLL_LABELS.structuresTitle}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
+              {structuresError && (
+                <p className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  Could not load salary structures. Please try closing and reopening this dialog.
+                </p>
+              )}
               <div className="grid gap-3 rounded-xl border border-border p-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <label className="text-xs font-medium text-muted-foreground">{LEGACY_PAYROLL_LABELS.employee}</label>

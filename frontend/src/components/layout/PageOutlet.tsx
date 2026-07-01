@@ -558,6 +558,11 @@ export function PageOutlet() {
           <DevWorkspace />
         </RoleGate>
       </Route>
+      <Route path="/dev/projects/:id">
+        <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
+          <AdminProjectDetail />
+        </RoleGate>
+      </Route>
       <Route path="/dev/projects">
         <RoleGate allowedRoles={[...DEV_PORTAL_STAFF_ROLES, "super_admin"]}>
           <DevProjects />

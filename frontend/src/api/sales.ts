@@ -701,6 +701,16 @@ export function useSetLeadReminder() {
   });
 }
 
+export function useGetDueReminders(enabled = true) {
+  return useQuery<{ leads: Array<{ id: number; name: string; reminder: { date: string; note: string } }> }>({
+    queryKey: ["sales-due-reminders"],
+    queryFn: () => customFetch(apiUrl("/api/sales/leads/due-reminders")),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
 // ─── Follow-ups ───────────────────────────────────────────────────────────
 
 export function useListFollowUps(

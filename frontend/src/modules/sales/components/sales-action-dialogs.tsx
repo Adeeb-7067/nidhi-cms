@@ -471,33 +471,29 @@ export function FollowUpDialog({
   leadId: number;
 }) {
   const createFollowUp = useCreateFollowUp();
-  const { staff } = useSalesStaff();
   const [type, setType] = useState<FollowUpType>("call");
   const [scheduledAt, setScheduledAt] = useState("");
   const [notes, setNotes] = useState("");
-  const [executiveId, setExecutiveId] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setType("call");
     setScheduledAt("");
     setNotes("");
-    setExecutiveId("");
   }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!scheduledAt) {
-      toast.error("Scheduled date/time is required");
+      toast.error("Scheduled date is required");
       return;
     }
     try {
       await createFollowUp.mutateAsync({
         leadId,
         type,
-        scheduledAt: new Date(scheduledAt).toISOString(),
+        scheduledAt,
         notes: notes.trim() || undefined,
-        executiveId: executiveId ? Number(executiveId) : undefined,
       });
       toast.success("Follow-up scheduled");
       onOpenChange(false);
@@ -510,16 +506,15 @@ export function FollowUpDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px] bg-card border-border">
+      <DialogContent className="sm:max-w-[380px] bg-card border-border">
         <DialogHeader>
           <DialogTitle>Schedule follow-up</DialogTitle>
-          <DialogDescription>Set a callback, email, meeting, or demo for this lead.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit} className="space-y-3 pt-1">
           <div className="grid grid-cols-2 gap-3">
             <SalesField label="Type">
               <Select value={type} onValueChange={(v) => setType(v as FollowUpType)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {FOLLOW_UP_TYPE_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
@@ -527,31 +522,18 @@ export function FollowUpDialog({
                 </SelectContent>
               </Select>
             </SalesField>
-            <SalesField label="Scheduled at">
-              <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} required />
+            <SalesField label="Date">
+              <Input type="date" className="h-9" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} required />
             </SalesField>
           </div>
-          {staff.length > 0 && (
-            <SalesField label="Executive">
-              <Select value={executiveId || "none"} onValueChange={(v) => setExecutiveId(v === "none" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Unassigned</SelectItem>
-                  {staff.map((s: User) => (
-                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </SalesField>
-          )}
-          <SalesField label="Notes">
-            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Talking points or context…" />
+          <SalesField label="Notes (optional)">
+            <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Brief note…" />
           </SalesField>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={createFollowUp.isPending}>
               {createFollowUp.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Schedule
+              Save
             </Button>
           </DialogFooter>
         </form>
@@ -576,23 +558,23 @@ export function LeadReminderDialog({
   initialNote?: string;
 }) {
   const setReminder = useSetLeadReminder();
-  const [date, setDate] = useState(initialDate?.slice(0, 10) ?? "");
+  const [date, setDate] = useState(initialDate?.slice(0, 16) ?? "");
   const [note, setNote] = useState(initialNote ?? "");
 
   useEffect(() => {
     if (!open) return;
-    setDate(initialDate?.slice(0, 10) ?? "");
+    setDate(initialDate?.slice(0, 16) ?? "");
     setNote(initialNote ?? "");
   }, [open, initialDate, initialNote]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!date) {
-      toast.error("Reminder date is required");
+      toast.error("Reminder date & time is required");
       return;
     }
     try {
-      await setReminder.mutateAsync({ id: leadId, date, note: note.trim() || undefined });
+      await setReminder.mutateAsync({ id: leadId, date: new Date(date).toISOString(), note: note.trim() || undefined });
       toast.success("Reminder saved");
       onOpenChange(false);
     } catch (err) {
@@ -602,23 +584,22 @@ export function LeadReminderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[380px] bg-card border-border">
+      <DialogContent className="sm:max-w-[340px] bg-card border-border">
         <DialogHeader>
           <DialogTitle>{initialDate ? "Edit reminder" : "Set reminder"}</DialogTitle>
-          <DialogDescription>You'll get a notification on this date to follow up.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <SalesField label="Date">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
+        <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+          <SalesField label="When">
+            <Input type="datetime-local" className="h-9" value={date} onChange={(e) => setDate(e.target.value)} required />
           </SalesField>
-          <SalesField label="Note">
+          <SalesField label="Note (optional)">
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="What to follow up on…" />
           </SalesField>
-          <DialogFooter>
+          <DialogFooter className="gap-2 sm:justify-end">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={setReminder.isPending}>
               {setReminder.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Save reminder
+              Save
             </Button>
           </DialogFooter>
         </form>

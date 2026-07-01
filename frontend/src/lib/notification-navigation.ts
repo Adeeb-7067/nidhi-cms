@@ -1,6 +1,7 @@
 import type { Notification } from "@/api";
 import type { UserRole } from "@/lib/navigation";
 import { getDiscussionsHref } from "@/lib/discussions-navigation";
+import { getProjectDetailHref } from "@/lib/project-routes";
 import { getLocationSearch, clearLocationParam } from "@/lib/electron-bridge";
 
 export type NotificationNavTarget = {
@@ -105,7 +106,7 @@ export function getNotificationTarget(
     if (role === "client") {
       return { href: "/client", label: "Client portal" };
     }
-    return { href: `/admin/projects/${entityId}`, label: "Open project" };
+    return { href: getProjectDetailHref(entityId, role), label: "Open project" };
   }
 
   if (

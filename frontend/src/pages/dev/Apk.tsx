@@ -43,6 +43,18 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { FileUploader } from "@/components/ui/file-uploader";
 
+function isStoredFileUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  if (trimmed.startsWith("/uploads/")) return true;
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 const apkReleaseSchema = z.object({
   name: z.string().min(1, "APK name is required"),
   version: z.string().min(1, "Version is required"),
@@ -54,7 +66,10 @@ const apkReleaseSchema = z.object({
   platform: z.enum(["android", "ios"]),
   audience: z.enum(["team_only", "client_visible", "all_visible"]),
   changelog: z.string().optional(),
-  fileUrl: z.string().url("Must be a valid URL"),
+  fileUrl: z
+    .string()
+    .min(1, "APK file is required")
+    .refine(isStoredFileUrl, "Upload a valid APK/IPA file"),
   minOsVersion: z.string().optional(),
 });
 
@@ -360,6 +375,9 @@ export default function DevApk() {
                           category="apk"
                           onUploadComplete={(url, meta) => {
                             field.onChange(url);
+                            if (url) {
+                              void form.trigger("fileUrl");
+                            }
                             if (meta?.fileName && !form.getValues("name")?.trim()) {
                               const suggested = meta.fileName
                                 .replace(/\.(apk|ipa|aab|zip|app)$/i, "")

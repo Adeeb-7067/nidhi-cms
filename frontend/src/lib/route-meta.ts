@@ -301,6 +301,14 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
 export function getRouteMeta(pathname: string): RouteMeta {
   if (STATIC_ROUTES[pathname]) return STATIC_ROUTES[pathname];
 
+  if (/^\/dev\/projects\/\d+/.test(pathname)) {
+    return {
+      title: "Project",
+      description: "Project overview, resources, and delivery.",
+      hideHeader: true,
+    };
+  }
+
   if (/^\/admin\/projects\/\d+/.test(pathname)) {
     return {
       title: "Project",

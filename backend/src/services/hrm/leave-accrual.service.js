@@ -510,6 +510,32 @@ export function _resetAccrualTickStateForTests() {
   accrualTickInFlight = false;
 }
 
+/**
+ * Backfill accrual for the current month for all active employees.
+ * Safe to call on startup — each employee's accrual is idempotent (deduped by
+ * lastLeaveAccrualPeriod + withJobLock). Only credits periods that were missed.
+ */
+export async function backfillCurrentMonthAccrual() {
+  try {
+    const settings = await getOrCreateSettings();
+    const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+    const periodKey = currentAccrualPeriodKey(new Date(), tz);
+    const accrualType = await findAccrualLeaveType();
+    if (!accrualType) return;
+
+    const staff = await usersTable
+      .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1 })
+      .lean();
+
+    for (const user of staff) {
+      await ensureUserLeaveAccrualForPeriod(user.id, { periodKey });
+    }
+    logger.info({ periodKey }, "Leave accrual startup backfill complete");
+  } catch (err) {
+    logger.error({ err }, "Leave accrual startup backfill failed");
+  }
+}
+
 export function startLeaveAccrualJob() {
   const tick = async () => {
     if (accrualTickInFlight) return;
@@ -524,7 +550,7 @@ export function startLeaveAccrualJob() {
     }
   };
 
-  void getOrCreateSettings().then((settings) => {
+  void getOrCreateSettings().then(async (settings) => {
     const tz = resolveWorkDayTimezone(settings.complianceTimezone);
     logger.info(
       {
@@ -535,6 +561,8 @@ export function startLeaveAccrualJob() {
       },
       "Leave accrual / carry-forward job scheduled (1st of month)",
     );
+    // Backfill any missed accrual for the current month on startup.
+    await backfillCurrentMonthAccrual();
   });
 
   setInterval(() => {

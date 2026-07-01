@@ -1,26 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { motion } from "framer-motion";
 import { formatDistanceToNow } from "date-fns";
-import {
-  Bell,
-  UserPlus,
-  FileCheck,
-  Clock,
-  CreditCard,
-  AlertCircle,
-  CheckCheck,
-  Receipt,
-  CalendarClock,
-  Loader2,
-} from "lucide-react";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { cn } from "@/lib/utils";
-import type { SalesNotificationType } from "@/modules/sales/types";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -31,28 +16,6 @@ import {
   type SalesAlertNotification,
 } from "@/api/sales";
 
-const typeIcons: Record<SalesNotificationType, typeof Bell> = {
-  lead_assigned: UserPlus,
-  proposal_approved: FileCheck,
-  follow_up_reminder: Clock,
-  payment_received: CreditCard,
-  overdue_payment: AlertCircle,
-  receipt_generated: Receipt,
-  installment_due: CalendarClock,
-  outstanding_reminder: AlertCircle,
-};
-
-const priorityStyles = {
-  low: "bg-slate-500/10 text-slate-600 border-slate-500/25",
-  medium: "bg-amber-500/10 text-amber-700 border-amber-500/25",
-  high: "bg-red-500/10 text-red-600 border-red-500/25",
-};
-
-function normalizeType(type: string): SalesNotificationType {
-  const key = type.replace(/^sales_/, "") as SalesNotificationType;
-  return typeIcons[key] ? key : "outstanding_reminder";
-}
-
 function NotificationRow({
   n,
   onMarkRead,
@@ -62,65 +25,45 @@ function NotificationRow({
   onMarkRead: (id: number) => void;
   marking: boolean;
 }) {
-  const displayType = normalizeType(n.type);
-  const Icon = typeIcons[displayType] ?? Bell;
-  const inner = (
-    <Card
+  const row = (
+    <div
       className={cn(
-        "transition-colors",
-        !n.isRead && "border-primary/20 bg-primary/[0.02]",
-        n.href && "hover:border-primary/30 cursor-pointer",
+        "flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+        !n.isRead && "border-primary/25 bg-primary/[0.03]",
+        n.href && "hover:bg-muted/40 cursor-pointer",
       )}
     >
-      <CardContent className="p-4 flex gap-3">
-        <div
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-            n.isRead ? "bg-muted" : "bg-primary/10 text-primary",
-          )}
-        >
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <p className={cn("text-sm", !n.isRead && "font-semibold")}>{n.title}</p>
-            <span
-              className={cn(
-                "inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize shrink-0",
-                priorityStyles[n.priority],
-              )}
-            >
-              {n.priority}
-            </span>
-          </div>
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-sm", !n.isRead && "font-medium")}>{n.title}</p>
+        {n.body ? (
           <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{n.body}</p>
-          <p className="text-[10px] text-muted-foreground/80 mt-1.5">
-            {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
-          </p>
-        </div>
-        {!n.isRead && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs shrink-0 self-center"
-            disabled={marking}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onMarkRead(n.id);
-            }}
-          >
-            Mark read
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+        ) : null}
+        <p className="text-[10px] text-muted-foreground mt-1">
+          {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+        </p>
+      </div>
+      {!n.isRead && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 text-xs"
+          disabled={marking}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onMarkRead(n.id);
+          }}
+        >
+          Read
+        </Button>
+      )}
+    </div>
   );
 
   if (n.href) {
-    return <Link href={n.href}>{inner}</Link>;
+    return <Link href={n.href}>{row}</Link>;
   }
-  return inner;
+  return row;
 }
 
 export default function SalesNotifications() {
@@ -134,12 +77,8 @@ export default function SalesNotifications() {
 
   const notifications = data?.notifications ?? [];
 
-  const stats = useMemo(
-    () => ({
-      total: data?.total ?? notifications.length,
-      unread: data?.unreadCount ?? notifications.filter((n) => !n.isRead).length,
-      read: (data?.total ?? notifications.length) - (data?.unreadCount ?? 0),
-    }),
+  const unreadCount = useMemo(
+    () => data?.unreadCount ?? notifications.filter((n) => !n.isRead).length,
     [data, notifications],
   );
 
@@ -163,14 +102,14 @@ export default function SalesNotifications() {
   return (
     <PortalPageShell>
       <SalesPageHeader
-        title="Notifications"
-        description="Sales alerts, reminders, and payment updates."
+        title="Reminders & alerts"
+        description="Follow-up reminders, payments, and sales updates."
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Notifications" },
         ]}
         actions={
-          stats.unread > 0 ? (
+          unreadCount > 0 ? (
             <Button
               variant="outline"
               size="sm"
@@ -189,28 +128,29 @@ export default function SalesNotifications() {
         }
       />
 
-      <PortalKpiGrid
-        columns={3}
-        count={3}
-        items={[
-          { title: "Total", value: stats.total, icon: Bell, accent: "violet", delay: 0 },
-          { title: "Unread", value: stats.unread, icon: AlertCircle, accent: "red", alert: stats.unread > 0, delay: 1 },
-          { title: "Read", value: stats.read, icon: CheckCheck, accent: "green", delay: 2 },
-        ]}
-      />
-
-      <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "unread")}>
-        <TabsList className="h-8">
-          <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-          <TabsTrigger value="unread" className="text-xs">
-            Unread {stats.unread > 0 && `(${stats.unread})`}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <div className="flex gap-1.5">
+        {(["all", "unread"] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            onClick={() => setFilter(tab)}
+            className={cn(
+              "rounded-md border px-2.5 py-1 text-xs font-medium transition-colors",
+              filter === tab
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:bg-muted/50",
+            )}
+          >
+            {tab === "all" ? "All" : `Unread${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+          </button>
+        ))}
+      </div>
 
       {isLoading ? (
         <div className="space-y-2">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full rounded-lg" />
+          ))}
         </div>
       ) : isError ? (
         <SalesEmptyState
@@ -226,25 +166,19 @@ export default function SalesNotifications() {
           title={filter === "unread" ? "All caught up" : "No notifications"}
           description={
             filter === "unread"
-              ? "You have no unread sales notifications."
-              : "Alerts for overdue follow-ups, invoices, and payments appear here."
+              ? "You have no unread alerts."
+              : "Reminders and payment alerts will show up here."
           }
         />
       ) : (
         <div className="space-y-2">
-          {notifications.map((n, i) => (
-            <motion.div
+          {notifications.map((n) => (
+            <NotificationRow
               key={n.id}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.03 }}
-            >
-              <NotificationRow
-                n={n}
-                onMarkRead={(id) => void handleMarkRead(id)}
-                marking={markRead.isPending}
-              />
-            </motion.div>
+              n={n}
+              onMarkRead={(id) => void handleMarkRead(id)}
+              marking={markRead.isPending}
+            />
           ))}
         </div>
       )}

@@ -27,10 +27,11 @@ async function postUpload(req, res) {
     req.file.mimetype,
     category
   );
-  const fileUrl = resolvePublicFileUrl(stored.url, req) ?? stored.url;
+  const publicUrl = resolvePublicFileUrl(stored.url, req) ?? stored.url;
   res.status(200).json({
     message: "File uploaded successfully",
-    url: fileUrl,
+    url: stored.url,
+    publicUrl,
     storage: stored.storage,
     backend: getStorageBackend(),
     category,

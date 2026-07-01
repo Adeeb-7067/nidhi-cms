@@ -8,7 +8,7 @@ const developerStaffRoles = ["developer", "freelancer"];
 const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer", "bde"];
 
 /** Payroll / leave / attendance HRM records — company employees only (not freelancers). */
-const hrmEmployeeRoles = ["manager", "developer", "tester", "qa"];
+const hrmEmployeeRoles = ["hr", "manager", "developer", "tester", "qa", "bde"];
 
 /** Shown on admin Team page and staff user listings. */
 const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde"];

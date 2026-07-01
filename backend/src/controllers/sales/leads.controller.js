@@ -428,6 +428,16 @@ async function importLeads(req, res) {
   res.status(201).json({ created: created.length, errors, leads: created });
 }
 
+async function getDueReminders(req, res) {
+  const now = new Date();
+  const filter = { reminder: { $ne: null }, "reminder.date": { $lte: now } };
+  if (req.user.role === "bde") {
+    filter.$or = [{ assignedTo: req.user.id }, { createdBy: req.user.id }];
+  }
+  const leads = await SalesLeads.find(filter, { id: 1, name: 1, reminder: 1 }).lean();
+  res.json({ leads });
+}
+
 export {
   listLeads,
   createLead,
@@ -438,5 +448,6 @@ export {
   convertLead,
   getLeadActivity,
   setReminder,
+  getDueReminders,
   deleteLead,
 };

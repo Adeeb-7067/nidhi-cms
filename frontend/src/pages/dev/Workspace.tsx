@@ -127,6 +127,7 @@ export default function DevWorkspace() {
   }
 
   const role = data.role ?? user.role ?? "developer";
+  const projectDetailHref = (projectId: number | string) => getProjectDetailHref(projectId, role);
   const isTester = role === "tester" || role === "qa";
   const isDeveloper = isDeveloperRole(role);
   const isPortalStaff = isDeveloper || isTester;
@@ -287,7 +288,7 @@ export default function DevWorkspace() {
             {myMilestones.length > 0 ? (
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {myMilestones.map((milestone) => (
-                  <Link key={milestone.id} href={getProjectDetailHref(milestone.projectId)}>
+                  <Link key={milestone.id} href={projectDetailHref(milestone.projectId)}>
                     <div className="rounded-lg border border-border/50 bg-card/60 px-3 py-2.5 hover:bg-muted/40 transition-colors h-full">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-xs font-medium line-clamp-2 leading-snug">{milestone.title}</p>
@@ -348,7 +349,7 @@ export default function DevWorkspace() {
                 <WorkspaceRecentProjectsList
                   projects={data.recentProjects}
                   totalCount={kpis.projects}
-                  getProjectHref={getProjectDetailHref}
+                  getProjectHref={projectDetailHref}
                   statusBadgeClass={projectStatusBadgeClass}
                 />
               ) : (

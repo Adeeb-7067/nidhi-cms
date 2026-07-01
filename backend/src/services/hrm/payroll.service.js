@@ -154,18 +154,20 @@ async function syncPayslipsForRun(runId, session = null) {
   const slipByLineId = new Map(existing.map((s) => [s.payrollLineId, s]));
   const sessOpts = session ? { session } : {};
 
-  // Bulk-load all users and salary structures in two queries instead of 2×N.
+  // Bulk-load all users in one query — salary data lives on the user document.
   const lineUserIds = lines.map((l) => l.userId);
-  const [bulkUsers, bulkStructures] = await Promise.all([
-    usersTable.find({ id: { $in: lineUserIds } }).lean(),
-    salaryStructuresTable.find({ userId: { $in: lineUserIds } }).lean(),
-  ]);
+  const bulkUsers = await usersTable.find({ id: { $in: lineUserIds } }).lean();
   const userMap = new Map(bulkUsers.map((u) => [u.id, u]));
-  const structMap = new Map(bulkStructures.map((s) => [s.userId, s]));
 
   for (const line of lines) {
     const user = userMap.get(line.userId);
-    const structure = structMap.get(line.userId);
+    const sal = user?.salary ?? {};
+    const structure = {
+      basic: Number(sal.basicSalary) || 0,
+      gross: (Number(sal.basicSalary) || 0) + (Number(sal.allowances) || 0),
+      allowances: Number(sal.allowances) || 0,
+      hra: 0,
+    };
     const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings });
     const prior = slipByLineId.get(line.id);
 
@@ -240,7 +242,7 @@ export async function getPayrollPreRunChecklist(year, month) {
 
   const staff = await usersTable
 
-    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1, name: 1, employeeId: 1 })
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1, name: 1, employeeId: 1, salary: 1 })
 
     .lean();
 
@@ -272,11 +274,7 @@ export async function getPayrollPreRunChecklist(year, month) {
 
 
 
-  const structures = await salaryStructuresTable.find({ userId: { $in: staffIds } }, { userId: 1 }).lean();
-
-  const structureUserIds = new Set(structures.map((s) => s.userId));
-
-  const missingStructure = staff.filter((u) => !structureUserIds.has(u.id));
+  const missingStructure = staff.filter((u) => !(Number(u.salary?.basicSalary) > 0));
 
 
 
@@ -509,7 +507,10 @@ export async function generatePayrollRun(year, month, actorId) {
 
   const staff = await usersTable.find({ role: { $in: hrmEmployeeRoles }, status: "active" }).lean();
 
-  const { summaries } = await getAttendanceDailySummaries({ startDate, endDate });
+  // Cap attendance to today so future dates don't produce computed "weekend" summaries.
+  const today = new Date().toISOString().slice(0, 10);
+  const attendanceEndDate = endDate <= today ? endDate : today;
+  const { summaries } = await getAttendanceDailySummaries({ startDate, endDate: attendanceEndDate });
 
   const { weekendDays } = await getHrmPolicyContext();
   const holidays = await companyHolidaysTable
@@ -517,10 +518,7 @@ export async function generatePayrollRun(year, month, actorId) {
     .lean();
   const holidayDates = new Set(holidays.map((h) => h.date));
 
-  // Bulk-load all salary structures in one query instead of one per employee.
   const staffIds = staff.map((u) => u.id);
-  const allStructures = await salaryStructuresTable.find({ userId: { $in: staffIds } }).lean();
-  const structureByUserId = new Map(allStructures.map((s) => [s.userId, s]));
 
   const approvedLeaves = await leaveRequestsTable
     .find({
@@ -543,7 +541,7 @@ export async function generatePayrollRun(year, month, actorId) {
 
     const leavePayrollByDate = buildLeavePayrollByDate(leavesByUserId.get(user.id) ?? [], {
       startDate,
-      endDate,
+      endDate: attendanceEndDate,
       weekendDays,
       holidayDates,
     });
@@ -554,19 +552,21 @@ export async function generatePayrollRun(year, month, actorId) {
       leavePayrollByDate,
     });
 
-    const structure = structureByUserId.get(user.id);
+    const salary = user.salary ?? {};
+    const gross = (Number(salary.basicSalary) || 0) + (Number(salary.allowances) || 0);
+    const deductions = Number(salary.deductions) || 0;
 
     const amounts = computePayrollLineAmounts({
 
-      gross: structure?.gross ?? 0,
+      gross,
 
       ...counts,
 
-      pfEmployee: structure?.pfEmployee ?? 0,
+      pfEmployee: deductions,
 
-      esiEmployee: structure?.esiEmployee ?? 0,
+      esiEmployee: 0,
 
-      tds: structure?.tds ?? 0,
+      tds: 0,
 
     });
 
@@ -582,7 +582,7 @@ export async function generatePayrollRun(year, month, actorId) {
 
       ...amounts,
 
-      pfEmployer: structure?.pfEmployer ?? 0,
+      pfEmployer: 0,
 
     });
 
@@ -832,19 +832,25 @@ export async function listPayrollRuns() {
 export async function getPayrollRunLines(runId) {
   const lines = await payrollLinesTable.find({ payrollRunId: runId }).lean();
   const lineIds = lines.map((l) => l.id);
-  const users = await usersTable.find({ id: { $in: lines.map((l) => l.userId) } }, { id: 1, name: 1, employeeId: 1 }).lean();
+  const users = await usersTable.find({ id: { $in: lines.map((l) => l.userId) } }, { id: 1, name: 1, employeeId: 1, salary: 1 }).lean();
   const slips = lineIds.length
     ? await payrollSlipsTable.find({ payrollLineId: { $in: lineIds } }, { id: 1, payrollLineId: 1 }).lean()
     : [];
   const slipByLineId = new Map(slips.map((s) => [s.payrollLineId, s.id]));
   const userMap = new Map(users.map((u) => [u.id, u]));
 
-  return lines.map((l) => ({
-    ...l,
-    employeeName: userMap.get(l.userId)?.name, 
-    employeeId: userMap.get(l.userId)?.employeeId,
-    payslipId: slipByLineId.get(l.id) ?? null,
-  }));
+  return lines.map((l) => {
+    const u = userMap.get(l.userId);
+    const sal = u?.salary ?? {};
+    const totalSalary = (Number(sal.basicSalary) || 0) + (Number(sal.allowances) || 0);
+    return {
+      ...l,
+      employeeName: u?.name,
+      employeeId: u?.employeeId,
+      payslipId: slipByLineId.get(l.id) ?? null,
+      totalSalary,
+    };
+  });
 } 
 
 /** Admin salary-slip archive — optional period filter or all periods. */
@@ -924,14 +930,16 @@ export async function updatePayrollLine(lineId, body) {
     body.paidDays !== undefined || body.lopDays !== undefined || body.lateCount !== undefined;
 
   if (attendanceFieldsTouched) {
-    const structure = await salaryStructuresTable.findOne({ userId: line.userId }).lean();
+    const lineUser = await usersTable.findOne({ id: line.userId }, { salary: 1 }).lean();
+    const lineSal = lineUser?.salary ?? {};
+    const userGross = (Number(lineSal.basicSalary) || 0) + (Number(lineSal.allowances) || 0);
     const amounts = computePayrollLineAmounts({
-      gross: structure?.gross ?? 0,
+      gross: userGross,
       paidDays: patch.paidDays ?? line.paidDays,
       lopDays: patch.lopDays ?? line.lopDays,
       lateCount: patch.lateCount ?? line.lateCount ?? 0,
       pfEmployee: patch.pfEmployee ?? line.pfEmployee ?? 0,
-      esiEmployee: structure?.esiEmployee ?? 0,
+      esiEmployee: 0,
       tds: patch.tds ?? line.tds ?? 0,
     });
     Object.assign(patch, amounts);
@@ -994,7 +1002,7 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
   if (slip.userId !== userId) notFound("Payslip");
 
   const [user, line, settings] = await Promise.all([
-    usersTable.findOne({ id: slip.userId }, { id: 1, name: 1, employeeId: 1, department: 1 }).lean(),
+    usersTable.findOne({ id: slip.userId }, { id: 1, name: 1, employeeId: 1, department: 1, salary: 1 }).lean(),
     payrollLinesTable.findOne({ id: slip.payrollLineId }).lean(),
     getOrCreateSettings(),
   ]);
@@ -1007,7 +1015,7 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     }
   }
 
-  const structure = await salaryStructuresTable.findOne({ userId: slip.userId }).lean();
+  const slipSal = user?.salary ?? {};
 
   return {
     id: slip.id,
@@ -1018,9 +1026,9 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     employeeName: user?.name ?? "Employee",
     employeeId: user?.employeeId ?? null,
     department: user?.department ?? null,
-    basic: structure?.basic ?? 0,
-    hra: structure?.hra ?? 0,
-    allowances: structure?.allowances ?? 0,
+    basic: Number(slipSal.basicSalary) || 0,
+    hra: 0,
+    allowances: Number(slipSal.allowances) || 0,
     paidDays: line.paidDays,
     lopDays: line.lopDays,
     lateCount: line.lateCount,
@@ -1092,13 +1100,13 @@ export async function exportPayrollBankTransferCsv(runId) {
 
   const lines = await getPayrollRunLines(runId);
 
-  const structures = await salaryStructuresTable
+  const exportUsers = await usersTable
 
-    .find({ userId: { $in: lines.map((l) => l.userId) } })
+    .find({ id: { $in: lines.map((l) => l.userId) } }, { id: 1, salary: 1, panNumber: 1 })
 
     .lean();
 
-  const structureByUser = new Map(structures.map((s) => [s.userId, s]));
+  const userByIdMap = new Map(exportUsers.map((u) => [u.id, u]));
 
 
 
@@ -1108,15 +1116,17 @@ export async function exportPayrollBankTransferCsv(runId) {
 
   const rows = lines.map((l) => {
 
-    const structure = structureByUser.get(l.userId);
+    const exportUser = userByIdMap.get(l.userId);
 
-    const bankName = decryptFromFields("bankName", structure) ?? "";
+    const bank = exportUser?.salary?.bankAccount ?? {};
 
-    const accountNumber = decryptFromFields("bankAccountNumber", structure) ?? "";
+    const bankName = bank.bankName ?? "";
 
-    const ifsc = decryptFromFields("ifscCode", structure) ?? "";
+    const accountNumber = bank.accountNumber ?? "";
 
-    const pan = decryptFromFields("panNumber", structure) ?? "";
+    const ifsc = bank.ifsc ?? "";
+
+    const pan = exportUser?.panNumber ?? "";
 
     return [
 

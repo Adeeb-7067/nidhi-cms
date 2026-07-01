@@ -44,6 +44,11 @@ export function RoleGate({
     return <Unauthorized />;
   }
 
+  const adminProjectDetailMatch = /^\/admin\/projects\/(\d+)/.exec(location.split("?")[0]);
+  if (adminProjectDetailMatch && isDevPortalRole(user.role) && user.role !== "super_admin") {
+    return <Redirect to={`/dev/projects/${adminProjectDetailMatch[1]}`} replace />;
+  }
+
   // super_admin bypasses the permission matrix entirely.
   // hr goes through the normal permission matrix below (their access is
   // defined via allowedRoles in PageOutlet and HRM permission modules).
@@ -62,6 +67,14 @@ export function RoleGate({
       );
     }
     if (can(permModule, action)) return <>{children}</>;
+    if (
+      permModule === "admin_projects" &&
+      action === "view" &&
+      isDevPortalRole(user.role) &&
+      can("dev_projects", "view")
+    ) {
+      return <>{children}</>;
+    }
     return <Unauthorized />;
   }
 

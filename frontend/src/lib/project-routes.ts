@@ -10,6 +10,11 @@ export function getProjectsListHref(role: UserRole | string | undefined): string
 }
 
 /** Project hub detail (shared route; access enforced by API). */
-export function getProjectDetailHref(projectId: number | string): string {
+export function getProjectDetailHref(
+  projectId: number | string,
+  role?: UserRole | string | null,
+): string {
+  if (role === "super_admin") return `/admin/projects/${projectId}`;
+  if (role && isDevPortalRole(role)) return `/dev/projects/${projectId}`;
   return `/admin/projects/${projectId}`;
 }

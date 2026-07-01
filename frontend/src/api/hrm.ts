@@ -199,6 +199,7 @@ export function useAssignShift() {
       qc.invalidateQueries({ queryKey: ["hrm", "shifts", "assignments"] });
       qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
       qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "payroll", "checklist"] });
     },
     meta: { errorMessage: "Could not assign shift" },
   });

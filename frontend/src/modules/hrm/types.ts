@@ -465,6 +465,7 @@ export type HrmPayrollLine = {
   pfEmployer?: number;
   tds?: number;
   net: number;
+  totalSalary?: number;
   notes?: string | null;
 };
 

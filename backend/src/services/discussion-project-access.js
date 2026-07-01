@@ -110,7 +110,7 @@ export function getDiscussionParticipantIds(projectId, threadType) {
 /** Project IDs the user may access in discussions (mirrors list projects rules). */
 export async function getAccessibleProjectIds(user) {
   const role = user.role;
-  if (isDevPortalStaffRole(role)) {
+  if (isDevPortalStaffRole(role) || role === "bde") {
     const rows = await projectMembersTable.find({ userId: user.id }, { projectId: 1 }).lean().exec();
     return rows.map((m) => m.projectId).filter((id) => id != null);
   }

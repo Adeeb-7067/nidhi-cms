@@ -751,19 +751,21 @@ export default function AdminEmployees() {
       hideInDetail: true,
       cell: (user) => (
         <div className="flex justify-end gap-2 transition-opacity">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 px-2 text-[10px] font-semibold"
-            title="Open employee profile"
-            onClick={(e) => {
-              e.stopPropagation();
-              setLocation(getStaffProfileHref(user.id, user.role, viewer?.role));
-            }}
-          >
-            <Eye className="h-3 w-3 mr-1" />
-            Profile
-          </Button>
+          {user.role !== "super_admin" && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 px-2 text-[10px] font-semibold"
+              title="Open employee profile"
+              onClick={(e) => {
+                e.stopPropagation();
+                setLocation(getStaffProfileHref(user.id, user.role, viewer?.role));
+              }}
+            >
+              <Eye className="h-3 w-3 mr-1" />
+              Profile
+            </Button>
+          )}
           {canViewAsEmployee(user, viewer?.id) && (
             <Button
               size="sm"
@@ -777,19 +779,23 @@ export default function AdminEmployees() {
               View as
             </Button>
           )}
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditFormSynced(false); setEditUser(user); }}>
-            <Edit className="h-3 w-3" />
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 w-7 p-0 text-red-500 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
-            title={user.status !== "active" ? "Already deactivated" : "Deactivate employee"}
-            disabled={user.status !== "active"}
-            onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
+          {user.role !== "super_admin" && (
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditFormSynced(false); setEditUser(user); }}>
+              <Edit className="h-3 w-3" />
+            </Button>
+          )}
+          {user.role !== "super_admin" && user.id !== viewer?.id && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0 text-red-500 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
+              title={user.status !== "active" ? "Already deactivated" : "Deactivate employee"}
+              disabled={user.status !== "active"}
+              onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}
+            >
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          )}
         </div>
       )
     }

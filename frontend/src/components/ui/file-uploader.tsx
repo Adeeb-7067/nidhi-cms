@@ -84,7 +84,7 @@ export function FileUploader({
         }
       });
 
-      const uploadPromise = new Promise<{ url: string }>((resolve, reject) => {
+      const uploadPromise = new Promise<{ url: string; publicUrl?: string }>((resolve, reject) => {
         const uploadPath = category
           ? `/api/upload?category=${encodeURIComponent(category)}`
           : "/api/upload";
@@ -119,9 +119,11 @@ export function FileUploader({
       const response = await uploadPromise;
 
       setProgress(100);
-      setCurrentFileUrl(response.url);
+      const storedUrl = response.url;
+      const displayUrl = response.publicUrl ?? resolveFileUrl(storedUrl) ?? storedUrl;
+      setCurrentFileUrl(displayUrl);
       setDisplayName(file.name);
-      onUploadComplete(response.url, { fileName: file.name });
+      onUploadComplete(storedUrl, { fileName: file.name });
       toast.success("File uploaded successfully!");
     } catch (err: unknown) {
       toastApiError(err, "Failed to upload file.");

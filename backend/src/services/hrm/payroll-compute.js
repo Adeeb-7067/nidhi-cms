@@ -12,7 +12,7 @@ export function countSundaysInRange(startDate, endDate) {
   return count;
 }
 
-const PAYROLL_PAID_STATUSES = new Set(["present", "holiday"]);
+const PAYROLL_PAID_STATUSES = new Set(["present", "holiday", "weekend"]);
 
 function addLeaveFraction(byDate, date, paid, lop) {
   const row = byDate.get(date) ?? { paid: 0, lop: 0 };
@@ -79,26 +79,32 @@ export function aggregateAttendanceForPayroll(
   summaries,
   { startDate, endDate, leavePayrollByDate },
 ) {
-  const sundayDates = new Set(
-    eachDateInRange(startDate, endDate).filter((d) => getDayOfWeek(d) === 0),
-  );
-
-  let paidDays = sundayDates.size;
+  let paidDays = 0;
   let lopDays = 0;
 
   for (const s of summaries) {
-    if (sundayDates.has(s.date)) continue;
-
     if (s.status === "on_leave") {
       const leave = leavePayrollByDate?.get(s.date);
       if (leave) {
-        paidDays += leave.paid;
+        // Count paid + lop together in paidDays so earned already includes the
+        // LOP day's rate; lopDeduction then removes it explicitly in
+        // computePayrollLineAmounts. Without this, LOP days would be deducted
+        // twice (once from paidDays and once via lopDeduction).
+        paidDays += leave.paid + leave.lop;
         lopDays += leave.lop;
       }
       continue;
     }
     if (PAYROLL_PAID_STATUSES.has(s.status)) {
       paidDays += 1;
+      // Half-day LOP leave: employee clocked in so status is "present", but
+      // the approved leave request marks part of the day as LOP. Deduct that
+      // fraction explicitly; keeping paidDays at 1 means the worked half is
+      // still earned, and lopDeduction removes only the LOP fraction.
+      const partialLeave = leavePayrollByDate?.get(s.date);
+      if (partialLeave?.lop > 0) {
+        lopDays += partialLeave.lop;
+      }
     }
   }
 

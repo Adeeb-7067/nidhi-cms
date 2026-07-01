@@ -40,6 +40,7 @@ router.get("/sales/leads", ...p("sales_leads"), wrap(leadsCtrl.listLeads));
 router.post("/sales/leads", ...p("sales_leads", "create"), wrap(leadsCtrl.createLead));
 router.post("/sales/leads/import", ...p("sales_leads", "create"), wrap(leadsCtrl.importLeads));
 router.patch("/sales/leads/bulk", ...p("sales_leads", "edit"), wrap(leadsCtrl.bulkUpdateLeads));
+router.get("/sales/leads/due-reminders", ...p("sales_leads"), wrap(leadsCtrl.getDueReminders));
 router.get("/sales/leads/:id", ...p("sales_leads"), wrap(leadsCtrl.getLeadById));
 router.patch("/sales/leads/:id", ...p("sales_leads", "edit"), wrap(leadsCtrl.updateLead));
 router.delete("/sales/leads/:id", ...p("sales_leads", "delete"), wrap(leadsCtrl.deleteLead));
