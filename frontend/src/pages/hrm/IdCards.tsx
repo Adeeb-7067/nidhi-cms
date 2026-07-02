@@ -24,6 +24,7 @@ import {
   HrmRefDetailSection,
 } from "@/modules/hrm/hrm-reference-kit";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { useHrmEmployee, useHrmEmployees } from "@/api/hrm";
 import {
   HrmIdCardPreview,
@@ -212,7 +213,12 @@ export default function HrmIdCardsPage() {
     {
       id: "name",
       header: "Name",
-      cell: (e) => <span className="text-xs font-semibold">{e.name}</span>,
+      cell: (e) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={e.name} avatarUrl={e.avatarUrl} className="h-7 w-7" />
+          <span className="text-xs font-semibold">{e.name}</span>
+        </div>
+      ),
       exportValue: (e) => e.name,
     },
     {

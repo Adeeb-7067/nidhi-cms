@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { CheckCircle, ClipboardList, Clock, Home, Plus, XCircle } from "lucide-react";
+import { CheckCircle, Clock, Home, Plus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import { HrmGate } from "@/modules/hrm/HrmGate";
@@ -38,12 +39,17 @@ export default function HrmWfhPage() {
   const { user } = useAuth();
   const canAdminView = useHrmPermission("wfh", "view");
   const canApprove = useHrmPermission("wfh", "approve");
+  const [wfhTab, setWfhTab] = useState("history");
+  const [queueStatusFilter, setQueueStatusFilter] = useState<"all" | "pending" | "approved">("all");
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "pending" | "approved">("all");
   const pendingQuery = useHrmWfhRequests(
-    canAdminView || canApprove ? { status: "pending" } : { userId: user?.id },
+    canAdminView || canApprove
+      ? (queueStatusFilter === "all" ? {} : { status: queueStatusFilter })
+      : { userId: user?.id },
   );
   const allQuery = useHrmWfhRequests(
     canAdminView ? {} : { userId: user?.id },
-    { enabled: canAdminView },
+    { enabled: canAdminView && (wfhTab === "history" || wfhTab === "rejected") },
   );
   const { data: requests, isLoading } = pendingQuery;
   const { data: allData, isLoading: allLoading } = allQuery;
@@ -59,25 +65,37 @@ export default function HrmWfhPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
 
   const requestRows = requests?.requests ?? [];
-  const allRows = canAdminView ? (allData?.requests ?? []) : requestRows;
+  const allRowsUnfiltered = canAdminView ? (allData?.requests ?? []) : requestRows;
+  const historyLoadingState = canAdminView ? allLoading : isLoading;
+  const allRows = useMemo(
+    () =>
+      historyStatusFilter === "all"
+        ? allRowsUnfiltered
+        : allRowsUnfiltered.filter((r) => r.status === historyStatusFilter),
+    [allRowsUnfiltered, historyStatusFilter],
+  );
+  const rejectedRows = useMemo(
+    () => allRowsUnfiltered.filter((r) => r.status === "rejected"),
+    [allRowsUnfiltered],
+  );
 
   const kpiItems = useMemo(() => {
-    const pending = countByStatus(allRows, "pending");
-    const approved = countByStatus(allRows, "approved");
-    const rejected = countByStatus(allRows, "rejected");
+    const pending = countByStatus(allRowsUnfiltered, "pending");
+    const approved = countByStatus(allRowsUnfiltered, "approved");
+    const rejected = countByStatus(allRowsUnfiltered, "rejected");
     return [
       { label: "Pending", value: pending, hint: "Awaiting approval", icon: Clock, accent: "amber" as const },
       { label: "Approved", value: approved, hint: "Remote days granted", icon: CheckCircle, accent: "green" as const },
       { label: "Rejected", value: rejected, hint: "Declined requests", icon: XCircle, accent: "blue" as const, alert: rejected > 0 },
       {
         label: canAdminView ? "Total requests" : "My requests",
-        value: allRows.length,
+        value: allRowsUnfiltered.length,
         hint: canAdminView ? "All WFH records" : "Submitted by you",
         icon: Home,
         accent: "violet" as const,
       },
     ];
-  }, [allRows, canAdminView]);
+  }, [allRowsUnfiltered, canAdminView]);
 
   const wfhActionOpts = useMemo(
     () => ({
@@ -135,11 +153,50 @@ export default function HrmWfhPage() {
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading || (canAdminView && allLoading)} />
 
-        <Tabs defaultValue={canApprove || canAdminView ? "queue" : "history"} className="space-y-4">
+        <Tabs value={wfhTab} onValueChange={setWfhTab} className="space-y-4">
           <HrmTabsList>
-            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Pending approvals</HrmTabsTrigger>}
             <HrmTabsTrigger value="history">{canAdminView ? "All requests" : "My requests"}</HrmTabsTrigger>
+            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Approvals</HrmTabsTrigger>}
+            <HrmTabsTrigger value="rejected">Rejected</HrmTabsTrigger>
           </HrmTabsList>
+
+          <TabsContent value="history" className="space-y-4 m-0">
+            {allState.isError ? (
+              <HrmQueryErrorPanel
+                error={allState.error}
+                onRetry={allState.refetch}
+                title="Could not load WFH history"
+              />
+            ) : (
+              <>
+                <div className="flex justify-end">
+                  <Select
+                    value={historyStatusFilter}
+                    onValueChange={(v) => setHistoryStatusFilter(v as "all" | "pending" | "approved")}
+                  >
+                    <SelectTrigger className="h-9 w-40 bg-background">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="approved">Approved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <PortalTablePanel isLoading={historyLoadingState}>
+                  <AdvancedTable
+                    data={allRows}
+                    columns={historyColumns}
+                    searchKey={canAdminView ? "userName" : undefined}
+                    searchPlaceholder="Filter requests…"
+                    filename="HrmWfhHistoryExport"
+                    viewStorageKey="hrm-wfh-history"
+                  />
+                </PortalTablePanel>
+              </>
+            )}
+          </TabsContent>
 
           {(canAdminView || canApprove) && (
             <TabsContent value="queue" className="space-y-4 m-0">
@@ -150,36 +207,53 @@ export default function HrmWfhPage() {
                   title="Could not load WFH requests"
                 />
               ) : (
-                <PortalTablePanel isLoading={isLoading}>
-                  <AdvancedTable
-                    data={requestRows}
-                    columns={queueColumns}
-                    searchKey="userName"
-                    searchPlaceholder="Filter by employee…"
-                    filename="HrmWfhQueueExport"
-                    viewStorageKey="hrm-wfh-queue"
-                  />
-                </PortalTablePanel>
+                <>
+                  <div className="flex justify-end">
+                    <Select
+                      value={queueStatusFilter}
+                      onValueChange={(v) => setQueueStatusFilter(v as "all" | "pending" | "approved")}
+                    >
+                      <SelectTrigger className="h-9 w-40 bg-background">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <PortalTablePanel isLoading={isLoading}>
+                    <AdvancedTable
+                      data={requestRows}
+                      columns={queueColumns}
+                      searchKey="userName"
+                      searchPlaceholder="Filter by employee…"
+                      filename="HrmWfhQueueExport"
+                      viewStorageKey="hrm-wfh-queue"
+                    />
+                  </PortalTablePanel>
+                </>
               )}
             </TabsContent>
           )}
 
-          <TabsContent value="history" className="space-y-4 m-0">
+          <TabsContent value="rejected" className="space-y-4 m-0">
             {allState.isError ? (
               <HrmQueryErrorPanel
                 error={allState.error}
                 onRetry={allState.refetch}
-                title="Could not load WFH history"
+                title="Could not load rejected requests"
               />
             ) : (
-              <PortalTablePanel isLoading={canAdminView ? allLoading : isLoading}>
+              <PortalTablePanel isLoading={historyLoadingState}>
                 <AdvancedTable
-                  data={allRows}
+                  data={rejectedRows}
                   columns={historyColumns}
                   searchKey={canAdminView ? "userName" : undefined}
                   searchPlaceholder="Filter requests…"
-                  filename="HrmWfhHistoryExport"
-                  viewStorageKey="hrm-wfh-history"
+                  filename="HrmWfhRejectedExport"
+                  viewStorageKey="hrm-wfh-rejected"
                 />
               </PortalTablePanel>
             )}

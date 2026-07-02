@@ -17,7 +17,7 @@ router.post("/auth/reset-password", asyncHandler(authController.postAuthResetPas
 router.get("/auth/me", requireAuth, asyncHandler(authController.getAuthMe));
 router.patch("/auth/me", requireAuth, asyncHandler(authController.patchAuthMe));
 router.post("/auth/fcm-token", requireAuth, asyncHandler(authController.postAuthFcmToken));
-router.post("/auth/request-change-password-otp", requireAuth, asyncHandler(authController.postAuthRequestChangePasswordOtp));
+router.post("/auth/change-password/request-otp", requireAuth, asyncHandler(authController.postAuthRequestChangePasswordOtp));
 router.post("/auth/stop-impersonate", requireAuth, asyncHandler(authController.postAuthStopImpersonate));
 
 // Super-admin only

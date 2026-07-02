@@ -216,7 +216,7 @@ export async function listLeaveRequests({ userIds, status, date } = {}) {
   }
   const rows = await leaveRequestsTable.find(query).sort({ createdAt: -1 }).lean();
   const userIdsSet = [...new Set(rows.map((r) => r.userId))];
-  const users = await usersTable.find({ id: { $in: userIdsSet } }, { id: 1, name: 1, employeeId: 1 }).lean();
+  const users = await usersTable.find({ id: { $in: userIdsSet } }, { id: 1, name: 1, employeeId: 1, avatarUrl: 1 }).lean();
   const userMap = new Map(users.map((u) => [u.id, u]));
   const types = await leaveTypesTable.find().lean();
   const typeMap = new Map(types.map((t) => [t.id, t]));
@@ -224,6 +224,7 @@ export async function listLeaveRequests({ userIds, status, date } = {}) {
     ...r,
     userName: userMap.get(r.userId)?.name ?? "Unknown",
     employeeId: userMap.get(r.userId)?.employeeId ?? null,
+    avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
     leaveType: typeMap.get(r.leaveTypeId) ?? null,
     leaveTypeName: typeMap.get(r.leaveTypeId)?.name ?? null,
   }));

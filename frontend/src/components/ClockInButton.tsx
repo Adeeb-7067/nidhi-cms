@@ -6,7 +6,7 @@ import { useMonitoringStatus, useConsentStatus } from "@/api/monitoring";
 import { isElectron } from "@/lib/electron-bridge";
 import { cn } from "@/lib/utils";
 import { getLiveActiveDurationMs } from "@/lib/work-session-utils";
-import { isMonitorableStaffRole } from "@/lib/user-roles";
+import { isClockableStaffRole, isMonitorableStaffRole } from "@/lib/user-roles";
 
 function formatDuration(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -21,6 +21,7 @@ function formatDuration(ms: number): string {
 export function ClockInButton() {
   const { user } = useAuth();
   const { activeSession, isLoading, clockIn, clockOut, isClockedIn } = useWorkSession();
+  const isClockable = isClockableStaffRole(user?.role);
   const isMonitorable = isMonitorableStaffRole(user?.role);
   const { data: monitoring } = useMonitoringStatus(!!user && isMonitorable);
   const { data: consent } = useConsentStatus(
@@ -45,7 +46,7 @@ export function ClockInButton() {
     };
   }, [activeSession]);
 
-  if (!isMonitorable) return null;
+  if (!isClockable) return null;
 
   const handleClick = async () => {
     setIsPending(true);

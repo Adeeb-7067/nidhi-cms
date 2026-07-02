@@ -20,6 +20,7 @@ import { getDirectReportIds, resolveScopedUserIds } from "./team-scope.js";
 import { computeAvailableBalance } from "./leave-accrual.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
 import { getHrmPolicyContext, workDayKeyForDate, minutesInTimezone } from "./hrm-date-utils.js";
+import { resolveContractSalary } from "./payroll-compute.js";
 
 const PENDING_PREVIEW_LIMIT = 8;
 
@@ -470,29 +471,40 @@ export function buildNeedsAttention({ stats, payrollBanner }) {
 }
 
 async function buildTopEarners(limit = 5) {
-  const structures = await salaryStructuresTable.find({ gross: { $gt: 0 } })
-    .sort({ gross: -1 })
-    .limit(limit)
+  const staff = await usersTable
+    .find(
+      { role: { $in: hrmEmployeeRoles }, status: "active" },
+      { id: 1, name: 1, employeeId: 1, avatarUrl: 1, designation: 1, salary: 1 },
+    )
     .lean();
-  if (!structures.length) return [];
-  const users = await usersTable.find(
-    { id: { $in: structures.map((s) => s.userId) } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1, designation: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  return structures.map((s, index) => {
-    const u = userMap.get(s.userId);
-    return {
+  if (!staff.length) return [];
+
+  const structureRows = await salaryStructuresTable
+    .find({ userId: { $in: staff.map((u) => u.id) } })
+    .lean();
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
+
+  return staff
+    .map((user) => {
+      const contract = resolveContractSalary({
+        profileSalary: user.salary ?? {},
+        structureRow: structureByUser.get(user.id),
+      });
+      return { user, contract };
+    })
+    .filter((row) => row.contract.configured && row.contract.contractNet > 0)
+    .sort((a, b) => b.contract.contractNet - a.contract.contractNet)
+    .slice(0, limit)
+    .map((row, index) => ({
       rank: index + 1,
-      userId: s.userId,
-      userName: u?.name ?? "Unknown",
-      employeeId: u?.employeeId ?? null,
-      avatarUrl: u?.avatarUrl ?? null,
-      designation: u?.designation ?? null,
-      gross: Math.round(s.gross ?? 0),
-      net: Math.round(s.net ?? 0),
-    };
-  });
+      userId: row.user.id,
+      userName: row.user.name ?? "Unknown",
+      employeeId: row.user.employeeId ?? null,
+      avatarUrl: row.user.avatarUrl ?? null,
+      designation: row.user.designation ?? null,
+      gross: Math.round(row.contract.gross ?? 0),
+      net: Math.round(row.contract.contractNet ?? 0),
+    }));
 }
 
 async function buildRecentActivity(limit = 8) {
@@ -641,6 +653,7 @@ function slimLeaveRequest(row) {
     id: row.id,
     userId: row.userId,
     userName: row.userName,
+    avatarUrl: row.avatarUrl ?? null,
     startDate: row.startDate,
     endDate: row.endDate,
     days: row.days,
@@ -654,6 +667,7 @@ function slimWfhRequest(row) {
     id: row.id,
     userId: row.userId,
     userName: row.userName,
+    avatarUrl: row.avatarUrl ?? null,
     startDate: row.startDate,
     endDate: row.endDate,
     status: row.status,

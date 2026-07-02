@@ -17,6 +17,9 @@ import { Loader2, Mail, ShieldCheck } from "lucide-react";
 
 type Mode = "current" | "otp";
 
+/** Cooldown before "Resend code" re-enables — independent of the OTP's own validity window. */
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export function ChangePasswordCard({
   userEmail,
   compact,
@@ -58,7 +61,7 @@ export function ChangePasswordCard({
       const res = await requestChangePasswordOtp();
       setOtpSent(true);
       setMode("otp");
-      startCooldown(res.expiresInSeconds ?? 60);
+      startCooldown(RESEND_COOLDOWN_SECONDS);
       if (res.devOtp) setDevOtpHint(res.devOtp);
       toast({
         title: "Code sent",

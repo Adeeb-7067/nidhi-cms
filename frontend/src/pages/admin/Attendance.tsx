@@ -24,7 +24,7 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Clock, Users, ShieldCheck, Activity, MonitorOff,
   CheckCircle2, XCircle, Timer, Laptop, Smartphone, Globe,
@@ -125,10 +125,11 @@ function KpiCard({
 
 // ── EmployeeCell ──────────────────────────────────────────────────────────
 
-function EmployeeCell({ name }: { name: string }) {
+function EmployeeCell({ name, avatarUrl }: { name: string; avatarUrl?: string | null }) {
   return (
     <div className="flex items-center gap-2.5">
       <Avatar className="h-7 w-7 shrink-0">
+        {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} /> : null}
         <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
           {initials(name)}
         </AvatarFallback>
@@ -140,13 +141,21 @@ function EmployeeCell({ name }: { name: string }) {
 
 // ── SessionRow ────────────────────────────────────────────────────────────
 
-function SessionRow({ session, userName }: { session: WorkSession; userName: string }) {
+function SessionRow({
+  session,
+  userName,
+  avatarUrl,
+}: {
+  session: WorkSession;
+  userName: string;
+  avatarUrl?: string | null;
+}) {
   const { label: deviceLabel, Icon: DeviceIcon } = parseDevice(session.deviceInfo);
 
   return (
     <TableRow className="text-xs">
       <TableCell className="py-2.5">
-        <EmployeeCell name={userName} />
+        <EmployeeCell name={userName} avatarUrl={avatarUrl} />
       </TableCell>
       <TableCell className="py-2.5 tabular-nums text-muted-foreground whitespace-nowrap">
         {format(new Date(session.startedAt), "MMM d, h:mm a")}
@@ -192,10 +201,12 @@ function SessionRow({ session, userName }: { session: WorkSession; userName: str
 function ActiveEmployeeChip({
   session,
   userName,
+  avatarUrl,
   dailyTotalMs,
 }: {
   session: WorkSession;
   userName: string;
+  avatarUrl?: string | null;
   dailyTotalMs?: number;
 }) {
   const [liveDailyMs, setLiveDailyMs] = useState(() =>
@@ -213,6 +224,7 @@ function ActiveEmployeeChip({
   return (
     <div className="flex items-center gap-2 pl-1 pr-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
       <Avatar className="h-5 w-5 shrink-0">
+        {avatarUrl ? <AvatarImage src={avatarUrl} alt={userName} /> : null}
         <AvatarFallback className="text-[8px] font-bold bg-emerald-500/20 text-emerald-700">
           {initials(userName)}
         </AvatarFallback>
@@ -228,14 +240,22 @@ function ActiveEmployeeChip({
 
 // ── ConsentRow ────────────────────────────────────────────────────────────
 
-function ConsentRow({ record, userName }: { record: ConsentRecord; userName: string }) {
+function ConsentRow({
+  record,
+  userName,
+  avatarUrl,
+}: {
+  record: ConsentRecord;
+  userName: string;
+  avatarUrl?: string | null;
+}) {
   const { label: deviceLabel, Icon: DeviceIcon } = parseDevice(record.userAgent);
   const consented = !!record.consentGivenAt;
 
   return (
     <TableRow className="text-xs">
       <TableCell className="py-2.5">
-        <EmployeeCell name={userName} />
+        <EmployeeCell name={userName} avatarUrl={avatarUrl} />
       </TableCell>
       <TableCell className="py-2.5">
         {consented ? (
@@ -279,14 +299,22 @@ function formatWorkDayLabel(dateKey: string) {
   return format(parseISO(`${dateKey}T12:00:00`), "EEE, MMM d, yyyy");
 }
 
-function DailyTotalRow({ row, userName }: { row: DailySessionTotal; userName: string }) {
+function DailyTotalRow({
+  row,
+  userName,
+  avatarUrl,
+}: {
+  row: DailySessionTotal;
+  userName: string;
+  avatarUrl?: string | null;
+}) {
   return (
     <TableRow className="text-xs">
       <TableCell className="py-2.5 tabular-nums whitespace-nowrap font-medium">
         {formatWorkDayLabel(row.date)}
       </TableCell>
       <TableCell className="py-2.5">
-        <EmployeeCell name={userName} />
+        <EmployeeCell name={userName} avatarUrl={avatarUrl} />
       </TableCell>
       <TableCell className="py-2.5">
         <div className="flex items-center gap-1 font-semibold tabular-nums">
@@ -328,6 +356,7 @@ export default function AttendancePage() {
   const allUsers = usersData?.users ?? [];
   const employees = allUsers.filter((u) => MONITORABLE_STAFF_ROLES.includes(u.role as typeof MONITORABLE_STAFF_ROLES[number]));
   const userMap = Object.fromEntries(allUsers.map((u) => [u.id, u.name]));
+  const avatarMap = Object.fromEntries(allUsers.map((u) => [u.id, u.avatarUrl ?? null]));
 
   const { data: activeAll, isLoading: loadingActive } = useAdminActiveAll();
   const todayKey = format(new Date(), "yyyy-MM-dd");
@@ -475,6 +504,7 @@ export default function AttendancePage() {
                     key={s.id}
                     session={s}
                     userName={userMap[s.userId] ?? `User #${s.userId}`}
+                    avatarUrl={avatarMap[s.userId]}
                     dailyTotalMs={todayDailyByUser.get(s.userId)}
                   />
                 ))}
@@ -583,6 +613,7 @@ export default function AttendancePage() {
                             key={s.id}
                             session={s}
                             userName={userMap[s.userId] ?? `Employee #${s.userId}`}
+                            avatarUrl={avatarMap[s.userId]}
                           />
                         ))}
                       </TableBody>
@@ -716,6 +747,7 @@ export default function AttendancePage() {
                             key={`${row.userId}-${row.date}`}
                             row={row}
                             userName={userMap[row.userId] ?? `Employee #${row.userId}`}
+                            avatarUrl={avatarMap[row.userId]}
                           />
                         ))}
                       </TableBody>
@@ -771,6 +803,7 @@ export default function AttendancePage() {
                             key={c.id}
                             record={c}
                             userName={userMap[c.userId] ?? `Employee #${c.userId}`}
+                            avatarUrl={avatarMap[c.userId]}
                           />
                         ))}
                       </TableBody>

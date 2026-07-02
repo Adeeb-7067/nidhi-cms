@@ -45,6 +45,7 @@ import {
   HrmRefStatusPill,
 } from "@/modules/hrm/hrm-reference-kit";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import {
   ASSET_CATEGORIES,
@@ -224,7 +225,15 @@ export default function HrmAssetsPage() {
     {
       id: "assigned",
       header: "Assigned to",
-      cell: (a) => <span className="text-xs">{a.assignedToName ?? "—"}</span>,
+      cell: (a) =>
+        a.assignedToName ? (
+          <div className="flex items-center gap-2">
+            <HrmEmployeeAvatar name={a.assignedToName} avatarUrl={a.assignedAvatarUrl} className="h-6 w-6" />
+            <span className="text-xs">{a.assignedToName}</span>
+          </div>
+        ) : (
+          <span className="text-xs">—</span>
+        ),
       exportValue: (a) => a.assignedToName ?? "—",
     },
     {
@@ -298,9 +307,16 @@ export default function HrmAssetsPage() {
                 <div className="text-[11px] text-muted-foreground">
                   {a.category} · {ASSET_CONDITION_LABELS[a.condition] ?? a.condition}
                 </div>
-                <div className="text-[11px]">
-                  Assigned:{" "}
-                  <span className="font-medium text-foreground">{a.assignedToName ?? "—"}</span>
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span>Assigned:</span>
+                  {a.assignedToName ? (
+                    <span className="flex items-center gap-1.5 font-medium text-foreground">
+                      <HrmEmployeeAvatar name={a.assignedToName} avatarUrl={a.assignedAvatarUrl} className="h-5 w-5" />
+                      {a.assignedToName}
+                    </span>
+                  ) : (
+                    <span className="font-medium text-foreground">—</span>
+                  )}
                 </div>
               </div>
             )}
@@ -335,7 +351,23 @@ export default function HrmAssetsPage() {
                       </HrmRefStatusPill>
                     }
                   />
-                  <HrmRefDetailRow label="Assigned to" value={detailAsset.assignedToName ?? "—"} />
+                  <HrmRefDetailRow
+                    label="Assigned to"
+                    value={
+                      detailAsset.assignedToName ? (
+                        <div className="flex items-center gap-2">
+                          <HrmEmployeeAvatar
+                            name={detailAsset.assignedToName}
+                            avatarUrl={detailAsset.assignedAvatarUrl}
+                            className="h-6 w-6"
+                          />
+                          {detailAsset.assignedToName}
+                        </div>
+                      ) : (
+                        "—"
+                      )
+                    }
+                  />
                   <HrmRefDetailRow
                     label="Assigned on"
                     value={

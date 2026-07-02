@@ -71,12 +71,6 @@ export function HrmPayslipPreview({
           {detail.lopDeduction > 0 && (
             <Row label="LOP deduction" value={`−${formatInr(detail.lopDeduction)}`} className="text-red-700 dark:text-red-400" />
           )}
-          {detail.pfEmployee > 0 && (
-            <Row label="PF (employee)" value={`−${formatInr(detail.pfEmployee)}`} className="text-red-700 dark:text-red-400" />
-          )}
-          {detail.tds > 0 && (
-            <Row label="TDS" value={`−${formatInr(detail.tds)}`} className="text-red-700 dark:text-red-400" />
-          )}
           <div className="border-t border-border/60 pt-2">
             <Row label="Total deductions" value={`−${formatInr(detail.deductions)}`} className="text-red-700 dark:text-red-400" />
           </div>

@@ -23,6 +23,7 @@ import {
   deriveRunStatusFromPayrollRun,
   formatPayrollPeriodLabel,
   estimateTotalsFromStructures,
+  totalsFromOrgOverview,
   totalsFromPayslipRows,
   type PayrollStatusFilter,
 } from "@/modules/hrm/payroll-satyakabir-ui";
@@ -35,11 +36,14 @@ import {
   useGeneratePayrollRun,
   useHrmPayrollRuns,
   useHrmSalaryStructures,
+  useHrmPayrollOrgOverview,
+  useHrmPayrollChecklistByPeriod,
 } from "@/api/hrm";
 import { getAccessToken } from "@/lib/auth-storage";
 import { getResponseErrorMessage } from "@/lib/api-error";
 import { payrollExportUrl } from "@/api/hrm";
 import type { HrmAdminPayslipRow } from "@/modules/hrm/types";
+import { PayrollReadinessBanner } from "@/modules/hrm/payroll-kit";
 import { cn } from "@/lib/utils";
 
 export default function HrmSalarySlipsPage() {
@@ -55,6 +59,11 @@ export default function HrmSalarySlipsPage() {
     archiveMode ? { allPeriods: true } : { year: period.year, month: period.month },
   );
   const { data: structuresData } = useHrmSalaryStructures();
+  const { data: orgOverview } = useHrmPayrollOrgOverview();
+  const {
+    data: checklist,
+    isLoading: checklistLoading,
+  } = useHrmPayrollChecklistByPeriod(period.year, period.month);
 
   const generate = useGeneratePayrollRun();
   const rows = data?.slips ?? [];
@@ -78,8 +87,12 @@ export default function HrmSalarySlipsPage() {
 
   const totals = useMemo(() => {
     if (rows.length > 0) return totalsFromPayslipRows(rows);
+    if (orgOverview) return totalsFromOrgOverview(orgOverview);
     return estimateTotalsFromStructures(structureRows);
-  }, [rows, structureRows]);
+  }, [rows, orgOverview, structureRows]);
+
+  const payrollBlocked = checklist ? !checklist.ready : false;
+  const canRunPayroll = !archiveMode && !checklistLoading && !payrollBlocked && !generate.isPending;
 
   const runPeriodStatus = deriveRunStatusFromPayrollRun(selectedRun?.status, totals.employeeCount);
   const periodLabel = archiveMode ? "Full archive" : formatPayrollPeriodLabel(period.month, period.year);
@@ -107,6 +120,10 @@ export default function HrmSalarySlipsPage() {
   };
 
   const handleRunPayroll = () => {
+    if (payrollBlocked) {
+      toast.error("Resolve payroll readiness blockers before running payroll");
+      return;
+    }
     generate.mutate(
       { year: period.year, month: period.month },
       {
@@ -190,6 +207,7 @@ export default function HrmSalarySlipsPage() {
               paidCount={totals.paidCount}
               pendingCount={totals.pendingCount}
             />
+            <PayrollReadinessBanner checklist={checklist} loading={checklistLoading} />
           </>
         ) : null}
 
@@ -210,7 +228,7 @@ export default function HrmSalarySlipsPage() {
           actions={
             <div className="flex flex-wrap gap-2">
               {!archiveMode && rows.length === 0 ? (
-                <Button size="sm" className="h-8" onClick={handleRunPayroll} disabled={generate.isPending}>
+                <Button size="sm" className="h-8" onClick={handleRunPayroll} disabled={!canRunPayroll}>
                   {generate.isPending ? <Loader2 className="size-3.5 animate-spin" /> : null}
                   Run payroll
                 </Button>
@@ -250,6 +268,7 @@ export default function HrmSalarySlipsPage() {
               <HrmPersonChip
                 name={r.employeeName}
                 subtitle={[r.employeeId, r.designation].filter(Boolean).join(" · ") || undefined}
+                avatarUrl={r.employeeAvatarUrl}
               />
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm font-bold tabular-nums text-primary">
@@ -276,6 +295,7 @@ export default function HrmSalarySlipsPage() {
                   subtitle={
                     [r.employeeId, r.designation].filter(Boolean).join(" · ") || undefined
                   }
+                  avatarUrl={r.employeeAvatarUrl}
                   href={`/hrm/employees/${r.userId}`}
                 />
               ),

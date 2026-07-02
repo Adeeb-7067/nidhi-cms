@@ -84,13 +84,29 @@ function pickSocial(src, linkedinUrl) {
 }
 
 function pickSalary(src) {
+  return normalizeSalary(src);
+}
+
+/** Parse and reconcile salary fields (floors negatives, aligns net with components). */
+export function normalizeSalary(src) {
   if (!src || typeof src !== "object") return undefined;
   const bank = src.bankAccount && typeof src.bankAccount === "object" ? src.bankAccount : {};
+  const basicSalary = Math.max(0, parseNumber(src.basicSalary) ?? 0);
+  const allowances = Math.max(0, parseNumber(src.allowances) ?? 0);
+  let deductions = Math.max(0, parseNumber(src.deductions) ?? 0);
+  const gross = Math.round((basicSalary + allowances) * 100) / 100;
+  deductions = Math.min(deductions, gross);
+  let netSalary = parseNumber(src.netSalary);
+  if (netSalary == null || !Number.isFinite(netSalary)) {
+    netSalary = Math.max(0, Math.round((gross - deductions) * 100) / 100);
+  } else {
+    netSalary = Math.max(0, Math.min(gross, Math.round(netSalary * 100) / 100));
+  }
   return {
-    basicSalary: parseNumber(src.basicSalary) ?? 0,
-    allowances: parseNumber(src.allowances) ?? 0,
-    deductions: parseNumber(src.deductions) ?? 0,
-    netSalary: parseNumber(src.netSalary) ?? 0,
+    basicSalary,
+    allowances,
+    deductions,
+    netSalary,
     bankAccount: {
       accountHolderName: optionalString(bank.accountHolderName) ?? "",
       accountNumber: optionalString(bank.accountNumber) ?? "",

@@ -34,7 +34,11 @@ import {
 } from "@/components/ui/select";
 import { PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
 import type { User } from "@/api";
-import type { TeamEmployeeFormValues } from "@/modules/admin/employee-form-shared";
+import {
+  computeTeamEmployeeNetSalary,
+  formatTeamEmployeeNetSalaryField,
+  type TeamEmployeeFormValues,
+} from "@/modules/admin/employee-form-shared";
 import {
   EMPLOYEE_BLOOD_GROUPS,
   EMPLOYEE_GENDERS,
@@ -78,6 +82,14 @@ export const EMPLOYEE_FORM_TAB_META: Record<
   work: { label: "Work & HRM", shortLabel: "Work", step: 3, icon: Briefcase },
   compensation: { label: "Compensation", shortLabel: "Pay", step: 4, icon: IndianRupee },
   documents: { label: "Documents", shortLabel: "Docs", step: 5, icon: FileText },
+};
+
+export const EMPLOYEE_FORM_TAB_FIELDS: Record<EmployeeFormTab, (keyof TeamEmployeeFormValues)[]> = {
+  personal: ["name", "email", "password"],
+  address: [],
+  work: ["role", "designation"],
+  compensation: ["salaryBasic", "salaryAllowances", "salaryDeductions", "aadharNumber", "panNumber"],
+  documents: [],
 };
 
 function AddressBlock({
@@ -140,6 +152,58 @@ function AddressBlock({
   );
 }
 
+function SalaryNetField({ form }: { form: UseFormReturn<TeamEmployeeFormValues> }) {
+  const basic = form.watch("salaryBasic");
+  const allowances = form.watch("salaryAllowances");
+  const deductions = form.watch("salaryDeductions");
+  const netDisplay = formatTeamEmployeeNetSalaryField(basic, allowances, deductions);
+
+  return (
+    <div className="space-y-2">
+      <Label>{L.netSalary}</Label>
+      <Input
+        className={`${employeeFormInputClass} bg-muted/40`}
+        type="number"
+        min={0}
+        placeholder="0"
+        readOnly
+        tabIndex={-1}
+        value={netDisplay}
+        aria-readonly
+      />
+      <p className="text-[0.8rem] text-muted-foreground">
+        Calculated as basic salary + allowances − deductions.
+      </p>
+    </div>
+  );
+}
+
+function PayrollStructureConflictHint({
+  form,
+  payrollStructure,
+}: {
+  form: UseFormReturn<TeamEmployeeFormValues>;
+  payrollStructure?: { basic: number; net: number } | null;
+}) {
+  const salaryBasic = form.watch("salaryBasic");
+  const salaryAllowances = form.watch("salaryAllowances");
+  const salaryDeductions = form.watch("salaryDeductions");
+  if (!payrollStructure || payrollStructure.basic <= 0) return null;
+
+  const basic = Number(salaryBasic) || 0;
+  const net = computeTeamEmployeeNetSalary(salaryBasic, salaryAllowances, salaryDeductions);
+  if (Math.abs(basic - payrollStructure.basic) < 1 && Math.abs(net - payrollStructure.net) < 1) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-500/40 bg-amber-50/90 px-3 py-2 text-xs text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+      Payroll structure on file differs (structure net ₹{payrollStructure.net.toLocaleString("en-IN")}).
+      When basic salary is set here, the team profile is used for payroll runs.
+    </div>
+  );
+}
+
 export function EmployeeFormTabs({
   form,
   tab,
@@ -155,6 +219,7 @@ export function EmployeeFormTabs({
   onSyncDisplayName,
   employeeDocuments,
   employeeDocumentsLoading,
+  payrollStructure,
 }: {
   form: UseFormReturn<TeamEmployeeFormValues>;
   tab: EmployeeFormTab;
@@ -170,6 +235,7 @@ export function EmployeeFormTabs({
   onSyncDisplayName?: () => void;
   employeeDocuments?: HrmEmployeeDocument[];
   employeeDocumentsLoading?: boolean;
+  payrollStructure?: { basic: number; net: number } | null;
 }) {
   const copyPermanentToCurrent = () => {
     const permanent = form.getValues("permanentAddress");
@@ -974,7 +1040,8 @@ export function EmployeeFormTabs({
       </TabsContent>
 
       <TabsContent forceMount value="compensation" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
-        <FormSection title="Salary structure" description="Reference amounts for HR and payroll.">
+        <PayrollStructureConflictHint form={form} payrollStructure={payrollStructure} />
+        <FormSection title="Compensation" description="Monthly net salary used for payroll (basic must be greater than 0).">
           <FormRow>
             <FormField
               control={form.control}
@@ -1017,19 +1084,7 @@ export function EmployeeFormTabs({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="salaryNet"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.netSalary}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <SalaryNetField form={form} />
           </FormRow>
         </FormSection>
 

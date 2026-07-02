@@ -38,6 +38,7 @@ import {
   HrmInsightBanner,
 } from "@/modules/hrm/components";
 import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { HrmAttendanceGridPanel, attendanceStatusSuffix } from "@/modules/hrm/hrm-attendance-grid";
 import type { HrmAttendanceCorrection, HrmAttendanceSummary } from "@/modules/hrm/types";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
@@ -61,12 +62,13 @@ import {
 } from "@/modules/hrm/hrm-legacy-labels";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { useAuth } from "@/contexts/AuthContext";
+import { CLOCKABLE_STAFF_ROLES } from "@/lib/user-roles";
 
 import { toast } from "sonner";
 
 type AttendanceRow = HrmAttendanceSummary;
 
-const CLOCKABLE_ROLES = new Set(["manager", "developer", "tester", "qa", "freelancer"]);
+const CLOCKABLE_ROLES = new Set(CLOCKABLE_STAFF_ROLES);
 
 export default function HrmAttendancePage() {
   const { user } = useAuth();
@@ -75,7 +77,7 @@ export default function HrmAttendancePage() {
   const canManage = useHrmPermission("attendance", "edit") || canApprove;
   const [periodMode, setPeriodMode] = useState<"today" | "yesterday" | "date" | "month">("today");
   const [customDate, setCustomDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [dateSort, setDateSort] = useState<"newest" | "oldest">("newest");
+  const [dateSort, setDateSort] = useState<"newest" | "oldest">("oldest");
   const [manualOpen, setManualOpen] = useState(false);
   const [manualMode, setManualMode] = useState<"clock_in" | "clock_out">("clock_in");
   const [month, setMonth] = useState(format(new Date(), "yyyy-MM"));
@@ -305,6 +307,7 @@ export default function HrmAttendancePage() {
   type VarianceRow = {
     userId: number;
     userName?: string;
+    avatarUrl?: string | null;
     date: string;
     clockHours: number;
     loggedHours: number;
@@ -318,7 +321,12 @@ export default function HrmAttendancePage() {
       cols.push({
         id: "employee",
         header: "Employee",
-        cell: (r) => <span className="font-medium">{r.userName}</span>,
+        cell: (r) => (
+          <div className="flex items-center gap-2">
+            <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-7 w-7" />
+            <span className="font-medium">{r.userName}</span>
+          </div>
+        ),
         exportValue: (r) => r.userName ?? String(r.userId),
       });
     }
@@ -350,8 +358,13 @@ export default function HrmAttendancePage() {
       cols.push({
         id: "employee",
         header: "Employee",
-        cell: (c) => String(c.userId),
-        exportValue: (c) => String(c.userId),
+        cell: (c) => (
+          <div className="flex items-center gap-2">
+            <HrmEmployeeAvatar name={c.userName ?? `#${c.userId}`} avatarUrl={c.avatarUrl} className="h-7 w-7" />
+            <span className="font-medium">{c.userName ?? `#${c.userId}`}</span>
+          </div>
+        ),
+        exportValue: (c) => c.userName ?? String(c.userId),
       });
     }
     cols.push(
@@ -368,7 +381,14 @@ export default function HrmAttendancePage() {
       {
         id: "reason",
         header: "Reason",
-        cell: (c) => <span className="max-w-xs truncate text-muted-foreground">{c.reason}</span>,
+        cell: (c) => (
+          <span className="block max-w-xs truncate text-muted-foreground" title={c.reason ?? undefined}>
+            {c.reason}
+          </span>
+        ),
+        detailCell: (c) => (
+          <span className="whitespace-pre-wrap break-words text-muted-foreground">{c.reason || "—"}</span>
+        ),
         exportValue: (c) => c.reason ?? "",
       },
       {
@@ -410,7 +430,12 @@ export default function HrmAttendancePage() {
     {
       id: "employee",
       header: "Employee",
-      cell: (r) => <span className="font-medium">{r.userName}</span>,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={r.userName} avatarUrl={r.avatarUrl} className="h-7 w-7" />
+          <span className="font-medium">{r.userName}</span>
+        </div>
+      ),
       exportValue: (r) => r.userName,
     },
     {

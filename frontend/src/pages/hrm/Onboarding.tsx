@@ -44,6 +44,7 @@ import {
   hrmRefCountSubtitle,
 } from "@/modules/hrm/components";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import {
   useCreateOnboardingRecord,
@@ -233,9 +234,12 @@ export default function HrmOnboardingPage() {
       id: "employee",
       header: "New hire",
       cell: (r) => (
-        <div>
-          <p className="font-medium">{r.employeeName}</p>
-          <p className="text-[11px] text-muted-foreground">{r.employeeDesignation ?? r.employeeCode ?? "—"}</p>
+        <div className="flex items-center gap-2.5">
+          <HrmEmployeeAvatar name={r.employeeName} avatarUrl={r.employeeAvatarUrl} className="h-8 w-8" />
+          <div>
+            <p className="font-medium">{r.employeeName}</p>
+            <p className="text-[11px] text-muted-foreground">{r.employeeDesignation ?? r.employeeCode ?? "—"}</p>
+          </div>
         </div>
       ),
       exportValue: (r) => r.employeeName,

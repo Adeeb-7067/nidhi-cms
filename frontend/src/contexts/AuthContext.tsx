@@ -31,7 +31,7 @@ import {
   type ImpersonationMeta,
 } from "@/lib/impersonation-storage";
 import { apiUrl } from "@/lib/api-base";
-import { isDevPortalRole, isMonitorableStaffRole, isStaffEmployeeRole } from "@/lib/user-roles";
+import { isClockableStaffRole, isDevPortalRole, isStaffEmployeeRole } from "@/lib/user-roles";
 import { permissionsQueryKey } from "@/api/permissions";
 import { customFetch } from "@/api/custom-fetch";
 import { resolveFcmTokenForLogout, revokeFirebaseToken } from "@/lib/firebase";
@@ -239,7 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     // Clock out the impersonated employee (if their role can have a session)
     // before revoking their token. Best-effort — don't block admin restoration.
-    const targetCanHaveSession = isMonitorableStaffRole(meta.targetUser.role);
+    const targetCanHaveSession = isClockableStaffRole(meta.targetUser.role);
     if (targetCanHaveSession && token) {
       try {
         await fetch(apiUrl("/api/work-sessions/clock-out"), {
@@ -247,7 +247,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ stopReason: "logout" }),
         });
-      } catch { /* network unavailable — stale session purge will clean up */ }
+      } catch { /* network unavailable — session may remain active until day end or manual clock-out */ }
     }
 
     try {
@@ -338,9 +338,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (typeof window !== "undefined" && window.electron) {
         window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
       }
-      // Clock out only if this role can have an active session (monitorable staff).
+      // Clock out only if this role can have an active session (clockable staff).
       // Admins and clients never clock in, so calling clock-out for them would hit a 403.
-      const canHaveSession = isMonitorableStaffRole(user?.role ?? "");
+      const canHaveSession = isClockableStaffRole(user?.role ?? "");
       if (canHaveSession) {
         try {
           await fetch(apiUrl("/api/work-sessions/clock-out"), {
@@ -348,7 +348,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
             body: JSON.stringify({ stopReason: "logout" }),
           });
-        } catch { /* network unavailable — stale-session purge job will clean up */ }
+        } catch { /* network unavailable — session may remain active until day end or manual clock-out */ }
       }
     }
 

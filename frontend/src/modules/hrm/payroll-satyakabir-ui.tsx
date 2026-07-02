@@ -53,7 +53,7 @@ import {
   type PayPeriodRunStatus,
   deriveRunStatusFromPayrollRun,
 } from "./payroll-period-utils";
-import type { HrmSalaryStructure } from "./types";
+import type { HrmPayrollOrgOverview, HrmSalaryStructure } from "./types";
 
 export type PayrollStatusFilter = "ALL" | "PAID" | "UNPAID";
 
@@ -67,10 +67,25 @@ export type PayrollPeriodTotals = {
   employeeCount: number;
 };
 
-/** Satyakabir: summary cards show salary-structure totals before payroll is run. */
+/** Pre-run period totals from org overview (team profile + structure salaries). */
+export function totalsFromOrgOverview(overview?: HrmPayrollOrgOverview): PayrollPeriodTotals {
+  const contractPay = overview?.monthlyCommitmentNet ?? 0;
+  const employeeCount = overview?.totalActive ?? 0;
+  return {
+    contractPay,
+    totalNet: contractPay,
+    paidAmount: 0,
+    pendingAmount: contractPay,
+    paidCount: 0,
+    pendingCount: employeeCount,
+    employeeCount,
+  };
+}
+
+/** @deprecated Prefer totalsFromOrgOverview when team-form salaries are in use. */
 export function estimateTotalsFromStructures(structures: HrmSalaryStructure[]): PayrollPeriodTotals {
-  const contractPay = structures.reduce((s, r) => s + (r.gross ?? 0), 0);
-  const totalNet = structures.reduce((s, r) => s + (r.net ?? 0), 0);
+  const contractPay = structures.reduce((s, r) => s + (r.net ?? 0), 0);
+  const totalNet = contractPay;
   const employeeCount = structures.length;
   return {
     contractPay,
@@ -84,10 +99,10 @@ export function estimateTotalsFromStructures(structures: HrmSalaryStructure[]): 
 }
 
 export function totalsFromPayrollLines(
-  lines: Array<{ gross?: number; net?: number }>,
+  lines: Array<{ gross?: number; net?: number; totalSalary?: number }>,
   runPaid: boolean,
 ): PayrollPeriodTotals {
-  const contractPay = lines.reduce((s, l) => s + (l.gross ?? 0), 0);
+  const contractPay = lines.reduce((s, l) => s + (l.totalSalary ?? 0), 0);
   const totalNet = lines.reduce((s, l) => s + (l.net ?? 0), 0);
   const employeeCount = lines.length;
   const paidCount = runPaid ? employeeCount : 0;
@@ -104,9 +119,9 @@ export function totalsFromPayrollLines(
 }
 
 export function totalsFromPayslipRows(
-  rows: Array<{ gross?: number | null; net?: number | null; status?: string }>,
+  rows: Array<{ gross?: number | null; net?: number | null; contractNet?: number | null; status?: string }>,
 ): PayrollPeriodTotals {
-  const contractPay = rows.reduce((s, r) => s + (r.gross ?? 0), 0);
+  const contractPay = rows.reduce((s, r) => s + (r.contractNet ?? 0), 0);
   const totalNet = rows.reduce((s, r) => s + (r.net ?? 0), 0);
   const paidCount = rows.filter((r) => r.status === "PAID").length;
   const pendingCount = rows.length - paidCount;
@@ -292,7 +307,7 @@ export function PayPeriodSummary({
     {
       label: "Contract pay",
       value: inrMoney(totalContractPay),
-      hint: "Sum of contract net salaries",
+      hint: "Sum of monthly net contract salaries",
       icon: FileSpreadsheet,
       tone: "text-foreground",
     },
@@ -360,20 +375,21 @@ export function PayPeriodSummary({
 
 export function OrgPayrollKpis({
   totalActive,
-  structureRows,
+  configuredCount,
+  monthlyCommitmentNet,
+  avgNetSalary,
+  notConfiguredCount,
   loading,
   className,
 }: {
   totalActive: number;
-  structureRows: Array<{ gross: number; net: number }>;
+  configuredCount: number;
+  monthlyCommitmentNet: number;
+  avgNetSalary: number;
+  notConfiguredCount: number;
   loading?: boolean;
   className?: string;
 }) {
-  const configured = structureRows.length;
-  const notConfigured = Math.max(0, totalActive - configured);
-  const monthlyCommitment = structureRows.reduce((s, r) => s + (r.gross ?? 0), 0);
-  const avgSalary = configured > 0 ? monthlyCommitment / configured : 0;
-
   const items = [
     {
       label: "Active employees",
@@ -385,26 +401,26 @@ export function OrgPayrollKpis({
     },
     {
       label: "Monthly commitment",
-      value: loading ? "—" : inrMoney(monthlyCommitment),
-      hint: `${configured} employee${configured === 1 ? "" : "s"} salary configured`,
+      value: loading ? "—" : inrMoney(monthlyCommitmentNet),
+      hint: `${configuredCount} employee${configuredCount === 1 ? "" : "s"} with net salary configured`,
       icon: BadgeIndianRupee,
       gradient: "from-violet-500 to-purple-700",
       iconBg: "bg-white/20",
     },
     {
-      label: "Avg salary",
-      value: loading ? "—" : avgSalary > 0 ? inrMoney(avgSalary) : "—",
-      hint: "Per employee / month",
+      label: "Avg net salary",
+      value: loading ? "—" : avgNetSalary > 0 ? inrMoney(avgNetSalary) : "—",
+      hint: "Contract net per employee / month",
       icon: TrendingUp,
       gradient: "from-emerald-500 to-teal-600",
       iconBg: "bg-white/20",
     },
     {
       label: "Not configured",
-      value: loading ? "—" : String(notConfigured),
-      hint: notConfigured > 0 ? "Salary not set — action needed" : "All employees configured",
+      value: loading ? "—" : String(notConfiguredCount),
+      hint: notConfiguredCount > 0 ? "Salary not set — action needed" : "All employees configured",
       icon: AlertTriangle,
-      gradient: notConfigured > 0 ? "from-amber-500 to-orange-600" : "from-green-500 to-emerald-600",
+      gradient: notConfiguredCount > 0 ? "from-amber-500 to-orange-600" : "from-green-500 to-emerald-600",
       iconBg: "bg-white/20",
     },
   ];

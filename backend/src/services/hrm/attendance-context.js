@@ -103,7 +103,7 @@ export async function buildAttendanceContext({
   if (filterUserIds?.length) userQuery.id = { $in: filterUserIds };
 
   const users = await usersTable.find(userQuery, {
-    id: 1, name: 1, employeeId: 1, departmentId: 1, department: 1,
+    id: 1, name: 1, employeeId: 1, departmentId: 1, department: 1, avatarUrl: 1,
   }).lean();
   const userIds = users.map((u) => u.id);
 

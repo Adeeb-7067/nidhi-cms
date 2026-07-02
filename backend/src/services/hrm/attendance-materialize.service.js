@@ -82,6 +82,7 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
     userId: user.id,
     employeeId: user.employeeId ?? null,
     userName: user.name,
+    avatarUrl: user.avatarUrl ?? null,
     departmentId: user.departmentId ?? null,
     departmentName: user.department ?? null,
     date,

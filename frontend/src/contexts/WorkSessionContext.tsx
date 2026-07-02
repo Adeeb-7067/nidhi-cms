@@ -15,7 +15,7 @@ import { useListNotifications, getListNotificationsQueryKey } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
-import { isMonitorableStaffRole } from "@/lib/user-roles";
+import { isClockableStaffRole, isMonitorableStaffRole } from "@/lib/user-roles";
 import { ensureNotificationPermission } from "@/lib/web-push-notify";
 import {
   markWorkSessionAlertShown,
@@ -42,11 +42,12 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // Only monitorable staff roles have work sessions. On web, skip polling for other roles
+  // Only clockable staff roles have work sessions. On web, skip polling for other roles
   // to avoid 30-second background requests that always return null for admins/clients.
-  // In Electron the desktop app always belongs to a monitorable employee, so allow any logged-in user.
+  // In Electron the desktop app always belongs to a clockable employee, so allow any logged-in user.
+  const isClockableRole = isClockableStaffRole(user?.role);
   const isMonitorableRole = isMonitorableStaffRole(user?.role);
-  const sessionEnabled = !!user && (isElectron() || isMonitorableRole);
+  const sessionEnabled = !!user && (isElectron() || isClockableRole);
 
   const { data: activeData, isLoading: sessionLoading } = useActiveSession(sessionEnabled);
   const workSessionAlertParams = { unreadOnly: true as const, limit: 10 };
@@ -93,7 +94,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
 
   // Surface unread work-session alerts once (persisted) — not on every app restart.
   useEffect(() => {
-    if (!isMonitorableRole || !unreadAlerts?.notifications?.length) return;
+    if (!isClockableRole || !unreadAlerts?.notifications?.length) return;
     for (const item of unreadAlerts.notifications) {
       if (item.type !== "work_session" || shownSessionAlertRef.current.has(item.id)) continue;
       const alertKey = `notif:${item.id}`;
@@ -105,7 +106,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
         duration: 12_000,
       });
     }
-  }, [isMonitorableRole, unreadAlerts]);
+  }, [isClockableRole, unreadAlerts]);
 
   // Sync Electron session + screenshot scheduler once active session is confirmed from API.
   useEffect(() => {
@@ -135,7 +136,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       system_shutdown: "Work session ended — PC is shutting down.",
       network_lost: "Work session ended — no network for an extended period.",
       app_quit: "Work session ended — app closed.",
-      client_disconnected: "Work session ended — desktop app stopped sending heartbeats for 10+ minutes.",
+      client_disconnected: "Work session ended — no longer active on the server.",
       session_expired: "Work session ended — 24-hour limit reached.",
       day_ended: "Work session ended — a new work day started.",
       logout: "Work session ended — you logged out.",
@@ -191,7 +192,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
         ? `Electron/${window.electron?.platform ?? "desktop"}`
         : "Web";
       const result = await clockInMutation.mutateAsync(deviceInfo);
-      if (isMonitorableRole) {
+      if (isClockableRole) {
         void ensureNotificationPermission();
       }
       if (result.resumed) {

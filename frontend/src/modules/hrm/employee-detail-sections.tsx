@@ -480,9 +480,11 @@ export function EmployeeAttendanceDonut({ rows }: { rows: HrmAttendanceSummary[]
 export function EmployeeSalaryBar({
   gross,
   net,
+  source,
 }: {
   gross?: number | null;
   net?: number | null;
+  source?: string | null;
 }) {
   const data = [
     { name: "Gross", amount: gross ?? 0 },
@@ -491,16 +493,25 @@ export function EmployeeSalaryBar({
 
   if (!data.length) {
     return (
-      <HrmChartCard title="Salary structure" description="Configured compensation">
+      <HrmChartCard title="Contract compensation" description="Monthly net salary used for payroll">
         <p className="flex h-[160px] items-center justify-center text-xs text-muted-foreground">
-          No salary structure on file — add in Payroll.
+          No compensation configured — set salary in Admin → Team (Compensation tab).
         </p>
       </HrmChartCard>
     );
   }
 
   return (
-    <HrmChartCard title="Salary structure" description="Configured compensation">
+    <HrmChartCard
+      title="Contract compensation"
+      description={
+        source === "profile"
+          ? "From team employee profile (used for payroll)"
+          : source === "structure"
+            ? "From payroll structure record"
+            : "Monthly contract amounts"
+      }
+    >
       <div className="h-[160px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, left: 8, bottom: 4 }}>
@@ -564,10 +575,11 @@ function addressesEqual(
 }
 
 export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee; overview: HrmEmployeeOverview }) {
-  const profileSalaryNet = employee.salary?.netSalary;
-  const profileSalaryBasic = employee.salary?.basicSalary;
-  const profileAllowances = employee.salary?.allowances;
-  const profileDeductions = employee.salary?.deductions;
+  const contract = overview.contractSalary;
+  const profileSalaryBasic = contract?.configured ? contract.basic : undefined;
+  const profileAllowances = contract?.configured ? contract.allowances : undefined;
+  const profileDeductions = contract?.configured ? contract.deductions : undefined;
+  const profileSalaryNet = contract?.configured ? contract.net : undefined;
   const bank = employee.salary?.bankAccount;
   const linkedin = employee.linkedinUrl ?? employee.socialProfiles?.linkedin;
   const social = employee.socialProfiles ?? {};
@@ -672,11 +684,11 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
           />
           <ProfileDetailRow
             label="Allowances"
-            value={profileAllowances != null ? formatCurrency(profileAllowances) : "—"}
+            value={profileAllowances != null && profileAllowances > 0 ? formatCurrency(profileAllowances) : "—"}
           />
           <ProfileDetailRow
             label="Deductions"
-            value={profileDeductions != null ? formatCurrency(profileDeductions) : "—"}
+            value={profileDeductions != null && profileDeductions > 0 ? formatCurrency(profileDeductions) : "—"}
           />
           <ProfileDetailRow
             label="Net pay"
@@ -690,6 +702,12 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
                     : "—"
             }
           />
+          {contract?.configured && contract.source ? (
+            <ProfileDetailRow
+              label="Payroll source"
+              value={contract.source === "profile" ? "Team profile" : "Payroll structure"}
+            />
+          ) : null}
         </CardContent>
       </Card>
 

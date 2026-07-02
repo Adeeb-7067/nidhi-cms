@@ -522,7 +522,7 @@ export function HrmRichDashboard({ data, view }: Props) {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-[10px] text-muted-foreground w-4">{i + 1}</span>
-                        <HrmEmployeeAvatar name={e.userName} className="h-7 w-7" />
+                        <HrmEmployeeAvatar name={e.userName} avatarUrl={e.avatarUrl} className="h-7 w-7" />
                         <span className="text-xs font-medium truncate">{e.userName}</span>
                       </div>
                       <span className="text-xs font-semibold tabular-nums">
@@ -577,7 +577,10 @@ export function HrmRichDashboard({ data, view }: Props) {
                 {pendingLeave.slice(0, 8).map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
-                      <p className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</p>
+                      <div className="flex items-center gap-2">
+                        <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-6 w-6" />
+                        <p className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</p>
+                      </div>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {r.startDate} → {r.endDate}

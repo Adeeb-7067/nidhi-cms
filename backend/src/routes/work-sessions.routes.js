@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { monitorableStaffRoles } from "../constants/user-roles.js";
+import { clockableStaffRoles } from "../constants/user-roles.js";
 import asyncHandler from "express-async-handler";
 import rateLimit from "express-rate-limit";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
@@ -16,16 +16,16 @@ const clockInLimiter = rateLimit({
 
 const router = Router();
 
-// Clock-in/out is only valid for monitored employee roles — admins and clients never clock in.
+// Clock-in/out is valid for every staff role — admins (view only) and clients never clock in.
 router.post(
   "/work-sessions/clock-in",
   requireAuth,
-  requireRole(...monitorableStaffRoles),
+  requireRole(...clockableStaffRoles),
   clockInLimiter,
   asyncHandler(workSessionsController.handleClockIn)
 );
-router.post("/work-sessions/clock-out", requireAuth, requireRole(...monitorableStaffRoles), asyncHandler(workSessionsController.handleClockOut));
-router.post("/work-sessions/heartbeat", requireAuth, requireRole(...monitorableStaffRoles), asyncHandler(workSessionsController.handleHeartbeat));
+router.post("/work-sessions/clock-out", requireAuth, requireRole(...clockableStaffRoles), asyncHandler(workSessionsController.handleClockOut));
+router.post("/work-sessions/heartbeat", requireAuth, requireRole(...clockableStaffRoles), asyncHandler(workSessionsController.handleHeartbeat));
 router.get("/work-sessions/active", requireAuth, asyncHandler(workSessionsController.handleGetActive));
 // Super-admin only: list all currently active sessions across every employee
 router.get("/work-sessions/active-all", requireAuth, requireRole("super_admin"), asyncHandler(workSessionsController.handleListActiveSessions));

@@ -122,10 +122,6 @@ export function hrmPayslipToViewModel(detail: HrmPayslipDetail): PayslipViewMode
     ...(detail.lopDeduction > 0
       ? [{ label: "LOP Deduction", amount: detail.lopDeduction, ytd: detail.lopDeduction }]
       : []),
-    ...(detail.pfEmployee > 0
-      ? [{ label: "PF (Employee)", amount: detail.pfEmployee, ytd: detail.pfEmployee }]
-      : []),
-    ...(detail.tds > 0 ? [{ label: "TDS", amount: detail.tds, ytd: detail.tds }] : []),
   ];
 
   if (!deductions.length && detail.deductions > 0) {

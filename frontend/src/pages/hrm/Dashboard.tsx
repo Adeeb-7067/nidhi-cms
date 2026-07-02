@@ -28,7 +28,7 @@ import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
 import { deriveTodayAttendanceStats } from "@/modules/hrm/attendance-day-stats";
 import { useHrmDashboard, useHrmAttendanceDaily } from "@/api/hrm";
 import { getApiErrorMessage } from "@/lib/api-error";
-import { isMonitorableStaffRole } from "@/lib/user-roles";
+import { isClockableStaffRole } from "@/lib/user-roles";
 import { useAuth } from "@/contexts/AuthContext";
 
 function formatHours(minutes: number) {
@@ -154,7 +154,7 @@ export default function HrmDashboardPage() {
 
         <HrmDashboardFilterBar trendDays={trendDays} onTrendDaysChange={setTrendDays} />
 
-        {isMonitorableStaffRole(user?.role) ? (
+        {isClockableStaffRole(user?.role) ? (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
@@ -166,7 +166,7 @@ export default function HrmDashboardPage() {
               </div>
               <div>
                 <p className="text-sm font-semibold">Work clock</p>
-                <p className="text-xs text-muted-foreground">Clock in to start your monitored work session.</p>
+                <p className="text-xs text-muted-foreground">Clock in to start your work session.</p>
               </div>
             </div>
             <ClockInButton />

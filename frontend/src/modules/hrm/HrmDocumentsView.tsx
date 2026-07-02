@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Check, Download, FileText, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { resolveFileUrl } from "@/lib/resolve-file-url";
+import { HrmEmployeeAvatar } from "./dashboard-sections";
 import type { HrmEmployeeDocument } from "./types";
 import {
   HrmRefDetailHeader,
@@ -128,10 +129,17 @@ export function HrmDocumentLibrary({
                     <HrmRefDetailRow
                       label="Employee"
                       value={
-                        <>
-                          {selected.userName ?? `#${selected.userId}`}
-                          {selected.employeeId ? ` (${selected.employeeId})` : ""}
-                        </>
+                        <div className="flex items-center gap-2">
+                          <HrmEmployeeAvatar
+                            name={selected.userName ?? `#${selected.userId}`}
+                            avatarUrl={selected.avatarUrl}
+                            className="h-6 w-6"
+                          />
+                          <span>
+                            {selected.userName ?? `#${selected.userId}`}
+                            {selected.employeeId ? ` (${selected.employeeId})` : ""}
+                          </span>
+                        </div>
                       }
                     />
                   )}

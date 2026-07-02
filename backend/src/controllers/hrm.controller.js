@@ -315,6 +315,10 @@ async function getSalaryStructures(_req, res) {
   res.json({ structures: await payrollService.listSalaryStructures() });
 }
 
+async function getOrgPayrollOverview(_req, res) {
+  res.json(await payrollService.getOrgPayrollOverview());
+}
+
 async function putSalaryStructure(req, res) {
   const userId = parseIdParam(req.params.userId, "user id");
   res.json(await payrollService.upsertSalaryStructure(userId, req.body));
@@ -877,6 +881,7 @@ export {
   getHrmEmployees,
   getHrmEmployee,
   getSalaryStructures,
+  getOrgPayrollOverview,
   putSalaryStructure,
   getPayrollRuns,
   postPayrollRun,

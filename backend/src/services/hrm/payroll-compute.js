@@ -148,6 +148,98 @@ export function computePayrollLineAmounts({
   };
 }
 
+/**
+ * Merge employee profile salary (team form) with optional payroll structure row.
+ * Profile wins when basicSalary is set; otherwise fall back to salaryStructures.
+ */
+export function resolveContractSalary({ profileSalary = {}, structureRow = {} } = {}) {
+  const profileBasic = Number(profileSalary.basicSalary) || 0;
+  const profileAllowances = Number(profileSalary.allowances) || 0;
+  const profileDeductions = Number(profileSalary.deductions) || 0;
+  const profileNet = Number(profileSalary.netSalary) || 0;
+
+  if (profileBasic > 0) {
+    const gross = profileBasic + profileAllowances;
+    const net =
+      profileNet > 0
+        ? profileNet
+        : Math.max(0, Math.round((gross - profileDeductions) * 100) / 100);
+    return {
+      basic: profileBasic,
+      allowances: profileAllowances,
+      hra: 0,
+      gross,
+      // Statutory amounts are already reflected in net salary from the team form.
+      pfEmployee: 0,
+      tds: 0,
+      esiEmployee: 0,
+      deductions: profileDeductions,
+      net,
+      totalSalary: net,
+      contractNet: net,
+      payrollBase: net,
+      configured: true,
+      source: "profile",
+    };
+  }
+
+  const structBasic = Number(structureRow.basic) || 0;
+  const structHra = Number(structureRow.hra) || 0;
+  const structAllowances = Number(structureRow.allowances) || 0;
+  const structPf = Number(structureRow.pfEmployee) || 0;
+  const structTds = Number(structureRow.tds) || 0;
+  const structEsi = Number(structureRow.esiEmployee) || 0;
+  const structGross = Number(structureRow.gross) || 0;
+  const structNet = Number(structureRow.net) || 0;
+
+  if (structBasic > 0 || structGross > 0) {
+    const basic = structBasic;
+    const hra = structHra;
+    const allowances = structAllowances;
+    const gross =
+      structGross > 0 ? structGross : Math.round((basic + hra + allowances) * 100) / 100;
+    const pfEmployee = structPf;
+    const tds = structTds;
+    const esiEmployee = structEsi;
+    const deductions = Math.round((pfEmployee + tds + esiEmployee) * 100) / 100;
+    const net =
+      structNet > 0 ? structNet : Math.max(0, Math.round((gross - deductions) * 100) / 100);
+    return {
+      basic,
+      allowances,
+      hra,
+      gross,
+      pfEmployee: 0,
+      tds: 0,
+      esiEmployee: 0,
+      deductions,
+      net,
+      totalSalary: net,
+      contractNet: net,
+      payrollBase: net,
+      configured: true,
+      source: "structure",
+    };
+  }
+
+  return {
+    basic: 0,
+    allowances: 0,
+    hra: 0,
+    gross: 0,
+    pfEmployee: 0,
+    tds: 0,
+    esiEmployee: 0,
+    deductions: 0,
+    net: 0,
+    totalSalary: 0,
+    contractNet: 0,
+    payrollBase: 0,
+    configured: false,
+    source: null,
+  };
+}
+
 /** Whether pre-run blockers allow payroll generation/finalization. */
 export function evaluatePayrollReadiness(checklist) {
   const blockerCount = checklist.blockers.reduce((n, b) => n + (b.count ?? 0), 0);

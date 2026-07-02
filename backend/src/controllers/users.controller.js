@@ -37,6 +37,7 @@ import {
   ensureUserLeaveAccrualForPeriod,
   leaveProfileFieldsTouched,
 } from "../services/hrm/leave-accrual.service.js";
+import { syncSalaryStructureFromProfile } from "../services/hrm/payroll.service.js";
 import {
   badRequest,
   conflict,
@@ -157,6 +158,9 @@ async function postUsers(req, res) {
     trigger: "initial_setup",
     status: "active"
   });
+  if (body.salary !== undefined) {
+    await syncSalaryStructureFromProfile(user.id);
+  }
   res.status(201).json(formatUser(user, { includeSensitive: true }));
 }
 async function patchUsersMePassword(req, res) {
@@ -284,6 +288,9 @@ async function patchUsersById(req, res) {
   if (body.role !== undefined) notifyUser(id, "role_updated", { userId: id, role: user.role });
   if (leaveProfileFieldsTouched(Object.keys(profilePatch))) {
     await ensureUserLeaveAccrualForPeriod(id);
+  }
+  if (body.salary !== undefined) {
+    await syncSalaryStructureFromProfile(id);
   }
   res.json(formatUser(user, { withPresence: true, includeSensitive: true }));
 }

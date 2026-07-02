@@ -26,7 +26,7 @@ const SESSION_END_COPY = {
   },
   client_disconnected: {
     title: "Work session ended",
-    body: "Your session ended — the desktop app stopped sending heartbeats for 10+ minutes. Open the app and clock in again today to continue.",
+    body: "Your session is no longer active on the server. Clock in again today to continue your shift.",
   },
   session_expired: {
     title: "Work session ended",

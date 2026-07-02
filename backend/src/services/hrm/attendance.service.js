@@ -191,6 +191,8 @@ export async function getAttendanceDailySummaries({
 
       departmentName: u.department,
 
+      avatarUrl: u.avatarUrl ?? null,
+
     }]),
 
   );
@@ -315,7 +317,28 @@ export async function listCorrections(userIds) {
 
   const query = userIds?.length ? { userId: { $in: userIds } } : {};
 
-  return attendanceCorrectionsTable.find(query).sort({ createdAt: -1 }).lean();
+  let rows, users;
+  if (userIds?.length) {
+    // userIds is already known — fetch corrections and users in parallel instead of waiting on one to find the other.
+    [rows, users] = await Promise.all([
+      attendanceCorrectionsTable.find(query).sort({ createdAt: -1 }).lean(),
+      usersTable.find({ id: { $in: userIds } }, { id: 1, name: 1, employeeId: 1, avatarUrl: 1 }).lean(),
+    ]);
+  } else {
+    rows = await attendanceCorrectionsTable.find(query).sort({ createdAt: -1 }).lean();
+    users = await usersTable.find(
+      { id: { $in: [...new Set(rows.map((r) => r.userId))] } },
+      { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
+    ).lean();
+  }
+  const userMap = new Map(users.map((u) => [u.id, u]));
+
+  return rows.map((r) => ({
+    ...r,
+    userName: userMap.get(r.userId)?.name ?? "Unknown",
+    employeeId: userMap.get(r.userId)?.employeeId ?? null,
+    avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
+  }));
 
 }
 

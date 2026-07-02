@@ -7,10 +7,33 @@ import {
   countSundaysInRange,
   evaluatePayrollReadiness,
   PAYROLL_DAYS_IN_MONTH,
+  resolveContractSalary,
 } from "../../src/services/hrm/payroll-compute.js";
+import { eachDateInRange, getDayOfWeek } from "../../src/services/hrm/hrm-date-utils.js";
 
 const period = { startDate: "2026-06-01", endDate: "2026-06-30" };
 const weekendDays = [0, 6];
+
+/** Materialize weekend/holiday rows like getAttendanceDailySummaries does in production. */
+function baseSummariesForPeriod(startDate, endDate, weekend = weekendDays) {
+  const rows = [];
+  for (const date of eachDateInRange(startDate, endDate)) {
+    if (weekend.includes(getDayOfWeek(date))) {
+      rows.push({ date, status: "weekend", compliance: "exempt" });
+    }
+  }
+  return rows;
+}
+
+function mergeSummaries(...groups) {
+  const byDate = new Map();
+  for (const group of groups) {
+    for (const row of group) {
+      byDate.set(row.date, row);
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
 
 describe("countSundaysInRange", () => {
   test("counts Sundays in June 2026", () => {
@@ -57,9 +80,10 @@ describe("buildLeavePayrollByDate", () => {
 });
 
 describe("aggregateAttendanceForPayroll", () => {
-  test("includes all Sundays as paid days", () => {
-    const result = aggregateAttendanceForPayroll([], period);
-    assert.equal(result.paidDays, 4);
+  test("includes weekend summaries as paid days", () => {
+    const summaries = baseSummariesForPeriod(period.startDate, period.endDate);
+    const result = aggregateAttendanceForPayroll(summaries, period);
+    assert.equal(result.paidDays, 8);
     assert.equal(result.lopDays, 0);
   });
 
@@ -77,16 +101,16 @@ describe("aggregateAttendanceForPayroll", () => {
       ],
       { ...period, weekendDays, holidayDates: new Set() },
     );
-    const summaries = [
+    const summaries = mergeSummaries(baseSummariesForPeriod(period.startDate, period.endDate), [
       { date: "2026-06-02", status: "present", compliance: "met" },
       { date: "2026-06-03", status: "on_leave", compliance: "exempt" },
       { date: "2026-06-04", status: "absent", compliance: "absent" },
-    ];
+    ]);
     const result = aggregateAttendanceForPayroll(summaries, {
       ...period,
       leavePayrollByDate,
     });
-    assert.equal(result.paidDays, 6);
+    assert.equal(result.paidDays, 10);
     assert.equal(result.lopDays, 0);
   });
 
@@ -104,19 +128,23 @@ describe("aggregateAttendanceForPayroll", () => {
       ],
       { ...period, weekendDays, holidayDates: new Set() },
     );
-    const summaries = [{ date: "2026-06-03", status: "on_leave", compliance: "exempt" }];
+    const summaries = mergeSummaries(baseSummariesForPeriod(period.startDate, period.endDate), [
+      { date: "2026-06-03", status: "on_leave", compliance: "exempt" },
+    ]);
     const result = aggregateAttendanceForPayroll(summaries, {
       ...period,
       leavePayrollByDate,
     });
-    assert.equal(result.paidDays, 4);
+    assert.equal(result.paidDays, 9);
     assert.equal(result.lopDays, 1);
   });
 
   test("absent days are unpaid with no LOP", () => {
-    const summaries = [{ date: "2026-06-02", status: "absent", compliance: "absent" }];
+    const summaries = mergeSummaries(baseSummariesForPeriod(period.startDate, period.endDate), [
+      { date: "2026-06-02", status: "absent", compliance: "absent" },
+    ]);
     const result = aggregateAttendanceForPayroll(summaries, { ...period, leavePayrollByDate: new Map() });
-    assert.equal(result.paidDays, 4);
+    assert.equal(result.paidDays, 8);
     assert.equal(result.lopDays, 0);
   });
 });
@@ -152,6 +180,49 @@ describe("computePayrollLineAmounts", () => {
     const line = computePayrollLineAmounts({ gross: 30000, paidDays: 1, lopDays: 1 });
     assert.equal(line.gross, 1000);
     assert.equal(line.lopDeduction, 1000);
+  });
+});
+
+describe("resolveContractSalary", () => {
+  test("uses employee profile salary when basic is set", () => {
+    const contract = resolveContractSalary({
+      profileSalary: { basicSalary: 50000, allowances: 5000, deductions: 2000, netSalary: 53000 },
+    });
+    assert.equal(contract.gross, 55000);
+    assert.equal(contract.totalSalary, 53000);
+    assert.equal(contract.contractNet, 53000);
+    assert.equal(contract.payrollBase, 53000);
+    assert.equal(contract.pfEmployee, 0);
+    assert.equal(contract.source, "profile");
+  });
+
+  test("computes profile net when netSalary is missing", () => {
+    const contract = resolveContractSalary({
+      profileSalary: { basicSalary: 40000, allowances: 10000, deductions: 1500 },
+    });
+    assert.equal(contract.gross, 50000);
+    assert.equal(contract.contractNet, 48500);
+    assert.equal(contract.totalSalary, 48500);
+    assert.equal(contract.payrollBase, 48500);
+  });
+
+  test("falls back to salary structure row when profile basic is missing", () => {
+    const contract = resolveContractSalary({
+      profileSalary: {},
+      structureRow: { basic: 30000, hra: 5000, allowances: 2000, pfEmployee: 1800, tds: 500, gross: 37000, net: 34700 },
+    });
+    assert.equal(contract.gross, 37000);
+    assert.equal(contract.totalSalary, 34700);
+    assert.equal(contract.contractNet, 34700);
+    assert.equal(contract.payrollBase, 34700);
+    assert.equal(contract.pfEmployee, 0);
+    assert.equal(contract.source, "structure");
+  });
+
+  test("returns unconfigured when no salary data exists", () => {
+    const contract = resolveContractSalary({ profileSalary: {}, structureRow: {} });
+    assert.equal(contract.configured, false);
+    assert.equal(contract.gross, 0);
   });
 });
 

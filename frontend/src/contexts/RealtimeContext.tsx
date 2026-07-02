@@ -21,7 +21,7 @@ import { playNotificationAlert, stopPersistentAlert } from "../lib/notification-
 import { apiUrl, getApiBaseUrl } from "../lib/api-base";
 import { BRAND } from "@/lib/brand";
 import { showWebPushNotification, ensureNotificationPermission } from "@/lib/web-push-notify";
-import { isMonitorableStaffRole } from "@/lib/user-roles";
+import { isClockableStaffRole } from "@/lib/user-roles";
 import {
   markWorkSessionAlertShown,
   wasWorkSessionAlertShown,
@@ -87,10 +87,10 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [unreadNotificationCount]);
 
-  // Request browser notification permission early for monitorable staff (web push when tab closed).
+  // Request browser notification permission early for clockable staff (web push when tab closed).
   useEffect(() => {
     if (!user?.id || !accessToken) return;
-    if (isMonitorableStaffRole(user.role)) {
+    if (isClockableStaffRole(user.role)) {
       void ensureNotificationPermission();
     }
   }, [user?.id, user?.role, accessToken]);

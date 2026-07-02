@@ -276,7 +276,7 @@ export function BdeTeamRosterPanel({
           <Badge variant="secondary" className={`${staffRoleBadgeClass(member.role)} w-fit text-[10px]`}>
             {formatStaffRoleLabel(member.role)}
           </Badge>
-          <span className="text-[9px] text-muted-foreground truncate max-w-[120px]">
+          <span className="block text-[9px] text-muted-foreground truncate max-w-[120px]">
             {member.designation || "BDE"}
           </span>
         </div>

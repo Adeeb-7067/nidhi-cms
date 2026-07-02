@@ -15,7 +15,8 @@ import { listLeaveRequests } from "./leave.service.js";
 import { getAttendanceDailySummaries } from "./attendance.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
 import { countDocuments } from "./documents.service.js";
-import { getSalaryStructureForUser } from "./payroll.service.js";
+import { resolveContractSalary } from "./payroll-compute.js";
+import { salaryStructuresTable } from "../../models/schema/hrm/payroll.js";
 
 /** All CMS team members that can open the shared employee profile detail page. */
 const teamProfileRoles = adminStaffRoles;
@@ -227,14 +228,14 @@ export async function getHrmEmployeeDetail(userId) {
   const month = now.getMonth() + 1;
   const { startDate, endDate } = monthBounds(year, month);
 
-  const [{ summaries }, balances, leaveRequests, documentCount, structure, latestRun] = await Promise.all([
+  const [{ summaries }, balances, leaveRequests, documentCount, structureRow, latestRun] = await Promise.all([
     isHrmTrackedEmployee
       ? getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] })
       : Promise.resolve({ summaries: [] }),
     isHrmTrackedEmployee ? listLeaveBalances(userId, year) : Promise.resolve([]),
     isHrmTrackedEmployee ? listLeaveRequests({ userIds: [userId] }) : Promise.resolve([]),
     countDocuments(userId),
-    isHrmTrackedEmployee ? getSalaryStructureForUser(userId) : Promise.resolve(null),
+    isHrmTrackedEmployee ? salaryStructuresTable.findOne({ userId }).lean() : Promise.resolve(null),
     isHrmTrackedEmployee
       ? payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
           .sort({ year: -1, month: -1 })
@@ -253,7 +254,10 @@ export async function getHrmEmployeeDetail(userId) {
     halfDay: userSummaries.filter((s) => ["half_day", "short"].includes(s.status)).length,
   };
 
-  const structureRow = structure;
+  const contract = resolveContractSalary({
+    profileSalary: user.salary ?? {},
+    structureRow: structureRow ?? {},
+  });
 
   let latestPayrollNet = null;
   if (latestRun) {
@@ -270,8 +274,18 @@ export async function getHrmEmployeeDetail(userId) {
       name: b.leaveType?.name ?? "Leave",
       available: Math.max(0, (b.allocated ?? 0) + (b.carriedForward ?? 0) - (b.used ?? 0) - (b.pending ?? 0)),
     })),
-    salaryGross: structureRow?.gross ?? null,
-    salaryNet: structureRow?.net ?? null,
+    salaryGross: contract.configured ? contract.gross : null,
+    salaryNet: contract.configured ? contract.contractNet : null,
+    contractSalary: {
+      configured: contract.configured,
+      source: contract.source,
+      basic: contract.basic,
+      allowances: contract.allowances,
+      hra: contract.hra,
+      deductions: contract.deductions ?? 0,
+      gross: contract.gross,
+      net: contract.contractNet,
+    },
     latestPayrollNet,
     documentCount,
   };

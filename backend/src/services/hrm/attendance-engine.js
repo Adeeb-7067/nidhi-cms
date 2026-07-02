@@ -154,6 +154,7 @@ export function dailyAttendanceToSummary(row, userMeta = {}) {
     userId: row.userId,
     employeeId: userMeta.employeeId ?? null,
     userName: userMeta.userName ?? "Unknown",
+    avatarUrl: userMeta.avatarUrl ?? null,
     departmentId: userMeta.departmentId ?? null,
     departmentName: userMeta.departmentName ?? null,
     date: row.date,

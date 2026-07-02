@@ -73,8 +73,6 @@ export function buildPayslipPrintHtml(detail: HrmPayslipDetail) {
     <tr><td>LOP days</td><td>${detail.lopDays}</td></tr>
     <tr><td>Late count</td><td>${detail.lateCount}</td></tr>
     <tr class="deduct"><td>LOP deduction</td><td>${detail.lopDeduction}</td></tr>
-    <tr class="deduct"><td>PF (employee)</td><td>${detail.pfEmployee}</td></tr>
-    <tr class="deduct"><td>TDS</td><td>${detail.tds}</td></tr>
     <tr class="deduct"><td>Total deductions</td><td>${detail.deductions}</td></tr>
     <tr class="net"><td>Net pay</td><td>${detail.net}</td></tr>
   </table>

@@ -38,6 +38,7 @@ function profileFieldDoc(user, slot, name, category, fileUrl, createdAt) {
     userId: user.id,
     userName: user.name ?? "Unknown",
     employeeId: user.employeeId ?? null,
+    avatarUrl: user.avatarUrl ?? null,
     name,
     category,
     fileUrl: fileUrl.trim(),
@@ -55,6 +56,7 @@ export function collectProfileDocuments(user) {
     id: user.id,
     name: user.name,
     employeeId: user.employeeId,
+    avatarUrl: user.avatarUrl,
     updatedAt: user.updatedAt,
   };
 
@@ -79,6 +81,7 @@ export function collectProfileDocuments(user) {
       userId: user.id,
       userName: user.name ?? "Unknown",
       employeeId: user.employeeId ?? null,
+      avatarUrl: user.avatarUrl ?? null,
       name: item.name?.trim() || `Profile document ${i + 1}`,
       category: mapEmbeddedTypeToCategory(item.type),
       fileUrl: item.fileUrl.trim(),
@@ -98,6 +101,7 @@ const USER_DOC_FIELDS = {
   id: 1,
   name: 1,
   employeeId: 1,
+  avatarUrl: 1,
   resumeUrl: 1,
   idProofUrl: 1,
   addressProofUrl: 1,
@@ -147,7 +151,7 @@ export async function listDocuments(userId) {
   const userMap = new Map(users.map((u) => [u.id, u]));
   for (const id of [...new Set(rows.map((r) => r.userId))]) {
     if (!userMap.has(id)) {
-      const u = await usersTable.findOne({ id }, { id: 1, name: 1, employeeId: 1 }).lean();
+      const u = await usersTable.findOne({ id }, { id: 1, name: 1, employeeId: 1, avatarUrl: 1 }).lean();
       if (u) userMap.set(id, u);
     }
   }
@@ -158,6 +162,7 @@ export async function listDocuments(userId) {
       ...r,
       userName: u?.name ?? "Unknown",
       employeeId: u?.employeeId ?? null,
+      avatarUrl: u?.avatarUrl ?? null,
       source: "library",
       createdAt: r.createdAt?.toISOString?.() ?? r.createdAt,
     };

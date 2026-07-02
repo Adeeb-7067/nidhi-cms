@@ -73,6 +73,7 @@ export type HrmLeaveRequest = {
   reviewedAt?: string | null;
   userName?: string;
   employeeId?: string | null;
+  avatarUrl?: string | null;
   leaveType?: HrmLeaveType | null;
   leaveTypeName?: string | null;
   balanceAllocations?: Array<{ leaveTypeId: number; days: number }>;
@@ -92,6 +93,7 @@ export type HrmWfhRequest = {
   reviewedAt?: string | null;
   userName?: string;
   employeeId?: string | null;
+  avatarUrl?: string | null;
   phoneNumber?: string | null;
   /** @deprecated use startDate */
   date?: string;
@@ -149,6 +151,7 @@ export type HrmAttendanceSummary = {
   userId: number;
   employeeId?: string | null;
   userName: string;
+  avatarUrl?: string | null;
   departmentId?: number | null;
   departmentName?: string | null;
   date: string;
@@ -180,6 +183,9 @@ export type HrmAttendanceVarianceRow = HrmAttendanceSummary & {
 export type HrmAttendanceCorrection = {
   id: number;
   userId: number;
+  userName?: string;
+  employeeId?: string | null;
+  avatarUrl?: string | null;
   date: string;
   reason: string;
   requestedStatus?: string | null;
@@ -240,6 +246,7 @@ export type HrmDashboardPendingLeave = {
   id: number;
   userId: number;
   userName?: string;
+  avatarUrl?: string | null;
   startDate: string;
   endDate: string;
   days?: number;
@@ -251,6 +258,7 @@ export type HrmDashboardPendingWfh = {
   id: number;
   userId: number;
   userName?: string;
+  avatarUrl?: string | null;
   startDate: string;
   endDate: string;
   status: string;
@@ -425,6 +433,17 @@ export type HrmEmployeeDetailResponse = {
   leaveRequests?: HrmLeaveRequest[];
 };
 
+export type HrmEmployeeContractSalary = {
+  configured: boolean;
+  source: "profile" | "structure" | null;
+  basic: number;
+  allowances: number;
+  hra: number;
+  deductions: number;
+  gross: number;
+  net: number;
+};
+
 export type HrmEmployeeOverview = {
   month: { year: number; month: number; startDate: string; endDate: string };
   attendance: { present: number; absent: number; onLeave: number; late: number; wfh: number };
@@ -432,6 +451,7 @@ export type HrmEmployeeOverview = {
   leaveBalances: Array<{ code: string; name: string; available: number }>;
   salaryGross?: number | null;
   salaryNet?: number | null;
+  contractSalary?: HrmEmployeeContractSalary;
   latestPayrollNet?: number | null;
   documentCount: number;
 };
@@ -454,6 +474,7 @@ export type HrmPayrollLine = {
   userId: number;
   employeeName?: string;
   employeeId?: string | null;
+  employeeAvatarUrl?: string | null;
   payslipId?: number | null;
   paidDays: number;
   lopDays: number;
@@ -466,7 +487,16 @@ export type HrmPayrollLine = {
   tds?: number;
   net: number;
   totalSalary?: number;
+  contractNet?: number;
   notes?: string | null;
+};
+
+export type HrmPayrollOrgOverview = {
+  totalActive: number;
+  configuredCount: number;
+  notConfiguredCount: number;
+  monthlyCommitmentNet: number;
+  avgNetSalary: number;
 };
 
 export type HrmSalaryStructure = {
@@ -510,9 +540,11 @@ export type HrmAdminPayslipRow = {
   month: number;
   employeeName: string;
   employeeId: string | null;
+  employeeAvatarUrl?: string | null;
   designation?: string | null;
   gross: number | null;
   net: number | null;
+  contractNet?: number | null;
   status: "PAID" | "UNPAID";
   runStatus?: string | null;
 };
@@ -535,10 +567,10 @@ export type HrmPayslipDetail = {
   gross: number;
   deductions: number;
   lopDeduction: number;
-  pfEmployee: number;
-  tds: number;
   net: number;
   htmlContent?: string | null;
+  contractNet?: number;
+  earnedGross?: number;
 };
 
 export type HrmPayrollChecklistBlocker = {
@@ -616,6 +648,7 @@ export type HrmEmployeeDocument = {
   userId: number;
   userName?: string;
   employeeId?: string | null;
+  avatarUrl?: string | null;
   name: string;
   category: string;
   fileUrl: string;

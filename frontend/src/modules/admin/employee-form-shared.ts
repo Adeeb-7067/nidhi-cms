@@ -89,9 +89,71 @@ export const teamEmployeeSchema = z
         path: ["password"],
       });
     }
+
+    const basic = parseSalaryFieldNumber(data.salaryBasic);
+    const allowances = parseSalaryFieldNumber(data.salaryAllowances);
+    const deductions = parseSalaryFieldNumber(data.salaryDeductions);
+    if ((allowances > 0 || deductions > 0) && basic <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Basic salary is required when allowances or deductions are set",
+        path: ["salaryBasic"],
+      });
+    }
+
+    const aadhar = data.aadharNumber?.trim() ?? "";
+    if (aadhar && !/^\d{12}$/.test(aadhar)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aadhar must be exactly 12 digits",
+        path: ["aadharNumber"],
+      });
+    }
+
+    const pan = data.panNumber?.trim().toUpperCase() ?? "";
+    if (pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(pan)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid PAN (e.g. ABCDE1234F)",
+        path: ["panNumber"],
+      });
+    }
   });
 
 export type TeamEmployeeFormValues = z.infer<typeof teamEmployeeSchema>;
+
+function parseSalaryFieldNumber(value: string | undefined): number {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return 0;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/** Net = basic + allowances − deductions (floored at 0). */
+export function computeTeamEmployeeNetSalary(
+  basic: string | undefined,
+  allowances: string | undefined,
+  deductions: string | undefined,
+): number {
+  const net =
+    parseSalaryFieldNumber(basic) +
+    parseSalaryFieldNumber(allowances) -
+    parseSalaryFieldNumber(deductions);
+  return Math.max(0, Math.round(net * 100) / 100);
+}
+
+export function formatTeamEmployeeNetSalaryField(
+  basic: string | undefined,
+  allowances: string | undefined,
+  deductions: string | undefined,
+): string {
+  const hasAny =
+    Boolean(basic?.trim()) ||
+    Boolean(allowances?.trim()) ||
+    Boolean(deductions?.trim());
+  if (!hasAny) return "";
+  return String(computeTeamEmployeeNetSalary(basic, allowances, deductions));
+}
 
 export function defaultTeamEmployeeFormValues(defaultDepartmentId: number | null): TeamEmployeeFormValues {
   return {
@@ -369,7 +431,11 @@ export function mapUserToTeamEmployeeForm(
     salaryBasic: salary.basicSalary != null ? String(salary.basicSalary) : "",
     salaryAllowances: salary.allowances != null ? String(salary.allowances) : "",
     salaryDeductions: salary.deductions != null ? String(salary.deductions) : "",
-    salaryNet: salary.netSalary != null ? String(salary.netSalary) : "",
+    salaryNet: formatTeamEmployeeNetSalaryField(
+      salary.basicSalary != null ? String(salary.basicSalary) : "",
+      salary.allowances != null ? String(salary.allowances) : "",
+      salary.deductions != null ? String(salary.deductions) : "",
+    ),
     bankAccountHolder: bank.accountHolderName ?? "",
     bankAccountNumber: bank.accountNumber ?? "",
     bankName: bank.bankName ?? "",
@@ -448,10 +514,14 @@ export function buildTeamEmployeePayload(
       website: values.socialWebsite ?? "",
     },
     salary: {
-      basicSalary: values.salaryBasic ? Number(values.salaryBasic) : 0,
-      allowances: values.salaryAllowances ? Number(values.salaryAllowances) : 0,
-      deductions: values.salaryDeductions ? Number(values.salaryDeductions) : 0,
-      netSalary: values.salaryNet ? Number(values.salaryNet) : 0,
+      basicSalary: parseSalaryFieldNumber(values.salaryBasic),
+      allowances: parseSalaryFieldNumber(values.salaryAllowances),
+      deductions: parseSalaryFieldNumber(values.salaryDeductions),
+      netSalary: computeTeamEmployeeNetSalary(
+        values.salaryBasic,
+        values.salaryAllowances,
+        values.salaryDeductions,
+      ),
       bankAccount: {
         accountHolderName: values.bankAccountHolder ?? "",
         accountNumber: values.bankAccountNumber ?? "",

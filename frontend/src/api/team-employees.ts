@@ -146,6 +146,7 @@ export function useSaveTeamEmployee() {
       qc.invalidateQueries({ queryKey: ["sales-team"] });
       qc.invalidateQueries({ queryKey: ["hrm", "payroll", "checklist"] });
       qc.invalidateQueries({ queryKey: ["hrm", "payroll", "structures"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "payroll", "org-overview"] });
       if (vars.id != null) {
         qc.invalidateQueries({ queryKey: teamEmployeeQueryKey(vars.id) });
         qc.invalidateQueries({ queryKey: hrmEmployeeQueryKey(vars.id) });

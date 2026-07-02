@@ -237,7 +237,7 @@ function formatBlockerSummary(code: string, count: number): string {
     case "missing_shift":
       return `${count} employee(s) missing shift`;
     case "missing_salary_structure":
-      return `${count} employee(s) missing salary structure`;
+      return `${count} employee(s) missing compensation (salary not configured)`;
     case "pending_leave":
       return `${count} pending leave request(s)`;
     case "pending_corrections":

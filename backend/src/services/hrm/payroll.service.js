@@ -44,6 +44,7 @@ import {
   buildLeavePayrollByDate,
   computePayrollLineAmounts,
   evaluatePayrollReadiness,
+  resolveContractSalary,
 } from "./payroll-compute.js";
 import { generatePayslipHtmlFromCms, resolvePublicAssetUrl } from "./payslip-template.js";
 
@@ -156,17 +157,26 @@ async function syncPayslipsForRun(runId, session = null) {
 
   // Bulk-load all users in one query — salary data lives on the user document.
   const lineUserIds = lines.map((l) => l.userId);
-  const bulkUsers = await usersTable.find({ id: { $in: lineUserIds } }).lean();
+  const [bulkUsers, structureRows] = await Promise.all([
+    usersTable.find({ id: { $in: lineUserIds } }).lean(),
+    salaryStructuresTable.find({ userId: { $in: lineUserIds } }).lean(),
+  ]);
   const userMap = new Map(bulkUsers.map((u) => [u.id, u]));
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
 
   for (const line of lines) {
     const user = userMap.get(line.userId);
     const sal = user?.salary ?? {};
+    const contract = resolveContractSalary({
+      profileSalary: sal,
+      structureRow: structureByUser.get(line.userId),
+    });
     const structure = {
-      basic: Number(sal.basicSalary) || 0,
-      gross: (Number(sal.basicSalary) || 0) + (Number(sal.allowances) || 0),
-      allowances: Number(sal.allowances) || 0,
-      hra: 0,
+      basic: contract.basic,
+      gross: contract.gross,
+      allowances: contract.allowances,
+      hra: contract.hra,
+      contractNet: contract.contractNet,
     };
     const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings });
     const prior = slipByLineId.get(line.id);
@@ -274,7 +284,18 @@ export async function getPayrollPreRunChecklist(year, month) {
 
 
 
-  const missingStructure = staff.filter((u) => !(Number(u.salary?.basicSalary) > 0));
+  const structureRows = await salaryStructuresTable
+    .find({ userId: { $in: staffIds } })
+    .lean();
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
+
+  const missingStructure = staff.filter(
+    (u) =>
+      !resolveContractSalary({
+        profileSalary: u.salary,
+        structureRow: structureByUser.get(u.id),
+      }).configured,
+  );
 
 
 
@@ -324,7 +345,7 @@ export async function getPayrollPreRunChecklist(year, month) {
 
       code: "missing_salary_structure",
 
-      message: "Active staff missing salary structure",
+      message: "Active staff missing compensation (salary not configured)",
 
       count: missingStructure.length,
 
@@ -396,6 +417,42 @@ export async function listSalaryStructures() {
 
 }
 
+/** Org-wide payroll KPIs — uses team profile salary first, then structure table (same as payroll run). */
+export async function getOrgPayrollOverview() {
+  const staff = await usersTable
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1, salary: 1 })
+    .lean();
+  const staffIds = staff.map((u) => u.id);
+  const structureRows = staffIds.length
+    ? await salaryStructuresTable.find({ userId: { $in: staffIds } }).lean()
+    : [];
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
+
+  let configuredCount = 0;
+  let monthlyCommitmentNet = 0;
+
+  for (const user of staff) {
+    const contract = resolveContractSalary({
+      profileSalary: user.salary,
+      structureRow: structureByUser.get(user.id),
+    });
+    if (!contract.configured) continue;
+    configuredCount += 1;
+    monthlyCommitmentNet += contract.contractNet;
+  }
+
+  const totalActive = staff.length;
+  const avgNetSalary = configuredCount > 0 ? monthlyCommitmentNet / configuredCount : 0;
+
+  return {
+    totalActive,
+    configuredCount,
+    notConfiguredCount: Math.max(0, totalActive - configuredCount),
+    monthlyCommitmentNet: Math.round(monthlyCommitmentNet * 100) / 100,
+    avgNetSalary: Math.round(avgNetSalary * 100) / 100,
+  };
+}
+
 
 
 export async function getSalaryStructureForUser(userId) {
@@ -408,6 +465,34 @@ export async function getSalaryStructureForUser(userId) {
 
   return formatSalaryStructure(row, user);
 
+}
+
+
+
+/** Mirror team profile salary into salaryStructures for legacy readers (dashboard, exports). */
+export async function syncSalaryStructureFromProfile(userId) {
+  const user = await usersTable.findOne({ id: userId }, { salary: 1 }).lean();
+  const sal = user?.salary;
+  const basic = Number(sal?.basicSalary) || 0;
+  if (basic <= 0) return null;
+
+  const allowances = Number(sal?.allowances) || 0;
+  const deductions = Number(sal?.deductions) || 0;
+  const gross = Math.round((basic + allowances) * 100) / 100;
+  const net =
+    Number(sal?.netSalary) > 0
+      ? Number(sal.netSalary)
+      : Math.max(0, Math.round((gross - deductions) * 100) / 100);
+  const statutory = Math.max(0, Math.round((gross - net) * 100) / 100);
+
+  return upsertSalaryStructure(userId, {
+    basic,
+    hra: 0,
+    allowances,
+    pfEmployee: statutory,
+    tds: 0,
+    esiEmployee: 0,
+  });
 }
 
 
@@ -520,6 +605,9 @@ export async function generatePayrollRun(year, month, actorId) {
 
   const staffIds = staff.map((u) => u.id);
 
+  const structureRows = await salaryStructuresTable.find({ userId: { $in: staffIds } }).lean();
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
+
   const approvedLeaves = await leaveRequestsTable
     .find({
       userId: { $in: staffIds },
@@ -552,17 +640,18 @@ export async function generatePayrollRun(year, month, actorId) {
       leavePayrollByDate,
     });
 
-    const salary = user.salary ?? {};
-    const gross = (Number(salary.basicSalary) || 0) + (Number(salary.allowances) || 0);
-    const deductions = Number(salary.deductions) || 0;
+    const contract = resolveContractSalary({
+      profileSalary: user.salary,
+      structureRow: structureByUser.get(user.id),
+    });
 
     const amounts = computePayrollLineAmounts({
 
-      gross,
+      gross: contract.payrollBase,
 
       ...counts,
 
-      pfEmployee: deductions,
+      pfEmployee: 0,
 
       esiEmployee: 0,
 
@@ -832,23 +921,34 @@ export async function listPayrollRuns() {
 export async function getPayrollRunLines(runId) {
   const lines = await payrollLinesTable.find({ payrollRunId: runId }).lean();
   const lineIds = lines.map((l) => l.id);
-  const users = await usersTable.find({ id: { $in: lines.map((l) => l.userId) } }, { id: 1, name: 1, employeeId: 1, salary: 1 }).lean();
-  const slips = lineIds.length
-    ? await payrollSlipsTable.find({ payrollLineId: { $in: lineIds } }, { id: 1, payrollLineId: 1 }).lean()
-    : [];
+  const userIds = lines.map((l) => l.userId);
+  const [users, structureRows, slips] = await Promise.all([
+    usersTable
+      .find({ id: { $in: userIds } }, { id: 1, name: 1, employeeId: 1, salary: 1, avatarUrl: 1 })
+      .lean(),
+    salaryStructuresTable.find({ userId: { $in: userIds } }).lean(),
+    lineIds.length
+      ? payrollSlipsTable.find({ payrollLineId: { $in: lineIds } }, { id: 1, payrollLineId: 1 }).lean()
+      : Promise.resolve([]),
+  ]);
   const slipByLineId = new Map(slips.map((s) => [s.payrollLineId, s.id]));
   const userMap = new Map(users.map((u) => [u.id, u]));
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
 
   return lines.map((l) => {
     const u = userMap.get(l.userId);
-    const sal = u?.salary ?? {};
-    const totalSalary = (Number(sal.basicSalary) || 0) + (Number(sal.allowances) || 0);
+    const contract = resolveContractSalary({
+      profileSalary: u?.salary ?? {},
+      structureRow: structureByUser.get(l.userId),
+    });
     return {
       ...l,
       employeeName: u?.name,
       employeeId: u?.employeeId,
+      employeeAvatarUrl: u?.avatarUrl ?? null,
       payslipId: slipByLineId.get(l.id) ?? null,
-      totalSalary,
+      totalSalary: contract.totalSalary,
+      contractNet: contract.contractNet,
     };
   });
 } 
@@ -869,12 +969,14 @@ export async function listAdminPayslips({ year, month, allPeriods = false, limit
  
   const lineIds = slips.map((s) => s.payrollLineId);
   const userIds = [...new Set(slips.map((s) => s.userId))];
-  const [lines, users] = await Promise.all([
+  const [lines, users, structureRows] = await Promise.all([
     payrollLinesTable.find({ id: { $in: lineIds } }).lean(),
-    usersTable.find({ id: { $in: userIds } }, { id: 1, name: 1, employeeId: 1, designation: 1 }).lean(),
+    usersTable.find({ id: { $in: userIds } }, { id: 1, name: 1, employeeId: 1, designation: 1, avatarUrl: 1, salary: 1 }).lean(),
+    salaryStructuresTable.find({ userId: { $in: userIds } }).lean(),
   ]);
   const lineById = new Map(lines.map((l) => [l.id, l]));
   const userById = new Map(users.map((u) => [u.id, u]));
+  const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
 
   const runIds = [...new Set(lines.map((l) => l.payrollRunId))];
   const runs = runIds.length
@@ -887,6 +989,10 @@ export async function listAdminPayslips({ year, month, allPeriods = false, limit
     const user = userById.get(s.userId);
     const run = line ? runById.get(line.payrollRunId) : null;
     const paid = run?.status === "paid";
+    const contract = resolveContractSalary({
+      profileSalary: user?.salary ?? {},
+      structureRow: structureByUser.get(s.userId),
+    });
     return {
       id: s.id,
       payrollLineId: s.payrollLineId,
@@ -895,9 +1001,11 @@ export async function listAdminPayslips({ year, month, allPeriods = false, limit
       month: s.month,
       employeeName: user?.name ?? `User #${s.userId}`,
       employeeId: user?.employeeId ?? null,
+      employeeAvatarUrl: user?.avatarUrl ?? null,
       designation: user?.designation ?? null,
       gross: line?.gross ?? null,
       net: line?.net ?? null,
+      contractNet: contract.configured ? contract.contractNet : null,
       status: paid ? "PAID" : "UNPAID",
       runStatus: run?.status ?? null,
     };
@@ -930,17 +1038,25 @@ export async function updatePayrollLine(lineId, body) {
     body.paidDays !== undefined || body.lopDays !== undefined || body.lateCount !== undefined;
 
   if (attendanceFieldsTouched) {
-    const lineUser = await usersTable.findOne({ id: line.userId }, { salary: 1 }).lean();
-    const lineSal = lineUser?.salary ?? {};
-    const userGross = (Number(lineSal.basicSalary) || 0) + (Number(lineSal.allowances) || 0);
+    const [lineUser, structureRow] = await Promise.all([
+      usersTable.findOne({ id: line.userId }, { salary: 1 }).lean(),
+      salaryStructuresTable.findOne({ userId: line.userId }).lean(),
+    ]);
+    const contract = resolveContractSalary({
+      profileSalary: lineUser?.salary ?? {},
+      structureRow: structureRow ?? {},
+    });
     const amounts = computePayrollLineAmounts({
-      gross: userGross,
+      gross: contract.payrollBase,
       paidDays: patch.paidDays ?? line.paidDays,
       lopDays: patch.lopDays ?? line.lopDays,
       lateCount: patch.lateCount ?? line.lateCount ?? 0,
-      pfEmployee: patch.pfEmployee ?? line.pfEmployee ?? 0,
-      esiEmployee: 0,
-      tds: patch.tds ?? line.tds ?? 0,
+      // Preserve whatever this line already carries — new lines are created with 0 (see
+      // generatePayrollRun), but legacy lines may still have real statutory amounts that
+      // an attendance-field edit must not silently wipe.
+      pfEmployee: line.pfEmployee ?? 0,
+      esiEmployee: line.esiEmployee ?? 0,
+      tds: line.tds ?? 0,
     });
     Object.assign(patch, amounts);
   } else {
@@ -1001,9 +1117,10 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
   if (!slip) notFound("Payslip");
   if (slip.userId !== userId) notFound("Payslip");
 
-  const [user, line, settings] = await Promise.all([
+  const [user, line, structureRow, settings] = await Promise.all([
     usersTable.findOne({ id: slip.userId }, { id: 1, name: 1, employeeId: 1, department: 1, salary: 1 }).lean(),
     payrollLinesTable.findOne({ id: slip.payrollLineId }).lean(),
+    salaryStructuresTable.findOne({ userId: slip.userId }).lean(),
     getOrCreateSettings(),
   ]);
   if (!line) notFound("Payroll line");
@@ -1015,7 +1132,10 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     }
   }
 
-  const slipSal = user?.salary ?? {};
+  const contract = resolveContractSalary({
+    profileSalary: user?.salary ?? {},
+    structureRow: structureRow ?? {},
+  });
 
   return {
     id: slip.id,
@@ -1026,17 +1146,17 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     employeeName: user?.name ?? "Employee",
     employeeId: user?.employeeId ?? null,
     department: user?.department ?? null,
-    basic: Number(slipSal.basicSalary) || 0,
-    hra: 0,
-    allowances: Number(slipSal.allowances) || 0,
+    basic: contract.basic,
+    hra: contract.hra,
+    allowances: contract.allowances,
+    contractNet: contract.contractNet,
+    earnedGross: line.gross,
     paidDays: line.paidDays,
     lopDays: line.lopDays,
     lateCount: line.lateCount,
     gross: line.gross,
     deductions: line.deductions,
     lopDeduction: line.lopDeduction ?? 0,
-    pfEmployee: line.pfEmployee ?? 0,
-    tds: line.tds ?? 0,
     net: line.net,
     htmlContent: slip.htmlContent ?? null,
   };
@@ -1165,6 +1285,8 @@ export {
   computePayrollLineAmounts,
 
   evaluatePayrollReadiness,
+
+  resolveContractSalary,
 
 } from "./payroll-compute.js";
 

@@ -72,6 +72,7 @@ router.patch(
 );
 
 router.get("/hrm/payroll/structures", perm("hrm_payroll", "view"), asyncHandler(hrm.getSalaryStructures));
+router.get("/hrm/payroll/org-overview", perm("hrm_payroll", "view"), asyncHandler(hrm.getOrgPayrollOverview));
 router.put("/hrm/payroll/structures/:userId", perm("hrm_payroll", "edit"), asyncHandler(hrm.putSalaryStructure));
 router.get("/hrm/payroll/runs", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollRuns));
 router.get("/hrm/payroll/checklist", perm("hrm_payroll", "view"), asyncHandler(hrm.getPayrollChecklistByPeriod));

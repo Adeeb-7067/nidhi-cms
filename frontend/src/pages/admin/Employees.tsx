@@ -90,7 +90,7 @@ import {
   isStaffEmployeeRole,
   staffRoleBadgeClass,
 } from "@/lib/user-roles";
-import { useHrmDepartments, useHrmShiftTemplates, useHrmDocuments } from "@/api/hrm";
+import { useHrmDepartments, useHrmShiftTemplates, useHrmDocuments, useHrmSalaryStructures } from "@/api/hrm";
 import { useRoleTemplates, useAssignableCmsRoles } from "@/api/permissions";
 import { User } from "@/api";
 import { cn } from "@/lib/utils";
@@ -105,6 +105,7 @@ import {
 } from "@/modules/admin/employee-form-shared";
 import {
   EmployeeFormTabs,
+  EMPLOYEE_FORM_TAB_FIELDS,
   EMPLOYEE_FORM_TAB_META,
   nextEmployeeFormTab,
   prevEmployeeFormTab,
@@ -266,6 +267,9 @@ export default function AdminEmployees() {
   const { data: shiftTemplatesData } = useHrmShiftTemplates();
   const { data: roleTemplatesData } = useRoleTemplates();
   const { data: assignableRolesData } = useAssignableCmsRoles(isDialogOpen || !!editUser);
+  const { data: payrollStructuresData } = useHrmSalaryStructures({
+    enabled: isDialogOpen || !!editUser,
+  });
   const { data: managerPoolData } = useListUsers(
     { staff: "1", limit: 200 },
     {
@@ -302,6 +306,13 @@ export default function AdminEmployees() {
     if (!editUser) return rows;
     return rows.filter((u) => u.id !== editUser.id);
   }, [managerPoolData, editUser]);
+
+  const payrollStructureForEdit = useMemo(() => {
+    if (!editUser) return null;
+    const row = (payrollStructuresData?.structures ?? []).find((s) => s.userId === editUser.id);
+    if (!row || row.basic <= 0) return null;
+    return { basic: row.basic, net: row.net };
+  }, [editUser, payrollStructuresData?.structures]);
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
@@ -847,10 +858,10 @@ export default function AdminEmployees() {
               <DialogDescription className="text-xs">
                 {editUser
                   ? `Update ${editUser.name}'s profile across personal, work, pay, and document settings.`
-                  : "Complete all four steps to onboard a new team member."}
+                  : "Complete all five steps to onboard a new team member."}
               </DialogDescription>
               <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground pt-1">
-                Step {EMPLOYEE_FORM_TAB_META[employeeFormTab].step} of 4 · {EMPLOYEE_FORM_TAB_META[employeeFormTab].label}
+                Step {EMPLOYEE_FORM_TAB_META[employeeFormTab].step} of 5 · {EMPLOYEE_FORM_TAB_META[employeeFormTab].label}
               </p>
             </DialogHeader>
             <Form {...form}>
@@ -881,6 +892,7 @@ export default function AdminEmployees() {
                       onSyncDisplayName={syncDisplayNameFromParts}
                       employeeDocuments={editUserDocumentsData?.documents}
                       employeeDocumentsLoading={editDocumentsFetching}
+                      payrollStructure={payrollStructureForEdit}
                     />
                   )}
                 </div>
@@ -920,7 +932,14 @@ export default function AdminEmployees() {
                         variant="secondary"
                         size="sm"
                         className="h-9"
-                        onClick={() => setEmployeeFormTab(nextEmployeeFormTab(employeeFormTab)!)}
+                        onClick={async () => {
+                          const fields = EMPLOYEE_FORM_TAB_FIELDS[employeeFormTab];
+                          if (fields.length > 0) {
+                            const ok = await form.trigger(fields);
+                            if (!ok) return;
+                          }
+                          setEmployeeFormTab(nextEmployeeFormTab(employeeFormTab)!);
+                        }}
                       >
                         Continue
                       </Button>

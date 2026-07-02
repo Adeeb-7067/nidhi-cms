@@ -17,6 +17,7 @@ import {
   portalActionButtonClass,
 } from "@/modules/hrm/components";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { useHrmDepartments, useHrmEmployees } from "@/api/hrm";
 import { getHrmEmployeeDetailHref } from "@/lib/employee-routes";
 import type { HrmEmployee } from "@/modules/hrm/types";
@@ -63,10 +64,13 @@ export default function HrmEmployeesPage() {
       header: "Employee",
       accessorKey: "name",
       cell: (e) => (
-        <>
-          <span className="font-medium">{e.name}</span>
-          <div className="text-xs text-muted-foreground">{e.email}</div>
-        </>
+        <div className="flex items-center gap-2.5">
+          <HrmEmployeeAvatar name={e.name} avatarUrl={e.avatarUrl} className="h-8 w-8" />
+          <div>
+            <span className="font-medium">{e.name}</span>
+            <div className="text-xs text-muted-foreground">{e.email}</div>
+          </div>
+        </div>
       ),
       exportValue: (e) => `${e.name} (${e.email})`,
     },

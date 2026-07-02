@@ -54,6 +54,9 @@ export const MONITORABLE_STAFF_ROLES: UserRole[] = [
 
 export const HRM_ADMIN_ROLES: UserRole[] = ["super_admin", "hr"];
 
+/** Clock in/out for attendance tracking — every staff role except super_admin (view only) and client (external). */
+export const CLOCKABLE_STAFF_ROLES: UserRole[] = ["hr", ...STAFF_EMPLOYEE_ROLES];
+
 /** Roles that can access CRM & Sales — super_admin manages, bde operates */
 export const SALES_STAFF_ROLES: UserRole[] = ["super_admin", "bde"];
 
@@ -127,6 +130,10 @@ export function isHrmEmployeeRole(role: UserRole | string | undefined): boolean 
 
 export function isMonitorableStaffRole(role: UserRole | string | undefined): boolean {
   return !!role && MONITORABLE_STAFF_ROLES.includes(role as UserRole);
+}
+
+export function isClockableStaffRole(role: UserRole | string | undefined): boolean {
+  return !!role && CLOCKABLE_STAFF_ROLES.includes(role as UserRole);
 }
 
 export function isQaStaffRole(role: UserRole | string | undefined): boolean {

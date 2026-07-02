@@ -4,6 +4,7 @@ import type { Column } from "@/components/ui/advanced-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HrmApprovalActions, HrmWorkflowBadge } from "@/modules/hrm/components";
+import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
 import type { HrmHoliday, HrmLeaveBalance, HrmLeaveRequest, HrmWfhRequest } from "@/modules/hrm/types";
 import { getLeaveBalanceAvailable } from "@/modules/hrm/employee-profile-types";
@@ -26,7 +27,12 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
       id: "employee",
       header: "Employee",
       accessorKey: "userName",
-      cell: (r) => <span className="font-medium">{r.userName ?? `#${r.userId}`}</span>,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-7 w-7" />
+          <span className="font-medium">{r.userName ?? `#${r.userId}`}</span>
+        </div>
+      ),
       exportValue: (r) => r.userName ?? String(r.userId),
     });
   }
@@ -52,7 +58,14 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
     {
       id: "reason",
       header: "Reason",
-      cell: (r) => <span className="max-w-[200px] truncate text-muted-foreground">{r.reason || "—"}</span>,
+      cell: (r) => (
+        <span className="block max-w-[200px] truncate text-muted-foreground" title={r.reason ?? undefined}>
+          {r.reason || "—"}
+        </span>
+      ),
+      detailCell: (r) => (
+        <span className="whitespace-pre-wrap break-words text-muted-foreground">{r.reason || "—"}</span>
+      ),
       exportValue: (r) => r.reason ?? "",
     },
     {
@@ -130,7 +143,12 @@ export function buildWfhRequestColumns(opts: WfhColumnOptions): Column<HrmWfhReq
       id: "employee",
       header: "Employee",
       accessorKey: "userName",
-      cell: (r) => <span className="font-medium">{r.userName ?? `#${r.userId}`}</span>,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-7 w-7" />
+          <span className="font-medium">{r.userName ?? `#${r.userId}`}</span>
+        </div>
+      ),
       exportValue: (r) => r.userName ?? String(r.userId),
     });
   }
@@ -156,7 +174,14 @@ export function buildWfhRequestColumns(opts: WfhColumnOptions): Column<HrmWfhReq
     {
       id: "reason",
       header: "Reason",
-      cell: (r) => <span className="max-w-[200px] truncate text-muted-foreground">{r.reason || "—"}</span>,
+      cell: (r) => (
+        <span className="block max-w-[200px] truncate text-muted-foreground" title={r.reason ?? undefined}>
+          {r.reason || "—"}
+        </span>
+      ),
+      detailCell: (r) => (
+        <span className="whitespace-pre-wrap break-words text-muted-foreground">{r.reason || "—"}</span>
+      ),
       exportValue: (r) => r.reason ?? "",
     },
     {

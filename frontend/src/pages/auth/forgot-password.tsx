@@ -23,6 +23,9 @@ import { ArrowLeft, Loader2, Mail } from "lucide-react";
 
 type Step = "email" | "otp" | "password" | "done";
 
+/** Cooldown before "Resend code" re-enables — independent of the OTP's own validity window. */
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export default function ForgotPasswordPage() {
   const [, setLocation] = useLocation();
   const [step, setStep] = useState<Step>("email");
@@ -60,7 +63,7 @@ export default function ForgotPasswordPage() {
       const res = await forgotPasswordOtp(trimmed);
       setEmail(trimmed);
       if (res.devOtp) setDevOtpHint(res.devOtp);
-      startCooldown(res.expiresInSeconds ?? 60);
+      startCooldown(RESEND_COOLDOWN_SECONDS);
       setStep("otp");
       toast.success(res.message);
     } catch (err) {

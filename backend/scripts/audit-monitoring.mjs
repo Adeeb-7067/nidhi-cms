@@ -105,7 +105,7 @@ async function auditDatabase() {
     lastHeartbeatAt: { $lt: new Date(Date.now() - 5 * 60 * 1000) },
   });
   if (staleHeartbeats > 0) {
-    info(`${staleHeartbeats} active session(s) with heartbeat older than 5 min (cleanup job should handle)`);
+    info(`${staleHeartbeats} active session(s) with heartbeat older than 5 min`);
   }
 
   const consentTotal = await monitoringConsentsTable.countDocuments();

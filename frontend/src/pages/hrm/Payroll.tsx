@@ -59,9 +59,11 @@ import {
   deriveRunStatusFromPayrollRun,
   formatPayrollPeriodLabel,
   estimateTotalsFromStructures,
+  totalsFromOrgOverview,
   totalsFromPayrollLines,
   type PayrollStatusFilter,
 } from "@/modules/hrm/payroll-satyakabir-ui";
+import { isCurrentPayrollPeriod } from "@/modules/hrm/payroll-period-utils";
 import { PayrollReadinessBanner, payrollSelectTriggerClass } from "@/modules/hrm/payroll-kit";
 import { HrmPayslipPreviewPanel } from "@/modules/hrm/HrmPayslipPreviewPanel";
 import { HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
@@ -78,6 +80,7 @@ import {
   useHrmPayrollRunLines,
   useHrmPayrollRuns,
   useHrmSalaryStructures,
+  useHrmPayrollOrgOverview,
   useHrmEmployees,
   useReviewPayrollRun,
   useUpdatePayrollLine,
@@ -121,7 +124,7 @@ export default function HrmPayrollPage() {
     refetch: refetchChecklist,
   } = useHrmPayrollChecklistByPeriod(period.year, period.month);
   const { data: structures, isError: structuresError } = useHrmSalaryStructures();
-  const { data: orgHeadcount, isLoading: orgHeadcountLoading } = useHrmEmployees({ status: "active", limit: 1 });
+  const { data: orgOverview, isLoading: orgOverviewLoading, refetch: refetchOrgOverview } = useHrmPayrollOrgOverview();
   const { data: employeesData } = useHrmEmployees(
     { status: "active", limit: 500 },
     { enabled: structuresOpen },
@@ -196,8 +199,9 @@ export default function HrmPayrollPage() {
 
   const totals = useMemo(() => {
     if (lineRows.length > 0) return totalsFromPayrollLines(lineRows, isPaid);
+    if (orgOverview) return totalsFromOrgOverview(orgOverview);
     return estimateTotalsFromStructures(structureRows);
-  }, [lineRows, isPaid, structureRows]);
+  }, [lineRows, isPaid, orgOverview, structureRows]);
 
   const filteredLines = useMemo(() => {
     let rows = lineRows;
@@ -224,6 +228,7 @@ export default function HrmPayrollPage() {
     void refetchRuns();
     void refetchLines();
     void refetchChecklist();
+    void refetchOrgOverview();
   };
 
   const extractChecklistFromError = (error: unknown): HrmPayrollChecklist | undefined => {
@@ -352,9 +357,12 @@ export default function HrmPayrollPage() {
     <HrmGate module="payroll">
       <HrmPageShell className="space-y-4">
         <OrgPayrollKpis
-          totalActive={orgHeadcount?.total ?? 0}
-          structureRows={structureRows}
-          loading={orgHeadcountLoading}
+          totalActive={orgOverview?.totalActive ?? 0}
+          configuredCount={orgOverview?.configuredCount ?? 0}
+          monthlyCommitmentNet={orgOverview?.monthlyCommitmentNet ?? 0}
+          avgNetSalary={orgOverview?.avgNetSalary ?? 0}
+          notConfiguredCount={orgOverview?.notConfiguredCount ?? 0}
+          loading={orgOverviewLoading}
         />
 
         <PayPeriodNavigator
@@ -367,6 +375,12 @@ export default function HrmPayrollPage() {
           runStatus={runPeriodStatus}
           payrollRunStatus={selectedRun?.status}
         />
+
+        {isCurrentPayrollPeriod(period) && !isPaid ? (
+          <p className="text-xs text-muted-foreground rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+            Current-month payroll uses attendance through today only. Re-run after month-end for full-period amounts.
+          </p>
+        ) : null}
 
         <PayPeriodSummary
           totalEmployees={totals.employeeCount}
@@ -503,6 +517,7 @@ export default function HrmPayrollPage() {
                 <HrmPersonChip
                   name={r.employeeName ?? `User #${r.userId}`}
                   subtitle={r.employeeId ?? undefined}
+                  avatarUrl={r.employeeAvatarUrl}
                 />
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold tabular-nums text-primary">{inrMoney(r.net)}</span>
@@ -521,17 +536,18 @@ export default function HrmPayrollPage() {
                   <HrmPersonChip
                     name={r.employeeName ?? `User #${r.userId}`}
                     subtitle={r.employeeId ?? undefined}
+                    avatarUrl={r.employeeAvatarUrl}
                     href={`/hrm/employees/${r.userId}`}
                   />
                 ),
               },
               {
                 key: "totalSalary",
-                header: "Total salary",
+                header: "Contract pay",
                 className: "text-right",
                 render: (r) => (
                   <span className="text-xs tabular-nums text-muted-foreground">
-                    {r.totalSalary != null ? inrMoney(r.totalSalary) : "—"}
+                    {r.totalSalary != null && r.totalSalary > 0 ? inrMoney(r.totalSalary) : "—"}
                   </span>
                 ),
               },
@@ -597,12 +613,12 @@ export default function HrmPayrollPage() {
                   <HrmRefDetailRow label="Period" value={periodLabel} />
                   <HrmRefDetailRow
                     label="Attendance"
-                    value={`${r.paidDays} paid · ${r.lopDays} LOP · ${r.lateCount} late`}
+                    value={`${r.paidDays} paid · ${r.lopDays} LOP`}
                   />
                   <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
                     {r.totalSalary != null && r.totalSalary > 0 && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Total salary</span>
+                        <span className="text-muted-foreground">Contract pay (net)</span>
                         <span className="tabular-nums text-muted-foreground">{inrMoney(r.totalSalary)}</span>
                       </div>
                     )}
@@ -703,6 +719,10 @@ export default function HrmPayrollPage() {
           <DialogContent className="max-w-2xl max-h-[85vh] overflow-auto">
             <DialogHeader>
               <DialogTitle>{LEGACY_PAYROLL_LABELS.structuresTitle}</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Use when the team employee profile has no basic salary. Prefer Admin → Team → Compensation for
+                primary pay setup. PF/TDS here apply only when payroll falls back to this structure.
+              </p>
             </DialogHeader>
             <div className="space-y-4">
               {structuresError && (

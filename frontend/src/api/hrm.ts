@@ -14,6 +14,7 @@ import type {
   HrmLeaveRequest,
   HrmLeaveType,
   HrmPayrollLine,
+  HrmPayrollOrgOverview,
   HrmSalaryStructure,
   HrmPayrollRun,
   HrmShiftTemplate,
@@ -729,6 +730,17 @@ export function useHrmSalaryStructures(options?: { enabled?: boolean }) {
   });
 }
 
+export function useHrmPayrollOrgOverview(options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: ["hrm", "payroll", "org-overview"],
+    enabled: options?.enabled ?? true,
+    staleTime: QUERY_STALE.reference,
+    queryFn: () =>
+      customFetch<HrmPayrollOrgOverview>(apiUrl("/api/hrm/payroll/org-overview")),
+    meta: { errorMessage: "Could not load payroll overview" },
+  });
+}
+
 export function useUpsertSalaryStructure() {
   const qc = useQueryClient();
   return useHrmMutation({
@@ -756,6 +768,7 @@ export function useUpsertSalaryStructure() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "payroll", "structures"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "payroll", "org-overview"] });
       qc.invalidateQueries({ queryKey: ["hrm", "payroll", "checklist"] });
     },
     meta: { errorMessage: "Could not save salary structure" },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth } from "date-fns";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -12,6 +12,8 @@ import {
   FileText,
   Wallet,
   Pencil,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +32,14 @@ import {
   HrmWorkflowBadge,
   hrmActionButtonClass,
   HrmChartCard,
+  HrmFilterBar,
 } from "@/modules/hrm/components";
+import {
+  ATTENDANCE_STATUS_LABELS,
+  PRIMARY_ATTENDANCE_STATUSES,
+  isPresentLikeStatus,
+  normalizeAttendanceStatus,
+} from "@/modules/hrm/constants";
 import {
   EmployeeDetailToolbar,
   EmployeeProfileHero,
@@ -113,14 +122,19 @@ export default function HrmEmployeeDetailPage() {
   const [position, setPosition] = useState("EMPLOYEE");
   const [bio, setBio] = useState("");
   const [lateChargePct, setLateChargePct] = useState("100");
+  const [attendanceMonth, setAttendanceMonth] = useState(format(new Date(), "yyyy-MM"));
+  const [attendanceStatusFilter, setAttendanceStatusFilter] = useState<string>("all");
+  const [attendanceDateSort, setAttendanceDateSort] = useState<"newest" | "oldest">("oldest");
 
-  const monthRange = overview?.month;
   const attendanceTabActive = activeTab === "attendance";
   const leaveTabActive = activeTab === "leave";
 
+  const attendanceStartDate = format(startOfMonth(new Date(`${attendanceMonth}-01`)), "yyyy-MM-dd");
+  const attendanceEndDate = format(endOfMonth(new Date(`${attendanceMonth}-01`)), "yyyy-MM-dd");
+
   const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
-    monthRange?.startDate ?? format(new Date(), "yyyy-MM-01"),
-    monthRange?.endDate ?? format(new Date(), "yyyy-MM-dd"),
+    attendanceStartDate,
+    attendanceEndDate,
     employeeId,
     undefined,
     { enabled: attendanceTabActive && !!employeeId },
@@ -159,6 +173,18 @@ export default function HrmEmployeeDetailPage() {
         : (data?.attendanceSummaries ?? []);
     return source.filter((s) => s.userId === employeeId);
   }, [attendanceTabActive, attendanceData?.summaries, data?.attendanceSummaries, employeeId]);
+
+  const filteredAttendanceRows = useMemo(() => {
+    let list = attendanceRows;
+    if (attendanceStatusFilter === "full_day") {
+      list = list.filter((r) => isPresentLikeStatus(r.status));
+    } else if (attendanceStatusFilter !== "all") {
+      list = list.filter((r) => normalizeAttendanceStatus(r.status) === attendanceStatusFilter);
+    }
+    return [...list].sort((a, b) =>
+      attendanceDateSort === "newest" ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date),
+    );
+  }, [attendanceRows, attendanceStatusFilter, attendanceDateSort]);
 
   const leaveRows = leaveTabActive
     ? (leaveReqData?.requests ?? [])
@@ -388,7 +414,11 @@ export default function HrmEmployeeDetailPage() {
 
                 <div className="grid gap-4 lg:grid-cols-3">
                   <EmployeeRecentLeaveList rows={leaveRows} />
-                  <EmployeeSalaryBar gross={overview.salaryGross} net={overview.salaryNet} />
+                  <EmployeeSalaryBar
+                    gross={overview.salaryGross}
+                    net={overview.salaryNet}
+                    source={overview.contractSalary?.source}
+                  />
                   <div className="hidden lg:block" />
                 </div>
 
@@ -609,9 +639,64 @@ export default function HrmEmployeeDetailPage() {
           </TabsContent>
 
           <TabsContent value="attendance" className="mt-0 space-y-4">
+            <HrmFilterBar>
+              <div className="flex items-center h-9 rounded-md border bg-background px-1 gap-0.5 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    const d = new Date(`${attendanceMonth}-01`);
+                    d.setMonth(d.getMonth() - 1);
+                    setAttendanceMonth(format(d, "yyyy-MM"));
+                  }}
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="text-sm font-medium px-1 min-w-[100px] text-center">
+                  {format(new Date(`${attendanceMonth}-01`), "MMMM, yyyy")}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => {
+                    const d = new Date(`${attendanceMonth}-01`);
+                    d.setMonth(d.getMonth() + 1);
+                    setAttendanceMonth(format(d, "yyyy-MM"));
+                  }}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <Select value={attendanceStatusFilter} onValueChange={setAttendanceStatusFilter}>
+                <SelectTrigger className="h-9 w-44 bg-background">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="full_day">Full day</SelectItem>
+                  <SelectItem value="half_day">Half day</SelectItem>
+                  {PRIMARY_ATTENDANCE_STATUSES.filter((k) => k !== "half_day").map((k) => (
+                    <SelectItem key={k} value={k}>
+                      {ATTENDANCE_STATUS_LABELS[k]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={attendanceDateSort} onValueChange={(v) => setAttendanceDateSort(v as "newest" | "oldest")}>
+                <SelectTrigger className="h-9 w-36 bg-background">
+                  <SelectValue placeholder="Sort" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest first</SelectItem>
+                  <SelectItem value="oldest">Oldest first</SelectItem>
+                </SelectContent>
+              </Select>
+            </HrmFilterBar>
             <PortalTablePanel isLoading={attendanceLoading}>
               <AdvancedTable
-                data={attendanceRows}
+                data={filteredAttendanceRows}
                 columns={attendanceColumns}
                 filename="EmployeeAttendanceExport"
                 viewStorageKey={`hrm-employee-${employeeId}-attendance`}
@@ -652,8 +737,8 @@ export default function HrmEmployeeDetailPage() {
               <>
                 <div className="grid gap-4 sm:grid-cols-3">
                   {[
-                    { label: "Gross (structure)", value: overview.salaryGross },
-                    { label: "Net (structure)", value: overview.salaryNet },
+                    { label: "Contract gross", value: overview.salaryGross },
+                    { label: "Contract net (monthly)", value: overview.salaryNet },
                     { label: "Latest payroll net", value: overview.latestPayrollNet },
                   ].map((item) => (
                     <HrmChartCard key={item.label} title={item.label}>
@@ -663,11 +748,17 @@ export default function HrmEmployeeDetailPage() {
                     </HrmChartCard>
                   ))}
                 </div>
-                <EmployeeSalaryBar gross={overview.salaryGross} net={overview.salaryNet} />
+                <EmployeeSalaryBar
+                  gross={overview.salaryGross}
+                  net={overview.salaryNet}
+                  source={overview.contractSalary?.source}
+                />
               </>
             ) : (
               <PortalContentCard>
-                <p className="text-sm text-muted-foreground">No salary data on file.</p>
+                <p className="text-sm text-muted-foreground">
+                  No compensation configured — set salary in Admin → Team (Compensation tab).
+                </p>
               </PortalContentCard>
             )}
           </TabsContent>

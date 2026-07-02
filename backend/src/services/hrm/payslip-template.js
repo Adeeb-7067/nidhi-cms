@@ -140,10 +140,6 @@ function buildDeductionRows(payRollData) {
   if (unpaidLeaveDed > 0) {
     rows.push({ label: "LOP Deduction", amount: unpaidLeaveDed });
   }
-  const pf = Number(payRollData?.pfDeductionAmount ?? 0);
-  const tds = Number(payRollData?.tdsDeductionAmount ?? 0);
-  if (pf > 0) rows.push({ label: "PF (Employee)", amount: pf });
-  if (tds > 0) rows.push({ label: "TDS", amount: tds });
 
   return rows.filter((row) => row.amount > 0);
 }
@@ -187,32 +183,23 @@ function tableRowsAmountOnly(rows) {
     .join("");
 }
 
-/** Single source of truth for payslip numbers (HTML + JSON API + PDF). */
-function buildPayslipFigures(payRollData, companyData) {
-  const emp = payRollData?.employeeId || {};
-  const salary = emp.salary || {};
-  const bank = salary.bankAccount || {};
-  const addr = companyData?.address || {};
-
-  const slipDate = payRollData?.paySlipTime ?? payRollData?.createdAt ?? new Date();
-  const payDate = payRollData?.paidOn ?? slipDate;
-  const ytdFactor = fiscalMonthIndex(slipDate, emp.joiningDate);
-
+/** Prorated earnings rows for CMS payroll (contract net / 30 × paid days). */
+function buildCmsEarningsRows(payRollData, salary) {
+  const earnedGross = Number(payRollData?.earnedGross ?? 0);
   const basic =
     Number(payRollData?.salaryBaseUsed) > 0
       ? Number(payRollData.salaryBaseUsed)
       : Number(salary.basicSalary ?? 0);
-  const contractNet = Number(salary.netSalary ?? payRollData?.totalSalary ?? 0);
-  const storedAllowances = Math.max(0, Number(salary.allowances ?? 0));
-  const derivedAllowances =
-    basic > 0 && contractNet > basic ? contractNet - basic : 0;
-  const allowances = storedAllowances > 0 ? storedAllowances : derivedAllowances;
-  const allowanceSplit = splitAllowances(basic, allowances);
-
+  const allowances = Math.max(0, Number(salary.allowances ?? 0));
+  const monthlyGross = basic + allowances;
   const earningsRows = [];
-  if (basic > 0) {
-    earningsRows.push({ label: "Basic Salary", amount: basic });
-    if (allowances > 0) {
+
+  if (basic > 0 && monthlyGross > 0 && earnedGross > 0) {
+    const basicEarned = Math.round((earnedGross * basic) / monthlyGross * 100) / 100;
+    const allowanceEarned = Math.round((earnedGross - basicEarned) * 100) / 100;
+    earningsRows.push({ label: "Basic Salary", amount: basicEarned });
+    if (allowanceEarned > 0) {
+      const allowanceSplit = splitAllowances(basicEarned, allowanceEarned);
       if (allowanceSplit.hra > 0) {
         earningsRows.push({ label: "House Rent Allowance", amount: allowanceSplit.hra });
       }
@@ -226,42 +213,123 @@ function buildPayslipFigures(payRollData, companyData) {
         earningsRows.push({ label: "Other Allowance", amount: allowanceSplit.other });
       }
     }
+  } else if (earnedGross > 0) {
+    earningsRows.push({ label: "Salary (earned)", amount: earnedGross });
+  }
+
+  const overtime = Number(payRollData?.overtimeAmount ?? 0);
+  if (overtime > 0) {
+    earningsRows.push({ label: "Overtime", amount: overtime });
+  }
+
+  return earningsRows.filter((row) => row.amount > 0);
+}
+
+/** Single source of truth for payslip numbers (HTML + JSON API + PDF). */
+function buildPayslipFigures(payRollData, companyData) {
+  const emp = payRollData?.employeeId || {};
+  const salary = emp.salary || {};
+  const bank = salary.bankAccount || {};
+  const addr = companyData?.address || {};
+
+  const slipDate = payRollData?.paySlipTime ?? payRollData?.createdAt ?? new Date();
+  const payDate = payRollData?.paidOn ?? slipDate;
+  const ytdFactor = fiscalMonthIndex(slipDate, emp.joiningDate);
+
+  const isCmsPayroll = payRollData?.cmsPayroll === true;
+  const basic =
+    Number(payRollData?.salaryBaseUsed) > 0
+      ? Number(payRollData.salaryBaseUsed)
+      : Number(salary.basicSalary ?? 0);
+  const contractNet = Number(
+    payRollData?.contractNetMonthly ?? salary.netSalary ?? payRollData?.totalSalary ?? 0,
+  );
+  const storedAllowances = Math.max(0, Number(salary.allowances ?? 0));
+  const derivedAllowances =
+    basic > 0 && contractNet > basic ? contractNet - basic : 0;
+  const allowances = storedAllowances > 0 ? storedAllowances : derivedAllowances;
+
+  let filteredEarnings;
+  let grossEarnings;
+  let deductionRows;
+  let totalDeductions;
+  let netPay;
+  let paidDays;
+  let lopDays;
+
+  if (isCmsPayroll) {
+    filteredEarnings = buildCmsEarningsRows(payRollData, salary);
+    if (!filteredEarnings.length) {
+      filteredEarnings.push({ label: "Salary (earned)", amount: 0 });
+    }
+    grossEarnings = filteredEarnings.reduce((sum, row) => sum + row.amount, 0);
+    deductionRows = buildDeductionRows(payRollData);
+    netPay = Number(payRollData?.paySalary ?? 0);
+    const explicitDeductions = deductionRows.reduce((sum, row) => sum + row.amount, 0);
+    totalDeductions =
+      explicitDeductions > 0
+        ? explicitDeductions
+        : Math.max(0, Math.round((grossEarnings - netPay) * 100) / 100);
+    paidDays = Math.round(Number(payRollData?.totalFullDay ?? 0) * 100) / 100;
+    lopDays = Math.round(Number(payRollData?.totalLeaveOrAbsent ?? 0) * 100) / 100;
   } else {
-    earningsRows.push({
-      label: "Gross Salary",
-      amount: contractNet || payRollData?.totalSalary || 0,
-    });
-  }
-  earningsRows.push({ label: "Overtime", amount: Number(payRollData?.overtimeAmount ?? 0) });
-  const filteredEarnings = earningsRows.filter((row) => row.amount > 0);
+    const allowanceSplit = splitAllowances(basic, allowances);
+    const earningsRows = [];
+    if (basic > 0) {
+      earningsRows.push({ label: "Basic Salary", amount: basic });
+      if (allowances > 0) {
+        if (allowanceSplit.hra > 0) {
+          earningsRows.push({ label: "House Rent Allowance", amount: allowanceSplit.hra });
+        }
+        if (allowanceSplit.conveyance > 0) {
+          earningsRows.push({ label: "Conveyance Allowance", amount: allowanceSplit.conveyance });
+        }
+        if (allowanceSplit.special > 0) {
+          earningsRows.push({ label: "Special Allowance", amount: allowanceSplit.special });
+        }
+        if (allowanceSplit.other > 0) {
+          earningsRows.push({ label: "Other Allowance", amount: allowanceSplit.other });
+        }
+      }
+    } else {
+      earningsRows.push({
+        label: "Gross Salary",
+        amount: contractNet || payRollData?.totalSalary || 0,
+      });
+    }
+    earningsRows.push({ label: "Overtime", amount: Number(payRollData?.overtimeAmount ?? 0) });
+    filteredEarnings = earningsRows.filter((row) => row.amount > 0);
 
-  if (!filteredEarnings.length) {
-    filteredEarnings.push({
-      label: "Gross Salary",
-      amount: payRollData?.totalSalary ?? 0,
-    });
-  }
+    if (!filteredEarnings.length) {
+      filteredEarnings.push({
+        label: "Gross Salary",
+        amount: payRollData?.totalSalary ?? 0,
+      });
+    }
 
-  const grossEarnings = filteredEarnings.reduce((sum, row) => sum + row.amount, 0);
-  const deductionRows = buildDeductionRows(payRollData);
-  const totalDeductions =
-    deductionRows.reduce((sum, row) => sum + row.amount, 0) ||
-    Math.max(0, grossEarnings - (payRollData?.paySalary ?? 0));
-  const netPay = Number(payRollData?.paySalary ?? grossEarnings - totalDeductions);
+    grossEarnings = filteredEarnings.reduce((sum, row) => sum + row.amount, 0);
+    deductionRows = buildDeductionRows(payRollData);
+    totalDeductions =
+      deductionRows.reduce((sum, row) => sum + row.amount, 0) ||
+      Math.max(0, grossEarnings - (payRollData?.paySalary ?? 0));
+    netPay = Number(payRollData?.paySalary ?? grossEarnings - totalDeductions);
+
+    const approvedLeaveDays = Number(payRollData?.approvedLeaveDaysUsed ?? 0);
+    const unpaidLeaveDays = Number(payRollData?.unpaidLeaveDays ?? 0);
+    const paidLeaveDays = Math.max(0, approvedLeaveDays - unpaidLeaveDays);
+    const workingDays =
+      Number(payRollData?.totalFullDay ?? 0) +
+      Number(payRollData?.totalHalfDay ?? 0) * 0.5;
+    paidDays = Math.round((workingDays + paidLeaveDays) * 100) / 100;
+    lopDays =
+      Math.round(
+        (Number(payRollData?.totalLeaveOrAbsent ?? 0) + unpaidLeaveDays) * 100,
+      ) / 100;
+  }
 
   const approvedLeaveDays = Number(payRollData?.approvedLeaveDaysUsed ?? 0);
-  const unpaidLeaveDays = Number(payRollData?.unpaidLeaveDays ?? 0);
-  const paidLeaveDays = Math.max(0, approvedLeaveDays - unpaidLeaveDays);
-  const wfhDays = Number(payRollData?.totalWfh ?? 0);
-  const workingDays =
-    Number(payRollData?.totalFullDay ?? 0) +
-    Number(payRollData?.totalHalfDay ?? 0) * 0.5;
-  const paidDays = Math.round((workingDays + paidLeaveDays) * 100) / 100;
-  const lopDays =
-    Math.round(
-      (Number(payRollData?.totalLeaveOrAbsent ?? 0) + unpaidLeaveDays) * 100,
-    ) / 100;
   const leaveDays = approvedLeaveDays;
+  const wfhDays = Number(payRollData?.totalWfh ?? 0);
   const lateDays = Number(payRollData?.totalLate ?? 0);
   const leaveBalance =
     payRollData?.leaveBalanceCarryForward != null
@@ -957,11 +1025,20 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
   const monthDate = new Date(run.year, run.month - 1, 1);
   const emp = user ?? {};
   const salary = structure ?? {};
+  const profileSal = emp.salary ?? {};
   const nameParts = String(emp.name ?? "").trim().split(/\s+/);
+  const contractNetMonthly = Number(salary.contractNet ?? profileSal.netSalary ?? 0);
+  const structAllowances = (salary.hra ?? 0) + (salary.allowances ?? 0);
+  const monthlyAllowances =
+    structAllowances > 0 ? structAllowances : Number(profileSal.allowances) || 0;
+  const basicSalary = salary.basic ?? (Number(profileSal.basicSalary) || 0);
   return {
+    cmsPayroll: true,
+    earnedGross: Number(line.gross ?? 0),
+    contractNetMonthly,
     paySalary: line.net,
-    totalSalary: line.gross,
-    salaryBaseUsed: salary.basic ?? 0,
+    totalSalary: contractNetMonthly,
+    salaryBaseUsed: basicSalary,
     paySlipTime: monthDate,
     createdAt: monthDate,
     paidOn: run.status === "paid" ? new Date() : null,
@@ -970,8 +1047,6 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
     halfDayDeductionAmount: 0,
     absentDeductionAmount: 0,
     unpaidLeaveDeductionAmount: line.lopDeduction ?? 0,
-    pfDeductionAmount: line.pfEmployee ?? 0,
-    tdsDeductionAmount: line.tds ?? 0,
     overtimeAmount: 0,
     totalFullDay: line.paidDays ?? 0,
     totalWfh: 0,
@@ -988,9 +1063,9 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
       departmentId: { departmentName: emp.department ?? "—" },
       joiningDate: emp.joiningDate,
       salary: {
-        basicSalary: salary.basic ?? 0,
-        netSalary: salary.gross ?? line.gross ?? 0,
-        allowances: (salary.hra ?? 0) + (salary.allowances ?? 0),
+        basicSalary,
+        netSalary: contractNetMonthly,
+        allowances: monthlyAllowances,
         bankAccount: { accountNumber: "—" },
       },
       panNumber: "—",

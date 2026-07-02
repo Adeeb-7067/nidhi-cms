@@ -125,7 +125,12 @@ export default function HrmDepartmentsPage() {
       id: "description",
       header: "Description",
       cell: (d) => (
-        <span className="max-w-[200px] truncate text-muted-foreground">{d.description ?? "—"}</span>
+        <span className="block max-w-[200px] truncate text-muted-foreground" title={d.description ?? undefined}>
+          {d.description ?? "—"}
+        </span>
+      ),
+      detailCell: (d) => (
+        <span className="whitespace-pre-wrap break-words text-muted-foreground">{d.description ?? "—"}</span>
       ),
       exportValue: (d) => d.description ?? "",
     },

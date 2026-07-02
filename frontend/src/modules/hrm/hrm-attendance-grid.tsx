@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import { HrmAttendanceStatusPill } from "./components";
+import { HrmEmployeeAvatar } from "./dashboard-sections";
 import { simpleAttendanceStatusLabel } from "./constants";
 import type { HrmAttendanceSummary } from "./types";
 
@@ -45,7 +46,12 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
       id: "employee",
       header: "Employee",
       accessorKey: "userName",
-      cell: (r) => <span className="font-medium">{r.userName}</span>,
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={r.userName} avatarUrl={r.avatarUrl} className="h-7 w-7" />
+          <span className="font-medium">{r.userName}</span>
+        </div>
+      ),
       exportValue: (r) => r.userName,
     });
     cols.push(statusColumn);
