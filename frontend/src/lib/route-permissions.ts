@@ -7,6 +7,12 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/admin/employees/", "hrm_employees"],
   ["/admin/employees", "admin_team"],
   ["/admin/roles", "roles_permissions"],
+  ["/admin/screenshots", "monitor_screenshots"],
+  ["/admin/attendance", "monitor_attendance"],
+  ["/admin/tickets", "admin_tickets"],
+  ["/discussions", "admin_discussions"],
+  ["/hrm/roles", "roles_permissions"],
+  ["/sales/bde", "sales_dashboard"],
   ["/dev/tasks/", "dev_tasks"],
   ["/dev/projects/", "dev_projects"],
   ["/dev/projects", "dev_projects"],
@@ -57,6 +63,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/sales/settings", "sales_settings"],
   ["/sales/receipts", "sales_payments"],
   ["/legal/", "legal"],
+  ["/marketing/", "marketing"],
   ["/finance/", "finance"],
   ["/ca/", "ca"],
   ["/client/", "client_portal"],
@@ -72,6 +79,16 @@ export function resolveRoutePermission(path: string): CmsModule | null {
   }
   if (p === "/dev" || p.startsWith("/dev/")) return "dev_workspace";
   return null;
+}
+
+/** Nav links with no permission module — visible to all authenticated users. */
+const NAV_PUBLIC_HREFS = new Set(["/profile", "/notifications", "/settings"]);
+
+export function isNavHrefPublic(href: string): boolean {
+  const path = href.split("?")[0];
+  if (NAV_PUBLIC_HREFS.has(path)) return true;
+  if (path === "/settings" || path.startsWith("/settings/")) return true;
+  return false;
 }
 
 export type RoutePermissionCheck = { module: CmsModule; action: CmsAction };

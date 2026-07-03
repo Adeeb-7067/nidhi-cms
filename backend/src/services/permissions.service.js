@@ -3,6 +3,7 @@ import {
   hrmPermissionsTable,
   usersTable,
   getNextSequence,
+  getNextSequenceRange,
 } from "../models/schema/index.js";
 import {
   cmsActions,
@@ -16,6 +17,10 @@ import {
 } from "../constants/permissions.js";
 import { userRoles } from "../constants/user-roles.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
+import { runInTx } from "../lib/db-tx.js";
+
+const VALID_MODULES = new Set(cmsModules);
+const VALID_ACTIONS = new Set(cmsActions);
 
 const ALL_MODULE_ACTIONS = cmsModules.flatMap((module) =>
   cmsActions.map((action) => ({ module, action })),
@@ -65,7 +70,12 @@ const DEFAULT_TEMPLATES = [
       { module: "sales_team", action: "view" },
       { module: "admin_team", action: "view" },
       { module: "admin_team", action: "edit" },
+      { module: "roles_permissions", action: "view" },
       { module: "monitor_attendance", action: "view" },
+      { module: "monitor_screenshots", action: "view" },
+      { module: "monitor_policy", action: "view" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_tickets", action: "view" },
     ],
   },
   {
@@ -75,6 +85,10 @@ const DEFAULT_TEMPLATES = [
     isSystem: true,
     grants: [
       { module: "hrm_dashboard", action: "view" },
+      // Nav/page visibility only — team-scope.js always scopes managers to their
+      // direct reports regardless of this grant, so it can't widen access org-wide.
+      { module: "hrm_employees", action: "view" },
+      { module: "monitor_attendance", action: "view" },
       { module: "hrm_attendance", action: "view" },
       { module: "hrm_leave", action: "view" },
       { module: "hrm_leave", action: "approve" },
@@ -351,6 +365,41 @@ function ensureTemplatesReady() {
   return _templatesReadyPromise;
 }
 
+function validatePermissionList(permissionList) {
+  if (!Array.isArray(permissionList)) {
+    throw new Error("permissions must be an array");
+  }
+  const seen = new Set();
+  for (const p of permissionList) {
+    const mod = normalizePermissionModule(p?.module);
+    const action = p?.action;
+    if (!mod || !VALID_MODULES.has(mod)) {
+      throw new Error(`Invalid permission module: ${p?.module ?? "(missing)"}`);
+    }
+    if (!action || !VALID_ACTIONS.has(action)) {
+      throw new Error(`Invalid permission action: ${action ?? "(missing)"}`);
+    }
+    const key = `${mod}:${action}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+  }
+}
+
+function normalizePermissionList(permissionList) {
+  validatePermissionList(permissionList);
+  const seen = new Set();
+  const normalized = [];
+  for (const p of permissionList) {
+    const mod = normalizePermissionModule(p.module);
+    const action = p.action;
+    const key = `${mod}:${action}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    normalized.push({ module: mod, action });
+  }
+  return normalized;
+}
+
 function permissionEntryKey(module, action) {
   return `${normalizePermissionModule(module)}:${action}`;
 }
@@ -404,14 +453,6 @@ async function loadUserPermissionEntry(userId) {
   return entry;
 }
 
-function resolveRoleTemplateId(user) {
-  const explicit = user.roleTemplateId ?? user.hrmRoleTemplateId;
-  if (explicit) return explicit;
-  const code = defaultTemplateByRole[user.role];
-  if (!code) return null;
-  return code;
-}
-
 async function resolveTemplateIdForUser(user) {
   const explicit = user.roleTemplateId ?? user.hrmRoleTemplateId;
   if (explicit) return explicit;
@@ -434,8 +475,8 @@ export async function getPermissionsForUser(userId) {
   if (!entry) return { permissions: [], templateId: null, groups: cmsModuleGroups };
 
   const permissions = [...entry.set].map((key) => {
-    const [module, action] = key.split(":");
-    return { module, action };
+    const sep = key.lastIndexOf(":");
+    return { module: key.slice(0, sep), action: key.slice(sep + 1) };
   });
 
   return {
@@ -483,16 +524,31 @@ export async function listRoleTemplates() {
 }
 
 export async function updateRoleTemplatePermissions(templateId, permissionList) {
-  await hrmPermissionsTable.deleteMany({ roleTemplateId: templateId });
-  for (const p of permissionList) {
-    const id = await getNextSequence("hrm_permissions");
-    await hrmPermissionsTable.create({
-      id,
-      roleTemplateId: templateId,
-      module: normalizePermissionModule(p.module),
-      action: p.action,
-    });
-  }
+  const existing = await hrmRoleTemplatesTable.findOne({ id: templateId }).lean();
+  if (!existing) throw new Error("Role template not found");
+
+  const normalized = normalizePermissionList(permissionList ?? []);
+  const ids =
+    normalized.length > 0
+      ? await getNextSequenceRange("hrm_permissions", normalized.length)
+      : [];
+
+  await runInTx(async (session) => {
+    const writeOpts = session ? { session } : {};
+    await hrmPermissionsTable.deleteMany({ roleTemplateId: templateId }, writeOpts);
+    if (normalized.length === 0) return;
+
+    await hrmPermissionsTable.insertMany(
+      normalized.map((p, index) => ({
+        id: ids[index],
+        roleTemplateId: templateId,
+        module: p.module,
+        action: p.action,
+      })),
+      writeOpts,
+    );
+  });
+
   const users = await usersTable.find(
     { $or: [{ hrmRoleTemplateId: templateId }, { roleTemplateId: templateId }] },
     { id: 1 },

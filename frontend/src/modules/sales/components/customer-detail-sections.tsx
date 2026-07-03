@@ -31,7 +31,7 @@ import type {
   SalesPayment,
 } from "@/api/sales";
 import { useAssignCustomerAdmin } from "@/api/sales";
-import { resolveProposalTotal } from "@/modules/sales/utils";
+import { formatPaymentMethod, resolveProposalTotal } from "@/modules/sales/utils";
 import { useGetSettings } from "@/api/generated/api";
 import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import { COMPANY_BILLING } from "@/modules/sales/constants";
@@ -744,6 +744,168 @@ export function CustomerProposalsSection({
           description="Try selecting a different status filter."
         />
       )}
+    </div>
+  );
+}
+
+// ── Invoices & payments ────────────────────────────────────────────────────────
+
+export function CustomerInvoicesSection({
+  invoices,
+  payments,
+}: {
+  invoices: SalesInvoice[];
+  payments: SalesPayment[];
+}) {
+  if (invoices.length === 0 && payments.length === 0) {
+    return (
+      <SalesEmptyState
+        title="No invoices or payments"
+        description="No invoices have been raised or payments recorded for this customer yet."
+      />
+    );
+  }
+
+  const totalInvoiced = invoices.reduce((s, i) => s + (i.adjustedTotal ?? i.amount), 0);
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const sortedInvoices = [...invoices].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const sortedPayments = [...payments].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Invoices</p>
+            <p className="text-xl font-bold mt-0.5">{invoices.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total invoiced</p>
+            <p className="text-xl font-bold mt-0.5">{formatCurrency(totalInvoiced)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Payments</p>
+            <p className="text-xl font-bold mt-0.5">{payments.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total paid</p>
+            <p className="text-xl font-bold mt-0.5 text-emerald-600">{formatCurrency(totalPaid)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Invoices</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {sortedInvoices.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">No invoices raised yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Invoice #</TableHead>
+                  <TableHead className="text-xs">Title</TableHead>
+                  <TableHead className="text-xs text-right">Amount</TableHead>
+                  <TableHead className="text-xs text-right">Paid</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="text-xs">Due date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedInvoices.map((inv) => (
+                  <TableRow key={inv.id}>
+                    <TableCell className="text-xs font-mono">
+                      <Link href={`/sales/invoices/${inv.id}`} className="text-primary hover:underline font-medium">
+                        {inv.number}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs">{inv.title ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {formatCurrency(inv.adjustedTotal ?? inv.amount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-emerald-600">
+                      {formatCurrency(inv.paidAmount)}
+                    </TableCell>
+                    <TableCell>
+                      <SalesStatusBadge variant="invoice" value={inv.status} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {format(new Date(inv.dueDate), "MMM d, yyyy")}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">Payment records</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {sortedPayments.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="text-xs">Receipt #</TableHead>
+                  <TableHead className="text-xs">Invoice</TableHead>
+                  <TableHead className="text-xs">Mode</TableHead>
+                  <TableHead className="text-xs text-right">Amount</TableHead>
+                  <TableHead className="text-xs">Invoice status</TableHead>
+                  <TableHead className="text-xs">Date</TableHead>
+                  <TableHead className="text-xs text-right">Receipt</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedPayments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell className="text-xs font-mono">{p.receiptNumber}</TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <Link
+                        href={`/sales/invoices/${p.invoiceId}`}
+                        className="text-primary hover:underline"
+                      >
+                        {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums font-medium">
+                      {formatCurrency(p.amount)}
+                    </TableCell>
+                    <TableCell>
+                      <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {format(new Date(p.createdAt), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <Link href={`/sales/receipts/${p.id}`}>View</Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

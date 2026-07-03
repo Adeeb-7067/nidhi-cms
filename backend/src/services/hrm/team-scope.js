@@ -1,5 +1,6 @@
 import { usersTable } from "../../models/schema/index.js";
-import { adminStaffRoles, hrmEmployeeRoles, isHrmAdminRole, isHrmEmployeeRole } from "../../constants/user-roles.js";import { forbidden, notFound } from "../../utils/route-errors.js";
+import { adminStaffRoles, hrmEmployeeRoles, isHrmEmployeeRole } from "../../constants/user-roles.js";
+import { forbidden, notFound } from "../../utils/route-errors.js";
 import { userHasPermission } from "../permissions.service.js";
 
 export async function assertHrmEmployeeUser(userId) {
@@ -15,10 +16,10 @@ export async function getDirectReportIds(managerId) {
   return rows.map((r) => r.id);
 }
 
-/** Org-wide attendance visibility (HR admin role or hrm_attendance view permission). */
+/** Org-wide attendance visibility (hrm_attendance view permission). */
 export async function canViewOrgAttendance(req) {
   if (!req.user) return false;
-  if (req.user.role === "super_admin" || isHrmAdminRole(req.user.role)) return true;
+  if (req.user.role === "super_admin") return true;
   return userHasPermission(req.user.id, "hrm_attendance", "view");
 }
 
@@ -50,7 +51,16 @@ export async function resolveAttendanceScopedUserIds(req, requestedUserId) {
 export async function assertCanAccessUser(req, targetUserId) {
   if (!req.user) forbidden("Unauthorized");
   if (req.user.id === targetUserId) return;
-  if (req.user.role === "super_admin" || isHrmAdminRole(req.user.role)) return;
+  if (req.user.role === "super_admin") return;
+
+  // Managers are always scoped to their direct reports, even if their template also
+  // grants hrm_employees:view (needed for nav/page visibility) — that grant must not
+  // widen a manager's access to the whole org. Checked before the generic bypass below.
+  if (req.user.role === "manager") {
+    const reports = await getDirectReportIds(req.user.id);
+    if (reports.includes(targetUserId)) return;
+  }
+
   if (await userHasPermission(req.user.id, "hrm_employees", "view")) return;
   if (await userHasPermission(req.user.id, "admin_team", "view")) return;
 
@@ -61,9 +71,6 @@ export async function assertCanAccessUser(req, targetUserId) {
     if (await userHasPermission(req.user.id, "sales_team", "view")) return;
   }
 
-  if (req.user.role === "manager") {    const reports = await getDirectReportIds(req.user.id);
-    if (reports.includes(targetUserId)) return;
-  }
   forbidden("You cannot access this employee's data.");
 }
 
@@ -77,8 +84,11 @@ export async function assertCanApproveForUser(req, targetUserId) {
  */
 export async function resolveHrmEmployeeScope(req) {
   if (!req.user) forbidden("Unauthorized");
-  if (isHrmAdminRole(req.user.role)) return null;
-  if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
+  if (req.user.role === "super_admin") return null;
+
+  // Checked before the generic hrm_employees:view bypass — a manager's own grant
+  // (needed so the Employees nav item/page shows for them) must not widen their
+  // scope to the whole org; they always stay limited to their direct reports.
   if (req.user.role === "manager") {
     const reports = await getDirectReportIds(req.user.id);
     const ids = [req.user.id, ...reports];
@@ -87,6 +97,8 @@ export async function resolveHrmEmployeeScope(req) {
       .lean();
     return rows.map((r) => r.id);
   }
+
+  if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
   forbidden("You cannot access the employee directory.");
 }
 
@@ -96,8 +108,10 @@ export async function resolveScopedUserIds(req, requestedUserId) {
     await assertCanAccessUser(req, uid);
     return [uid];
   }
-  if (isHrmAdminRole(req.user.role)) return null;
-  if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
+  if (req.user.role === "super_admin") return null;
+
+  // Same precedence as resolveHrmEmployeeScope: manager scoping wins over the
+  // generic hrm_employees:view grant so that grant can't widen a manager's access.
   if (req.user.role === "manager") {
     const reports = await getDirectReportIds(req.user.id);
     const ids = [req.user.id, ...reports];
@@ -106,5 +120,7 @@ export async function resolveScopedUserIds(req, requestedUserId) {
       .lean();
     return rows.map((r) => r.id);
   }
+
+  if (await userHasPermission(req.user.id, "hrm_employees", "view")) return null;
   return [req.user.id];
 }

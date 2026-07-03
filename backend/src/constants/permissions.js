@@ -44,6 +44,10 @@ export const cmsModuleGroups = [
     modules: ["legal"],
   },
   {
+    label: "Marketing",
+    modules: ["marketing"],
+  },
+  {
     label: "Finance",
     modules: ["finance"],
   },

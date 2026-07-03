@@ -179,15 +179,22 @@ function useSidebarNavState() {
   );
 
   const sections = useMemo<NavSection[]>(() => {
-    const permissionFiltered = rawSections
-      .map((section) => ({
-        ...section,
-        items: section.items.filter((item) => {
-          if (!item.roles.includes(role)) return false;
-          return canViewHref(item.href);
-        }),
-      }))
-      .filter((section) => section.items.length > 0);
+    // Clients aren't part of the CMS staff permission-template system (see
+    // defaultTemplateByRole: client -> null), so their permission set is always
+    // empty and canViewHref can never match for them. getNavSections(role) already
+    // does the authoritative role-based filtering for clients; the client-team
+    // scoping below further restricts within that.
+    const permissionFiltered = role === "client"
+      ? rawSections.filter((section) => section.items.length > 0)
+      : rawSections
+          .map((section) => ({
+            ...section,
+            // Role allowlist (e.g. BDE-only "My Dashboard") plus permission matrix.
+            items: section.items.filter(
+              (item) => item.roles.includes(role) && canViewHref(item.href),
+            ),
+          }))
+          .filter((section) => section.items.length > 0);
 
     if (role !== "client" || !team.isClientUser || team.isAdmin) return permissionFiltered;
     return permissionFiltered

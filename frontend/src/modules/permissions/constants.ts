@@ -40,6 +40,7 @@ export const CMS_MODULE_GROUPS = [
     ],
   },
   { label: "Legal", modules: ["legal"] },
+  { label: "Marketing", modules: ["marketing"] },
   { label: "Finance", modules: ["finance"] },
   { label: "CA", modules: ["ca"] },
   {
@@ -173,6 +174,7 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   sales_settings: "Automation & settings",
   sales: "Sales & CRM (all pages)",
   legal: "Legal",
+  marketing: "Marketing",
   finance: "Finance",
   ca: "CA Master",
   dev_workspace: "Dev workspace",
@@ -236,9 +238,11 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/settings/monitoring": "monitor_policy",
   "/sales": "sales_dashboard",
   "/legal": "legal",
+  "/marketing": "marketing",
   "/finance": "finance",
   "/ca": "ca",
   "/dev": "dev_workspace",
   "/hrm": "hrm_dashboard",
   "/admin/roles": "roles_permissions",
+  "/hrm/roles": "roles_permissions",
 };

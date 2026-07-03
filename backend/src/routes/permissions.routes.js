@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { requireAuth } from "../middlewares/auth.js";
-import { requirePermission } from "../middlewares/permission.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permission.js";
 import * as permissions from "../controllers/permissions.controller.js";
 
 const router = Router();
@@ -25,6 +25,11 @@ router.get(
 router.get(
   "/roles/assignable",
   requireAuth,
+  requireAnyPermission(
+    ["roles_permissions", "view"],
+    ["admin_team", "edit"],
+    ["hrm_employees", "edit"],
+  ),
   asyncHandler(permissions.getAssignableCmsRoles),
 );
 router.post(

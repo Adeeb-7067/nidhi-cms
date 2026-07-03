@@ -43,6 +43,18 @@ import {
   type CmsAction,
 } from "@/modules/permissions/constants";
 
+function permissionKey(module: string, action: string) {
+  return `${module}:${action}`;
+}
+
+function parsePermissionKey(key: string): { module: string; action: CmsAction } {
+  const sep = key.lastIndexOf(":");
+  return {
+    module: key.slice(0, sep),
+    action: key.slice(sep + 1) as CmsAction,
+  };
+}
+
 type RoleFormState = {
   name: string;
   code: string;
@@ -70,6 +82,7 @@ export default function RolesPermissionsPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [roleForm, setRoleForm] = useState<RoleFormState>(emptyRoleForm);
+  const [draftGranted, setDraftGranted] = useState<Set<string>>(new Set());
 
   const templates = rolesData?.templates ?? [];
 
@@ -86,20 +99,40 @@ export default function RolesPermissionsPage() {
 
   const granted = useMemo(() => {
     const set = new Set<string>();
-    for (const p of selected?.permissions ?? []) set.add(`${p.module}:${p.action}`);
+    for (const p of selected?.permissions ?? []) set.add(permissionKey(p.module, p.action));
     return set;
   }, [selected]);
 
+  useEffect(() => {
+    setDraftGranted(new Set(granted));
+  }, [granted, selected?.id]);
+
+  const isDirty = useMemo(() => {
+    if (draftGranted.size !== granted.size) return true;
+    for (const key of draftGranted) {
+      if (!granted.has(key)) return true;
+    }
+    return false;
+  }, [draftGranted, granted]);
+
   const toggle = (module: string, action: CmsAction) => {
     if (!selected || !canEdit) return;
-    const key = `${module}:${action}`;
-    const next = new Set(granted);
-    if (next.has(key)) next.delete(key);
-    else next.add(key);
-    const permissions = [...next].map((k) => {
-      const [m, a] = k.split(":");
-      return { module: m, action: a as CmsAction };
+    const key = permissionKey(module, action);
+    setDraftGranted((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
+  };
+
+  const handleDiscardPermissions = () => {
+    setDraftGranted(new Set(granted));
+  };
+
+  const handleSavePermissions = () => {
+    if (!selected || !canEdit) return;
+    const permissions = [...draftGranted].map((k) => parsePermissionKey(k));
     updatePerms.mutate(
       { id: selected.id, permissions },
       {
@@ -172,7 +205,10 @@ export default function RolesPermissionsPage() {
     });
   };
 
-  const groups = CMS_MODULE_GROUPS;
+  const groups =
+    catalog?.groups?.length
+      ? catalog.groups.map((g) => ({ label: g.label, modules: g.modules }))
+      : CMS_MODULE_GROUPS;
   const actions = catalog?.actions?.length ? catalog.actions : CMS_ACTIONS;
 
   return (
@@ -182,7 +218,7 @@ export default function RolesPermissionsPage() {
           <nav className="text-xs text-muted-foreground mb-1">Manage / Roles & permissions</nav>
           <h1 className="text-2xl font-bold tracking-tight">CMS roles & permissions</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Create CMS roles, map them to login accounts, and control module access across the platform.
+            Create permission templates, assign them on the Team form, and control module access across the platform.
           </p>
         </div>
 
@@ -191,7 +227,12 @@ export default function RolesPermissionsPage() {
             <Label className="text-xs text-muted-foreground mb-1.5 block">Role template</Label>
             <Select
               value={String(selected?.id ?? "")}
-              onValueChange={(v) => setTemplateId(Number(v))}
+              onValueChange={(v) => {
+                if (isDirty && !window.confirm("You have unsaved permission changes. Switch templates and discard them?")) {
+                  return;
+                }
+                setTemplateId(Number(v));
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select role template" />
@@ -250,6 +291,29 @@ export default function RolesPermissionsPage() {
           <p className="text-sm text-muted-foreground mb-4">{selected.description}</p>
         )}
 
+        {canEdit && isDirty && (
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2">
+            <p className="text-sm text-muted-foreground flex-1 min-w-[200px]">Unsaved permission changes</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDiscardPermissions}
+              disabled={updatePerms.isPending}
+            >
+              Discard
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleSavePermissions}
+              disabled={updatePerms.isPending}
+            >
+              Save permissions
+            </Button>
+          </div>
+        )}
+
         <div className="space-y-8">
           {groups.map((group) => (
             <section key={group.label}>
@@ -273,7 +337,7 @@ export default function RolesPermissionsPage() {
                           {CMS_MODULE_LABELS[module] ?? module}
                         </td>
                         {actions.map((action) => {
-                          const checked = granted.has(`${module}:${action}`);
+                          const checked = draftGranted.has(permissionKey(module, action));
                           return (
                             <td key={action} className="p-2 text-center">
                               <Checkbox

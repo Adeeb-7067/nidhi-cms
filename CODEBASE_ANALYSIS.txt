@@ -3,7 +3,7 @@
               COMPREHENSIVE CODEBASE ANALYSIS & DOCUMENTATION
 ================================================================================
 
-Generated: June 12, 2026
+Generated: July 2, 2026 (roles & permissions section updated)
 Repository: D:\Content-Management-Hub
 Analysis scope: Full monorepo (backend + frontend + electron + docs)
 
@@ -17,6 +17,7 @@ TABLE OF CONTENTS
   4.  Technology Stack
   5.  Project Structure
   6.  User Roles & Access Model
+  6a. Roles & Permissions Matrix (CMS RBAC) — CURRENT STATUS
   7.  Authentication & Security
   8.  Database Design (MongoDB)
   9.  Backend API — Complete Reference
@@ -60,25 +61,29 @@ Typical production deployment uses two domains:
 The Electron desktop app connects to the same remote backend — it wraps only
 the frontend in a native shell (shell architecture, no embedded backend).
 
-Six primary user roles drive the permission model (plus a planned CA role
-for frontend-only mock access):
+Six primary user roles drive the legacy permission model, plus extended
+staff roles and a CMS-wide permission matrix (role templates):
 
-  super_admin, developer, tester, qa, client, freelancer
+  super_admin, hr, manager, developer, tester, qa, client, freelancer, bde
 
-The codebase contains ~575+ frontend/backend source files with graphify
-knowledge graph auto-updated on code changes (graphify-out/).
+Access is controlled by TWO layers (see Section 6a):
+  1. CMS login role (user.role) — identity, defaults, data scoping
+  2. Permission template (roleTemplateId) — module×action matrix (primary)
+
+The codebase contains ~865+ indexed source files with graphify knowledge
+graph auto-updated on code changes (graphify-out/).
 
 Core live features (backend-integrated):
   Projects, Bugs, Daily Logs, Tasks, APK Releases, Discussions/Comments,
   Tickets, Resource Requests, Inventory Vault, Analytics, Reports,
   Notifications, Presence, Client Portal, Employee Management,
-  Screenshot Monitoring, Attendance tracking.
+  Screenshot Monitoring, Attendance tracking, HRM (full suite),
+  Sales/CRM (live API with permission gates).
 
-Mock UI modules (frontend only, no backend API yet):
-  Sales/CRM (/sales/*)     — super_admin
-  Finance (/finance/*)     — super_admin
-  Legal (/legal/*)         — super_admin
-  CA Panel (/ca/*)         — super_admin (+ planned ca role in routes/nav)
+Partially mock / limited backend:
+  Finance (/finance/*)     — super_admin UI; coarse permission module
+  Legal (/legal/*)         — super_admin UI; coarse permission module
+  CA Panel (/ca/*)         — permission-gated UI; some mock data
 
 ================================================================================
 2. WHAT THIS PROJECT IS
@@ -101,12 +106,14 @@ It centralizes everything needed to deliver client projects:
 
 TARGET USERS
 ------------
-  Super Admin  — Agency owner/manager; full system control
-  Developer    — Builds software; logs work, fixes bugs, manages inventory
-  Freelancer   — External contractor; same dev-portal access as developer
-  Tester/QA    — Reports and triages bugs; QA status workflow
+  Super Admin  — Agency owner; full system control; manages roles & permissions
+  HR           — HRM admin; default hr_admin template (matrix-configurable)
+  Manager      — Team lead; HRM approve + dev portal
+  Developer    — Builds software; logs work, fixes bugs
+  Freelancer   — External contractor; dev-portal access
+  Tester/QA    — Reports and triages bugs
+  BDE          — Sales pipeline, proposals, CRM
   Client       — Views project progress, downloads APKs, raises tickets
-  CA (planned) — Chartered accountant; /ca/* mock panel (routes ready)
 
 BUSINESS DOMAIN
 ---------------
@@ -175,7 +182,7 @@ FRONTEND FLOW
               PresenceProvider (heartbeat)
                 AuthenticatedShell
                   AppLayout (Sidebar + Navbar)
-                    PageOutlet (lazy routes + RoleGate)
+                    PageOutlet (lazy routes + permission-based RoleGate)
 
 ================================================================================
 4. TECHNOLOGY STACK
@@ -325,25 +332,55 @@ Content-Management-Hub/
 6. USER ROLES & ACCESS MODEL
 ================================================================================
 
-ROLES (6 live + 1 planned frontend role)
------------------------------------------
-  super_admin  — Full system access; manages users, clients, all projects
-  developer    — Project team member; builds, logs work, fixes assigned bugs
-  freelancer   — External contractor; dev-portal access (same as developer)
-  tester       — QA staff; creates bugs, sets QA track statuses
-  qa           — QA staff (same as tester for most permissions)
-  client       — External client; portal access to their company's projects
-  ca (planned) — Referenced in /ca/* routes/nav; not yet in backend UserRole
+ROLES (CMS login roles — user.role field)
+--------------------------------------------
+  super_admin  — Break-glass full access; bypasses permission matrix
+  hr           — HR staff; default template hr_admin (not auto-bypass anymore)
+  manager      — Team lead; default template manager
+  developer    — Project team; default template employee
+  tester, qa   — QA staff; default template employee
+  freelancer   — External contractor; default template employee
+  bde          — Business development; default template bde
+  client       — External client portal (separate boundary from staff matrix)
 
 LOGIN METHODS
 -------------
-  super_admin, client  → Login with EMAIL + password
-  developer, tester, qa, freelancer → Login with EMPLOYEE ID (e.g. AL001) + password
+  super_admin, client, hr  → Login with EMAIL + password
+  developer, tester, qa, freelancer, manager, bde
+                           → Login with EMPLOYEE ID (e.g. AL001) + password
 
 USER STATUSES: active | inactive | suspended
 
-ROLE CAPABILITY MATRIX
-----------------------
+CMS ROLE vs PERMISSION TEMPLATE (two-layer model)
+-------------------------------------------------
+  CMS role (user.role)              | Permission template (roleTemplateId)
+  ----------------------------------|----------------------------------------
+  Required on every account         | Optional; "Default for role" if null
+  Login home redirect               | Sidebar + page access (mapped routes)
+  BDE own-leads data scoping        | API requirePermission checks
+  Manager team scoping (team-scope) | Button-level PermissionGate (partial)
+  Employee ID generation            | HRM/Sales route visibility
+  Profile page variant              |
+
+  Resolution order for effective permissions:
+    1. Explicit roleTemplateId on user document
+    2. defaultTemplateByRole[user.role] → template code → DB id
+    3. Template where cmsRole === user.role
+
+  Managed on: Admin → Roles & permissions (/admin/roles or /hrm/roles)
+  Assigned on: Admin → Team form → "Permission template" field
+
+DEFAULT SYSTEM TEMPLATES (backend seeds + backfill on boot)
+------------------------------------------------------------
+  super_admin    — All modules × all actions (grants: "all")
+  hr_admin       — Full HRM + sales view + admin_team + roles_permissions:view
+  manager        — Team HRM view/approve + dev portal + hrm_employees:view
+  bde            — Full sales modules + HRM self-service
+  employee       — HRM self-service + dev portal view/create
+  payroll_viewer — hrm_payroll view/export + hrm_employees view (no cmsRole)
+
+LEGACY ROLE CAPABILITY MATRIX (project/bug domain — still role-based)
+---------------------------------------------------------------------
 Capability                    | super | dev | tester | qa | client
 ------------------------------|-------|-----|--------|----|-------
 Full user/client/project CRUD |   ✓   |     |        |    |
@@ -370,34 +407,151 @@ Client hub dashboard          |       |     |        |    |  ✓
   † Only when assigned to the bug.
   ‡ Filtered to client_visible / all_visible APK audiences.
 
-ACCESS SCOPING LOGIC (services/access/)
----------------------------------------
-  super_admin  → Full access everywhere
-  client       → Only their linked company (clients.userId) and its projects
-  developer/tester/qa → Access if member of any project under the company
-                        Developers get canManage: true on their projects
-  Inventory    → Clients see only client_visible resources
+ACCESS SCOPING LOGIC
+--------------------
+  Project/company scope (services/access/):
+    super_admin  → Full access everywhere
+    client       → Only their linked company and its projects
+    developer/tester/qa → Access if project member
 
-FRONTEND NAVIGATION ZONES
--------------------------
-  /admin/*   → super_admin (Manage section)
-  /admin/screenshots, /admin/attendance → super_admin (Monitoring section)
-  /dev/*     → developer, tester, qa, freelancer (+ super_admin)
-  /client/*  → client only
-  /sales/*   → super_admin only (mock CRM)
-  /finance/* → super_admin only (mock finance)
-  /legal/*   → super_admin only (mock legal department)
-  /ca/*      → super_admin (+ ca role planned; mock CA panel)
-  /settings/*, /profile, /notifications → all authenticated users
+  HRM data scope (services/hrm/team-scope.js) — HYBRID:
+    super_admin  → Org-wide
+    Permission   → hrm_employees:view or hrm_attendance:view → org-wide
+    manager role → Direct reports only (still CMS role, not template)
+    BDE/sales    → Own records in sales controllers (role === "bde")
 
-Settings uses path-based sections (/settings/monitoring) not query strings.
+FRONTEND NAVIGATION (permission-driven as of July 2026)
+-------------------------------------------------------
+  Sidebar: getNavSections() returns all internal sections; items filtered by
+           canViewHref(href) → resolveRoutePermission(path) → matrix view
+  Public nav (no module): /profile, /notifications, /settings/*
 
-ROLE-BASED HOME REDIRECT AFTER LOGIN
-------------------------------------
+  Route gates: RoleGate checks permission matrix when route is mapped;
+               allowedRoles only for client routes + mixed staff/client pages
+
+  Mapped zones (examples):
+    /admin/*           → admin_* modules
+    /hrm/*             → hrm_* modules
+    /sales/*           → sales_* modules
+    /dev/*             → dev_* modules
+    /legal/*, /finance/*, /ca/* → single coarse modules
+    /client/*          → client_portal + client role isolation
+
+ROLE-BASED HOME REDIRECT AFTER LOGIN (still CMS role)
+----------------------------------------------------
   super_admin → /admin
-  developer, tester, qa, freelancer → /dev
-  client → /client
-  ca (when backend adds role) → /ca (not yet wired in getHomeHref)
+  hr          → /hrm
+  client      → /client
+  all others  → /dev
+
+================================================================================
+6a. ROLES & PERMISSIONS MATRIX (CMS RBAC) — CURRENT STATUS
+================================================================================
+Last updated: July 2, 2026
+
+OVERVIEW
+--------
+Super admin configures access via Admin → Roles & permissions. Each role
+template stores rows of (module, action). Users receive a template via Team
+form (explicit roleTemplateId) or default mapping from CMS role.
+
+WHAT THE MATRIX CONTROLS (implemented)
+--------------------------------------
+  ✓ Sidebar visibility (canViewHref on mapped routes)
+  ✓ Page access (RoleGate → resolveRoutePermission → usePermission)
+  ✓ In-page gates (PermissionGate, usePermission hook)
+  ✓ HRM API routes (requirePermission on hrm.routes.js)
+  ✓ Sales API routes (requirePermission on sales.routes.js)
+  ✓ Roles API (requirePermission roles_permissions view/edit)
+  ✓ Monitoring attendance route (monitor_attendance module)
+  ✓ Template CRUD + batch save on Roles page
+  ✓ Permission validation on PATCH (catalog enum check)
+  ✓ Transactional template permission replace (runInTx)
+  ✓ Cache eviction on template change (30s backend, 30s frontend stale)
+
+WHAT STILL USES CMS ROLE / HARDCODED LOGIC (not fully matrix-driven)
+--------------------------------------------------------------------
+  ✗ super_admin — always bypasses matrix (by design)
+  ✗ client portal — separate client role boundary
+  ✗ Projects, bugs, tasks, logs, tickets, users APIs — mostly requireAuth
+    only; membership/role checks in controllers (not requirePermission)
+  ✗ BDE data scope — sales controllers filter by req.user.role === "bde"
+  ✗ Manager team scope — team-scope.js uses role === "manager"
+  ✗ Login home URL — getHomeHref(role) not template-based
+  ✗ Many in-page buttons — still check user.role === "super_admin"
+  ✗ Data scope flags — no per-template org/team/self scope on Roles page
+
+KEY FILES
+---------
+  Backend:
+    backend/src/constants/permissions.js     — Module catalog + groups
+    backend/src/services/permissions.service.js — Templates, resolution, cache
+    backend/src/middlewares/permission.js    — requirePermission middleware
+    backend/src/routes/permissions.routes.js — /api/roles, /api/permissions/me
+    backend/src/controllers/permissions.controller.js
+
+  Frontend:
+    frontend/src/pages/admin/RolesPermissions.tsx — Matrix UI (batch save)
+    frontend/src/modules/permissions/usePermission.ts — can(), canViewHref()
+    frontend/src/modules/permissions/PermissionGate.tsx — Page/section gate
+    frontend/src/components/layout/RoleGate.tsx — Route gate
+    frontend/src/lib/route-permissions.ts — href → module mapping
+    frontend/src/modules/permissions/constants.ts — Labels (sync with backend)
+    frontend/src/modules/admin/employee-form-shared.ts — Template assignment
+
+PERMISSION MODULES (catalog groups)
+-----------------------------------
+  Platform: roles_permissions, platform_settings, platform_audit
+  Manage: admin_dashboard, admin_analytics, admin_companies, admin_projects,
+          admin_team, admin_requests, admin_tickets, admin_discussions
+  Monitoring: monitor_screenshots, monitor_attendance, monitor_policy
+  Sales & CRM: sales_dashboard, sales_leads, … sales_settings (14 modules)
+  Legal, Finance, CA: single module each (coarse granularity)
+  Delivery: dev_workspace, dev_projects, dev_logs, dev_tasks, dev_bugs, …
+  Client portal: client_portal
+  HRM: hrm_dashboard, hrm_employees, hrm_payroll, … + self-service modules
+
+ACTIONS: view | create | edit | delete | approve | finalize | export
+
+API ENDPOINTS
+-------------
+  GET  /api/permissions/me          — Current user's effective permissions
+  GET  /api/permissions/catalog     — Module/action catalog (any auth user)
+  GET  /api/roles                   — List templates (roles_permissions:view)
+  GET  /api/roles/assignable        — Team form roles (view OR admin_team:edit)
+  POST /api/roles                   — Create template (roles_permissions:edit)
+  PATCH /api/roles/:id              — Update template metadata
+  PATCH /api/roles/:id/permissions  — Replace permission rows (validated)
+  DELETE /api/roles/:id             — Delete custom template
+
+ADMIN WORKFLOW
+--------------
+  1. Open Manage → Roles & permissions (/admin/roles)
+  2. Select or create a role template
+  3. Edit module×action checkboxes → Save permissions
+  4. On Team form, assign "Permission template" to each user
+  5. User sees nav/pages/APIs matching their template (not super_admin)
+
+RECENT RBAC CHANGES (July 2026)
+-------------------------------
+  - Removed HR auto-bypass on frontend PermissionGate and backend middleware
+  - RoleGate prioritizes permission matrix over allowedRoles when route mapped
+  - Sidebar driven by canViewHref (not per-item CMS role arrays)
+  - PageOutlet: ~100 routes simplified to plain <RoleGate>
+  - Batch save on Roles page (no per-checkbox API race)
+  - Manager template backfilled with hrm_employees:view
+  - team-scope.js and StaffProfileAccessGate use permissions not HR bypass
+  - updateRoleTemplatePermissions: validated + transactional
+  - Unmapped nav hrefs hidden except profile/settings/notifications
+
+REMAINING WORK FOR "FULLY DYNAMIC" RBAC
+---------------------------------------
+  P2: User count per template on Roles page; clone template UX
+  P3: requirePermission on projects/bugs/tasks/tickets/users routes
+  P3: Replace BDE/manager role scoping with template scope flags
+  P3: Audit all pages for PermissionGate on action buttons
+  P4: DB-driven catalog (modules editable without code deploy)
+  P4: Optional CMS role deprecation (template-only accounts)
 
 ================================================================================
 7. AUTHENTICATION & SECURITY
@@ -795,7 +949,8 @@ ROUTING ARCHITECTURE
     /notifications      All roles
 
   Auth gate: ProtectedRoute redirects unauthenticated to /login
-  Role gate: RoleGate in PageOutlet shows "Unauthorized" if role mismatch
+  Role gate: RoleGate checks permission matrix (mapped routes) or
+             allowedRoles fallback (client, profile, settings, discussions)
 
 LAZY LOADING
 ------------
@@ -812,7 +967,15 @@ STATE MANAGEMENT
   Form state      → react-hook-form
   URL state       → Wouter useLocation/useParams
 
-Query defaults: 60s stale time, 10min GC, no refetch on focus, no 4xx retry
+Query defaults: permissions/me 30s stale + refetch on focus; other queries 60s stale
+
+PERMISSIONS INTEGRATION
+-----------------------
+  usePermissionsQuery → GET /api/permissions/me
+  usePermission(module, action) → boolean (super_admin always true)
+  canViewHref(href) → sidebar filter via route-permissions.ts
+  PermissionGate / HrmGate → in-page access control
+  Roles page: useRoleTemplates, useUpdateRoleTemplatePermissions (batch save)
 
 API INTEGRATION
 ---------------
@@ -1596,6 +1759,8 @@ CUSTOM API MODULES (not in OpenAPI)
   api/workspace-dashboard.ts
   api/discussion-previews.ts
   api/presence.ts
+  api/permissions.ts            → /api/roles, /api/permissions/me, catalog
+  api/team-employees.ts
   api/bugs-batch.ts
   api/project-members-batch.ts
   api/password-auth.ts
@@ -1606,12 +1771,19 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
 23. KNOWN GAPS & TECHNICAL NOTES
 ================================================================================
 
-1. MOCK UI MODULES (NO BACKEND)
-   All /sales/*, /finance/*, /legal/*, /ca/* pages use hardcoded mock data.
-   No backend API exists for CRM, finance, legal, or CA workflows yet.
-   CA module routes reference a planned "ca" role not yet in backend UserRole.
+1. PARTIAL RBAC COVERAGE (July 2026 status)
+   HRM + Sales + mapped nav routes are permission-matrix driven.
+   Projects, bugs, tasks, logs, tickets, users APIs still use requireAuth +
+   controller-level role/membership checks — NOT fully matrix-controlled.
+   BDE/manager data scoping still uses CMS role in backend services.
+   See Section 6a for full current status and remaining work.
 
-2. OPENAPI GAPS
+2. MOCK / COARSE UI MODULES
+   Finance and Legal use single permission modules (finance, legal).
+   CA panel has live routes with permission gates; some pages use mock data.
+   Sales/CRM has live backend API with per-route requirePermission.
+
+3. OPENAPI GAPS
    Missing from openapi.yaml:
    - All /projects/:id/inventory/* routes
    - POST /upload
@@ -1653,6 +1825,10 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
    - SMTP email (gracefully skipped if not configured)
 
 10. RECENT FEATURE ADDITIONS (2026)
+    - CMS-wide roles & permissions matrix (role templates + module×action)
+    - HRM full suite (attendance, leave, payroll, recruitment, etc.)
+    - Sales/CRM live API with permission middleware
+    - Permission-driven sidebar and RoleGate (July 2026 RBAC phase)
     - Freelancer role (dev-portal access, monitoring-eligible)
     - Screenshot monitoring + attendance tracking (admin + Electron agent)
     - Settings path-based sections (/settings/monitoring)
@@ -1924,14 +2100,22 @@ ENTRY POINTS
 
 AUTH
   backend/src/middlewares/auth.js           requireAuth, requireRole
-  backend/src/lib/jwt.js                    Token sign/verify
+  backend/src/middlewares/permission.js   requirePermission, requireAnyPermission
+  backend/src/services/permissions.service.js  Templates, userHasPermission
+  backend/src/constants/permissions.js      Module catalog, defaultTemplateByRole
   frontend/src/contexts/AuthContext.tsx     Session management
   frontend/src/lib/auth-storage.ts          Token localStorage
+  frontend/src/modules/permissions/         usePermission, PermissionGate, constants
+  frontend/src/pages/admin/RolesPermissions.tsx  Roles matrix admin UI
 
 ROUTING
   backend/src/routes/index.js               API router + auth gate
-  frontend/src/components/layout/PageOutlet.tsx  Frontend routes
-  frontend/src/lib/navigation.ts            Sidebar nav by role
+  backend/src/routes/permissions.routes.js    Roles & permissions API
+  backend/src/routes/hrm.routes.js            HRM API (requirePermission)
+  backend/src/routes/sales.routes.js          Sales API (requirePermission)
+  frontend/src/components/layout/PageOutlet.tsx  Frontend routes + RoleGate
+  frontend/src/lib/navigation.ts            Sidebar nav sections
+  frontend/src/lib/route-permissions.ts     href → permission module map
   frontend/src/lib/route-meta.ts            Page titles/breadcrumbs
   frontend/src/lib/electron-bridge.ts       isElectron, getLocationSearch,
                                             clearLocationParam, openExternal
@@ -2007,7 +2191,8 @@ CONFIG
                               END OF DOCUMENT
 ================================================================================
 
-This analysis covers the Content Management Hub codebase as of June 12, 2026.
+This analysis covers the Content Management Hub codebase as of July 2, 2026.
+For roles & permissions current status, see Section 6a.
 For the latest API contract, see backend/openapi.yaml.
 For local setup (web + Electron), see LOCAL_RUNNING.md and ELECTRON_INSTALL_GUIDE.md.
 For architecture patterns, see backend/ARCHITECTURE.md.

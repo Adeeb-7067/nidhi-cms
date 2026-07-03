@@ -1,12 +1,5 @@
 import { HttpError } from "../lib/http-error.js";
 import { userHasPermission } from "../services/permissions.service.js";
-import { isHrmAdminRole, normalizePermissionModule } from "../constants/permissions.js";
-
-function isHrmScopedModule(module) {
-  const key = normalizePermissionModule(module);
-  return key.startsWith("hrm_") || key === "monitor_attendance";
-}
-
 export function requirePermission(module, action) {
   return async (req, _res, next) => {
     try {
@@ -14,10 +7,6 @@ export function requirePermission(module, action) {
         throw new HttpError(401, "Please sign in to continue.", { code: "UNAUTHORIZED" });
       }
       if (req.user.role === "super_admin") {
-        next();
-        return;
-      }
-      if (isHrmAdminRole(req.user.role) && isHrmScopedModule(module)) {
         next();
         return;
       }
@@ -45,14 +34,6 @@ export function requireAnyPermission(...checks) {
       if (req.user.role === "super_admin") {
         next();
         return;
-      }
-      if (isHrmAdminRole(req.user.role)) {
-        for (const [mod] of checks) {
-          if (isHrmScopedModule(mod)) {
-            next();
-            return;
-          }
-        }
       }
       for (const [module, action] of checks) {
         if (await userHasPermission(req.user.id, module, action)) {

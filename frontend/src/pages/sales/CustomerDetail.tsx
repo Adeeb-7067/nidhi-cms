@@ -42,6 +42,7 @@ import {
   CustomerCredentialsSection,
   CustomerInstallmentsSection,
   CustomerInventorySection,
+  CustomerInvoicesSection,
   CustomerOverviewExtras,
   CustomerProjectsSection,
   CustomerProposalsSection,
@@ -183,6 +184,7 @@ export default function CustomerDetail() {
         <TabsList className="h-auto flex-wrap justify-start gap-1 p-1">
           <TabsTrigger value="overview" className="text-xs">Customer info</TabsTrigger>
           <TabsTrigger value="proposals" className="text-xs">Proposals ({proposals.length})</TabsTrigger>
+          <TabsTrigger value="invoices" className="text-xs">Invoices &amp; payments ({invoices.length})</TabsTrigger>
           <TabsTrigger value="projects" className="text-xs">Projects ({projectCount})</TabsTrigger>
           <TabsTrigger value="admin" className="text-xs">Custom admin</TabsTrigger>
           <TabsTrigger value="team" className="text-xs">Team ({teamCount})</TabsTrigger>
@@ -291,6 +293,10 @@ export default function CustomerDetail() {
 
         <TabsContent value="proposals" className="mt-4">
           <CustomerProposalsSection proposals={proposals} customerId={customer.id} />
+        </TabsContent>
+
+        <TabsContent value="invoices" className="mt-4">
+          <CustomerInvoicesSection invoices={invoices} payments={payments} />
         </TabsContent>
 
         <TabsContent value="projects" className="mt-4">

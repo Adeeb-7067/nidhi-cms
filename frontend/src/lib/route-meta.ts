@@ -170,6 +170,76 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Profit & loss, profitability analysis, and revenue analytics.",
     hideHeader: true,
   },
+  "/marketing": {
+    title: "Marketing dashboard",
+    description: "Agency overview — tasks, approvals, campaigns, and team performance.",
+    hideHeader: true,
+  },
+  "/marketing/tasks": {
+    title: "Marketing tasks",
+    description: "Daily task management with status, priority, and deadlines.",
+    hideHeader: true,
+  },
+  "/marketing/clients": {
+    title: "Marketing clients",
+    description: "Assigned client accounts, packages, and budgets.",
+    hideHeader: true,
+  },
+  "/marketing/calendar": {
+    title: "Content calendar",
+    description: "Scheduled posts across platforms with approval status.",
+    hideHeader: true,
+  },
+  "/marketing/graphics": {
+    title: "Graphics queue",
+    description: "Design requests, revisions, and deliverable files.",
+    hideHeader: true,
+  },
+  "/marketing/videos": {
+    title: "Video queue",
+    description: "Reel and video production pipeline.",
+    hideHeader: true,
+  },
+  "/marketing/social": {
+    title: "Social analytics",
+    description: "Per-platform followers, reach, and engagement.",
+    hideHeader: true,
+  },
+  "/marketing/meta-ads": {
+    title: "Meta Ads",
+    description: "Facebook and Instagram campaign performance.",
+    hideHeader: true,
+  },
+  "/marketing/google-ads": {
+    title: "Google Ads",
+    description: "Search, Display, Shopping, PMax, and YouTube campaigns.",
+    hideHeader: true,
+  },
+  "/marketing/seo": {
+    title: "SEO panel",
+    description: "Keyword rankings, backlinks, audits, and Core Web Vitals.",
+    hideHeader: true,
+  },
+  "/marketing/content": {
+    title: "Content queue",
+    description: "Blogs, captions, scripts, and emails.",
+    hideHeader: true,
+  },
+  "/marketing/approvals": {
+    title: "Approval workflow",
+    description: "Internal and client review pipeline.",
+    hideHeader: true,
+  },
+  "/marketing/performance": {
+    title: "Team performance",
+    description: "Productivity, delivery time, and client ratings.",
+    hideHeader: true,
+  },
+  "/marketing/reports": {
+    title: "Marketing reports",
+    description: "Daily, weekly, and monthly report exports.",
+    hideHeader: true,
+  },
   "/settings": {
     title: "Settings",
     description: "Appearance, notifications, workspace, and account preferences.",

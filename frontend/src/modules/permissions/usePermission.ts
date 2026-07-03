@@ -2,8 +2,7 @@ import { useCallback, useMemo } from "react";
 import { usePermissionsQuery } from "@/api/permissions";
 import { normalizeModule, SALES_MODULES, type CmsAction } from "./constants";
 import { useAuth } from "@/contexts/AuthContext";
-import { isHrmAdminRole } from "@/lib/user-roles";
-import { resolveRoutePermission } from "@/lib/route-permissions";
+import { resolveRoutePermission, isNavHrefPublic } from "@/lib/route-permissions";
 
 function expandLegacySalesViewSet(set: Set<string>) {
   if (!set.has("sales")) return;
@@ -60,7 +59,7 @@ export function usePermission(module: string, action: CmsAction): boolean {
   return useMemo(() => {
     if (!user) return false;
     if (isLoading && !data) return false;
-    if (user.role === "super_admin" || isHrmAdminRole(user.role)) return true;
+    if (user.role === "super_admin") return true;
     return permissionMatches(data?.permissions ?? [], permissionSet, module, action);
   }, [user, data, module, action, isLoading, permissionSet]);
 }
@@ -74,12 +73,7 @@ export function usePermissions() {
     [data?.permissions],
   );
 
-  const isPrivileged = Boolean(
-    user && (user.role === "super_admin" || isHrmAdminRole(user.role)),
-  );
-
-  /** Show nav links while permissions load or when none are configured; page gates still enforce access. */
-  const optimisticNav = !isPrivileged && !data?.permissions?.length;
+  const isPrivileged = Boolean(user?.role === "super_admin");
 
   const can = useCallback(
     (module: string, action: CmsAction) => {
@@ -95,12 +89,12 @@ export function usePermissions() {
     (href: string) => {
       const path = href.split("?")[0];
       const perm = resolveRoutePermission(path);
-      if (!perm) return true;
-      if (optimisticNav) return true;
+      if (!perm) return isNavHrefPublic(path);
       if (isPrivileged) return true;
+      if (isLoading && !data) return false;
       return permissionMatches(data?.permissions ?? [], permissionSet, perm, "view");
     },
-    [optimisticNav, isPrivileged, permissionSet, data?.permissions],
+    [isPrivileged, isLoading, data, permissionSet],
   );
 
   return {

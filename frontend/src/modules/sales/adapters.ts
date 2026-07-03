@@ -27,6 +27,7 @@ export function toInvoicePreview(
     status: invoice.status,
     dueDate: invoice.dueDate,
     createdAt: invoice.createdAt,
+    lineItems: invoice.lineItems,
   };
 }
 

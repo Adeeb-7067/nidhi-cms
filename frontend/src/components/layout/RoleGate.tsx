@@ -15,7 +15,7 @@ export function RoleGate({
   action = "view",
   children,
 }: {
-  /** Explicit role allowlist — checked before any admin bypass. */
+  /** Fallback role allowlist when the route has no permission mapping (e.g. profile, settings). */
   allowedRoles?: UserRole[];
   /** CMS permission module — overrides auto-detect from URL. */
   module?: string;
@@ -30,17 +30,23 @@ export function RoleGate({
 
   if (!user) return <Unauthorized />;
 
-  // Client portal pages
   if (user.role === "client") {
-    return allowedRoles?.includes("client") ? <>{children}</> : <Unauthorized />;
+    if (allowedRoles?.includes("client")) return <>{children}</>;
+    if (permModule === "client_portal") {
+      if (isLoading) {
+        return (
+          <div className="p-6 space-y-3">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-32 w-full" />
+          </div>
+        );
+      }
+      if (can("client_portal", action)) return <>{children}</>;
+    }
+    return <Unauthorized />;
   }
 
-  // Hard allowedRoles gate — checked BEFORE admin bypass so it is always
-  // respected regardless of role tier.
-  if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
-    if (location === "/admin/projects" && isDevPortalRole(user.role)) {
-      return <Redirect to={getProjectsListHref(user.role)} replace />;
-    }
+  if (allowedRoles?.length === 1 && allowedRoles[0] === "client") {
     return <Unauthorized />;
   }
 
@@ -49,14 +55,10 @@ export function RoleGate({
     return <Redirect to={`/dev/projects/${adminProjectDetailMatch[1]}`} replace />;
   }
 
-  // super_admin bypasses the permission matrix entirely.
-  // hr goes through the normal permission matrix below (their access is
-  // defined via allowedRoles in PageOutlet and HRM permission modules).
   if (user.role === "super_admin") {
     return <>{children}</>;
   }
 
-  // Permission matrix for other internal roles
   if (permModule) {
     if (isLoading) {
       return (
@@ -75,10 +77,19 @@ export function RoleGate({
     ) {
       return <>{children}</>;
     }
+    if (location === "/admin/projects" && isDevPortalRole(user.role)) {
+      return <Redirect to={getProjectsListHref(user.role)} replace />;
+    }
     return <Unauthorized />;
   }
 
-  // No allowedRoles restriction and no permModule — any authenticated user
+  if (allowedRoles && !allowedRoles.includes(user.role as UserRole)) {
+    if (location === "/admin/projects" && isDevPortalRole(user.role)) {
+      return <Redirect to={getProjectsListHref(user.role)} replace />;
+    }
+    return <Unauthorized />;
+  }
+
   return <>{children}</>;
 }
 

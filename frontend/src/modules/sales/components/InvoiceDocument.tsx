@@ -71,6 +71,7 @@ export function InvoiceDocument({
   const maxPaymentRows = compact ? 4 : payments.length;
   const visiblePayments = payments.slice(0, maxPaymentRows);
   const hiddenPaymentCount = payments.length - visiblePayments.length;
+  const lineItems = invoice.lineItems ?? [];
 
   return (
     <div
@@ -163,17 +164,32 @@ export function InvoiceDocument({
         </div>
       </div>
 
-      {/* Line item */}
+      {/* Line items */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr style={{ background: dark }}>
+              {lineItems.length > 0 && (
+                <th
+                  className={`text-center ${compact ? "py-2 px-3" : "py-3.5 px-5"} text-[10px] font-black uppercase tracking-widest w-12`}
+                  style={{ color: "#9CA3AF" }}
+                >
+                  #
+                </th>
+              )}
               <th
                 className={`text-left ${compact ? "py-2 px-4" : "py-3.5 px-6"} text-[10px] font-black uppercase tracking-widest`}
                 style={{ color: "#fff" }}
               >
                 Description
               </th>
+              {lineItems.length > 0 && (
+                <>
+                  <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Qty</th>
+                  <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Rate</th>
+                  <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Tax</th>
+                </>
+              )}
               <th
                 className={`text-right ${compact ? "py-2 px-4" : "py-3.5 px-6"} text-[10px] font-black uppercase tracking-widest w-36`}
                 style={{ color: "#fff" }}
@@ -183,24 +199,63 @@ export function InvoiceDocument({
             </tr>
           </thead>
           <tbody>
-            <tr style={{ background: "#fff", borderBottom: `1px solid ${border}` }}>
-              <td className={compact ? "py-3 px-4" : "py-5 px-6"}>
-                <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`} style={{ color: dark }}>
-                  {invoice.installmentName
-                    ? `Billing — ${invoice.installmentName}`
-                    : invoice.projectName
-                      ? `Professional services — ${invoice.projectName}`
-                      : "Professional services as per agreement"}
-                </p>
-                <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>
-                  Invoice {invoice.number}
-                  {invoice.installmentName ? ` · ${invoice.installmentName}` : ""}
-                </p>
-              </td>
-              <td className={`${compact ? "py-3 px-4" : "py-5 px-6"} text-right font-bold tabular-nums align-top`} style={{ color: dark }}>
-                {formatCurrency(invoice.amount)}
-              </td>
-            </tr>
+            {lineItems.length > 0 ? (
+              lineItems.map((item, idx) => {
+                const line = item.quantity * item.unitPrice;
+                const lineTax = line * (item.taxPercent / 100);
+                return (
+                  <tr
+                    key={item.itemId ?? idx}
+                    style={{ background: idx % 2 === 0 ? "#fff" : rowAlt, borderBottom: `1px solid ${border}` }}
+                  >
+                    <td className={`text-center ${compact ? "py-2 px-3" : "py-4 px-5"} text-xs font-bold tabular-nums align-top`} style={{ color: primary }}>
+                      {idx + 1}
+                    </td>
+                    <td className={compact ? "py-2 px-4" : "py-4 px-6"}>
+                      <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`} style={{ color: dark }}>
+                        {item.name || "—"}
+                      </p>
+                      {item.description && (
+                        <p className="text-xs mt-1 leading-relaxed break-words" style={{ color: muted }}>
+                          {item.description}
+                        </p>
+                      )}
+                    </td>
+                    <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right tabular-nums align-top`} style={{ color: muted }}>
+                      {item.quantity}
+                    </td>
+                    <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right tabular-nums align-top`} style={{ color: muted }}>
+                      {formatCurrency(item.unitPrice)}
+                    </td>
+                    <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right text-xs align-top`} style={{ color: subtle }}>
+                      {item.taxPercent > 0 ? `GST ${item.taxPercent}%` : "—"}
+                    </td>
+                    <td className={`${compact ? "py-2 px-4" : "py-4 px-6"} text-right font-bold tabular-nums align-top`} style={{ color: dark }}>
+                      {formatCurrency(line + lineTax)}
+                    </td>
+                  </tr>
+                );
+              })
+            ) : (
+              <tr style={{ background: "#fff", borderBottom: `1px solid ${border}` }}>
+                <td className={compact ? "py-3 px-4" : "py-5 px-6"}>
+                  <p className={`font-semibold ${compact ? "text-xs" : "text-sm"}`} style={{ color: dark }}>
+                    {invoice.installmentName
+                      ? `Billing — ${invoice.installmentName}`
+                      : invoice.projectName
+                        ? `Professional services — ${invoice.projectName}`
+                        : "Professional services as per agreement"}
+                  </p>
+                  <p className="text-xs mt-1 leading-relaxed" style={{ color: muted }}>
+                    Invoice {invoice.number}
+                    {invoice.installmentName ? ` · ${invoice.installmentName}` : ""}
+                  </p>
+                </td>
+                <td className={`${compact ? "py-3 px-4" : "py-5 px-6"} text-right font-bold tabular-nums align-top`} style={{ color: dark }}>
+                  {formatCurrency(invoice.amount)}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

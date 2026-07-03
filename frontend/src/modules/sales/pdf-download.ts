@@ -40,7 +40,13 @@ async function waitForImages(root: HTMLElement): Promise<void> {
   );
 }
 
-/** Inline remote images as data URLs so html2canvas does not taint the canvas. */
+/**
+ * Inline remote images as data URLs so html2canvas does not taint the canvas.
+ * Logos/seals are hosted on object storage with a wildcard `Access-Control-Allow-Origin: *`
+ * CORS policy — the Fetch spec forbids the browser from exposing that response to a
+ * credentialed request, so `credentials: "include"` made this fetch fail every time. The
+ * image still renders fine on-screen because plain <img> tags never go through CORS.
+ */
 async function inlineImages(root: HTMLElement): Promise<void> {
   const images = Array.from(root.querySelectorAll("img"));
   await Promise.all(
@@ -48,7 +54,7 @@ async function inlineImages(root: HTMLElement): Promise<void> {
       const src = img.getAttribute("src");
       if (!src || src.startsWith("data:")) return;
       try {
-        const response = await fetch(src, { credentials: "include" });
+        const response = await fetch(src, { credentials: "omit", mode: "cors" });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const blob = await response.blob();
         const dataUrl = await new Promise<string>((resolve, reject) => {
@@ -60,7 +66,10 @@ async function inlineImages(root: HTMLElement): Promise<void> {
         img.setAttribute("src", dataUrl);
         img.removeAttribute("crossorigin");
       } catch {
-        img.style.display = "none";
+        // Leave the original (non-inlined) src in place and mark it for anonymous CORS
+        // loading — html2canvas's own `useCORS` pass then gets a chance to draw it directly
+        // instead of the image being permanently dropped from the export.
+        img.setAttribute("crossorigin", "anonymous");
       }
     }),
   );
@@ -261,8 +270,13 @@ export async function downloadElementAsPdf(
       canvas = await renderCanvas(host, clone, captureWidth, scale);
     } catch {
       stripSvgIcons(clone);
+      // Only drop images that never made it to a safe data: URL — those are the ones
+      // capable of tainting the canvas. Successfully inlined images are harmless and
+      // should stay in the retry so the export doesn't lose more than it has to.
       clone.querySelectorAll("img").forEach((img) => {
-        img.style.display = "none";
+        if (!img.getAttribute("src")?.startsWith("data:")) {
+          img.style.display = "none";
+        }
       });
       canvas = await renderCanvas(host, clone, captureWidth, 1);
     }

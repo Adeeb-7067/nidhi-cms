@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 import {
+  Banknote,
   Download,
   Layers,
   Loader2,
@@ -98,6 +99,7 @@ export default function HrmPayrollPage() {
   const [search, setSearch] = useState("");
   const [structuresOpen, setStructuresOpen] = useState(false);
   const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  const [payAllConfirmOpen, setPayAllConfirmOpen] = useState(false);
   const [structEmployeeKey, setStructEmployeeKey] = useState("");
   const [structBasic, setStructBasic] = useState("");
   const [structHra, setStructHra] = useState("");
@@ -427,6 +429,21 @@ export default function HrmPayrollPage() {
                   <RefreshCw className={isRefreshing ? "size-3.5 animate-spin" : "size-3.5"} />
                   Refresh
                 </Button>
+                {isFinalized && runId && (
+                  <Button
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    disabled={markPaid.isPending}
+                    onClick={() => setPayAllConfirmOpen(true)}
+                  >
+                    {markPaid.isPending ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Banknote className="size-3.5" />
+                    )}
+                    Pay all
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="h-8 w-8 p-0">
@@ -442,15 +459,6 @@ export default function HrmPayrollPage() {
                     {(isDraft || isReviewed) && runId && (
                       <DropdownMenuItem onClick={() => setFinalizeConfirmOpen(true)}>
                         Finalize & publish payslips
-                      </DropdownMenuItem>
-                    )}
-                    {isFinalized && runId && (
-                      <DropdownMenuItem
-                        onClick={() =>
-                          markPaid.mutate(runId, { onSuccess: () => toast.success("Payroll marked as paid") })
-                        }
-                      >
-                        Mark as paid
                       </DropdownMenuItem>
                     )}
                     {isFinalized && runId && (
@@ -691,12 +699,10 @@ export default function HrmPayrollPage() {
                       size="sm"
                       className="w-full gap-1.5"
                       disabled={markPaid.isPending}
-                      onClick={() =>
-                        markPaid.mutate(runId, { onSuccess: () => toast.success("Payroll marked as paid") })
-                      }
+                      onClick={() => setPayAllConfirmOpen(true)}
                     >
                       <Check className="size-3.5" />
-                      Mark period as paid
+                      Pay all for this period
                     </Button>
                   )}
                   <Button variant="outline" size="sm" className="w-full gap-1.5" asChild>
@@ -816,6 +822,39 @@ export default function HrmPayrollPage() {
                   <Loader2 className="mr-2 size-3.5 animate-spin" />
                 ) : null}
                 Yes, finalize
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={payAllConfirmOpen} onOpenChange={setPayAllConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Pay all for {periodLabel}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This marks every payslip in this payroll run as paid ({totals.employeeCount} employee
+                {totals.employeeCount === 1 ? "" : "s"}, {inrMoney(totals.totalNet)} total). This does not
+                trigger the actual bank transfer — export the bank file first if you haven't disbursed funds yet.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={markPaid.isPending}
+                onClick={() => {
+                  if (!runId) return;
+                  markPaid.mutate(runId, {
+                    onSuccess: () => {
+                      toast.success("Payroll marked as paid for all employees");
+                      setPayAllConfirmOpen(false);
+                    },
+                  });
+                }}
+              >
+                {markPaid.isPending ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin" />
+                ) : null}
+                Yes, pay all
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

@@ -223,6 +223,15 @@ export interface PaymentReceipt {
   sealUrl?: string | null;
 }
 
+export interface InvoiceLineItem {
+  itemId: string;
+  name: string;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  taxPercent: number;
+}
+
 export interface SalesInvoice {
   id: number;
   number: string;
@@ -237,6 +246,7 @@ export interface SalesInvoice {
   status: InvoiceStatus;
   dueDate: string;
   createdAt: string;
+  lineItems?: InvoiceLineItem[];
 }
 
 export interface SalesActivity {

@@ -50,9 +50,16 @@ import {
   IdCard,
   Laptop,
   LogOut,
+  Megaphone,
+  CheckSquare,
+  Image,
+  Video,
+  Share2,
+  Search,
 } from "lucide-react";
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
+import { MARKETING_ACCESS_ROLES } from "@/modules/marketing/constants";
 
 import type { UserRole } from "@/lib/user-roles";
 import {
@@ -147,19 +154,19 @@ export function getNavSections(role: UserRole): NavSection[] {
     },
 
     // =========================
-    // MONITORING (ADMIN)
+    // MONITORING
     // =========================
     {
       label: "Monitoring",
       railLabel: "Monitor",
       icon: Monitor,
-      roles: [...HRM_ADMIN_ROLES],
+      roles: [...HRM_ADMIN_ROLES, ...MONITORABLE_STAFF_ROLES],
       items: [
         {
           title: "Work analytics",
           href: "/admin/monitoring/analytics",
           icon: BarChart3,
-          roles: [...HRM_ADMIN_ROLES],
+          roles: [...HRM_ADMIN_ROLES, "manager"],
           group: "Activity",
         },
         {
@@ -180,7 +187,14 @@ export function getNavSections(role: UserRole): NavSection[] {
           title: "Attendance",
           href: "/admin/attendance",
           icon: ClipboardList,
-          roles: [...HRM_ADMIN_ROLES],
+          roles: [...HRM_ADMIN_ROLES, "manager"],
+          group: "Activity",
+        },
+        {
+          title: "My Screenshots",
+          href: "/dev/my-screenshots",
+          icon: Camera,
+          roles: [...MONITORABLE_STAFF_ROLES],
           group: "Activity",
         },
       ],
@@ -235,6 +249,32 @@ export function getNavSections(role: UserRole): NavSection[] {
     },
 
     // =========================
+    // DIGITAL MARKETING
+    // =========================
+    {
+      label: "Marketing",
+      railLabel: "Marketing",
+      icon: Megaphone,
+      roles: [...MARKETING_ACCESS_ROLES],
+      items: [
+        { title: "Dashboard", href: "/marketing", icon: LayoutDashboard, roles: [...MARKETING_ACCESS_ROLES], group: "Overview" },
+        { title: "Tasks", href: "/marketing/tasks", icon: CheckSquare, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
+        { title: "Clients", href: "/marketing/clients", icon: Building2, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
+        { title: "Calendar", href: "/marketing/calendar", icon: CalendarDays, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
+        { title: "Graphics", href: "/marketing/graphics", icon: Image, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
+        { title: "Videos", href: "/marketing/videos", icon: Video, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
+        { title: "Content", href: "/marketing/content", icon: FileText, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
+        { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: [...MARKETING_ACCESS_ROLES], group: "Workflow" },
+        { title: "Social analytics", href: "/marketing/social", icon: Share2, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
+        { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
+        { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
+        { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
+        { title: "Performance", href: "/marketing/performance", icon: Users, roles: [...MARKETING_ACCESS_ROLES], group: "Team" },
+        { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: [...MARKETING_ACCESS_ROLES], group: "Reports" },
+      ],
+    },
+
+    // =========================
     // CA (CHARTERED ACCOUNTANT)
     // =========================
     {
@@ -283,39 +323,6 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: ["super_admin"], group: "Planning" },
         { title: "Tax", href: "/finance/tax", icon: Percent, roles: ["super_admin"], group: "Planning" },
         { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: ["super_admin"], group: "Reports" },
-      ],
-    },
-
-    // =========================
-    // MONITORING (STAFF)
-    // =========================
-    {
-      label: "Monitoring",
-      railLabel: "Monitor",
-      icon: Monitor,
-      roles: [...MONITORABLE_STAFF_ROLES],
-      items: [
-        {
-          title: "My Screenshots",
-          href: "/dev/my-screenshots",
-          icon: Camera,
-          roles: [...MONITORABLE_STAFF_ROLES],
-          group: "Activity",
-        },
-        {
-          title: "Team attendance",
-          href: "/admin/attendance",
-          icon: ClipboardList,
-          roles: ["manager"],
-          group: "Team",
-        },
-        {
-          title: "Work analytics",
-          href: "/admin/monitoring/analytics",
-          icon: BarChart3,
-          roles: ["manager"],
-          group: "Team",
-        },
       ],
     },
 
@@ -473,6 +480,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Employees", href: "/hrm/employees", icon: Users, roles: [...HRM_ADMIN_ROLES, "manager"], group: "Organization" },
         { title: "Recruitment", href: "/hrm/recruitment", icon: UserPlus, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
         { title: "Onboarding", href: "/hrm/onboarding", icon: Rocket, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
+        { title: "Roles & permissions", href: "/hrm/roles", icon: Shield, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
 
         { title: "Attendance", href: "/hrm/attendance", icon: ClipboardList, roles: [...HRM_ADMIN_ROLES, "manager"], group: "Time" },
         { title: "Leave", href: "/hrm/leave", icon: CalendarDays, roles: [...HRM_ADMIN_ROLES, "manager"], group: "Time" },
@@ -528,13 +536,20 @@ export function getNavSections(role: UserRole): NavSection[] {
     },
   ];
 
-  return all
-    .filter((s) => s.roles.includes(role))
-    .map((s) => ({
-      ...s,
-      items: s.items.filter((i) => i.roles.includes(role)),
-    }))
-    .filter((s) => s.items.length > 0);
+  const isClientOnlySection = (section: NavSection) =>
+    section.roles.length > 0 && section.roles.every((r) => r === "client");
+
+  if (role === "client") {
+    return all
+      .filter((s) => s.roles.includes("client"))
+      .map((s) => ({
+        ...s,
+        items: s.items.filter((i) => i.roles.includes("client")),
+      }))
+      .filter((s) => s.items.length > 0);
+  }
+
+  return all.filter((s) => !isClientOnlySection(s));
 }
 
 export function isNavActive(pathname: string, href: string): boolean {

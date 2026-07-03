@@ -51,8 +51,12 @@ async function patchRoleTemplate(req, res) {
 
 async function patchRoleTemplatePermissions(req, res) {
   const templateId = parseIdParam(req.params.id, "template id");
-  await updateRoleTemplatePermissions(templateId, req.body.permissions ?? []);
-  res.json({ message: "Permissions updated" });
+  try {
+    await updateRoleTemplatePermissions(templateId, req.body.permissions ?? []);
+    res.json({ message: "Permissions updated" });
+  } catch (err) {
+    badRequest(err.message ?? "Failed to update permissions");
+  }
 }
 
 async function deleteRoleTemplateHandler(req, res) {

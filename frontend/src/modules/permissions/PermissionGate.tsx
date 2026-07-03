@@ -2,7 +2,6 @@ import React from "react";
 import { usePermission, usePermissionLoading } from "./usePermission";
 import { normalizeModule, type CmsAction } from "./constants";
 import { useAuth } from "@/contexts/AuthContext";
-import { isHrmAdminRole } from "@/lib/user-roles";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function PermissionGate({
@@ -18,7 +17,7 @@ export function PermissionGate({
   const loading = usePermissionLoading();
   const allowed = usePermission(module, action);
 
-  if (user && (user.role === "super_admin" || isHrmAdminRole(user.role))) {
+  if (user?.role === "super_admin") {
     return <>{children}</>;
   }
 

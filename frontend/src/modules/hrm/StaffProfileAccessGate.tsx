@@ -1,6 +1,5 @@
 import React from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { isHrmAdminRole } from "@/lib/user-roles";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -26,7 +25,7 @@ export function StaffProfileAccessGate({
     );
   }
 
-  if (user.role === "super_admin" || isHrmAdminRole(user.role)) {
+  if (user.role === "super_admin") {
     return <>{children}</>;
   }
 
