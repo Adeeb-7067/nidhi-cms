@@ -7,7 +7,7 @@ import {
 } from "../../models/schema/index.js";
 import { notFound } from "../../utils/route-errors.js";
 import { eachDateInRange } from "./hrm-date-utils.js";
-import { invalidateSettingsCache } from "../company-settings.js";
+import { getOrCreateSettings, invalidateSettingsCache } from "../company-settings.js";
 
 /** Canonical default shift: 9:30 AM – 6:00 PM with 30 min break → 8 h expected. */
 export const DEFAULT_OFFICE_SHIFT = {
@@ -113,6 +113,32 @@ export async function resolveShiftForUser(userId, dateStr) {
 
   if (!assignment) return null;
   const template = await shiftTemplatesTable.findOne({ id: assignment.shiftTemplateId }).lean();
+  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr));
+}
+
+/** Effective shift for attendance/clock-out: assignment → profile shift → company default. */
+export async function resolveEffectiveShiftForUser(userId, dateStr, { settings = null } = {}) {
+  const date = new Date(`${dateStr}T12:00:00Z`);
+  const assignment = await shiftAssignmentsTable.findOne({
+    userId,
+    effectiveFrom: { $lte: date },
+    $or: [{ effectiveTo: null }, { effectiveTo: { $gte: date } }],
+  }).sort({ effectiveFrom: -1 }).lean();
+
+  let template = null;
+  if (assignment) {
+    template = await shiftTemplatesTable.findOne({ id: assignment.shiftTemplateId }).lean();
+  }
+  if (!template) {
+    const user = await usersTable.findOne({ id: userId }, { shiftId: 1 }).lean();
+    if (user?.shiftId) {
+      template = await shiftTemplatesTable.findOne({ id: user.shiftId }).lean();
+    }
+  }
+  if (!template) {
+    const s = settings ?? (await getOrCreateSettings());
+    template = await getDefaultShiftTemplate(s);
+  }
   return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr));
 }
 

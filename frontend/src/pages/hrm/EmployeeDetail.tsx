@@ -72,6 +72,7 @@ import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { buildLeaveBalanceColumns } from "@/modules/hrm/hrm-table-columns";
 import type { HrmAttendanceSummary, HrmLeaveRequest } from "@/modules/hrm/types";
 import { formatCurrency } from "@/modules/finance/constants";
+import { getEmployeeContractNet } from "@/modules/hrm/employee-profile-types";
 import { isAdminTeamEmployeeDetail, isSalesTeamEmployeeDetail, parseEmployeeDetailId } from "@/lib/employee-routes";
 import { isHrmEmployeeRole } from "@/lib/user-roles";
 import { StaffProfileAccessGate } from "@/modules/hrm/StaffProfileAccessGate";
@@ -310,6 +311,8 @@ export default function HrmEmployeeDetailPage() {
     }
   };
 
+  const contractNet = overview && employee ? getEmployeeContractNet(overview, employee.salary) : null;
+
   if (isError) {
     return (
       <StaffProfileAccessGate employeeId={employeeId}>
@@ -358,7 +361,9 @@ export default function HrmEmployeeDetailPage() {
             backLabel={backLabel}
             onRefresh={() => void handleRefresh()}
             onEdit={() => setActiveTab("file")}
-            onSendCredentials={() => void handleSendCredentials()}
+            onSendCredentials={
+              employee && isHrmEmployeeRole(employee.role) ? () => void handleSendCredentials() : undefined
+            }
             refreshing={refreshing}
             sendingCredentials={sendCredentials.isPending}
             canEdit={canEdit}
@@ -435,8 +440,8 @@ export default function HrmEmployeeDetailPage() {
                         { label: "WFH", value: overview.attendance.wfh, icon: Briefcase, color: "text-blue-600" },
                         { label: "Documents", value: overview.documentCount, icon: FileText, color: "text-violet-600" },
                         {
-                          label: "Net pay",
-                          value: overview.latestPayrollNet != null ? formatCurrency(overview.latestPayrollNet) : "—",
+                          label: "Net salary",
+                          value: contractNet != null ? formatCurrency(contractNet) : "—",
                           icon: Wallet,
                           color: "text-emerald-600",
                         },

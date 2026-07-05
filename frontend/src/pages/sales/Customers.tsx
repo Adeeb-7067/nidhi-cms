@@ -1,12 +1,22 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Building2, Plus, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { Building2, Plus, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -27,6 +37,7 @@ import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
 import {
   useListCustomers,
+  useDeleteCustomer,
   salesKeys,
   type Customer,
   type CustomerStatus,
@@ -37,6 +48,7 @@ import {
   CUSTOMER_STATUS_OPTIONS,
   CUSTOMER_TYPE_OPTIONS,
 } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -77,7 +89,7 @@ function downloadCustomersCsv(customers: Customer[]) {
     c.status,
     c.totalSales,
     c.outstanding,
-    format(new Date(c.createdAt), "yyyy-MM-dd"),
+    formatSalesDateTime(c.createdAt),
   ]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -95,8 +107,12 @@ export default function Customers() {
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<CustomerType | "all">("all");
   const [page, setPage] = useState(1);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
   const [exporting, setExporting] = useState(false);
+
+  const deleteCustomer = useDeleteCustomer();
 
   const listParams = {
     search: search || undefined,
@@ -137,6 +153,32 @@ export default function Customers() {
     setPage(1);
   }, [search, statusFilter, typeFilter]);
 
+  const openCreate = () => {
+    setEditingCustomer(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (customer: Customer) => {
+    setEditingCustomer(customer);
+    setFormOpen(true);
+  };
+
+  const handleFormOpenChange = (open: boolean) => {
+    setFormOpen(open);
+    if (!open) setEditingCustomer(null);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteCustomer.mutateAsync(deleteTarget.id);
+      toast.success(`Customer "${deleteTarget.companyName}" deleted`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toastApiError(err, "Failed to delete customer");
+    }
+  };
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -158,7 +200,7 @@ export default function Customers() {
               <Download className="h-3.5 w-3.5" />
               Export
             </Button>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
               <Plus className="h-3.5 w-3.5" />
               Add customer
             </Button>
@@ -226,6 +268,7 @@ export default function Customers() {
                   <TableHead className="text-xs text-right">Total sales</TableHead>
                   <TableHead className="text-xs text-right">Outstanding</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
+                  <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -235,6 +278,9 @@ export default function Customers() {
                       <Link href={`/sales/customers/${c.id}`} className="block min-w-0 hover:text-primary">
                         <p className="text-xs font-medium">{c.companyName}</p>
                         <p className="text-[10px] text-muted-foreground">{c.email}</p>
+                        {!c.portalUserId ? (
+                          <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">Portal not enabled</p>
+                        ) : null}
                       </Link>
                     </TableCell>
                     <TableCell className="text-xs">{c.contactPerson}</TableCell>
@@ -248,7 +294,31 @@ export default function Customers() {
                     <TableCell className={`text-xs text-right tabular-nums ${c.outstanding > 0 ? "text-destructive font-medium" : ""}`}>
                       {formatCurrency(c.outstanding)}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{format(new Date(c.createdAt), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(c.createdAt)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Edit customer"
+                          onClick={() => openEdit(c)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          title="Delete customer"
+                          onClick={() => setDeleteTarget(c)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -284,7 +354,51 @@ export default function Customers() {
           ) : null}
         </>
       )}
-      <CustomerFormModal open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <CustomerFormModal
+        open={formOpen}
+        onOpenChange={handleFormOpenChange}
+        customer={editingCustomer}
+      />
+
+      <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete customer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget ? (
+                deleteTarget.totalSales > 0 || deleteTarget.outstanding > 0 ? (
+                  <>
+                    <strong>{deleteTarget.companyName}</strong> has billing history and cannot be deleted.
+                    Set status to inactive instead.
+                  </>
+                ) : (
+                  <>
+                    This will permanently remove <strong>{deleteTarget.companyName}</strong> from the sales
+                    customer list. The linked admin company record is not deleted.
+                  </>
+                )
+              ) : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteCustomer.isPending}>
+              {deleteTarget && (deleteTarget.totalSales > 0 || deleteTarget.outstanding > 0) ? "Close" : "Cancel"}
+            </AlertDialogCancel>
+            {deleteTarget && deleteTarget.totalSales === 0 && deleteTarget.outstanding === 0 ? (
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteCustomer.isPending}
+                onClick={(event) => {
+                  event.preventDefault();
+                  void handleDelete();
+                }}
+              >
+                {deleteCustomer.isPending ? "Deleting…" : "Delete"}
+              </AlertDialogAction>
+            ) : null}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PortalPageShell>
   );
 }

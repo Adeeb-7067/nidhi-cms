@@ -249,7 +249,6 @@ export function HrmPayslipDocument({
                   className="h-20 w-20 object-contain opacity-90"
                 />
               ) : null}
-              <div className="w-40 border-b border-dashed border-slate-300" />
               <div className="text-right text-[10px] text-slate-600">Authorized Signatory</div>
               <div className="text-right text-[10px] text-slate-400">{data.company.legalName}</div>
             </div>

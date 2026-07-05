@@ -42,3 +42,18 @@ export function defaultDailyRangeEnd(tz) {
 export function defaultDailyRangeStart(tz, days = 6) {
   return addDaysToDateString(defaultDailyRangeEnd(tz), -days);
 }
+
+/**
+ * True when a paused session can resume on clock-in today.
+ * Covers same-day sessions and overnight shifts auto-clocked out after midnight.
+ */
+export function isPausedSessionResumableToday(session, now = new Date(), tz) {
+  if (!session?.startedAt) return false;
+  const todayKey = workDayKey(now, tz);
+  const startDay = workDayKey(session.startedAt, tz);
+  if (startDay === todayKey) return true;
+  if (session.stopReason === "shift_ended" && session.endedAt) {
+    return workDayKey(session.endedAt, tz) === todayKey;
+  }
+  return false;
+}

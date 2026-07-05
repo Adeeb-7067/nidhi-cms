@@ -202,6 +202,71 @@ export async function sendDailyLogComplianceEmail({ to, name, date, loggedHours,
 }
 
 /**
+ * Experience / relieving letter with PDF attachment.
+ */
+export async function sendExperienceLetterEmail({
+  to,
+  employeeName,
+  companyName,
+  letterLabel,
+  relievingDate,
+  attachmentPath,
+}) {
+  const relieving =
+    relievingDate instanceof Date
+      ? relievingDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+      : String(relievingDate ?? "");
+  const subject = `${letterLabel} — ${companyName}`;
+  const text = [
+    `Dear ${employeeName},`,
+    "",
+    `Please find attached your ${letterLabel.toLowerCase()} from ${companyName}.`,
+    relieving ? `Relieving date: ${relieving}` : "",
+    "",
+    "If you have any questions, please contact the HR department.",
+    "",
+    `Regards,`,
+    `${companyName} — Human Resources`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = wrapHtmlEmail({
+    title: letterLabel,
+    bodyHtml: `
+      <p style="margin:0 0 12px">Dear <strong>${employeeName}</strong>,</p>
+      <p style="margin:0 0 12px">Please find attached your <strong>${letterLabel}</strong> from <strong>${companyName}</strong>.</p>
+      ${relieving ? `<p style="margin:0 0 12px">Relieving date: <strong>${relieving}</strong></p>` : ""}
+      <p style="margin:0;color:#71717a;font-size:13px">If you have any questions, contact the HR department.</p>
+    `,
+  });
+
+  const from = getFromAddress();
+  const transport = getTransporter();
+  if (!from || !transport) {
+    logger.warn({ to, subject }, "Nodemailer: email skipped — SMTP not configured");
+    return { sent: false, reason: "not_configured" };
+  }
+
+  const fileName = `${letterLabel.replace(/\s+/g, "_")}.pdf`;
+  try {
+    const info = await transport.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+      attachments: [{ filename: fileName, path: attachmentPath }],
+    });
+    logger.info({ to, subject, messageId: info.messageId }, "Nodemailer: experience letter sent");
+    return { sent: true, messageId: info.messageId };
+  } catch (err) {
+    logger.error({ err, to, subject }, "Nodemailer: experience letter send failed");
+    return { sent: false, reason: "send_failed" };
+  }
+}
+
+/**
  * Invitation email for a newly-added client team member. Includes their
  * email + temporary password and a link to the portal sign-in page.
  */

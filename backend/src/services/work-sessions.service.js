@@ -1,6 +1,6 @@
 import { workSessionsTable, getNextSequence } from "../models/schema/index.js";
 import { getOrCreateSettings } from "./company-settings.js";
-import { notifyWorkSessionEnded, shouldNotifySessionEnd } from "./work-session-notifications.js";
+import { notifyWorkSessionEnded, notifyShiftAutoClockOut, shouldNotifySessionEnd } from "./work-session-notifications.js";
 import {
   isSameWorkDay,
   isSessionWithinMaxDuration,
@@ -9,11 +9,15 @@ import {
   workDayKey,
   defaultDailyRangeEnd,
   defaultDailyRangeStart,
+  isPausedSessionResumableToday,
 } from "./work-session-policy.js";
+import { evaluateShiftEndPolicy } from "./shift-end-clockout.service.js";
+import { broadcastWorkSessionSync } from "./work-session-sync.js";
 
-/** Sessions ended for these reasons can resume on the next clock-in (same work day only). */
+/** Sessions paused for these reasons can resume on the next clock-in (same work day only). */
 const RESUMABLE_STOP_REASONS = [
   "clock_out",
+  "shift_ended",
   "app_quit",
   "logout",
   "system_sleep",
@@ -65,25 +69,41 @@ async function closeActiveSession(session, stopReason, endedAt = new Date()) {
     { new: true },
   );
   if (updated) {
-    await notifyWorkSessionEnded({
-      userId: updated.userId,
-      sessionId: updated.id,
-      stopReason,
-    });
+    if (stopReason === "shift_ended") {
+      await notifyShiftAutoClockOut({ userId: updated.userId, sessionId: updated.id });
+      broadcastWorkSessionSync(updated.userId, { action: "shift_auto_clock_out", session: null });
+    } else {
+      await notifyWorkSessionEnded({
+        userId: updated.userId,
+        sessionId: updated.id,
+        stopReason,
+      });
+    }
   }
   return updated ?? null;
 }
 
-/** Auto-close when session crosses a work-day boundary or the 24 h cap. */
+async function enforceShiftEndPolicy(session, tz, settings) {
+  const shiftEnd = await evaluateShiftEndPolicy(session, new Date(), tz, settings);
+  if (!shiftEnd) return session;
+
+  await closeActiveSession(session, shiftEnd.reason, shiftEnd.endedAt);
+  return null;
+}
+
+/** Auto-close when session crosses a work-day boundary, the 24 h cap, or shift end. */
 async function enforceActiveSessionPolicy(session) {
   if (!session?.isActive) return session ?? null;
 
-  const tz = await resolveTimezone();
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
   const reason = sessionPolicyStopReason(session, new Date(), tz);
-  if (!reason) return session;
+  if (reason) {
+    await closeActiveSession(session, reason);
+    return null;
+  }
 
-  await closeActiveSession(session, reason);
-  return null;
+  return enforceShiftEndPolicy(session, tz, settings);
 }
 
 async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = null } = {}) {
@@ -96,7 +116,6 @@ async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = 
 async function findResumableSession(userId) {
   const tz = await resolveTimezone();
   const now = new Date();
-  const todayKey = workDayKey(now, tz);
 
   const candidates = await workSessionsTable
     .find({
@@ -104,14 +123,33 @@ async function findResumableSession(userId) {
       isActive: false,
       stopReason: { $in: RESUMABLE_STOP_REASONS },
     })
-    .sort({ endedAt: -1 })
+    .sort({ startedAt: 1 })
     .limit(10)
     .lean();
 
   for (const session of candidates) {
-    if (workDayKey(session.startedAt, tz) !== todayKey) continue;
-    if (!session.endedAt || workDayKey(session.endedAt, tz) !== todayKey) continue;
+    if (!session.endedAt) continue;
+    if (!isPausedSessionResumableToday(session, now, tz)) continue;
     if (!isSessionWithinMaxDuration(session, now)) continue;
+    return session;
+  }
+
+  // Fallback: sessions auto-closed before shift_ended enum existed (stopReason may be null).
+  const orphans = await workSessionsTable
+    .find({
+      userId,
+      isActive: false,
+      endedAt: { $ne: null },
+      stopReason: null,
+    })
+    .sort({ startedAt: 1 })
+    .limit(5)
+    .lean();
+
+  for (const session of orphans) {
+    if (!isPausedSessionResumableToday(session, now, tz)) continue;
+    if (!isSessionWithinMaxDuration(session, now)) continue;
+    if (computeSessionDurations(session).activeDurationMs < 30 * 60 * 1000) continue;
     return session;
   }
 
@@ -148,9 +186,43 @@ async function resumeSession(session, deviceInfo) {
   return resumed;
 }
 
+/**
+ * When shift auto clock-out failed to resume, a short stray session may be active.
+ * Reattach to the original same-day session so prior hours are not lost.
+ */
+async function tryReclaimStrayActiveSession(userId) {
+  const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+  if (!active) return null;
+
+  const primary = await findResumableSession(userId);
+  if (!primary) return active;
+
+  const activeStarted = new Date(active.startedAt).getTime();
+  const primaryStarted = new Date(primary.startedAt).getTime();
+  if (!Number.isFinite(activeStarted) || !Number.isFinite(primaryStarted)) return active;
+  if (primaryStarted >= activeStarted) return active;
+
+  const primaryMs = computeSessionDurations(primary).activeDurationMs;
+  const activeMs = computeSessionDurations(active).activeDurationMs;
+  const shouldReclaim =
+    primary.stopReason === "shift_ended" ||
+    primaryMs > activeMs + 5 * 60 * 1000;
+  if (!shouldReclaim) return active;
+
+  const now = new Date();
+  await closeActiveSession(active, "clock_out", now);
+  const resumed = await resumeSession(primary, active.deviceInfo);
+  return resumed ?? active;
+}
+
 export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
   const existingActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (existingActive) {
+    const reclaimed = !forceNew ? await tryReclaimStrayActiveSession(userId) : null;
+    if (reclaimed && reclaimed.id !== existingActive.id) {
+      return { session: reclaimed, resumed: true };
+    }
+
     const enforced = await enforceActiveSessionPolicy(existingActive);
     if (enforced) {
       // Another client (web + desktop) may clock in while a session is already active.
@@ -194,11 +266,18 @@ export async function touchHeartbeat(userId) {
   const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (!active) return { session: null, stopReason: null };
 
-  const tz = await resolveTimezone();
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
   const reason = sessionPolicyStopReason(active, new Date(), tz);
   if (reason) {
     await closeActiveSession(active, reason);
     return { session: null, stopReason: reason };
+  }
+
+  const shiftEnd = await evaluateShiftEndPolicy(active, new Date(), tz, settings);
+  if (shiftEnd) {
+    await closeActiveSession(active, shiftEnd.reason, shiftEnd.endedAt);
+    return { session: null, stopReason: shiftEnd.reason };
   }
 
   const now = new Date();
@@ -239,14 +318,24 @@ export async function forceClockOutAll(stopReason = "session_expired") {
 }
 
 export async function getActiveSession(userId) {
-  const session = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+  let session = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+  if (session) {
+    session = (await tryReclaimStrayActiveSession(userId)) ?? session;
+  }
   if (!session) return { session: null, stopReason: null };
 
-  const tz = await resolveTimezone();
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
   const reason = sessionPolicyStopReason(session, new Date(), tz);
   if (reason) {
     await closeActiveSession(session, reason);
     return { session: null, stopReason: reason };
+  }
+
+  const shiftEnd = await evaluateShiftEndPolicy(session, new Date(), tz, settings);
+  if (shiftEnd) {
+    await closeActiveSession(session, shiftEnd.reason, shiftEnd.endedAt);
+    return { session: null, stopReason: shiftEnd.reason };
   }
 
   // App is open and polling — refresh heartbeat so stale cleanup does not fire falsely.

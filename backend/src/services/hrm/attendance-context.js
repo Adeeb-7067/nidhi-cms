@@ -3,7 +3,7 @@ import { leaveRequestsTable } from "../../models/schema/hrm/leave.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { attendanceCorrectionsTable } from "../../models/schema/hrm/attendance.js";
 import { workSessionsTable } from "../../models/schema/WorkSession.js";
-import { listDailySessionTotals, queryWindowForDateRange } from "../work-sessions.service.js";
+import { computeSessionDurations, queryWindowForDateRange } from "../work-sessions.service.js";
 import { workDayKey } from "../work-session-policy.js";
 import { eachDateInRange, getHrmPolicyContext } from "./hrm-date-utils.js";
 import { getHolidaysForRange } from "./holidays.service.js";
@@ -87,6 +87,52 @@ export async function loadSessionsByUserDay(userIds, startDate, endDate, timezon
   return map;
 }
 
+/**
+ * Single fetch of the userId/date-range session window, deriving the three views
+ * (per-day totals, first clock-in, sessions grouped by day) that buildAttendanceContext
+ * needs — instead of issuing three separate range queries against workSessionsTable
+ * for the same data.
+ */
+async function loadSessionWindowData(userIds, startDate, endDate, timezone) {
+  const { start, end } = queryWindowForDateRange(startDate, endDate);
+  const sessions = await workSessionsTable
+    .find({ userId: { $in: userIds }, startedAt: { $gte: start, $lte: end } })
+    .lean();
+
+  const sessionsByUserDay = new Map();
+  const firstSessionMap = new Map();
+  const totalsByUserDay = new Map();
+
+  for (const session of sessions) {
+    const dayKey = workDayKey(session.startedAt, timezone);
+    if (dayKey < startDate || dayKey > endDate) continue;
+    const key = `${session.userId}:${dayKey}`;
+
+    const daySessions = sessionsByUserDay.get(key) ?? [];
+    daySessions.push(session);
+    sessionsByUserDay.set(key, daySessions);
+
+    const firstStart = firstSessionMap.get(key);
+    if (!firstStart || new Date(session.startedAt) < new Date(firstStart)) {
+      firstSessionMap.set(key, session.startedAt);
+    }
+
+    const totals = totalsByUserDay.get(key) ?? {
+      userId: session.userId,
+      date: dayKey,
+      totalMs: 0,
+      sessionCount: 0,
+      hasActiveSession: false,
+    };
+    totals.totalMs += computeSessionDurations(session).activeDurationMs;
+    totals.sessionCount += 1;
+    if (session.isActive) totals.hasActiveSession = true;
+    totalsByUserDay.set(key, totals);
+  }
+
+  return { sessionsByUserDay, firstSessionMap, totalsByUserDay };
+}
+
 export async function buildAttendanceContext({
   startDate,
   endDate,
@@ -129,26 +175,25 @@ export async function buildAttendanceContext({
     };
   }
 
-  const sessionData = await listDailySessionTotals({
-    fromDate: startDate,
-    toDate: endDate,
-    userIds,
-    allRows: true,
-  });
-
-  const [holidays, leaveMap, wfhMap, correctionMap, firstSessionMap, sessionsByUserDay, defaultShiftTemplate, shiftMap] =
-    await Promise.all([
-      getHolidaysForRange(startDate, endDate),
-      loadApprovedLeaveMap(userIds, startDate, endDate),
-      loadApprovedWfhMap(userIds, startDate, endDate),
-      loadApprovedCorrectionsMap(userIds, startDate, endDate),
-      loadFirstSessionStarts(userIds, startDate, endDate, timezone),
-      loadSessionsByUserDay(userIds, startDate, endDate, timezone),
-      getDefaultShiftTemplate(settings),
-      resolveDefaultShiftTemplateId(settings).then((defaultTemplateId) =>
-        buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId }),
-      ),
-    ]);
+  const [
+    { sessionsByUserDay, firstSessionMap, totalsByUserDay },
+    holidays,
+    leaveMap,
+    wfhMap,
+    correctionMap,
+    defaultShiftTemplate,
+    shiftMap,
+  ] = await Promise.all([
+    loadSessionWindowData(userIds, startDate, endDate, timezone),
+    getHolidaysForRange(startDate, endDate),
+    loadApprovedLeaveMap(userIds, startDate, endDate),
+    loadApprovedWfhMap(userIds, startDate, endDate),
+    loadApprovedCorrectionsMap(userIds, startDate, endDate),
+    getDefaultShiftTemplate(settings),
+    resolveDefaultShiftTemplateId(settings).then((defaultTemplateId) =>
+      buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId }),
+    ),
+  ]);
 
   return {
     users,
@@ -160,7 +205,7 @@ export async function buildAttendanceContext({
     globalWfhMode,
     maxFreeLates,
     defaultShiftTemplate,
-    sessionMap: new Map(sessionData.data.map((r) => [`${r.userId}:${r.date}`, r])),
+    sessionMap: totalsByUserDay,
     holidays,
     leaveMap,
     wfhMap,

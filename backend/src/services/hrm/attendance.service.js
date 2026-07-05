@@ -239,7 +239,7 @@ export async function getAttendanceDailySummaries({
 
 
 
-      summaries.push(await computeUserDaySummary(user, date, ctx, lateForgiven));
+      summaries.push(computeUserDaySummary(user, date, ctx, lateForgiven));
 
     }
 

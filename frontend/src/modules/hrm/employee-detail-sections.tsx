@@ -41,6 +41,7 @@ import type { HrmAttendanceSummary, HrmEmployee, HrmEmployeeOverview, HrmLeaveBa
 import { getLeaveBalanceAvailable, getLeaveBalanceCarriedForward } from "./employee-profile-types";
 import {
   formatAddressLine,
+  getEmployeeContractNet,
   getEmployeeDisplayName,
 } from "./employee-profile-types";
 
@@ -191,7 +192,8 @@ export function EmployeeDetailToolbar({
 
 export function EmployeeProfileHero({ employee }: { employee: HrmEmployee }) {
   const displayName = getEmployeeDisplayName(employee);
-  const avatar = employee.avatarUrl ?? employee.image ?? null;
+  const avatarRaw = employee.avatarUrl ?? employee.image ?? null;
+  const avatar = avatarRaw ? resolveFileUrl(avatarRaw) : null;
   const dept = employee.departmentName ?? employee.department ?? "Unassigned";
   const roleLabel = employee.designation ?? employee.role.replace(/_/g, " ");
   const hrStatus = employee.hrEmploymentStatus ?? employee.status;
@@ -587,6 +589,7 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
   const current = employee.currentAddress;
   const showBothAddresses =
     permanent && current && !addressesEqual(permanent, current);
+  const contractNet = getEmployeeContractNet(overview, employee.salary);
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -692,15 +695,7 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
           />
           <ProfileDetailRow
             label="Net pay"
-            value={
-              profileSalaryNet != null
-                ? formatCurrency(profileSalaryNet)
-                : overview.salaryNet != null
-                  ? formatCurrency(overview.salaryNet)
-                  : overview.latestPayrollNet != null
-                    ? formatCurrency(overview.latestPayrollNet)
-                    : "—"
-            }
+            value={contractNet != null ? formatCurrency(contractNet) : "—"}
           />
           {contract?.configured && contract.source ? (
             <ProfileDetailRow
@@ -845,12 +840,8 @@ export function EmployeeOverviewStats({
     overview.leaveBalances.find((b) => b.code === "EL")?.available ??
     overview.leaveBalances.reduce((n, b) => n + b.available, 0);
   const leaveAvailable = elAvailable;
-  const netPay =
-    overview.latestPayrollNet != null
-      ? formatCurrency(overview.latestPayrollNet)
-      : overview.salaryNet != null
-        ? formatCurrency(overview.salaryNet)
-        : "—";
+  const contractNet = getEmployeeContractNet(overview);
+  const netPay = contractNet != null ? formatCurrency(contractNet) : "—";
 
   return (
     <>

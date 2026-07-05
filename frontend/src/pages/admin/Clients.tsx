@@ -88,7 +88,8 @@ const clientSchema = z.object({
   industry: z.string().optional(),
   website: z.string().optional(),
   tier: z.string().optional(),
-  status: z.enum(["active", "inactive"]).optional(),
+  status: z.enum(["active", "inactive", "on_hold", "prospect", "lost"]).optional(),
+  customerType: z.enum(["corporate", "sme", "individual"]).optional(),
 });
 
 type ClientFormValues = z.infer<typeof clientSchema>;
@@ -312,6 +313,7 @@ export default function AdminClients() {
       website: "",
       tier: "Standard",
       status: "active",
+      customerType: "corporate",
     },
   });
 
@@ -331,6 +333,7 @@ export default function AdminClients() {
         website: (editClient as any).website || "",
         tier: (editClient as any).tier || "Standard",
         status: editClient.status as any,
+        customerType: (editClient as any).customerType || "corporate",
       });
     } else {
       form.reset({
@@ -347,6 +350,7 @@ export default function AdminClients() {
         website: "",
         tier: "Standard",
         status: "active",
+        customerType: "corporate",
       });
     }
   }, [editClient, form]);
@@ -374,7 +378,7 @@ export default function AdminClients() {
         await createClientMutation.mutateAsync({
           data: { ...values, phone, portalEmail, password: values.password } as any,
         });
-        toast.success("Company and portal login created");
+        toast.success("Company, portal login, and discussion channel created");
         setIsDialogOpen(false);
       }
       form.reset();
@@ -825,6 +829,30 @@ export default function AdminClients() {
                 {editClient && (
                   <FormField
                     control={form.control}
+                    name="customerType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Customer type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value ?? "corporate"}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="corporate">Corporate</SelectItem>
+                            <SelectItem value="sme">SME</SelectItem>
+                            <SelectItem value="individual">Individual</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {editClient && (
+                  <FormField
+                    control={form.control}
                     name="status"
                     render={({ field }) => (
                       <FormItem>
@@ -838,6 +866,9 @@ export default function AdminClients() {
                           <SelectContent>
                             <SelectItem value="active">Active</SelectItem>
                             <SelectItem value="inactive">Inactive</SelectItem>
+                            <SelectItem value="on_hold">On hold</SelectItem>
+                            <SelectItem value="prospect">Prospect</SelectItem>
+                            <SelectItem value="lost">Lost</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -859,7 +890,7 @@ export default function AdminClients() {
             <AlertDialogHeader>
               <AlertDialogTitle>Are you sure?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will permanently delete the client company and all associated data.
+                This permanently deletes the company and portal account. Deletion is blocked if billing records or projects exist.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

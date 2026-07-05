@@ -17,6 +17,7 @@ import { isPresentLikeStatus } from "../../constants/attendance-status.js";
 import { countDocuments } from "./documents.service.js";
 import { resolveContractSalary } from "./payroll-compute.js";
 import { salaryStructuresTable } from "../../models/schema/hrm/payroll.js";
+import { normalizeSalary } from "../../utils/user-profile-fields.js";
 
 /** All CMS team members that can open the shared employee profile detail page. */
 const teamProfileRoles = adminStaffRoles;
@@ -62,7 +63,20 @@ function monthBounds(year, month) {
 
 export { monthBounds };
 
-async function enrichEmployees(rows) {
+async function getLatestPayrollNetForUser(userId) {
+  const lines = await payrollLinesTable.find({ userId }).lean();
+  if (!lines.length) return null;
+  const runIds = [...new Set(lines.map((l) => l.payrollRunId))];
+  const runs = await payrollRunsTable
+    .find({ id: { $in: runIds }, status: { $in: ["finalized", "paid"] } })
+    .sort({ year: -1, month: -1 })
+    .lean();
+  if (!runs.length) return null;
+  const line = lines.find((l) => l.payrollRunId === runs[0].id);
+  return line?.net ?? null;
+}
+
+async function enrichEmployees(rows, { includeSensitive = false } = {}) {
   const deptIds = [...new Set(rows.map((r) => r.departmentId).filter(Boolean))];
   const managerIds = [...new Set(rows.map((r) => r.reportingManagerId).filter(Boolean))];
   const teamleaderIds = [...new Set(rows.map((r) => r.teamleaderId).filter(Boolean))];
@@ -86,7 +100,7 @@ async function enrichEmployees(rows) {
   const shiftMap = new Map(shifts.map((s) => [s.id, s]));
 
   return rows.map((u) => {
-    const base = formatUser(u, { includeSensitive: false });
+    const base = formatUser(u, { includeSensitive });
     const dept = u.departmentId ? deptMap.get(u.departmentId) : null;
     const mgr = u.reportingManagerId ? peopleMap.get(u.reportingManagerId) : null;
     const teamleader = u.teamleaderId ? peopleMap.get(u.teamleaderId) : null;
@@ -219,7 +233,7 @@ export async function getHrmEmployeeDetail(userId) {
   const user = await usersTable.findOne({ id: userId, role: { $in: teamProfileRoles } }).lean();
   if (!user) notFound("Employee");
 
-  const [employees] = await enrichEmployees([user]);
+  const [employees] = await enrichEmployees([user], { includeSensitive: true });
   const employee = employees;
   const isHrmTrackedEmployee = isHrmEmployeeRole(user.role);
 
@@ -228,7 +242,7 @@ export async function getHrmEmployeeDetail(userId) {
   const month = now.getMonth() + 1;
   const { startDate, endDate } = monthBounds(year, month);
 
-  const [{ summaries }, balances, leaveRequests, documentCount, structureRow, latestRun] = await Promise.all([
+  const [{ summaries }, balances, leaveRequests, documentCount, structureRow, latestPayrollNet] = await Promise.all([
     isHrmTrackedEmployee
       ? getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] })
       : Promise.resolve({ summaries: [] }),
@@ -236,16 +250,12 @@ export async function getHrmEmployeeDetail(userId) {
     isHrmTrackedEmployee ? listLeaveRequests({ userIds: [userId] }) : Promise.resolve([]),
     countDocuments(userId),
     isHrmTrackedEmployee ? salaryStructuresTable.findOne({ userId }).lean() : Promise.resolve(null),
-    isHrmTrackedEmployee
-      ? payrollRunsTable.findOne({ status: { $in: ["finalized", "paid"] } })
-          .sort({ year: -1, month: -1 })
-          .lean()
-      : Promise.resolve(null),
+    isHrmTrackedEmployee ? getLatestPayrollNetForUser(userId) : Promise.resolve(null),
   ]);
 
   const userSummaries = summaries.filter((s) => s.userId === userId);
   const attendance = {
-    present: userSummaries.filter((s) => s.status === "present").length,
+    present: userSummaries.filter((s) => isPresentLikeStatus(s.status)).length,
     onsite: userSummaries.filter((s) => ["onsite", "late"].includes(s.status)).length,
     absent: userSummaries.filter((s) => s.status === "absent").length,
     onLeave: userSummaries.filter((s) => s.status === "on_leave").length,
@@ -255,15 +265,11 @@ export async function getHrmEmployeeDetail(userId) {
   };
 
   const contract = resolveContractSalary({
-    profileSalary: user.salary ?? {},
+    profileSalary: normalizeSalary(user.salary ?? {}) ?? {},
     structureRow: structureRow ?? {},
   });
 
-  let latestPayrollNet = null;
-  if (latestRun) {
-    const line = await payrollLinesTable.findOne({ payrollRunId: latestRun.id, userId }).lean();
-    latestPayrollNet = line?.net ?? null;
-  }
+  const latestPayrollNetValue = latestPayrollNet ?? null;
 
   const overview = {
     month: { year, month, startDate, endDate },
@@ -286,7 +292,7 @@ export async function getHrmEmployeeDetail(userId) {
       gross: contract.gross,
       net: contract.contractNet,
     },
-    latestPayrollNet,
+    latestPayrollNet: latestPayrollNetValue,
     documentCount,
   };
 

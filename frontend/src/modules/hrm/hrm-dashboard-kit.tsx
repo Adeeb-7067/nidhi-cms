@@ -1,16 +1,8 @@
 import { motion } from "framer-motion";
-import { ArrowRight, Calendar, Download, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import type { HrmTrendDays } from "./components";
 
 const ATTENDANCE_STAGE_COLORS: Record<string, string> = {
   Present: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700",
@@ -65,45 +57,27 @@ export function HrmAttendancePipelineFlow({
 }
 
 export function HrmDashboardFilterBar({
-  trendDays,
-  onTrendDaysChange,
   onRefresh,
   onExport,
+  extraFilters,
   className,
 }: {
-  trendDays: HrmTrendDays;
-  onTrendDaysChange: (v: HrmTrendDays) => void;
   onRefresh?: () => void;
   onExport?: () => void;
+  extraFilters?: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card/80 p-3 sm:flex-row sm:flex-wrap sm:items-center backdrop-blur-sm",
+        "flex flex-col gap-3 rounded-xl border bg-card/80 p-3 backdrop-blur-sm sm:flex-row sm:flex-wrap sm:items-center",
         className,
       )}
     >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Calendar className="h-3.5 w-3.5" />
-        <span>Attendance trend window</span>
-      </div>
-      <Select value={trendDays} onValueChange={(v) => onTrendDaysChange(v as HrmTrendDays)}>
-        <SelectTrigger className="w-full sm:w-[200px] h-9">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="7">Last 7 days</SelectItem>
-          <SelectItem value="30">Last 30 days</SelectItem>
-          <SelectItem value="90">Last 90 days</SelectItem>
-          <SelectItem value="180">Last 6 months</SelectItem>
-        </SelectContent>
-      </Select>
+      {extraFilters ? (
+        <div className="flex flex-col gap-2 sm:flex-1 sm:flex-row sm:flex-wrap sm:items-center">{extraFilters}</div>
+      ) : null}
       <motion.div className="flex gap-2 sm:ml-auto">
-        <Button variant="outline" size="sm" className="h-9 gap-1.5" type="button">
-          <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters
-        </Button>
         {onRefresh ? (
           <Button variant="outline" size="sm" className="h-9 gap-1.5" type="button" onClick={onRefresh}>
             <RefreshCw className="h-3.5 w-3.5" />

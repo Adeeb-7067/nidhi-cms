@@ -26,7 +26,7 @@ export default function MarketingPerformance() {
       <MarketingPageHeader
         title="Team performance"
         description="Tasks completed, delivery time, client ratings, and productivity metrics"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Performance" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Performance" }]}
       />
 
       <MarketingFilterBar

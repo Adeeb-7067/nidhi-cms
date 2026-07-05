@@ -95,12 +95,18 @@ export function normalizeSalary(src) {
   const allowances = Math.max(0, parseNumber(src.allowances) ?? 0);
   let deductions = Math.max(0, parseNumber(src.deductions) ?? 0);
   const gross = Math.round((basicSalary + allowances) * 100) / 100;
-  deductions = Math.min(deductions, gross);
+  deductions = gross > 0 ? Math.min(deductions, gross) : deductions;
   let netSalary = parseNumber(src.netSalary);
-  if (netSalary == null || !Number.isFinite(netSalary)) {
+  const shouldRecomputeNet =
+    netSalary == null ||
+    !Number.isFinite(netSalary) ||
+    (netSalary === 0 && gross > deductions);
+  if (shouldRecomputeNet) {
     netSalary = Math.max(0, Math.round((gross - deductions) * 100) / 100);
-  } else {
+  } else if (gross > 0) {
     netSalary = Math.max(0, Math.min(gross, Math.round(netSalary * 100) / 100));
+  } else {
+    netSalary = Math.max(0, Math.round(netSalary * 100) / 100);
   }
   return {
     basicSalary,

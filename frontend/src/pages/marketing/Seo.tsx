@@ -50,7 +50,7 @@ export default function MarketingSeo() {
       <MarketingPageHeader
         title="SEO panel"
         description="Keyword rankings, backlinks, audits, and Core Web Vitals"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "SEO" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "SEO" }]}
       />
 
       <MarketingFilterBar

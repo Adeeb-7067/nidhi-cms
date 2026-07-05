@@ -38,7 +38,7 @@ export default function MarketingContent() {
       <MarketingPageHeader
         title="Content writer queue"
         description="Blogs, captions, scripts, and emails with approval status and SEO scores"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Content" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Content" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search content, clients…" />

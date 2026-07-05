@@ -88,6 +88,11 @@ export function installmentCardData(inst: Installment) {
     dueDate: inst.dueDate,
     status: inst.status,
     projectId: inst.projectId ?? undefined,
+    customerId: inst.customerId,
+    customerName: inst.customerName ?? undefined,
+    sequenceNumber: inst.sequenceNumber ?? undefined,
+    sequenceTotal: inst.sequenceTotal ?? undefined,
     invoiceId: inst.invoiceId ?? undefined,
+    createdAt: inst.createdAt,
   };
 }

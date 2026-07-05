@@ -1,6 +1,7 @@
 import { employeeScreenshotsTable, workSessionsTable, getNextSequence } from "../models/schema/index.js";
-import { storeUpload } from "../lib/file-storage.js";
+import { storeUpload, deleteStoredFile } from "../lib/file-storage.js";
 import { badRequest, notFound, forbidden } from "../utils/route-errors.js";
+import { logger } from "../lib/logger.js";
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47]; // \x89PNG
 const JPEG_MAGIC = [0xff, 0xd8, 0xff];       // SOI marker
@@ -71,6 +72,11 @@ export async function deleteScreenshot(id, requestingUser) {
   const doc = await employeeScreenshotsTable.findOne({ id });
   if (!doc) notFound("Screenshot");
 
+  try {
+    await deleteStoredFile(doc.fileUrl);
+  } catch (err) {
+    logger.error({ err, screenshotId: id }, "Screenshot delete: failed to remove file, removing DB record anyway");
+  }
   await employeeScreenshotsTable.deleteOne({ id });
 }
 
@@ -81,6 +87,15 @@ export async function bulkDeleteScreenshots(ids, requestingUser) {
 
   const isAdmin = ["super_admin", "admin"].includes(requestingUser.role);
   if (!isAdmin) forbidden("Only admins can delete screenshots.");
+
+  const docs = await employeeScreenshotsTable.find({ id: { $in: ids } }, { id: 1, fileUrl: 1 }).lean();
+  for (const doc of docs) {
+    try {
+      await deleteStoredFile(doc.fileUrl);
+    } catch (err) {
+      logger.error({ err, screenshotId: doc.id }, "Bulk screenshot delete: failed to remove file, removing DB record anyway");
+    }
+  }
 
   const result = await employeeScreenshotsTable.deleteMany({ id: { $in: ids } });
   return { deleted: result.deletedCount };

@@ -2,8 +2,10 @@ import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import {
   assertValidStoredFileUrl,
+  getS3Client,
   isObjectStorageEnabled,
   uploadBufferToObjectStorage,
   uploadLocalFileToObjectStorage,
@@ -41,6 +43,22 @@ async function storeGeneratedFile(localPath, originalName, mimetype, category = 
   const filename = path.basename(localPath);
   return { url: `/uploads/${filename}`, key: filename, storage: "local" };
 }
+/** Delete a file previously returned by storeUpload/storeGeneratedFile — local disk or object storage. */
+async function deleteStoredFile(fileUrl) {
+  if (!fileUrl) return;
+  if (/^https?:\/\//i.test(fileUrl)) {
+    if (!isObjectStorageEnabled()) return;
+    const key = new URL(fileUrl).pathname.slice(1);
+    await getS3Client().send(
+      new DeleteObjectCommand({ Bucket: process.env.LINODE_OBJECT_BUCKET, Key: key })
+    );
+  } else if (fileUrl.startsWith("/uploads/")) {
+    // Preserve the full subpath after /uploads/ — path.basename would strip subdirectories.
+    const relPath = fileUrl.slice("/uploads/".length);
+    const filePath = path.join(UPLOAD_DIR, relPath);
+    await fs.unlink(filePath);
+  }
+}
 function resolvePublicFileUrl(storedUrl, req) {
   if (!storedUrl) return null;
   if (/^https?:\/\//i.test(storedUrl)) return storedUrl;
@@ -64,6 +82,7 @@ function validateStoredFileUrls(urls, fieldName = "attachments") {
 }
 export {
   UPLOAD_CATEGORIES,
+  deleteStoredFile,
   ensureLocalUploadDir,
   getStorageBackend,
   isObjectStorageEnabled,

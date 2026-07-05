@@ -46,7 +46,7 @@ export default function MarketingVideos() {
       <MarketingPageHeader
         title="Video & reel queue"
         description="Raw files, voiceover, subtitles, thumbnails, and export targets"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Videos" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Videos" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search videos, clients…" />

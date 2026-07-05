@@ -39,7 +39,7 @@ export default function MarketingDashboard() {
       <MarketingPageHeader
         title="Marketing Dashboard"
         description="Agency overview — tasks, approvals, campaigns, and team performance"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Dashboard" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Dashboard" }]}
         actions={
           <Button
             size="sm"

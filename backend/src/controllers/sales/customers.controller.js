@@ -1,10 +1,8 @@
 import {
-  SalesCustomers,
+  clientsTable,
   SalesInstallments,
   SalesInvoices,
   SalesPayments,
-  SalesProposals,
-  clientsTable,
   usersTable,
   projectsTable,
   ticketsTable,
@@ -12,11 +10,14 @@ import {
   clientTeamMembersTable,
   credentialHistoryTable,
   inventoryCredentialsTable,
-  getNextSequence,
 } from "../../models/schema/index.js";
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { formatProject } from "../../mappers/project-format.js";
 import { formatUser } from "../../mappers/user-format.js";
+import {
+  formatClientAsCustomer,
+  customerUpdatesToClientSet,
+} from "../../mappers/client-customer-format.js";
 import {
   badRequest,
   forbidden,
@@ -25,8 +26,18 @@ import {
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
-import { createClientPortalUser, updateClientPortalEmail } from "../../services/client-portal.js";
+import {
+  createClientCompanyRecord,
+  enablePortalForClientCompany,
+  deleteClientCompany,
+  syncPortalEmailIfLinked,
+} from "../../services/client-company-provision.js";
 import { sendCustomerPaymentReminderEmail } from "../../lib/email.js";
+import {
+  isBillableInvoice,
+  sumInvoiceBilled,
+  sumInvoiceOutstanding,
+} from "../../utils/sales-invoice-filters.js";
 
 async function loadStaffUser(userId) {
   if (!userId) return null;
@@ -57,14 +68,33 @@ async function formatTeamMember(member) {
   };
 }
 
+async function findClientOr404(id, user) {
+  const client = await clientsTable.findOne({ id }).lean();
+  if (!client) notFound("Customer");
+  if (user?.role === "bde" && client.assignedAdminId !== user.id) {
+    notFound("Customer");
+  }
+  return client;
+}
+
+function computeCustomerFinancials(invoices) {
+  const financials = new Map();
+  for (const inv of invoices) {
+    if (!isBillableInvoice(inv)) continue;
+    if (!financials.has(inv.customerId)) financials.set(inv.customerId, { totalSales: 0, outstanding: 0 });
+    const entry = financials.get(inv.customerId);
+    entry.totalSales += inv.amount;
+    entry.outstanding += Math.max(0, inv.amount - inv.paidAmount);
+  }
+  return financials;
+}
+
 async function getCustomerHub(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
+  const client = await findClientOr404(id, req.user);
 
-  const [assignedAdmin, client, paymentsForCustomer] = await Promise.all([
-    loadStaffUser(customer.assignedAdminId),
-    customer.clientId ? clientsTable.findOne({ id: customer.clientId }).lean() : null,
+  const [assignedAdmin, paymentsForCustomer] = await Promise.all([
+    loadStaffUser(client.assignedAdminId),
     SalesPayments.find({ customerId: id }).sort({ createdAt: -1 }).limit(200).lean(),
   ]);
 
@@ -76,14 +106,13 @@ async function getCustomerHub(req, res) {
   let portalCredentials = [];
   let inventoryCredentials = [];
 
-  if (client?.userId) {
+  if (client.userId) {
     clientAdmin = await loadStaffUser(client.userId);
   }
 
-  const credentialUserId = customer.portalUserId ?? client?.userId ?? null;
-  if (credentialUserId) {
+  if (client.userId) {
     const credRows = await credentialHistoryTable
-      .find({ userId: credentialUserId })
+      .find({ userId: client.userId })
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
@@ -95,107 +124,103 @@ async function getCustomerHub(req, res) {
     }));
   }
 
-  if (customer.clientId) {
-    const companyId = customer.clientId;
-    const [projectRows, memberRows] = await Promise.all([
-      projectsTable
-        .find({ $or: [{ companyId }, { clientId: companyId }] })
-        .sort({ createdAt: -1 })
-        .lean(),
-      clientTeamMembersTable.find({ clientCompanyId: companyId }).sort({ createdAt: -1 }).lean(),
-    ]);
+  const companyId = client.id;
+  const [projectRows, memberRows] = await Promise.all([
+    projectsTable
+      .find({ $or: [{ companyId }, { clientId: companyId }] })
+      .sort({ createdAt: -1 })
+      .lean(),
+    clientTeamMembersTable.find({ clientCompanyId: companyId }).sort({ createdAt: -1 }).lean(),
+  ]);
 
-    projects = await Promise.all(projectRows.map((p) => formatProject(p)));
-    teamMembers = await Promise.all(memberRows.map(formatTeamMember));
+  projects = await Promise.all(projectRows.map((p) => formatProject(p)));
+  teamMembers = await Promise.all(memberRows.map(formatTeamMember));
 
-    const projectIds = projectRows.map((p) => p.id);
-    const projectNameMap = new Map(projectRows.map((p) => [p.id, p.name]));
+  const projectIds = projectRows.map((p) => p.id);
+  const projectNameMap = new Map(projectRows.map((p) => [p.id, p.name]));
 
-    const ticketFilter = projectIds.length
-      ? { $or: [{ companyId }, { projectId: { $in: projectIds } }] }
-      : { companyId };
-    const ticketRows = await ticketsTable
-      .find(ticketFilter)
+  const ticketFilter = projectIds.length
+    ? { $or: [{ companyId }, { projectId: { $in: projectIds } }] }
+    : { companyId };
+  const ticketRows = await ticketsTable
+    .find(ticketFilter)
+    .sort({ updatedAt: -1 })
+    .limit(100)
+    .lean();
+
+  if (projectIds.length) {
+    const taskRows = await tasksTable
+      .find({ projectId: { $in: projectIds } })
       .sort({ updatedAt: -1 })
       .limit(100)
       .lean();
-
-    if (projectIds.length) {
-      const taskRows = await tasksTable
-        .find({ projectId: { $in: projectIds } })
-        .sort({ updatedAt: -1 })
-        .limit(100)
-        .lean();
-      const assigneeIds = [...new Set(taskRows.map((t) => t.assigneeId).filter(Boolean))];
-      const assignees = assigneeIds.length
-        ? await usersTable.find({ id: { $in: assigneeIds } }).select({ id: 1, name: 1 }).lean()
-        : [];
-      const assigneeMap = new Map(assignees.map((u) => [u.id, u.name]));
-
-      tasks = taskRows.map((t) => ({
-        id: t.id,
-        taskNumber: t.taskNumber,
-        title: t.title,
-        projectId: t.projectId,
-        projectName: projectNameMap.get(t.projectId) ?? null,
-        assigneeId: t.assigneeId,
-        assigneeName: t.assigneeId ? assigneeMap.get(t.assigneeId) ?? null : null,
-        status: t.status,
-        priority: t.priority,
-        dueDate: t.dueDate ? toIso(t.dueDate) : null,
-        progress: t.status === "done" ? 100 : t.status === "in_progress" ? 50 : 0,
-        updatedAt: toIso(t.updatedAt),
-        createdAt: toIso(t.createdAt),
-      }));
-
-      const credInvRows = await inventoryCredentialsTable
-        .find({ projectId: { $in: projectIds }, deletedAt: null })
-        .sort({ updatedAt: -1 })
-        .limit(100)
-        .lean();
-      inventoryCredentials = credInvRows.map((c) => ({
-        id: c.id,
-        projectId: c.projectId,
-        projectName: projectNameMap.get(c.projectId) ?? null,
-        name: c.label,
-        username: c.username ?? null,
-        url: c.url ?? null,
-        category: c.type ?? null,
-        updatedAt: toIso(c.updatedAt),
-      }));
-    }
-
-    const ticketAssigneeIds = [...new Set(ticketRows.map((t) => t.assignedTo).filter(Boolean))];
-    const ticketAssignees = ticketAssigneeIds.length
-      ? await usersTable.find({ id: { $in: ticketAssigneeIds } }).select({ id: 1, name: 1 }).lean()
+    const assigneeIds = [...new Set(taskRows.map((t) => t.assigneeId).filter(Boolean))];
+    const assignees = assigneeIds.length
+      ? await usersTable.find({ id: { $in: assigneeIds } }).select({ id: 1, name: 1 }).lean()
       : [];
-    const ticketAssigneeMap = new Map(ticketAssignees.map((u) => [u.id, u.name]));
+    const assigneeMap = new Map(assignees.map((u) => [u.id, u.name]));
 
-    tickets = ticketRows.map((t) => ({
+    tasks = taskRows.map((t) => ({
       id: t.id,
-      subject: t.title,
-      priority: t.priority,
-      status: t.status,
-      assignedTo: t.assignedTo,
-      assignedToName: t.assignedTo ? ticketAssigneeMap.get(t.assignedTo) ?? null : null,
+      taskNumber: t.taskNumber,
+      title: t.title,
       projectId: t.projectId,
-      createdAt: toIso(t.createdAt),
+      projectName: projectNameMap.get(t.projectId) ?? null,
+      assigneeId: t.assigneeId,
+      assigneeName: t.assigneeId ? assigneeMap.get(t.assigneeId) ?? null : null,
+      status: t.status,
+      priority: t.priority,
+      dueDate: t.dueDate ? toIso(t.dueDate) : null,
+      progress: t.status === "done" ? 100 : t.status === "in_progress" ? 50 : 0,
       updatedAt: toIso(t.updatedAt),
+      createdAt: toIso(t.createdAt),
+    }));
+
+    const credInvRows = await inventoryCredentialsTable
+      .find({ projectId: { $in: projectIds }, deletedAt: null })
+      .sort({ updatedAt: -1 })
+      .limit(100)
+      .lean();
+    inventoryCredentials = credInvRows.map((c) => ({
+      id: c.id,
+      projectId: c.projectId,
+      projectName: projectNameMap.get(c.projectId) ?? null,
+      name: c.label,
+      username: c.username ?? null,
+      url: c.url ?? null,
+      category: c.type ?? null,
+      updatedAt: toIso(c.updatedAt),
     }));
   }
+
+  const ticketAssigneeIds = [...new Set(ticketRows.map((t) => t.assignedTo).filter(Boolean))];
+  const ticketAssignees = ticketAssigneeIds.length
+    ? await usersTable.find({ id: { $in: ticketAssigneeIds } }).select({ id: 1, name: 1 }).lean()
+    : [];
+  const ticketAssigneeMap = new Map(ticketAssignees.map((u) => [u.id, u.name]));
+
+  tickets = ticketRows.map((t) => ({
+    id: t.id,
+    subject: t.title,
+    priority: t.priority,
+    status: t.status,
+    assignedTo: t.assignedTo,
+    assignedToName: t.assignedTo ? ticketAssigneeMap.get(t.assignedTo) ?? null : null,
+    projectId: t.projectId,
+    createdAt: toIso(t.createdAt),
+    updatedAt: toIso(t.updatedAt),
+  }));
 
   res.json({
     assignedAdmin,
     clientAdmin,
-    client: client
-      ? {
-          id: client.id,
-          companyName: client.companyName,
-          status: client.status,
-          tier: client.tier,
-          userId: client.userId,
-        }
-      : null,
+    client: {
+      id: client.id,
+      companyName: client.companyName,
+      status: client.status,
+      tier: client.tier,
+      userId: client.userId,
+    },
     projects,
     teamMembers,
     tickets,
@@ -213,51 +238,21 @@ async function getCustomerHub(req, res) {
   });
 }
 
-async function syncLinkedClientRecord(customer, updates) {
-  if (!customer.clientId) return;
-  const clientUpdates = {};
-  if (updates.companyName !== undefined) clientUpdates.companyName = updates.companyName;
-  if (updates.contactPerson !== undefined) clientUpdates.contactPerson = updates.contactPerson;
-  if (updates.email !== undefined) clientUpdates.email = updates.email;
-  if (updates.phone !== undefined) clientUpdates.phone = updates.phone;
-  if (updates.location !== undefined) clientUpdates.address = updates.location;
-  if (updates.gstin !== undefined) clientUpdates.gstNumber = updates.gstin;
-  if (updates.website !== undefined) clientUpdates.website = updates.website;
-  if (Object.keys(clientUpdates).length) {
-    await clientsTable.updateOne({ id: customer.clientId }, { $set: clientUpdates });
-  }
-  if (updates.email !== undefined && customer.portalUserId) {
-    await updateClientPortalEmail({ userId: customer.portalUserId, email: updates.email });
-  }
-}
-
-function computeCustomerFinancials(invoices) {
-  const financials = new Map();
-  for (const inv of invoices) {
-    if (!financials.has(inv.customerId)) financials.set(inv.customerId, { totalSales: 0, outstanding: 0 });
-    const entry = financials.get(inv.customerId);
-    entry.totalSales += inv.amount;
-    entry.outstanding += Math.max(0, inv.amount - inv.paidAmount);
-  }
-  return financials;
-}
-
 async function listCustomers(req, res) {
   const { status, type, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (status) filter.status = status;
-  if (type) filter.type = type;
+  if (type) filter.customerType = type;
   if (search?.trim()) {
     const re = { $regex: search.trim(), $options: "i" };
     filter.$or = [{ companyName: re }, { contactPerson: re }, { email: re }];
   }
-  // BDE scope: only see customers assigned to them
   if (req.user.role === "bde") {
     filter.assignedAdminId = req.user.id;
   }
   const { items, total, page: pg, limit: lim } = await paginateModel(
-    SalesCustomers,
+    clientsTable,
     filter,
     { page, limit, skip },
     { sort: { createdAt: -1 } }
@@ -265,69 +260,66 @@ async function listCustomers(req, res) {
   const customerIds = items.map((c) => c.id);
   const invoices = customerIds.length
     ? await SalesInvoices.find({ customerId: { $in: customerIds } })
-        .select({ customerId: 1, amount: 1, paidAmount: 1 })
+        .select({ customerId: 1, amount: 1, paidAmount: 1, status: 1 })
         .lean()
     : [];
   const financials = computeCustomerFinancials(invoices);
-  const customers = items.map((c) => ({
-    ...c,
-    totalSales: financials.get(c.id)?.totalSales ?? 0,
-    outstanding: financials.get(c.id)?.outstanding ?? 0,
-  }));
+  const customers = items.map((c) =>
+    formatClientAsCustomer(c, financials.get(c.id) ?? {}),
+  );
   res.json({ customers, total, page: pg, limit: lim });
 }
 
 async function createCustomer(req, res) {
   const body = req.body;
-  const companyName = optionalString(body.companyName);
-  const contactPerson = optionalString(body.contactPerson);
-  const email = optionalString(body.email);
-  if (!companyName) badRequest("Company name is required.", "companyName");
-  if (!contactPerson) badRequest("Contact person is required.", "contactPerson");
-  if (!email) badRequest("Email is required.", "email");
-  const id = await getNextSequence("sales_customers");
-  const customer = await SalesCustomers.create({
-    id,
-    companyName,
-    contactPerson,
-    email: email.toLowerCase(),
-    phone: optionalString(body.phone) ?? null,
-    status: optionalString(body.status) ?? "active",
-    type: optionalString(body.type) ?? "corporate",
-    location: optionalString(body.location) ?? null,
-    gstin: optionalString(body.gstin) ?? null,
-    website: optionalString(body.website) ?? null,
+  const { client, directConversationId } = await createClientCompanyRecord({
+    companyName: optionalString(body.companyName),
+    contactPerson: optionalString(body.contactPerson),
+    email: optionalString(body.email),
+    enablePortal: body.enablePortal === false
+      ? false
+      : body.enablePortal === true || Boolean(optionalString(body.password)),
+    portalEmail: optionalString(body.portalEmail),
+    portalPassword: optionalString(body.password),
+    phone: optionalString(body.phone),
+    address: optionalString(body.location),
+    gstNumber: optionalString(body.gstin),
+    website: optionalString(body.website),
+    industry: optionalString(body.industry),
+    status: optionalString(body.status),
+    customerType: optionalString(body.type),
     leadId: body.leadId ? Number(body.leadId) : null,
-    clientId: body.clientId ? Number(body.clientId) : null,
-    portalUserId: body.portalUserId ? Number(body.portalUserId) : null,
+    createdByUserId: req.user.id,
+    createdByLabel: req.user.name,
+    bootstrapDiscussion: true,
   });
-  res.status(201).json(customer.toObject());
+  res.status(201).json({
+    ...formatClientAsCustomer(client),
+    directConversationId: directConversationId ?? null,
+  });
 }
 
 async function getCustomerById(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
-  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
-    notFound("Customer");
-  }
+  const client = await findClientOr404(id, req.user);
   const [installments, invoices, assignedAdmin] = await Promise.all([
     SalesInstallments.find({ customerId: id }).sort({ dueDate: 1 }).lean(),
     SalesInvoices.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
-    loadStaffUser(customer.assignedAdminId),
+    loadStaffUser(client.assignedAdminId),
   ]);
-  const totalSales = invoices.reduce((s, i) => s + i.amount, 0);
-  const outstanding = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
-  res.json({ ...customer, installments, invoices, totalSales, outstanding, assignedAdmin });
+  const totalSales = sumInvoiceBilled(invoices);
+  const outstanding = sumInvoiceOutstanding(invoices);
+  res.json({
+    ...formatClientAsCustomer(client, { totalSales, outstanding }),
+    installments,
+    invoices,
+    assignedAdmin,
+  });
 }
 
 async function updateCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
-  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
-    notFound("Customer");
-  }
+  const client = await findClientOr404(id, req.user);
   const body = req.body;
   const updates = {};
   if (body.companyName !== undefined) updates.companyName = optionalString(body.companyName);
@@ -356,119 +348,68 @@ async function updateCustomer(req, res) {
     updates.assignedAdminId = adminId;
   }
 
-  if (Object.keys(updates).length) {
-    await syncLinkedClientRecord(customer, updates);
+  const clientSet = customerUpdatesToClientSet(updates);
+  if (updates.email !== undefined && client.userId) {
+    await syncPortalEmailIfLinked({
+      userId: client.userId,
+      oldContactEmail: client.email,
+      newContactEmail: updates.email,
+    });
   }
 
-  const updated = await SalesCustomers.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
+  const updated = Object.keys(clientSet).length
+    ? await clientsTable.findOneAndUpdate({ id }, { $set: clientSet }, { new: true }).lean()
+    : client;
   const assignedAdmin = await loadStaffUser(updated.assignedAdminId);
-  res.json({ ...updated, assignedAdmin });
+  res.json({ ...formatClientAsCustomer(updated), assignedAdmin });
 }
 
 async function deleteCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
-  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
-    notFound("Customer");
-  }
-
-  const [proposals, invoices, installments, payments] = await Promise.all([
-    SalesProposals.countDocuments({ customerId: id }),
-    SalesInvoices.countDocuments({ customerId: id }),
-    SalesInstallments.countDocuments({ customerId: id }),
-    SalesPayments.countDocuments({ customerId: id }),
-  ]);
-  if (proposals + invoices + installments + payments > 0) {
-    badRequest(
-      "Cannot delete a customer with billing history. Set status to inactive instead.",
-      "customerId"
-    );
-  }
-
-  await SalesCustomers.deleteOne({ id });
+  const client = await findClientOr404(id, req.user);
+  await deleteClientCompany(client);
   res.json({ success: true });
 }
 
 async function provisionCustomerPortal(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
-  if (req.user.role === "bde" && customer.assignedAdminId !== req.user.id) {
-    notFound("Customer");
-  }
-  if (customer.clientId || customer.portalUserId) {
-    badRequest("This customer already has portal access.", "portal");
-  }
-
+  const client = await findClientOr404(id, req.user);
   const body = req.body;
-  const portalEmail = optionalString(body.portalEmail ?? customer.email);
-  const portalPassword = optionalString(body.password);
-  if (!portalEmail) badRequest("Portal login email is required.", "portalEmail");
-  if (!portalPassword || portalPassword.length < 8) {
-    badRequest("Portal password must be at least 8 characters.", "password");
-  }
 
-  let clientId = null;
-  let portalUserId = null;
-  try {
-    portalUserId = await createClientPortalUser({
-      name: customer.contactPerson,
-      email: portalEmail,
-      password: portalPassword,
-      setByUserId: req.user.id,
-      setByLabel: req.user.name,
-    });
-    const clientSeqId = await getNextSequence("clients");
-    const client = await clientsTable.create({
-      id: clientSeqId,
-      companyName: optionalString(body.companyName) ?? customer.companyName,
-      contactPerson: customer.contactPerson,
-      email: portalEmail.toLowerCase(),
-      phone: customer.phone ?? null,
-      address: customer.location ?? null,
-      gstNumber: customer.gstin ?? null,
-      industry: optionalString(body.industry) ?? null,
-      website: customer.website ?? null,
-      tier: "Standard",
-      status: "active",
-      portalLogin: true,
-      userId: portalUserId,
-      createdBy: req.user.id,
-    });
-    clientId = client.id;
-    const updated = await SalesCustomers.findOneAndUpdate(
-      { id },
-      { $set: { clientId, portalUserId, email: portalEmail.toLowerCase() } },
-      { new: true }
-    ).lean();
-    res.status(201).json({
-      success: true,
-      customerId: id,
-      clientId,
-      portalUserId,
-      customer: updated,
-    });
-  } catch (err) {
-    if (clientId) await clientsTable.deleteOne({ id: clientId }).catch(() => {});
-    if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
-    throw err;
-  }
+  const { client: updated, portalUserId, directConversationId } = await enablePortalForClientCompany({
+    client,
+    portalEmail: optionalString(body.portalEmail ?? client.email),
+    portalPassword: optionalString(body.password),
+    contactPerson: client.contactPerson,
+    industry: optionalString(body.industry),
+    companyName: optionalString(body.companyName),
+    createdByUserId: req.user.id,
+    createdByLabel: req.user.name,
+    bootstrapDiscussion: true,
+  });
+
+  res.status(201).json({
+    success: true,
+    customerId: id,
+    clientId: id,
+    portalUserId,
+    directConversationId: directConversationId ?? null,
+    customer: formatClientAsCustomer(updated),
+  });
 }
 
 async function getCustomerStatement(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
+  const client = await findClientOr404(id, req.user);
   const [invoices, payments] = await Promise.all([
     SalesInvoices.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
     SalesPayments.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
   ]);
-  const totalBilled = invoices.reduce((s, i) => s + i.amount, 0);
+  const totalBilled = sumInvoiceBilled(invoices);
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const outstanding = Math.max(0, totalBilled - totalPaid);
+  const outstanding = sumInvoiceOutstanding(invoices);
   res.json({
-    customer,
+    customer: formatClientAsCustomer(client),
     invoices,
     payments,
     summary: { totalBilled, totalPaid, outstanding },
@@ -477,30 +418,29 @@ async function getCustomerStatement(req, res) {
 
 async function remindCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
-  const customer = await SalesCustomers.findOne({ id }).lean();
-  if (!customer) notFound("Customer");
+  const client = await findClientOr404(id, req.user);
   const message =
     optionalString(req.body.message) ?? "You have a pending payment. Please review your account.";
 
   const invoices = await SalesInvoices.find({ customerId: id })
-    .select({ amount: 1, paidAmount: 1 })
+    .select({ amount: 1, paidAmount: 1, status: 1 })
     .lean();
-  const outstanding = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+  const outstanding = sumInvoiceOutstanding(invoices);
   if (outstanding <= 0) {
     badRequest("This customer has no outstanding balance.", "outstanding");
   }
 
   const emailResult = await sendCustomerPaymentReminderEmail({
-    to: customer.email,
-    recipientName: customer.contactPerson,
-    companyName: customer.companyName,
+    to: client.email,
+    recipientName: client.contactPerson,
+    companyName: client.companyName,
     outstandingAmount: outstanding,
     message,
   });
 
   res.json({
     success: true,
-    sentTo: customer.email,
+    sentTo: client.email,
     message,
     outstanding,
     emailSent: emailResult.sent === true,

@@ -1,5 +1,6 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { format, startOfYear, endOfYear, subMonths, subYears, startOfMonth } from "date-fns";
 import {
   Briefcase,
@@ -8,10 +9,13 @@ import {
   KeyRound,
   Loader2,
   Mail,
+  Pencil,
   Phone,
+  Plus,
   Printer,
   Receipt,
   Shield,
+  Trash2,
   UserCog,
   Users,
 } from "lucide-react";
@@ -19,19 +23,20 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useAuth } from "@/contexts/AuthContext";
-import { useListUsers, getListUsersQueryKey } from "@/api";
+import { useListUsers, getListUsersQueryKey, useCreateProject, useUpdateProject, useDeleteProject, getListProjectsQueryKey } from "@/api";
 import { listQueryOptions } from "@/lib/list-query-options";
 import type { User, UserListResult } from "@/api/generated/api.schemas";
 import type {
   Customer,
   CustomerHubData,
+  CustomerHubProject,
   Installment,
   Proposal,
   SalesInvoice,
   SalesPayment,
 } from "@/api/sales";
-import { useAssignCustomerAdmin } from "@/api/sales";
-import { formatPaymentMethod, resolveProposalTotal } from "@/modules/sales/utils";
+import { salesKeys, useAssignCustomerAdmin, useDeleteProposal } from "@/api/sales";
+import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime } from "@/modules/sales/utils";
 import { useGetSettings } from "@/api/generated/api";
 import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import { COMPANY_BILLING } from "@/modules/sales/constants";
@@ -45,6 +50,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -72,9 +97,12 @@ import {
 } from "@/modules/sales/components/financial-kit";
 import { installmentCardData } from "@/modules/sales/adapters";
 import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
+import { ProposalFormSheet } from "./ProposalFormSheet";
+import { InvoiceFormSheet } from "./InvoiceFormSheet";
+import { CreateInstallmentDialog, CreateInvoiceDialog, RecordPaymentDialog } from "./sales-action-dialogs";
 
-function PortalGate({ clientId, message }: { clientId: number | null; message: string }) {
-  if (clientId) return null;
+function PortalGate({ portalEnabled, message }: { portalEnabled: boolean; message: string }) {
+  if (portalEnabled) return null;
   return (
     <SalesEmptyState
       title="Portal not enabled"
@@ -189,9 +217,9 @@ export function CustomerAdminSection({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {!customer.clientId ? (
+          {!customer.portalUserId ? (
             <p className="text-sm text-muted-foreground">
-              Enable portal access to link a client admin account.
+              Enable portal access to create the client admin login for this company.
             </p>
           ) : clientAdmin ? (
             <div className="flex items-start gap-3">
@@ -211,55 +239,296 @@ export function CustomerAdminSection({
   );
 }
 
+const PROJECT_STATUS_OPTIONS = [
+  { value: "scoping", label: "Scoping" },
+  { value: "in_progress", label: "In progress" },
+  { value: "on_hold", label: "On hold" },
+  { value: "uat", label: "UAT" },
+  { value: "completed", label: "Completed" },
+  { value: "maintenance", label: "Maintenance" },
+];
+
+const PROJECT_PRIORITY_OPTIONS = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "critical", label: "Critical" },
+];
+
+function ProjectQuickDialog({
+  open,
+  onOpenChange,
+  clientId,
+  project,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  clientId: number;
+  project: CustomerHubProject | null;
+  onSaved: () => void;
+}) {
+  const isEdit = project != null;
+  const createProject = useCreateProject();
+  const updateProject = useUpdateProject();
+  const [name, setName] = useState("");
+  const [status, setStatus] = useState<
+    "scoping" | "in_progress" | "on_hold" | "uat" | "completed" | "maintenance"
+  >("scoping");
+  const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [deadline, setDeadline] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setName(project?.name ?? "");
+    setStatus((project?.status as typeof status) ?? "scoping");
+    setPriority("medium");
+    setDeadline(project?.deadline ? project.deadline.slice(0, 10) : "");
+  }, [open, project]);
+
+  const isPending = createProject.isPending || updateProject.isPending;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !deadline) {
+      toast.error("Project name and deadline are required");
+      return;
+    }
+    try {
+      if (isEdit && project) {
+        await updateProject.mutateAsync({
+          id: project.id,
+          data: { name: name.trim(), status, deadline },
+        });
+        toast.success("Project updated");
+      } else {
+        await createProject.mutateAsync({
+          data: {
+            name: name.trim(),
+            clientId,
+            companyId: clientId,
+            priority,
+            status,
+            startDate: new Date().toISOString().slice(0, 10),
+            deadline,
+          },
+        });
+        toast.success("Project created");
+      }
+      onOpenChange(false);
+      onSaved();
+    } catch (err) {
+      toastApiError(err, isEdit ? "Failed to update project" : "Failed to create project");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>{isEdit ? "Edit project" : "New project"}</DialogTitle>
+          <DialogDescription>
+            {isEdit
+              ? "Update the project's name, status, or deadline."
+              : "Create a new project for this client company."}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div className="space-y-1.5">
+            <Label>Project name</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Mobile App Revamp" />
+          </div>
+          {!isEdit ? (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Priority</Label>
+                <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_PRIORITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_STATUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PROJECT_STATUS_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label>Deadline</Label>
+            <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isEdit ? "Save changes" : "Create project"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function CustomerProjectsSection({
   hub,
   hubLoading,
   clientId,
+  customerId,
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  clientId: number;
+  customerId: number;
 }) {
+  const queryClient = useQueryClient();
+  const deleteProject = useDeleteProject();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<CustomerHubProject | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CustomerHubProject | null>(null);
+
+  const refreshProjects = () => {
+    queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: [...salesKeys.customer(customerId), "hub"] });
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteProject.mutateAsync({ id: deleteTarget.id });
+      toast.success("Project deleted");
+      setDeleteTarget(null);
+      refreshProjects();
+    } catch (err) {
+      toastApiError(err, "Failed to delete project");
+    }
+  };
+
   if (hubLoading) return <LoadingBlock />;
-  if (!clientId) {
-    return (
-      <PortalGate
-        clientId={clientId}
-        message="Link this customer to a client company (enable portal) to view project information."
-      />
-    );
-  }
 
   const projects = hub?.projects ?? [];
-  if (projects.length === 0) {
-    return <SalesEmptyState title="No projects" description="No projects linked to this client company yet." />;
-  }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {projects.map((p) => (
-        <Link key={p.id} href={`/admin/projects/${p.id}`}>
-          <Card className="hover:border-primary/30 transition-colors h-full">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{p.name}</p>
-                  <p className="text-xs text-muted-foreground capitalize">{p.status?.replace(/_/g, " ")}</p>
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">
+        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          New project
+        </Button>
+      </div>
+
+      {projects.length === 0 ? (
+        <SalesEmptyState
+          title="No projects"
+          description="No projects linked to this client company yet."
+          actionLabel="Create first project"
+          onAction={() => setCreateOpen(true)}
+        />
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {projects.map((p) => (
+            <Card key={p.id} className="hover:border-primary/30 transition-colors h-full">
+              <CardContent className="p-4 space-y-2">
+                <Link href={`/admin/projects/${p.id}`} className="block">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold truncate">{p.name}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{p.status?.replace(/_/g, " ")}</p>
+                    </div>
+                    <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
+                  </div>
+                  {p.pmName ? (
+                    <p className="text-xs text-muted-foreground mt-2">PM: {p.pmName}</p>
+                  ) : null}
+                  {p.deadline ? (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Deadline {format(new Date(p.deadline), "MMM d, yyyy")}
+                    </p>
+                  ) : null}
+                </Link>
+                <div className="flex items-center gap-1 pt-2 border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-xs"
+                    onClick={() => setEditTarget(p)}
+                  >
+                    <Pencil className="h-3 w-3" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setDeleteTarget(p)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                    Delete
+                  </Button>
                 </div>
-                <Briefcase className="h-4 w-4 text-muted-foreground shrink-0" />
-              </div>
-              {p.pmName ? (
-                <p className="text-xs text-muted-foreground">PM: {p.pmName}</p>
-              ) : null}
-              {p.deadline ? (
-                <p className="text-[10px] text-muted-foreground">
-                  Deadline {format(new Date(p.deadline), "MMM d, yyyy")}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-        </Link>
-      ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <ProjectQuickDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        clientId={clientId}
+        project={null}
+        onSaved={refreshProjects}
+      />
+      <ProjectQuickDialog
+        open={editTarget != null}
+        onOpenChange={(o) => { if (!o) setEditTarget(null); }}
+        clientId={clientId}
+        project={editTarget}
+        onSaved={refreshProjects}
+      />
+      <AlertDialog open={deleteTarget != null} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently removes <strong>{deleteTarget?.name}</strong> and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+              disabled={deleteProject.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -271,17 +540,9 @@ export function CustomerTeamSection({
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  clientId: number;
 }) {
   if (hubLoading) return <LoadingBlock />;
-  if (!clientId) {
-    return (
-      <PortalGate
-        clientId={clientId}
-        message="Client team members appear after portal access is enabled for this customer."
-      />
-    );
-  }
 
   const members = hub?.teamMembers ?? [];
   if (members.length === 0) {
@@ -342,22 +603,22 @@ export function CustomerTeamSection({
 export function CustomerCredentialsSection({
   hub,
   hubLoading,
-  clientId,
+  portalUserId,
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  portalUserId: number | null;
 }) {
   if (hubLoading) return <LoadingBlock />;
 
   const portalCreds = hub?.portalCredentials ?? [];
   const inventoryCreds = hub?.inventoryCredentials ?? [];
 
-  if (!clientId && portalCreds.length === 0 && inventoryCreds.length === 0) {
+  if (!portalUserId && portalCreds.length === 0 && inventoryCreds.length === 0) {
     return (
       <PortalGate
-        clientId={clientId}
-        message="Shared credentials appear when portal access is enabled or project inventory credentials exist."
+        portalEnabled={false}
+        message="Enable portal access to view login history, or add project inventory credentials."
       />
     );
   }
@@ -391,7 +652,7 @@ export function CustomerCredentialsSection({
                     <TableCell className="text-xs">{c.label ?? "Portal login"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.setByLabel ?? "—"}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {c.createdAt ? format(new Date(c.createdAt), "MMM d, yyyy") : "—"}
+                      {formatSalesDateTime(c.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -449,12 +710,9 @@ export function CustomerTicketsSection({
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  clientId: number;
 }) {
   if (hubLoading) return <LoadingBlock />;
-  if (!clientId) {
-    return <PortalGate clientId={clientId} message="Tickets appear once this customer is linked to a client company." />;
-  }
 
   const tickets = hub?.tickets ?? [];
   if (tickets.length === 0) {
@@ -484,7 +742,7 @@ export function CustomerTicketsSection({
               <TableCell className="text-xs capitalize">{t.status}</TableCell>
               <TableCell className="text-xs">{t.assignedToName ?? "Unassigned"}</TableCell>
               <TableCell className="text-xs text-muted-foreground">
-                {t.createdAt ? format(new Date(t.createdAt), "MMM d, yyyy") : "—"}
+                {formatSalesDateTime(t.createdAt)}
               </TableCell>
               <TableCell className="text-xs text-muted-foreground">
                 {t.updatedAt ? format(new Date(t.updatedAt), "MMM d, yyyy") : "—"}
@@ -504,12 +762,9 @@ export function CustomerTasksSection({
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  clientId: number;
 }) {
   if (hubLoading) return <LoadingBlock />;
-  if (!clientId) {
-    return <PortalGate clientId={clientId} message="Tasks appear when projects exist for this client company." />;
-  }
 
   const tasks = hub?.tasks ?? [];
   if (tasks.length === 0) {
@@ -564,16 +819,13 @@ export function CustomerInventorySection({
 }: {
   hub: CustomerHubData | undefined;
   hubLoading: boolean;
-  clientId: number | null;
+  clientId: number;
 }) {
   const [projectId, setProjectId] = useState<number | null>(null);
   const projects = hub?.projects ?? [];
   const activeProjectId = projectId ?? projects[0]?.id ?? null;
 
   if (hubLoading) return <LoadingBlock />;
-  if (!clientId) {
-    return <PortalGate clientId={clientId} message="Inventory is available per linked project after portal setup." />;
-  }
   if (projects.length === 0) {
     return <SalesEmptyState title="No inventory" description="Create a project for this client to manage inventory." />;
   }
@@ -620,6 +872,10 @@ export function CustomerProposalsSection({
   customerId: number;
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Proposal | null>(null);
+  const deleteProposal = useDeleteProposal();
 
   const statuses = useMemo(() => [...new Set(proposals.map((p) => p.status))], [proposals]);
   const filtered = statusFilter === "all" ? proposals : proposals.filter((p) => p.status === statusFilter);
@@ -631,19 +887,71 @@ export function CustomerProposalsSection({
   const approved = proposals.filter((p) => p.status === "approved" || (p.status as string) === "converted").length;
   const pending = proposals.filter((p) => p.status === "draft" || p.status === "sent" || p.status === "seen").length;
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteProposal.mutateAsync(deleteTarget.id);
+      toast.success(`Proposal ${deleteTarget.number} deleted`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toastApiError(err, "Failed to delete proposal");
+    }
+  };
+
+  const proposalDialogs = (
+    <>
+      <ProposalFormSheet open={createOpen} onOpenChange={setCreateOpen} defaultCustomerId={customerId} />
+      <ProposalFormSheet
+        open={editId !== null}
+        onOpenChange={(o) => { if (!o) setEditId(null); }}
+        editId={editId}
+      />
+      <AlertDialog open={deleteTarget != null} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete proposal?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes <strong>{deleteTarget?.number}</strong> and all its audit history. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDelete}
+              disabled={deleteProposal.isPending}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+
   if (proposals.length === 0) {
     return (
-      <SalesEmptyState
-        title="No proposals"
-        description="No proposals have been created for this customer yet."
-        actionLabel="Create first proposal"
-        onAction={() => { window.location.href = `/sales/proposals/create?customerId=${customerId}`; }}
-      />
+      <>
+        <SalesEmptyState
+          title="No proposals"
+          description="No proposals have been created for this customer yet."
+          actionLabel="Create first proposal"
+          onAction={() => setCreateOpen(true)}
+        />
+        {proposalDialogs}
+      </>
     );
   }
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          New proposal
+        </Button>
+      </div>
+
       {/* Summary stats */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card>
@@ -701,11 +1009,13 @@ export function CustomerProposalsSection({
                   <TableHead className="text-xs">Assigned to</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
                   <TableHead className="text-xs">Valid until</TableHead>
+                  <TableHead className="text-xs text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((p) => {
                   const { finalTotal } = resolveProposalTotal(p);
+                  const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="text-xs font-mono">
@@ -726,10 +1036,34 @@ export function CustomerProposalsSection({
                         {p.assignedToUser?.name ?? "—"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(p.createdAt), "MMM d, yyyy")}
+                        {formatSalesDateTime(p.createdAt)}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Edit proposal"
+                            onClick={() => setEditId(p.id)}
+                          >
+                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                          </Button>
+                          {canDelete ? (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              title="Delete proposal"
+                              onClick={() => setDeleteTarget(p)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -744,6 +1078,7 @@ export function CustomerProposalsSection({
           description="Try selecting a different status filter."
         />
       )}
+      {proposalDialogs}
     </div>
   );
 }
@@ -753,16 +1088,43 @@ export function CustomerProposalsSection({
 export function CustomerInvoicesSection({
   invoices,
   payments,
+  customerId,
 }: {
   invoices: SalesInvoice[];
   payments: SalesPayment[];
+  customerId: number;
 }) {
+  const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+
+  const actionDialogs = (
+    <>
+      <InvoiceFormSheet open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen} defaultCustomerId={customerId} />
+      <RecordPaymentDialog open={recordPaymentOpen} onOpenChange={setRecordPaymentOpen} customerId={customerId} />
+    </>
+  );
+
   if (invoices.length === 0 && payments.length === 0) {
     return (
-      <SalesEmptyState
-        title="No invoices or payments"
-        description="No invoices have been raised or payments recorded for this customer yet."
-      />
+      <>
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
+            <Receipt className="h-3.5 w-3.5" />
+            Record payment
+          </Button>
+          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateInvoiceOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            New invoice
+          </Button>
+        </div>
+        <SalesEmptyState
+          title="No invoices or payments"
+          description="No invoices have been raised or payments recorded for this customer yet."
+          actionLabel="Create first invoice"
+          onAction={() => setCreateInvoiceOpen(true)}
+        />
+        {actionDialogs}
+      </>
     );
   }
 
@@ -777,6 +1139,17 @@ export function CustomerInvoicesSection({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
+          <Receipt className="h-3.5 w-3.5" />
+          Record payment
+        </Button>
+        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateInvoiceOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          New invoice
+        </Button>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card>
           <CardContent className="p-3">
@@ -821,6 +1194,7 @@ export function CustomerInvoicesSection({
                   <TableHead className="text-xs text-right">Paid</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Due date</TableHead>
+                  <TableHead className="text-xs">Created</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -843,6 +1217,9 @@ export function CustomerInvoicesSection({
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {format(new Date(inv.dueDate), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {formatSalesDateTime(inv.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -868,7 +1245,7 @@ export function CustomerInvoicesSection({
                   <TableHead className="text-xs">Mode</TableHead>
                   <TableHead className="text-xs text-right">Amount</TableHead>
                   <TableHead className="text-xs">Invoice status</TableHead>
-                  <TableHead className="text-xs">Date</TableHead>
+                  <TableHead className="text-xs">Created</TableHead>
                   <TableHead className="text-xs text-right">Receipt</TableHead>
                 </TableRow>
               </TableHeader>
@@ -892,7 +1269,7 @@ export function CustomerInvoicesSection({
                       <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      {format(new Date(p.createdAt), "MMM d, yyyy")}
+                      {formatSalesDateTime(p.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
@@ -906,6 +1283,7 @@ export function CustomerInvoicesSection({
           )}
         </CardContent>
       </Card>
+      {actionDialogs}
     </div>
   );
 }
@@ -1297,11 +1675,14 @@ export function CustomerInstallmentsSection({
   installments,
   payments,
   invoices,
+  customerId,
 }: {
   installments: Installment[];
   payments: SalesPayment[];
   invoices: SalesInvoice[];
+  customerId: number;
 }) {
+  const [createOpen, setCreateOpen] = useState(false);
   const stats = useMemo(() => {
     const paid = installments.filter((i) => i.status === "paid").length;
     const partial = installments.filter((i) => i.status === "partial").length;
@@ -1313,9 +1694,21 @@ export function CustomerInstallmentsSection({
     return { paid, partial, pending, upcoming };
   }, [installments]);
 
+  const createDialog = (
+    <CreateInstallmentDialog open={createOpen} onOpenChange={setCreateOpen} defaultCustomerId={customerId} />
+  );
+
   if (installments.length === 0) {
     return (
-      <SalesEmptyState title="No installments" description="Create installment plans from approved proposals." />
+      <>
+        <SalesEmptyState
+          title="No installments"
+          description="Open an approved proposal and use Create payment schedule to split it into milestones, then generate an invoice for each one."
+          actionLabel="View proposals"
+          onAction={() => { window.location.href = "/sales/proposals"; }}
+        />
+        {createDialog}
+      </>
     );
   }
 
@@ -1328,6 +1721,13 @@ export function CustomerInstallmentsSection({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          New installment
+        </Button>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-3"><p className="text-[10px] uppercase text-muted-foreground">Paid</p><p className="text-lg font-bold">{stats.paid}</p></CardContent></Card>
         <Card><CardContent className="p-3"><p className="text-[10px] uppercase text-muted-foreground">Partial</p><p className="text-lg font-bold">{stats.partial}</p></CardContent></Card>
@@ -1384,7 +1784,7 @@ export function CustomerInstallmentsSection({
                               {p.receiptNumber}
                             </Link>
                             <span className="tabular-nums">{formatCurrency(p.amount)}</span>
-                            <span className="text-muted-foreground">{format(new Date(p.createdAt), "MMM d")}</span>
+                            <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>
                           </div>
                         ))}
                       </div>
@@ -1396,6 +1796,7 @@ export function CustomerInstallmentsSection({
           </CardContent>
         </Card>
       ) : null}
+      {createDialog}
     </div>
   );
 }

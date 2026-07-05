@@ -3,9 +3,10 @@ import { Loader2, LogIn, LogOut } from "lucide-react";
 import { useWorkSession } from "@/contexts/WorkSessionContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMonitoringStatus, useConsentStatus } from "@/api/monitoring";
+import { useDailySessionTotals } from "@/api/work-sessions";
 import { isElectron } from "@/lib/electron-bridge";
 import { cn } from "@/lib/utils";
-import { getLiveActiveDurationMs } from "@/lib/work-session-utils";
+import { getLiveActiveDurationMs, getLiveDailyActiveMs } from "@/lib/work-session-utils";
 import { isClockableStaffRole, isMonitorableStaffRole } from "@/lib/user-roles";
 
 function formatDuration(ms: number): string {
@@ -28,6 +29,16 @@ export function ClockInButton() {
     !!user && isMonitorable && isElectron() && !!monitoring?.screenshotEnabled,
   );
 
+  const { data: dailyData } = useDailySessionTotals(
+    {},
+    { refetchInterval: isClockedIn ? 60_000 : false },
+  );
+  const todayKey = new Date().toLocaleDateString("en-CA");
+  const todayTotalMs =
+    dailyData?.data.find((row) => row.date === todayKey)?.totalMs ??
+    dailyData?.data[0]?.totalMs ??
+    0;
+
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isPending, setIsPending] = useState(false);
@@ -38,13 +49,19 @@ export function ClockInButton() {
       if (intervalRef.current) clearInterval(intervalRef.current);
       return;
     }
-    const tick = () => setElapsed(getLiveActiveDurationMs(activeSession));
+    const tick = () => {
+      if (!activeSession) return;
+      const sessionMs = getLiveActiveDurationMs(activeSession);
+      const dailyMs = getLiveDailyActiveMs(todayTotalMs, activeSession);
+      // Show today's total when it includes prior segments; otherwise this session only.
+      setElapsed(dailyMs > sessionMs + 60_000 ? dailyMs : sessionMs);
+    };
     tick();
     intervalRef.current = setInterval(tick, 1000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [activeSession]);
+  }, [activeSession, todayTotalMs]);
 
   if (!isClockable) return null;
 

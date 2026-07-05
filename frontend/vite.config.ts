@@ -57,29 +57,17 @@ export default defineConfig(({ mode }) => {
       outDir: path.resolve(appRoot, "dist/public"),
       emptyOutDir: true,
       chunkSizeWarningLimit: 600,
-      rollupOptions: {
-        output: {
-          // Only split heavy libs that do not share React init with the app shell.
-          // Custom react/radix chunks caused circular vendor ↔ vendor-react loads and
-          // "Cannot read properties of undefined (reading 'forwardRef')" in production.
-          manualChunks(id) {
-            if (!id.includes("node_modules")) return;
-
-            const nm = (pkg: string) =>
-              id.includes(`node_modules/${pkg}`) || id.includes(`node_modules\\${pkg}`);
-
-            if (nm("recharts") || nm("framer-motion") || nm("lottie-react") || nm("lottie-web")) {
-              return "vendor-charts-motion";
-            }
-            if (nm("date-fns") || nm("jspdf") || nm("jspdf-autotable")) {
-              return "vendor-utils";
-            }
-            if (nm("firebase")) {
-              return "vendor-firebase";
-            }
-          },
-        },
-      },
+      // No manualChunks: grouping recharts/framer-motion/lottie/firebase into
+      // fixed vendor chunks forced Rollup to also park shared React/ReactDOM
+      // CJS-interop shims inside those chunks (whichever chunk a CJS-interop
+      // lib lands in first "wins" the shims) — the entry then had to eagerly
+      // import that chunk just to bootstrap React, defeating route-level lazy
+      // loading. Letting Rollup's default splitting follow actual dynamic
+      // import boundaries keeps each lazy page's heavy deps out of the
+      // eagerly-loaded entry. (A prior *more aggressive* manual react/radix
+      // split broke production with "Cannot read properties of undefined
+      // (reading 'forwardRef')" — this removes chunking rules entirely rather
+      // than adjusting them, to stay on Rollup's well-tested automatic path.)
     },
     server: {
       port,
@@ -93,6 +81,25 @@ export default defineConfig(({ mode }) => {
         "/api": apiProxy,
         "/uploads": apiProxy,
         "/socket.io": socketProxy,
+      },
+      // Dev-mode only: Vite serves each source file as its own on-demand
+      // transform, so a route with a deep module graph (dashboards pulling in
+      // recharts/framer-motion + many sub-components) can take 10+ seconds to
+      // finish loading the *first* time it's visited in a session, even though
+      // the underlying API responds in under a second. Pre-transforming these
+      // entry points at server boot moves that cost off the first click.
+      warmup: {
+        clientFiles: [
+          "./src/components/layout/AuthenticatedShell.tsx",
+          "./src/components/layout/AppLayout.tsx",
+          "./src/components/layout/Sidebar.tsx",
+          "./src/components/layout/Navbar.tsx",
+          "./src/pages/hrm/Dashboard.tsx",
+          "./src/modules/hrm/HrmRichDashboard.tsx",
+          "./src/pages/admin/Dashboard.tsx",
+          "./src/pages/sales/Dashboard.tsx",
+          "./src/pages/finance/Dashboard.tsx",
+        ],
       },
     },
     preview: {

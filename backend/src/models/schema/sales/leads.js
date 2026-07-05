@@ -35,7 +35,7 @@ const leadSchema = new Schema(
       default: [],
       _id: false,
     },
-    customerId: { type: Number, ref: "SalesCustomers", default: null },
+    customerId: { type: Number, ref: "Clients", default: null },
     clientId: { type: Number, ref: "Clients", default: null },
     proposalId: { type: Number, ref: "SalesProposals", default: null },
     createdBy: { type: Number, ref: "Users", required: true },
@@ -46,6 +46,8 @@ const leadSchema = new Schema(
 leadSchema.index({ createdAt: -1 });
 leadSchema.index({ status: 1, assignedTo: 1 });
 leadSchema.index({ email: 1 });
+leadSchema.index({ assignedTo: 1, createdAt: -1 });
+leadSchema.index({ createdBy: 1, createdAt: -1 });
 
 const SalesLeads = mongoose.models.SalesLeads || mongoose.model("SalesLeads", leadSchema);
 

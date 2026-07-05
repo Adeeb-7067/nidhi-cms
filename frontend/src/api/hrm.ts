@@ -38,6 +38,7 @@ import type {
   HrmPolicyAcknowledgement,
   HrmAsset,
   HrmExitRequest,
+  HrmExperienceLetter,
 } from "@/modules/hrm/types";
 import type { HrmProfilePatchPayload } from "@/modules/hrm/employee-profile-types";
 import type { HrmAction, HrmModule } from "@/modules/hrm/constants";
@@ -53,13 +54,20 @@ export {
 } from "./permissions";
 
 export const hrmDepartmentsQueryKey = () => ["hrm", "departments"] as const;
-export const hrmDashboardQueryKey = () => ["hrm", "dashboard"] as const;
+export const hrmDashboardQueryKey = (trendDays: string = "30") => ["hrm", "dashboard", trendDays] as const;
 export const hrmLeaveRequestsQueryKey = (params?: object) => ["hrm", "leave", "requests", params] as const;
 export const hrmLeaveBalancesQueryKey = (userId?: number, year?: number) =>
   ["hrm", "leave", "balances", userId, year] as const;
 export const hrmWfhRequestsQueryKey = (params?: object) => ["hrm", "wfh", "requests", params] as const;
 export const hrmHolidaysQueryKey = (params?: object) => ["hrm", "holidays", params] as const;
 export const hrmAttendanceQueryKey = (params?: object) => ["hrm", "attendance", params] as const;
+
+/** Leave review changes attendance status — invalidate dependent caches together. */
+function invalidateLeaveWorkflowQueries(qc: QueryClient) {
+  qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
+  qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
+  qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+}
 export const hrmPayrollRunsQueryKey = () => ["hrm", "payroll", "runs"] as const;
 export const hrmShiftTemplatesQueryKey = () => ["hrm", "shifts", "templates"] as const;
 export const hrmSettingsQueryKey = () => ["hrm", "settings"] as const;
@@ -218,11 +226,11 @@ export function useHrmShiftAssignments(userId?: number) {
   });
 }
 
-export function useHrmDashboard() {
+export function useHrmDashboard(trendDays: string = "30") {
   return useHrmQuery({
-    queryKey: hrmDashboardQueryKey(),
+    queryKey: hrmDashboardQueryKey(trendDays),
     staleTime: QUERY_STALE.analytics,
-    queryFn: () => customFetch<HrmDashboardResponse>(apiUrl("/api/hrm/dashboard")),
+    queryFn: () => customFetch<HrmDashboardResponse>(apiUrl(`/api/hrm/dashboard?trendDays=${encodeURIComponent(trendDays)}`)),
     meta: { errorMessage: "Could not load HRM dashboard" },
   });
 }
@@ -291,7 +299,7 @@ export function useApplyLeaveRequest() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not submit leave request" },
   });
@@ -306,8 +314,7 @@ export function useReviewLeaveRequest() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      invalidateLeaveWorkflowQueries(qc);
     },
     meta: { errorMessage: "Could not update leave request" },
   });
@@ -320,7 +327,7 @@ export function useCancelLeaveRequest() {
       customFetch<HrmLeaveRequest>(apiUrl(`/api/hrm/leave/requests/${id}/cancel`), { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not cancel leave request" },
   });
@@ -367,7 +374,7 @@ export function useApplyWfhRequest() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "wfh"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not submit WFH request" },
   });
@@ -383,7 +390,7 @@ export function useReviewWfhRequest() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "wfh"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not update WFH request" },
   });
@@ -396,7 +403,7 @@ export function useCancelWfhRequest() {
       customFetch<HrmWfhRequest>(apiUrl(`/api/hrm/wfh/requests/${id}/cancel`), { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "wfh"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not cancel WFH request" },
   });
@@ -509,7 +516,7 @@ export function useApplyAttendanceCorrection() {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not submit correction" },
   });
@@ -552,7 +559,7 @@ export function useExcuseLateArrival() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
       qc.invalidateQueries({ queryKey: hrmAuditQueryKey() });
     },
     meta: { errorMessage: "Could not excuse late arrival" },
@@ -590,7 +597,7 @@ export function useAdminOverrideAttendance() {
       ),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["hrm", "attendance"] });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
       qc.invalidateQueries({ queryKey: hrmAuditQueryKey() });
     },
     meta: { errorMessage: "Could not update attendance" },
@@ -908,7 +915,7 @@ export function useMarkPayrollRunPaid() {
       customFetch<HrmPayrollRun>(apiUrl(`/api/hrm/payroll/runs/${runId}/paid`), { method: "POST" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: hrmPayrollRunsQueryKey() });
-      qc.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not mark payroll as paid" },
   });
@@ -1396,7 +1403,8 @@ export function useCreateExitRequest() {
       userId: number;
       reason: string;
       resignationDate: string;
-      lastWorkingDay: string;
+      lastWorkingDay?: string;
+      noticePeriodDays?: number;
       notes?: string;
     }) =>
       customFetch<HrmExitRequest>(apiUrl("/api/hrm/exit"), { method: "POST", body: JSON.stringify(body) }),
@@ -1458,4 +1466,122 @@ export function useCancelExitRequest() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "exit"] }),
     meta: { errorMessage: "Could not cancel exit request" },
   });
+}
+
+export const hrmLettersQueryKey = (search?: string) => ["hrm", "letters", search ?? ""] as const;
+export const hrmLetterDetailQueryKey = (id?: number) => ["hrm", "letters", "detail", id] as const;
+
+export function useHrmExperienceLetters(search?: string) {
+  const params = new URLSearchParams();
+  if (search?.trim()) params.set("search", search.trim());
+  const qs = params.toString();
+  return useHrmQuery({
+    queryKey: hrmLettersQueryKey(search),
+    queryFn: () =>
+      customFetch<{ letters: HrmExperienceLetter[] }>(
+        apiUrl(`/api/hrm/letters${qs ? `?${qs}` : ""}`),
+      ),
+    meta: { errorMessage: "Could not load experience letters" },
+  });
+}
+
+export function useHrmExperienceLetter(id?: number, options?: { enabled?: boolean }) {
+  return useHrmQuery({
+    queryKey: hrmLetterDetailQueryKey(id),
+    enabled: (options?.enabled ?? true) && id != null && id > 0,
+    queryFn: () => customFetch<HrmExperienceLetter>(apiUrl(`/api/hrm/letters/${id}`)),
+    meta: { errorMessage: "Could not load letter" },
+  });
+}
+
+export function usePreviewExperienceLetter() {
+  return useHrmMutation({
+    mutationFn: (body: {
+      userId: number;
+      relievingDate: string;
+      joiningDate?: string;
+      offeredCtc?: number;
+      letterType: "experience" | "relieving" | "offer";
+      additionalNotes?: string;
+    }) =>
+      customFetch<{
+        htmlContent: string;
+        employee: {
+          userId: number;
+          name: string;
+          employeeCode: string;
+          email: string;
+          designation: string;
+          departmentName: string;
+          joiningDate: string | null;
+        };
+        relievingDate: string;
+        letterType: string;
+        offeredCtc?: number | null;
+      }>(apiUrl("/api/hrm/letters/preview"), { method: "POST", body: JSON.stringify(body) }),
+    meta: { errorMessage: "Could not preview letter" },
+  });
+}
+
+export function useCreateExperienceLetter() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (body: {
+      userId: number;
+      relievingDate: string;
+      joiningDate?: string;
+      offeredCtc?: number;
+      letterType: "experience" | "relieving" | "offer";
+      additionalNotes?: string;
+    }) =>
+      customFetch<HrmExperienceLetter>(apiUrl("/api/hrm/letters"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "letters"] });
+    },
+    meta: { errorMessage: "Could not generate letter" },
+  });
+}
+
+export function useSendExperienceLetter() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<{
+        message: string;
+        emailSent: boolean;
+        emailConfigured: boolean;
+        email: string;
+      }>(apiUrl(`/api/hrm/letters/${id}/send`), { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "letters"] });
+    },
+    meta: { errorMessage: "Could not email letter" },
+  });
+}
+
+export function useDeleteExperienceLetter() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ message: string }>(apiUrl(`/api/hrm/letters/${id}`), { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "letters"] });
+    },
+    meta: { errorMessage: "Could not delete letter" },
+  });
+}
+
+export async function downloadExperienceLetterPdf(id: number, fileName: string) {
+  const blob = await customFetch<Blob>(apiUrl(`/api/hrm/letters/${id}/pdf`), {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
 }

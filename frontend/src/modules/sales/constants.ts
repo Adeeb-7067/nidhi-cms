@@ -131,6 +131,7 @@ export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   partial: "Partial",
   paid: "Paid",
   overdue: "Overdue",
+  cancelled: "Cancelled",
 };
 
 export const FINANCIAL_EVENT_LABELS: Record<FinancialEventType, string> = {

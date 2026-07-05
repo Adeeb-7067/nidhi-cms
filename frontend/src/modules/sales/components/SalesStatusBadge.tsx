@@ -69,6 +69,7 @@ const invoiceStyles: Record<string, string> = {
   unpaid: "bg-amber-500/10 text-amber-700 border-amber-500/25",
   partial: "bg-violet-500/10 text-violet-700 border-violet-500/25",
   overdue: "bg-red-500/10 text-red-600 border-red-500/25",
+  cancelled: "bg-gray-500/10 text-gray-600 border-gray-500/25",
 };
 
 const paymentStyles: Record<string, string> = {

@@ -13,6 +13,7 @@ import {
   type PaymentMethod,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -313,7 +314,7 @@ function InstallmentRow({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="tabular-nums font-semibold text-emerald-700">{formatCurrency(p.amount)}</span>
-                  <span className="text-muted-foreground text-[10px]">{format(new Date(p.createdAt), "MMM d")}</span>
+                  <span className="text-muted-foreground text-[10px] whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
                 </div>
               </div>
             ))

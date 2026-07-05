@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Package } from "lucide-react";
+import { Plus, Package, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -16,44 +16,129 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
-import { useListProducts, useCreateProduct, useUpdateProduct } from "@/api/sales";
+import {
+  useListProducts,
+  useCreateProduct,
+  useUpdateProduct,
+  useDeleteProduct,
+  type SalesProduct,
+} from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
+
+type ProductForm = {
+  name: string;
+  category: string;
+  price: string;
+  tax: string;
+  description: string;
+};
+
+const emptyForm = (): ProductForm => ({
+  name: "",
+  category: "Services",
+  price: "",
+  tax: "18",
+  description: "",
+});
 
 export default function Products() {
   const { data, isLoading, isError, refetch } = useListProducts();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
+  const deleteProduct = useDeleteProduct();
 
   const products = data?.products ?? [];
-  const [name, setName] = useState("");
-  const [category, setCategory] = useState("Services");
-  const [price, setPrice] = useState("");
-  const [tax, setTax] = useState("18");
-  const [description, setDescription] = useState("");
+  const [form, setForm] = useState<ProductForm>(emptyForm);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editing, setEditing] = useState<SalesProduct | null>(null);
+  const [editForm, setEditForm] = useState<ProductForm>(emptyForm);
+  const [deleteTarget, setDeleteTarget] = useState<SalesProduct | null>(null);
 
   const activeCount = useMemo(() => products.filter((p) => p.status === "active").length, [products]);
 
   const addProduct = async () => {
-    if (!name.trim() || !price) {
+    if (!form.name.trim() || !form.price) {
       toast.error("Name and price are required");
       return;
     }
     try {
       await createProduct.mutateAsync({
-        name: name.trim(),
-        category,
-        price: Number(price),
-        taxPercent: Number(tax),
-        description: description.trim() || undefined,
+        name: form.name.trim(),
+        category: form.category,
+        price: Number(form.price),
+        taxPercent: Number(form.tax),
+        description: form.description.trim() || undefined,
       });
       toast.success("Product added");
-      setName("");
-      setPrice("");
-      setDescription("");
+      setForm(emptyForm());
     } catch (err) {
       toastApiError(err, "Failed to add product");
+    }
+  };
+
+  const openEdit = (product: SalesProduct) => {
+    setEditing(product);
+    setEditForm({
+      name: product.name,
+      category: product.category ?? "Services",
+      price: String(product.price),
+      tax: String(product.taxPercent),
+      description: product.description ?? "",
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    if (!editForm.name.trim() || !editForm.price) {
+      toast.error("Name and price are required");
+      return;
+    }
+    try {
+      await updateProduct.mutateAsync({
+        id: editing.id,
+        name: editForm.name.trim(),
+        category: editForm.category,
+        price: Number(editForm.price),
+        taxPercent: Number(editForm.tax),
+        description: editForm.description.trim() || null,
+      });
+      toast.success("Product updated");
+      setEditOpen(false);
+      setEditing(null);
+    } catch (err) {
+      toastApiError(err, "Failed to update product");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteProduct.mutateAsync(deleteTarget.id);
+      toast.success("Product deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toastApiError(err, "Failed to delete product");
     }
   };
 
@@ -90,25 +175,25 @@ export default function Products() {
           <CardContent className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs">Name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="CRM Implementation" />
+              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="CRM Implementation" />
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Category</Label>
-              <Input value={category} onChange={(e) => setCategory(e.target.value)} />
+              <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1.5">
                 <Label className="text-xs">Price (₹)</Label>
-                <Input type="number" value={price} onChange={(e) => setPrice(e.target.value)} />
+                <Input type="number" value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs">GST %</Label>
-                <Input type="number" value={tax} onChange={(e) => setTax(e.target.value)} />
+                <Input type="number" value={form.tax} onChange={(e) => setForm((f) => ({ ...f, tax: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Description</Label>
-              <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Optional details" />
+              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional details" />
             </div>
             <Button size="sm" className="w-full" onClick={addProduct} disabled={createProduct.isPending}>
               {createProduct.isPending ? "Saving…" : "Save product"}
@@ -136,6 +221,8 @@ export default function Products() {
                     <TableHead className="text-xs text-right">Price</TableHead>
                     <TableHead className="text-xs text-right">Tax</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">Created</TableHead>
+                    <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -155,6 +242,33 @@ export default function Products() {
                           disabled={updateProduct.isPending}
                         />
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatSalesDateTime(p.createdAt)}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            title="Edit product"
+                            onClick={() => openEdit(p)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            title="Delete product"
+                            onClick={() => setDeleteTarget(p)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -163,6 +277,72 @@ export default function Products() {
           )}
         </div>
       </div>
+
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setEditing(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit product</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Category</Label>
+              <Input value={editForm.category} onChange={(e) => setEditForm((f) => ({ ...f, category: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Price (₹)</Label>
+                <Input type="number" value={editForm.price} onChange={(e) => setEditForm((f) => ({ ...f, price: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">GST %</Label>
+                <Input type="number" value={editForm.tax} onChange={(e) => setEditForm((f) => ({ ...f, tax: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Description</Label>
+              <Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(false)} disabled={updateProduct.isPending}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={saveEdit} disabled={updateProduct.isPending}>
+              {updateProduct.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete product?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget
+                ? `This will permanently remove "${deleteTarget.name}" from the catalog. This cannot be undone.`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteProduct.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteProduct.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                void handleDelete();
+              }}
+            >
+              {deleteProduct.isPending ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PortalPageShell>
   );
 }

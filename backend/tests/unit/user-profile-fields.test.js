@@ -7,6 +7,7 @@ import {
   buildSelfServiceProfilePatchSet,
   pickSelfServiceProfileBody,
   formatUserProfileFields,
+  normalizeSalary,
 } from "../../src/utils/user-profile-fields.js";
 
 describe("buildUserProfileCreateFields", () => {
@@ -101,6 +102,19 @@ describe("formatUserProfileFields", () => {
     assert.equal(out.aadharNumber, 123456789012);
     assert.equal(out.panNumber, "ABCDE1234F");
     assert.equal(out.idProofUrl, "https://example.com/id.pdf");
+  });
+});
+
+describe("normalizeSalary", () => {
+  test("preserves netSalary when gross components are zero", () => {
+    const out = normalizeSalary({ netSalary: 42000 });
+    assert.equal(out.netSalary, 42000);
+    assert.equal(out.basicSalary, 0);
+  });
+
+  test("recomputes net from components when stored net is zero", () => {
+    const out = normalizeSalary({ basicSalary: 50000, allowances: 5000, deductions: 2000, netSalary: 0 });
+    assert.equal(out.netSalary, 53000);
   });
 });
 

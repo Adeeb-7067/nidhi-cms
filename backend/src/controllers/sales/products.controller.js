@@ -57,4 +57,12 @@ async function updateProduct(req, res) {
   res.json(updated);
 }
 
-export { listProducts, createProduct, updateProduct };
+async function deleteProduct(req, res) {
+  const id = parseIdParam(req.params.id, "product id");
+  const product = await SalesProducts.findOne({ id }).lean();
+  if (!product) notFound("Product");
+  await SalesProducts.deleteOne({ id });
+  res.json({ success: true, id });
+}
+
+export { listProducts, createProduct, updateProduct, deleteProduct };

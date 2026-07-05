@@ -23,6 +23,7 @@ import { getHrmPolicyContext, workDayKeyForDate, minutesInTimezone } from "./hrm
 import { resolveContractSalary } from "./payroll-compute.js";
 
 const PENDING_PREVIEW_LIMIT = 8;
+const DASHBOARD_TREND_DAYS = new Set([7, 30, 90, 180]);
 
 export function resolveDashboardView(role) {
   if (role === "super_admin" || isHrmAdminRole(role)) return "admin";
@@ -36,6 +37,11 @@ export function computeAttendanceMonthPct(summaries) {
   if (workingDays.length === 0) return 0;
   const present = workingDays.filter((s) => isPresentLikeStatus(s.status)).length;
   return Math.round((present / workingDays.length) * 100);
+}
+
+function parseDashboardTrendDays(rawValue) {
+  const value = Number.parseInt(String(rawValue ?? "30"), 10);
+  return DASHBOARD_TREND_DAYS.has(value) ? value : 30;
 }
 
 const TODAY_STATUS_LABELS = {
@@ -137,19 +143,26 @@ function dobToUpcomingDate(dob, fromDate, year) {
   return { date: dateKey, candidate };
 }
 
-/** Upcoming employee birthdays within the next N days. */
-export async function buildUpcomingBirthdays(scopeUserIds, daysAhead = 90) {
-  const filter = {
-    role: { $in: hrmEmployeeRoles },
-    status: "active",
-    dob: { $ne: null },
-  };
+/**
+ * Active employee roster shared by dashboard widgets that would otherwise each
+ * re-query the same role+status set (department strength, top earners, birthdays).
+ */
+async function loadActiveEmployeeRoster(scopeUserIds) {
+  const filter = { role: { $in: hrmEmployeeRoles }, status: "active" };
   if (scopeUserIds?.length) filter.id = { $in: scopeUserIds };
 
-  const employees = await usersTable
+  return usersTable
     .find(filter)
-    .select({ id: 1, name: 1, employeeId: 1, dob: 1, avatarUrl: 1 })
+    .select({
+      id: 1, name: 1, employeeId: 1, avatarUrl: 1, departmentId: 1, department: 1,
+      designation: 1, salary: 1, dob: 1,
+    })
     .lean();
+}
+
+/** Upcoming employee birthdays within the next N days. */
+export function buildUpcomingBirthdays(employees, daysAhead = 90) {
+  employees = employees.filter((e) => e.dob != null);
 
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
@@ -172,6 +185,8 @@ export async function buildUpcomingBirthdays(scopeUserIds, daysAhead = 90) {
       userName: emp.name,
       employeeId: emp.employeeId ?? null,
       avatarUrl: emp.avatarUrl ?? null,
+      departmentId: emp.departmentId ?? null,
+      departmentName: emp.department ?? null,
       date: match.date,
     });
   }
@@ -210,27 +225,20 @@ async function buildDashboardAnalyticsFromSummaries(rangeSummaries, todayKey) {
   };
 }
 
-async function enrichSummaryUsers(summaryRows, pickFields = (s) => s) {
-  if (!summaryRows.length) return [];
-  const users = await usersTable.find(
-    { id: { $in: summaryRows.map((s) => s.userId) } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  return summaryRows.map((s) => {
-    const u = userMap.get(s.userId);
-    return pickFields(s, u);
-  });
-}
-
-async function buildOnLeaveTodayFromSummaries(todaySummaries) {
-  const onLeave = todaySummaries.filter((s) => s.status === "on_leave");
-  return enrichSummaryUsers(onLeave, (s, u) => ({
-    userId: s.userId,
-    userName: u?.name ?? s.userName ?? "Unknown",
-    employeeId: u?.employeeId ?? s.employeeId ?? null,
-    avatarUrl: u?.avatarUrl ?? null,
-  }));
+// computeUserDaySummary / dailyAttendanceToSummary already embed userName, employeeId,
+// avatarUrl, departmentId, departmentName on every summary row at construction time — no
+// need to re-fetch usersTable here just to attach the same fields a second time.
+function buildOnLeaveTodayFromSummaries(todaySummaries) {
+  return todaySummaries
+    .filter((s) => s.status === "on_leave")
+    .map((s) => ({
+      userId: s.userId,
+      userName: s.userName ?? "Unknown",
+      employeeId: s.employeeId ?? null,
+      avatarUrl: s.avatarUrl ?? null,
+      departmentId: s.departmentId ?? null,
+      departmentName: s.departmentName ?? null,
+    }));
 }
 
 async function buildOnWfhTodayFromSummaries(todaySummaries) {
@@ -238,46 +246,28 @@ async function buildOnWfhTodayFromSummaries(todaySummaries) {
   if (settings.hrmGlobalWfhMode === true) {
     return [];
   }
-  const onWfh = todaySummaries.filter((s) => s.status === "wfh");
-  return enrichSummaryUsers(onWfh, (s, u) => ({
-    userId: s.userId,
-    userName: u?.name ?? s.userName ?? "Unknown",
-    employeeId: u?.employeeId ?? s.employeeId ?? null,
-    avatarUrl: u?.avatarUrl ?? null,
-  }));
+  return todaySummaries
+    .filter((s) => s.status === "wfh")
+    .map((s) => ({
+      userId: s.userId,
+      userName: s.userName ?? "Unknown",
+      employeeId: s.employeeId ?? null,
+      avatarUrl: s.avatarUrl ?? null,
+      departmentId: s.departmentId ?? null,
+      departmentName: s.departmentName ?? null,
+    }));
 }
 
-async function buildTodayAttendanceRowsFromSummaries(todaySummaries, todayKey) {
-  const rows = todaySummaries.filter((s) => !["weekend", "holiday"].includes(s.status));
-  if (!rows.length) return [];
-
-  const userIds = [...new Set(rows.map((s) => s.userId))];
-  const users = await usersTable.find(
-    { id: { $in: userIds } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  const { timezone } = await getHrmPolicyContext();
-  const firstSessionMap = await loadFirstSessionStarts(userIds, todayKey, todayKey, timezone);
-
-  return rows
-    .map((s) => {
-      const u = userMap.get(s.userId);
-      return {
-        userId: s.userId,
-        userName: u?.name ?? s.userName ?? "Unknown",
-        employeeId: u?.employeeId ?? s.employeeId ?? null,
-        avatarUrl: u?.avatarUrl ?? null,
-        status: s.status,
-        activeMinutes: s.activeMinutes,
-        expectedMinutes: s.expectedMinutes,
-        clockIn: (() => {
-          const startedAt = firstSessionMap.get(`${s.userId}:${todayKey}`);
-          return startedAt ? new Date(startedAt).toISOString() : null;
-        })(),
-      };
-    })
-    .sort((a, b) => a.userName.localeCompare(b.userName));
+/**
+ * Full today-attendance grid rows, reusing the summary rows computed once for the
+ * dashboard's trend range — no extra queries needed (firstClockIn/lastClockOut and
+ * user fields are already resolved on each row).
+ */
+function buildTodayAttendanceRowsFromSummaries(todaySummaries) {
+  return todaySummaries
+    .filter((s) => !["weekend", "holiday"].includes(s.status))
+    .slice()
+    .sort((a, b) => (a.userName ?? "").localeCompare(b.userName ?? ""));
 }
 
 function filterSummariesByUserIds(summaries, userIds) {
@@ -295,60 +285,6 @@ function monthBoundsForDate(date) {
   return { year, month, startDate, endDate };
 }
 
-async function buildOnLeaveTodayList(scopeUserIds) {
-  const { timezone } = await getHrmPolicyContext();
-  const today = workDayKeyForDate(new Date(), timezone);
-  const { summaries } = await getAttendanceDailySummaries({
-    startDate: today,
-    endDate: today,
-    userIds: scopeUserIds ?? undefined,
-  });
-  const onLeave = summaries.filter((s) => s.status === "on_leave");
-  if (!onLeave.length) return [];
-
-  const users = await usersTable.find(
-    { id: { $in: onLeave.map((s) => s.userId) } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  return onLeave.map((s) => {
-    const u = userMap.get(s.userId);
-    return {
-      userId: s.userId,
-      userName: u?.name ?? "Unknown",
-      employeeId: u?.employeeId ?? null,
-      avatarUrl: u?.avatarUrl ?? null,
-    };
-  });
-}
-
-async function buildOnWfhTodayList(scopeUserIds) {
-  const { timezone } = await getHrmPolicyContext();
-  const today = workDayKeyForDate(new Date(), timezone);
-  const { summaries } = await getAttendanceDailySummaries({
-    startDate: today,
-    endDate: today,
-    userIds: scopeUserIds ?? undefined,
-  });
-  const onWfh = summaries.filter((s) => s.status === "wfh");
-  if (!onWfh.length) return [];
-
-  const users = await usersTable.find(
-    { id: { $in: onWfh.map((s) => s.userId) } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  return onWfh.map((s) => {
-    const u = userMap.get(s.userId);
-    return {
-      userId: s.userId,
-      userName: u?.name ?? s.userName ?? "Unknown",
-      employeeId: u?.employeeId ?? s.employeeId ?? null,
-      avatarUrl: u?.avatarUrl ?? null,
-    };
-  });
-}
-
 export async function buildEmployeeStatusBreakdown() {
   const [active, inactive] = await Promise.all([
     usersTable.countDocuments({ role: { $in: hrmEmployeeRoles }, status: "active" }),
@@ -358,42 +294,6 @@ export async function buildEmployeeStatusBreakdown() {
     { name: "Active", value: active },
     { name: "Inactive", value: inactive },
   ].filter((r) => r.value > 0);
-}
-
-async function buildTodayAttendanceRows(scopeUserIds, todayKey) {
-  const { summaries } = await getAttendanceDailySummaries({
-    startDate: todayKey,
-    endDate: todayKey,
-    userIds: scopeUserIds ?? undefined,
-  });
-  const rows = summaries.filter((s) => !["weekend", "holiday"].includes(s.status));
-  if (!rows.length) return [];
-
-  const userIds = [...new Set(rows.map((s) => s.userId))];
-  const users = await usersTable.find(
-    { id: { $in: userIds } },
-    { id: 1, name: 1, employeeId: 1, avatarUrl: 1 },
-  ).lean();
-  const userMap = new Map(users.map((u) => [u.id, u]));
-  const { timezone } = await getHrmPolicyContext();
-  const firstSessionMap = await loadFirstSessionStarts(userIds, todayKey, todayKey, timezone);
-
-  return rows
-    .map((s) => {
-      const u = userMap.get(s.userId);
-      const startedAt = firstSessionMap.get(`${s.userId}:${todayKey}`);
-      return {
-        userId: s.userId,
-        userName: s.userName ?? u?.name ?? "Unknown",
-        employeeId: s.employeeId ?? u?.employeeId ?? null,
-        avatarUrl: u?.avatarUrl ?? null,
-        status: s.status,
-        activeMinutes: s.activeMinutes ?? 0,
-        clockIn: startedAt ? new Date(startedAt).toISOString() : null,
-      };
-    })
-    .sort((a, b) => a.userName.localeCompare(b.userName))
-    .slice(0, 25);
 }
 
 export async function buildLeaveByTypeStats(scopeUserIds) {
@@ -470,13 +370,7 @@ export function buildNeedsAttention({ stats, payrollBanner }) {
   return items.slice(0, 5);
 }
 
-async function buildTopEarners(limit = 5) {
-  const staff = await usersTable
-    .find(
-      { role: { $in: hrmEmployeeRoles }, status: "active" },
-      { id: 1, name: 1, employeeId: 1, avatarUrl: 1, designation: 1, salary: 1 },
-    )
-    .lean();
+async function buildTopEarners(staff, limit = 5) {
   if (!staff.length) return [];
 
   const structureRows = await salaryStructuresTable
@@ -501,6 +395,8 @@ async function buildTopEarners(limit = 5) {
       userName: row.user.name ?? "Unknown",
       employeeId: row.user.employeeId ?? null,
       avatarUrl: row.user.avatarUrl ?? null,
+      departmentId: row.user.departmentId ?? null,
+      departmentName: row.user.department ?? null,
       designation: row.user.designation ?? null,
       gross: Math.round(row.contract.gross ?? 0),
       net: Math.round(row.contract.contractNet ?? 0),
@@ -574,11 +470,7 @@ async function buildEmployeeSelfSummary(userId) {
   };
 }
 
-async function buildDepartmentStrength() {
-  const users = await usersTable.find(
-    { role: { $in: hrmEmployeeRoles }, status: "active" },
-    { departmentId: 1 },
-  ).lean();
+async function buildDepartmentStrength(users) {
   const deptIds = [...new Set(users.map((u) => u.departmentId).filter(Boolean))];
   const depts = deptIds.length
     ? await departmentsTable.find({ id: { $in: deptIds } }, { id: 1, name: 1 }).lean()
@@ -616,6 +508,7 @@ async function buildPayrollBanner() {
   const paidOut = run.status === "paid" ? totalNet : 0;
   const yetToPay = Math.max(0, totalNet - paidOut);
   const payrollProgressPct = totalNet > 0 ? Math.round((paidOut / totalNet) * 100) : 0;
+  const yetToPayEmployeeCount = yetToPay > 0 ? lines.length : 0;
 
   return {
     year: run.year,
@@ -626,6 +519,7 @@ async function buildPayrollBanner() {
     totalDeductions: Math.round(totalDeductions),
     paidOut: Math.round(paidOut),
     yetToPay: Math.round(yetToPay),
+    yetToPayEmployeeCount,
     payrollProgressPct,
     employeeCount: lines.length,
   };
@@ -653,7 +547,10 @@ function slimLeaveRequest(row) {
     id: row.id,
     userId: row.userId,
     userName: row.userName,
+    employeeId: row.employeeId ?? null,
     avatarUrl: row.avatarUrl ?? null,
+    departmentId: row.departmentId ?? null,
+    departmentName: row.departmentName ?? null,
     startDate: row.startDate,
     endDate: row.endDate,
     days: row.days,
@@ -667,7 +564,10 @@ function slimWfhRequest(row) {
     id: row.id,
     userId: row.userId,
     userName: row.userName,
+    employeeId: row.employeeId ?? null,
     avatarUrl: row.avatarUrl ?? null,
+    departmentId: row.departmentId ?? null,
+    departmentName: row.departmentName ?? null,
     startDate: row.startDate,
     endDate: row.endDate,
     status: row.status,
@@ -679,7 +579,8 @@ export async function getHrmDashboard(req) {
   const scopeUserIds = await resolveScopedUserIds(req, undefined);
   const policy = await getHrmPolicyContext();
   const todayKey = workDayKeyForDate(new Date(), policy.timezone);
-  const trendStart = shiftDateKey(todayKey, -29);
+  const trendDays = parseDashboardTrendDays(req.query?.trendDays);
+  const trendStart = shiftDateKey(todayKey, -(trendDays - 1));
 
   const fetchUserIds = view === "employee" ? [req.user.id] : scopeUserIds ?? undefined;
   const { summaries: rangeSummaries } = await getAttendanceDailySummaries({
@@ -719,18 +620,19 @@ export async function getHrmDashboard(req) {
     const reportIds = await getDirectReportIds(req.user.id);
     const managerScope = reportIds.length ? [req.user.id, ...reportIds] : [req.user.id];
     const managerToday = filterSummariesByUserIds(todaySummaries, managerScope);
-    const [leave, wfh, leaveByType, leaveRequestStats, wfhRequestStats, upcomingBirthdays, insights] =
+    const [leave, wfh, leaveByType, leaveRequestStats, wfhRequestStats, managerRoster, insights] =
       await Promise.all([
       listLeaveRequests({ userIds: reportIds, status: "pending" }),
       listWfhRequests({ userIds: reportIds, status: "pending" }),
       buildLeaveByTypeStats(managerScope),
       buildLeaveRequestStats(managerScope),
       buildWfhRequestStats(managerScope),
-      buildUpcomingBirthdays(managerScope),
+      loadActiveEmployeeRoster(managerScope),
       buildDashboardInsights(managerToday, todayKey, req.user.id),
     ]);
+    const upcomingBirthdays = buildUpcomingBirthdays(managerRoster);
     payload.onWfhToday = await buildOnWfhTodayFromSummaries(managerToday);
-    payload.todayAttendance = await buildTodayAttendanceRowsFromSummaries(managerToday, todayKey);
+    payload.todayAttendance = buildTodayAttendanceRowsFromSummaries(managerToday);
     payload.leaveByType = leaveByType;
     payload.leaveRequestStats = leaveRequestStats;
     payload.wfhRequestStats = wfhRequestStats;
@@ -751,34 +653,34 @@ export async function getHrmDashboard(req) {
     const [
       leave,
       wfh,
-      departmentStrength,
+      roster,
       payrollBanner,
       employeeStatus,
       leaveByType,
       leaveRequestStats,
       wfhRequestStats,
-      topEarners,
       recentActivity,
       onWfhToday,
-      todayAttendance,
-      upcomingBirthdays,
       insights,
     ] = await Promise.all([
       listLeaveRequests({ status: "pending" }),
       listWfhRequests({ status: "pending" }),
-      buildDepartmentStrength(),
+      loadActiveEmployeeRoster(null),
       buildPayrollBanner(),
       buildEmployeeStatusBreakdown(),
       buildLeaveByTypeStats(null),
       buildLeaveRequestStats(null),
       buildWfhRequestStats(null),
-      buildTopEarners(),
       buildRecentActivity(),
       buildOnWfhTodayFromSummaries(todaySummaries),
-      buildTodayAttendanceRowsFromSummaries(todaySummaries, todayKey),
-      buildUpcomingBirthdays(null),
       buildDashboardInsights(todaySummaries, todayKey, req.user.id),
     ]);
+    const [departmentStrength, topEarners] = await Promise.all([
+      buildDepartmentStrength(roster),
+      buildTopEarners(roster),
+    ]);
+    const upcomingBirthdays = buildUpcomingBirthdays(roster);
+    const todayAttendance = buildTodayAttendanceRowsFromSummaries(todaySummaries);
     payload.pendingApprovals = {
       leave: leave.slice(0, PENDING_PREVIEW_LIMIT).map(slimLeaveRequest),
       wfh: wfh.slice(0, PENDING_PREVIEW_LIMIT).map(slimWfhRequest),

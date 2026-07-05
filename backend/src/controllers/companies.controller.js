@@ -2,8 +2,6 @@ import {
   clientsTable,
   projectsTable,
   ticketsTable,
-  usersTable,
-  getNextSequence
 } from "../models/schema/index.js";
 import {
   formatCompanyRecord,
@@ -11,7 +9,7 @@ import {
   getCompanyActivity,
 } from "../mappers/company-format.js";
 import { formatProject } from "../mappers/project-format.js";
-import { createClientPortalUser } from "../services/client-portal.js";
+import { createClientCompanyRecord } from "../services/client-company-provision.js";
 import { assertCompanyAccess } from "../services/access/access-helpers.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import {
@@ -42,71 +40,35 @@ async function getCompanies(req, res) {
   res.json({ companies: formatted, clients: formatted, total, page: pageNum, limit: limitNum });
 }
 async function postCompanies(req, res) {
-  const {
-    companyName,
-    contactPerson,
-    primaryContact,
-    email,
-    portalEmail,
-    password,
-    phone,
-    address,
-    gstNumber: gstNumberBody,
-    businessId: legacyBusinessId,
-    logoUrl,
-    logo,
-    status,
-    industry,
-    website,
-    tier,
-    companyCode
-  } = req.body;
-  const coName = optionalString(companyName);
-  const contact = optionalString(contactPerson);
-  const mail = optionalString(email);
-  const pwd = optionalString(password);
-  if (!coName) badRequest("Company name is required.", "companyName");
-  if (!contact) badRequest("Contact person is required.", "contactPerson");
-  if (!mail) badRequest("Company contact email is required.", "email");
+  const body = req.body;
+  const pwd = optionalString(body.password);
   if (!pwd || pwd.length < 8) {
     badRequest("Portal password is required (at least 8 characters).", "password");
   }
-  const loginEmail = (optionalString(portalEmail) ?? mail).toLowerCase();
-  let userId = null;
-  try {
-    userId = await createClientPortalUser({
-      name: contact,
-      email: loginEmail,
-      password: pwd,
-      setByUserId: req.user.id,
-      setByLabel: req.user.name
-    });
-    const nextId = await getNextSequence("clients");
-    const company = await clientsTable.create({
-      id: nextId,
-      companyName: coName,
-      companyCode: optionalString(companyCode),
-      contactPerson: contact,
-      primaryContact: optionalString(primaryContact) ?? contact,
-      email: mail.toLowerCase(),
-      phone: optionalString(phone),
-      address: optionalString(address),
-      gstNumber: resolveGstNumber({ gstNumber: gstNumberBody, businessId: legacyBusinessId }),
-      logoUrl: logoUrl ?? logo,
-      logo: logo ?? logoUrl,
-      industry: optionalString(industry),
-      website: optionalString(website),
-      tier: optionalString(tier) ?? "Standard",
-      status: optionalString(status) ?? "active",
-      portalLogin: true,
-      userId,
-      createdBy: req.user.id
-    });
-    res.status(201).json(await formatCompanyRecord(company));
-  } catch (err) {
-    if (userId) await usersTable.deleteOne({ id: userId });
-    throw err;
-  }
+  const { client } = await createClientCompanyRecord({
+    companyName: optionalString(body.companyName),
+    contactPerson: optionalString(body.contactPerson),
+    primaryContact: optionalString(body.primaryContact),
+    email: optionalString(body.email),
+    enablePortal: true,
+    portalEmail: optionalString(body.portalEmail),
+    portalPassword: pwd,
+    phone: optionalString(body.phone),
+    address: optionalString(body.address),
+    gstNumber: optionalString(body.gstNumber),
+    businessId: optionalString(body.businessId),
+    logoUrl: body.logoUrl ?? body.logo,
+    logo: body.logo ?? body.logoUrl,
+    industry: optionalString(body.industry),
+    website: optionalString(body.website),
+    tier: optionalString(body.tier),
+    companyCode: optionalString(body.companyCode),
+    status: optionalString(body.status),
+    createdByUserId: req.user.id,
+    createdByLabel: req.user.name,
+    bootstrapDiscussion: true,
+  });
+  res.status(201).json(await formatCompanyRecord(client));
 }
 async function getCompaniesById(req, res) {
   const id = parseIdParam(req.params.id, "company id");

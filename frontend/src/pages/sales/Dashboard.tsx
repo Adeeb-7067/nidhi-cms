@@ -15,6 +15,7 @@ import {
   XCircle,
   BarChart2,
   ArrowRight,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,10 +97,12 @@ export default function SalesDashboard() {
     const rows = [
       ["Metric", "Value"],
       ["Revenue (month)", dash.totalRevenue ?? 0],
+      ["Total sales", dash.totalSales ?? dash.totalBilled ?? 0],
       ["Outstanding", dash.outstanding ?? 0],
       ["Leads today", dash.leads?.today ?? 0],
       ["Leads this week", dash.leads?.thisWeek ?? 0],
       ["Leads this month", dash.leads?.thisMonth ?? 0],
+      ["Leads closed", dash.totalLeadsClosed ?? dash.leads?.closed ?? 0],
       ["Total proposals", dash.totalProposals ?? 0],
       ["Pending invoices", dash.pendingInvoices ?? 0],
     ];
@@ -144,19 +147,21 @@ export default function SalesDashboard() {
         </div>
         {dashLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
           </div>
         ) : (
           <PortalKpiGrid
             columns={4}
-            count={6}
+            count={8}
             items={[
               { title: "Total leads", value: leadCount.toLocaleString(), icon: Users, accent: "blue", href: "/sales/leads", delay: 0 },
-              { title: "Active follow-ups", value: dash?.activeFollowUps ?? 0, icon: CalendarClock, accent: "amber", href: "/sales/follow-ups", delay: 1 },
-              { title: "Proposals", value: dash?.totalProposals ?? 0, icon: FileText, accent: "violet", href: "/sales/proposals", delay: 2 },
-              { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, icon: Receipt, accent: "sky", href: "/sales/invoices", delay: 3 },
-              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 4 },
-              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), icon: AlertCircle, accent: "red", alert: true, href: "/sales/payments", delay: 5 },
+              { title: "Leads closed", value: (dash?.totalLeadsClosed ?? dash?.leads?.closed ?? 0).toLocaleString(), hint: "Converted to customers", icon: CheckCircle2, accent: "violet", href: "/sales/leads", delay: 1 },
+              { title: "Active follow-ups", value: dash?.activeFollowUps ?? 0, icon: CalendarClock, accent: "amber", href: "/sales/follow-ups", delay: 2 },
+              { title: "Proposals", value: dash?.totalProposals ?? 0, icon: FileText, accent: "violet", href: "/sales/proposals", delay: 3 },
+              { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, icon: Receipt, accent: "sky", href: "/sales/invoices", delay: 4 },
+              { title: "Total sales", value: formatCompactCurrency(dash?.totalSales ?? dash?.totalBilled ?? 0), icon: ShoppingBag, accent: "green", href: "/sales/invoices", delay: 5 },
+              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 6 },
+              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), icon: AlertCircle, accent: "red", alert: true, href: "/sales/payments", delay: 7 },
             ]}
           />
         )}
@@ -175,8 +180,8 @@ export default function SalesDashboard() {
             columns={4}
             count={6}
             items={[
-              { title: "Total revenue", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/reports", delay: 0 },
-              { title: "Total billed", value: formatCompactCurrency(dash?.totalBilled ?? 0), icon: Receipt, accent: "blue", href: "/sales/invoices", delay: 1 },
+              { title: "Total sales", value: formatCompactCurrency(dash?.totalSales ?? dash?.totalBilled ?? 0), icon: ShoppingBag, accent: "green", href: "/sales/invoices", delay: 0 },
+              { title: "Total revenue", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/reports", delay: 1 },
               { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), hint: "Across all customers", icon: AlertCircle, accent: "red", alert: true, href: "/sales/installments", delay: 2 },
               { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, hint: "Awaiting collection", icon: Receipt, accent: "violet", href: "/sales/installments", delay: 3 },
               { title: "Active customers", value: dash?.activeCustomers ?? 0, icon: Users, accent: "sky", href: "/sales/customers", delay: 4 },

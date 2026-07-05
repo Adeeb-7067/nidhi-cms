@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
 
 function PortalSkeletonShell({
   label = "Loading",
@@ -9,9 +8,13 @@ function PortalSkeletonShell({
   label?: string;
   children: React.ReactNode;
 }) {
+  // Inlined `PortalPageShell`'s markup instead of importing it — that module
+  // pulls in dashboard-kit/framer-motion, and importing it here created a
+  // cycle with the "@/components/loading" barrel (page-skeletons <-> loading
+  // <-> portal-page-kit) that dragged framer-motion into the eager entry chunk.
   return (
     <div aria-busy="true" aria-label={label}>
-      <PortalPageShell>{children}</PortalPageShell>
+      <div className="space-y-4 pb-8">{children}</div>
     </div>
   );
 }

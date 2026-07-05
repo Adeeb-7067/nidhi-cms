@@ -1,6 +1,3 @@
-import path from "path";
-import fs from "fs/promises";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { employeeScreenshotsTable } from "../models/schema/index.js";
 import { getOrCreateSettings } from "./company-settings.js";
 import {
@@ -8,7 +5,8 @@ import {
   closeSessionsPastWorkDay,
   closeStaleHeartbeatSessions,
 } from "./work-sessions.service.js";
-import { isObjectStorageEnabled } from "../lib/object-storage.js";
+import { closeSessionsPastShiftEnd } from "./shift-end-clockout.service.js";
+import { deleteStoredFile } from "../lib/file-storage.js";
 import { logger } from "../lib/logger.js";
 import { isDatabaseConnected } from "../lib/db.js";
 
@@ -26,39 +24,6 @@ const HEARTBEAT_STALE_MINUTES = 10;
 // on startup — prevents a server restart from immediately killing sessions that had heartbeats
 // right before the downtime.
 const SERVER_STARTED_AT = Date.now();
-
-// Single S3 client shared across the purge run — avoid per-file client construction.
-let _s3Client = null;
-function getS3Client() {
-  if (!_s3Client) {
-    _s3Client = new S3Client({
-      region: process.env.LINODE_OBJECT_STORAGE_REGION || "sgp1",
-      endpoint: process.env.LINODE_OBJECT_STORAGE_ENDPOINT,
-      forcePathStyle: false,
-      credentials: {
-        accessKeyId: process.env.LINODE_OBJECT_STORAGE_ACCESS_KEY_ID,
-        secretAccessKey: process.env.LINODE_OBJECT_STORAGE_SECRET_ACCESS_KEY,
-      },
-    });
-  }
-  return _s3Client;
-}
-
-async function deleteStoredFile(fileUrl) {
-  if (!fileUrl) return;
-  if (/^https?:\/\//i.test(fileUrl)) {
-    if (!isObjectStorageEnabled()) return;
-    const key = new URL(fileUrl).pathname.slice(1);
-    await getS3Client().send(
-      new DeleteObjectCommand({ Bucket: process.env.LINODE_OBJECT_BUCKET, Key: key })
-    );
-  } else if (fileUrl.startsWith("/uploads/")) {
-    // Preserve the full subpath after /uploads/ — path.basename would strip subdirectories.
-    const relPath = fileUrl.slice("/uploads/".length);
-    const filePath = path.join(process.cwd(), "uploads", relPath);
-    await fs.unlink(filePath);
-  }
-}
 
 async function runScreenshotPurge() {
   if (!isDatabaseConnected()) {
@@ -124,6 +89,15 @@ async function runWorkDaySessionCleanup() {
   }
 }
 
+async function runShiftEndSessionCleanup() {
+  if (!isDatabaseConnected()) return;
+
+  const { closed, workDay } = await closeSessionsPastShiftEnd();
+  if (closed > 0) {
+    logger.info({ count: closed, workDay }, "Shift-end session cleanup: closed sessions past shift end");
+  }
+}
+
 async function runHeartbeatStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
@@ -160,6 +134,9 @@ function startScreenshotPurgeJob() {
   const heartbeatTick = () => {
     runWorkDaySessionCleanup().catch((err) =>
       logger.error({ err }, "Work-day session cleanup job failed")
+    );
+    runShiftEndSessionCleanup().catch((err) =>
+      logger.error({ err }, "Shift-end session cleanup job failed")
     );
     runStaleSessionCleanup().catch((err) =>
       logger.error({ err }, "Max-duration session cleanup job failed")

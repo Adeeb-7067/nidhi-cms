@@ -1,6 +1,6 @@
 import mongoose, { Schema } from "mongoose";
 
-const invoiceStatuses = ["unpaid", "partial", "paid", "overdue"];
+const invoiceStatuses = ["unpaid", "partial", "paid", "overdue", "cancelled"];
 
 const invoiceLineItemSchema = new Schema(
   {
@@ -19,7 +19,7 @@ const invoiceSchema = new Schema(
     id: { type: Number, unique: true, required: true },
     number: { type: String, unique: true, required: true },
     title: { type: String, default: null, trim: true },
-    customerId: { type: Number, ref: "SalesCustomers", required: true, index: true },
+    customerId: { type: Number, ref: "Clients", required: true, index: true },
     projectId: { type: Number, ref: "Projects", default: null, index: true },
     installmentId: { type: Number, ref: "SalesInstallments", default: null },
     proposalId: { type: Number, ref: "SalesProposals", default: null },
@@ -32,6 +32,9 @@ const invoiceSchema = new Schema(
     paidAmount: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: invoiceStatuses, default: "unpaid", required: true, index: true },
     dueDate: { type: Date, required: true },
+    cancelledAt: { type: Date, default: null },
+    cancelReason: { type: String, default: null, trim: true },
+    cancelledBy: { type: Number, ref: "Users", default: null },
   },
   { timestamps: true }
 );

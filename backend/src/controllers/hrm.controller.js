@@ -27,6 +27,7 @@ import * as documentsService from "../services/hrm/documents.service.js";
 import * as policiesService from "../services/hrm/policies.service.js";
 import * as assetsService from "../services/hrm/assets.service.js";
 import * as exitService from "../services/hrm/exit.service.js";
+import * as lettersService from "../services/hrm/letters.service.js";
 import { resolveScopedUserIds, resolveAttendanceScopedUserIds, assertCanAccessUser, assertCanViewAttendanceForUser, assertHrmEmployeeUser, resolveHrmEmployeeScope } from "../services/hrm/team-scope.js";
 import {
   getOrCreateSettings,
@@ -620,6 +621,7 @@ async function patchHrmSettings(req, res) {
     "hrmWeekendDays",
     "hrmGlobalWfhMode",
     "hrmPaidLeavesPerMonth",
+    "hrmLeaveResetCycleMonths",
     "hrmMaxFreeLates",
     "hrmElectronOnlyClock",
     "hrmLeaveCarryForwardStartYear",
@@ -816,6 +818,59 @@ async function postExitCancel(req, res) {
   res.json(await exitService.cancelExitRequest(id, req.user.id));
 }
 
+async function getExperienceLetters(req, res) {
+  res.json({
+    letters: await lettersService.listExperienceLetters({
+      search: req.query.search,
+      limit: req.query.limit,
+    }),
+  });
+}
+
+async function postExperienceLetterPreview(req, res) {
+  const userId = parseIdParam(req.body.userId, "employee id");
+  const { relievingDate, letterType, additionalNotes } = req.body ?? {};
+  res.json(await lettersService.previewExperienceLetter({ userId, relievingDate, letterType, additionalNotes }));
+}
+
+async function postExperienceLetter(req, res) {
+  const userId = parseIdParam(req.body.userId, "employee id");
+  const { relievingDate, letterType, additionalNotes } = req.body ?? {};
+  const letter = await lettersService.createExperienceLetter(req.user, {
+    userId,
+    relievingDate,
+    letterType,
+    additionalNotes,
+  });
+  res.status(201).json(letter);
+}
+
+async function getExperienceLetter(req, res) {
+  const id = parseIdParam(req.params.id, "letter id");
+  res.json(await lettersService.getExperienceLetter(id));
+}
+
+async function getExperienceLetterPdf(req, res) {
+  const id = parseIdParam(req.params.id, "letter id");
+  const letter = await lettersService.getExperienceLetter(id);
+  const pdfPath = await lettersService.getExperienceLetterPdfPath(id);
+  if (pdfPath && typeof pdfPath === "object" && pdfPath.remoteUrl) {
+    return res.redirect(pdfPath.remoteUrl);
+  }
+  const fileName = `${letter.letterType}_letter_${letter.employeeCode}.pdf`;
+  res.download(pdfPath, fileName);
+}
+
+async function postExperienceLetterSend(req, res) {
+  const id = parseIdParam(req.params.id, "letter id");
+  res.json(await lettersService.sendExperienceLetter(req.user, id));
+}
+
+async function deleteExperienceLetter(req, res) {
+  const id = parseIdParam(req.params.id, "letter id");
+  res.json(await lettersService.deleteExperienceLetter(req.user, id));
+}
+
 async function getAuditLogs(req, res) {
   const query = {};
   if (req.query.severity) query.severity = req.query.severity;
@@ -939,5 +994,12 @@ export {
   postExitAdvance,
   postExitReturnAssets,
   postExitCancel,
+  getExperienceLetters,
+  postExperienceLetterPreview,
+  postExperienceLetter,
+  getExperienceLetter,
+  getExperienceLetterPdf,
+  postExperienceLetterSend,
+  deleteExperienceLetter,
   getAuditLogs,
 };

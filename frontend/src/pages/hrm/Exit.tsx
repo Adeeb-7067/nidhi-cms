@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Check, LogOut, Plus, Package, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -63,6 +63,7 @@ type ExitForm = {
   userId: string;
   reason: string;
   resignationDate: string;
+  noticePeriodDays: string;
   lastWorkingDay: string;
   notes: string;
 };
@@ -71,6 +72,7 @@ const emptyForm = (): ExitForm => ({
   userId: "",
   reason: "",
   resignationDate: format(new Date(), "yyyy-MM-dd"),
+  noticePeriodDays: "30",
   lastWorkingDay: "",
   notes: "",
 });
@@ -95,11 +97,32 @@ export default function HrmExitPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<HrmExitRequest | null>(null);
   const [form, setForm] = useState<ExitForm>(emptyForm);
+  const [detailLastWorkingDay, setDetailLastWorkingDay] = useState("");
+  const [detailNotes, setDetailNotes] = useState("");
 
   const { data: detailData, isLoading: detailLoading } = useHrmExitRequest(detailId ?? undefined, {
     enabled: detailId != null,
   });
   const detail = detailData?.request ?? null;
+
+  useEffect(() => {
+    if (!form.resignationDate) return;
+    const resignationDate = new Date(`${form.resignationDate}T00:00:00`);
+    if (Number.isNaN(resignationDate.getTime())) return;
+    const noticePeriodDays = Math.max(0, Number(form.noticePeriodDays) || 0);
+    const computed = new Date(resignationDate);
+    computed.setDate(computed.getDate() + noticePeriodDays);
+    setForm((current) => ({
+      ...current,
+      lastWorkingDay: format(computed, "yyyy-MM-dd"),
+    }));
+  }, [form.resignationDate, form.noticePeriodDays]);
+
+  useEffect(() => {
+    if (!detail) return;
+    setDetailLastWorkingDay(format(new Date(detail.lastWorkingDay), "yyyy-MM-dd"));
+    setDetailNotes(detail.notes ?? "");
+  }, [detail?.id, detail?.lastWorkingDay, detail?.notes]);
 
   const kpiItems = useMemo(() => {
     const avgNotice =
@@ -126,8 +149,8 @@ export default function HrmExitPage() {
   };
 
   const submitCreate = async () => {
-    if (!form.userId || !form.reason.trim() || !form.resignationDate || !form.lastWorkingDay) {
-      toast.error("Employee, reason, and dates are required");
+    if (!form.userId || !form.reason.trim() || !form.resignationDate) {
+      toast.error("Employee, reason, and resignation date are required");
       return;
     }
     try {
@@ -135,7 +158,8 @@ export default function HrmExitPage() {
         userId: Number(form.userId),
         reason: form.reason.trim(),
         resignationDate: form.resignationDate,
-        lastWorkingDay: form.lastWorkingDay,
+        noticePeriodDays: Number(form.noticePeriodDays) || 0,
+        lastWorkingDay: form.lastWorkingDay || undefined,
         notes: form.notes.trim() || undefined,
       });
       toast.success("Exit workflow started");
@@ -176,6 +200,51 @@ export default function HrmExitPage() {
     try {
       await updateExit.mutateAsync({ id: detail.id, fnfSettled: !detail.fnfSettled });
       toast.success(detail.fnfSettled ? "FnF marked pending" : "FnF marked settled");
+    } catch {
+      // mutation toast
+    }
+  };
+
+  const handleSaveDetail = async () => {
+    if (!detail) return;
+    try {
+      await updateExit.mutateAsync({
+        id: detail.id,
+        lastWorkingDay: detailLastWorkingDay,
+        notes: detailNotes.trim(),
+      });
+      toast.success("Exit details updated");
+    } catch {
+      // mutation toast
+    }
+  };
+
+  const handleApprove = async () => {
+    if (!detail) return;
+    try {
+      await updateExit.mutateAsync({
+        id: detail.id,
+        approvalStatus: "approved",
+        lastWorkingDay: detailLastWorkingDay,
+        notes: detailNotes.trim(),
+      });
+      toast.success("Exit approved");
+    } catch {
+      // mutation toast
+    }
+  };
+
+  const handleReject = async () => {
+    if (!detail) return;
+    try {
+      await updateExit.mutateAsync({
+        id: detail.id,
+        approvalStatus: "rejected",
+        rejectionReason: detailNotes.trim() || undefined,
+        notes: detailNotes.trim(),
+      });
+      toast.success("Exit rejected");
+      setDetailId(null);
     } catch {
       // mutation toast
     }
@@ -249,6 +318,12 @@ export default function HrmExitPage() {
         </span>
       ),
       exportValue: (r) => `${r.stageLabel} (${r.stage}/${r.stageCount})`,
+    },
+    {
+      id: "approval",
+      header: "Approval",
+      cell: (r) => <span className="text-xs capitalize">{r.approvalStatus}</span>,
+      exportValue: (r) => r.approvalStatus,
     },
   ], []);
 
@@ -339,9 +414,39 @@ export default function HrmExitPage() {
                     label="Last working day"
                     value={format(new Date(detail.lastWorkingDay), "MMM d, yyyy")}
                   />
+                  <HrmRefDetailRow label="Notice period" value={`${detail.noticePeriodDays} days`} />
                   <HrmRefDetailRow label="Notice remaining" value={`${detail.noticeDaysRemaining} days`} />
+                  <HrmRefDetailRow label="Approval" value={detail.approvalStatus} />
+                  <HrmRefDetailRow label="Employee status" value={detail.employeeStatus ?? "—"} />
+                  {detail.autoDeactivatedAt ? (
+                    <HrmRefDetailRow
+                      label="Auto deactivated"
+                      value={format(new Date(detail.autoDeactivatedAt), "MMM d, yyyy")}
+                    />
+                  ) : null}
                   <HrmRefDetailRow label="Reason" value={detail.reason} />
                 </HrmRefDetailSection>
+
+                {canEdit ? (
+                  <HrmRefDetailSection title="Admin controls">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <HrmField label="Last working day">
+                        <Input
+                          type="date"
+                          value={detailLastWorkingDay}
+                          onChange={(e) => setDetailLastWorkingDay(e.target.value)}
+                        />
+                      </HrmField>
+                      <HrmField label="Notes / rejection reason">
+                        <Input
+                          value={detailNotes}
+                          onChange={(e) => setDetailNotes(e.target.value)}
+                          placeholder="Notes for approval, relieving date, or rejection"
+                        />
+                      </HrmField>
+                    </div>
+                  </HrmRefDetailSection>
+                ) : null}
 
                 <HrmRefDetailSection title="Workflow stages">
                   <div className="space-y-2">
@@ -402,7 +507,19 @@ export default function HrmExitPage() {
                   ) : null}
                   {canEdit ? (
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
-                      {detail.stage < EXIT_WORKFLOW_STAGES.length ? (
+                      <Button size="sm" variant="outline" onClick={handleSaveDetail} disabled={updateExit.isPending}>
+                        Save details
+                      </Button>
+                      {detail.approvalStatus === "pending" ? (
+                        <>
+                          <Button size="sm" className={portalActionButtonClass()} onClick={handleApprove} disabled={updateExit.isPending}>
+                            Approve exit
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={handleReject} disabled={updateExit.isPending}>
+                            Reject exit
+                          </Button>
+                        </>
+                      ) : detail.stage < EXIT_WORKFLOW_STAGES.length ? (
                         <Button size="sm" className={portalActionButtonClass()} onClick={handleAdvance} disabled={advanceExit.isPending}>
                           Advance stage
                         </Button>
@@ -453,6 +570,16 @@ export default function HrmExitPage() {
                     onChange={(e) => setForm({ ...form, resignationDate: e.target.value })}
                   />
                 </HrmField>
+                <HrmField label="Notice period (days)">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={form.noticePeriodDays}
+                    onChange={(e) => setForm({ ...form, noticePeriodDays: e.target.value })}
+                  />
+                </HrmField>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
                 <HrmField label="Last working day">
                   <Input
                     type="date"

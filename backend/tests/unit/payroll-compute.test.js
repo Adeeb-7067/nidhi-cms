@@ -219,6 +219,16 @@ describe("resolveContractSalary", () => {
     assert.equal(contract.source, "structure");
   });
 
+  test("uses profile net when basic is missing but netSalary is set", () => {
+    const contract = resolveContractSalary({
+      profileSalary: { netSalary: 42000 },
+    });
+    assert.equal(contract.configured, true);
+    assert.equal(contract.contractNet, 42000);
+    assert.equal(contract.payrollBase, 42000);
+    assert.equal(contract.source, "profile");
+  });
+
   test("returns unconfigured when no salary data exists", () => {
     const contract = resolveContractSalary({ profileSalary: {}, structureRow: {} });
     assert.equal(contract.configured, false);

@@ -39,7 +39,7 @@ export default function MarketingClients() {
       <MarketingPageHeader
         title="Assigned clients"
         description="Client accounts — packages, budgets, platforms, and renewal dates"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Clients" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Clients" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search clients, industry, account manager…" />

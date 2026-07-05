@@ -38,7 +38,7 @@ export default function MarketingMetaAds() {
       <MarketingPageHeader
         title="Meta Ads"
         description="Facebook & Instagram campaigns — objectives, budgets, audiences, and performance"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Meta Ads" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Meta Ads" }]}
       />
 
       <MarketingFilterBar

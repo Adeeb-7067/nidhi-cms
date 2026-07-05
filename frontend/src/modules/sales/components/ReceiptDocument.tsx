@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { COMPANY_BILLING, formatCurrency } from "../constants";
-import { numberToWords } from "../utils";
+import { numberToWords, formatSalesDateTime } from "../utils";
 import type { PaymentReceipt } from "../types";
 
 const primary = "#1A56DB";
@@ -99,7 +99,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
               Receipt date
             </p>
             <p className="text-sm font-semibold" style={{ color: dark }}>
-              {format(new Date(receipt.generatedAt), "dd MMM yyyy")}
+              {formatSalesDateTime(receipt.generatedAt)}
             </p>
           </div>
           <div className="text-right">
@@ -156,10 +156,9 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
         style={{ borderTop: `1px dashed ${border}`, background: rowAlt }}
       >
         <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-6" style={{ color: subtle }}>
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>
             Received by
           </p>
-          <div className="h-px w-36 mb-2" style={{ background: muted }} />
           <p className="text-xs font-semibold" style={{ color: dark }}>{receipt.companyName}</p>
         </div>
         <div className="text-right">

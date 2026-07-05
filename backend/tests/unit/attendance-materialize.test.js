@@ -149,6 +149,26 @@ describe("resolveAttendanceStatus — simplified rules", () => {
     assert.equal(result.status, "on_leave");
   });
 
+  test("full-day leave stays on_leave even when employee clocked in before approval", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: { id: 1, dayPart: "full" },
+      wfh: null,
+      globalWfhMode: false,
+      activeMinutes: 480,
+      expectedMinutes: 0,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
+      shift,
+      timezone,
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "on_leave");
+    assert.equal(result.leaveRequestId, 1);
+  });
+
   test("under minimum active minutes on weekday is absent", () => {
     const result = resolveAttendanceStatus({
       date: "2026-06-18",

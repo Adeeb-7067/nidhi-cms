@@ -12,6 +12,8 @@ import {
 
   getNextSequence,
 
+  getNextSequenceRange,
+
 } from "../../models/schema/index.js";
 
 import { dailyAttendanceTable } from "../../models/schema/hrm/daily-attendance.js";
@@ -64,6 +66,20 @@ function monthBounds(year, month) {
 
   return { startDate, endDate };
 
+}
+
+function summarizeApprovedLeaveForPeriod(leaveRequests, startDate, endDate, weekendDays, holidayDates) {
+  const leaveByDate = buildLeavePayrollByDate(leaveRequests ?? [], { startDate, endDate, weekendDays, holidayDates });
+  let paidSum = 0;
+  let lopSum = 0;
+  for (const row of leaveByDate.values()) {
+    paidSum += Number(row?.paid ?? 0);
+    lopSum += Number(row?.lop ?? 0);
+  }
+  return {
+    approvedLeaveDaysUsed: Math.round((paidSum + lopSum) * 100) / 100,
+    unpaidLeaveDays: Math.round(lopSum * 100) / 100,
+  };
 }
 
 
@@ -144,11 +160,13 @@ function stripBankFields(body) {
 async function syncPayslipsForRun(runId, session = null) {
   const run = await payrollRunsTable.findOne({ id: runId }).lean();
   if (!run) return;
+  const { startDate, endDate } = monthBounds(run.year, run.month);
 
   const lines = await payrollLinesTable.find({ payrollRunId: runId }).lean();
   if (!lines.length) return;
 
   const settings = await getOrCreateSettings();
+  const weekendDays = settings.hrmWeekendDays?.length ? settings.hrmWeekendDays : [0, 6];
   const existing = await payrollSlipsTable
     .find({ payrollLineId: { $in: lines.map((l) => l.id) } })
     .lean();
@@ -157,14 +175,34 @@ async function syncPayslipsForRun(runId, session = null) {
 
   // Bulk-load all users in one query — salary data lives on the user document.
   const lineUserIds = lines.map((l) => l.userId);
-  const [bulkUsers, structureRows] = await Promise.all([
+  const [bulkUsers, structureRows, approvedLeaveRequests, holidays] = await Promise.all([
     usersTable.find({ id: { $in: lineUserIds } }).lean(),
     salaryStructuresTable.find({ userId: { $in: lineUserIds } }).lean(),
+    leaveRequestsTable.find({
+      userId: { $in: lineUserIds },
+      status: "approved",
+      startDate: { $lte: endDate },
+      endDate: { $gte: startDate },
+    }).lean(),
+    companyHolidaysTable.find({ date: { $gte: startDate, $lte: endDate } }).lean(),
   ]);
   const userMap = new Map(bulkUsers.map((u) => [u.id, u]));
   const structureByUser = new Map(structureRows.map((r) => [r.userId, r]));
+  const holidayDates = new Set(holidays.map((h) => h.date));
+  const leaveRequestsByUser = new Map();
+  for (const request of approvedLeaveRequests) {
+    const list = leaveRequestsByUser.get(request.userId) ?? [];
+    list.push(request);
+    leaveRequestsByUser.set(request.userId, list);
+  }
 
-  for (const line of lines) {
+  const linesToInsert = lines.filter((line) => !slipByLineId.has(line.id));
+  const insertIds = linesToInsert.length
+    ? await getNextSequenceRange("payroll_slips", linesToInsert.length)
+    : [];
+  const insertIdByLineId = new Map(linesToInsert.map((line, i) => [line.id, insertIds[i]]));
+
+  const bulkOps = lines.map((line) => {
     const user = userMap.get(line.userId);
     const sal = user?.salary ?? {};
     const contract = resolveContractSalary({
@@ -178,31 +216,40 @@ async function syncPayslipsForRun(runId, session = null) {
       hra: contract.hra,
       contractNet: contract.contractNet,
     };
-    const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings });
+    const leaveSummary = summarizeApprovedLeaveForPeriod(
+      leaveRequestsByUser.get(line.userId) ?? [],
+      startDate,
+      endDate,
+      weekendDays,
+      holidayDates,
+    );
+    const html = generatePayslipHtmlFromCms({ user, run, line, structure, settings, leaveSummary });
     const prior = slipByLineId.get(line.id);
 
     if (prior) {
-      await payrollSlipsTable.updateOne(
-        { id: prior.id },
-        { $set: { htmlContent: html, year: run.year, month: run.month, userId: line.userId } },
-        sessOpts,
-      );
-    } else {
-      const slipId = await getNextSequence("payroll_slips");
-      const doc = {
-        id: slipId,
-        payrollLineId: line.id,
-        userId: line.userId,
-        year: run.year,
-        month: run.month,
-        htmlContent: html,
+      return {
+        updateOne: {
+          filter: { id: prior.id },
+          update: { $set: { htmlContent: html, year: run.year, month: run.month, userId: line.userId } },
+        },
       };
-      if (session) {
-        await payrollSlipsTable.create([doc], { session });
-      } else {
-        await payrollSlipsTable.create(doc);
-      }
     }
+    return {
+      insertOne: {
+        document: {
+          id: insertIdByLineId.get(line.id),
+          payrollLineId: line.id,
+          userId: line.userId,
+          year: run.year,
+          month: run.month,
+          htmlContent: html,
+        },
+      },
+    };
+  });
+
+  if (bulkOps.length) {
+    await payrollSlipsTable.bulkWrite(bulkOps, sessOpts);
   }
 }
 
@@ -659,6 +706,11 @@ export async function generatePayrollRun(year, month, actorId) {
 
     });
 
+    const hasPayrollActivity = (amounts.paidDays ?? 0) > 0 || (amounts.lopDays ?? 0) > 0;
+    if (!hasPayrollActivity) {
+      continue;
+    }
+
     const lineId = await getNextSequence("payroll_lines");
 
     await payrollLinesTable.create({
@@ -801,7 +853,7 @@ export async function finalizePayrollRun(runId, actorId) {
     action: "payroll_finalized",
 
     entityType: "payroll_run",
-
+ 
     entityId: runId,
 
     severity: "critical",

@@ -61,7 +61,7 @@ export default function MarketingClientDetail() {
         title={client.company}
         description={`${client.industry} · ${client.city} · ${PACKAGE_LABELS[client.package]} package`}
         breadcrumbs={[
-          { label: "Marketing", href: "/marketing" },
+          { label: "Digital", href: "/marketing" },
           { label: "Clients", href: "/marketing/clients" },
           { label: client.company },
         ]}

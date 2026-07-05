@@ -11,13 +11,17 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
 import { PresenceProvider } from "@/contexts/PresenceContext";
-import { AuthenticatedShell } from "@/components/layout/AuthenticatedShell";
 import { QUERY_GC, QUERY_STALE } from "@/lib/query-config";
 import { AppLoadingScreen } from "@/components/loading";
 
 const Login = React.lazy(() => import("@/pages/login"));
 const ForgotPassword = React.lazy(() => import("@/pages/auth/forgot-password"));
 const PublicProposalView = React.lazy(() => import("@/pages/sales/PublicProposalView"));
+// Lazy so the shell (sockets, Firebase, framer-motion, the full generated API
+// client) isn't fetched/eval'd until a route past login actually needs it.
+const AuthenticatedShell = React.lazy(() =>
+  import("@/components/layout/AuthenticatedShell").then((m) => ({ default: m.AuthenticatedShell })),
+);
 
 function getHttpStatus(error: Error): number | undefined {
   return (error as Error & { response?: { status?: number } }).response?.status;
@@ -47,28 +51,32 @@ const queryClient = new QueryClient({
 function AuthenticatedApp() {
   return (
     <AuthProvider>
-      <RealtimeProvider>
-        <PresenceProvider>
-          <Switch>
-            <Route path="/login">
-              <React.Suspense fallback={<AppLoadingScreen message="Loading sign in" />}>
-                <Login />
-              </React.Suspense>
-            </Route>
-            <Route path="/forgot-password">
+      <Switch>
+        <Route path="/login">
+          <React.Suspense fallback={<AppLoadingScreen message="Loading sign in" />}>
+            <Login />
+          </React.Suspense>
+        </Route>
+        <Route path="/forgot-password">
+          <React.Suspense fallback={<AppLoadingScreen message="Loading" />}>
+            <ForgotPassword />
+          </React.Suspense>
+        </Route>
+        <Route path="/">
+          <Redirect to="/login" />
+        </Route>
+        <Route>
+          {/* Realtime/presence and the authenticated shell only mount past this point,
+              so the login screen never pays for sockets, Firebase, or the app chrome. */}
+          <RealtimeProvider>
+            <PresenceProvider>
               <React.Suspense fallback={<AppLoadingScreen message="Loading" />}>
-                <ForgotPassword />
+                <AuthenticatedShell />
               </React.Suspense>
-            </Route>
-            <Route path="/">
-              <Redirect to="/login" />
-            </Route>
-            <Route>
-              <AuthenticatedShell />
-            </Route>
-          </Switch>
-        </PresenceProvider>
-      </RealtimeProvider>
+            </PresenceProvider>
+          </RealtimeProvider>
+        </Route>
+      </Switch>
     </AuthProvider>
   );
 }

@@ -320,7 +320,6 @@ export function ProposalDocument({
       >
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>For {companyName}</p>
-          <div className="h-px w-32 mb-2" style={{ background: muted }} />
           <p className="text-xs font-semibold" style={{ color: dark }}>Authorised Signatory</p>
           {(company?.address ?? COMPANY_BILLING.address) && (
             <p className="text-xs mt-1" style={{ color: muted }}>{company?.address ?? COMPANY_BILLING.address}</p>

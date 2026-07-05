@@ -41,7 +41,7 @@ export const ADMIN_STAFF_ROLES: UserRole[] = [
 export const IMPERSONATABLE_STAFF_ROLES: UserRole[] = [...ADMIN_STAFF_ROLES];
 
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */
-export const HRM_EMPLOYEE_ROLES: UserRole[] = ["manager", "developer", "tester", "qa", "bde"];
+export const HRM_EMPLOYEE_ROLES: UserRole[] = ["hr", "manager", "developer", "tester", "qa", "bde"];
 
 /** Screenshot / attendance monitoring — mirrors developer for freelancers. */
 export const MONITORABLE_STAFF_ROLES: UserRole[] = [

@@ -1,5 +1,3 @@
-import { motion } from "framer-motion";
-
 const ORBS = [
   { className: "left-[6%] top-[10%] h-56 w-56", duration: 18, delay: 0 },
   { className: "right-[8%] top-[18%] h-44 w-44", duration: 14, delay: 2 },
@@ -23,8 +21,8 @@ export function LoadingBackground() {
       <div className="absolute inset-0 bg-background" />
       <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.07] via-background to-primary/[0.12]" />
 
-      <motion.div
-        className="absolute inset-0 opacity-[0.4] dark:opacity-[0.25]"
+      <div
+        className="loading-grid-drift absolute inset-0 opacity-[0.4] dark:opacity-[0.25]"
         style={{
           backgroundImage: `
             linear-gradient(hsl(var(--primary) / 0.08) 1px, transparent 1px),
@@ -32,39 +30,27 @@ export function LoadingBackground() {
           `,
           backgroundSize: "40px 40px",
         }}
-        animate={{ backgroundPosition: ["0px 0px", "40px 40px"] }}
-        transition={{ duration: 24, repeat: Infinity, ease: "linear" }}
       />
 
       {ORBS.map((orb) => (
-        <motion.div
+        <div
           key={orb.className}
-          className={`absolute rounded-full bg-primary/15 blur-3xl ${orb.className}`}
-          animate={{
-            x: [0, 28, -18, 0],
-            y: [0, -22, 12, 0],
-            scale: [1, 1.1, 0.92, 1],
-          }}
-          transition={{
-            duration: orb.duration,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: orb.delay,
-          }}
+          className={`loading-orb absolute rounded-full bg-primary/15 blur-3xl ${orb.className}`}
+          style={{ animationDuration: `${orb.duration}s`, animationDelay: `${orb.delay}s` }}
         />
       ))}
 
       {PARTICLES.map((p) => (
-        <motion.span
+        <span
           key={p.id}
-          className="absolute rounded-full bg-primary/40"
-          style={{ left: p.left, top: p.top, width: p.size, height: p.size }}
-          animate={{ y: [0, -16, 0], opacity: [0.15, 0.55, 0.15] }}
-          transition={{
-            duration: p.duration,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: p.delay,
+          className="loading-particle absolute rounded-full bg-primary/40"
+          style={{
+            left: p.left,
+            top: p.top,
+            width: p.size,
+            height: p.size,
+            animationDuration: `${p.duration}s`,
+            animationDelay: `${p.delay}s`,
           }}
         />
       ))}

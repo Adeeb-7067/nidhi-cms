@@ -7,7 +7,7 @@ const paymentSchema = new Schema(
     id: { type: Number, unique: true, required: true },
     invoiceId: { type: Number, ref: "SalesInvoices", required: true, index: true },
     installmentId: { type: Number, ref: "SalesInstallments", default: null, index: true },
-    customerId: { type: Number, ref: "SalesCustomers", required: true, index: true },
+    customerId: { type: Number, ref: "Clients", required: true, index: true },
     amount: { type: Number, required: true, min: 0.01 },
     paymentMethod: { type: String, enum: paymentMethods, required: true },
     transactionId: { type: String, trim: true, default: null },
@@ -18,6 +18,7 @@ const paymentSchema = new Schema(
 );
 
 paymentSchema.index({ createdAt: -1 });
+paymentSchema.index({ recordedBy: 1, createdAt: -1 });
 
 const SalesPayments =
   mongoose.models.SalesPayments || mongoose.model("SalesPayments", paymentSchema);

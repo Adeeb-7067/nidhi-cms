@@ -16,19 +16,36 @@ function formatClockTime(iso: string | null | undefined): string {
   }
 }
 
+/** Full-day approved leave — clock times are not meaningful for attendance status. */
+export function isFullDayLeaveRow(r: HrmAttendanceSummary): boolean {
+  return r.status === "on_leave" && !r.partialLeave;
+}
+
+function formatLeaveAwareClockTime(iso: string | null | undefined, r: HrmAttendanceSummary): string {
+  if (isFullDayLeaveRow(r)) return "—";
+  return formatClockTime(iso);
+}
+
+function formatLeaveAwareActiveHours(r: HrmAttendanceSummary): string {
+  if (isFullDayLeaveRow(r)) return "—";
+  return formatHoursFromMinutes(r.activeMinutes);
+}
+
+function formatHoursFromMinutes(minutes: number) {
+  return `${Math.round((minutes / 60) * 10) / 10}h`;
+}
+
 /** Extra detail for exports only — not shown in the main grid. */
 export function attendanceStatusSuffix(r: HrmAttendanceSummary) {
   return (
     (r.forgivenLate ? " (excused)" : "") +
+    (r.partialLeave ? " · partial leave" : "") +
+    (isFullDayLeaveRow(r) ? " · full-day leave" : "") +
     (r.corrected ? " · corrected" : "") +
     (r.missingClockOut ? " · no clock-out" : "") +
     (r.globalWfh ? " · global WFH" : "") +
     (r.source === "admin_override" ? " · manual" : "")
   );
-}
-
-function formatHoursFromMinutes(minutes: number) {
-  return `${Math.round((minutes / 60) * 10) / 10}h`;
 }
 
 export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<HrmAttendanceSummary>[] {
@@ -67,20 +84,21 @@ export function buildHrmAttendanceGridColumns(showEmployee: boolean): Column<Hrm
     {
       id: "clockIn",
       header: "Clock in",
-      cell: (r) => <span className="tabular-nums text-xs">{formatClockTime(r.firstClockIn)}</span>,
-      exportValue: (r) => formatClockTime(r.firstClockIn),
+      cell: (r) => <span className="tabular-nums text-xs">{formatLeaveAwareClockTime(r.firstClockIn, r)}</span>,
+      exportValue: (r) => formatLeaveAwareClockTime(r.firstClockIn, r),
     },
     {
       id: "clockOut",
       header: "Clock out",
-      cell: (r) => <span className="tabular-nums text-xs">{formatClockTime(r.lastClockOut)}</span>,
-      exportValue: (r) => formatClockTime(r.lastClockOut),
+      cell: (r) => <span className="tabular-nums text-xs">{formatLeaveAwareClockTime(r.lastClockOut, r)}</span>,
+      exportValue: (r) => formatLeaveAwareClockTime(r.lastClockOut, r),
     },
     {
       id: "active",
       header: "Hours",
-      cell: (r) => formatHoursFromMinutes(r.activeMinutes),
-      exportValue: (r) => String(Math.round((r.activeMinutes / 60) * 10) / 10),
+      cell: (r) => formatLeaveAwareActiveHours(r),
+      exportValue: (r) =>
+        isFullDayLeaveRow(r) ? "" : String(Math.round((r.activeMinutes / 60) * 10) / 10),
     },
     {
       id: "expected",

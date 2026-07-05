@@ -2,11 +2,12 @@ import {
   SalesPayments,
   SalesInvoices,
   SalesInstallments,
-  SalesCustomers,
+  clientsTable,
   getNextSequence,
 } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
+import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
 
 async function listPayments(req, res) {
   const { search } = req.query;
@@ -35,16 +36,33 @@ async function listPayments(req, res) {
   ]);
 
   const invoiceIds = [...new Set(payments.map((p) => p.invoiceId))];
-  const invoices = invoiceIds.length
-    ? await SalesInvoices.find({ id: { $in: invoiceIds } }).lean()
-    : [];
+  const installmentIds = [...new Set(payments.map((p) => p.installmentId).filter(Boolean))];
+  const [invoices, installments] = await Promise.all([
+    invoiceIds.length ? SalesInvoices.find({ id: { $in: invoiceIds } }).lean() : [],
+    installmentIds.length
+      ? SalesInstallments.find({ id: { $in: installmentIds } }).select({ id: 1, name: 1, projectId: 1 }).lean()
+      : [],
+  ]);
   const invoiceMap = new Map(invoices.map((i) => [i.id, i]));
+  const installmentMap = new Map(installments.map((i) => [i.id, i]));
+  const projectNameMap = await loadProjectNameMap([
+    ...invoices.map((i) => i.projectId),
+    ...installments.map((i) => i.projectId),
+  ]);
 
-  const rows = payments.map((p) => ({
-    ...p,
-    invoiceStatus: invoiceMap.get(p.invoiceId)?.status ?? "unknown",
-    invoiceNumber: invoiceMap.get(p.invoiceId)?.number ?? null,
-  }));
+  const rows = payments.map((p) => {
+    const invoice = invoiceMap.get(p.invoiceId);
+    const installment = p.installmentId ? installmentMap.get(p.installmentId) : null;
+    const projectId = invoice?.projectId ?? installment?.projectId ?? null;
+    return {
+      ...p,
+      invoiceStatus: invoice?.status ?? "unknown",
+      invoiceNumber: invoice?.number ?? null,
+      installmentName: installment?.name ?? null,
+      projectId,
+      projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+    };
+  });
 
   res.json({ payments: rows, total, page, limit });
 }
@@ -73,7 +91,7 @@ async function recordPayment(req, res) {
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
   const invoiceId = Number(body.invoiceId);
-  const installmentId = body.installmentId ? Number(body.installmentId) : null;
+  let installmentId = body.installmentId ? Number(body.installmentId) : null;
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
 
@@ -86,7 +104,13 @@ async function recordPayment(req, res) {
   await runInTx(async (session) => {
     const invoice = await SalesInvoices.findOne({ id: invoiceId }).session(session).lean();
     if (!invoice) notFound("Invoice");
+    if (invoice.status === "cancelled") badRequest("This invoice has been cancelled.", "invoiceId");
     if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
+
+    // Milestone invoices are 1:1 with an installment — apply payment to both ledgers.
+    if (!installmentId && invoice.installmentId) {
+      installmentId = invoice.installmentId;
+    }
 
     // If paying against a specific installment, validate and update it too
     if (installmentId) {
@@ -146,7 +170,7 @@ async function getReceiptById(req, res) {
   if (!payment) notFound("Receipt");
   const [invoice, customer, installment] = await Promise.all([
     SalesInvoices.findOne({ id: payment.invoiceId }).lean(),
-    SalesCustomers.findOne({ id: payment.customerId }).lean(),
+    clientsTable.findOne({ id: payment.customerId }).lean(),
     payment.installmentId
       ? SalesInstallments.findOne({ id: payment.installmentId }).lean()
       : Promise.resolve(null),

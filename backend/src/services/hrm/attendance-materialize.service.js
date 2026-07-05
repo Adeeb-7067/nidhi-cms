@@ -5,6 +5,7 @@ import {
   resolveAttendanceStatus,
   applyCorrectionOverlay,
   detectMissingClockOut,
+  effectiveExpectedMinutes,
   DEFAULT_WORKDAY_MINUTES,
 } from "./attendance-engine.js";
 import { getDayOfWeek } from "./hrm-date-utils.js";
@@ -23,7 +24,7 @@ const JOB_TICK_MS = 5 * 60 * 1000;
 /**
  * Compute one employee-day summary from a pre-built context (no DB except shift lookup).
  */
-export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
+export function computeUserDaySummary(user, date, ctx, lateForgiven) {
   const sess = ctx.sessionMap.get(`${user.id}:${date}`);
   const activeMinutes = minutesFromMs(sess?.totalMs ?? 0);
   const shift = ctx.shiftMap?.get(`${user.id}:${date}`) ?? null;
@@ -43,6 +44,7 @@ export async function computeUserDaySummary(user, date, ctx, lateForgiven) {
 
   const leave = ctx.leaveMap.get(`${user.id}:${date}`);
   const wfh = ctx.wfhMap.get(`${user.id}:${date}`);
+  expectedMinutes = effectiveExpectedMinutes(expectedMinutes, leave);
   const firstSessionStart = ctx.firstSessionMap.get(`${user.id}:${date}`) ?? null;
   const daySessions = ctx.sessionsByUserDay.get(`${user.id}:${date}`) ?? [];
   const missingClockOut = detectMissingClockOut(daySessions);

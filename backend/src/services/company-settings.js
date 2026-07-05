@@ -72,6 +72,7 @@ export function formatSettings(settings) {
     hrmWeekendDays: settings.hrmWeekendDays ?? [0, 6],
     hrmGlobalWfhMode: settings.hrmGlobalWfhMode ?? false,
     hrmPaidLeavesPerMonth: settings.hrmPaidLeavesPerMonth ?? 1,
+    hrmLeaveResetCycleMonths: settings.hrmLeaveResetCycleMonths ?? 3,
     hrmMaxFreeLates: settings.hrmMaxFreeLates ?? 3,
     hrmElectronOnlyClock: settings.hrmElectronOnlyClock ?? false,
     hrmLeaveCarryForwardStartYear: settings.hrmLeaveCarryForwardStartYear ?? 2026,

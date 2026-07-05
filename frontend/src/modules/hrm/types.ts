@@ -78,6 +78,8 @@ export type HrmLeaveRequest = {
   leaveTypeName?: string | null;
   balanceAllocations?: Array<{ leaveTypeId: number; days: number }>;
   createdAt?: string;
+  /** Non-blocking messages from leave review (e.g. payroll-locked attendance). */
+  warnings?: string[];
 };
 
 export type HrmWfhRequest = {
@@ -166,6 +168,8 @@ export type HrmAttendanceSummary = {
   forgivenLate?: boolean;
   globalWfh?: boolean;
   missingClockOut?: boolean;
+  partialLeave?: boolean;
+  leaveDayPart?: string | null;
   source?: string;
   persisted?: boolean;
   firstClockIn?: string | null;
@@ -204,6 +208,7 @@ export type HrmSettings = {
   hrmWeekendDays: number[];
   hrmGlobalWfhMode: boolean;
   hrmPaidLeavesPerMonth: number;
+  hrmLeaveResetCycleMonths: number;
   hrmMaxFreeLates: number;
   hrmElectronOnlyClock: boolean;
   hrmLeaveCarryForwardStartYear: number;
@@ -240,13 +245,18 @@ export type HrmDashboardOnLeavePerson = {
   userName: string;
   employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
 };
 
 export type HrmDashboardPendingLeave = {
   id: number;
   userId: number;
   userName?: string;
+  employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
   startDate: string;
   endDate: string;
   days?: number;
@@ -258,7 +268,10 @@ export type HrmDashboardPendingWfh = {
   id: number;
   userId: number;
   userName?: string;
+  employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
   startDate: string;
   endDate: string;
   status: string;
@@ -286,6 +299,7 @@ export type HrmDashboardPayrollBanner = {
   totalDeductions: number;
   paidOut: number;
   yetToPay: number;
+  yetToPayEmployeeCount?: number;
   payrollProgressPct: number;
   employeeCount: number;
 };
@@ -295,8 +309,12 @@ export type HrmDashboardTodayAttendanceRow = {
   userName: string;
   employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
   status: string;
   activeMinutes: number;
+  expectedMinutes: number;
+  globalWfh?: boolean;
   clockIn?: string | null;
 };
 
@@ -308,6 +326,8 @@ export type HrmDashboardTopEarner = {
   userName: string;
   employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
   designation?: string | null;
   gross: number;
   net: number;
@@ -334,6 +354,8 @@ export type HrmDashboardBirthday = {
   userName: string;
   employeeId?: string | null;
   avatarUrl?: string | null;
+  departmentId?: number | null;
+  departmentName?: string | null;
   date: string;
 };
 
@@ -378,7 +400,7 @@ export type HrmDashboardResponse = {
   payrollBanner?: HrmDashboardPayrollBanner | null;
   onWfhToday?: HrmDashboardOnLeavePerson[];
   employeeStatus?: Array<{ name: string; value: number }>;
-  todayAttendance?: HrmDashboardTodayAttendanceRow[];
+  todayAttendance?: HrmAttendanceSummary[];
   leaveByType?: HrmDashboardLeaveByType[];
   leaveRequestStats?: HrmDashboardRequestStats;
   wfhRequestStats?: HrmDashboardRequestStats;
@@ -697,6 +719,28 @@ export type HrmAsset = {
   updatedAt?: string;
 };
 
+export type HrmExperienceLetter = {
+  id: number;
+  userId: number;
+  employeeName: string;
+  employeeCode: string;
+  designation?: string;
+  departmentName?: string;
+  joiningDate?: string | null;
+  relievingDate: string;
+  letterType: "experience" | "relieving" | "offer";
+  offeredCtc?: number | null;
+  htmlContent?: string;
+  pdfUrl?: string | null;
+  emailSentAt?: string | null;
+  emailSentTo?: string | null;
+  createdBy?: number | null;
+  createdByName?: string;
+  additionalNotes?: string;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
 export type HrmExitRequest = {
   id: number;
   userId: number;
@@ -709,10 +753,19 @@ export type HrmExitRequest = {
   reason: string;
   resignationDate: string;
   lastWorkingDay: string;
+  noticePeriodDays: number;
   stage: number;
   stageLabel: string;
   stageCount: number;
   status: string;
+  approvalStatus: "pending" | "approved" | "rejected";
+  approvedAt?: string | null;
+  approvedByUserId?: number | null;
+  rejectedAt?: string | null;
+  rejectedByUserId?: number | null;
+  rejectionReason?: string;
+  autoDeactivatedAt?: string | null;
+  employeeStatus?: string | null;
   assetReturnComplete: boolean;
   fnfSettled: boolean;
   noticeDaysRemaining: number;

@@ -1,5 +1,6 @@
 import { apiUrl } from "@/lib/api-base";
 import type { UploadCategory } from "@/components/ui/file-uploader";
+import { compressImageFile } from "@/lib/image-compression";
 
 const CHAT_FILE_MAX_MB = 10;
 const CHAT_VOICE_MAX_MB = 10;
@@ -68,12 +69,14 @@ export async function uploadChatAttachment(
     : isChatAudioFile(file)
       ? CHAT_VOICE_MAX_MB
       : CHAT_FILE_MAX_MB;
-  if (file.size > maxMb * 1024 * 1024) {
+
+  const uploadFile = await compressImageFile(file);
+  if (uploadFile.size > maxMb * 1024 * 1024) {
     throw new Error(`File is too large. Maximum size is ${maxMb} MB.`);
   }
 
   const formData = new FormData();
-  formData.append("file", file);
+  formData.append("file", uploadFile);
 
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();

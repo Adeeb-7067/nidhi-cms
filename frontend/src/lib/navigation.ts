@@ -56,6 +56,7 @@ import {
   Video,
   Share2,
   Search,
+  ScrollText,
 } from "lucide-react";
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
@@ -227,33 +228,11 @@ export function getNavSections(role: UserRole): NavSection[] {
     },
 
     // =========================
-    // LEGAL
+    // DIGITAL MARKETING (UI only — no backend yet)
     // =========================
     {
-      label: "Legal",
-      railLabel: "Legal",
-      icon: Scale,
-      roles: ["super_admin"],
-      items: [
-        { title: "Dashboard", href: "/legal", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
-        { title: "Employee cases", href: "/legal/cases", icon: Briefcase, roles: ["super_admin"], group: "Matters" },
-        { title: "Vendor disputes", href: "/legal/vendor-disputes", icon: Handshake, roles: ["super_admin"], group: "Matters" },
-        { title: "Client matters", href: "/legal/client-matters", icon: Building2, roles: ["super_admin"], group: "Matters" },
-        { title: "NDA repository", href: "/legal/nda", icon: FileWarning, roles: ["super_admin"], group: "Documents" },
-        { title: "Agreements", href: "/legal/agreements", icon: FileText, roles: ["super_admin"], group: "Documents" },
-        { title: "Legal notices", href: "/legal/notices", icon: Mail, roles: ["super_admin"], group: "Documents" },
-        { title: "Court cases", href: "/legal/court-cases", icon: Gavel, roles: ["super_admin"], group: "Litigation" },
-        { title: "Compliance", href: "/legal/compliance", icon: ShieldCheck, roles: ["super_admin"], group: "Governance" },
-        { title: "Expenses", href: "/legal/expenses", icon: Wallet, roles: ["super_admin"], group: "Governance" },
-      ],
-    },
-
-    // =========================
-    // DIGITAL MARKETING
-    // =========================
-    {
-      label: "Marketing",
-      railLabel: "Marketing",
+      label: "Digital",
+      railLabel: "Digital",
       icon: Megaphone,
       roles: [...MARKETING_ACCESS_ROLES],
       items: [
@@ -271,58 +250,6 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: [...MARKETING_ACCESS_ROLES], group: "Team" },
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: [...MARKETING_ACCESS_ROLES], group: "Reports" },
-      ],
-    },
-
-    // =========================
-    // CA (CHARTERED ACCOUNTANT)
-    // =========================
-    {
-      label: "CA Master",
-      railLabel: "CA",
-      icon: Calculator,
-      roles: [...CA_ACCESS_ROLES],
-      items: [
-        { title: "Dashboard", href: "/ca", icon: LayoutDashboard, roles: [...CA_ACCESS_ROLES], group: "Overview" },
-        { title: "Compliance score", href: "/ca/compliance-score", icon: ShieldCheck, roles: [...CA_ACCESS_ROLES], group: "Overview" },
-        { title: "Client payments", href: "/ca/client-payments", icon: CreditCard, roles: [...CA_ACCESS_ROLES], group: "Receivables" },
-        { title: "Suspense account", href: "/ca/suspense", icon: AlertTriangle, roles: [...CA_ACCESS_ROLES], group: "Receivables" },
-        { title: "Vendors", href: "/ca/vendors", icon: Building2, roles: [...CA_ACCESS_ROLES], group: "Payables" },
-        { title: "Expenses", href: "/ca/expenses", icon: TrendingDown, roles: [...CA_ACCESS_ROLES], group: "Payables" },
-        { title: "Bank reconciliation", href: "/ca/bank-reconciliation", icon: Landmark, roles: [...CA_ACCESS_ROLES], group: "Banking" },
-        { title: "GST", href: "/ca/gst", icon: Receipt, roles: [...CA_ACCESS_ROLES], group: "Tax" },
-        { title: "TDS", href: "/ca/tds", icon: Percent, roles: [...CA_ACCESS_ROLES], group: "Tax" },
-        { title: "Company ITR", href: "/ca/company-itr", icon: FileText, roles: [...CA_ACCESS_ROLES], group: "Tax" },
-        { title: "Director ITR", href: "/ca/director-itr", icon: UserCircle, roles: [...CA_ACCESS_ROLES], group: "Tax" },
-        { title: "ROC compliance", href: "/ca/roc", icon: Scale, roles: [...CA_ACCESS_ROLES], group: "Corporate" },
-        { title: "DIN / DSC", href: "/ca/din-dsc", icon: KeyRound, roles: [...CA_ACCESS_ROLES], group: "Corporate" },
-        { title: "Documents", href: "/ca/documents", icon: FolderOpen, roles: [...CA_ACCESS_ROLES], group: "Governance" },
-        { title: "Audit", href: "/ca/audit", icon: ShieldCheck, roles: [...CA_ACCESS_ROLES], group: "Governance" },
-        { title: "Notices", href: "/ca/notices", icon: Mail, roles: [...CA_ACCESS_ROLES], group: "Governance" },
-        { title: "Compliance calendar", href: "/ca/compliance-calendar", icon: CalendarDays, roles: [...CA_ACCESS_ROLES], group: "Governance" },
-        { title: "Tasks", href: "/ca/tasks", icon: ListTodo, roles: [...CA_ACCESS_ROLES], group: "Governance" },
-      ],
-    },
-
-    // =========================
-    // FINANCE
-    // =========================
-    {
-      label: "Finance",
-      railLabel: "Finance",
-      icon: Landmark,
-      roles: ["super_admin"],
-      items: [
-        { title: "Dashboard", href: "/finance", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
-        { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: ["super_admin"], group: "Transactions" },
-        { title: "Income", href: "/finance/income", icon: TrendingUp, roles: ["super_admin"], group: "Transactions" },
-        { title: "Payments", href: "/finance/payments", icon: Wallet, roles: ["super_admin"], group: "Transactions" },
-        { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: ["super_admin"], group: "Billing" },
-        { title: "Payroll", href: "/finance/payroll", icon: Users, roles: ["super_admin"], group: "Billing" },
-        { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: ["super_admin"], group: "Planning" },
-        { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: ["super_admin"], group: "Planning" },
-        { title: "Tax", href: "/finance/tax", icon: Percent, roles: ["super_admin"], group: "Planning" },
-        { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: ["super_admin"], group: "Reports" },
       ],
     },
 
@@ -494,6 +421,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Assets", href: "/hrm/assets", icon: Laptop, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Exit workflow", href: "/hrm/exit", icon: LogOut, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "ID Cards", href: "/hrm/id-cards", icon: IdCard, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
+        { title: "Letters", href: "/hrm/letters", icon: ScrollText, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Audit log", href: "/hrm/audit", icon: ShieldCheck, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "HRM settings", href: "/hrm/settings", icon: Settings, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "My attendance", href: "/hrm/my-attendance", icon: ClipboardList, roles: [...HRM_EMPLOYEE_ROLES], group: "Self-service" },
@@ -501,6 +429,80 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "My WFH", href: "/hrm/my-wfh", icon: Briefcase, roles: [...HRM_EMPLOYEE_ROLES], group: "Self-service" },
         { title: "My payslips", href: "/hrm/my-payslips", icon: Receipt, roles: [...HRM_EMPLOYEE_ROLES], group: "Self-service" },
         { title: "Calendar", href: "/hrm/my-holidays", icon: CalendarClock, roles: [...HRM_EMPLOYEE_ROLES], group: "Self-service" },
+      ],
+    },
+
+    // =========================
+    // LEGAL (UI only — no backend yet)
+    // =========================
+    {
+      label: "Legal",
+      railLabel: "Legal",
+      icon: Scale,
+      roles: ["super_admin"],
+      items: [
+        { title: "Dashboard", href: "/legal", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Employee cases", href: "/legal/cases", icon: Briefcase, roles: ["super_admin"], group: "Matters" },
+        { title: "Vendor disputes", href: "/legal/vendor-disputes", icon: Handshake, roles: ["super_admin"], group: "Matters" },
+        { title: "Client matters", href: "/legal/client-matters", icon: Building2, roles: ["super_admin"], group: "Matters" },
+        { title: "NDA repository", href: "/legal/nda", icon: FileWarning, roles: ["super_admin"], group: "Documents" },
+        { title: "Agreements", href: "/legal/agreements", icon: FileText, roles: ["super_admin"], group: "Documents" },
+        { title: "Legal notices", href: "/legal/notices", icon: Mail, roles: ["super_admin"], group: "Documents" },
+        { title: "Court cases", href: "/legal/court-cases", icon: Gavel, roles: ["super_admin"], group: "Litigation" },
+        { title: "Compliance", href: "/legal/compliance", icon: ShieldCheck, roles: ["super_admin"], group: "Governance" },
+        { title: "Expenses", href: "/legal/expenses", icon: Wallet, roles: ["super_admin"], group: "Governance" },
+      ],
+    },
+
+    // =========================
+    // CA (CHARTERED ACCOUNTANT) (UI only — no backend yet)
+    // =========================
+    {
+      label: "CA Master",
+      railLabel: "CA",
+      icon: Calculator,
+      roles: [...CA_ACCESS_ROLES],
+      items: [
+        { title: "Dashboard", href: "/ca", icon: LayoutDashboard, roles: [...CA_ACCESS_ROLES], group: "Overview" },
+        { title: "Compliance score", href: "/ca/compliance-score", icon: ShieldCheck, roles: [...CA_ACCESS_ROLES], group: "Overview" },
+        { title: "Client payments", href: "/ca/client-payments", icon: CreditCard, roles: [...CA_ACCESS_ROLES], group: "Receivables" },
+        { title: "Suspense account", href: "/ca/suspense", icon: AlertTriangle, roles: [...CA_ACCESS_ROLES], group: "Receivables" },
+        { title: "Vendors", href: "/ca/vendors", icon: Building2, roles: [...CA_ACCESS_ROLES], group: "Payables" },
+        { title: "Expenses", href: "/ca/expenses", icon: TrendingDown, roles: [...CA_ACCESS_ROLES], group: "Payables" },
+        { title: "Bank reconciliation", href: "/ca/bank-reconciliation", icon: Landmark, roles: [...CA_ACCESS_ROLES], group: "Banking" },
+        { title: "GST", href: "/ca/gst", icon: Receipt, roles: [...CA_ACCESS_ROLES], group: "Tax" },
+        { title: "TDS", href: "/ca/tds", icon: Percent, roles: [...CA_ACCESS_ROLES], group: "Tax" },
+        { title: "Company ITR", href: "/ca/company-itr", icon: FileText, roles: [...CA_ACCESS_ROLES], group: "Tax" },
+        { title: "Director ITR", href: "/ca/director-itr", icon: UserCircle, roles: [...CA_ACCESS_ROLES], group: "Tax" },
+        { title: "ROC compliance", href: "/ca/roc", icon: Scale, roles: [...CA_ACCESS_ROLES], group: "Corporate" },
+        { title: "DIN / DSC", href: "/ca/din-dsc", icon: KeyRound, roles: [...CA_ACCESS_ROLES], group: "Corporate" },
+        { title: "Documents", href: "/ca/documents", icon: FolderOpen, roles: [...CA_ACCESS_ROLES], group: "Governance" },
+        { title: "Audit", href: "/ca/audit", icon: ShieldCheck, roles: [...CA_ACCESS_ROLES], group: "Governance" },
+        { title: "Notices", href: "/ca/notices", icon: Mail, roles: [...CA_ACCESS_ROLES], group: "Governance" },
+        { title: "Compliance calendar", href: "/ca/compliance-calendar", icon: CalendarDays, roles: [...CA_ACCESS_ROLES], group: "Governance" },
+        { title: "Tasks", href: "/ca/tasks", icon: ListTodo, roles: [...CA_ACCESS_ROLES], group: "Governance" },
+      ],
+    },
+
+    // =========================
+    // FINANCE (UI only — no backend yet)
+    // =========================
+    {
+      label: "Finance",
+      railLabel: "Finance",
+      icon: Landmark,
+      roles: ["super_admin"],
+      items: [
+        { title: "Dashboard", href: "/finance", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: ["super_admin"], group: "Transactions" },
+        { title: "Income", href: "/finance/income", icon: TrendingUp, roles: ["super_admin"], group: "Transactions" },
+        { title: "Payments", href: "/finance/payments", icon: Wallet, roles: ["super_admin"], group: "Transactions" },
+        { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: ["super_admin"], group: "Billing" },
+        { title: "Payroll", href: "/finance/payroll", icon: Users, roles: ["super_admin"], group: "Billing" },
+        { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: ["super_admin"], group: "Planning" },
+        { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: ["super_admin"], group: "Planning" },
+        { title: "Tax", href: "/finance/tax", icon: Percent, roles: ["super_admin"], group: "Planning" },
+        { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: ["super_admin"], group: "Reports" },
       ],
     },
 

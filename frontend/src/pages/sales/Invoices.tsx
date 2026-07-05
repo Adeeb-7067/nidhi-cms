@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, Receipt, FileDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
@@ -16,21 +16,21 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useListInvoices, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { formatProjectLabel, formatSalesDateTime } from "@/modules/sales/utils";
 import { readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
   SalesEmptyState,
-  InvoiceFromProposalDialog,
   InvoiceFormSheet,
 } from "@/modules/sales/components";
 
 const PAGE_SIZE = 20;
 
-type InvoiceStatus = "paid" | "unpaid" | "partial" | "overdue";
+type InvoiceStatus = "paid" | "unpaid" | "partial" | "overdue" | "cancelled";
 
-const STATUS_TABS: (InvoiceStatus | "all")[] = ["all", "unpaid", "partial", "paid", "overdue"];
+const STATUS_TABS: (InvoiceStatus | "all")[] = ["all", "unpaid", "partial", "paid", "overdue", "cancelled"];
 
 export default function Invoices() {
   const initialStatus = readSearchParam("status");
@@ -40,7 +40,6 @@ export default function Invoices() {
   );
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [fromProposalOpen, setFromProposalOpen] = useState(false);
 
   useEffect(() => { setPage(1); }, [search, statusTab]);
 
@@ -69,7 +68,9 @@ export default function Invoices() {
     return counts;
   }, [dashData]);
 
-  const totalDue = invoices.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+  const totalDue = invoices
+    .filter((i) => i.status !== "cancelled")
+    .reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
   const paidCount = dashData?.invoiceByStatus?.paid?.count ?? statusCounts.paid ?? 0;
   const unpaidCount = dashData?.invoiceByStatus?.unpaid?.count ?? statusCounts.unpaid ?? 0;
 
@@ -77,27 +78,16 @@ export default function Invoices() {
     <PortalPageShell>
       <SalesPageHeader
         title="Invoices"
-        description="Generate, send, and track billing after proposal approval."
+        description="Generate invoices from installments after the payment schedule is set up."
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Invoices" },
         ]}
         actions={
-          <>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1.5"
-              onClick={() => setFromProposalOpen(true)}
-            >
-              <FileDown className="h-3.5 w-3.5" />
-              From proposal
-            </Button>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-3.5 w-3.5" />
-              New invoice
-            </Button>
-          </>
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
+            New invoice
+          </Button>
         }
       />
 
@@ -137,6 +127,7 @@ export default function Invoices() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Invoice #</TableHead>
                 <TableHead className="text-xs">Customer</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Installment</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
@@ -155,8 +146,11 @@ export default function Invoices() {
                   <TableCell className="text-xs font-medium max-w-[180px] truncate text-muted-foreground">
                     Customer #{inv.customerId}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">
-                    {inv.installmentId ? `Installment #${inv.installmentId}` : "—"}
+                  <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(inv.projectId, inv.projectName)}>
+                    {formatProjectLabel(inv.projectId, inv.projectName)}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
+                    {inv.installmentName ?? (inv.installmentId ? `Installment #${inv.installmentId}` : "—")}
                   </TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="invoice" value={inv.status} />
@@ -164,7 +158,7 @@ export default function Invoices() {
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(inv.amount)}</TableCell>
                   <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(inv.paidAmount)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.createdAt), "MMM d, yyyy")}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(inv.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
                       <Link href={`/sales/invoices/${inv.id}`}>View</Link>
@@ -193,7 +187,6 @@ export default function Invoices() {
       )}
 
       <InvoiceFormSheet open={createOpen} onOpenChange={setCreateOpen} />
-      <InvoiceFromProposalDialog open={fromProposalOpen} onOpenChange={setFromProposalOpen} />
     </PortalPageShell>
   );
 }

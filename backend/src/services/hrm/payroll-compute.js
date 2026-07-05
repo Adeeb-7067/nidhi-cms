@@ -183,6 +183,26 @@ export function resolveContractSalary({ profileSalary = {}, structureRow = {} } 
     };
   }
 
+  // Net-only profile (legacy imports or net entered without basic breakdown).
+  if (profileNet > 0) {
+    return {
+      basic: 0,
+      allowances: 0,
+      hra: 0,
+      gross: profileNet,
+      pfEmployee: 0,
+      tds: 0,
+      esiEmployee: 0,
+      deductions: 0,
+      net: profileNet,
+      totalSalary: profileNet,
+      contractNet: profileNet,
+      payrollBase: profileNet,
+      configured: true,
+      source: "profile",
+    };
+  }
+
   const structBasic = Number(structureRow.basic) || 0;
   const structHra = Number(structureRow.hra) || 0;
   const structAllowances = Number(structureRow.allowances) || 0;

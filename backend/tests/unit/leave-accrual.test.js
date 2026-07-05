@@ -4,7 +4,9 @@ import {
   computeAvailableBalance,
   currentAccrualPeriodKey,
   getLeaveYearForDate,
+  isLeaveCycleResetMonth,
   resolveAccrualDaysPerMonth,
+  resolveLeaveResetCycleMonths,
   computeCarryForwardAmount,
   allocateOldestFirst,
   leaveProfileFieldsTouched,
@@ -37,6 +39,36 @@ describe("getLeaveYearForDate", () => {
     assert.equal(getLeaveYearForDate(2026, 12, 4), 2026);
     assert.equal(getLeaveYearForDate(2026, 3, 4), 2025);
     assert.equal(getLeaveYearForDate(2026, 1, 4), 2025);
+  });
+});
+
+describe("isLeaveCycleResetMonth", () => {
+  test("resets every 3 months from January (Jan, Apr, Jul, Oct)", () => {
+    assert.equal(isLeaveCycleResetMonth(1, 1, 3), true);
+    assert.equal(isLeaveCycleResetMonth(2, 1, 3), false);
+    assert.equal(isLeaveCycleResetMonth(3, 1, 3), false);
+    assert.equal(isLeaveCycleResetMonth(4, 1, 3), true);
+    assert.equal(isLeaveCycleResetMonth(7, 1, 3), true);
+    assert.equal(isLeaveCycleResetMonth(10, 1, 3), true);
+  });
+
+  test("respects leave year start month", () => {
+    assert.equal(isLeaveCycleResetMonth(4, 4, 3), true);
+    assert.equal(isLeaveCycleResetMonth(5, 4, 3), false);
+    assert.equal(isLeaveCycleResetMonth(7, 4, 3), true);
+  });
+});
+
+describe("resolveLeaveResetCycleMonths", () => {
+  test("defaults to 3 months", () => {
+    assert.equal(resolveLeaveResetCycleMonths({}), 3);
+    assert.equal(resolveLeaveResetCycleMonths({ hrmLeaveResetCycleMonths: null }), 3);
+  });
+
+  test("clamps configured value to 1–12", () => {
+    assert.equal(resolveLeaveResetCycleMonths({ hrmLeaveResetCycleMonths: 6 }), 6);
+    assert.equal(resolveLeaveResetCycleMonths({ hrmLeaveResetCycleMonths: 0 }), 1);
+    assert.equal(resolveLeaveResetCycleMonths({ hrmLeaveResetCycleMonths: 99 }), 12);
   });
 });
 

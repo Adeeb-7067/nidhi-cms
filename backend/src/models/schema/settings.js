@@ -16,12 +16,16 @@ const companySettingsSchema = new Schema({
   screenshotRetentionDays: { type: Number, default: 30 },
   screenshotBlurEnabled: { type: Boolean, default: true },
   screenshotConsentVersion: { type: String, default: "1.0" },
+  /** Generated report files (PDF/Excel) older than this are purged nightly. */
+  reportRetentionDays: { type: Number, default: 30 },
   hrmLeaveYearStartMonth: { type: Number, default: 1, min: 1, max: 12 },
   hrmDefaultShiftTemplateId: { type: Number, default: null },
   hrmAttendanceShortfallThresholdMinutes: { type: Number, default: 0, min: 0 },
   hrmWeekendDays: { type: [Number], default: [0, 6] },
   hrmGlobalWfhMode: { type: Boolean, default: false },
   hrmPaidLeavesPerMonth: { type: Number, default: 1, min: 0 },
+  /** Unused paid-leave pool resets every N months (default 3). Accrued days carry forward within each cycle. */
+  hrmLeaveResetCycleMonths: { type: Number, default: 3, min: 1, max: 12 },
   hrmMaxFreeLates: { type: Number, default: 3, min: 0 },
   hrmElectronOnlyClock: { type: Boolean, default: false },
   hrmLeaveCarryForwardStartYear: { type: Number, default: 2026 },

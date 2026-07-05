@@ -44,7 +44,7 @@ export const cmsModuleGroups = [
     modules: ["legal"],
   },
   {
-    label: "Marketing",
+    label: "Digital",
     modules: ["marketing"],
   },
   {
@@ -92,6 +92,7 @@ export const cmsModuleGroups = [
       "hrm_documents",
       "hrm_policies",
       "hrm_id_cards",
+      "hrm_letters",
       "hrm_assets",
       "hrm_exit",
     ],
@@ -133,6 +134,7 @@ export const legacyModuleMap = {
   documents: "hrm_documents",
   policies: "hrm_policies",
   id_cards: "hrm_id_cards",
+  letters: "hrm_letters",
   assets: "hrm_assets",
   exit: "hrm_exit",
   my_attendance: "hrm_my_attendance",

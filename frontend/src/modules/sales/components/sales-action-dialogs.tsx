@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { addDays, format } from "date-fns";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import {
@@ -17,6 +18,9 @@ import { phoneValidationError, normalizePhoneForSubmit } from "@/lib/phone-input
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { PasswordInput } from "@/components/ui/password-input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Select,
   SelectContent,
@@ -35,8 +39,8 @@ import {
   useRemindCustomer,
   useProvisionCustomerPortal,
   useCreateInstallment,
+  useCreateInstallmentsFromProposal,
   useCreateInvoice,
-  useCreateInvoiceFromProposal,
   useCreateFollowUp,
   useConvertLead,
   useSetLeadReminder,
@@ -50,6 +54,7 @@ import {
   type FollowUpType,
   type PaymentMethod,
   type Customer,
+  type Proposal,
   type CustomerType,
   type CustomerStatus,
 } from "@/api/sales";
@@ -62,6 +67,7 @@ import {
   CUSTOMER_STATUS_OPTIONS,
   PAYMENT_METHOD_OPTIONS,
   FOLLOW_UP_TYPE_OPTIONS,
+  formatCurrency,
 } from "../constants";
 import { useSalesStaff } from "../use-sales-staff";
 
@@ -149,6 +155,10 @@ export function CustomerFormModal({
   const [website, setWebsite] = useState(EMPTY_CUSTOMER_FORM.website);
   const [type, setType] = useState<CustomerType>(EMPTY_CUSTOMER_FORM.type);
   const [status, setStatus] = useState<CustomerStatus>(EMPTY_CUSTOMER_FORM.status);
+  const [enablePortal, setEnablePortal] = useState(true);
+  const [portalEmail, setPortalEmail] = useState("");
+  const [portalPassword, setPortalPassword] = useState("");
+  const [industry, setIndustry] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -162,7 +172,20 @@ export function CustomerFormModal({
     setWebsite(values.website);
     setType(values.type);
     setStatus(values.status);
+    if (!customer) {
+      setEnablePortal(true);
+      setPortalEmail("");
+      setPortalPassword("");
+      setIndustry("");
+    }
   }, [open, customer]);
+
+  useEffect(() => {
+    if (!enablePortal || isEdit) return;
+    if (!portalEmail.trim() && email.trim()) {
+      setPortalEmail(email.trim());
+    }
+  }, [email, enablePortal, isEdit, portalEmail]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -175,6 +198,16 @@ export function CustomerFormModal({
       toast.error(phoneErr);
       return;
     }
+    if (!isEdit && enablePortal) {
+      if (!portalEmail.trim()) {
+        toast.error("Portal login email is required when portal access is enabled");
+        return;
+      }
+      if (portalPassword.length < 8) {
+        toast.error("Portal password must be at least 8 characters");
+        return;
+      }
+    }
     const payload = {
       companyName: companyName.trim(),
       contactPerson: contactPerson.trim(),
@@ -185,6 +218,16 @@ export function CustomerFormModal({
       website: website.trim() || null,
       type,
       status,
+      ...(!isEdit
+        ? enablePortal
+          ? {
+              enablePortal: true,
+              portalEmail: portalEmail.trim(),
+              password: portalPassword,
+              industry: industry.trim() || null,
+            }
+          : { enablePortal: false }
+        : {}),
     };
     try {
       if (isEdit && customer) {
@@ -192,7 +235,11 @@ export function CustomerFormModal({
         toast.success(`Customer "${payload.companyName}" updated`);
       } else {
         await createCustomer.mutateAsync(payload);
-        toast.success(`Customer "${payload.companyName}" created`);
+        toast.success(
+          enablePortal
+            ? `Customer "${payload.companyName}" created with portal access and discussion channel`
+            : `Customer "${payload.companyName}" created`,
+        );
       }
       onOpenChange(false);
       onSuccess?.();
@@ -209,7 +256,7 @@ export function CustomerFormModal({
           <DialogDescription>
             {isEdit
               ? "Update company profile, contact details, and classification."
-              : "Create a new customer record in the sales database."}
+              : "Creates one company record for Sales and Admin → Companies. Portal access is enabled by default — set a login password before saving."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
@@ -230,6 +277,59 @@ export function CustomerFormModal({
                 </SalesField>
               </div>
             </CustomerFormSection>
+
+            {!isEdit ? (
+              <CustomerFormSection title="Client portal">
+                <Alert className="bg-muted/40 border-border/60">
+                  <AlertDescription className="text-xs leading-relaxed">
+                    Recommended: create the company with portal login so it appears active under Admin → Companies.
+                    Turn off only if you will add portal access later from the customer detail page.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
+                  <div>
+                    <p className="text-sm font-medium">Enable client portal</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Portal login on the same company record (on by default)
+                    </p>
+                  </div>
+                  <Switch checked={enablePortal} onCheckedChange={setEnablePortal} />
+                </div>
+                {enablePortal ? (
+                  <div className="space-y-3 pt-1">
+                    <SalesField label="Portal login email" hint="Defaults to contact email; can differ from billing email.">
+                      <Input
+                        type="email"
+                        value={portalEmail}
+                        onChange={(e) => setPortalEmail(e.target.value)}
+                        placeholder="login@company.com"
+                        required
+                      />
+                    </SalesField>
+                    <SalesField label="Portal password" hint="Required — minimum 8 characters. Share securely with the client.">
+                      <PasswordInput
+                        value={portalPassword}
+                        onChange={(e) => setPortalPassword(e.target.value)}
+                        minLength={8}
+                        required
+                        autoComplete="new-password"
+                      />
+                    </SalesField>
+                    <SalesField label="Industry">
+                      <Input
+                        value={industry}
+                        onChange={(e) => setIndustry(e.target.value)}
+                        placeholder="e.g. Technology, Hospitality"
+                      />
+                    </SalesField>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Without portal login, the company will show in Admin → Companies as non-portal until you enable access later.
+                  </p>
+                )}
+              </CustomerFormSection>
+            ) : null}
 
             <CustomerFormSection title="Address & web">
               <SalesField label="Location / address">
@@ -273,13 +373,17 @@ export function CustomerFormModal({
               </SalesField>
             </CustomerFormSection>
 
-            {isEdit && (customer?.leadId || customer?.clientId || customer?.portalUserId) ? (
+            {isEdit && (customer?.leadId || customer?.portalUserId) ? (
               <CustomerFormSection title="Linked records">
                 <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-1">
                   {customer.leadId ? <p>Source lead: #{customer.leadId}</p> : null}
-                  {customer.clientId ? <p>Client record: #{customer.clientId}</p> : null}
-                  {customer.portalUserId ? <p>Portal user: #{customer.portalUserId}</p> : null}
-                  <p className="text-[10px]">These links are set during lead conversion and cannot be edited here.</p>
+                  <p>Company record: #{customer.id}</p>
+                  {customer.portalUserId ? (
+                    <p>Portal access enabled (user #{customer.portalUserId})</p>
+                  ) : (
+                    <p>Portal access not enabled yet</p>
+                  )}
+                  <p className="text-[10px]">Lead link is set during conversion. Use Enable portal for login setup.</p>
                 </div>
               </CustomerFormSection>
             ) : null}
@@ -290,7 +394,7 @@ export function CustomerFormModal({
             </Button>
             <Button type="submit" disabled={isPending}>
               {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEdit ? "Save changes" : "Create customer"}
+              {isEdit ? "Save changes" : enablePortal ? "Create customer & portal" : "Create customer"}
             </Button>
           </DialogFooter>
         </form>
@@ -427,7 +531,7 @@ export function CustomerProvisionPortalDialog({
         <DialogHeader>
           <DialogTitle>Enable client portal</DialogTitle>
           <DialogDescription>
-            Creates a client record and portal login for this customer.
+            Creates one company record used in both Sales and Admin. Optionally enable the client portal now.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
@@ -852,9 +956,11 @@ export function BulkLeadActions({
 export function CreateInstallmentDialog({
   open,
   onOpenChange,
+  defaultCustomerId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultCustomerId?: number;
 }) {
   const createInstallment = useCreateInstallment();
   const { data: customersData } = useListCustomers({ limit: 200 }, open);
@@ -870,6 +976,11 @@ export function CreateInstallmentDialog({
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
   const [dueDate, setDueDate] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setCustomerId(defaultCustomerId ? String(defaultCustomerId) : "");
+  }, [open, defaultCustomerId]);
 
   const calculatedAmount = Number(baseAmount) || 0;
   const finalDueAmount = totalAdjustPayload(
@@ -982,9 +1093,11 @@ export function CreateInstallmentDialog({
 export function CreateInvoiceDialog({
   open,
   onOpenChange,
+  defaultCustomerId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultCustomerId?: number;
 }) {
   const createInvoice = useCreateInvoice();
   const { data: customersData } = useListCustomers({ limit: 200 }, open);
@@ -1014,7 +1127,7 @@ export function CreateInvoiceDialog({
 
   useEffect(() => {
     if (!open) return;
-    setCustomerId("");
+    setCustomerId(defaultCustomerId ? String(defaultCustomerId) : "");
     setBaseAmount("");
     setTotalAdjustment(0);
     setAdjustedTotal(null);
@@ -1023,7 +1136,7 @@ export function CreateInvoiceDialog({
     setProjectId("");
     setInstallmentId("");
     setProposalId("");
-  }, [open]);
+  }, [open, defaultCustomerId]);
 
   useEffect(() => {
     if (!proposalId || proposalId === "none") return;
@@ -1155,6 +1268,173 @@ export function CreateInvoiceDialog({
   );
 }
 
+type ScheduleRow = { name: string; amount: string; dueDate: string };
+
+function buildDefaultScheduleRows(proposalTotal: number): ScheduleRow[] {
+  const today = new Date();
+  const labels = ["Advance", "Development", "Final"];
+  const offsets = [0, 30, 60];
+  const pct = [0.4, 0.4, 0.2];
+  const amounts = pct.map((p) => Math.round(proposalTotal * p));
+  amounts[amounts.length - 1] += proposalTotal - amounts.reduce((sum, n) => sum + n, 0);
+  return labels.map((name, i) => ({
+    name,
+    amount: String(amounts[i]),
+    dueDate: format(addDays(today, offsets[i]), "yyyy-MM-dd"),
+  }));
+}
+
+export function InstallmentsFromProposalDialog({
+  open,
+  onOpenChange,
+  proposal,
+  proposalTotal,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  proposal: Pick<Proposal, "id" | "number" | "title" | "customerId">;
+  proposalTotal: number;
+}) {
+  const createSchedule = useCreateInstallmentsFromProposal();
+  const [rows, setRows] = useState<ScheduleRow[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setRows(buildDefaultScheduleRows(proposalTotal));
+  }, [open, proposalTotal]);
+
+  const scheduledTotal = rows.reduce((sum, row) => sum + (Number(row.amount) || 0), 0);
+  const diff = proposalTotal - scheduledTotal;
+  const balanced = Math.abs(diff) <= 1;
+
+  const updateRow = (index: number, patch: Partial<ScheduleRow>) => {
+    setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+
+  const addRow = () => {
+    setRows((prev) => [
+      ...prev,
+      {
+        name: `Milestone ${prev.length + 1}`,
+        amount: diff > 0 ? String(Math.max(0, Math.round(diff))) : "0",
+        dueDate: format(addDays(new Date(), 30 * (prev.length + 1)), "yyyy-MM-dd"),
+      },
+    ]);
+  };
+
+  const removeRow = (index: number) => {
+    if (rows.length <= 1) return;
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!proposal.customerId) {
+      toast.error("Convert the lead to a customer before creating installments.");
+      return;
+    }
+    if (!balanced) {
+      toast.error(`Installment total must equal proposal total (${formatCurrency(proposalTotal)})`);
+      return;
+    }
+    for (const row of rows) {
+      if (!row.name.trim() || !row.amount || Number(row.amount) <= 0 || !row.dueDate) {
+        toast.error("Each milestone needs a name, amount, and due date");
+        return;
+      }
+    }
+    try {
+      const result = await createSchedule.mutateAsync({
+        proposalId: proposal.id,
+        installments: rows.map((row) => ({
+          name: row.name.trim(),
+          dueAmount: Number(row.amount),
+          calculatedAmount: Number(row.amount),
+          dueDate: row.dueDate,
+        })),
+      });
+      toast.success(`${result.installments.length} installments created`);
+      onOpenChange(false);
+    } catch (err) {
+      toastApiError(err, "Failed to create installments");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[560px] bg-card border-border">
+        <DialogHeader>
+          <DialogTitle>Payment schedule from proposal</DialogTitle>
+          <DialogDescription>
+            Split {proposal.number} ({formatCurrency(proposalTotal)}) into milestones. Invoices are generated per installment later.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div className="rounded-lg border bg-muted/30 px-3 py-2 flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">Proposal total</span>
+            <span className="font-semibold tabular-nums">{formatCurrency(proposalTotal)}</span>
+          </div>
+          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+            {rows.map((row, index) => (
+              <div key={index} className="grid grid-cols-[1fr_100px_130px_32px] gap-2 items-end">
+                <SalesField label={index === 0 ? "Milestone" : ""}>
+                  <Input
+                    value={row.name}
+                    onChange={(e) => updateRow(index, { name: e.target.value })}
+                    placeholder="e.g. Advance"
+                  />
+                </SalesField>
+                <SalesField label={index === 0 ? "Amount (₹)" : ""}>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={row.amount}
+                    onChange={(e) => updateRow(index, { amount: e.target.value })}
+                  />
+                </SalesField>
+                <SalesField label={index === 0 ? "Due date" : ""}>
+                  <Input
+                    type="date"
+                    value={row.dueDate}
+                    onChange={(e) => updateRow(index, { dueDate: e.target.value })}
+                  />
+                </SalesField>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 text-muted-foreground"
+                  disabled={rows.length <= 1}
+                  onClick={() => removeRow(index)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={addRow}>
+            <Plus className="h-3.5 w-3.5" />
+            Add milestone
+          </Button>
+          <div className={`text-xs rounded-lg px-3 py-2 border ${balanced ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+            Scheduled: <span className="font-semibold tabular-nums">{formatCurrency(scheduledTotal)}</span>
+            {!balanced && (
+              <span> · {diff > 0 ? `${formatCurrency(diff)} remaining` : `${formatCurrency(Math.abs(diff))} over`}</span>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={createSchedule.isPending || !balanced}>
+              {createSchedule.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create installments
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function InvoiceFromProposalDialog({
   open,
   onOpenChange,
@@ -1162,111 +1442,21 @@ export function InvoiceFromProposalDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const createFromProposal = useCreateInvoiceFromProposal();
-  const { data: proposalsData } = useListProposals({ status: "approved", limit: 200 }, open);
-  const [proposalId, setProposalId] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [totalAdjustment, setTotalAdjustment] = useState(0);
-  const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
-  const [useCustomTotal, setUseCustomTotal] = useState(false);
-
-  const selectedProposal = (proposalsData?.proposals ?? []).find(
-    (p) => String(p.id) === proposalId && p.status === "approved",
-  );
-  const calculatedAmount = selectedProposal ? resolveProposalTotal(selectedProposal).finalTotal : 0;
-  const finalAmount = totalAdjustPayload(
-    calculatedAmount,
-    totalAdjustment,
-    useCustomTotal,
-    adjustedTotal,
-  ).amount;
-
-  useEffect(() => {
-    if (!open) return;
-    setProposalId("");
-    setDueDate("");
-    setTotalAdjustment(0);
-    setAdjustedTotal(null);
-    setUseCustomTotal(false);
-  }, [open]);
-
-  useEffect(() => {
-    setTotalAdjustment(0);
-    setAdjustedTotal(null);
-    setUseCustomTotal(false);
-  }, [proposalId]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!proposalId) {
-      toast.error("Select a proposal");
-      return;
-    }
-    try {
-      const payload = totalAdjustPayload(
-        calculatedAmount,
-        totalAdjustment,
-        useCustomTotal,
-        adjustedTotal,
-      );
-      const inv = await createFromProposal.mutateAsync({
-        proposalId: Number(proposalId),
-        dueDate: dueDate || undefined,
-        totalAdjustment: payload.totalAdjustment ?? 0,
-        adjustedTotal: payload.adjustedTotal,
-      });
-      toast.success(`Invoice ${inv.number} created from proposal`);
-      onOpenChange(false);
-      window.location.href = `/sales/invoices/${inv.id}`;
-    } catch (err) {
-      toastApiError(err, "Failed to create invoice from proposal");
-    }
-  };
-
-  const approved = (proposalsData?.proposals ?? []).filter((p) => p.status === "approved");
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px] bg-card border-border">
         <DialogHeader>
-          <DialogTitle>Invoice from proposal</DialogTitle>
-          <DialogDescription>Convert an approved proposal into an invoice.</DialogDescription>
+          <DialogTitle>Billing flow updated</DialogTitle>
+          <DialogDescription>
+            Invoices are no longer created directly from proposals. Open an approved proposal, create a payment schedule (installments), then generate an invoice for each milestone when you are ready to bill.
+          </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <SalesField label="Approved proposal">
-            <Select value={proposalId} onValueChange={setProposalId}>
-              <SelectTrigger><SelectValue placeholder="Select proposal" /></SelectTrigger>
-              <SelectContent>
-                {approved.map((p) => (
-                  <SelectItem key={p.id} value={String(p.id)}>{p.number} — {p.title}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SalesField>
-          <SalesField label="Due date" hint="Optional — leave blank to set it on the invoice later.">
-            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </SalesField>
-          {selectedProposal && (
-            <TotalAmountAdjustFields
-              calculatedTotal={calculatedAmount}
-              totalAdjustment={totalAdjustment}
-              onTotalAdjustmentChange={setTotalAdjustment}
-              adjustedTotal={adjustedTotal}
-              onAdjustedTotalChange={setAdjustedTotal}
-              useCustomTotal={useCustomTotal}
-              onUseCustomTotalChange={setUseCustomTotal}
-              finalTotal={finalAmount}
-              compact
-            />
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={createFromProposal.isPending}>
-              {createFromProposal.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Create invoice
-            </Button>
-          </DialogFooter>
-        </form>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button type="button" onClick={() => { onOpenChange(false); window.location.href = "/sales/proposals"; }}>
+            Go to proposals
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -1278,16 +1468,22 @@ export function RecordPaymentDialog({
   open,
   onOpenChange,
   defaultInvoiceId,
+  defaultInstallmentId,
+  customerId: filterCustomerId,
   onSuccess,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultInvoiceId?: number;
+  defaultInstallmentId?: number;
+  customerId?: number;
   onSuccess?: (paymentId: number) => void;
 }) {
   const recordPayment = useRecordPayment();
   const { data: invoicesData } = useListInvoices({ limit: 500 }, open);
-  const unpaid = (invoicesData?.invoices ?? []).filter((i) => i.status !== "paid");
+  const unpaid = (invoicesData?.invoices ?? []).filter(
+    (i) => i.status !== "paid" && i.status !== "cancelled" && (filterCustomerId == null || i.customerId === filterCustomerId),
+  );
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ? String(defaultInvoiceId) : "");
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
@@ -1319,6 +1515,7 @@ export function RecordPaymentDialog({
     try {
       const payment = await recordPayment.mutateAsync({
         invoiceId: Number(invoiceId),
+        installmentId: defaultInstallmentId,
         amount: amt,
         paymentMethod,
         transactionId: transactionId.trim() || undefined,

@@ -1,4 +1,51 @@
+import { format } from "date-fns";
 import type { ProposalItem } from "@/api/sales";
+
+export const SALES_DATETIME_FORMAT = "MMM d, yyyy · h:mm a";
+
+export function formatSalesDateTime(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(d, SALES_DATETIME_FORMAT);
+}
+
+export function formatProjectLabel(projectId?: number | null, projectName?: string | null): string {
+  if (!projectId && !projectName) return "—";
+  return projectName?.trim() || (projectId ? `Project #${projectId}` : "—");
+}
+
+export function formatInstallmentSequence(
+  sequenceNumber?: number | null,
+  sequenceTotal?: number | null,
+): string | null {
+  if (!sequenceNumber) return null;
+  if (sequenceTotal && sequenceTotal > 1) {
+    return `Installment ${sequenceNumber} of ${sequenceTotal}`;
+  }
+  return `Installment ${sequenceNumber}`;
+}
+
+export function isProposalValidityActive(validUntil?: string | null): boolean {
+  if (!validUntil) return true;
+  const end = new Date(validUntil);
+  if (Number.isNaN(end.getTime())) return true;
+  end.setHours(23, 59, 59, 999);
+  return end.getTime() >= Date.now();
+}
+
+export function canClientRespondToProposal(proposal: {
+  status: string;
+  validUntil?: string | null;
+  sentAt?: string | null;
+}): boolean {
+  if (["approved", "declined", "draft"].includes(proposal.status)) return false;
+  if (["sent", "seen"].includes(proposal.status)) return true;
+  if (!isProposalValidityActive(proposal.validUntil)) return false;
+  if (proposal.status === "expired") return true;
+  if (proposal.status === "revised" && proposal.sentAt) return true;
+  return false;
+}
 
 export function calcProposalTotal(proposal: { items: ProposalItem[]; discount: number }) {
   let subtotal = 0;

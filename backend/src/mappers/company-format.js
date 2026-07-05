@@ -27,6 +27,8 @@ function mapCompanyRecord(client, counts) {
     portalLogin: client.portalLogin,
     clientSince: client.clientSince.toISOString(),
     userId: client.userId ?? null,
+    directConversationId: client.directConversationId ?? null,
+    customerType: client.customerType ?? "corporate",
     createdBy: client.createdBy ?? null,
     activeProjectCount: counts.activeProjectCount,
     totalProjects: counts.totalProjects,

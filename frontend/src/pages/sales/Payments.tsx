@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { format } from "date-fns";
 import { Plus, IndianRupee, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { useListPayments, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { formatProjectLabel, formatSalesDateTime } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -97,11 +97,12 @@ export default function Payments() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Receipt #</TableHead>
                 <TableHead className="text-xs">Invoice</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Installment</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Invoice status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Date</TableHead>
+                <TableHead className="text-xs">Created</TableHead>
                 <TableHead className="text-xs text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -117,19 +118,18 @@ export default function Payments() {
                       {p.invoiceNumber ?? `INV-${p.invoiceId}`}
                     </Link>
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {p.installmentId ? (
-                      <span className="font-mono text-[11px]">Inst #{p.installmentId}</span>
-                    ) : (
-                      <span className="text-muted-foreground/50">—</span>
-                    )}
+                  <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(p.projectId, p.projectName)}>
+                    {formatProjectLabel(p.projectId, p.projectName)}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
+                    {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
                   </TableCell>
                   <TableCell className="text-xs">{METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="invoice" value={p.invoiceStatus as "paid" | "partial" | "unpaid" | "overdue"} />
                   </TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(p.createdAt), "MMM d, yyyy")}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>

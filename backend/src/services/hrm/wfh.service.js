@@ -41,13 +41,18 @@ export async function listWfhRequests({ userIds, status } = {}) {
   if (userIds?.length) query.userId = { $in: userIds };
   if (status) query.status = status;
   const rows = await wfhRequestsTable.find(query).sort({ createdAt: -1 }).lean();
-  const users = await usersTable.find({ id: { $in: [...new Set(rows.map((r) => r.userId))] } }, { id: 1, name: 1, employeeId: 1, avatarUrl: 1 }).lean();
+  const users = await usersTable.find(
+    { id: { $in: [...new Set(rows.map((r) => r.userId))] } },
+    { id: 1, name: 1, employeeId: 1, avatarUrl: 1, departmentId: 1, department: 1 },
+  ).lean();
   const userMap = new Map(users.map((u) => [u.id, u]));
   return rows.map((r) => ({
     ...r,
     userName: userMap.get(r.userId)?.name ?? "Unknown",
     employeeId: userMap.get(r.userId)?.employeeId ?? null,
     avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
+    departmentId: userMap.get(r.userId)?.departmentId ?? null,
+    departmentName: userMap.get(r.userId)?.department ?? null,
   }));
 }
 

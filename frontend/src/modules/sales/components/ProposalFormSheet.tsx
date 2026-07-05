@@ -16,7 +16,7 @@ import {
 } from "@/api/sales";
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { formatCurrency } from "@/modules/sales/constants";
-import { TotalAmountAdjustFields, proposalAdjustPayload } from "@/modules/sales/components";
+import { TotalAmountAdjustFields, proposalAdjustPayload } from "@/modules/sales/components/total-amount-adjust";
 import { resolveFinalTotal } from "@/modules/sales/utils";
 import { useSalesStaff } from "@/modules/sales/use-sales-staff";
 import type { User } from "@/api/generated/api.schemas";

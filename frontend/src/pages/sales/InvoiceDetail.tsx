@@ -1,10 +1,23 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useRoute } from "wouter";
-import { ArrowLeft, Download, Loader2, Pencil } from "lucide-react";
+import { Link, useRoute, useLocation } from "wouter";
+import { format } from "date-fns";
+import { ArrowLeft, Download, Loader2, Pencil, Ban, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,11 +26,14 @@ import {
   useListPayments,
   useGetInstallment,
   useUpdateInvoice,
+  useCancelInvoice,
 } from "@/api/sales";
 import { useGetSettings } from "@/api/generated/api";
 import { toInvoicePreview, paymentToPartial } from "@/modules/sales/adapters";
+import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
 import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesEmptyState,
@@ -28,17 +44,23 @@ import {
   totalAdjustPayload,
   InvoiceFormSheet,
   PaymentScheduleCard,
+  InstallmentProgress,
+  SalesStatusBadge,
 } from "@/modules/sales/components";
 
 export default function InvoiceDetailPage() {
   const [, params] = useRoute("/sales/invoices/:id");
+  const [, navigate] = useLocation();
   const invoiceId = Number(params?.id);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
   const [downloading, setDownloading] = useState(false);
   const docRef = useRef<HTMLDivElement>(null);
   const pdfRef = useRef<HTMLDivElement>(null);
   const updateInvoice = useUpdateInvoice();
+  const cancelInvoice = useCancelInvoice();
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
@@ -87,6 +109,24 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  const handleCancel = async () => {
+    if (!invoice) return;
+    try {
+      await cancelInvoice.mutateAsync({
+        id: invoice.id,
+        reason: cancelReason.trim() || undefined,
+      });
+      toast.success("Invoice cancelled");
+      setCancelOpen(false);
+      setCancelReason("");
+      if (invoice.installmentId) {
+        navigate(`/sales/installments/${invoice.installmentId}`);
+      }
+    } catch (err) {
+      toastApiError(err, "Failed to cancel invoice");
+    }
+  };
+
   const handleDownloadPdf = async () => {
     const target = pdfRef.current ?? docRef.current;
     if (!target || !invoice) return;
@@ -127,12 +167,20 @@ export default function InvoiceDetailPage() {
     installment?.name,
   );
   const payments = (paymentsData?.payments ?? []).map(paymentToPartial);
+  const isMilestoneInvoice = !!invoice.installmentId;
+  const isCancelled = invoice.status === "cancelled";
+  const isActive = !isCancelled && invoice.status !== "paid";
+  const canCancel = isActive && invoice.paidAmount === 0;
+  const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
+  const installmentRemaining = installment
+    ? calcRemaining(installment.dueAmount, installment.paidAmount)
+    : remaining;
 
   return (
     <PortalPageShell>
       <SalesPageHeader
         title={invoice.number}
-        description={customer?.companyName ?? `Customer #${invoice.customerId}`}
+        description={invoice.title?.trim() || customer?.companyName || `Customer #${invoice.customerId}`}
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Invoices", href: "/sales/invoices" },
@@ -160,7 +208,7 @@ export default function InvoiceDetailPage() {
               )}
               Download PDF
             </Button>
-            {invoice.status !== "paid" && (
+            {isActive && (
               <Button
                 variant="outline"
                 size="sm"
@@ -171,7 +219,18 @@ export default function InvoiceDetailPage() {
                 Edit
               </Button>
             )}
-            {invoice.status !== "paid" && (
+            {canCancel && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-destructive hover:text-destructive border-destructive/30"
+                onClick={() => setCancelOpen(true)}
+              >
+                <Ban className="h-3.5 w-3.5" />
+                Cancel invoice
+              </Button>
+            )}
+            {isActive && (
               <Button size="sm" className="h-8" onClick={() => setPaymentOpen(true)}>
                 Record payment
               </Button>
@@ -179,6 +238,43 @@ export default function InvoiceDetailPage() {
           </>
         }
       />
+
+      <div className="flex flex-wrap items-center gap-2 -mt-1">
+        <SalesStatusBadge variant="invoice" value={invoice.status} />
+        <span className="text-xs text-muted-foreground">
+          Due {format(new Date(invoice.dueDate), "MMM d, yyyy")}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          Created {formatSalesDateTime(invoice.createdAt)}
+        </span>
+        {!isCancelled && (
+          <span className="text-xs font-semibold tabular-nums">
+            {formatCurrency(remaining)} outstanding
+          </span>
+        )}
+      </div>
+
+      {isCancelled && (
+        <div className="rounded-xl px-4 py-3.5 flex gap-3 bg-muted/50 border border-border">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5 text-muted-foreground" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">This invoice was cancelled</p>
+            {invoice.cancelledAt && (
+              <p className="text-xs text-muted-foreground">
+                Cancelled {formatSalesDateTime(invoice.cancelledAt)}
+              </p>
+            )}
+            {invoice.cancelReason && (
+              <p className="text-sm text-muted-foreground">{invoice.cancelReason}</p>
+            )}
+            {invoice.installmentId && (
+              <p className="text-xs text-muted-foreground">
+                The linked milestone is available again — you can generate a new invoice from the installment page.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Left column — invoice document + direct payment history */}
@@ -195,13 +291,13 @@ export default function InvoiceDetailPage() {
             />
           </div>
           {/* Payments not linked to any installment */}
-          {payments.filter((p) => !p.installmentId).length > 0 && (
+          {payments.length > 0 && (
             <Card data-pdf-hide>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Direct payments</CardTitle>
+                <CardTitle className="text-sm">Payment history</CardTitle>
               </CardHeader>
               <CardContent>
-                <PaymentHistoryTable payments={payments.filter((p) => !p.installmentId)} />
+                <PaymentHistoryTable payments={payments} />
               </CardContent>
             </Card>
           )}
@@ -209,18 +305,81 @@ export default function InvoiceDetailPage() {
 
         {/* Right column — schedule + adjust + links */}
         <div className="space-y-4">
-          {/* Payment schedule with installments */}
-          <PaymentScheduleCard
-            invoiceId={invoiceId}
-            invoiceAmount={invoice.amount}
-            invoicePaidAmount={invoice.paidAmount}
-            onPaySuccess={(paymentId) => {
-              window.location.href = `/sales/receipts/${paymentId}`;
-            }}
-          />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Invoice summary</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-muted-foreground">Amount</p>
+                <p className="font-bold tabular-nums">{formatCurrency(invoice.amount)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Paid</p>
+                <p className="font-bold tabular-nums text-emerald-700">{formatCurrency(invoice.paidAmount)}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Customer</p>
+                <p className="font-medium truncate">{customer?.companyName ?? `#${invoice.customerId}`}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Project</p>
+                <p className="font-medium">{invoice.projectId ? `#${invoice.projectId}` : "—"}</p>
+              </div>
+            </CardContent>
+          </Card>
 
-          {/* Direct payment (no installment) */}
-          {invoice.status !== "paid" && (
+          {isMilestoneInvoice && !isCancelled ? (
+            <Card>
+              <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                <CardTitle className="text-sm">Linked milestone</CardTitle>
+                <SalesStatusBadge variant="installment" value={installment?.status ?? "pending"} />
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm font-semibold">{installment?.name ?? "Milestone"}</p>
+                {installment ? (
+                  <InstallmentProgress paid={installment.paidAmount} total={installment.dueAmount} />
+                ) : (
+                  <InstallmentProgress paid={invoice.paidAmount} total={invoice.amount} />
+                )}
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">Due date</p>
+                    <p className="font-medium">
+                      {installment
+                        ? format(new Date(installment.dueDate), "MMM d, yyyy")
+                        : format(new Date(invoice.dueDate), "MMM d, yyyy")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Remaining</p>
+                    <p className="font-bold text-amber-700">{formatCurrency(installmentRemaining)}</p>
+                  </div>
+                </div>
+                {isActive && (
+                  <Button size="sm" className="w-full h-8" onClick={() => setPaymentOpen(true)}>
+                    Record payment
+                  </Button>
+                )}
+                {installment && (
+                  <Button variant="outline" size="sm" className="w-full h-8" asChild>
+                    <Link href={`/sales/installments/${installment.id}`}>Open installment</Link>
+                  </Button>
+                )}
+              </CardContent>
+            </Card>
+          ) : !isCancelled ? (
+            <PaymentScheduleCard
+              invoiceId={invoiceId}
+              invoiceAmount={invoice.amount}
+              invoicePaidAmount={invoice.paidAmount}
+              onPaySuccess={(paymentId) => {
+                window.location.href = `/sales/receipts/${paymentId}`;
+              }}
+            />
+          ) : null}
+
+          {!isMilestoneInvoice && isActive && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Direct payment</CardTitle>
@@ -236,7 +395,7 @@ export default function InvoiceDetailPage() {
             </Card>
           )}
 
-          {/* Adjust amount */}
+          {!isMilestoneInvoice && !isCancelled && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Adjust amount</CardTitle>
@@ -253,7 +412,7 @@ export default function InvoiceDetailPage() {
                 finalTotal={finalAmount}
                 compact
               />
-              {invoice.status !== "paid" && (
+              {isActive && (
                 <Button
                   size="sm"
                   className="w-full h-8"
@@ -266,8 +425,42 @@ export default function InvoiceDetailPage() {
               )}
             </CardContent>
           </Card>
+          )}
 
-          {/* Links */}
+          {canCancel && (
+            <Card className="border-destructive/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-destructive">Cancel invoice</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <p className="text-xs text-muted-foreground">
+                  Void this invoice with no payments. Milestone invoices will be unlinked so you can bill again.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full h-8 text-destructive border-destructive/30 hover:bg-destructive/5"
+                  onClick={() => setCancelOpen(true)}
+                >
+                  Cancel invoice
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {isMilestoneInvoice && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Amount</CardTitle>
+              </CardHeader>
+              <CardContent className="text-xs text-muted-foreground space-y-1">
+                <p>Milestone invoice — amount matches the linked installment.</p>
+                <p className="font-bold text-foreground tabular-nums">{formatCurrency(invoice.amount)}</p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Links — placeholder removed duplicate adjust block below */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Links</CardTitle>
@@ -295,11 +488,48 @@ export default function InvoiceDetailPage() {
         open={paymentOpen}
         onOpenChange={setPaymentOpen}
         defaultInvoiceId={invoiceId}
+        defaultInstallmentId={invoice.installmentId ?? undefined}
         onSuccess={(paymentId) => {
           window.location.href = `/sales/receipts/${paymentId}`;
         }}
       />
       <InvoiceFormSheet open={editOpen} onOpenChange={setEditOpen} invoice={invoice} />
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel invoice {invoice.number}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This voids the invoice. It only works when no payments have been recorded.
+              {invoice.installmentId && " The linked milestone will be available to invoice again."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="cancel-reason" className="text-xs">Reason (optional)</Label>
+            <Textarea
+              id="cancel-reason"
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g. Wrong milestone amount, client requested revision"
+              className="min-h-[72px] text-sm"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelInvoice.isPending}>Keep invoice</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={cancelInvoice.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleCancel();
+              }}
+            >
+              {cancelInvoice.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancel invoice
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div
         ref={pdfRef}

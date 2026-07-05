@@ -29,7 +29,7 @@ const proposalSchema = new Schema(
     number: { type: String, unique: true, required: true },
     title: { type: String, required: true, trim: true },
     leadId: { type: Number, ref: "SalesLeads", default: null, index: true },
-    customerId: { type: Number, ref: "SalesCustomers", default: null, index: true },
+    customerId: { type: Number, ref: "Clients", default: null, index: true },
     assignedTo: { type: Number, ref: "Users", default: null, index: true },
     status: { type: String, enum: proposalStatuses, default: "draft", required: true, index: true },
     items: { type: [proposalItemSchema], default: [] },

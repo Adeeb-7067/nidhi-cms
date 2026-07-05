@@ -209,6 +209,22 @@ export type HrmProfilePatchPayload = {
   addressProofUrl?: string | null;
 };
 
+export function getEmployeeContractNet(
+  overview?: {
+    salaryNet?: number | null;
+    contractSalary?: { configured?: boolean; net?: number } | null;
+  } | null,
+  profileSalary?: EmployeeSalaryProfile | null,
+): number | null {
+  if (overview?.contractSalary?.configured && overview.contractSalary.net != null) {
+    return overview.contractSalary.net;
+  }
+  if (overview?.salaryNet != null && overview.salaryNet > 0) return overview.salaryNet;
+  const profileNet = profileSalary?.netSalary;
+  if (profileNet != null && profileNet > 0) return profileNet;
+  return null;
+}
+
 export function getLeaveBalanceCarriedForward(balance: {
   carriedForward?: number;
   carryForward?: number;

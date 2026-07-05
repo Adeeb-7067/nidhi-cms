@@ -36,9 +36,17 @@ const SESSION_END_COPY = {
     title: "Work session ended",
     body: "A new work day started — your previous session was closed. Clock in to start today’s shift.",
   },
+  shift_ended: {
+    title: "Automatically clocked out",
+    body: "Your shift has ended. You were clocked out automatically. Clock in again if you are doing extra work — your session continues until the end of the day.",
+  },
   admin_terminated: {
     title: "Work session ended by admin",
     body: "An administrator ended your work session. Clock in again when you are ready to work.",
+  },
+  leave_approved: {
+    title: "Clocked out — leave approved",
+    body: "Your full-day leave was approved and your active work session was ended. You are marked on leave for today.",
   },
 };
 
@@ -48,6 +56,63 @@ export function shouldNotifySessionEnd(stopReason) {
 
 export function getSessionEndCopy(stopReason) {
   return SESSION_END_COPY[stopReason] ?? null;
+}
+
+const SHIFT_AUTO_CLOCK_OUT_COPY = SESSION_END_COPY.shift_ended;
+
+/**
+ * Notify when shift ends — auto clock-out, not a terminal session end.
+ * Uses a separate realtime event so clients treat it like clock-out, not session death.
+ */
+export async function notifyShiftAutoClockOut({ userId, sessionId }) {
+  const copy = SHIFT_AUTO_CLOCK_OUT_COPY;
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const existing = await notificationsTable
+    .findOne({
+      userId,
+      type: "work_session",
+      entityId: sessionId,
+      createdAt: { $gte: oneHourAgo },
+    })
+    .lean();
+  if (existing) return false;
+
+  const notifId = await getNextSequence("notifications");
+  await notificationsTable.create({
+    id: notifId,
+    userId,
+    type: "work_session",
+    title: copy.title,
+    body: copy.body,
+    entityType: "work_session",
+    entityId: sessionId,
+    relatedId: sessionId,
+    isRead: false,
+  });
+
+  const payload = {
+    id: notifId,
+    type: "work_session",
+    title: copy.title,
+    body: copy.body,
+    entityType: "work_session",
+    entityId: sessionId,
+    stopReason: "shift_ended",
+  };
+
+  await notifyUser(userId, "notification", payload);
+  await notifyUser(userId, "shift_auto_clock_out", payload);
+  await sendWebPushToUser(userId, {
+    title: copy.title,
+    body: copy.body,
+    data: {
+      type: "work_session",
+      entityType: "work_session",
+      entityId: sessionId,
+      stopReason: "shift_ended",
+    },
+  });
+  return true;
 }
 
 /**

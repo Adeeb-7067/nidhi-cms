@@ -9,6 +9,7 @@ export type StopReason =
   | "logout"
   | "session_expired"
   | "day_ended"
+  | "shift_ended"
   | "admin_terminated"
   | "system_sleep"
   | "system_shutdown"

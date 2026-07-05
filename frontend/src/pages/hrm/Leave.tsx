@@ -30,6 +30,7 @@ import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { HrmPageKpiRow, countByStatus } from "@/modules/hrm/page-kpis";
 import { useAuth } from "@/contexts/AuthContext";
 import { getLeaveBalanceAvailable } from "@/modules/hrm/employee-profile-types";
+import { LeaveCycleResetBanner } from "@/modules/hrm/LeaveCycleResetBanner";
 
 export default function HrmLeavePage() {
   const { user } = useAuth();
@@ -64,7 +65,7 @@ export default function HrmLeavePage() {
   const applyLeave = useApplyLeaveRequest();
   const reviewLeave = useReviewLeaveRequest();
   const cancelLeave = useCancelLeaveRequest();
-  const { data: hrmSettings } = useHrmSettings({ enabled: !canAdminView || applyOpen });
+  const { data: hrmSettings } = useHrmSettings();
 
   const submitLeave = async (payload: {
     leaveTypeId: number;
@@ -126,7 +127,7 @@ export default function HrmLeavePage() {
       {
         label: "Monthly quota",
         value: hrmSettings?.hrmPaidLeavesPerMonth ?? 0,
-        hint: "Paid leave accrual / month",
+        hint: "Accrues monthly; unused days carry forward for 3 months, then reset",
         icon: Wallet,
         accent: "blue" as const,
       },
@@ -140,9 +141,25 @@ export default function HrmLeavePage() {
       currentUserId: user?.id,
       reviewPending: reviewLeave.isPending || cancelLeave.isPending,
       onApprove: (id: number) =>
-        reviewLeave.mutate({ id, status: "approved" }, { onSuccess: () => toast.success("Leave approved") }),
+        reviewLeave.mutate(
+          { id, status: "approved" },
+          {
+            onSuccess: (data) => {
+              toast.success("Leave approved");
+              for (const message of data.warnings ?? []) toast.warning(message);
+            },
+          },
+        ),
       onReject: (id: number) =>
-        reviewLeave.mutate({ id, status: "rejected" }, { onSuccess: () => toast.success("Leave rejected") }),
+        reviewLeave.mutate(
+          { id, status: "rejected" },
+          {
+            onSuccess: (data) => {
+              toast.success("Leave rejected");
+              for (const message of data.warnings ?? []) toast.warning(message);
+            },
+          },
+        ),
       onCancel: (id: number) =>
         cancelLeave.mutate(id, { onSuccess: () => toast.success("Leave request cancelled") }),
     }),
@@ -191,6 +208,12 @@ export default function HrmLeavePage() {
         />
 
         <HrmPageKpiRow items={kpiItems} loading={requestsLoading || balancesLoading} />
+
+        <LeaveCycleResetBanner
+          leaveYearStartMonth={hrmSettings?.hrmLeaveYearStartMonth ?? 1}
+          resetCycleMonths={hrmSettings?.hrmLeaveResetCycleMonths ?? 3}
+          paidLeavesPerMonth={hrmSettings?.hrmPaidLeavesPerMonth ?? 1}
+        />
 
         <Tabs value={leaveTab} onValueChange={setLeaveTab} className="space-y-4">
           <HrmTabsList>

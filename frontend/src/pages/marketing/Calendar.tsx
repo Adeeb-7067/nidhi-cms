@@ -48,7 +48,7 @@ export default function MarketingCalendar() {
       <MarketingPageHeader
         title="Content calendar"
         description="Scheduled posts — platform, caption, hashtags, and approval status"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Calendar" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Calendar" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search posts, clients…">

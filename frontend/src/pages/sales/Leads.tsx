@@ -39,6 +39,7 @@ import {
   formatCompactCurrency,
   formatLeadSourceLabel,
 } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -68,7 +69,7 @@ function downloadLeadsCsv(leads: Lead[]) {
     l.status,
     l.priority,
     l.expectedValue,
-    format(new Date(l.createdAt), "yyyy-MM-dd"),
+    formatSalesDateTime(l.createdAt),
   ]);
   const csv = [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
   const a = document.createElement("a");
@@ -343,9 +344,9 @@ export default function SalesLeads() {
                         ? format(new Date(lead.reminder.date), "MMM d, yyyy")
                         : "—"}
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {format(new Date(lead.createdAt), "MMM d, yyyy")}
-                    </TableCell>
+                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                        {formatSalesDateTime(lead.createdAt)}
+                      </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
                         <Button

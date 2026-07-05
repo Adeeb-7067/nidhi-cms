@@ -18,6 +18,7 @@ import {
 import { ChangePasswordCard } from "@/components/auth/change-password-card";
 import { useAuth } from "@/contexts/AuthContext";
 import { LEAD_STATUS_LABELS, LEAD_STATUS_ORDER } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader } from "@/modules/sales/components";
 import {
   useListSalesConfig,
@@ -85,6 +86,9 @@ function ConfigItemList({ type, label }: { type: string; label: string }) {
               <div>
                 <span className="text-sm font-medium">{item.label}</span>
                 <span className="ml-2 text-xs text-muted-foreground font-mono">{item.value}</span>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Created {formatSalesDateTime(item.createdAt)}
+                </p>
               </div>
               <Button
                 variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"

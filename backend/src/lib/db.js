@@ -14,8 +14,8 @@ if (process.env.DATABASE_URL) {
       serverSelectionTimeoutMS: 5_000,
       connectTimeoutMS: 10_000,
       socketTimeoutMS: 45_000,
-      maxPoolSize: 10,   // max concurrent DB connections
-      minPoolSize: 2,    // keep at least 2 warm connections in the pool
+      maxPoolSize: 50,   // max concurrent DB connections
+      minPoolSize: 5,    // keep at least 5 warm connections in the pool
     }).then(() => {
       console.log("[DB] Mongoose connect call resolved.");
     }).catch((err) => {

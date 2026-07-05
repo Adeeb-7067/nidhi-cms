@@ -25,6 +25,7 @@ import {
   type Proposal,
 } from "@/api/sales";
 import { PROPOSAL_STATUS_LABELS, formatCurrency } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -266,7 +267,7 @@ export default function Proposals() {
                         {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
-                        {format(new Date(p.createdAt), "MMM d, yyyy")}
+                        {formatSalesDateTime(p.createdAt)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">

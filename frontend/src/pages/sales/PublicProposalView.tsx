@@ -16,7 +16,7 @@ import {
   usePublicProposalComments,
   useAddPublicComment,
 } from "@/api/sales";
-import { resolveProposalTotal } from "@/modules/sales/utils";
+import { resolveProposalTotal, canClientRespondToProposal, isProposalValidityActive } from "@/modules/sales/utils";
 import { formatCurrency, COMPANY_BILLING } from "@/modules/sales/constants";
 import { ProposalDocument } from "@/modules/sales/components/ProposalDocument";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
@@ -578,8 +578,8 @@ export default function PublicProposalView() {
 
   /* Derived */
   const { subtotal, tax, finalTotal } = resolveProposalTotal(proposal);
-  const isPastValidity = !!(proposal.validUntil && new Date(proposal.validUntil) < new Date());
-  const canAct = ["sent", "seen"].includes(proposal.status);
+  const isPastValidity = !!(proposal.validUntil && !isProposalValidityActive(proposal.validUntil));
+  const canAct = canClientRespondToProposal(proposal);
   const currentStatus: "approved" | "declined" | "counter_offer" | null =
     doneEvent ?? (["approved", "declined", "counter_offer"].includes(proposal.status)
       ? proposal.status as "approved" | "declined" | "counter_offer"

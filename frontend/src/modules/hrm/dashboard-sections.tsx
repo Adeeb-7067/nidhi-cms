@@ -17,7 +17,7 @@ import type {
   HrmDashboardTopEarner,
   HrmDashboardBirthday,
 } from "./types";
-import { HrmAttendanceBadge } from "./components";
+import { HrmAttendanceBadge } from "./attendance-badge";
 
 export const HRM_DASHBOARD_PANEL_MIN_H = "min-h-[220px]";
 

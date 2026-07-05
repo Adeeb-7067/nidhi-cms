@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import {
   ArrowLeft, Activity, Bell, Briefcase, Building2, Calendar,
   CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock,
-  Download, ExternalLink, FileText, FileImage, FolderOpen, Mail, MapPin,
+  Download, FileText, FileImage, FolderOpen, Mail, MapPin,
   MessageSquare, Pencil, Phone, Plus, Radio, RefreshCw, Send,
   StickyNote, Tag, Trash2, TrendingUp, User, UserCheck, X,
 } from "lucide-react";
@@ -42,6 +42,7 @@ import {
   formatLeadContactChannelLabel,
   formatLeadSourceLabel,
 } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { FileUploader } from "@/components/ui/file-uploader";
 
 /* ─── Design tokens ────────────────────────────────────────────────────────── */
@@ -624,7 +625,7 @@ export default function LeadDetail() {
                       </ContactRow>
                     ) : null}
                     <ContactRow icon={Calendar} label="Created">
-                      {format(new Date(lead.createdAt), "dd MMM yyyy")}
+                      {formatSalesDateTime(lead.createdAt)}
                     </ContactRow>
                   </div>
                 </div>
@@ -879,7 +880,13 @@ export default function LeadDetail() {
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="text-sm font-semibold" style={{ color: P.dark }}>{p.title}</p>
+                        <Link
+                          href={`/sales/proposals/${p.id}`}
+                          className="text-sm font-semibold hover:text-primary hover:underline transition-colors"
+                          style={{ color: P.dark }}
+                        >
+                          {p.title}
+                        </Link>
                         {isCurrent && (
                           <span
                             className="text-[10px] font-bold px-2 py-0.5 rounded-full"
@@ -889,9 +896,15 @@ export default function LeadDetail() {
                           </span>
                         )}
                       </div>
-                      <p className="text-xs mt-0.5" style={{ color: P.muted }}>{p.number}</p>
+                      <Link
+                        href={`/sales/proposals/${p.id}`}
+                        className="text-xs mt-0.5 block hover:text-primary hover:underline transition-colors"
+                        style={{ color: P.muted }}
+                      >
+                        {p.number}
+                      </Link>
                       <p className="text-[10px] mt-1" style={{ color: P.subtle }}>
-                        Created {format(new Date(p.createdAt), "MMM d, yyyy")}
+                        Created {formatSalesDateTime(p.createdAt)}
                         {p.sentAt ? ` · Sent ${format(new Date(p.sentAt), "MMM d, yyyy")}` : ""}
                       </p>
                     </div>
@@ -918,11 +931,6 @@ export default function LeadDetail() {
                         {isSending ? "Sending…" : "Resend"}
                       </Button>
                     )}
-                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5 ml-auto" asChild>
-                      <Link href={`/sales/proposals/${p.id}`}>
-                        <ExternalLink className="h-3 w-3" />Open
-                      </Link>
-                    </Button>
                   </div>
                 </div>
               );

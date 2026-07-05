@@ -40,7 +40,7 @@ export default function MarketingGoogleAds() {
       <MarketingPageHeader
         title="Google Ads"
         description="Search, Display, Shopping, PMax, and YouTube campaigns with keyword performance"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Google Ads" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Google Ads" }]}
       />
 
       <MarketingFilterBar

@@ -9,6 +9,7 @@ import { verifyMailer } from "./src/lib/email.js";
 import { startInventoryExpiryJob } from "./src/services/inventory/expiry-job.js";
 import { startDailyLogComplianceJob } from "./src/services/daily-log-compliance.js";
 import { startScreenshotPurgeJob } from "./src/services/screenshot-purge-job.js";
+import { startReportPurgeJob } from "./src/services/report-purge-job.js";
 import { migrateDirectConversationIndexes } from "./src/services/direct-conversation-migration.js";
 import {
   ensureDefaultRoleTemplates,
@@ -18,6 +19,7 @@ import {
 import { seedLeaveTypes } from "./src/services/hrm/leave.service.js";
 import { startLeaveAccrualJob } from "./src/services/hrm/leave-accrual.service.js";
 import { startAttendanceMaterializeJob } from "./src/services/hrm/attendance-materialize.service.js";
+import { startEmployeeExitJob } from "./src/services/hrm/employee-exit-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -28,9 +30,11 @@ initFirebaseAdmin();
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
 const runScreenshotJobs = startScreenshotPurgeJob();
+const runReportJobs = startReportPurgeJob();
 startDailyLogComplianceJob();
 const runLeaveAccrualTick = startLeaveAccrualJob();
 const runAttendanceMaterializeTick = startAttendanceMaterializeJob();
+const runEmployeeExitTick = startEmployeeExitJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
@@ -38,10 +42,12 @@ const bootstrapBackgroundJobs = () => {
   runInventoryExpiryCheck();
   runScreenshotJobs.dailyTick();
   runScreenshotJobs.heartbeatTick();
+  runReportJobs.dailyTick();
   runLeaveAccrualTick();
   runAttendanceMaterializeTick();
+  runEmployeeExitTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, daily log compliance, leave accrual, attendance materialize)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation)",
   );
 };
 void whenDatabaseReady()

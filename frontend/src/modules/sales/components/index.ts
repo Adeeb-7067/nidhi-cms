@@ -26,6 +26,7 @@ export {
   BulkLeadActions,
   CreateInstallmentDialog,
   CreateInvoiceDialog,
+  InstallmentsFromProposalDialog,
   InvoiceFromProposalDialog,
   RecordPaymentDialog,
 } from "./sales-action-dialogs";

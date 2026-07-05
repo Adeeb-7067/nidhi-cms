@@ -8,6 +8,7 @@ import { apiUrl } from "@/lib/api-base";
 import { getAccessToken } from "@/lib/auth-storage";
 import type { BugAttachment } from "@/api";
 import type { UploadCategory } from "./file-uploader";
+import { compressImageFile } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 
 interface MultiFileUploaderProps {
@@ -97,7 +98,7 @@ export function MultiFileUploader({
     try {
       const uploaded: BugAttachment[] = [];
       for (const file of toUpload) {
-        const item = await uploadFile(file);
+        const item = await uploadFile(await compressImageFile(file));
         uploaded.push(item);
       }
       onChange([...value, ...uploaded]);

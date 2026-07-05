@@ -1,15 +1,16 @@
 import {
   SalesLeads,
   SalesProposals,
-  SalesCustomers,
+  clientsTable,
   SalesInvoices,
   SalesPayments,
   SalesFollowUps,
   usersTable,
 } from "../../models/schema/index.js";
+import { billableInvoiceMatch } from "../../utils/sales-invoice-filters.js";
 
 async function getBdeScope(userId) {
-  const myCustomers = await SalesCustomers.find({ assignedAdminId: userId }).select({ id: 1 }).lean();
+  const myCustomers = await clientsTable.find({ assignedAdminId: userId }).select({ id: 1 }).lean();
   const myCustomerIds = myCustomers.map((c) => c.id);
   return {
     leadFilter: { $or: [{ assignedTo: userId }, { createdBy: userId }] },
@@ -44,6 +45,7 @@ async function getDashboard(req, res) {
     leadsToday,
     leadsThisWeek,
     leadsThisMonth,
+    totalLeadsClosed,
     activeFollowUps,
     totalProposals,
     activeCustomers,
@@ -56,9 +58,10 @@ async function getDashboard(req, res) {
     SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfToday } }),
     SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfWeek } }),
     SalesLeads.countDocuments({ ...lf, createdAt: { $gte: startOfMonth } }),
+    SalesLeads.countDocuments({ ...lf, status: "converted" }),
     SalesFollowUps.countDocuments({ ...fuf, status: { $in: ["scheduled", "overdue"] } }),
     SalesProposals.countDocuments(pf),
-    SalesCustomers.countDocuments(cf),
+    clientsTable.countDocuments(cf),
     SalesLeads.aggregate([
       { $match: lf },
       { $group: { _id: { $ifNull: ["$source", "other"] }, count: { $sum: 1 } } },
@@ -92,6 +95,7 @@ async function getDashboard(req, res) {
   let totalOutstanding = 0;
   for (const row of invoiceAgg) {
     invoiceByStatus[row._id] = { count: row.count, amount: row.totalAmount };
+    if (row._id === "cancelled") continue;
     totalBilled += row.totalAmount;
     totalOutstanding += Math.max(0, row.totalAmount - row.totalPaid);
   }
@@ -105,12 +109,14 @@ async function getDashboard(req, res) {
     (invoiceByStatus["overdue"]?.count ?? 0);
 
   res.json({
-    leads: { total: totalLeads, today: leadsToday, thisWeek: leadsThisWeek, thisMonth: leadsThisMonth },
+    leads: { total: totalLeads, today: leadsToday, thisWeek: leadsThisWeek, thisMonth: leadsThisMonth, closed: totalLeadsClosed },
+    totalLeadsClosed,
     activeFollowUps,
     totalProposals,
     activeCustomers,
     totalRevenue,
     totalBilled,
+    totalSales: totalBilled,
     outstanding: totalOutstanding,
     pendingInvoices,
     invoiceByStatus,
@@ -208,7 +214,7 @@ async function getReports(req, res) {
       { $sort: { _id: 1 } },
     ]),
     SalesInvoices.aggregate([
-      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      { $match: billableInvoiceMatch({ createdAt: { $gte: sixMonthsAgo } }) },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
@@ -220,6 +226,7 @@ async function getReports(req, res) {
     ]),
     SalesPayments.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }]),
     SalesInvoices.aggregate([
+      { $match: billableInvoiceMatch() },
       {
         $group: {
           _id: null,

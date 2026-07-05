@@ -39,7 +39,7 @@ export type InstallmentStatus = "pending" | "partial" | "paid" | "overdue";
 
 export type PartialPaymentStatus = "received" | "verified" | "failed" | "refunded";
 
-export type InvoiceStatus = "unpaid" | "partial" | "paid" | "overdue";
+export type InvoiceStatus = "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
 
 export type FinancialEventType =
   | "proposal_sent"
@@ -246,6 +246,8 @@ export interface SalesInvoice {
   status: InvoiceStatus;
   dueDate: string;
   createdAt: string;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
   lineItems?: InvoiceLineItem[];
 }
 

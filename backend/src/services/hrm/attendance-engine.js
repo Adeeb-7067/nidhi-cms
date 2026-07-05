@@ -84,14 +84,25 @@ export function resolveAttendanceStatus({
     return { status: "holiday", compliance: "exempt", holidayId: holiday.id, missingClockOut: false };
   }
 
-  // Approved leave with no meaningful clock → on leave (payroll uses leave balance vs LOP).
+  // Full-day approved leave always marks the day as on leave — even if the employee
+  // clocked in before leave was approved (accidental / invalid clock-in).
+  if (leave && !partialLeave) {
+    return {
+      status: "on_leave",
+      compliance: "exempt",
+      leaveRequestId: leave.id,
+      missingClockOut: false,
+    };
+  }
+
+  // Partial leave with no meaningful clock → on leave for the leave portion.
   if (leave && activeMinutes < MIN_ACTIVE_MINUTES_FOR_PRESENT) {
     return {
       status: "on_leave",
       compliance: "exempt",
       leaveRequestId: leave.id,
-      partialLeave: partialLeave || undefined,
-      leaveDayPart: partialLeave ? leave.dayPart : undefined,
+      partialLeave: true,
+      leaveDayPart: leave.dayPart,
       missingClockOut: false,
     };
   }

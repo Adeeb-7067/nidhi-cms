@@ -2,10 +2,18 @@ import { useMemo, useState } from "react";
 import { CalendarClock, Layers, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useListInstallments } from "@/api/sales";
+import { useListInstallments, useListCustomers } from "@/api/sales";
 import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
+import { readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -19,17 +27,38 @@ import { installmentCardData } from "@/modules/sales/adapters";
 type StatusTab = "all" | "pending" | "partial" | "paid" | "overdue";
 
 export default function InstallmentsPage() {
+  const proposalIdParam = readSearchParam("proposalId");
+  const customerIdParam = readSearchParam("customerId");
+  const proposalId = proposalIdParam ? Number(proposalIdParam) : undefined;
+  const initialCustomerId = customerIdParam ? Number(customerIdParam) : undefined;
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<StatusTab>("all");
+  const [customerId, setCustomerId] = useState<string>(
+    initialCustomerId ? String(initialCustomerId) : "all",
+  );
   const [createOpen, setCreateOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useListInstallments();
+  const { data: customersData } = useListCustomers({ limit: 300 });
+  const customers = customersData?.customers ?? [];
+
+  const listParams = {
+    ...(proposalId ? { proposalId } : {}),
+    ...(customerId !== "all" ? { customerId: Number(customerId) } : {}),
+    limit: 200,
+  };
+
+  const { data, isLoading, isError, refetch } = useListInstallments(
+    Object.keys(listParams).length ? listParams : { limit: 200 },
+  );
   const allInstallments = data?.installments ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return allInstallments.filter((i) => {
-      const matchesSearch = !q || i.name.toLowerCase().includes(q);
+      const matchesSearch =
+        !q ||
+        i.name.toLowerCase().includes(q) ||
+        (i.customerName?.toLowerCase().includes(q) ?? false);
       const matchesStatus = statusTab === "all" || i.status === statusTab;
       return matchesSearch && matchesStatus;
     });
@@ -46,7 +75,11 @@ export default function InstallmentsPage() {
     <PortalPageShell>
       <SalesPageHeader
         title="Installment management"
-        description="Track milestone billing, partial payments, and collection progress per project."
+        description={
+          proposalId
+            ? `Milestones for proposal #${proposalId}. Generate an invoice per installment when ready to bill.`
+            : "Track milestone billing from approved proposals, then generate invoices per installment."
+        }
         breadcrumbs={[{ label: "Sales", href: "/sales" }, { label: "Installments" }]}
         actions={
           <Button size="sm" className="h-8 gap-1.5" onClick={() => setCreateOpen(true)}>
@@ -63,7 +96,21 @@ export default function InstallmentsPage() {
         <FinancialSummaryCard title="Outstanding" value={formatCurrency(totalDue)} icon={CalendarClock} accent="violet" hint={overdueCount ? `${overdueCount} overdue` : undefined} />
       </div>
 
-      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search installment name…" />
+      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search installment or client…">
+        <Select value={customerId} onValueChange={setCustomerId}>
+          <SelectTrigger className="w-full sm:w-[220px] h-9">
+            <SelectValue placeholder="All clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All clients</SelectItem>
+            {customers.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.companyName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SalesFilterBar>
 
       <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
@@ -82,7 +129,7 @@ export default function InstallmentsPage() {
       ) : isError ? (
         <SalesEmptyState icon={Layers} title="Failed to load installments" description="Could not fetch installments." actionLabel="Retry" onAction={() => refetch()} />
       ) : filtered.length === 0 ? (
-        <SalesEmptyState icon={Layers} title="No installments found" description="Create an installment plan from an approved proposal." />
+        <SalesEmptyState icon={Layers} title="No installments found" description="Create an installment plan from an approved proposal or change the client filter." />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((inst) => (

@@ -24,7 +24,15 @@ import {
   PieChart,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -35,11 +43,11 @@ import {
 } from "@/components/ui/table";
 import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import { SalesPageHeader, SalesDonutPanel } from "@/modules/sales/components";
+import { SalesPageHeader } from "@/modules/sales/components/SalesPageHeader";
+import { SalesDonutPanel } from "@/modules/sales/components/SalesDonutPanel";
 import {
   HrmApprovalActions,
   HrmChartEmptyState,
-  sliceTrendByDays,
   type HrmTrendDays,
 } from "./components";
 import { HrmAttendanceTrendChart } from "./dashboard-charts";
@@ -59,7 +67,7 @@ import {
   HrmDashboardSectionLabel,
 } from "./hrm-dashboard-kit";
 import { formatCompactCurrency } from "@/modules/finance/constants";
-import { hrmAttendanceQueryKey, hrmDashboardQueryKey, useHrmAttendanceDaily, useReviewLeaveRequest } from "@/api/hrm";
+import { useReviewLeaveRequest } from "@/api/hrm";
 import { useHrmPermission } from "./useHrmPermission";
 import type { HrmDashboardResponse } from "./types";
 
@@ -67,18 +75,31 @@ function monthLabel(year: number, month: number) {
   return format(new Date(year, month - 1, 1), "MMMM yyyy");
 }
 
+function csvCell(value: string | number | null | undefined) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function downloadDashboardCsv(filename: string, rows: Array<Array<string | number | null | undefined>>) {
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 type Props = {
   data: HrmDashboardResponse;
   view: "admin" | "manager";
+  trendDays: HrmTrendDays;
 };
 
-export function HrmRichDashboard({ data, view }: Props) {
-  const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
+export function HrmRichDashboard({ data, view, trendDays }: Props) {
+  const [employeeFilter, setEmployeeFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [attendanceStatusFilter, setAttendanceStatusFilter] = useState("all");
   const todayKey = data.todayKey ?? format(new Date(), "yyyy-MM-dd");
-  const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
-    todayKey,
-    todayKey,
-  );
   const queryClient = useQueryClient();
   const canApproveLeave = useHrmPermission("leave", "approve");
   const reviewLeave = useReviewLeaveRequest();
@@ -86,55 +107,109 @@ export function HrmRichDashboard({ data, view }: Props) {
   const stats = data.stats;
   const analytics = data.analytics;
   const pendingLeave = data.pendingApprovals?.leave ?? [];
-  const pendingTotal = (stats?.pendingLeave ?? 0) + (stats?.pendingWfh ?? 0) + (stats?.pendingCorrections ?? 0);
+  const pendingWfh = data.pendingApprovals?.wfh ?? [];
   const insights = data.insights;
+  const normalizedEmployeeFilter = employeeFilter.trim().toLowerCase();
+  const trendData = analytics?.attendanceTrend ?? [];
+  const baseAttendanceRows = data.todayAttendance ?? [];
+  const fallbackOnLeaveToday = data.onLeaveToday ?? [];
+  const fallbackOnWfhToday = data.onWfhToday ?? [];
   const upcomingBirthdays = data.upcomingBirthdays ?? [];
+  const hasAttendanceFilters =
+    normalizedEmployeeFilter.length > 0 || departmentFilter !== "all" || attendanceStatusFilter !== "all";
 
-  const trendData = useMemo(() => {
-    const rows = analytics?.attendanceTrend ?? [];
-    const days = trendDays === "180" ? 180 : Number(trendDays);
-    return sliceTrendByDays(rows, days);
-  }, [analytics?.attendanceTrend, trendDays]);
+  const matchesEmployee = (
+    row?: {
+      userName?: string | null;
+      employeeId?: string | null;
+      departmentId?: number | null;
+      departmentName?: string | null;
+    } | null,
+  ) => {
+    if (!row) return false;
+    if (departmentFilter === "unassigned") {
+      if (row.departmentId != null) return false;
+    } else if (departmentFilter !== "all" && row.departmentId !== Number(departmentFilter)) {
+      return false;
+    }
+    if (!normalizedEmployeeFilter) return true;
+    const haystack = [row.userName, row.employeeId, row.departmentName]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalizedEmployeeFilter);
+  };
+
+  const matchesAttendanceStatus = (status?: string | null) => {
+    if (attendanceStatusFilter === "all") return true;
+    if (attendanceStatusFilter === "present") return ["present", "onsite", "late"].includes(status ?? "");
+    return (status ?? "") === attendanceStatusFilter;
+  };
 
   const attendanceRows = useMemo(() => {
-    const list = attendanceData?.summaries ?? [];
-    return [...list].sort((a, b) => (a.userName ?? "").localeCompare(b.userName ?? ""));
-  }, [attendanceData?.summaries]);
+    return [...baseAttendanceRows]
+      .filter((row) => matchesEmployee(row))
+      .filter((row) => matchesAttendanceStatus(row.status))
+      .sort((a, b) => (a.userName ?? "").localeCompare(b.userName ?? ""));
+  }, [baseAttendanceRows, normalizedEmployeeFilter, departmentFilter, attendanceStatusFilter]);
 
   const liveToday = useMemo(() => deriveTodayAttendanceStats(attendanceRows), [attendanceRows]);
-  const useLiveToday = !attendanceLoading && attendanceData !== undefined;
+  const useLiveToday = data.todayAttendance !== undefined;
 
-  const headcount = stats?.headcount ?? liveToday.workingCount;
+  const filteredPendingLeave = useMemo(
+    () => pendingLeave.filter((row) => matchesEmployee(row)),
+    [pendingLeave, normalizedEmployeeFilter, departmentFilter],
+  );
+  const filteredPendingWfh = useMemo(
+    () => pendingWfh.filter((row) => matchesEmployee(row)),
+    [pendingWfh, normalizedEmployeeFilter, departmentFilter],
+  );
+  const filteredUpcomingBirthdays = useMemo(
+    () => upcomingBirthdays.filter((row) => matchesEmployee(row)),
+    [upcomingBirthdays, normalizedEmployeeFilter, departmentFilter],
+  );
+  const departmentOptions = data.departmentStrength ?? [];
+  const topEarners = useMemo(
+    () => (data.topEarners ?? []).filter((row) => matchesEmployee(row)).slice(0, 5),
+    [data.topEarners, normalizedEmployeeFilter, departmentFilter],
+  );
+
+  const pendingTotal = hasAttendanceFilters
+    ? filteredPendingLeave.length + filteredPendingWfh.length
+    : (stats?.pendingLeave ?? 0) + (stats?.pendingWfh ?? 0) + (stats?.pendingCorrections ?? 0);
+  const headcount = useLiveToday && hasAttendanceFilters ? liveToday.workingCount : (stats?.headcount ?? liveToday.workingCount);
   const presentToday = useLiveToday ? liveToday.present : (stats?.presentToday ?? 0);
   const absentToday = useLiveToday ? liveToday.absent : (stats?.absentToday ?? 0);
-  const onLeaveCount = useLiveToday ? liveToday.onLeave : (data.onLeaveToday?.length ?? stats?.onLeaveToday ?? 0);
+  const onLeaveCount = useLiveToday ? liveToday.onLeave : (fallbackOnLeaveToday.length ?? stats?.onLeaveToday ?? 0);
   const globalWfhMode = data.globalWfhMode === true;
   const wfhCount = useLiveToday
     ? liveToday.wfh
     : globalWfhMode
       ? Math.max(0, headcount - onLeaveCount)
-      : (data.onWfhToday?.length ?? 0);
+      : (fallbackOnWfhToday.length ?? 0);
   const pipelineStages = useLiveToday
     ? liveToday.pipelineStages
     : (analytics?.todayBreakdown ?? []).map((row) => ({ label: row.name, value: row.value }));
-  const onLeaveToday = useLiveToday ? liveToday.onLeaveToday : (data.onLeaveToday ?? []);
-  const onWfhToday = useLiveToday ? liveToday.onWfhToday : (data.onWfhToday ?? []);
+  const onLeaveToday = useLiveToday
+    ? liveToday.onLeaveToday
+    : fallbackOnLeaveToday.filter((row) => matchesEmployee(row));
+  const onWfhToday = useLiveToday
+    ? liveToday.onWfhToday
+    : fallbackOnWfhToday.filter((row) => matchesEmployee(row));
 
   const attendancePct =
     headcount > 0 ? Math.round((presentToday / headcount) * 100) : 0;
 
   const refreshDashboard = () => {
-    void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
-    void queryClient.invalidateQueries({ queryKey: hrmAttendanceQueryKey({ startDate: todayKey, endDate: todayKey }) });
+    void queryClient.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     toast.success("Dashboard refreshed");
   };
 
   const reviewLeaveRequest = async (id: number, status: "approved" | "rejected") => {
     try {
-      await reviewLeave.mutateAsync({ id, status });
+      const data = await reviewLeave.mutateAsync({ id, status });
       toast.success(status === "approved" ? "Approved" : "Rejected");
-      void queryClient.invalidateQueries({ queryKey: hrmDashboardQueryKey() });
-      void queryClient.invalidateQueries({ queryKey: hrmAttendanceQueryKey({ startDate: todayKey, endDate: todayKey }) });
+      for (const message of data.warnings ?? []) toast.warning(message);
     } catch {
       // Error toast handled by mutation hook
     }
@@ -147,8 +222,37 @@ export function HrmRichDashboard({ data, view }: Props) {
     year: "numeric",
   });
 
-  const topEarners = [...(data.topEarners ?? [])].slice(0, 5);
   const maxEarnerNet = topEarners[0]?.net ?? 1;
+
+  const exportDashboardSummary = () => {
+    downloadDashboardCsv(`hrm-dashboard-summary-${todayKey}.csv`, [
+      ["Section", "Metric", "Value"],
+      ["Filters", "Trend window", trendDays],
+      ["Filters", "Employee search", employeeFilter || "All employees"],
+      ["Filters", "Department", departmentFilter === "all" ? "All" : departmentFilter === "unassigned" ? "Unassigned" : departmentFilter],
+      ["Filters", "Attendance status", attendanceStatusFilter],
+      ["Workforce", "Total employees", headcount],
+      ["Workforce", "Present today", presentToday],
+      ["Workforce", "Absent today", absentToday],
+      ["Workforce", "On leave today", onLeaveCount],
+      ["Workforce", "WFH today", wfhCount],
+      ["Approvals", "Pending approvals", pendingTotal],
+      ["Approvals", "Visible leave requests", filteredPendingLeave.length],
+      ["Approvals", "Visible WFH requests", filteredPendingWfh.length],
+      ["Dashboard", "Visible birthdays", filteredUpcomingBirthdays.length],
+      ["Dashboard", "Visible top earners", topEarners.length],
+      ...(data.payrollBanner
+        ? [
+            ["Payroll", "Period", monthLabel(data.payrollBanner.year, data.payrollBanner.month)],
+            ["Payroll", "Contract pay", data.payrollBanner.totalGross],
+            ["Payroll", "Net payroll", data.payrollBanner.totalNet],
+            ["Payroll", "Yet to pay amount", data.payrollBanner.yetToPay],
+            ["Payroll", "Yet to pay employees", data.payrollBanner.yetToPayEmployeeCount ?? data.payrollBanner.employeeCount],
+          ]
+        : []),
+    ]);
+    toast.success("Summary exported");
+  };
 
   return (
     <div className="space-y-4">
@@ -162,7 +266,7 @@ export function HrmRichDashboard({ data, view }: Props) {
               size="sm"
               variant="outline"
               className="h-8"
-              onClick={() => toast.success("Summary export started")}
+              onClick={exportDashboardSummary}
             >
               Export summary
             </Button>
@@ -179,10 +283,45 @@ export function HrmRichDashboard({ data, view }: Props) {
       />
 
       <HrmDashboardFilterBar
-        trendDays={trendDays}
-        onTrendDaysChange={setTrendDays}
         onRefresh={refreshDashboard}
-        onExport={() => toast.success("Export started")}
+        onExport={exportDashboardSummary}
+        extraFilters={
+          <>
+            <Input
+              value={employeeFilter}
+              onChange={(e) => setEmployeeFilter(e.target.value)}
+              placeholder="Search employees..."
+              className="h-9 w-full sm:w-[220px]"
+            />
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-[180px]">
+                <SelectValue placeholder="Department" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All departments</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {departmentOptions.filter((department) => department.departmentId != null).map((department) => (
+                  <SelectItem key={department.departmentId} value={String(department.departmentId)}>
+                    {department.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={attendanceStatusFilter} onValueChange={setAttendanceStatusFilter}>
+              <SelectTrigger className="h-9 w-full sm:w-[180px]">
+                <SelectValue placeholder="Attendance status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="present">Present / onsite</SelectItem>
+                <SelectItem value="wfh">WFH</SelectItem>
+                <SelectItem value="on_leave">On leave</SelectItem>
+                <SelectItem value="absent">Absent</SelectItem>
+                <SelectItem value="half_day">Half day</SelectItem>
+              </SelectContent>
+            </Select>
+          </>
+        }
       />
 
       <motion.div className="space-y-2">
@@ -255,7 +394,7 @@ export function HrmRichDashboard({ data, view }: Props) {
 
       {(insights?.averageClockIn != null ||
         insights?.onTimeRatePct != null ||
-        upcomingBirthdays.length > 0 ||
+        filteredUpcomingBirthdays.length > 0 ||
         (insights?.unreadAlerts ?? 0) > 0) && (
         <motion.div className="space-y-2">
           <HrmDashboardSectionLabel>Insights</HrmDashboardSectionLabel>
@@ -287,11 +426,11 @@ export function HrmRichDashboard({ data, view }: Props) {
                     },
                   ]
                 : []),
-              ...(upcomingBirthdays.length > 0
+              ...(filteredUpcomingBirthdays.length > 0
                 ? [
                     {
                       title: "Upcoming birthdays",
-                      value: upcomingBirthdays.length,
+                      value: filteredUpcomingBirthdays.length,
                       hint: "Next 3 months",
                       icon: Cake,
                       accent: "violet" as const,
@@ -345,11 +484,11 @@ export function HrmRichDashboard({ data, view }: Props) {
               },
               {
                 title: "Yet to pay",
-                value: formatCompactCurrency(data.payrollBanner.yetToPay),
-                hint: "Outstanding balance",
+                value: `${data.payrollBanner.yetToPayEmployeeCount ?? data.payrollBanner.employeeCount} employees`,
+                hint: `${formatCompactCurrency(data.payrollBanner.yetToPay)} outstanding`,
                 icon: AlertCircle,
                 accent: "red",
-                alert: data.payrollBanner.yetToPay > 0,
+                alert: (data.payrollBanner.yetToPayEmployeeCount ?? data.payrollBanner.employeeCount) > 0,
                 href: "/hrm/payroll",
                 delay: 2,
               },
@@ -537,7 +676,7 @@ export function HrmRichDashboard({ data, view }: Props) {
           </ChartGridCell>
         ) : null}
 
-        {upcomingBirthdays.length > 0 ? (
+        {filteredUpcomingBirthdays.length > 0 ? (
           <ChartGridCell colSpan={4}>
             <ChartPanel
               title="Upcoming birthdays"
@@ -546,7 +685,7 @@ export function HrmRichDashboard({ data, view }: Props) {
               accent="amber"
               viewAllHref="/hrm/calendar"
             >
-              <HrmBirthdayList birthdays={upcomingBirthdays} />
+              <HrmBirthdayList birthdays={filteredUpcomingBirthdays} />
             </ChartPanel>
           </ChartGridCell>
         ) : null}
@@ -559,9 +698,9 @@ export function HrmRichDashboard({ data, view }: Props) {
           icon={ClipboardList}
           accent="amber"
           viewAllHref="/hrm/leave"
-          badge={pendingLeave.length || undefined}
+        badge={filteredPendingLeave.length || undefined}
         >
-          {pendingLeave.length === 0 ? (
+          {filteredPendingLeave.length === 0 ? (
             <HrmChartEmptyState message="No pending leave requests." icon={ClipboardList} />
           ) : (
             <Table>
@@ -574,7 +713,7 @@ export function HrmRichDashboard({ data, view }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pendingLeave.slice(0, 8).map((r) => (
+                {filteredPendingLeave.slice(0, 8).map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -612,7 +751,6 @@ export function HrmRichDashboard({ data, view }: Props) {
       >
         <HrmAttendanceGridPanel
           rows={attendanceRows}
-          isLoading={attendanceLoading}
           showEmployee
           viewStorageKey="hrm-dashboard-attendance-grid"
           filename="HrmDashboardAttendanceExport"

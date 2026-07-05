@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
-import { format } from "date-fns";
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, KeyRound, FilePlus, Trash2 } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, KeyRound, FilePlus, Trash2, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -28,6 +27,8 @@ import {
   useDeleteCustomer,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
+import { getDiscussionsHref } from "@/lib/discussions-navigation";
 import {
   SalesPageHeader,
   SalesStatusBadge,
@@ -133,7 +134,21 @@ export default function CustomerDetail() {
               <FilePlus className="h-3.5 w-3.5" />
               New proposal
             </Button>
-            {!customer.clientId && !customer.portalUserId ? (
+            {customer.portalUserId ? (
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
+                <Link
+                  href={
+                    customer.directConversationId
+                      ? getDiscussionsHref(null, { directConversationId: customer.directConversationId })
+                      : "/discussions"
+                  }
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  Open discussion
+                </Link>
+              </Button>
+            ) : null}
+            {!customer.portalUserId ? (
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setPortalOpen(true)}>
                 <KeyRound className="h-3.5 w-3.5" />
                 Enable portal
@@ -173,11 +188,14 @@ export default function CustomerDetail() {
             Lead #{customer.leadId}
           </Link>
         ) : null}
-        {customer.clientId ? (
-          <Link href={`/admin/clients`} className="text-xs text-primary hover:underline">
-            Client #{customer.clientId}
-          </Link>
-        ) : null}
+        {customer.portalUserId ? (
+          <span className="text-xs text-green-700 dark:text-green-400">Portal enabled</span>
+        ) : (
+          <span className="text-xs text-amber-700 dark:text-amber-400">Portal not enabled</span>
+        )}
+        <Link href={`/admin/clients`} className="text-xs text-primary hover:underline">
+          Company #{customer.id}
+        </Link>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
@@ -251,14 +269,16 @@ export default function CustomerDetail() {
                 </div>
               ) : null}
               {customer.gstin ? <p className="text-xs text-muted-foreground">GSTIN: {customer.gstin}</p> : null}
-              {(customer.clientId || customer.portalUserId) ? (
-                <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-0.5">
-                  {customer.clientId ? <p>Client record #{customer.clientId}</p> : null}
-                  {customer.portalUserId ? <p>Portal access enabled</p> : null}
-                </div>
-              ) : null}
+              <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-0.5">
+                <p>Company record #{customer.id} (shared with Admin → Companies)</p>
+                {customer.portalUserId ? (
+                  <p>Portal access enabled — direct discussion channel available under Discussions</p>
+                ) : (
+                  <p>Portal access not enabled — use Enable portal to add login</p>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
-                Customer since {format(new Date(customer.createdAt), "MMMM yyyy")}
+                Created {formatSalesDateTime(customer.createdAt)}
               </p>
             </CardContent>
           </Card>
@@ -296,11 +316,16 @@ export default function CustomerDetail() {
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-4">
-          <CustomerInvoicesSection invoices={invoices} payments={payments} />
+          <CustomerInvoicesSection invoices={invoices} payments={payments} customerId={customer.id} />
         </TabsContent>
 
         <TabsContent value="projects" className="mt-4">
-          <CustomerProjectsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerProjectsSection
+            hub={hub}
+            hubLoading={hubLoading}
+            clientId={customer.id}
+            customerId={customer.id}
+          />
         </TabsContent>
 
         <TabsContent value="admin" className="mt-4">
@@ -308,23 +333,23 @@ export default function CustomerDetail() {
         </TabsContent>
 
         <TabsContent value="team" className="mt-4">
-          <CustomerTeamSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerTeamSection hub={hub} hubLoading={hubLoading} clientId={customer.id} />
         </TabsContent>
 
         <TabsContent value="credentials" className="mt-4">
-          <CustomerCredentialsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerCredentialsSection hub={hub} hubLoading={hubLoading} portalUserId={customer.portalUserId} />
         </TabsContent>
 
         <TabsContent value="tickets" className="mt-4">
-          <CustomerTicketsSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerTicketsSection hub={hub} hubLoading={hubLoading} clientId={customer.id} />
         </TabsContent>
 
         <TabsContent value="tasks" className="mt-4">
-          <CustomerTasksSection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerTasksSection hub={hub} hubLoading={hubLoading} clientId={customer.id} />
         </TabsContent>
 
         <TabsContent value="inventory" className="mt-4">
-          <CustomerInventorySection hub={hub} hubLoading={hubLoading} clientId={customer.clientId} />
+          <CustomerInventorySection hub={hub} hubLoading={hubLoading} clientId={customer.id} />
         </TabsContent>
 
         <TabsContent value="statement" className="mt-4">
@@ -341,6 +366,7 @@ export default function CustomerDetail() {
             installments={installments}
             payments={payments}
             invoices={invoices}
+            customerId={customer.id}
           />
         </TabsContent>
       </Tabs>

@@ -19,7 +19,7 @@ export default function MarketingSocial() {
       <MarketingPageHeader
         title="Social analytics"
         description="Per-platform followers, reach, engagement, and top/bottom posts"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Social" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Social" }]}
       />
 
       <MarketingFilterBar

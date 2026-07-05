@@ -1,4 +1,3 @@
-import puppeteer from "puppeteer";
 import ExcelJS from "exceljs";
 import path from "path";
 import fs from "fs/promises";
@@ -10,6 +9,7 @@ import {
 } from "../models/schema/index.js";
 import { logger } from "../lib/logger.js";
 import { storeGeneratedFile } from "../lib/file-storage.js";
+import { withBrowserPage } from "../lib/browser.js";
 import {
   isVirtualLogProjectId,
   resolveLogProjectName,
@@ -74,12 +74,8 @@ async function generatePdfReport(reportId, type, params) {
   const fileName = `report_${reportId}_${Date.now()}.pdf`;
   const filePath = path.join(process.cwd(), "uploads", fileName);
   await fs.mkdir(path.join(process.cwd(), "uploads"), { recursive: true });
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox"]
-  });
   try {
-    const page = await browser.newPage();
+    return await withBrowserPage(async (page) => {
     let htmlContent = "<h1>Report</h1>";
     const { projectId, month, year } = params;
 
@@ -182,11 +178,10 @@ async function generatePdfReport(reportId, type, params) {
       margin: { top: "15mm", right: "12mm", bottom: "15mm", left: "12mm" }
     });
     return persistGeneratedFile(filePath, fileName, "application/pdf");
+    });
   } catch (err) {
     logger.error({ err }, "Error generating PDF report");
     throw err;
-  } finally {
-    await browser.close();
   }
 }
 
@@ -207,11 +202,13 @@ async function generateExcelReport(reportId, type, params) {
       { header: "Hours", key: "hours", width: 10 },
       { header: "Completion %", key: "pct", width: 15 }
     ];
+    const devIds = [...new Set(logs.map((l) => l.developerId))];
+    const devs = await usersTable.find({ id: { $in: devIds } }).lean();
+    const devById = new Map(devs.map((d) => [d.id, d]));
     for (const l of logs) {
-      const dev = await usersTable.findOne({ id: l.developerId }).lean();
       sheet.addRow({
         logDate: l.logDate,
-        developer: dev?.name ?? "Unknown",
+        developer: devById.get(l.developerId)?.name ?? "Unknown",
         task: l.taskTitle,
         hours: l.hoursSpent,
         pct: l.completionPct

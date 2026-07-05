@@ -90,6 +90,7 @@ router.post("/sales/customers/:id/remind", ...p("sales_customers", "edit"), wrap
 // ── Installments ──────────────────────────────────────────────────────────
 router.get("/sales/installments", ...p("sales_installments"), wrap(installmentsCtrl.listInstallments));
 router.post("/sales/installments", ...p("sales_installments", "create"), wrap(installmentsCtrl.createInstallment));
+router.post("/sales/proposals/:proposalId/installments", ...p("sales_installments", "create"), wrap(installmentsCtrl.createInstallmentsFromProposal));
 router.get("/sales/installments/:id", ...p("sales_installments"), wrap(installmentsCtrl.getInstallmentById));
 router.patch("/sales/installments/:id", ...p("sales_installments", "edit"), wrap(installmentsCtrl.updateInstallment));
 
@@ -97,6 +98,8 @@ router.patch("/sales/installments/:id", ...p("sales_installments", "edit"), wrap
 router.get("/sales/invoices", ...p("sales_invoices"), wrap(invoicesCtrl.listInvoices));
 router.post("/sales/invoices", ...p("sales_invoices", "create"), wrap(invoicesCtrl.createInvoice));
 router.post("/sales/invoices/from-proposal/:proposalId", ...p("sales_invoices", "create"), wrap(invoicesCtrl.createInvoiceFromProposal));
+router.post("/sales/invoices/from-installment/:installmentId", ...p("sales_invoices", "create"), wrap(invoicesCtrl.createInvoiceFromInstallment));
+router.post("/sales/invoices/:id/cancel", ...p("sales_invoices", "edit"), wrap(invoicesCtrl.cancelInvoice));
 router.get("/sales/invoices/:id", ...p("sales_invoices"), wrap(invoicesCtrl.getInvoiceById));
 router.patch("/sales/invoices/:id", ...p("sales_invoices", "edit"), wrap(invoicesCtrl.updateInvoice));
 
@@ -109,6 +112,7 @@ router.get("/sales/payments/:id", ...p("sales_payments"), wrap(paymentsCtrl.getR
 router.get("/sales/products", ...p("sales_products"), wrap(productsCtrl.listProducts));
 router.post("/sales/products", ...p("sales_products", "create"), wrap(productsCtrl.createProduct));
 router.patch("/sales/products/:id", ...p("sales_products", "edit"), wrap(productsCtrl.updateProduct));
+router.delete("/sales/products/:id", ...p("sales_products", "delete"), wrap(productsCtrl.deleteProduct));
 
 // ── Dashboard & reports ───────────────────────────────────────────────────
 router.get("/sales/dashboard", ...p("sales_dashboard"), wrap(dashboardCtrl.getDashboard));

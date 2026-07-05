@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { useListFollowUps, type FollowUp as ApiFollowUp } from "@/api/sales";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
 
 type FilterTab = "all" | "overdue" | "scheduled" | "completed";
@@ -58,6 +59,9 @@ function FollowUpRow({ fu }: { fu: ApiFollowUp }) {
             {" · "}
             {format(new Date(fu.scheduledAt), "MMM d, yyyy")}
             {fu.notes ? ` · ${fu.notes}` : ""}
+          </p>
+          <p className="text-[10px] text-muted-foreground/80 mt-0.5">
+            Created {formatSalesDateTime(fu.createdAt)}
           </p>
         </div>
       </div>

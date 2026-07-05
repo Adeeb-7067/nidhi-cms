@@ -27,6 +27,7 @@ import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_ORDER,
 } from "../constants";
+import { formatSalesDateTime } from "../utils";
 import { SalesStatusBadge } from "./SalesStatusBadge";
 import { ExecutiveAvatar } from "./UserAvatarGroup";
 
@@ -284,7 +285,7 @@ export function LeadContactCard({ lead }: { lead: Lead }) {
           {formatLeadSourceLabel(lead.source)}
         </DetailItem>
         <DetailItem icon={Calendar} label="Created">
-          {format(new Date(lead.createdAt), "PPP")}
+          {formatSalesDateTime(lead.createdAt)}
         </DetailItem>
       </CardContent>
     </Card>

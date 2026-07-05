@@ -1,6 +1,6 @@
 import { format } from "date-fns";
 import { COMPANY_BILLING, calcRemaining, formatCurrency } from "../constants";
-import { numberToWords } from "../utils";
+import { numberToWords, formatSalesDateTime } from "../utils";
 import type { DocumentCompanyBranding } from "../company-branding";
 import type { PartialPayment, SalesInvoice } from "../types";
 
@@ -17,6 +17,7 @@ const INVOICE_STATUS: Record<string, { label: string; chip: string; text: string
   unpaid: { label: "Unpaid", chip: "#FFFBEB", text: "#B45309" },
   partial: { label: "Partially paid", chip: "#EFF6FF", text: primary },
   overdue: { label: "Overdue", chip: "#FEF2F2", text: "#C81E1E" },
+  cancelled: { label: "Cancelled", chip: "#F3F4F6", text: "#4B5563" },
 };
 
 function DocRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
@@ -147,7 +148,7 @@ export function InvoiceDocument({
           </p>
           <div className="space-y-2.5">
             <DocRow label="Invoice No." value={invoice.number} mono />
-            <DocRow label="Issue Date" value={format(new Date(invoice.createdAt), "dd MMM yyyy")} />
+            <DocRow label="Issue Date" value={formatSalesDateTime(invoice.createdAt)} />
             <DocRow label="Due Date" value={format(new Date(invoice.dueDate), "dd MMM yyyy")} />
             {invoice.projectName && <DocRow label="Project" value={invoice.projectName} />}
             {invoice.installmentName && <DocRow label="Installment" value={invoice.installmentName} />}
@@ -361,10 +362,9 @@ export function InvoiceDocument({
           <p>Thank you for your business.</p>
         </div>
         <div className="text-right flex-shrink-0">
-          <p className="text-[10px] font-bold uppercase tracking-widest mb-6" style={{ color: subtle }}>
-            Authorised signatory
+          <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>
+            Authorised seal
           </p>
-          <div className="h-px w-32 ml-auto mb-2" style={{ background: muted }} />
           <p className="text-xs font-semibold" style={{ color: dark }}>{branding.companyName}</p>
           {branding.sealUrl && (
             <img

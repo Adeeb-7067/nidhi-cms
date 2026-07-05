@@ -51,7 +51,7 @@ export default function MarketingTasks() {
       <MarketingPageHeader
         title="Daily tasks"
         description="Task management — status, priority, deadlines, and estimated hours"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Tasks" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Tasks" }]}
         actions={
           <Button size="sm" className="h-8 gap-1.5">
             <Plus className="h-3.5 w-3.5" />

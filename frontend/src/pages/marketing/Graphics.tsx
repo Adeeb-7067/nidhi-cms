@@ -39,7 +39,7 @@ export default function MarketingGraphics() {
       <MarketingPageHeader
         title="Graphics queue"
         description="Design requests, revisions, brand guidelines, and deliverable files"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Graphics" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Graphics" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search designs, clients…" />

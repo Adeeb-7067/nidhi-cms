@@ -15,7 +15,7 @@ import {
 } from "@/api/sales";
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { formatCurrency } from "@/modules/sales/constants";
-import { TotalAmountAdjustFields, totalAdjustPayload } from "@/modules/sales/components";
+import { TotalAmountAdjustFields, totalAdjustPayload } from "@/modules/sales/components/total-amount-adjust";
 import { useListProjects, getListProjectsQueryKey } from "@/api/generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,10 +155,12 @@ export function InvoiceFormSheet({
   open,
   onOpenChange,
   invoice,
+  defaultCustomerId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice?: SalesInvoice | null;
+  defaultCustomerId?: number;
 }) {
   const isEdit = invoice != null;
   const [, setLocation] = useLocation();
@@ -213,7 +215,7 @@ export function InvoiceFormSheet({
       setUseCustomTotal(invoice.adjustedTotal != null);
     } else {
       setTitle("");
-      setCustomerId("");
+      setCustomerId(defaultCustomerId ? String(defaultCustomerId) : "");
       setDueDate("");
       setProjectId("");
       setInstallmentId("");
@@ -223,7 +225,7 @@ export function InvoiceFormSheet({
       setAdjustedTotal(null);
       setUseCustomTotal(false);
     }
-  }, [open, invoice?.id]);
+  }, [open, invoice?.id, defaultCustomerId]);
 
   const { subtotal, tax, total: calculatedAmount } = useMemo(() => calcTotals(items), [items]);
 

@@ -3,7 +3,7 @@ import {
   SalesProposals,
   SalesLeads,
   SalesLeadActivity,
-  SalesCustomers,
+  clientsTable,
   SalesProposalLogs,
   SalesProposalComments,
   companySettingsTable,
@@ -27,6 +27,12 @@ import {
   parseAdjustedTotal,
   parseTotalAdjustment,
 } from "../../utils/sales-totals.js";
+import { customerProposalOwnershipFilter } from "../../utils/sales-proposal-links.js";
+import {
+  canClientRespondToProposal,
+  statusAfterValidityExtension,
+} from "../../utils/sales-proposal-client.js";
+import { clientAsProposalCustomer } from "../../mappers/client-customer-format.js";
 
 function getClientIp(req) {
   return (
@@ -86,19 +92,28 @@ async function listProposals(req, res) {
   const { status, assignedTo, leadId, customerId, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
+  const andClauses = [];
   if (status) filter.status = status;
   if (assignedTo) filter.assignedTo = Number(assignedTo);
   if (leadId) filter.leadId = Number(leadId);
-  if (customerId) filter.customerId = Number(customerId);
+  if (customerId && !leadId) {
+    const cid = Number(customerId);
+    const customer = await clientsTable.findOne({ id: cid }).select({ leadId: 1 }).lean();
+    andClauses.push(customerProposalOwnershipFilter(cid, customer?.leadId ?? null));
+  }
   if (search) {
     const q = String(search).trim();
     if (q) {
-      filter.$or = [
-        { title: { $regex: q, $options: "i" } },
-        { number: { $regex: q, $options: "i" } },
-      ];
+      andClauses.push({
+        $or: [
+          { title: { $regex: q, $options: "i" } },
+          { number: { $regex: q, $options: "i" } },
+        ],
+      });
     }
   }
+  if (andClauses.length === 1) Object.assign(filter, andClauses[0]);
+  else if (andClauses.length > 1) filter.$and = andClauses;
   // BDE scope: only see proposals assigned to them
   if (req.user.role === "bde") {
     filter.assignedTo = req.user.id;
@@ -181,7 +196,7 @@ async function getProposalById(req, res) {
       ? SalesLeads.findOne({ id: proposal.leadId }).select({ id: 1, name: 1, email: 1, phone: 1, company: 1, status: 1 }).lean()
       : null,
     proposal.customerId
-      ? SalesCustomers.findOne({ id: proposal.customerId }).select({ id: 1, companyName: 1, contactPerson: 1, email: 1, phone: 1 }).lean()
+      ? clientsTable.findOne({ id: proposal.customerId }).select({ id: 1, companyName: 1, contactPerson: 1, email: 1, phone: 1, address: 1, gstNumber: 1 }).lean().then(clientAsProposalCustomer)
       : null,
   ]);
 
@@ -206,7 +221,11 @@ async function updateProposal(req, res) {
   if (body.adjustedTotal !== undefined) {
     updates.adjustedTotal = parseAdjustedTotal(body.adjustedTotal);
   }
-  if (body.validUntil !== undefined) updates.validUntil = body.validUntil ? new Date(body.validUntil) : null;
+  if (body.validUntil !== undefined) {
+    updates.validUntil = body.validUntil ? new Date(body.validUntil) : null;
+    const reopened = statusAfterValidityExtension(proposal, updates.validUntil);
+    if (reopened) updates.status = reopened;
+  }
   if (body.clientNote !== undefined) updates.clientNote = optionalString(body.clientNote) ?? "";
   if (body.terms !== undefined) updates.terms = optionalString(body.terms) ?? "";
   if (body.internalNotes !== undefined) updates.internalNotes = optionalString(body.internalNotes) ?? "";
@@ -227,13 +246,13 @@ async function sendProposal(req, res) {
   }
 
   const updated = await SalesProposals.findOneAndUpdate(
-    { id, status: { $in: ["draft", "revised", "counter_offer"] } },
+    { id, status: { $in: ["draft", "revised", "counter_offer", "sent", "seen", "expired"] } },
     { $set: { status: "sent", sentAt: new Date() } },
     { new: true }
   ).lean();
   if (!updated) {
-    if (!["draft", "revised", "counter_offer"].includes(pre.status)) {
-      badRequest("Only draft, revised, or counter-offer proposals can be sent.", "status");
+    if (!["draft", "revised", "counter_offer", "sent", "seen", "expired"].includes(pre.status)) {
+      badRequest("This proposal cannot be sent in its current state.", "status");
     }
     notFound("Proposal");
   }
@@ -247,7 +266,7 @@ async function sendProposal(req, res) {
       const lead = await SalesLeads.findOne({ id: updated.leadId }).select({ email: 1, name: 1 }).lean();
       if (lead?.email) { recipientEmail = lead.email; recipientName = lead.name; sentToEmail = lead.email; }
     } else if (updated.customerId) {
-      const customer = await SalesCustomers.findOne({ id: updated.customerId }).select({ email: 1, contactPerson: 1 }).lean();
+      const customer = await clientsTable.findOne({ id: updated.customerId }).select({ email: 1, contactPerson: 1 }).lean();
       if (customer?.email) { recipientEmail = customer.email; recipientName = customer.contactPerson; sentToEmail = customer.email; }
     }
     if (recipientEmail) {
@@ -377,7 +396,7 @@ async function viewProposal(req, res) {
       ? SalesLeads.findOne({ id: proposal.leadId }).select({ id: 1, name: 1, email: 1, phone: 1, company: 1, address: 1, status: 1 }).lean()
       : null,
     proposal.customerId
-      ? SalesCustomers.findOne({ id: proposal.customerId }).select({ id: 1, companyName: 1, contactPerson: 1, email: 1, phone: 1, location: 1, gstin: 1 }).lean()
+      ? clientsTable.findOne({ id: proposal.customerId }).select({ id: 1, companyName: 1, contactPerson: 1, email: 1, phone: 1, address: 1, gstNumber: 1 }).lean().then(clientAsProposalCustomer)
       : null,
     companySettingsTable.findOne({}).select({ companyName: 1, logoUrl: 1, sealUrl: 1, address: 1 }).lean(),
   ]);
@@ -399,7 +418,7 @@ async function publicApproveProposal(req, res) {
   if (!token || token.length < 32) badRequest("Invalid link.");
   const proposal = await SalesProposals.findOne({ viewToken: token }).lean();
   if (!proposal) notFound("Proposal");
-  if (!["sent", "seen"].includes(proposal.status)) {
+  if (!canClientRespondToProposal(proposal)) {
     badRequest("This proposal cannot be accepted in its current state.", "status");
   }
   const approvalNote = optionalString(req.body.note) ?? null;
@@ -420,7 +439,7 @@ async function publicDeclineProposal(req, res) {
   if (!token || token.length < 32) badRequest("Invalid link.");
   const proposal = await SalesProposals.findOne({ viewToken: token }).lean();
   if (!proposal) notFound("Proposal");
-  if (!["sent", "seen"].includes(proposal.status)) {
+  if (!canClientRespondToProposal(proposal)) {
     badRequest("This proposal cannot be declined in its current state.", "status");
   }
   const reason = optionalString(req.body.reason) ?? null;
@@ -440,7 +459,7 @@ async function publicCounterProposal(req, res) {
   if (!token || token.length < 32) badRequest("Invalid link.");
   const proposal = await SalesProposals.findOne({ viewToken: token }).lean();
   if (!proposal) notFound("Proposal");
-  if (!["sent", "seen"].includes(proposal.status)) {
+  if (!canClientRespondToProposal(proposal)) {
     badRequest("This proposal cannot receive a counter offer in its current state.", "status");
   }
   const note = optionalString(req.body.note) ?? null;

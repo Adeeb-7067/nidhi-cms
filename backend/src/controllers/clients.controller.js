@@ -1,29 +1,37 @@
-import { clientsTable, usersTable, getNextSequence } from "../models/schema/index.js";
+import { clientsTable, usersTable } from "../models/schema/index.js";
 import { formatCompanyRecord, formatCompanyRecordsBatch } from "../mappers/company-format.js";
 import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
 import {
-  createClientPortalUser,
   updateClientPortalEmail,
-  updateClientPortalPassword
+  updateClientPortalPassword,
 } from "../services/client-portal.js";
+import {
+  createClientCompanyRecord,
+  enablePortalForClientCompany,
+  deleteClientCompany,
+  syncPortalEmailIfLinked,
+} from "../services/client-company-provision.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
-  optionalString
+  optionalString,
 } from "../utils/route-errors.js";
+
 function resolveGstNumber(body) {
   const value = body.gstNumber ?? body.businessId;
   const trimmed = typeof value === "string" ? value.trim() : "";
   return trimmed || void 0;
 }
+
 function portalAvatarFromUser(portalUser) {
   const url = typeof portalUser?.avatarUrl === "string" ? portalUser.avatarUrl.trim() : "";
   return url || null;
 }
+
 function enrichClientPortalPresence(clientRecord, portalUser) {
   if (!clientRecord.userId || !portalUser) {
     return {
@@ -33,13 +41,13 @@ function enrichClientPortalPresence(clientRecord, portalUser) {
       portalLastSeenAt: null,
       portalPresenceStatus: "offline",
       portalIsActiveNow: false,
-      portalAvatarUrl: null
+      portalAvatarUrl: null,
     };
   }
   const withPresence = attachPresenceToUser({
     id: portalUser.id,
     lastLoginAt: toIso(portalUser.lastLoginAt),
-    lastSeenAt: toIso(portalUser.lastSeenAt)
+    lastSeenAt: toIso(portalUser.lastSeenAt),
   });
   return {
     ...clientRecord,
@@ -48,9 +56,10 @@ function enrichClientPortalPresence(clientRecord, portalUser) {
     portalLastSeenAt: withPresence.lastSeenAt ?? null,
     portalPresenceStatus: withPresence.presenceStatus,
     portalIsActiveNow: withPresence.isActiveNow,
-    portalAvatarUrl: portalAvatarFromUser(portalUser)
+    portalAvatarUrl: portalAvatarFromUser(portalUser),
   };
 }
+
 async function enrichClientsBatch(clients) {
   const userIds = [...new Set(clients.map((c) => c.userId).filter((id) => id != null && id > 0))];
   if (!userIds.length) {
@@ -63,6 +72,7 @@ async function enrichClientsBatch(clients) {
   const userById = new Map(users.map((u) => [u.id, u]));
   return clients.map((c) => enrichClientPortalPresence(c, userById.get(c.userId) ?? null));
 }
+
 async function formatClient(client) {
   const base = await formatCompanyRecord(client);
   if (!base.userId) return enrichClientPortalPresence(base, null);
@@ -72,6 +82,7 @@ async function formatClient(client) {
     .lean();
   return enrichClientPortalPresence(base, portalUser);
 }
+
 async function getClients(req, res) {
   const { status, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
@@ -82,131 +93,130 @@ async function getClients(req, res) {
     clientsTable,
     query,
     { page, limit, skip },
-    { sort: { clientSince: -1 } }
+    { sort: { clientSince: -1 } },
   );
   const formatted = await formatCompanyRecordsBatch(items);
   const clients = await enrichClientsBatch(formatted);
   res.json({ clients, total, page: pageNum, limit: limitNum });
 }
+
 async function postClients(req, res) {
   const body = req.body;
-  const companyName = optionalString(body.companyName);
-  const contactPerson = optionalString(body.contactPerson);
-  const email = optionalString(body.email);
   const password = optionalString(body.password);
-  if (!companyName) badRequest("Company name is required.", "companyName");
-  if (!contactPerson) badRequest("Contact person is required.", "contactPerson");
-  if (!email) badRequest("Company contact email is required.", "email");
   if (!password || password.length < 8) {
     badRequest("Portal password is required (at least 8 characters).", "password");
   }
-  const loginEmail = (optionalString(body.portalEmail) ?? email).toLowerCase();
-  let userId = null;
-  try {
-    userId = await createClientPortalUser({
-      name: contactPerson,
-      email: loginEmail,
-      password,
-      setByUserId: req.user.id,
-      setByLabel: req.user.name
-    });
-    const nextId = await getNextSequence("clients");
-    const client = await clientsTable.create({
-      id: nextId,
-      companyName,
-      contactPerson,
-      email: email.toLowerCase(),
-      phone: optionalString(body.phone),
-      address: optionalString(body.address),
-      gstNumber: resolveGstNumber({
-        gstNumber: optionalString(body.gstNumber),
-        businessId: optionalString(body.businessId)
-      }),
-      logoUrl: optionalString(body.logoUrl),
-      industry: optionalString(body.industry),
-      website: optionalString(body.website),
-      tier: optionalString(body.tier) ?? "Standard",
-      status: optionalString(body.status) ?? "active",
-      portalLogin: true,
-      userId
-    });
-    res.status(201).json(await formatClient(client));
-  } catch (err) {
-    if (userId) await usersTable.deleteOne({ id: userId });
-    throw err;
-  }
+  const { client } = await createClientCompanyRecord({
+    companyName: optionalString(body.companyName),
+    contactPerson: optionalString(body.contactPerson),
+    email: optionalString(body.email),
+    enablePortal: true,
+    portalEmail: optionalString(body.portalEmail),
+    portalPassword: password,
+    phone: optionalString(body.phone),
+    address: optionalString(body.address),
+    gstNumber: optionalString(body.gstNumber),
+    businessId: optionalString(body.businessId),
+    logoUrl: optionalString(body.logoUrl),
+    industry: optionalString(body.industry),
+    website: optionalString(body.website),
+    tier: optionalString(body.tier),
+    status: optionalString(body.status),
+    customerType: optionalString(body.customerType),
+    createdByUserId: req.user?.id,
+    createdByLabel: req.user?.name,
+    bootstrapDiscussion: true,
+  });
+  res.status(201).json(await formatClient(client));
 }
+
 async function getClientsById(req, res) {
   const id = parseIdParam(req.params.id, "client id");
   const client = await clientsTable.findOne({ id });
   if (!client) notFound("Client company");
   res.json(await formatClient(client));
 }
+
 async function patchClientsById(req, res) {
   const id = parseIdParam(req.params.id, "client id");
   const body = req.body;
-  const existing = await clientsTable.findOne({ id });
+  let existing = await clientsTable.findOne({ id }).lean();
   if (!existing) notFound("Client company");
-  const gstNumber = body.gstNumber !== void 0 || body.businessId !== void 0 ? resolveGstNumber({
-    gstNumber: optionalString(body.gstNumber),
-    businessId: optionalString(body.businessId)
-  }) : void 0;
+
+  const gstNumber =
+    body.gstNumber !== undefined || body.businessId !== undefined
+      ? resolveGstNumber({
+          gstNumber: optionalString(body.gstNumber),
+          businessId: optionalString(body.businessId),
+        })
+      : undefined;
   const portalEmail = optionalString(body.portalEmail);
   const password = optionalString(body.password);
-  if (portalEmail && existing.userId) {
-    await updateClientPortalEmail({ userId: existing.userId, email: portalEmail });
-  }
-  if (password) {
-    if (existing.userId) {
+
+  if (password && !existing.userId) {
+    const enabled = await enablePortalForClientCompany({
+      client: existing,
+      portalEmail: portalEmail ?? optionalString(body.email) ?? existing.email,
+      portalPassword: password,
+      contactPerson: optionalString(body.contactPerson) ?? existing.contactPerson,
+      createdByUserId: req.user.id,
+      createdByLabel: req.user.name,
+      bootstrapDiscussion: true,
+    });
+    existing = enabled.client;
+  } else {
+    if (portalEmail && existing.userId) {
+      await updateClientPortalEmail({ userId: existing.userId, email: portalEmail });
+    }
+    if (password && existing.userId) {
       await updateClientPortalPassword({
         userId: existing.userId,
         password,
         setByUserId: req.user.id,
-        setByLabel: req.user.name
+        setByLabel: req.user.name,
       });
-    } else {
-      const email = optionalString(body.email);
-      const loginEmail = (portalEmail ?? email ?? existing.email).toLowerCase();
-      const userId = await createClientPortalUser({
-        name: optionalString(body.contactPerson) ?? existing.contactPerson,
-        email: loginEmail,
-        password,
-        setByUserId: req.user.id,
-        setByLabel: req.user.name
-      });
-      await clientsTable.updateOne({ id }, { $set: { userId, portalLogin: true } });
     }
   }
+
+  const newContactEmail =
+    body.email !== undefined ? optionalString(body.email)?.toLowerCase() : undefined;
+  if (newContactEmail && existing.userId && newContactEmail !== existing.email) {
+    await syncPortalEmailIfLinked({
+      userId: existing.userId,
+      oldContactEmail: existing.email,
+      newContactEmail,
+    });
+  }
+
+  const patchSet = {
+    companyName: optionalString(body.companyName),
+    contactPerson: optionalString(body.contactPerson),
+    phone: optionalString(body.phone),
+    address: optionalString(body.address),
+    ...gstNumber !== undefined ? { gstNumber } : {},
+    logoUrl: optionalString(body.logoUrl),
+    industry: optionalString(body.industry),
+    website: optionalString(body.website),
+    tier: optionalString(body.tier),
+    status: optionalString(body.status),
+    customerType: optionalString(body.customerType),
+  };
+  if (newContactEmail !== undefined) patchSet.email = newContactEmail;
+
   const client = await clientsTable.findOneAndUpdate(
     { id },
-    {
-      $set: {
-        companyName: optionalString(body.companyName),
-        contactPerson: optionalString(body.contactPerson),
-        email: optionalString(body.email)?.toLowerCase(),
-        phone: optionalString(body.phone),
-        address: optionalString(body.address),
-        ...gstNumber !== void 0 ? { gstNumber } : {},
-        logoUrl: optionalString(body.logoUrl),
-        industry: optionalString(body.industry),
-        website: optionalString(body.website),
-        tier: optionalString(body.tier),
-        status: optionalString(body.status)
-      }
-    },
-    { new: true }
+    { $set: patchSet },
+    { new: true },
   );
   if (!client) notFound("Client company");
   res.json(await formatClient(client));
 }
+
 async function deleteClientsById(req, res) {
   const id = parseIdParam(req.params.id, "client id");
   const client = await clientsTable.findOne({ id }).lean();
   if (!client) notFound("Client company");
-  await clientsTable.deleteOne({ id });
-  if (client.userId) {
-    await usersTable.deleteOne({ id: client.userId }).catch(() => {});
-  }
+  await deleteClientCompany(client);
   res.json({ success: true });
 }
 

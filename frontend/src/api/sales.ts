@@ -16,7 +16,7 @@ export type CustomerType = "corporate" | "sme" | "individual";
 export type FollowUpType = "call" | "email" | "meeting" | "demo";
 export type FollowUpStatus = "scheduled" | "completed" | "overdue" | "cancelled";
 export type InstallmentStatus = "pending" | "partial" | "paid" | "overdue";
-export type InvoiceStatus = "unpaid" | "partial" | "paid" | "overdue";
+export type InvoiceStatus = "unpaid" | "partial" | "paid" | "overdue" | "cancelled";
 export type PaymentMethod = "bank_transfer" | "upi" | "cheque" | "cash" | "card";
 
 export interface SalesConfigItem {
@@ -199,6 +199,8 @@ export interface Customer {
   leadId: number | null;
   clientId: number | null;
   portalUserId: number | null;
+  portalLogin?: boolean;
+  directConversationId?: number | null;
   assignedAdminId?: number | null;
   assignedAdmin?: StaffUserSummary | null;
   totalSales: number;
@@ -311,6 +313,10 @@ export interface Installment {
   invoiceId: number | null;
   projectId: number | null;
   customerId: number;
+  proposalId?: number | null;
+  sequenceNumber?: number | null;
+  sequenceTotal?: number | null;
+  customerName?: string | null;
   name: string;
   dueAmount: number;
   calculatedAmount?: number | null;
@@ -328,7 +334,9 @@ export interface SalesInvoice {
   title: string | null;
   customerId: number;
   projectId: number | null;
+  projectName?: string | null;
   installmentId: number | null;
+  installmentName?: string | null;
   proposalId: number | null;
   lineItems: ProposalItem[];
   notes: string | null;
@@ -340,6 +348,9 @@ export interface SalesInvoice {
   status: InvoiceStatus;
   dueDate: string;
   createdAt: string;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  cancelledBy?: number | null;
 }
 
 export interface SalesPayment {
@@ -347,6 +358,9 @@ export interface SalesPayment {
   invoiceId: number;
   invoiceNumber: string | null;
   installmentId: number | null;
+  installmentName?: string | null;
+  projectId?: number | null;
+  projectName?: string | null;
   customerId: number;
   amount: number;
   paymentMethod: PaymentMethod;
@@ -369,12 +383,14 @@ export interface SalesProduct {
 }
 
 export interface SalesDashboard {
-  leads: { total: number; today: number; thisWeek: number; thisMonth: number };
+  leads: { total: number; today: number; thisWeek: number; thisMonth: number; closed?: number };
+  totalLeadsClosed?: number;
   activeFollowUps: number;
   totalProposals: number;
   activeCustomers: number;
   totalRevenue: number;
   totalBilled: number;
+  totalSales: number;
   outstanding: number;
   pendingInvoices: number;
   invoiceByStatus: Record<string, { count: number; amount: number }>;
@@ -995,7 +1011,15 @@ export function useGetCustomerHub(id: number, enabled = true) {
 export function useCreateCustomer() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<Customer> & { companyName: string; contactPerson: string; email: string }) =>
+    mutationFn: (body: Partial<Customer> & {
+      companyName: string;
+      contactPerson: string;
+      email: string;
+      enablePortal?: boolean;
+      portalEmail?: string;
+      password?: string;
+      industry?: string | null;
+    }) =>
       customFetch<Customer>(apiUrl("/api/sales/customers"), { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-customers"] }),
   });
@@ -1100,7 +1124,7 @@ export function useRemindCustomer() {
 // ─── Installments ─────────────────────────────────────────────────────────
 
 export function useListInstallments(
-  params?: { customerId?: number; projectId?: number; invoiceId?: number; status?: InstallmentStatus; page?: number; limit?: number },
+  params?: { customerId?: number; projectId?: number; invoiceId?: number; proposalId?: number; status?: InstallmentStatus; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -1133,6 +1157,7 @@ export function useCreateInstallment() {
       invoiceId?: number;
       projectId?: number;
       customerId?: number;
+      proposalId?: number;
       calculatedAmount?: number;
       totalAdjustment?: number;
       adjustedTotal?: number | null;
@@ -1142,6 +1167,35 @@ export function useCreateInstallment() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-installments"] }),
+  });
+}
+
+export function useCreateInstallmentsFromProposal() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      proposalId,
+      installments,
+    }: {
+      proposalId: number;
+      installments: Array<{
+        name: string;
+        dueAmount: number;
+        dueDate: string;
+        calculatedAmount?: number;
+        totalAdjustment?: number;
+        adjustedTotal?: number | null;
+      }>;
+    }) =>
+      customFetch<{ installments: Installment[] }>(
+        apiUrl(`/api/sales/proposals/${proposalId}/installments`),
+        { method: "POST", body: JSON.stringify({ installments }) },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      qc.invalidateQueries({ queryKey: salesKeys.proposal(vars.proposalId) });
+      qc.invalidateQueries({ queryKey: ["sales-proposals"] });
+    },
   });
 }
 
@@ -1230,6 +1284,45 @@ export function useUpdateInvoice() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.id) });
       qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+    },
+  });
+}
+
+export function useCancelInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: number; reason?: string }) =>
+      customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/${id}/cancel`), {
+        method: "POST",
+        body: JSON.stringify({ reason: reason?.trim() || undefined }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.id) });
+      qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      qc.invalidateQueries({ queryKey: salesKeys.dashboard() });
+    },
+  });
+}
+
+export function useCreateInvoiceFromInstallment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      installmentId,
+      dueDate,
+    }: {
+      installmentId: number;
+      dueDate?: string;
+    }) =>
+      customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/from-installment/${installmentId}`), {
+        method: "POST",
+        body: JSON.stringify({ dueDate }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      qc.invalidateQueries({ queryKey: salesKeys.installment(vars.installmentId) });
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
     },
   });
 }
@@ -1338,6 +1431,15 @@ export function useUpdateProduct() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-products"] }),
+  });
+}
+
+export function useDeleteProduct() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ success: boolean; id: number }>(apiUrl(`/api/sales/products/${id}`), { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-products"] }),
   });
 }

@@ -15,6 +15,8 @@ import { isDatabaseConnected } from "../../lib/db.js";
 
 /** Local hour (0–23) when the monthly accrual / carry-forward job fires. */
 export const LEAVE_ACCRUAL_RUN_HOUR = 2;
+/** Default paid-leave reset interval: unused balance forfeits every N months. */
+export const LEAVE_RESET_CYCLE_MONTHS = 3;
 
 const ACCRUAL_LEAVE_CODE = "EL";
 const JOB_TICK_MS = 5 * 60 * 1000;
@@ -35,6 +37,27 @@ export function computeAvailableBalance({ allocated = 0, carriedForward = 0, use
 export function getLeaveYearForDate(year, month, startMonth = 1) {
   const sm = Math.min(12, Math.max(1, startMonth));
   return month >= sm ? year : year - 1;
+}
+
+/**
+ * True on the first month of each leave cycle (default every 3 months).
+ * Example with startMonth=1, cycle=3 → Jan, Apr, Jul, Oct.
+ * Within a cycle, monthly accrual is cumulative so unused days carry forward month-to-month.
+ * On cycle-start months the prior cycle balance is forfeited before the new accrual credits.
+ */
+export function isLeaveCycleResetMonth(month, startMonth = 1, cycleMonths = LEAVE_RESET_CYCLE_MONTHS) {
+  const sm = Math.min(12, Math.max(1, startMonth));
+  const cycle = Math.min(12, Math.max(1, Number(cycleMonths) || LEAVE_RESET_CYCLE_MONTHS));
+  return ((month - sm + 12) % 12) % cycle === 0;
+}
+
+/** Resolve configured leave reset cycle length from company settings. */
+export function resolveLeaveResetCycleMonths(settings) {
+  const configured = settings?.hrmLeaveResetCycleMonths;
+  if (configured != null && Number.isFinite(Number(configured))) {
+    return Math.min(12, Math.max(1, Number(configured)));
+  }
+  return LEAVE_RESET_CYCLE_MONTHS;
 }
 
 /** Days to credit this employee for the monthly accrual run (Satyakabir: leave.monthlyQuota). */
@@ -314,6 +337,8 @@ export async function runLeaveCarryForward(targetLeaveYear) {
       for (const user of staff) {
         let userCarried = 0;
         for (const type of cfTypes) {
+          // Earned-leave accrual pool uses monthly carry within a 3-month cycle, not yearly carry.
+          if (type.code === ACCRUAL_LEAVE_CODE) continue;
           const prior = await leaveBalancesTable
             .findOne({ userId: user.id, leaveTypeId: type.id, year: priorYear })
             .session(session ?? null)
@@ -349,6 +374,80 @@ export async function runLeaveCarryForward(targetLeaveYear) {
     });
 
     return { targetLeaveYear, priorYear, carriedTotal, employeeCount };
+  });
+
+  return outcome;
+}
+
+// ---------------------------------------------------------------------------
+// Leave cycle reset — forfeit unused EL accrual pool every N months (default 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Forfeit unused paid-leave balance and zero counters for the accrual leave type.
+ * Runs on the first month of each leave cycle (every 3 months by default).
+ */
+export async function runLeaveCycleReset(periodKey, leaveYear) {
+  const outcome = await withJobLock("hrm_leave_cycle_reset", periodKey, async () => {
+    const accrualType = await findAccrualLeaveType();
+    if (!accrualType) return { skipped: "no_accrual_leave_type", periodKey };
+
+    const staff = await usersTable
+      .find({ role: { $in: hrmEmployeeRoles }, status: "active" })
+      .lean();
+
+    let forfeitTotal = 0;
+    let employeeCount = 0;
+
+    await runInTx(async (session) => {
+      const sessOpts = session ? { session } : {};
+      for (const user of staff) {
+        const bal = await leaveBalancesTable
+          .findOne({ userId: user.id, leaveTypeId: accrualType.id, year: leaveYear })
+          .session(session ?? null);
+        if (!bal) continue;
+
+        const available = computeAvailableBalance(bal);
+        const hasCounters =
+          (bal.allocated ?? 0) > 0 ||
+          (bal.carriedForward ?? 0) > 0 ||
+          (bal.used ?? 0) > 0 ||
+          (bal.pending ?? 0) > 0;
+        if (!hasCounters) continue;
+
+        const updated = await leaveBalancesTable.updateOne(
+          { id: bal.id, version: bal.version },
+          {
+            $set: { allocated: 0, carriedForward: 0, used: 0, pending: 0 },
+            $inc: { version: 1 },
+          },
+          sessOpts,
+        );
+        if (updated.modifiedCount !== 1) {
+          throw new Error(`Leave cycle reset conflict for user ${user.id}`);
+        }
+
+        if (available > 0) {
+          forfeitTotal += available;
+          employeeCount += 1;
+        }
+      }
+    });
+
+    for (const user of staff) {
+      await syncUserLeaveAvailable(user.id, leaveYear);
+    }
+
+    await logHrmAudit({
+      actorId: null,
+      action: "leave_cycle_reset",
+      entityType: "leave_balance",
+      entityId: null,
+      severity: "info",
+      metadata: { periodKey, leaveYear, forfeitTotal, employeeCount, leaveTypeCode: accrualType.code },
+    });
+
+    return { periodKey, leaveYear, forfeitTotal, employeeCount, leaveTypeId: accrualType.id };
   });
 
   return outcome;
@@ -490,8 +589,16 @@ export async function runLeaveAccrualTick(now = new Date()) {
   lastAccrualRunKey = runKey;
 
   const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+  const cycleMonths = resolveLeaveResetCycleMonths(settings);
+  let resetOutcome = null;
   let carryOutcome = null;
 
+  if (isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
+    const leaveYear = getLeaveYearForDate(year, month, startMonth);
+    resetOutcome = await runLeaveCycleReset(periodKey, leaveYear);
+  }
+
+  // Year-end carry-forward for non-accrual leave types (CL/SL) when the leave year starts.
   if (month === startMonth) {
     const targetLeaveYear = getLeaveYearForDate(year, month, startMonth);
     carryOutcome = await runLeaveCarryForward(targetLeaveYear);
@@ -499,7 +606,7 @@ export async function runLeaveAccrualTick(now = new Date()) {
 
   const accrualOutcome = await runMonthlyLeaveAccrual(periodKey);
 
-  const summary = { periodKey, timezone: tz, carryOutcome, accrualOutcome };
+  const summary = { periodKey, timezone: tz, resetOutcome, carryOutcome, accrualOutcome };
   logger.info(summary, "Leave accrual tick completed");
   return summary;
 }
@@ -557,9 +664,10 @@ export function startLeaveAccrualJob() {
         runHour: LEAVE_ACCRUAL_RUN_HOUR,
         timezone: tz,
         leaveYearStartMonth: settings.hrmLeaveYearStartMonth ?? 1,
+        leaveResetCycleMonths: resolveLeaveResetCycleMonths(settings),
         paidLeavesPerMonth: settings.hrmPaidLeavesPerMonth ?? 1,
       },
-      "Leave accrual / carry-forward job scheduled (1st of month)",
+      "Leave accrual job scheduled (1st of month; unused EL carries within each cycle, resets every 3 months)",
     );
     // Backfill any missed accrual for the current month on startup.
     await backfillCurrentMonthAccrual();

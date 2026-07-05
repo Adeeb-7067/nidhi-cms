@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSalesTeam, useSalesTeamMember, useMyBdeTarget } from "@/api/sales";
 import { formatCompactCurrency, formatCurrency, LEAD_STATUS_LABELS } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { SalesPageHeader, SalesStatusBadge } from "@/modules/sales/components";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -598,7 +599,7 @@ export default function BdeDashboard() {
                             {lead.expectedValue > 0 ? formatCompactCurrency(lead.expectedValue) : "—"}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {lead.createdAt ? format(new Date(lead.createdAt), "MMM d") : "—"}
+                            {formatSalesDateTime(lead.createdAt)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
@@ -650,7 +651,7 @@ export default function BdeDashboard() {
                             {formatCompactCurrency(p.totalAmount ?? 0)}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">
-                            {p.createdAt ? format(new Date(p.createdAt), "MMM d") : "—"}
+                            {formatSalesDateTime(p.createdAt)}
                           </TableCell>
                           <TableCell className="text-right">
                             <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>

@@ -15,8 +15,10 @@ const workSessionSchema = new Schema({
       "logout",
       "session_expired",
       "day_ended",
+      "shift_ended",
       "admin_terminated",
       "admin_manual",
+      "leave_approved",
       "system_sleep",
       "system_shutdown",
       "network_lost",
@@ -39,6 +41,10 @@ const workSessionSchema = new Schema({
 }, { timestamps: true });
 
 workSessionSchema.index({ userId: 1, isActive: 1 });
+// Attendance/dashboard/payroll reads filter by userId set + startedAt range — without this,
+// those range queries have no usable index on startedAt and fall back to scanning every
+// session for the matched users.
+workSessionSchema.index({ userId: 1, startedAt: 1 });
 // Prevent two simultaneous active sessions for the same user at the DB level.
 // partialFilterExpression limits the unique constraint to documents where isActive = true.
 workSessionSchema.index(

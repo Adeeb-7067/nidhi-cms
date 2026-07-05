@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -15,15 +15,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ClockInButton } from "@/components/ClockInButton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import { SalesPageHeader, SalesDonutPanel } from "@/modules/sales/components";
+import { SalesPageHeader } from "@/modules/sales/components/SalesPageHeader";
+import { SalesDonutPanel } from "@/modules/sales/components/SalesDonutPanel";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import { HrmRichDashboard } from "@/modules/hrm/HrmRichDashboard";
 import { HrmAttendanceTrendChart } from "@/modules/hrm/dashboard-charts";
 import { HrmChartEmptyState, sliceTrendByDays, type HrmTrendDays } from "@/modules/hrm/components";
-import {
-  HrmDashboardFilterBar,
-  HrmDashboardSectionLabel,
-} from "@/modules/hrm/hrm-dashboard-kit";
+import { HrmDashboardSectionLabel } from "@/modules/hrm/hrm-dashboard-kit";
 import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
 import { deriveTodayAttendanceStats } from "@/modules/hrm/attendance-day-stats";
 import { useHrmDashboard, useHrmAttendanceDaily } from "@/api/hrm";
@@ -59,21 +57,23 @@ function DashboardLoading() {
 
 export default function HrmDashboardPage() {
   const { user } = useAuth();
-  const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
-  const { data, isLoading, isError, error } = useHrmDashboard();
+  const trendDays: HrmTrendDays = "30";
+  const { data, isLoading, isError, error } = useHrmDashboard(trendDays);
   const todayKey = data?.todayKey ?? format(new Date(), "yyyy-MM-dd");
+  // Admin/manager views get today's attendance rows embedded in the dashboard payload
+  // (data.todayAttendance) — this dedicated fetch is only needed for the employee self-view,
+  // which doesn't carry row-level attendance in the dashboard response.
   const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
     todayKey,
     todayKey,
     undefined,
     undefined,
-    { enabled: !isLoading && !!data },
+    { enabled: !!data && data.view === "employee" },
   );
 
   const trendData = useMemo(() => {
     const rows = data?.analytics?.attendanceTrend ?? [];
-    const days = trendDays === "180" ? 180 : Number(trendDays);
-    return sliceTrendByDays(rows, days);
+    return sliceTrendByDays(rows, Number(trendDays));
   }, [data?.analytics?.attendanceTrend, trendDays]);
 
   const todayBreakdown = useMemo(() => {
@@ -123,7 +123,11 @@ export default function HrmDashboardPage() {
     return (
       <HrmGate module="dashboard">
         <PortalPageShell>
-          <HrmRichDashboard data={data} view={view} />
+          <HrmRichDashboard
+            data={data}
+            view={view}
+            trendDays={trendDays}
+          />
         </PortalPageShell>
       </HrmGate>
     );
@@ -151,8 +155,6 @@ export default function HrmDashboardPage() {
             </Button>
           }
         />
-
-        <HrmDashboardFilterBar trendDays={trendDays} onTrendDaysChange={setTrendDays} />
 
         {isClockableStaffRole(user?.role) ? (
           <motion.div
@@ -225,7 +227,7 @@ export default function HrmDashboardPage() {
           <ChartGridCell colSpan={8}>
             <ChartPanel
               title="My attendance trend"
-              description={`Present vs absent · last ${trendDays === "180" ? "6 months" : `${trendDays} days`}`}
+              description={`Present vs absent · last ${trendDays} days`}
               icon={TrendingUp}
               accent="blue"
               viewAllHref="/hrm/my-attendance"

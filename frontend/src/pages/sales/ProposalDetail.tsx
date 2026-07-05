@@ -8,6 +8,7 @@ import {
   Link2, Mail, Monitor, Send, CheckCircle2, XCircle, Clock,
   AlertTriangle, MessageSquare, User, Building2, Phone, AtSign,
   RefreshCw, Eye, Shield, Pencil, Download, Loader2, Trash2, TrendingUp,
+  CalendarClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,16 +18,17 @@ import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
   useGetProposal, useGetProposalLogs, useSendProposal,
   useApproveProposal, useDeclineProposal, useCounterProposal, useReviseProposal,
-  useDeleteProposal, useProposalComments, useAddStaffComment,
+  useDeleteProposal, useProposalComments, useAddStaffComment, useListInstallments,
   type ProposalComment, type ProposalLog, type PublicProposal,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { resolveProposalTotal } from "@/modules/sales/utils";
+import { resolveProposalTotal, formatSalesDateTime, formatInstallmentSequence } from "@/modules/sales/utils";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 import { useGetSettings } from "@/api/generated/api";
 import { resolveDocumentCompany } from "@/modules/sales/company-branding";
 import {
   SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState, ProposalDocument, ProposalFormSheet,
+  InstallmentsFromProposalDialog,
 } from "@/modules/sales/components";
 
 /* ─── Design tokens (match public view palette) ───────────────────────────── */
@@ -135,11 +137,18 @@ export default function ProposalDetail() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const { data: proposal, isLoading, isError } = useGetProposal(proposalId, !!proposalId);
   const { data: logsData } = useGetProposalLogs(proposalId, !!proposalId);
   const { data: orgSettings } = useGetSettings();
+  const { data: installmentsData } = useListInstallments(
+    { proposalId, limit: 50 },
+    !!proposalId && proposal?.status === "approved",
+  );
+  const proposalInstallments = installmentsData?.installments ?? [];
+  const hasInstallmentSchedule = proposalInstallments.length > 0;
   const logs = logsData?.logs ?? [];
 
   const sendProposal    = useSendProposal();
@@ -362,9 +371,19 @@ export default function ProposalDetail() {
               </Button>
             )}
             {proposal.status === "approved" && (
-              <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
-                <Link href="/sales/installments">View installments</Link>
-              </Button>
+              <>
+                {!hasInstallmentSchedule && proposal.customerId && (
+                  <Button size="sm" className="h-8 gap-1.5" onClick={() => setScheduleOpen(true)}>
+                    <CalendarClock className="h-3.5 w-3.5" />
+                    Create payment schedule
+                  </Button>
+                )}
+                {hasInstallmentSchedule && (
+                  <Button size="sm" variant="outline" className="h-8 gap-1.5" asChild>
+                    <Link href={`/sales/installments?proposalId=${proposal.id}`}>View installments</Link>
+                  </Button>
+                )}
+              </>
             )}
           </>
         }
@@ -436,6 +455,57 @@ export default function ProposalDetail() {
           color={P.orange}
         />
       </div>
+
+      {proposal.status === "approved" && !proposal.customerId && (
+        <div className="rounded-xl px-4 py-3.5 flex gap-3" style={{ background: "#FFFBEB", border: `1px solid #FDE68A` }}>
+          <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: P.orange }} />
+          <div>
+            <p className="text-xs font-bold mb-1" style={{ color: "#92400E" }}>Customer required for billing</p>
+            <p className="text-sm" style={{ color: "#78350F" }}>
+              Convert the linked lead to a customer before creating a payment schedule.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {proposal.status === "approved" && hasInstallmentSchedule && (
+        <div className="rounded-xl p-4 space-y-3" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-bold" style={{ color: P.dark }}>Payment schedule</p>
+              <p className="text-xs" style={{ color: P.muted }}>
+                {proposalInstallments.length} milestone{proposalInstallments.length === 1 ? "" : "s"} · generate an invoice per installment when due
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="h-8" asChild>
+              <Link href={`/sales/installments?proposalId=${proposal.id}`}>Manage</Link>
+            </Button>
+          </div>
+          <div className="divide-y rounded-lg border overflow-hidden">
+            {proposalInstallments.map((inst) => (
+              <Link
+                key={inst.id}
+                href={`/sales/installments/${inst.id}`}
+                className="flex items-center justify-between gap-3 px-3 py-2.5 text-xs hover:bg-muted/40 transition-colors"
+              >
+                <div className="min-w-0">
+                  {formatInstallmentSequence(inst.sequenceNumber, inst.sequenceTotal) && (
+                    <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: P.blue }}>
+                      {formatInstallmentSequence(inst.sequenceNumber, inst.sequenceTotal)}
+                    </p>
+                  )}
+                  <p className="font-semibold truncate">{inst.name}</p>
+                  <p style={{ color: P.muted }}>
+                    Due {format(new Date(inst.dueDate), "MMM d, yyyy")}
+                    {inst.invoiceId ? " · Invoice linked" : " · No invoice yet"}
+                  </p>
+                </div>
+                <span className="font-bold tabular-nums shrink-0">{formatCurrency(inst.dueAmount)}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Approval evidence banner ── */}
       {proposal.status === "approved" && (proposal.clientSignature || proposal.approvalNote) && (
@@ -587,7 +657,7 @@ export default function ProposalDetail() {
                   { label: "Revision",    value: `v${proposal.revision}` },
                   { label: "Status",      node: <SalesStatusBadge variant="proposal" value={proposal.status} /> },
                   { label: "Assigned to", value: proposal.assignedToUser?.name ?? "—" },
-                  { label: "Created",     value: format(new Date(proposal.createdAt), "dd MMM yyyy") },
+                  { label: "Created",     value: formatSalesDateTime(proposal.createdAt) },
                   proposal.sentAt    ? { label: "Sent",        value: format(new Date(proposal.sentAt),    "dd MMM yyyy") } : null,
                   proposal.validUntil ? { label: "Valid until", value: format(new Date(proposal.validUntil), "dd MMM yyyy"), warn: isPastValidity } : null,
                   proposal.seenAt    ? { label: "First opened", value: format(new Date(proposal.seenAt),   "dd MMM yyyy") } : null,
@@ -953,6 +1023,12 @@ export default function ProposalDetail() {
       </div>
     </PortalPageShell>
     <ProposalFormSheet open={editOpen} onOpenChange={setEditOpen} editId={proposal.id} />
+    <InstallmentsFromProposalDialog
+      open={scheduleOpen}
+      onOpenChange={setScheduleOpen}
+      proposal={proposal}
+      proposalTotal={finalTotal}
+    />
   </>
   );
 }

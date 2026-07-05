@@ -146,6 +146,10 @@ export default function HrmPayrollPage() {
   const isReviewed = runStatus === "reviewed";
   const isFinalized = runStatus === "finalized";
   const isPaid = runStatus === "paid";
+  const nowPeriod = currentPayrollPeriod();
+  const isFuturePeriod =
+    period.year > nowPeriod.year ||
+    (period.year === nowPeriod.year && period.month > nowPeriod.month);
   const payrollBlocked = checklist ? !checklist.ready : false;
   const canRunPayroll =
     !checklistLoading && !payrollBlocked && (!selectedRun || isDraft) && !generate.isPending;
@@ -201,9 +205,20 @@ export default function HrmPayrollPage() {
 
   const totals = useMemo(() => {
     if (lineRows.length > 0) return totalsFromPayrollLines(lineRows, isPaid);
+    if (isFuturePeriod) {
+      return {
+        employeeCount: 0,
+        totalNet: 0,
+        contractPay: 0,
+        paidAmount: 0,
+        pendingAmount: 0,
+        paidCount: 0,
+        pendingCount: 0,
+      };
+    }
     if (orgOverview) return totalsFromOrgOverview(orgOverview);
     return estimateTotalsFromStructures(structureRows);
-  }, [lineRows, isPaid, orgOverview, structureRows]);
+  }, [lineRows, isPaid, isFuturePeriod, orgOverview, structureRows]);
 
   const filteredLines = useMemo(() => {
     let rows = lineRows;
@@ -381,6 +396,10 @@ export default function HrmPayrollPage() {
         {isCurrentPayrollPeriod(period) && !isPaid ? (
           <p className="text-xs text-muted-foreground rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
             Current-month payroll uses attendance through today only. Re-run after month-end for full-period amounts.
+          </p>
+        ) : isFuturePeriod ? (
+          <p className="text-xs text-muted-foreground rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+            Future payroll periods do not have attendance yet, so this view stays empty until that month begins or a run is created.
           </p>
         ) : null}
 

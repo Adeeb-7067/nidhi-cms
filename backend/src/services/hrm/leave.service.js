@@ -8,8 +8,13 @@ import {
 } from "../../models/schema/index.js";
 import { notifyUser, broadcast } from "../../lib/realtime.js";
 import { conflict, notFound, badRequest, forbidden } from "../../utils/route-errors.js";
-import { getHrmPolicyContext, countWorkingDays, getDayOfWeek, normalizeDateKey, workDayKeyForDate } from "./hrm-date-utils.js";
+import { getHrmPolicyContext, countWorkingDays, getDayOfWeek, normalizeDateKey, workDayKeyForDate, eachDateInRange } from "./hrm-date-utils.js";
+import { materializeUserAttendanceDay } from "./attendance-materialize.service.js";
+import {
+  clockOutActiveSessionForApprovedLeave,
+} from "./leave-attendance-sync.js";
 import { logHrmAudit } from "./hrm-audit.service.js";
+import { logger } from "../../lib/logger.js";
 import { companyHolidaysTable } from "../../models/schema/hrm/holidays.js";
 import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { runInTx } from "../../lib/db-tx.js";
@@ -216,7 +221,10 @@ export async function listLeaveRequests({ userIds, status, date } = {}) {
   }
   const rows = await leaveRequestsTable.find(query).sort({ createdAt: -1 }).lean();
   const userIdsSet = [...new Set(rows.map((r) => r.userId))];
-  const users = await usersTable.find({ id: { $in: userIdsSet } }, { id: 1, name: 1, employeeId: 1, avatarUrl: 1 }).lean();
+  const users = await usersTable.find(
+    { id: { $in: userIdsSet } },
+    { id: 1, name: 1, employeeId: 1, avatarUrl: 1, departmentId: 1, department: 1 },
+  ).lean();
   const userMap = new Map(users.map((u) => [u.id, u]));
   const types = await leaveTypesTable.find().lean();
   const typeMap = new Map(types.map((t) => [t.id, t]));
@@ -225,6 +233,8 @@ export async function listLeaveRequests({ userIds, status, date } = {}) {
     userName: userMap.get(r.userId)?.name ?? "Unknown",
     employeeId: userMap.get(r.userId)?.employeeId ?? null,
     avatarUrl: userMap.get(r.userId)?.avatarUrl ?? null,
+    departmentId: userMap.get(r.userId)?.departmentId ?? null,
+    departmentName: userMap.get(r.userId)?.department ?? null,
     leaveType: typeMap.get(r.leaveTypeId) ?? null,
     leaveTypeName: typeMap.get(r.leaveTypeId)?.name ?? null,
   }));
@@ -315,6 +325,42 @@ export async function applyLeaveRequest(userId, body, actorId) {
   });
 
   return request;
+}
+
+/** Recompute persisted attendance for each day covered by a leave request. */
+async function syncAttendanceForLeaveRequest(request, { actorId } = {}) {
+  const warnings = [];
+  for (const date of eachDateInRange(request.startDate, request.endDate)) {
+    try {
+      const result = await materializeUserAttendanceDay(request.userId, date, { source: "engine" });
+      if (result?.skipped === "locked_for_payroll") {
+        warnings.push(`Attendance for ${date} is locked for payroll and was not updated.`);
+        logger.warn(
+          { userId: request.userId, leaveRequestId: request.id, date },
+          "Leave reviewed but attendance locked for payroll",
+        );
+      }
+    } catch (err) {
+      logger.error(
+        { err, userId: request.userId, date, leaveRequestId: request.id, status: request.status },
+        "Failed to sync attendance after leave review",
+      );
+      try {
+        await logHrmAudit({
+          actorId: actorId ?? null,
+          action: "attendance_sync_failed",
+          entityType: "leave_request",
+          entityId: request.id,
+          severity: "warning",
+          metadata: { userId: request.userId, date, error: err?.message ?? String(err) },
+        });
+      } catch {
+        // Best-effort audit; leave review already committed.
+      }
+      warnings.push(`Attendance could not be updated for ${date}.`);
+    }
+  }
+  return warnings;
 }
 
 async function notifyApprovers(userId, request, title) {
@@ -412,6 +458,19 @@ export async function reviewLeaveRequest(id, { status, reviewNote }, reviewerId)
 
   await syncUserLeaveAvailable(req.userId, leaveYear);
 
+  const syncWarnings = [];
+  if (status === "approved") {
+    const { timezone } = await getHrmPolicyContext();
+    const todayKey = workDayKeyForDate(new Date(), timezone);
+    const { error } = await clockOutActiveSessionForApprovedLeave(updated, todayKey);
+    if (error) {
+      syncWarnings.push("Leave approved, but the active work session could not be closed automatically.");
+    }
+  }
+  syncWarnings.push(...(await syncAttendanceForLeaveRequest(updated, { actorId: reviewerId })));
+
+  broadcast("hrm_attendance_updated", { userId: req.userId, leaveRequestId: id });
+
   await logHrmAudit({
     actorId: reviewerId,
     action: `leave_${status}`,
@@ -421,7 +480,9 @@ export async function reviewLeaveRequest(id, { status, reviewNote }, reviewerId)
     newVal: updated.toObject(),
   });
 
-  return updated;
+  const payload = updated.toObject?.() ?? updated;
+  if (syncWarnings.length) payload.warnings = syncWarnings;
+  return payload;
 }
 
 export async function cancelLeaveRequest(id, userId) {

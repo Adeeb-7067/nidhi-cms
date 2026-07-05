@@ -53,6 +53,8 @@ interface AdvancedTableProps<T> {
   searchKey?: keyof T;
   searchPlaceholder?: string;
   filename?: string;
+  /** Optional full dataset for CSV/PDF export when table view is paginated. */
+  exportData?: T[];
   onRowClick?: (item: T) => void;
   /** Persist table/grid preference in localStorage */
   viewStorageKey?: string;
@@ -148,6 +150,7 @@ export function AdvancedTable<T>({
   searchKey,
   searchPlaceholder = "Search...",
   filename = "export",
+  exportData,
   onRowClick,
   viewStorageKey,
   defaultViewMode = "table",
@@ -170,11 +173,18 @@ export function AdvancedTable<T>({
 
   useEffect(() => {
     setVisibleColumns((prev) => {
+      let changed = false;
       const next = { ...prev };
       for (const col of columns) {
-        if (next[col.id] === undefined) next[col.id] = true;
+        if (next[col.id] === undefined) {
+          next[col.id] = true;
+          changed = true;
+        }
       }
-      return next;
+      // Returning the same reference when nothing changed lets React bail out
+      // of the re-render — callers commonly pass a new `columns` array literal
+      // on every parent render, which would otherwise force a re-render here.
+      return changed ? next : prev;
     });
   }, [columns]);
 
@@ -233,12 +243,13 @@ export function AdvancedTable<T>({
   const gridColumns = columns.filter((col) => visibleColumns[col.id]);
   const tableColSpan =
     activeColumns.length + (showRowDetails && effectiveViewMode === "table" ? 1 : 0);
+  const exportRows = exportData ?? filteredData;
 
   const exportCSV = () => {
-    if (filteredData.length === 0) return;
+    if (exportRows.length === 0) return;
     const exportColumns = activeColumns.filter((col) => col.id !== "actions");
     const headers = exportColumns.map((c) => c.header).join(",");
-    const rows = filteredData.map((item) => {
+    const rows = exportRows.map((item) => {
       return exportColumns
         .map((col) => `"${getColumnExportValue(col, item).replace(/"/g, '""')}"`)
         .join(",");
@@ -255,12 +266,12 @@ export function AdvancedTable<T>({
   };
 
   const exportPDF = () => {
-    if (filteredData.length === 0) return;
+    if (exportRows.length === 0) return;
     const exportColumns = activeColumns.filter((col) => col.id !== "actions");
     const columnCount = exportColumns.length;
     const doc = createExportPdf(columnCount);
     const head = [exportColumns.map((c) => c.header)];
-    const body = filteredData.map((item) =>
+    const body = exportRows.map((item) =>
       exportColumns.map((col) => getColumnExportValue(col, item)),
     );
 

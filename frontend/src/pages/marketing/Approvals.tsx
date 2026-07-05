@@ -46,7 +46,7 @@ export default function MarketingApprovals() {
       <MarketingPageHeader
         title="Approval workflow"
         description="Pipeline: Internal Review → Client Review → Revision → Approved → Scheduled → Published"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Approvals" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Approvals" }]}
       />
 
       <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search approvals, clients…" />

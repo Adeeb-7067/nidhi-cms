@@ -1,5 +1,8 @@
 import mongoose, { Schema } from "mongoose";
-const clientStatuses = ["active", "inactive", "on_hold"];
+
+const clientStatuses = ["active", "inactive", "on_hold", "prospect", "lost"];
+const customerTypes = ["corporate", "sme", "individual"];
+
 const clientSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   companyName: { type: String, required: true },
@@ -36,17 +39,30 @@ const clientSchema = new Schema({
   },
   tier: { type: String, default: "Standard" },
   status: { type: String, enum: clientStatuses, default: "active", required: true },
+  /** Sales CRM classification (corporate / sme / individual). */
+  customerType: { type: String, enum: customerTypes, default: "corporate", required: true },
+  /** Originating sales lead when converted from CRM. */
+  leadId: { type: Number, ref: "SalesLeads", default: null, index: true },
+  /** Internal staff admin assigned to manage this account in sales. */
+  assignedAdminId: { type: Number, ref: "Users", default: null, index: true },
   portalLogin: { type: Boolean, default: false, required: true },
   userId: { type: Number, ref: "Users", index: true },
+  /** Direct 1:1 staff↔client discussion channel created at portal onboarding. */
+  directConversationId: { type: Number, default: null, index: true },
   createdBy: { type: Number, ref: "Users", index: true },
   clientSince: { type: Date, default: Date.now, required: true }
 }, { timestamps: true });
+
+clientSchema.index({ createdAt: -1 });
+
 const Clients = mongoose.models.Clients || mongoose.model("Clients", clientSchema);
 const clientsTable = Clients;
 const companiesTable = Clients;
+
 export {
   Clients,
   clientStatuses,
+  customerTypes,
   clientsTable,
-  companiesTable
+  companiesTable,
 };

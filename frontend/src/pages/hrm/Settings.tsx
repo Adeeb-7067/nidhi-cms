@@ -55,6 +55,7 @@ type SettingsForm = Pick<
   | "hrmGlobalWfhMode"
   | "hrmMaxFreeLates"
   | "hrmPaidLeavesPerMonth"
+  | "hrmLeaveResetCycleMonths"
   | "hrmElectronOnlyClock"
   | "hrmLeaveCarryForwardStartYear"
   | "hrmLeaveYearStartMonth"
@@ -154,6 +155,7 @@ export default function HrmSettingsPage() {
       hrmGlobalWfhMode: false,
       hrmMaxFreeLates: 3,
       hrmPaidLeavesPerMonth: 1,
+      hrmLeaveResetCycleMonths: 3,
       hrmElectronOnlyClock: false,
       hrmLeaveCarryForwardStartYear: 2026,
       hrmLeaveYearStartMonth: 1,
@@ -440,7 +442,7 @@ export default function HrmSettingsPage() {
                   <SettingsSectionHeader
                     icon={CalendarClock}
                     title={LEGACY_SETTINGS_LABELS.leavePolicy}
-                    description="Default accrual, leave year, and carry-forward rules"
+                    description="Paid leave accrues monthly. Unused days carry forward within each cycle, then reset when the cycle ends."
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -456,8 +458,20 @@ export default function HrmSettingsPage() {
                       />
                     </HrmField>
                     <HrmField
+                      label={LEGACY_SETTINGS_LABELS.leaveResetCycleMonths}
+                      hint="Unused paid leave resets every N months (default 3)"
+                    >
+                      <Input
+                        type="number"
+                        min={1}
+                        max={12}
+                        className={fieldControlClass}
+                        {...form.register("hrmLeaveResetCycleMonths", { valueAsNumber: true })}
+                      />
+                    </HrmField>
+                    <HrmField
                       label={LEGACY_SETTINGS_LABELS.carryForwardStartYear}
-                      hint="First year carry-forward balances apply"
+                      hint="Year-end carry for CL/SL and other non-accrual types"
                     >
                       <Input
                         type="number"

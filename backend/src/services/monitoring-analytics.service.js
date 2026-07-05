@@ -131,6 +131,7 @@ export async function getMonitoringAnalytics({ month, year }) {
   const clockByUser = new Map();
   const daysClockedByUser = new Map();
   const lastClockByUser = new Map();
+  const sessionCountByUser = new Map();
 
   for (const row of sessionTotals.data ?? []) {
     const prev = clockByUser.get(row.userId) ?? 0;
@@ -138,6 +139,10 @@ export async function getMonitoringAnalytics({ month, year }) {
     daysClockedByUser.set(row.userId, (daysClockedByUser.get(row.userId) ?? 0) + 1);
     const last = lastClockByUser.get(row.userId);
     if (!last || row.date > last) lastClockByUser.set(row.userId, row.date);
+    sessionCountByUser.set(
+      row.userId,
+      (sessionCountByUser.get(row.userId) ?? 0) + (row.sessionCount ?? 0),
+    );
   }
 
   const logByUser = new Map(
@@ -182,9 +187,7 @@ export async function getMonitoringAnalytics({ month, year }) {
         variancePct,
         clockUtilisationPct: utilisationPct(clockHours),
         logUtilisationPct: utilisationPct(loggedHours),
-        sessionCount: (sessionTotals.data ?? [])
-          .filter((r) => r.userId === user.id)
-          .reduce((sum, r) => sum + (r.sessionCount ?? 0), 0),
+        sessionCount: sessionCountByUser.get(user.id) ?? 0,
         daysClocked: daysClockedByUser.get(user.id) ?? 0,
         logEntriesCount: logByUser.get(user.id)?.logEntries ?? 0,
         autoClosedSessions: autoCloseByUser.get(user.id) ?? 0,

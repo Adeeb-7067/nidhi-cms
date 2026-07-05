@@ -273,12 +273,46 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
     socketInstance.on("hrm_leave_updated", () => {
       queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "leave"] });
       queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+    });
+
+    socketInstance.on("hrm_attendance_updated", () => {
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "attendance"] });
+      queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     });
 
     socketInstance.on("hrm_wfh_updated", () => {
       queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "wfh"] });
       queryClientRef.current.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     });
+
+    socketInstance.on(
+      "shift_auto_clock_out",
+      (data: { title?: string; body?: string; entityId?: number }) => {
+        if (isElectron() && window.electron) {
+          window.electron.setScreenshotConfig({ enabled: false, intervalMs: 0, sessionId: 0 });
+        }
+        queryClientRef.current.setQueryData(activeSessionQueryKey(), { session: null });
+        queryClientRef.current.invalidateQueries({ queryKey: ["work-sessions"] });
+        queryClientRef.current.invalidateQueries({ queryKey: ["/api/notifications"] });
+
+        const dedupeKey =
+          data.entityId != null
+            ? workSessionAlertKey(data.entityId, "shift_ended")
+            : `socket:shift_ended:${data.title ?? ""}`;
+        if (wasWorkSessionAlertShown(dedupeKey)) return;
+        markWorkSessionAlertShown(dedupeKey);
+
+        const title = data.title ?? "Automatically clocked out";
+        const body =
+          data.body ??
+          "Your shift has ended. Clock in again if you are doing extra work.";
+        toast.info(title, { description: body, duration: 10_000 });
+        if (!isElectron()) {
+          showWebPushNotification(title, body, { tag: "work-session-shift-ended" });
+        }
+      },
+    );
 
     socketInstance.on(
       "work_session_ended",

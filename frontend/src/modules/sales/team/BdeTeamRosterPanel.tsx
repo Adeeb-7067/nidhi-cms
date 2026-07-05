@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/tooltip";
 import { SalesEmptyState } from "@/modules/sales/components";
 import { formatCompactCurrency } from "@/modules/sales/constants";
+import { formatSalesDateTime } from "@/modules/sales/utils";
 import { BdeTeamFormDialog } from "./BdeTeamFormDialog";
 
 function canViewAsBde(user: SalesTeamMember): boolean {
@@ -363,8 +364,7 @@ export function BdeTeamRosterPanel({
       id: "createdAt",
       header: "Joined system",
       detailOnly: true,
-      detailCell: (member) =>
-        member.createdAt ? new Date(member.createdAt).toLocaleString() : "—",
+      detailCell: (member) => formatSalesDateTime(member.createdAt),
     },
     {
       id: "actions",

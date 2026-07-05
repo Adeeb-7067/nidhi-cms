@@ -1,10 +1,13 @@
-import { SalesInvoices, SalesProposals, SalesCustomers, getNextSequence } from "../../models/schema/index.js";
+import { SalesInvoices, SalesProposals, clientsTable, SalesInstallments, getNextSequence } from "../../models/schema/index.js";
+import { runInTx } from "../../lib/db-tx.js";
 import { paginateModel } from "../../utils/mongo-list.js";
+import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
 import {
   badRequest,
   notFound,
   parseIdParam,
   parsePagination,
+  optionalString,
 } from "../../utils/route-errors.js";
 import {
   calcLineItemsTotal,
@@ -44,7 +47,7 @@ async function listInvoices(req, res) {
   }
   // BDE scope: only see invoices for customers assigned to them
   if (req.user.role === "bde") {
-    const myCustomers = await SalesCustomers.find({ assignedAdminId: req.user.id }).select({ id: 1 }).lean();
+    const myCustomers = await clientsTable.find({ assignedAdminId: req.user.id }).select({ id: 1 }).lean();
     const myCustomerIds = myCustomers.map((c) => c.id);
     if (filter.customerId != null) {
       if (!myCustomerIds.includes(Number(filter.customerId))) {
@@ -54,7 +57,6 @@ async function listInvoices(req, res) {
       filter.customerId = { $in: myCustomerIds };
     }
   }
-  // Auto-mark overdue on read
   await SalesInvoices.updateMany(
     { status: "unpaid", dueDate: { $lt: new Date() } },
     { $set: { status: "overdue" } }
@@ -65,7 +67,26 @@ async function listInvoices(req, res) {
     { page, limit, skip },
     { sort: { createdAt: -1 } }
   );
-  res.json({ invoices: items, total, page: pg, limit: lim });
+  const installmentIds = [...new Set(items.map((i) => i.installmentId).filter(Boolean))];
+  const installments = installmentIds.length
+    ? await SalesInstallments.find({ id: { $in: installmentIds } }).select({ id: 1, name: 1, projectId: 1 }).lean()
+    : [];
+  const installmentMap = new Map(installments.map((i) => [i.id, i]));
+  const projectNameMap = await loadProjectNameMap([
+    ...items.map((i) => i.projectId),
+    ...installments.map((i) => i.projectId),
+  ]);
+  const invoices = items.map((inv) => {
+    const installment = inv.installmentId ? installmentMap.get(inv.installmentId) : null;
+    const projectId = inv.projectId ?? installment?.projectId ?? null;
+    return {
+      ...inv,
+      installmentName: installment?.name ?? null,
+      projectId,
+      projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+    };
+  });
+  res.json({ invoices, total, page: pg, limit: lim });
 }
 
 async function createInvoice(req, res) {
@@ -91,31 +112,55 @@ async function createInvoice(req, res) {
   }
 
   const amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+  const installmentId = body.installmentId ? Number(body.installmentId) : null;
+  if (installmentId) {
+    const inst = await SalesInstallments.findOne({ id: installmentId }).lean();
+    if (!inst) badRequest("installmentId references a non-existent installment.", "installmentId");
+    if (inst.invoiceId) badRequest("This installment already has an invoice.", "installmentId");
+    if (inst.customerId !== Number(body.customerId)) {
+      badRequest("Installment belongs to a different customer.", "installmentId");
+    }
+  }
+
   const [number, id] = await Promise.all([nextInvoiceNumber(), getNextSequence("sales_invoices")]);
-  const invoice = await SalesInvoices.create({
-    id,
-    number,
-    title: body.title?.trim() || null,
-    customerId: Number(body.customerId),
-    projectId: body.projectId ? Number(body.projectId) : null,
-    installmentId: body.installmentId ? Number(body.installmentId) : null,
-    proposalId: body.proposalId ? Number(body.proposalId) : null,
-    lineItems,
-    notes: body.notes?.trim() || null,
-    amount,
-    calculatedAmount: Math.round(calculatedAmount),
-    totalAdjustment,
-    adjustedTotal,
-    paidAmount: 0,
-    status: "unpaid",
-    dueDate,
+  let invoice;
+  await runInTx(async (session) => {
+    invoice = await SalesInvoices.create(
+      [{
+        id,
+        number,
+        title: body.title?.trim() || null,
+        customerId: Number(body.customerId),
+        projectId: body.projectId ? Number(body.projectId) : null,
+        installmentId,
+        proposalId: body.proposalId ? Number(body.proposalId) : null,
+        lineItems,
+        notes: body.notes?.trim() || null,
+        amount,
+        calculatedAmount: Math.round(calculatedAmount),
+        totalAdjustment,
+        adjustedTotal,
+        paidAmount: 0,
+        status: "unpaid",
+        dueDate,
+      }],
+      { session }
+    );
+    invoice = invoice[0];
+    if (installmentId) {
+      await SalesInstallments.updateOne(
+        { id: installmentId, invoiceId: null },
+        { $set: { invoiceId: id } },
+        { session }
+      );
+    }
   });
   res.status(201).json(invoice.toObject());
 }
 
 async function assertBdeInvoiceAccess(invoice, user) {
   if (user.role !== "bde") return;
-  const mine = await SalesCustomers.findOne({ id: invoice.customerId, assignedAdminId: user.id }).lean();
+  const mine = await clientsTable.findOne({ id: invoice.customerId, assignedAdminId: user.id }).lean();
   if (!mine) notFound("Invoice");
 }
 
@@ -132,8 +177,23 @@ async function updateInvoice(req, res) {
   const invoice = await SalesInvoices.findOne({ id }).lean();
   if (!invoice) notFound("Invoice");
   await assertBdeInvoiceAccess(invoice, req.user);
+  if (invoice.status === "cancelled") {
+    badRequest("Cancelled invoices cannot be edited.", "status");
+  }
   const body = req.body;
   const updates = {};
+  const amountFieldsTouched =
+    body.amount !== undefined ||
+    body.calculatedAmount !== undefined ||
+    body.totalAdjustment !== undefined ||
+    body.adjustedTotal !== undefined ||
+    body.lineItems !== undefined;
+  if (invoice.installmentId && amountFieldsTouched) {
+    badRequest(
+      "Cannot change a milestone invoice amount here. Update the linked installment instead.",
+      "amount"
+    );
+  }
 
   // Core editable fields
   if (body.title !== undefined) updates.title = body.title?.trim() || null;
@@ -148,7 +208,9 @@ async function updateInvoice(req, res) {
     if (isNaN(d.getTime())) badRequest("dueDate is invalid.", "dueDate");
     updates.dueDate = d;
   }
-  if (body.status !== undefined) updates.status = body.status;
+  if (body.status !== undefined) {
+    badRequest("Use POST /sales/invoices/:id/cancel to cancel an invoice.", "status");
+  }
 
   // Line items — recalculate amount when provided
   if (body.lineItems !== undefined) {
@@ -190,60 +252,147 @@ async function updateInvoice(req, res) {
   res.json(updated);
 }
 
-async function createInvoiceFromProposal(req, res) {
-  const proposalId = parseIdParam(req.params.proposalId, "proposal id");
-  const proposal = await SalesProposals.findOne({ id: proposalId }).lean();
-  if (!proposal) notFound("Proposal");
-  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
-    notFound("Proposal");
+async function assertBdeInstallmentAccess(installment, user) {
+  if (user.role !== "bde") return;
+  const mine = await clientsTable.findOne({ id: installment.customerId, assignedAdminId: user.id }).lean();
+  if (!mine) notFound("Installment");
+}
+
+async function createInvoiceFromInstallment(req, res) {
+  const installmentId = parseIdParam(req.params.installmentId, "installment id");
+  const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
+  if (!installment) notFound("Installment");
+  await assertBdeInstallmentAccess(installment, req.user);
+  if (installment.invoiceId) {
+    badRequest("This installment already has an invoice.", "invoiceId");
   }
-  if (!proposal.customerId) {
-    badRequest(
-      "Proposal has no linked customer. Convert the lead to a customer first.",
-      "customerId"
-    );
+  if (installment.dueAmount <= 0) {
+    badRequest("Installment amount must be greater than zero.", "dueAmount");
   }
-  let calculatedAmount = calcLineItemsTotal(proposal.items, proposal.discount);
-  calculatedAmount = resolveFinalTotal(
-    calculatedAmount,
-    proposal.totalAdjustment ?? 0,
-    proposal.adjustedTotal ?? null
-  );
-  const body = req.body;
-  const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
-  const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
-  const amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
-  const dueDate = body.dueDate
-    ? new Date(body.dueDate)
-    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const body = req.body ?? {};
+  const dueDate = body.dueDate ? new Date(body.dueDate) : new Date(installment.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+
+  let title = installment.name;
+  const proposalId = installment.proposalId ?? null;
+  let proposal = null;
+  if (proposalId) {
+    proposal = await SalesProposals.findOne({ id: proposalId }).lean();
+    if (proposal?.title) title = `${proposal.title} — ${installment.name}`;
+  }
+
+  const amount = installment.dueAmount;
+  const calculatedAmount = installment.calculatedAmount ?? installment.dueAmount;
+  const totalAdjustment = installment.totalAdjustment ?? 0;
+  const adjustedTotal = installment.adjustedTotal ?? null;
+  const lineItems = [
+    {
+      itemId: `inst-${installmentId}`,
+      name: installment.name,
+      description: proposal ? `From proposal ${proposal.number}` : "",
+      quantity: 1,
+      unitPrice: amount,
+      taxPercent: 0,
+    },
+  ];
   const [number, id] = await Promise.all([nextInvoiceNumber(), getNextSequence("sales_invoices")]);
-  const lineItems = (proposal.items ?? []).map((item) => ({
-    itemId: item.itemId ?? String(Math.random()),
-    name: item.name ?? "",
-    description: item.description ?? "",
-    quantity: item.quantity,
-    unitPrice: item.unitPrice,
-    taxPercent: item.taxPercent,
-  }));
-  const invoice = await SalesInvoices.create({
-    id,
-    number,
-    title: proposal.title ?? null,
-    customerId: proposal.customerId,
-    projectId: proposal.projectId ?? null,
-    proposalId,
-    lineItems,
-    notes: null,
-    amount,
-    calculatedAmount: Math.round(calculatedAmount),
-    totalAdjustment,
-    adjustedTotal,
-    paidAmount: 0,
-    status: "unpaid",
-    dueDate,
+  let invoice;
+  await runInTx(async (session) => {
+    const existing = await SalesInstallments.findOne({ id: installmentId }).session(session).lean();
+    if (existing?.invoiceId) {
+      badRequest("This installment already has an invoice.", "invoiceId");
+    }
+    invoice = await SalesInvoices.create(
+      [{
+        id,
+        number,
+        title,
+        customerId: installment.customerId,
+        projectId: installment.projectId ?? null,
+        installmentId,
+        proposalId,
+        lineItems,
+        notes: null,
+        amount,
+        calculatedAmount: Math.round(calculatedAmount),
+        totalAdjustment,
+        adjustedTotal,
+        paidAmount: 0,
+        status: "unpaid",
+        dueDate,
+      }],
+      { session }
+    );
+    invoice = invoice[0];
+    const linked = await SalesInstallments.updateOne(
+      { id: installmentId, invoiceId: null },
+      { $set: { invoiceId: id } },
+      { session }
+    );
+    if (linked.matchedCount === 0) {
+      badRequest("This installment already has an invoice.", "invoiceId");
+    }
   });
   res.status(201).json(invoice.toObject());
 }
 
-export { listInvoices, createInvoice, getInvoiceById, updateInvoice, createInvoiceFromProposal };
+async function createInvoiceFromProposal(req, res) {
+  badRequest(
+    "Create installments from the approved proposal first, then generate an invoice for each installment.",
+    "flow"
+  );
+}
+
+async function cancelInvoice(req, res) {
+  const id = parseIdParam(req.params.id, "invoice id");
+  const invoice = await SalesInvoices.findOne({ id }).lean();
+  if (!invoice) notFound("Invoice");
+  await assertBdeInvoiceAccess(invoice, req.user);
+  if (invoice.status === "cancelled") {
+    badRequest("This invoice is already cancelled.", "status");
+  }
+  if (invoice.status === "paid" || (invoice.paidAmount ?? 0) > 0) {
+    badRequest("Invoices with recorded payments cannot be cancelled.", "paidAmount");
+  }
+
+  const reason = optionalString(req.body?.reason) ?? null;
+  const cancelledAt = new Date();
+  let updated;
+
+  await runInTx(async (session) => {
+    updated = await SalesInvoices.findOneAndUpdate(
+      { id, status: { $ne: "cancelled" }, paidAmount: 0 },
+      {
+        $set: {
+          status: "cancelled",
+          cancelledAt,
+          cancelReason: reason,
+          cancelledBy: req.user.id,
+        },
+      },
+      { new: true, session }
+    ).lean();
+    if (!updated) {
+      badRequest("Invoices with recorded payments cannot be cancelled.", "paidAmount");
+    }
+    if (invoice.installmentId) {
+      await SalesInstallments.updateOne(
+        { id: invoice.installmentId, invoiceId: id },
+        { $set: { invoiceId: null } },
+        { session }
+      );
+    }
+  });
+
+  res.json(updated);
+}
+
+export {
+  listInvoices,
+  createInvoice,
+  getInvoiceById,
+  updateInvoice,
+  cancelInvoice,
+  createInvoiceFromProposal,
+  createInvoiceFromInstallment,
+};

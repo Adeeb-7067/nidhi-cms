@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useLocation } from "wouter";
 import {
   useListUsers,
+  listUsers,
   useDeleteUser,
   getListUsersQueryKey,
   useGetTeamAnalytics,
@@ -84,7 +85,7 @@ import { toastApiError } from "@/lib/api-error";
 import { listQueryOptions, referenceQueryOptions } from "@/lib/list-query-options";
 import { LIST_LIMIT, QUERY_STALE } from "@/lib/query-config";
 import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   formatStaffRoleLabel,
   isStaffEmployeeRole,
@@ -192,22 +193,43 @@ export default function AdminEmployees() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
+  const trimmedSearch = search.trim() || undefined;
 
   useEffect(() => {
     resetPage();
   }, [search, statusFilter, resetPage]);
 
-  const listParams = {
+  const userFilterParams = {
     staff: "1",
-    search,
+    search: trimmedSearch,
+    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
+  } as Parameters<typeof useListUsers>[0];
+  const listParams = {
+    ...userFilterParams,
     page,
     limit: apiLimit,
-    ...(statusFilter !== "all" ? { status: statusFilter } : {}),
   } as Parameters<typeof useListUsers>[0];
   const { data, isLoading } = useListUsers(listParams, {
     query: listQueryOptions({
       queryKey: getListUsersQueryKey(listParams),
     }),
+  });
+  const { data: exportUsersData } = useQuery({
+    queryKey: [...getListUsersQueryKey({ ...userFilterParams, limit: 1000 }), "export-all"],
+    enabled: activeTab === "list",
+    staleTime: QUERY_STALE.list,
+    queryFn: async () => {
+      const pageSize = 1000;
+      let nextPage = 1;
+      const users: User[] = [];
+      while (true) {
+        const res = await listUsers({ ...userFilterParams, page: nextPage, limit: pageSize });
+        users.push(...res.users);
+        if (users.length >= res.total || res.users.length === 0) break;
+        nextPage += 1;
+      }
+      return users;
+    },
   });
 
   const pageUserIds = useMemo(() => data?.users?.map((u) => u.id) ?? [], [data?.users]);
@@ -261,6 +283,7 @@ export default function AdminEmployees() {
     };
   }, [staffSummary, staffTotal, teamAnalytics]);
   const statsLoading = staffTotalLoading || staffSummaryLoading;
+  const exportUsers = exportUsersData ?? data?.users ?? [];
   const saveTeamEmployee = useSaveTeamEmployee();
   const deleteUserMutation = useDeleteUser();
   const { data: hrmDepartmentsData } = useHrmDepartments();
@@ -1002,7 +1025,13 @@ export default function AdminEmployees() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsContent value="list" className="space-y-4 m-0">
           <PortalContentCard>
-              <div className="flex items-center gap-2 px-1 pb-3">
+              <div className="flex flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-center">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search employees..."
+                  className="h-8 w-full text-xs sm:w-72"
+                />
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="h-8 w-36 text-xs">
                     <SelectValue />
@@ -1020,9 +1049,8 @@ export default function AdminEmployees() {
                 <AdvancedTable
                   data={data?.users || []}
                   columns={columns}
-                  searchKey="name"
-                  searchPlaceholder="Filter employees..."
                   filename="EmployeesExport"
+                  exportData={exportUsers}
                   viewStorageKey="employees"
                   onRowClick={(user) => setLocation(getStaffProfileHref(user.id, user.role, viewer?.role))}
                 />

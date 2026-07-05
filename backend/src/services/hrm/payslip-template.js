@@ -788,7 +788,6 @@ const generatePaySlipHtml = (
     }
     .sign-line {
       width: 180px;
-      border-top: 1px solid #9ca3af;
       padding-top: 8px;
       text-align: center;
       font-size: 10px;
@@ -1021,7 +1020,7 @@ const generatePaySlipHtml = (
 };
 
 /** Map CMS payroll entities to Satyakabir payslip template input. */
-function buildCmsPayrollPayload({ user, run, line, structure }) {
+function buildCmsPayrollPayload({ user, run, line, structure, leaveSummary }) {
   const monthDate = new Date(run.year, run.month - 1, 1);
   const emp = user ?? {};
   const salary = structure ?? {};
@@ -1032,6 +1031,8 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
   const monthlyAllowances =
     structAllowances > 0 ? structAllowances : Number(profileSal.allowances) || 0;
   const basicSalary = salary.basic ?? (Number(profileSal.basicSalary) || 0);
+  const approvedLeaveDaysUsed = Number(leaveSummary?.approvedLeaveDaysUsed ?? 0);
+  const unpaidLeaveDays = Number(leaveSummary?.unpaidLeaveDays ?? 0);
   return {
     cmsPayroll: true,
     earnedGross: Number(line.gross ?? 0),
@@ -1053,8 +1054,8 @@ function buildCmsPayrollPayload({ user, run, line, structure }) {
     totalHalfDay: 0,
     totalLate: line.lateCount ?? 0,
     totalLeaveOrAbsent: line.lopDays ?? 0,
-    approvedLeaveDaysUsed: 0,
-    unpaidLeaveDays: 0,
+    approvedLeaveDaysUsed,
+    unpaidLeaveDays,
     employeeId: {
       firstName: nameParts[0] ?? "",
       lastName: nameParts.slice(1).join(" ") ?? "",
@@ -1101,8 +1102,8 @@ function buildCmsCompanyPayload(settings) {
   };
 }
 
-function generatePayslipHtmlFromCms({ user, run, line, structure, settings }) {
-  const payRollData = buildCmsPayrollPayload({ user, run, line, structure });
+function generatePayslipHtmlFromCms({ user, run, line, structure, settings, leaveSummary }) {
+  const payRollData = buildCmsPayrollPayload({ user, run, line, structure, leaveSummary });
   const companyData = buildCmsCompanyPayload(settings);
   return generatePaySlipHtml(payRollData, companyData);
 }

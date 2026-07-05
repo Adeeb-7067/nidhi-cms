@@ -26,7 +26,7 @@ export default function MarketingReports() {
       <MarketingPageHeader
         title="Reports"
         description="Daily, weekly, and monthly marketing reports with PDF and Excel exports"
-        breadcrumbs={[{ label: "Marketing", href: "/marketing" }, { label: "Reports" }]}
+        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Reports" }]}
       />
 
       <div className="space-y-6">

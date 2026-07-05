@@ -2,14 +2,14 @@ import {
   SalesLeads,
   SalesLeadActivity,
   SalesFollowUps,
-  SalesCustomers,
+  SalesProposals,
   clientsTable,
   usersTable,
   getNextSequence,
   leadStatuses,
   leadPriorities,
 } from "../../models/schema/index.js";
-import { createClientPortalUser } from "../../services/client-portal.js";
+import { createClientCompanyRecord, deleteClientCompany } from "../../services/client-company-provision.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -237,7 +237,7 @@ async function convertLead(req, res) {
   if (lead.status === "converted") badRequest("This lead has already been converted.", "status");
   // Guard against partial-failure retries: if a customer already exists for this lead
   // (created by a prior attempt that failed at the final updateOne), block re-conversion.
-  const existingCustomer = await SalesCustomers.findOne({ leadId: id }).lean();
+  const existingCustomer = await clientsTable.findOne({ leadId: id }).lean();
   if (existingCustomer) badRequest("A customer record already exists for this lead. Contact support to resolve.", "leadId");
   const body = req.body;
   const portalEmail = optionalString(body.portalEmail ?? body.email ?? lead.email);
@@ -247,63 +247,38 @@ async function convertLead(req, res) {
     badRequest("Portal password must be at least 8 characters.", "password");
   }
   let clientId = null;
-  let portalUserId = null;
-  let customerId = null;
   try {
-    portalUserId = await createClientPortalUser({
-      name: lead.name,
-      email: portalEmail,
-      password: portalPassword,
-      setByUserId: req.user.id,
-      setByLabel: req.user.name,
-    });
-    const clientSeqId = await getNextSequence("clients");
-    const client = await clientsTable.create({
-      id: clientSeqId,
+    const { client, portalUserId } = await createClientCompanyRecord({
       companyName: optionalString(body.companyName) ?? lead.company ?? lead.name,
       contactPerson: lead.name,
-      email: (lead.email ?? portalEmail).toLowerCase(),
-      phone: optionalString(body.phone) ?? lead.phone ?? null,
-      address: optionalString(body.address) ?? lead.address ?? null,
-      gstNumber: optionalString(body.gstin) ?? null,
-      industry: optionalString(body.industry) ?? null,
-      website: optionalString(body.website) ?? null,
-      tier: "Standard",
-      status: "active",
-      portalLogin: true,
-      userId: portalUserId,
-      createdBy: req.user.id,
+      email: lead.email ?? portalEmail,
+      enablePortal: true,
+      portalEmail,
+      portalPassword,
+      phone: optionalString(body.phone) ?? lead.phone,
+      address: optionalString(body.address) ?? lead.address,
+      gstNumber: optionalString(body.gstin),
+      website: optionalString(body.website),
+      industry: optionalString(body.industry),
+      customerType: optionalString(body.type) ?? "corporate",
+      leadId: id,
+      createdByUserId: req.user.id,
+      createdByLabel: req.user.name,
+      bootstrapDiscussion: true,
     });
     clientId = client.id;
-    const customerSeqId = await getNextSequence("sales_customers");
-    const customer = await SalesCustomers.create({
-      id: customerSeqId,
-      companyName: client.companyName,
-      contactPerson: lead.name,
-      email: client.email,
-      phone: client.phone ?? null,
-      status: "active",
-      type: optionalString(body.type) ?? "corporate",
-      location: optionalString(body.location) ?? lead.address ?? null,
-      gstin: optionalString(body.gstin) ?? null,
-      website: optionalString(body.website) ?? null,
-      leadId: id,
-      clientId,
-      portalUserId,
-    });
-    customerId = customer.id;
-    await SalesLeads.updateOne({ id }, { $set: { status: "converted", customerId, clientId } });
+    await SalesProposals.updateMany({ leadId: id }, { $set: { customerId: client.id } });
+    await SalesLeads.updateOne({ id }, { $set: { status: "converted", customerId: client.id, clientId: client.id } });
     await logActivity(id, req.user.id, "converted",
       `Lead converted to customer by ${req.user.name}`,
-      { customerId, clientId }
+      { customerId: client.id, clientId: client.id }
     );
-    res.status(201).json({ success: true, customerId, clientId, portalUserId });
+    res.status(201).json({ success: true, customerId: client.id, clientId: client.id, portalUserId });
   } catch (err) {
-    // Roll back in reverse creation order. Each step is guarded so a failure
-    // in one cleanup doesn't prevent the others from running.
-    if (customerId) await SalesCustomers.deleteOne({ id: customerId }).catch(() => {});
-    if (clientId) await clientsTable.deleteOne({ id: clientId }).catch(() => {});
-    if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
+    if (clientId) {
+      const row = await clientsTable.findOne({ id: clientId }).lean();
+      if (row) await deleteClientCompany(row).catch(() => {});
+    }
     throw err;
   }
 }

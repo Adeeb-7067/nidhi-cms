@@ -35,6 +35,7 @@ import {
   formatCurrency,
   FINANCIAL_EVENT_LABELS,
 } from "../constants";
+import { formatSalesDateTime, formatInstallmentSequence } from "../utils";
 import { SalesStatusBadge } from "./SalesStatusBadge";
 
 export function OutstandingBadge({
@@ -144,8 +145,13 @@ export function InstallmentCard({
     status: Installment["status"];
     projectId?: number;
     projectName?: string;
+    customerId?: number;
+    customerName?: string;
+    sequenceNumber?: number;
+    sequenceTotal?: number;
     invoiceId?: number | null;
     invoiceNumber?: string;
+    createdAt?: string;
   };
   href?: string;
   compact?: boolean;
@@ -156,6 +162,10 @@ export function InstallmentCard({
     installment.projectName ??
     (installment.projectId ? `Project #${installment.projectId}` : null);
   const invoiceLabel = installment.invoiceNumber ?? (installment.invoiceId ? `INV-${installment.invoiceId}` : null);
+  const sequenceLabel = formatInstallmentSequence(
+    installment.sequenceNumber,
+    installment.sequenceTotal,
+  );
 
   const handleCardClick = () => {
     if (href) navigate(href);
@@ -168,8 +178,16 @@ export function InstallmentCard({
     >
       <CardContent className={cn("p-4", compact && "p-3")}>
         <div className="flex items-start justify-between gap-2 mb-2">
-          <div>
-            <p className="text-sm font-semibold">{installment.name}</p>
+          <div className="min-w-0">
+            {sequenceLabel && (
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-primary mb-0.5">
+                {sequenceLabel}
+              </p>
+            )}
+            <p className="text-sm font-semibold truncate">{installment.name}</p>
+            {installment.customerName && (
+              <p className="text-[10px] text-muted-foreground truncate">{installment.customerName}</p>
+            )}
             {projectLabel && (
               <p className="text-[10px] text-muted-foreground truncate">{projectLabel}</p>
             )}
@@ -183,8 +201,16 @@ export function InstallmentCard({
               <Calendar className="h-3 w-3" />
               Due {format(new Date(installment.dueDate), "MMM d, yyyy")}
             </span>
+            {installment.createdAt && (
+              <span>Created {formatSalesDateTime(installment.createdAt)}</span>
+            )}
             {remaining > 0 && <OutstandingBadge amount={remaining} showLabel={false} />}
           </div>
+          {!installment.invoiceId && installment.status !== "paid" && (
+            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5">
+              Invoice pending
+            </span>
+          )}
           {invoiceLabel && installment.invoiceId && (
             <button
               className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 text-[10px] font-mono text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
@@ -220,7 +246,7 @@ export function PaymentHistoryTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/30">
-            <TableHead className="text-xs">Date</TableHead>
+            <TableHead className="text-xs">Created</TableHead>
             <TableHead className="text-xs">Amount</TableHead>
             <TableHead className="text-xs">Mode</TableHead>
             <TableHead className="text-xs">Transaction ID</TableHead>
@@ -231,8 +257,8 @@ export function PaymentHistoryTable({
         <TableBody>
           {payments.map((p) => (
             <TableRow key={p.id}>
-              <TableCell className="text-xs">
-                {format(new Date(p.paymentDate), "MMM d, yyyy")}
+              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                {formatSalesDateTime(p.paymentDate)}
               </TableCell>
               <TableCell className="text-xs font-medium tabular-nums">
                 {formatCurrency(p.amount)}
@@ -326,7 +352,7 @@ export function FinancialActivityTimeline({
             <p className="text-[11px] text-muted-foreground mt-0.5">{event.description}</p>
             <div className="flex flex-wrap items-center gap-2 mt-1">
               <span className="text-[10px] text-muted-foreground">
-                {format(new Date(event.createdAt), "MMM d, yyyy h:mm a")}
+                {formatSalesDateTime(event.createdAt)}
               </span>
               {event.amount != null && (
                 <span className="text-[10px] font-medium text-emerald-700">
@@ -475,17 +501,20 @@ export function ReceiptPreview({
             <span className="font-semibold">{formatCurrency(receipt.remainingBalance)}</span>
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-6 pt-4 border-t mt-4">
-          <div>
-            <p className="text-[10px] text-muted-foreground mb-6">Authorized signature</p>
-            <div className="border-b border-dashed border-muted-foreground/40" />
-          </div>
-          <div className="flex flex-col items-center">
-            <p className="text-[10px] text-muted-foreground mb-2">Company seal</p>
+        <div className="flex flex-col items-center gap-2 pt-4 border-t mt-4">
+          <p className="text-[10px] text-muted-foreground">Authorized seal</p>
+          {receipt.sealUrl ? (
+            <img
+              src={receipt.sealUrl}
+              alt="Official seal"
+              className="h-16 w-16 object-contain"
+              style={{ opacity: 0.92 }}
+            />
+          ) : (
             <div className="h-16 w-16 rounded-full border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
               <span className="text-[8px] text-muted-foreground text-center">SEAL</span>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

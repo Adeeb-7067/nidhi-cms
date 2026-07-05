@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { apiUrl } from "@/lib/api-base";
 import { resolveFileUrl } from "@/lib/resolve-file-url";
+import { compressImageFile } from "@/lib/image-compression";
 import { cn } from "@/lib/utils";
 
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
@@ -59,19 +60,20 @@ export function FileUploader({
   }, [value]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const selected = e.target.files?.[0];
+    if (!selected) return;
 
-    if (file.size > limitMb * 1024 * 1024) {
+    if (selected.size > limitMb * 1024 * 1024) {
       toast.error(`File is too large. Max allowed is ${limitMb}MB`);
       return;
     }
 
-    setDisplayName(file.name);
+    setDisplayName(selected.name);
     setIsUploading(true);
     setProgress(10);
 
     try {
+      const file = await compressImageFile(selected);
       const formData = new FormData();
       formData.append("file", file);
 

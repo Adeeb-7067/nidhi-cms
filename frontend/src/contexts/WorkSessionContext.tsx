@@ -139,6 +139,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       client_disconnected: "Work session ended — no longer active on the server.",
       session_expired: "Work session ended — 24-hour limit reached.",
       day_ended: "Work session ended — a new work day started.",
+      shift_ended: "Automatically clocked out at shift end. Clock in again to continue your day.",
       logout: "Work session ended — you logged out.",
       admin_terminated: "Work session ended — an administrator ended your session.",
     };

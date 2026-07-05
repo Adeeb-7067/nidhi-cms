@@ -112,7 +112,8 @@ async function uploadLocalFileToObjectStorage(localPath, originalName, mimetype,
   const result = await uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
   try {
     await fs.unlink(localPath);
-  } catch {
+  } catch (err) {
+    logger.warn({ err, localPath }, "Uploaded to object storage but failed to remove local temp file");
   }
   return result;
 }

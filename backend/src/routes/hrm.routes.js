@@ -150,4 +150,12 @@ router.post("/hrm/exit/:id/advance", perm("hrm_exit", "edit"), asyncHandler(hrm.
 router.post("/hrm/exit/:id/return-assets", perm("hrm_exit", "edit"), asyncHandler(hrm.postExitReturnAssets));
 router.post("/hrm/exit/:id/cancel", perm("hrm_exit", "delete"), asyncHandler(hrm.postExitCancel));
 
+router.get("/hrm/letters", perm("hrm_letters", "view"), asyncHandler(hrm.getExperienceLetters));
+router.post("/hrm/letters/preview", perm("hrm_letters", "create"), asyncHandler(hrm.postExperienceLetterPreview));
+router.post("/hrm/letters", perm("hrm_letters", "create"), asyncHandler(hrm.postExperienceLetter));
+router.get("/hrm/letters/:id", perm("hrm_letters", "view"), asyncHandler(hrm.getExperienceLetter));
+router.get("/hrm/letters/:id/pdf", perm("hrm_letters", "export"), asyncHandler(hrm.getExperienceLetterPdf));
+router.post("/hrm/letters/:id/send", perm("hrm_letters", "edit"), asyncHandler(hrm.postExperienceLetterSend));
+router.delete("/hrm/letters/:id", perm("hrm_letters", "delete"), asyncHandler(hrm.deleteExperienceLetter));
+
 export default router;
