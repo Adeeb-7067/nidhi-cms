@@ -53,8 +53,8 @@ export default function Reports() {
   const [reportType, setReportType] = useState("conversion");
   const { canViewHref } = usePermissions();
 
-  const { data: pipeline, isLoading: pipelineLoading } = useSalesPipeline();
-  const { data: reports, isLoading: reportsLoading } = useSalesReports();
+  const { data: pipeline, isLoading: pipelineLoading, isError: pipelineError } = useSalesPipeline();
+  const { data: reports, isLoading: reportsLoading, isError: reportsError } = useSalesReports();
   const { data: revenueData, isLoading: revenueLoading } = useSalesRevenueTrend("year");
 
   const visibleModules = useMemo(
@@ -110,7 +110,7 @@ export default function Reports() {
     () =>
       (revenueData?.trend ?? []).map((row) => ({
         month: row.date,
-        revenue: row.revenue,
+        revenue: row.collected ?? row.revenue ?? 0,
       })),
     [revenueData?.trend],
   );
@@ -171,6 +171,12 @@ export default function Reports() {
           </Button>
         }
       />
+
+      {(pipelineError || reportsError) ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 mb-4">
+          <p className="text-sm text-destructive">Some report data could not be loaded. Charts may be incomplete.</p>
+        </div>
+      ) : null}
 
       <Tabs value={reportType} onValueChange={setReportType}>
         <TabsList className="h-9">

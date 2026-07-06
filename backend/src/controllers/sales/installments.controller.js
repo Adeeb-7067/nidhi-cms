@@ -15,8 +15,11 @@ import {
 } from "../../utils/sales-totals.js";
 import {
   bdeOwnsCustomer,
+  bdeOwnsProposal,
   findBdeOwnedCustomerIds,
+  findBdeAssignedProposalIds,
   assertBdeOwnsCustomerById,
+  assertBdeOwnsProposal,
 } from "../../utils/sales-bde-customer-scope.js";
 
 function proposalFinalTotal(proposal) {
@@ -76,14 +79,19 @@ async function listInstallments(req, res) {
   if (invoiceId) filter.invoiceId = Number(invoiceId);
   if (proposalId) filter.proposalId = Number(proposalId);
   if (status) filter.status = status;
-  // BDE scope: only see installments for their own customers
+  // BDE scope: own customers or installments tied to proposals assigned to them
   if (req.user.role === "bde") {
-    const myIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
-    if (filter.customerId != null) {
-      if (!myIds.includes(Number(filter.customerId))) filter.customerId = -1;
-    } else {
-      filter.customerId = { $in: myIds };
-    }
+    const [myIds, myProposalIds] = await Promise.all([
+      findBdeOwnedCustomerIds(clientsTable, req.user.id),
+      findBdeAssignedProposalIds(SalesProposals, req.user.id),
+    ]);
+    const scopeOr = [];
+    if (myIds.length) scopeOr.push({ customerId: { $in: myIds } });
+    if (myProposalIds.length) scopeOr.push({ proposalId: { $in: myProposalIds } });
+    const bdeScope = scopeOr.length ? { $or: scopeOr } : { id: -1 };
+    const explicit = { ...filter };
+    for (const key of Object.keys(filter)) delete filter[key];
+    filter.$and = [bdeScope, explicit];
   }
   await SalesInstallments.updateMany(
     { status: "pending", dueDate: { $lt: new Date() } },
@@ -150,7 +158,14 @@ async function createInstallment(req, res) {
 async function assertBdeInstallmentAccess(installment, user) {
   if (user.role !== "bde") return;
   const client = await clientsTable.findOne({ id: installment.customerId }).lean();
-  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Installment");
+  if (client && bdeOwnsCustomer(client, user.id)) return;
+  if (installment.proposalId) {
+    const proposal = await SalesProposals.findOne({ id: installment.proposalId })
+      .select({ assignedTo: 1 })
+      .lean();
+    if (bdeOwnsProposal(proposal, user.id)) return;
+  }
+  notFound("Installment");
 }
 
 async function getInstallmentById(req, res) {
@@ -225,11 +240,7 @@ async function createInstallmentsFromProposal(req, res) {
   const proposalId = parseIdParam(req.params.proposalId, "proposal id");
   const proposal = await SalesProposals.findOne({ id: proposalId }).lean();
   if (!proposal) notFound("Proposal");
-  if (req.user.role === "bde") {
-    if (proposal.assignedTo !== req.user.id) notFound("Proposal");
-    const client = await clientsTable.findOne({ id: proposal.customerId }).lean();
-    if (!client || !bdeOwnsCustomer(client, req.user.id)) notFound("Proposal");
-  }
+  await assertBdeOwnsProposal(proposal, req.user);
   if (proposal.status !== "approved") {
     badRequest("Only approved proposals can be converted to installments.", "status");
   }

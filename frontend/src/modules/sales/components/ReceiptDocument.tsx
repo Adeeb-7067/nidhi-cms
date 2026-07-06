@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { COMPANY_BILLING, formatCurrency } from "../constants";
+import { formatCurrency } from "../constants";
 import { numberToWords, formatSalesDateTime } from "../utils";
 import type { PaymentReceipt } from "../types";
 
@@ -149,6 +149,17 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
             {numberToWords(receipt.amountPaid)}
           </p>
         </div>
+
+        {receipt.note ? (
+          <div className="rounded-xl px-4 py-3" style={{ border: `1px solid ${border}`, background: rowAlt }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-1" style={{ color: subtle }}>
+              Note
+            </p>
+            <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: dark }}>
+              {receipt.note}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -184,7 +195,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
       </div>
 
       <div className={`${padX} py-4 text-center text-[11px] break-words`} style={{ borderTop: `1px solid ${border}`, color: subtle }}>
-        {COMPANY_BILLING.phone} · {COMPANY_BILLING.email}
+        {[receipt.companyPhone, receipt.companyEmail].filter(Boolean).join(" · ") || "—"}
       </div>
     </div>
   );

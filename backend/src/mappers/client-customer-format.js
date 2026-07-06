@@ -31,6 +31,7 @@ export function formatClientAsCustomer(client, financials = {}) {
     updatedAt: client.updatedAt,
     totalSales: financials.totalSales ?? 0,
     outstanding: financials.outstanding ?? 0,
+    hasPayments: Boolean(financials.hasPayments),
   };
 }
 

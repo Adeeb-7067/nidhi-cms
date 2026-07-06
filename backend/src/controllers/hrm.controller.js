@@ -784,7 +784,10 @@ async function deleteAsset(req, res) {
 
 async function getExitRequests(req, res) {
   res.json({
-    requests: await exitService.listExitRequests({ status: req.query.status }),
+    requests: await exitService.listExitRequests({
+      status: req.query.status,
+      approvalStatus: req.query.approvalStatus,
+    }),
   });
 }
 
@@ -816,6 +819,16 @@ async function postExitReturnAssets(req, res) {
 async function postExitCancel(req, res) {
   const id = parseIdParam(req.params.id, "exit id");
   res.json(await exitService.cancelExitRequest(id, req.user.id));
+}
+
+async function postExitApprove(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.approveExitRequest(id, req.body, req.user.id));
+}
+
+async function postExitReject(req, res) {
+  const id = parseIdParam(req.params.id, "exit id");
+  res.json(await exitService.rejectExitRequest(id, req.body, req.user.id));
 }
 
 async function getExperienceLetters(req, res) {
@@ -1005,6 +1018,8 @@ export {
   postExitAdvance,
   postExitReturnAssets,
   postExitCancel,
+  postExitApprove,
+  postExitReject,
   getExperienceLetters,
   postExperienceLetterPreview,
   postExperienceLetter,

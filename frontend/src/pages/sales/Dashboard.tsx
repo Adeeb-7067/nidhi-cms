@@ -58,8 +58,8 @@ export default function SalesDashboard() {
   const [leadPeriod, setLeadPeriod] = useState<"today" | "week" | "month">("month");
   const [trendPeriod, setTrendPeriod] = useState<"week" | "month" | "year">("month");
 
-  const { data: dash, isLoading: dashLoading } = useSalesDashboard();
-  const { data: trendData, isLoading: trendLoading } = useSalesRevenueTrend(trendPeriod);
+  const { data: dash, isLoading: dashLoading, isError: dashError, refetch: refetchDash } = useSalesDashboard();
+  const { data: trendData, isLoading: trendLoading, isError: trendError } = useSalesRevenueTrend(trendPeriod);
   const { data: fuData, isLoading: fuLoading } = useListFollowUps({ limit: 50 });
   const { data: teamData } = useSalesTeam({ limit: 8 });
 
@@ -76,8 +76,8 @@ export default function SalesDashboard() {
 
   const trendChartData = (trendData?.trend ?? []).map((t) => ({
     day: format(new Date(t.date), "MMM d"),
-    revenue: t.revenue,
-    collected: t.revenue,
+    revenue: t.billed ?? 0,
+    collected: t.collected ?? t.revenue ?? 0,
   }));
 
   const invoiceDonutData = Object.entries(dash?.invoiceByStatus ?? {}).map(([status, v]) => ({
@@ -133,6 +133,13 @@ export default function SalesDashboard() {
       />
 
       <SalesFilterBar onExport={exportDashboardCsv} />
+
+      {dashError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-sm text-destructive">Could not load dashboard metrics.</p>
+          <Button size="sm" variant="outline" onClick={() => void refetchDash()}>Retry</Button>
+        </div>
+      ) : null}
 
       <motion.div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -229,6 +236,8 @@ export default function SalesDashboard() {
           >
             {trendLoading ? (
               <Skeleton className="h-[200px] w-full rounded-lg" />
+            ) : trendError ? (
+              <NoDataPlaceholder label="Could not load revenue trend" />
             ) : trendChartData.length > 0 ? (
               <SalesDualLineChart
                 data={trendChartData}
@@ -336,7 +345,7 @@ export default function SalesDashboard() {
               {followUpRows.map((fu) => (
                 <TableRow key={fu.id}>
                   <TableCell>
-                    <p className="text-xs font-medium">Lead #{fu.leadId}</p>
+                    <p className="text-xs font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</p>
                   </TableCell>
                   <TableCell className="text-xs capitalize">{fu.type}</TableCell>
                   <TableCell className="text-xs">{format(new Date(fu.scheduledAt), "MMM d, h:mm a")}</TableCell>

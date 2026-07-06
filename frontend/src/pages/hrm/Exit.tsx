@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Check, LogOut, Plus, Package, Trash2 } from "lucide-react";
+import { Check, Clock, LogOut, Plus, Package, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { Textarea } from "@/components/ui/textarea";
+import { AdvancedTable } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
 import {
   Dialog,
@@ -41,19 +42,21 @@ import {
 import {
   HrmRefDetailRow,
   HrmRefDetailSection,
-  HrmRefStatusPill,
 } from "@/modules/hrm/hrm-reference-kit";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
-import { EXIT_WORKFLOW_STAGES, exitNoticeTone } from "@/modules/hrm/exit-constants";
+import { EXIT_WORKFLOW_STAGES } from "@/modules/hrm/exit-constants";
+import { buildExitRequestColumns } from "@/modules/hrm/hrm-table-columns";
 import {
   useAdvanceExitRequest,
+  useApproveExitRequest,
   useCancelExitRequest,
   useCreateExitRequest,
   useHrmEmployees,
   useHrmExitRequest,
   useHrmExitRequests,
+  useRejectExitRequest,
   useReturnExitAssets,
   useUpdateExitRequest,
 } from "@/api/hrm";
@@ -80,12 +83,24 @@ const emptyForm = (): ExitForm => ({
 export default function HrmExitPage() {
   const canCreate = useHrmPermission("exit", "create");
   const canEdit = useHrmPermission("exit", "edit");
+  const canApprove = useHrmPermission("exit", "approve");
   const canDelete = useHrmPermission("exit", "delete");
 
-  const { data, isLoading, refetch, isFetching } = useHrmExitRequests("active");
+  const [approvalFilter, setApprovalFilter] = useState<"all" | "pending" | "approved">("all");
+  const listParams = useMemo(
+    () => ({
+      status: "active" as const,
+      approvalStatus: approvalFilter === "all" ? undefined : approvalFilter,
+    }),
+    [approvalFilter],
+  );
+
+  const { data, isLoading, refetch, isFetching } = useHrmExitRequests(listParams);
   const { data: employeesData } = useHrmEmployees({ status: "active", limit: 500 });
   const createExit = useCreateExitRequest();
   const updateExit = useUpdateExitRequest();
+  const approveExit = useApproveExitRequest();
+  const rejectExit = useRejectExitRequest();
   const advanceExit = useAdvanceExitRequest();
   const returnAssets = useReturnExitAssets();
   const cancelExit = useCancelExitRequest();
@@ -96,6 +111,8 @@ export default function HrmExitPage() {
   const [detailId, setDetailId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState<HrmExitRequest | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<HrmExitRequest | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [form, setForm] = useState<ExitForm>(emptyForm);
   const [detailLastWorkingDay, setDetailLastWorkingDay] = useState("");
   const [detailNotes, setDetailNotes] = useState("");
@@ -125,12 +142,14 @@ export default function HrmExitPage() {
   }, [detail?.id, detail?.lastWorkingDay, detail?.notes]);
 
   const kpiItems = useMemo(() => {
+    const pendingApproval = requests.filter((r) => r.approvalStatus === "pending").length;
     const avgNotice =
       requests.length > 0
         ? Math.round(requests.reduce((sum, r) => sum + r.noticeDaysRemaining, 0) / requests.length)
         : 0;
     const finalStage = requests.filter((r) => r.stage >= 5).length;
     return [
+      { label: "Pending approval", value: pendingApproval, hint: "Awaiting HR review", icon: Clock, accent: "amber" as const },
       { label: "In progress", value: requests.length, hint: "Active offboarding", icon: LogOut, accent: "violet" as const },
       { label: "Avg notice left", value: `${avgNotice}d`, hint: "Days to last working day", icon: LogOut, accent: "amber" as const },
       { label: "Final stage", value: finalStage, hint: "FnF or exit", icon: Check, accent: "green" as const },
@@ -219,32 +238,40 @@ export default function HrmExitPage() {
     }
   };
 
-  const handleApprove = async () => {
-    if (!detail) return;
-    try {
-      await updateExit.mutateAsync({
-        id: detail.id,
-        approvalStatus: "approved",
-        lastWorkingDay: detailLastWorkingDay,
-        notes: detailNotes.trim(),
-      });
-      toast.success("Exit approved");
-    } catch {
-      // mutation toast
-    }
-  };
+  const handleApprove = useCallback(
+    async (request: HrmExitRequest) => {
+      try {
+        await approveExit.mutateAsync({
+          id: request.id,
+          lastWorkingDay: detail?.id === request.id ? detailLastWorkingDay : undefined,
+          notes: detail?.id === request.id ? detailNotes.trim() || undefined : undefined,
+        });
+        toast.success(`Exit approved for ${request.employeeName}`);
+      } catch {
+        // mutation toast
+      }
+    },
+    [approveExit, detail?.id, detailLastWorkingDay, detailNotes],
+  );
+
+  const openRejectDialog = useCallback((request: HrmExitRequest) => {
+    setRejectTarget(request);
+    setRejectReason("");
+  }, []);
 
   const handleReject = async () => {
-    if (!detail) return;
+    if (!rejectTarget) return;
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast.error("Rejection reason is required");
+      return;
+    }
     try {
-      await updateExit.mutateAsync({
-        id: detail.id,
-        approvalStatus: "rejected",
-        rejectionReason: detailNotes.trim() || undefined,
-        notes: detailNotes.trim(),
-      });
-      toast.success("Exit rejected");
-      setDetailId(null);
+      await rejectExit.mutateAsync({ id: rejectTarget.id, rejectionReason: reason });
+      toast.success(`Exit rejected for ${rejectTarget.employeeName}`);
+      if (detailId === rejectTarget.id) setDetailId(null);
+      setRejectTarget(null);
+      setRejectReason("");
     } catch {
       // mutation toast
     }
@@ -262,70 +289,16 @@ export default function HrmExitPage() {
     }
   };
 
-  const columns = useMemo((): Column<HrmExitRequest>[] => [
-    {
-      id: "employee",
-      header: "Employee",
-      cell: (r) => (
-        <div className="flex items-center gap-2">
-          <HrmEmployeeAvatar name={r.employeeName} avatarUrl={r.employeeAvatarUrl} className="h-7 w-7" />
-          <div>
-            <p className="text-xs font-semibold">{r.employeeName}</p>
-            <p className="text-[10px] text-muted-foreground">{r.employeeDesignation ?? r.employeeCode ?? "—"}</p>
-          </div>
-        </div>
-      ),
-      exportValue: (r) => r.employeeName,
-    },
-    {
-      id: "reason",
-      header: "Reason",
-      cell: (r) => <span className="text-xs">{r.reason}</span>,
-      exportValue: (r) => r.reason,
-    },
-    {
-      id: "resigned",
-      header: "Resigned",
-      cell: (r) => (
-        <span className="text-xs tabular-nums">{format(new Date(r.resignationDate), "MMM d, yyyy")}</span>
-      ),
-      exportValue: (r) => format(new Date(r.resignationDate), "MMM d, yyyy"),
-    },
-    {
-      id: "lwd",
-      header: "Last day",
-      cell: (r) => (
-        <span className="text-xs tabular-nums">{format(new Date(r.lastWorkingDay), "MMM d, yyyy")}</span>
-      ),
-      exportValue: (r) => format(new Date(r.lastWorkingDay), "MMM d, yyyy"),
-    },
-    {
-      id: "notice",
-      header: "Notice left",
-      cell: (r) => (
-        <HrmRefStatusPill tone={exitNoticeTone(r.noticeDaysRemaining)}>
-          {r.noticeDaysRemaining}d
-        </HrmRefStatusPill>
-      ),
-      exportValue: (r) => `${r.noticeDaysRemaining}d`,
-    },
-    {
-      id: "stage",
-      header: "Stage",
-      cell: (r) => (
-        <span className="text-xs">
-          {r.stageLabel} ({r.stage}/{r.stageCount})
-        </span>
-      ),
-      exportValue: (r) => `${r.stageLabel} (${r.stage}/${r.stageCount})`,
-    },
-    {
-      id: "approval",
-      header: "Approval",
-      cell: (r) => <span className="text-xs capitalize">{r.approvalStatus}</span>,
-      exportValue: (r) => r.approvalStatus,
-    },
-  ], []);
+  const columns = useMemo(
+    () =>
+      buildExitRequestColumns({
+        canApprove,
+        reviewPending: approveExit.isPending || rejectExit.isPending,
+        onApprove: (request) => void handleApprove(request),
+        onReject: openRejectDialog,
+      }),
+    [canApprove, approveExit.isPending, rejectExit.isPending, handleApprove, openRejectDialog],
+  );
 
   return (
     <HrmGate module="exit">
@@ -348,6 +321,22 @@ export default function HrmExitPage() {
         />
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading} />
+
+        {canApprove ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Approval queue</span>
+            <Select value={approvalFilter} onValueChange={(v) => setApprovalFilter(v as typeof approvalFilter)}>
+              <SelectTrigger className="h-8 w-[180px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All active exits</SelectItem>
+                <SelectItem value="pending">Pending approval</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
 
         <PortalTablePanel isLoading={isLoading}>
           <AdvancedTable
@@ -417,6 +406,16 @@ export default function HrmExitPage() {
                   <HrmRefDetailRow label="Notice period" value={`${detail.noticePeriodDays} days`} />
                   <HrmRefDetailRow label="Notice remaining" value={`${detail.noticeDaysRemaining} days`} />
                   <HrmRefDetailRow label="Approval" value={detail.approvalStatus} />
+                  <HrmRefDetailRow
+                    label="Account status"
+                    value={
+                      detail.autoDeactivatedAt
+                        ? `Inactive since ${format(new Date(detail.autoDeactivatedAt), "MMM d, yyyy")}`
+                        : detail.approvalStatus === "approved"
+                          ? `Active until ${format(new Date(detail.lastWorkingDay), "MMM d, yyyy")} — deactivates the next day`
+                          : (detail.employeeStatus ?? "—")
+                    }
+                  />
                   <HrmRefDetailRow label="Employee status" value={detail.employeeStatus ?? "—"} />
                   {detail.autoDeactivatedAt ? (
                     <HrmRefDetailRow
@@ -427,7 +426,29 @@ export default function HrmExitPage() {
                   <HrmRefDetailRow label="Reason" value={detail.reason} />
                 </HrmRefDetailSection>
 
-                {canEdit ? (
+                {(canEdit || canApprove) && detail.approvalStatus === "pending" ? (
+                  <HrmRefDetailSection title="Review">
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {canEdit || canApprove ? (
+                        <HrmField label="Last working day">
+                          <Input
+                            type="date"
+                            value={detailLastWorkingDay}
+                            onChange={(e) => setDetailLastWorkingDay(e.target.value)}
+                            disabled={!canEdit && !canApprove}
+                          />
+                        </HrmField>
+                      ) : null}
+                      <HrmField label="Notes">
+                        <Input
+                          value={detailNotes}
+                          onChange={(e) => setDetailNotes(e.target.value)}
+                          placeholder="HR notes for this exit"
+                        />
+                      </HrmField>
+                    </div>
+                  </HrmRefDetailSection>
+                ) : canEdit ? (
                   <HrmRefDetailSection title="Admin controls">
                     <div className="grid gap-4 sm:grid-cols-2">
                       <HrmField label="Last working day">
@@ -437,11 +458,11 @@ export default function HrmExitPage() {
                           onChange={(e) => setDetailLastWorkingDay(e.target.value)}
                         />
                       </HrmField>
-                      <HrmField label="Notes / rejection reason">
+                      <HrmField label="Notes">
                         <Input
                           value={detailNotes}
                           onChange={(e) => setDetailNotes(e.target.value)}
-                          placeholder="Notes for approval, relieving date, or rejection"
+                          placeholder="Internal notes"
                         />
                       </HrmField>
                     </div>
@@ -505,36 +526,49 @@ export default function HrmExitPage() {
                       Cancel workflow
                     </Button>
                   ) : null}
-                  {canEdit ? (
-                    <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
-                      <Button size="sm" variant="outline" onClick={handleSaveDetail} disabled={updateExit.isPending}>
-                        Save details
-                      </Button>
-                      {detail.approvalStatus === "pending" ? (
-                        <>
-                          <Button size="sm" className={portalActionButtonClass()} onClick={handleApprove} disabled={updateExit.isPending}>
-                            Approve exit
-                          </Button>
-                          <Button size="sm" variant="outline" onClick={handleReject} disabled={updateExit.isPending}>
-                            Reject exit
-                          </Button>
-                        </>
-                      ) : detail.stage < EXIT_WORKFLOW_STAGES.length ? (
-                        <Button size="sm" className={portalActionButtonClass()} onClick={handleAdvance} disabled={advanceExit.isPending}>
-                          Advance stage
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:justify-end">
+                    {canApprove && detail.approvalStatus === "pending" ? (
+                      <>
+                        <Button
+                          size="sm"
+                          className={portalActionButtonClass()}
+                          onClick={() => void handleApprove(detail)}
+                          disabled={approveExit.isPending}
+                        >
+                          Approve exit
                         </Button>
-                      ) : null}
-                      {!detail.assetReturnComplete && (detail.assignedAssetCount ?? 0) > 0 ? (
-                        <Button size="sm" variant="outline" onClick={handleReturnAssets} disabled={returnAssets.isPending}>
-                          <Package className="size-3.5 mr-1" />
-                          Return assets
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openRejectDialog(detail)}
+                          disabled={rejectExit.isPending}
+                        >
+                          Reject exit
                         </Button>
-                      ) : null}
-                      <Button size="sm" variant="outline" onClick={handleToggleFnf} disabled={updateExit.isPending}>
-                        {detail.fnfSettled ? "Mark FnF pending" : "Mark FnF settled"}
-                      </Button>
-                    </div>
-                  ) : null}
+                      </>
+                    ) : null}
+                    {canEdit ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={handleSaveDetail} disabled={updateExit.isPending}>
+                          Save details
+                        </Button>
+                        {detail.approvalStatus === "approved" && detail.stage < EXIT_WORKFLOW_STAGES.length ? (
+                          <Button size="sm" className={portalActionButtonClass()} onClick={handleAdvance} disabled={advanceExit.isPending}>
+                            Advance stage
+                          </Button>
+                        ) : null}
+                        {!detail.assetReturnComplete && (detail.assignedAssetCount ?? 0) > 0 ? (
+                          <Button size="sm" variant="outline" onClick={handleReturnAssets} disabled={returnAssets.isPending}>
+                            <Package className="size-3.5 mr-1" />
+                            Return assets
+                          </Button>
+                        ) : null}
+                        <Button size="sm" variant="outline" onClick={handleToggleFnf} disabled={updateExit.isPending}>
+                          {detail.fnfSettled ? "Mark FnF pending" : "Mark FnF settled"}
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
                 </DialogFooter>
               </>
             ) : null}
@@ -612,6 +646,39 @@ export default function HrmExitPage() {
             <AlertDialogFooter>
               <AlertDialogCancel>Keep active</AlertDialogCancel>
               <AlertDialogAction onClick={confirmCancel}>Cancel workflow</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={!!rejectTarget} onOpenChange={(open) => !open && setRejectTarget(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reject exit request?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Reject offboarding for {rejectTarget?.employeeName}. The workflow will be cancelled and the employee stays active.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-2">
+              <HrmField label="Rejection reason">
+                <Textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Explain why this exit is not approved"
+                  rows={3}
+                />
+              </HrmField>
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setRejectReason("")}>Back</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={(e) => {
+                  e.preventDefault();
+                  void handleReject();
+                }}
+              >
+                Reject exit
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

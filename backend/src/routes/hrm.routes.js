@@ -146,6 +146,8 @@ router.get("/hrm/exit", perm("hrm_exit", "view"), asyncHandler(hrm.getExitReques
 router.get("/hrm/exit/:id", perm("hrm_exit", "view"), asyncHandler(hrm.getExitRequest));
 router.post("/hrm/exit", perm("hrm_exit", "create"), asyncHandler(hrm.postExitRequest));
 router.patch("/hrm/exit/:id", perm("hrm_exit", "edit"), asyncHandler(hrm.patchExitRequest));
+router.post("/hrm/exit/:id/approve", perm("hrm_exit", "approve"), asyncHandler(hrm.postExitApprove));
+router.post("/hrm/exit/:id/reject", perm("hrm_exit", "approve"), asyncHandler(hrm.postExitReject));
 router.post("/hrm/exit/:id/advance", perm("hrm_exit", "edit"), asyncHandler(hrm.postExitAdvance));
 router.post("/hrm/exit/:id/return-assets", perm("hrm_exit", "edit"), asyncHandler(hrm.postExitReturnAssets));
 router.post("/hrm/exit/:id/cancel", perm("hrm_exit", "delete"), asyncHandler(hrm.postExitCancel));

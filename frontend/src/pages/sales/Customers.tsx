@@ -39,6 +39,7 @@ import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
 import {
   useListCustomers,
+  useCustomersSummary,
   useDeleteCustomer,
   salesKeys,
   type Customer,
@@ -59,6 +60,7 @@ import {
   SalesEmptyState,
   CustomerFormModal,
   CustomerProvisionPortalDialog,
+  CustomersSummaryBar,
 } from "@/modules/sales/components";
 
 function csvCell(value: string | number | null | undefined): string {
@@ -128,6 +130,7 @@ export default function Customers() {
   };
 
   const { data, isLoading, isError, refetch } = useListCustomers(listParams);
+  const { data: summary, isLoading: summaryLoading } = useCustomersSummary();
   const customers = data?.customers ?? [];
   const total = data?.total ?? 0;
 
@@ -211,6 +214,8 @@ export default function Customers() {
           </div>
         }
       />
+
+      <CustomersSummaryBar loading={summaryLoading} summary={summary} />
 
       <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search customers…">
         <Select
@@ -336,8 +341,9 @@ export default function Customers() {
                           type="button"
                           variant="ghost"
                           size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          title="Delete customer"
+                          className="h-8 w-8 text-destructive hover:text-destructive disabled:opacity-40"
+                          title={c.hasPayments ? "Cannot delete — payments recorded" : "Delete customer"}
+                          disabled={c.hasPayments}
                           onClick={() => setDeleteTarget(c)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -387,9 +393,9 @@ export default function Customers() {
             <AlertDialogTitle>Delete customer?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget ? (
-                deleteTarget.totalSales > 0 || deleteTarget.outstanding > 0 ? (
+                deleteTarget.hasPayments ? (
                   <>
-                    <strong>{deleteTarget.companyName}</strong> has billing history and cannot be deleted.
+                    <strong>{deleteTarget.companyName}</strong> has recorded payments and cannot be deleted.
                     Set status to inactive instead.
                   </>
                 ) : (
@@ -403,9 +409,9 @@ export default function Customers() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleteCustomer.isPending}>
-              {deleteTarget && (deleteTarget.totalSales > 0 || deleteTarget.outstanding > 0) ? "Close" : "Cancel"}
+              {deleteTarget?.hasPayments ? "Close" : "Cancel"}
             </AlertDialogCancel>
-            {deleteTarget && deleteTarget.totalSales === 0 && deleteTarget.outstanding === 0 ? (
+            {deleteTarget && !deleteTarget.hasPayments ? (
               <AlertDialogAction
                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 disabled={deleteCustomer.isPending}

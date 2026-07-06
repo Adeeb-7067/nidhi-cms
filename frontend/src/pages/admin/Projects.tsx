@@ -675,8 +675,8 @@ export default function AdminProjects() {
   return (
     <PortalPageShell>
       <PortalPageHero
-        title="Projects"
-        subtitle="Manage development and maintenance portfolios"
+        title="All projects"
+        subtitle="All development and maintenance portfolios"
         actions={
           <Dialog
             open={isDialogOpen || !!editProject}

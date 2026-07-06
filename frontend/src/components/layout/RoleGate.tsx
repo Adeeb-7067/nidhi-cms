@@ -89,6 +89,14 @@ export function RoleGate({
     ) {
       return <>{children}</>;
     }
+    if (
+      permModule === "admin_projects" &&
+      action === "view" &&
+      user.role === "bde" &&
+      can("sales_customers", "view")
+    ) {
+      return <>{children}</>;
+    }
     if (location === "/admin/projects" && isDevPortalRole(user.role)) {
       return <Redirect to={getProjectsListHref(user.role)} replace />;
     }

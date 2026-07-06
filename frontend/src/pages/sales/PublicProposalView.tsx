@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRoute } from "wouter";
 import { format } from "date-fns";
 import SignaturePad from "signature_pad";
@@ -17,7 +17,8 @@ import {
   useAddPublicComment,
 } from "@/api/sales";
 import { resolveProposalTotal, canClientRespondToProposal, isProposalValidityActive } from "@/modules/sales/utils";
-import { formatCurrency, COMPANY_BILLING } from "@/modules/sales/constants";
+import { formatCurrency } from "@/modules/sales/constants";
+import { resolvePublicProposalBranding, resolveSalesDocumentBranding } from "@/modules/sales/company-branding";
 import { ProposalDocument } from "@/modules/sales/components/ProposalDocument";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 
@@ -500,6 +501,7 @@ export default function PublicProposalView() {
   const token = params?.token ?? "";
 
   const { data: proposal, isLoading, isError, refetch } = useGetPublicProposal(token);
+  const fallbackBranding = useMemo(() => resolveSalesDocumentBranding(), []);
   const approve = usePublicApproveProposal(token);
   const decline = usePublicDeclineProposal(token);
   const counter = usePublicCounterProposal(token);
@@ -568,8 +570,8 @@ export default function PublicProposalView() {
           <p className="text-sm leading-relaxed" style={{ color: muted }}>
             This link may have expired or the proposal doesn't exist.
           </p>
-          <a href={`mailto:${COMPANY_BILLING.email}`} className="text-sm font-semibold hover:underline" style={{ color: primary }}>
-            {COMPANY_BILLING.email}
+          <a href={`mailto:${fallbackBranding.email}`} className="text-sm font-semibold hover:underline" style={{ color: primary }}>
+            {fallbackBranding.email}
           </a>
         </div>
       </div>
@@ -585,8 +587,8 @@ export default function PublicProposalView() {
       ? proposal.status as "approved" | "declined" | "counter_offer"
       : null);
 
-  const company     = proposal.companySettings;
-  const companyName = company?.companyName ?? COMPANY_BILLING.name;
+  const branding = resolvePublicProposalBranding(proposal);
+  const companyName = branding.companyName;
   const clientName    = proposal.lead?.name    ?? proposal.customer?.contactPerson ?? "Client";
   const clientCompany = proposal.lead?.company ?? proposal.customer?.companyName   ?? null;
   const clientEmail   = proposal.lead?.email   ?? proposal.customer?.email         ?? null;
@@ -616,13 +618,13 @@ export default function PublicProposalView() {
         {/* ── Top bar ───────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
-            {company?.logoUrl
-              ? <img src={company.logoUrl} alt="logo" className="h-9 object-contain" />
+            {branding.logoUrl
+              ? <img src={branding.logoUrl} alt="logo" className="h-9 object-contain" />
               : <div className="h-9 w-9 rounded-lg flex items-center justify-center text-white text-sm font-black" style={{ background: primary }}>SK</div>
             }
             <div>
               <p className="font-bold text-sm leading-none" style={{ color: dark }}>{companyName}</p>
-              <p className="text-xs mt-0.5" style={{ color: subtle }}>{COMPANY_BILLING.email}</p>
+              <p className="text-xs mt-0.5" style={{ color: subtle }}>{branding.email}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -663,6 +665,7 @@ export default function PublicProposalView() {
                 proposal={proposal}
                 currentStatus={currentStatus}
                 statusChip={sCfg}
+                branding={branding}
               />
             </div>
 
@@ -718,8 +721,8 @@ export default function PublicProposalView() {
                 </div>
                 <p className="text-center text-[11px] mt-4" style={{ color: subtle }}>
                   Questions? Contact us at{" "}
-                  <a href={`mailto:${COMPANY_BILLING.email}`} className="hover:underline font-semibold" style={{ color: primary }}>
-                    {COMPANY_BILLING.email}
+                  <a href={`mailto:${branding.email}`} className="hover:underline font-semibold" style={{ color: primary }}>
+                    {branding.email}
                   </a>
                 </p>
               </div>
@@ -856,7 +859,7 @@ export default function PublicProposalView() {
         <div className="text-center py-2 space-y-1">
           <p className="text-xs font-semibold" style={{ color: muted }}>{companyName}</p>
           <p className="text-[11px]" style={{ color: subtle }}>
-            {COMPANY_BILLING.address} · {COMPANY_BILLING.phone} · {COMPANY_BILLING.email}
+            {branding.address} · {branding.phone} · {branding.email}
           </p>
         </div>
       </div>
@@ -871,6 +874,7 @@ export default function PublicProposalView() {
           proposal={proposal}
           currentStatus={currentStatus}
           statusChip={sCfg}
+          branding={branding}
           forPdf
         />
       </div>

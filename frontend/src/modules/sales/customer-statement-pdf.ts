@@ -2,7 +2,6 @@ import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Customer } from "@/api/sales";
-import { COMPANY_BILLING } from "./constants";
 import type { DocumentCompanyBranding } from "./company-branding";
 import {
   formatStatementSummaryAmount,
@@ -39,7 +38,7 @@ function drawStatementHeader(
   startY: number,
 ): number {
   const { customer, company, companyGstin, ledger, periodLabel } = input;
-  const gstin = companyGstin ?? COMPANY_BILLING.gstin;
+  const gstin = companyGstin?.trim() ?? "";
   let y = startY;
 
   doc.setFont("helvetica", "bold");
@@ -55,8 +54,12 @@ function drawStatementHeader(
   doc.text(addressLines, MARGIN.left, y);
   y += addressLines.length * 4.2;
 
-  doc.text(`GSTIN Number: ${gstin}`, MARGIN.left, y);
-  y += 8;
+  if (gstin) {
+    doc.text(`GSTIN Number: ${gstin}`, MARGIN.left, y);
+    y += 8;
+  } else {
+    y += 4;
+  }
 
   const summaryX = MARGIN.left + CONTENT_W * 0.52;
   const summaryW = CONTENT_W * 0.48;

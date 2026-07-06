@@ -268,7 +268,7 @@ export default function BdeDashboard() {
 
   const [activityTab, setActivityTab] = useState("leads");
 
-  const { data: myData, isLoading: myLoading } = useSalesTeamMember(userId, !!userId);
+  const { data: myData, isLoading: myLoading, isError: myError } = useSalesTeamMember(userId, !!userId);
   const { data: teamData, isLoading: teamLoading } = useSalesTeam({ limit: 100, leaderboard: true });
   const { data: targetData } = useMyBdeTarget();
 
@@ -326,6 +326,12 @@ export default function BdeDashboard() {
           </div>
         }
       />
+
+      {myError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 mb-4">
+          <p className="text-sm text-destructive">Could not load your performance data. Try refreshing the page.</p>
+        </div>
+      ) : null}
 
       {/* ── Rank Hero ── */}
       {myLoading ? (
@@ -696,7 +702,7 @@ export default function BdeDashboard() {
                         const isOverdue = fu.status === "overdue" || (scheduled && isPast(scheduled) && !isToday(scheduled));
                         return (
                           <TableRow key={fu.id} className={cn(isOverdue && "bg-destructive/5")}>
-                            <TableCell className="text-xs font-medium">Lead #{fu.leadId}</TableCell>
+                            <TableCell className="text-xs font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</TableCell>
                             <TableCell className="text-xs capitalize">{fu.type}</TableCell>
                             <TableCell className="text-xs">
                               {scheduled ? (

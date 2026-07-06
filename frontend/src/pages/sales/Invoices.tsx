@@ -143,8 +143,8 @@ export default function Invoices() {
                   <TableCell className="text-xs font-mono">
                     <Link href={`/sales/invoices/${inv.id}`} className="hover:text-primary">{inv.number}</Link>
                   </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[180px] truncate text-muted-foreground">
-                    Customer #{inv.customerId}
+                  <TableCell className="text-xs font-medium max-w-[180px] truncate">
+                    {inv.customerName ?? `Customer #${inv.customerId}`}
                   </TableCell>
                   <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(inv.projectId, inv.projectName)}>
                     {formatProjectLabel(inv.projectId, inv.projectName)}

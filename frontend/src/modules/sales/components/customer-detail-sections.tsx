@@ -6,6 +6,7 @@ import {
   Briefcase,
   ExternalLink,
   FileText,
+  IndianRupee,
   KeyRound,
   Loader2,
   Mail,
@@ -16,6 +17,7 @@ import {
   Receipt,
   Shield,
   Trash2,
+  TrendingUp,
   User as UserIcon,
   UserCog,
   Users,
@@ -38,9 +40,8 @@ import type {
 } from "@/api/sales";
 import { salesKeys, useAssignCustomerAdmin, useDeleteProposal } from "@/api/sales";
 import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime } from "@/modules/sales/utils";
-import { useGetSettings } from "@/api/generated/api";
-import { resolveDocumentCompany } from "@/modules/sales/company-branding";
-import { COMPANY_BILLING } from "@/modules/sales/constants";
+import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
+import { customFieldsForDocument } from "@/modules/sales/company-branding";
 import {
   buildCustomerStatementLedger,
   formatStatementSummaryAmount,
@@ -582,31 +583,43 @@ export function CustomerTeamSection({
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <Table>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {members.length} team member{members.length === 1 ? "" : "s"} on this account
+        </p>
+        <Button variant="outline" size="sm" className="h-7 text-xs" asChild>
+          <Link href={`/sales/client-team?customerId=${clientId}`}>
+            View all & manage
+          </Link>
+        </Button>
+      </div>
+      <div className="rounded-xl border overflow-hidden">
+        <div className="overflow-x-auto">
+        <Table className="min-w-[640px]">
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">Name</TableHead>
-            <TableHead className="text-xs">Role</TableHead>
-            <TableHead className="text-xs">Email</TableHead>
-            <TableHead className="text-xs">Phone</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
+            <TableHead className="text-xs min-w-[120px]">Name</TableHead>
+            <TableHead className="text-xs min-w-[88px]">Role</TableHead>
+            <TableHead className="text-xs min-w-[160px]">Email</TableHead>
+            <TableHead className="text-xs min-w-[110px] hidden sm:table-cell">Phone</TableHead>
+            <TableHead className="text-xs min-w-[80px]">Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {members.map((m) => (
             <TableRow key={m.id}>
-              <TableCell className="text-xs font-medium">{m.name ?? "—"}</TableCell>
-              <TableCell className="text-xs">{m.role ?? m.title ?? "Member"}</TableCell>
-              <TableCell className="text-xs">
+              <TableCell className="text-xs font-medium max-w-[160px] truncate">{m.name ?? "—"}</TableCell>
+              <TableCell className="text-xs max-w-[120px] truncate">{m.role ?? m.title ?? "Member"}</TableCell>
+              <TableCell className="text-xs max-w-[200px]">
                 {m.email ? (
-                  <a href={`mailto:${m.email}`} className="text-primary hover:underline inline-flex items-center gap-1">
-                    <Mail className="h-3 w-3" />
-                    {m.email}
+                  <a href={`mailto:${m.email}`} className="text-primary hover:underline inline-flex items-center gap-1 min-w-0 max-w-full">
+                    <Mail className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{m.email}</span>
                   </a>
                 ) : "—"}
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell className="text-xs hidden sm:table-cell whitespace-nowrap">
                 {m.phoneNumber ? (
                   <span className="inline-flex items-center gap-1">
                     <Phone className="h-3 w-3" />
@@ -621,6 +634,8 @@ export function CustomerTeamSection({
           ))}
         </TableBody>
       </Table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1108,207 +1123,257 @@ export function CustomerProposalsSection({
   );
 }
 
-// ── Invoices & payments ────────────────────────────────────────────────────────
+// ── Invoices ───────────────────────────────────────────────────────────────────
 
 export function CustomerInvoicesSection({
   invoices,
-  payments,
   customerId,
+  outstanding,
+  isLoading = false,
+  invoicesTotal,
 }: {
   invoices: SalesInvoice[];
-  payments: SalesPayment[];
   customerId: number;
+  outstanding?: number;
+  isLoading?: boolean;
+  invoicesTotal?: number;
 }) {
   const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
-  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
 
-  const actionDialogs = (
-    <>
-      <InvoiceFormSheet open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen} defaultCustomerId={customerId} />
-      <RecordPaymentDialog open={recordPaymentOpen} onOpenChange={setRecordPaymentOpen} customerId={customerId} />
-    </>
+  if (isLoading) return <LoadingBlock />;
+
+  const billableInvoices = invoices.filter((i) => i.status !== "cancelled");
+  const totalInvoiced = billableInvoices.reduce((s, i) => s + i.amount, 0);
+  const computedOutstanding =
+    outstanding ??
+    billableInvoices.reduce((s, i) => s + Math.max(0, i.amount - (i.paidAmount ?? 0)), 0);
+  const sortedInvoices = [...invoices].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
+  const invoicesTruncated = invoicesTotal != null && invoicesTotal > invoices.length;
 
-  if (invoices.length === 0 && payments.length === 0) {
+  if (invoices.length === 0) {
     return (
       <>
-        <div className="flex items-center justify-end gap-2">
-          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
-            <Receipt className="h-3.5 w-3.5" />
-            Record payment
-          </Button>
+        <div className="flex items-center justify-end">
           <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateInvoiceOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             New invoice
           </Button>
         </div>
         <SalesEmptyState
-          title="No invoices or payments"
-          description="No invoices have been raised or payments recorded for this customer yet."
+          title="No invoices"
+          description="No invoices have been raised for this customer yet."
           actionLabel="Create first invoice"
           onAction={() => setCreateInvoiceOpen(true)}
         />
-        {actionDialogs}
+        <InvoiceFormSheet open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen} defaultCustomerId={customerId} />
       </>
     );
   }
 
-  const totalInvoiced = invoices.reduce((s, i) => s + (i.adjustedTotal ?? i.amount), 0);
-  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const sortedInvoices = [...invoices].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-  const sortedPayments = [...payments].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-end gap-2">
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
-          <Receipt className="h-3.5 w-3.5" />
-          Record payment
-        </Button>
+      <div className="flex items-center justify-end">
         <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setCreateInvoiceOpen(true)}>
           <Plus className="h-3.5 w-3.5" />
           New invoice
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Invoices</p>
-            <p className="text-xl font-bold mt-0.5">{invoices.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total invoiced</p>
-            <p className="text-xl font-bold mt-0.5">{formatCurrency(totalInvoiced)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Payments</p>
-            <p className="text-xl font-bold mt-0.5">{payments.length}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-3">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Total paid</p>
-            <p className="text-xl font-bold mt-0.5 text-emerald-600">{formatCurrency(totalPaid)}</p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <FinancialSummaryCard title="Invoices" value={invoices.length} icon={FileText} accent="blue" />
+        <FinancialSummaryCard title="Total invoiced" value={formatCurrency(totalInvoiced)} icon={IndianRupee} accent="violet" />
+        <FinancialSummaryCard
+          title="Outstanding"
+          value={formatCurrency(computedOutstanding)}
+          icon={Receipt}
+          accent="red"
+          alert={computedOutstanding > 0}
+        />
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Invoices</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {sortedInvoices.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4 text-center">No invoices raised yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Invoice #</TableHead>
-                  <TableHead className="text-xs">Title</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs text-right">Paid</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Due date</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedInvoices.map((inv) => (
-                  <TableRow key={inv.id}>
-                    <TableCell className="text-xs font-mono">
-                      <Link href={`/sales/invoices/${inv.id}`} className="text-primary hover:underline font-medium">
-                        {inv.number}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-xs">{inv.title ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {formatCurrency(inv.adjustedTotal ?? inv.amount)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-emerald-600">
-                      {formatCurrency(inv.paidAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <SalesStatusBadge variant="invoice" value={inv.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {format(new Date(inv.dueDate), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {formatSalesDateTime(inv.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {invoicesTruncated ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+          Showing {invoices.length} of {invoicesTotal} invoices. Use the global Invoices list for the full history.
+        </p>
+      ) : null}
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Payment records</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          {sortedPayments.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Receipt #</TableHead>
-                  <TableHead className="text-xs">Invoice</TableHead>
-                  <TableHead className="text-xs">Mode</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs">Invoice status</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                  <TableHead className="text-xs text-right">Receipt</TableHead>
+      <div className="rounded-xl border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="text-xs">Invoice #</TableHead>
+              <TableHead className="text-xs">Title</TableHead>
+              <TableHead className="text-xs text-right">Amount</TableHead>
+              <TableHead className="text-xs text-right">Paid</TableHead>
+              <TableHead className="text-xs text-right">Due</TableHead>
+              <TableHead className="text-xs">Status</TableHead>
+              <TableHead className="text-xs">Due date</TableHead>
+              <TableHead className="text-xs">Created</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedInvoices.map((inv) => {
+              const remaining = calcRemaining(inv.amount, inv.paidAmount ?? 0);
+              return (
+                <TableRow key={inv.id} className="hover:bg-muted/20">
+                  <TableCell className="text-xs font-mono">
+                    <Link href={`/sales/invoices/${inv.id}`} className="text-primary hover:underline font-medium">
+                      {inv.number}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-xs max-w-[200px] truncate">{inv.title ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium">
+                    {formatCurrency(inv.amount)}
+                  </TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-emerald-600">
+                    {formatCurrency(inv.paidAmount ?? 0)}
+                  </TableCell>
+                  <TableCell
+                    className={cn(
+                      "text-xs text-right tabular-nums font-medium",
+                      remaining > 0 && inv.status !== "cancelled" && "text-destructive",
+                    )}
+                  >
+                    {inv.status === "cancelled" ? "—" : formatCurrency(remaining)}
+                  </TableCell>
+                  <TableCell>
+                    <SalesStatusBadge variant="invoice" value={inv.status} />
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {format(new Date(inv.dueDate), "MMM d, yyyy")}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {formatSalesDateTime(inv.createdAt)}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedPayments.map((p) => (
-                  <TableRow key={p.id}>
-                    <TableCell className="text-xs font-mono">{p.receiptNumber}</TableCell>
-                    <TableCell className="text-xs font-mono">
-                      <Link
-                        href={`/sales/invoices/${p.invoiceId}`}
-                        className="text-primary hover:underline"
-                      >
-                        {p.invoiceNumber ?? `INV-${p.invoiceId}`}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums font-medium">
-                      {formatCurrency(p.amount)}
-                    </TableCell>
-                    <TableCell>
-                      <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatSalesDateTime(p.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                        <Link href={`/sales/receipts/${p.id}`}>View</Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-      {actionDialogs}
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      <InvoiceFormSheet open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen} defaultCustomerId={customerId} />
+    </div>
+  );
+}
+
+// ── Payments ─────────────────────────────────────────────────────────────────────
+
+export function CustomerPaymentsSection({
+  payments,
+  customerId,
+  isLoading = false,
+  paymentsTotal,
+}: {
+  payments: SalesPayment[];
+  customerId: number;
+  isLoading?: boolean;
+  paymentsTotal?: number;
+}) {
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+
+  if (isLoading) return <LoadingBlock />;
+
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
+  const sortedPayments = [...payments].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const paymentsTruncated = paymentsTotal != null && paymentsTotal > payments.length;
+
+  if (payments.length === 0) {
+    return (
+      <>
+        <div className="flex items-center justify-end">
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
+            <Receipt className="h-3.5 w-3.5" />
+            Record payment
+          </Button>
+        </div>
+        <SalesEmptyState
+          title="No payments"
+          description="No payments have been recorded for this customer yet."
+          actionLabel="Record payment"
+          onAction={() => setRecordPaymentOpen(true)}
+        />
+        <RecordPaymentDialog open={recordPaymentOpen} onOpenChange={setRecordPaymentOpen} customerId={customerId} />
+      </>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-end">
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => setRecordPaymentOpen(true)}>
+          <Receipt className="h-3.5 w-3.5" />
+          Record payment
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+        <FinancialSummaryCard title="Payments" value={payments.length} icon={Receipt} accent="green" />
+        <FinancialSummaryCard title="Total paid" value={formatCurrency(totalPaid)} icon={TrendingUp} accent="green" />
+      </div>
+
+      {paymentsTruncated ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
+          Showing {payments.length} of {paymentsTotal} payments. Use the global Payments list for the full history.
+        </p>
+      ) : null}
+
+      <div className="rounded-xl border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="text-xs">Receipt #</TableHead>
+              <TableHead className="text-xs">Invoice</TableHead>
+              <TableHead className="text-xs">Mode</TableHead>
+              <TableHead className="text-xs text-right">Amount</TableHead>
+              <TableHead className="text-xs">Invoice status</TableHead>
+              <TableHead className="text-xs">Created at</TableHead>
+              <TableHead className="text-xs">Created by</TableHead>
+              <TableHead className="text-xs text-right">Receipt</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sortedPayments.map((p) => (
+              <TableRow key={p.id} className="hover:bg-muted/20">
+                <TableCell className="text-xs font-mono font-medium">{p.receiptNumber}</TableCell>
+                <TableCell className="text-xs font-mono">
+                  <Link href={`/sales/invoices/${p.invoiceId}`} className="text-primary hover:underline">
+                    {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
+                <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">
+                  {formatCurrency(p.amount)}
+                </TableCell>
+                <TableCell>
+                  <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                  {formatSalesDateTime(p.createdAt)}
+                </TableCell>
+                <TableCell>
+                  {p.recordedByName ? (
+                    <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} className="max-w-[140px]" />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                    <Link href={`/sales/receipts/${p.id}`}>View</Link>
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <RecordPaymentDialog open={recordPaymentOpen} onOpenChange={setRecordPaymentOpen} customerId={customerId} />
     </div>
   );
 }
@@ -1342,7 +1407,6 @@ export function CustomerStatementSection({
   customer,
   statement,
   statementLoading,
-  payments,
 }: {
   customer: Customer;
   statement: {
@@ -1351,15 +1415,13 @@ export function CustomerStatementSection({
     payments: SalesPayment[];
   } | undefined;
   statementLoading: boolean;
-  payments: SalesPayment[];
 }) {
   const printRef = useRef<HTMLDivElement>(null);
   const [period, setPeriod] = useState<PeriodPreset>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [pdfLoading, setPdfLoading] = useState(false);
-  const { data: orgSettings } = useGetSettings();
-  const company = resolveDocumentCompany(orgSettings);
+  const branding = useSalesDocumentBranding();
 
   function applyPreset(preset: PeriodPreset) {
     const now = new Date();
@@ -1392,7 +1454,7 @@ export function CustomerStatementSection({
   const to = toDate ? new Date(toDate + "T23:59:59") : null;
 
   const allInvoices = statement?.invoices ?? [];
-  const allPayments = payments;
+  const allPayments = statement?.payments ?? [];
 
   const ledger = useMemo(
     () => buildCustomerStatementLedger(allInvoices, allPayments, from, to),
@@ -1420,8 +1482,8 @@ export function CustomerStatementSection({
     try {
       downloadCustomerStatementPdf({
         customer,
-        company,
-        companyGstin: COMPANY_BILLING.gstin,
+        company: branding,
+        companyGstin: branding.gstin,
         ledger,
         periodLabel,
         showingText,
@@ -1566,13 +1628,18 @@ export function CustomerStatementSection({
       <div ref={printRef} className="rounded-xl border bg-white shadow-sm overflow-hidden text-foreground">
         {/* Issuer letterhead */}
         <div className="px-8 pt-8 pb-6 border-b">
-          <p className="text-sm font-bold leading-snug">{company.companyName}</p>
+          <p className="text-sm font-bold leading-snug">{branding.companyName}</p>
           <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed max-w-md">
-            {company.address}
+            {branding.address}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            GSTIN Number: {COMPANY_BILLING.gstin}
+            GSTIN Number: {branding.gstin}
           </p>
+          {customFieldsForDocument(branding, "statement").map((field) => (
+            <p key={field.id} className="text-xs text-muted-foreground mt-1">
+              {field.label}: {field.value}
+            </p>
+          ))}
         </div>
 
         <div className="px-8 py-6 space-y-5">

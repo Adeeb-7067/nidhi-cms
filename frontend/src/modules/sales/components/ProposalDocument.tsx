@@ -2,6 +2,8 @@ import { format } from "date-fns";
 import type { PublicProposal } from "@/api/sales";
 import { COMPANY_BILLING, formatCurrency } from "../constants";
 import { numberToWords, resolveProposalTotal } from "../utils";
+import type { SalesDocumentBranding } from "../company-branding";
+import { DocumentIssuerMeta } from "./DocumentIssuerMeta";
 
 const primary = "#1A56DB";
 const orange = "#E8630A";
@@ -55,12 +57,14 @@ export function ProposalDocument({
   proposal,
   currentStatus,
   statusChip,
+  branding,
   compact = false,
   forPdf = false,
 }: {
   proposal: PublicProposal;
   currentStatus: "approved" | "declined" | "counter_offer" | null;
   statusChip: StatusChip;
+  branding?: SalesDocumentBranding;
   /** Tighter layout for single-page PDF export. */
   compact?: boolean;
   /** Full content, multi-page PDF export — no truncation or hidden rows. */
@@ -74,7 +78,8 @@ export function ProposalDocument({
   const isPastValidity = !!(proposal.validUntil && new Date(proposal.validUntil) < new Date());
 
   const company = proposal.companySettings;
-  const companyName = company?.companyName ?? COMPANY_BILLING.name;
+  const issuer = branding ?? null;
+  const companyName = company?.companyName ?? issuer?.companyName ?? COMPANY_BILLING.name;
   const clientName = proposal.lead?.name ?? proposal.customer?.contactPerson ?? "Client";
   const clientCompany = proposal.lead?.company ?? proposal.customer?.companyName ?? null;
   const clientEmail = proposal.lead?.email ?? proposal.customer?.email ?? null;
@@ -113,13 +118,17 @@ export function ProposalDocument({
           <div className="min-w-0">
             <h2 className={`font-extrabold leading-tight break-words ${isTight ? "text-base" : "text-lg"}`} style={{ color: dark }}>{companyName}</h2>
             <p className={`${compact ? "text-[10px]" : "text-xs"} mt-1 leading-relaxed`} style={{ color: muted }}>
-              {company?.address ?? COMPANY_BILLING.address}
+              {company?.address ?? issuer?.address ?? COMPANY_BILLING.address}
             </p>
-            <div className={`flex flex-wrap gap-3 ${compact ? "mt-1" : "mt-1.5"}`}>
-              <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.phone}</span>
-              <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.email}</span>
-              <span className={`${compact ? "text-[10px]" : "text-xs"} font-mono`} style={{ color: subtle }}>GSTIN: {COMPANY_BILLING.gstin}</span>
-            </div>
+            {issuer ? (
+              <DocumentIssuerMeta branding={issuer} kind="proposal" compact={compact} />
+            ) : (
+              <div className={`flex flex-wrap gap-3 ${compact ? "mt-1" : "mt-1.5"}`}>
+                <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.phone}</span>
+                <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.email}</span>
+                <span className={`${compact ? "text-[10px]" : "text-xs"} font-mono`} style={{ color: subtle }}>GSTIN: {COMPANY_BILLING.gstin}</span>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex-shrink-0 text-right">

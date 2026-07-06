@@ -575,8 +575,8 @@ export default function AdminClients() {
   return (
     <PortalPageShell>
       <PortalPageHero
-        title="Companies"
-        subtitle="Manage your client relationships"
+        title="All companies"
+        subtitle="All client companies and partnerships"
         actions={
         <>
         <Dialog
@@ -908,7 +908,7 @@ export default function AdminClients() {
       <PortalKpiGrid
         loading={statsLoading}
         items={[
-          { title: "Companies", value: clientStats.total, hint: "Registered clients", icon: Building, accent: "violet" },
+          { title: "All companies", value: clientStats.total, hint: "Registered clients", icon: Building, accent: "violet" },
           { title: "Active", value: clientStats.active, hint: "Active partnerships", icon: Users, accent: "green" },
           { title: "Active projects", value: clientStats.activeProjects, hint: "Across all companies", icon: Briefcase, accent: "blue" },
           { title: "Inactive", value: clientStats.inactive, hint: "Paused or churned", icon: TrendingUp, accent: "amber", alert: clientStats.inactive > 0 },

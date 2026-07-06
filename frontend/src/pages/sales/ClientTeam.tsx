@@ -1,0 +1,465 @@
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { format } from "date-fns";
+import {
+  Building2,
+  KeyRound,
+  LogIn,
+  MoreHorizontal,
+  Phone,
+  RefreshCw,
+  UserCheck,
+  UserMinus,
+  UsersRound,
+} from "lucide-react";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  useListSalesClientTeam,
+  useListCustomers,
+  useDeactivateSalesClientTeamMember,
+  useReactivateSalesClientTeamMember,
+  useResendSalesClientTeamInvitation,
+  useResetSalesClientTeamPassword,
+  useCustomersSummary,
+  type SalesClientTeamMember,
+  type SalesClientTeamMemberStatus,
+} from "@/api/sales";
+import { readSearchParam } from "@/modules/sales/utils";
+import {
+  SalesPageHeader,
+  SalesFilterBar,
+  SalesEmptyState,
+  FinancialSummaryCard,
+} from "@/modules/sales/components";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { formatSalesDateTime } from "@/modules/sales/utils";
+import { cn } from "@/lib/utils";
+
+type StatusTab = "all" | SalesClientTeamMemberStatus;
+
+const STATUS_LABEL: Record<SalesClientTeamMemberStatus, string> = {
+  active: "Active",
+  pending: "Pending",
+  inactive: "Inactive",
+};
+
+function statusBadgeClass(status: SalesClientTeamMemberStatus) {
+  switch (status) {
+    case "active":
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+    case "pending":
+      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+    case "inactive":
+      return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400";
+  }
+}
+
+export default function SalesClientTeamPage() {
+  const { can } = usePermissions();
+  const canManage = can("sales_customers", "edit");
+  const customerIdParam = readSearchParam("customerId");
+  const initialCustomerId = customerIdParam ? Number(customerIdParam) : undefined;
+
+  const [search, setSearch] = useState("");
+  const [statusTab, setStatusTab] = useState<StatusTab>("all");
+  const [customerFilter, setCustomerFilter] = useState<string>(
+    initialCustomerId ? String(initialCustomerId) : "all",
+  );
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
+
+  const [deactivateTarget, setDeactivateTarget] = useState<SalesClientTeamMember | null>(null);
+  const [resetTarget, setResetTarget] = useState<SalesClientTeamMember | null>(null);
+
+  const deactivate = useDeactivateSalesClientTeamMember();
+  const reactivate = useReactivateSalesClientTeamMember();
+  const resendInvite = useResendSalesClientTeamInvitation();
+  const resetPassword = useResetSalesClientTeamPassword();
+
+  const listParams = {
+    search: search || undefined,
+    status: statusTab === "all" ? undefined : statusTab,
+    customerId: customerFilter !== "all" ? Number(customerFilter) : undefined,
+    page,
+    limit: apiLimit,
+  };
+
+  const { data, isLoading, isError, refetch } = useListSalesClientTeam(listParams);
+  const { data: summary } = useCustomersSummary();
+  const { data: customersData } = useListCustomers({ limit: 500 });
+
+  const members = data?.members ?? [];
+  const total = data?.total ?? 0;
+
+  useEffect(() => {
+    resetPage();
+  }, [search, statusTab, customerFilter, resetPage]);
+
+  const companyOptions = useMemo(() => {
+    return (customersData?.customers ?? [])
+      .map((c) => ({ id: c.id, name: c.companyName }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [customersData?.customers]);
+
+  const handleResend = (member: SalesClientTeamMember) => {
+    resendInvite.mutate(member.id, {
+      onSuccess: (result) => {
+        if (result.invitation.sent) {
+          toast.success(`Invitation sent to ${member.email}`);
+        } else if (result.invitation.temporaryPassword) {
+          toast.success(`Temporary password: ${result.invitation.temporaryPassword}`, { duration: 12_000 });
+        } else {
+          toast.success("Invitation updated");
+        }
+      },
+      onError: (err) => toastApiError(err, "Failed to resend invitation"),
+    });
+  };
+
+  const handleReactivate = (member: SalesClientTeamMember) => {
+    reactivate.mutate(member.id, {
+      onSuccess: () => toast.success(`${member.name ?? "Member"} reactivated`),
+      onError: (err) => toastApiError(err, "Failed to reactivate member"),
+    });
+  };
+
+  const handleDeactivate = () => {
+    if (!deactivateTarget) return;
+    deactivate.mutate(deactivateTarget.id, {
+      onSuccess: () => {
+        toast.success(`${deactivateTarget.name ?? "Member"} deactivated`);
+        setDeactivateTarget(null);
+      },
+      onError: (err) => toastApiError(err, "Failed to deactivate member"),
+    });
+  };
+
+  const handleResetPassword = () => {
+    if (!resetTarget) return;
+    resetPassword.mutate(
+      { id: resetTarget.id },
+      {
+        onSuccess: (result) => {
+          toast.success(
+            result.temporaryPassword
+              ? `Temporary password: ${result.temporaryPassword}`
+              : "Password reset successfully",
+            { duration: 12_000 },
+          );
+          setResetTarget(null);
+        },
+        onError: (err) => toastApiError(err, "Failed to reset password"),
+      },
+    );
+  };
+
+  return (
+    <PortalPageShell>
+      <SalesPageHeader
+        title="Client team"
+        description="Portal collaborators invited by customers — manage access across all companies."
+        breadcrumbs={[
+          { label: "Sales", href: "/sales" },
+          { label: "Customers", href: "/sales/customers" },
+          { label: "Client team" },
+        ]}
+      />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <FinancialSummaryCard
+          title="Active contacts"
+          value={summary?.activeContacts ?? "—"}
+          icon={UserCheck}
+          accent="green"
+          hint="Can sign in to portal"
+        />
+        <FinancialSummaryCard
+          title="Inactive"
+          value={summary?.inactiveContacts ?? "—"}
+          icon={UserMinus}
+          accent="red"
+        />
+        <FinancialSummaryCard
+          title="Logged in today"
+          value={summary?.contactsLoggedInToday ?? "—"}
+          icon={LogIn}
+          accent="blue"
+        />
+        <FinancialSummaryCard
+          title="Listed below"
+          value={total}
+          icon={UsersRound}
+          accent="violet"
+          hint="Matching current filters"
+        />
+      </div>
+
+      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search name, email, or company…">
+        <Select value={customerFilter} onValueChange={setCustomerFilter}>
+          <SelectTrigger className="w-full sm:w-[220px] h-9">
+            <SelectValue placeholder="All companies" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All companies</SelectItem>
+            {companyOptions.map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </SalesFilterBar>
+
+      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
+        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+          {(["all", "active", "pending", "inactive"] as StatusTab[]).map((tab) => (
+            <TabsTrigger
+              key={tab}
+              value={tab}
+              className="text-xs capitalize data-[state=active]:bg-primary/10"
+            >
+              {tab === "all" ? "All" : STATUS_LABEL[tab]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : isError ? (
+        <SalesEmptyState
+          icon={UsersRound}
+          title="Failed to load client team"
+          description="Could not fetch team members."
+          actionLabel="Retry"
+          onAction={() => void refetch()}
+        />
+      ) : members.length === 0 ? (
+        <SalesEmptyState
+          icon={UsersRound}
+          title="No team members found"
+          description="Customers invite collaborators from their client portal. Adjust filters or check back later."
+          actionLabel="View customers"
+          onAction={() => window.location.assign("/sales/customers")}
+        />
+      ) : (
+        <>
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
+            <Table className="min-w-[880px]">
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs min-w-[200px]">Member</TableHead>
+                  <TableHead className="text-xs min-w-[140px]">Company</TableHead>
+                  <TableHead className="text-xs min-w-[96px] hidden sm:table-cell">Role</TableHead>
+                  <TableHead className="text-xs min-w-[88px]">Status</TableHead>
+                  <TableHead className="text-xs min-w-[108px] hidden md:table-cell">Last login</TableHead>
+                  <TableHead className="text-xs min-w-[108px] hidden lg:table-cell">Added</TableHead>
+                  <TableHead className="text-xs text-right w-[72px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {members.map((member) => (
+                  <TableRow key={member.id} className="hover:bg-muted/30">
+                    <TableCell className="min-w-[200px] max-w-[260px]">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar className="h-8 w-8 shrink-0">
+                          {member.avatarUrl ? (
+                            <AvatarImage src={member.avatarUrl} alt={member.name ?? ""} />
+                          ) : null}
+                          <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-semibold">
+                            {(member.name ?? member.email ?? "?").charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium truncate">{member.name ?? "—"}</p>
+                          {member.email ? (
+                            <a
+                              href={`mailto:${member.email}`}
+                              className="text-[10px] text-muted-foreground hover:text-primary truncate block"
+                            >
+                              {member.email}
+                            </a>
+                          ) : null}
+                          {member.phoneNumber ? (
+                            <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              {member.phoneNumber}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-xs min-w-[140px] max-w-[180px]">
+                      <Link
+                        href={`/sales/customers/${member.clientCompanyId}`}
+                        className="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
+                      >
+                        <Building2 className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{member.companyName ?? `Customer #${member.clientCompanyId}`}</span>
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground hidden sm:table-cell max-w-[120px] truncate">
+                      {member.title ?? "Member"}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <Badge variant="outline" className={cn("text-[10px] capitalize", statusBadgeClass(member.status))}>
+                        {STATUS_LABEL[member.status]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell">
+                      {member.lastLoginAt ? format(new Date(member.lastLoginAt), "MMM d, yyyy") : "Never"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap hidden lg:table-cell">
+                      {formatSalesDateTime(member.createdAt)}
+                    </TableCell>
+                    <TableCell className="text-right w-[72px]">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                          <DropdownMenuItem asChild>
+                            <Link href={`/sales/customers/${member.clientCompanyId}`}>View customer</Link>
+                          </DropdownMenuItem>
+                          {canManage ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              {member.status === "inactive" ? (
+                                <DropdownMenuItem onClick={() => handleReactivate(member)}>
+                                  <UserCheck className="mr-2 h-3.5 w-3.5" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  className="text-destructive focus:text-destructive"
+                                  onClick={() => setDeactivateTarget(member)}
+                                >
+                                  <UserMinus className="mr-2 h-3.5 w-3.5" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem onClick={() => handleResend(member)}>
+                                <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                                Resend invitation
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setResetTarget(member)}>
+                                <KeyRound className="mr-2 h-3.5 w-3.5" />
+                                Reset password
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            </div>
+          </div>
+          <DataPagination
+            page={page}
+            total={total}
+            limit={limit}
+            loadedRowCount={members.length}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+          />
+        </>
+      )}
+
+      <AlertDialog open={!!deactivateTarget} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate team member?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deactivateTarget?.name ?? "This member"} will lose portal access until reactivated.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => {
+                e.preventDefault();
+                handleDeactivate();
+              }}
+            >
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!resetTarget} onOpenChange={(open) => !open && setResetTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset password?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A new temporary password will be generated for {resetTarget?.name ?? "this member"}.
+              Share it securely if email delivery is unavailable.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                handleResetPassword();
+              }}
+            >
+              Reset password
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </PortalPageShell>
+  );
+}

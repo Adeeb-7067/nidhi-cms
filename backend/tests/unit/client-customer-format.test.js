@@ -34,6 +34,14 @@ test("formatClientAsCustomer maps unified client to sales API shape", () => {
   assert.equal(row.portalUserId, 3);
   assert.equal(row.createdBy, 9);
   assert.equal(row.totalSales, 1000);
+  assert.equal(row.hasPayments, false);
+});
+
+test("formatClientAsCustomer maps hasPayments from financials", () => {
+  const row = formatClientAsCustomer({ id: 1, companyName: "Co", contactPerson: "A", email: "a@b.c", status: "active" }, {
+    hasPayments: true,
+  });
+  assert.equal(row.hasPayments, true);
 });
 
 test("resolveCustomerCreatorUserId prefers createdBy over assignedAdminId", () => {

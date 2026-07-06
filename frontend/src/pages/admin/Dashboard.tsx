@@ -178,7 +178,7 @@ export default function AdminDashboard() {
             <Button variant="outline" size="sm" className="h-8" asChild>
               <Link href="/admin/projects">
                 <Briefcase className="h-4 w-4 mr-2" />
-                Projects
+                All projects
               </Link>
             </Button>
             <Button size="sm" className="h-8" asChild>
@@ -206,7 +206,7 @@ export default function AdminDashboard() {
           count={4}
           items={[
             { title: "Active projects", value: stats.activeProjects, hint: stats.overdueProjects > 0 ? `${stats.overdueProjects} overdue` : "On track · in delivery", icon: Briefcase, href: "/admin/projects", accent: "blue", delay: 0, alert: stats.overdueProjects > 0 },
-            { title: "Companies", value: stats.totalClients, hint: "Active partners", icon: Building2, href: "/admin/clients", accent: "violet", delay: 1 },
+            { title: "All companies", value: stats.totalClients, hint: "Active partners", icon: Building2, href: "/admin/clients", accent: "violet", delay: 1 },
             { title: "Open bugs", value: stats.openBugs, hint: "Unresolved", icon: Activity, href: "/dev/bugs", accent: "amber", alert: stats.openBugs > 0, delay: 2 },
             { title: "Pending requests", value: stats.openRequests, hint: "Resource queue", icon: Inbox, href: "/admin/requests", accent: "sky", alert: stats.openRequests > 0, delay: 3 },
           ]}
@@ -459,21 +459,21 @@ export default function AdminDashboard() {
         <DashboardSectionLabel title="Quick overview" className="mb-3" />
         <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <OverviewTile
-            label="Projects"
+            label="All projects"
             value={stats.activeProjects}
             sublabel="Active"
             icon={Briefcase}
             href="/admin/projects"
           />
           <OverviewTile
-            label="Companies"
+            label="All companies"
             value={stats.totalClients}
             sublabel="Partners"
             icon={Building2}
             href="/admin/clients"
           />
           <OverviewTile
-            label="Team"
+            label="All team"
             value={stats.teamMembersActive ?? stats.teamMembersOnline ?? 0}
             sublabel="Active"
             icon={Users}

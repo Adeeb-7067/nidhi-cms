@@ -1,7 +1,10 @@
 import { format } from "date-fns";
-import { COMPANY_BILLING, calcRemaining, formatCurrency } from "../constants";
-import { numberToWords, formatSalesDateTime } from "../utils";
-import type { DocumentCompanyBranding } from "../company-branding";
+import type { ReactNode } from "react";
+import { calcRemaining, formatCurrency } from "../constants";
+import { numberToWords, formatSalesDateTime, resolveInvoiceTotal } from "../utils";
+import type { SalesDocumentBranding } from "../company-branding";
+import { defaultDocumentBrandingFields, resolveSalesDocumentBranding } from "../company-branding";
+import { DocumentBankDetails, DocumentIssuerMeta } from "./DocumentIssuerMeta";
 import type { PartialPayment, SalesInvoice } from "../types";
 
 const primary = "#1A56DB";
@@ -34,9 +37,56 @@ function DocRow({ label, value, mono }: { label: string; value: string; mono?: b
   );
 }
 
+function TotRow({ label, val, valColor }: { label: string; val: string; valColor?: string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-sm" style={{ color: muted }}>{label}</span>
+      <span className="text-sm font-semibold tabular-nums" style={{ color: valColor ?? dark }}>{val}</span>
+    </div>
+  );
+}
+
+function InvoiceDocumentTextSection({
+  title,
+  children,
+  variant = "default",
+  compact,
+  padX,
+}: {
+  title: string;
+  children: ReactNode;
+  variant?: "default" | "muted";
+  compact?: boolean;
+  padX: string;
+}) {
+  const textSize = compact ? "text-[10px]" : "text-xs";
+  return (
+    <div className={`${padX} ${compact ? "py-4" : "py-5"}`}>
+      <p
+        className="text-[10px] font-black uppercase tracking-widest mb-2.5"
+        style={{ color: primary }}
+      >
+        {title}
+      </p>
+      <div
+        className={`rounded-xl px-4 py-3.5 ${textSize} leading-relaxed whitespace-pre-line break-words`}
+        style={{
+          color: variant === "muted" ? muted : dark,
+          background: "#fff",
+          border: `1px solid ${border}`,
+          boxShadow: "0 1px 2px rgba(17,25,40,0.04)",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function InvoiceDocument({
   invoice,
   company,
+  branding: brandingProp,
   customerContact,
   customerEmail,
   customerPhone,
@@ -45,7 +95,8 @@ export function InvoiceDocument({
   compact = false,
 }: {
   invoice: SalesInvoice;
-  company?: DocumentCompanyBranding;
+  company?: SalesDocumentBranding;
+  branding?: SalesDocumentBranding;
   customerContact?: string;
   customerEmail?: string;
   customerPhone?: string;
@@ -56,11 +107,8 @@ export function InvoiceDocument({
 }) {
   const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
   const statusCfg = INVOICE_STATUS[invoice.status] ?? INVOICE_STATUS.unpaid;
-  const branding = company ?? {
-    companyName: COMPANY_BILLING.name,
-    address: COMPANY_BILLING.address,
-    logoUrl: null,
-    sealUrl: null,
+  const branding = brandingProp ?? company ?? {
+  ...resolveSalesDocumentBranding(null, defaultDocumentBrandingFields()),
   };
 
   const padX = compact ? "px-5" : "px-8";
@@ -73,6 +121,11 @@ export function InvoiceDocument({
   const visiblePayments = payments.slice(0, maxPaymentRows);
   const hiddenPaymentCount = payments.length - visiblePayments.length;
   const lineItems = invoice.lineItems ?? [];
+  const { subtotal, tax, calculated, finalTotal, adjustmentDelta, hasLineItems } = resolveInvoiceTotal(invoice);
+  const notesText = invoice.notes?.trim() ?? "";
+  const termsText =
+    invoice.terms?.trim() ||
+    `Payment is due by ${format(new Date(invoice.dueDate), "dd MMMM yyyy")}. Please quote invoice number ${invoice.number} on all remittances. Late payments may attract interest as per applicable law.`;
 
   return (
     <div
@@ -106,13 +159,7 @@ export function InvoiceDocument({
             <p className={`${compact ? "text-[10px]" : "text-xs"} mt-1 leading-relaxed`} style={{ color: muted }}>
               {branding.address}
             </p>
-            <div className={`flex flex-wrap gap-2 ${compact ? "mt-1" : "mt-2"}`}>
-              <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.phone}</span>
-              <span className={compact ? "text-[10px]" : "text-xs"} style={{ color: muted }}>{COMPANY_BILLING.email}</span>
-              <span className={`${compact ? "text-[10px]" : "text-xs"} font-mono`} style={{ color: subtle }}>
-                GSTIN: {COMPANY_BILLING.gstin}
-              </span>
-            </div>
+            <DocumentIssuerMeta branding={branding} kind="invoice" compact={compact} />
           </div>
         </div>
         <div className="flex-shrink-0 text-right">
@@ -264,38 +311,57 @@ export function InvoiceDocument({
       {/* Totals */}
       <div className={`${padX} ${padYSection} flex justify-end`} style={{ borderTop: `1px solid ${border}` }}>
         <div className="w-full max-w-xs space-y-2.5">
-          <div className="flex justify-between text-sm">
-            <span style={{ color: muted }}>Invoice amount</span>
-            <span className="font-semibold tabular-nums" style={{ color: dark }}>
-              {formatCurrency(invoice.amount)}
+          {(hasLineItems || tax > 0 || adjustmentDelta !== 0) && (
+            <div className={`space-y-2.5 ${compact ? "pb-2" : "pb-4"}`} style={{ borderBottom: `1px solid ${border}` }}>
+              <TotRow label="Subtotal" val={formatCurrency(subtotal)} />
+              <TotRow label="Tax (GST)" val={formatCurrency(tax)} />
+              <TotRow label="Total (before adjustments)" val={formatCurrency(calculated)} />
+              {adjustmentDelta !== 0 && (
+                <TotRow
+                  label="Amount adjustment"
+                  val={`${adjustmentDelta > 0 ? "+ " : "− "}${formatCurrency(Math.abs(adjustmentDelta))}`}
+                  valColor={primary}
+                />
+              )}
+            </div>
+          )}
+          <div
+            className={`flex items-center justify-between ${compact ? "mt-2 px-4 py-3" : "mt-3 px-5 py-4"} rounded-xl`}
+            style={{ background: dark }}
+          >
+            <span className={`${compact ? "text-xs" : "text-sm"} font-semibold`} style={{ color: "#9CA3AF" }}>
+              Invoice total
+            </span>
+            <span className={`${compact ? "text-base" : "text-xl"} font-black tabular-nums`} style={{ color: orange }}>
+              {formatCurrency(finalTotal)}
             </span>
           </div>
-          <div className="flex justify-between text-sm">
+          <div className="flex justify-between text-sm pt-1">
             <span style={{ color: muted }}>Amount received</span>
             <span className="font-semibold tabular-nums" style={{ color: "#057A55" }}>
               {formatCurrency(invoice.paidAmount)}
             </span>
           </div>
           <div
-            className={`flex items-center justify-between ${compact ? "mt-2 px-4 py-3" : "mt-3 px-5 py-4"} rounded-xl`}
-            style={{ background: dark }}
+            className={`flex items-center justify-between ${compact ? "px-4 py-3" : "px-5 py-4"} rounded-xl`}
+            style={{ background: `${primary}08`, border: `1px solid ${primary}20` }}
           >
-            <span className="text-sm font-semibold" style={{ color: "#9CA3AF" }}>
+            <span className="text-sm font-semibold" style={{ color: primary }}>
               Balance due
             </span>
-            <span className={`${compact ? "text-base" : "text-xl"} font-black tabular-nums`} style={{ color: orange }}>
+            <span className={`${compact ? "text-base" : "text-lg"} font-black tabular-nums`} style={{ color: orange }}>
               {formatCurrency(remaining)}
             </span>
           </div>
           <div
-            className="mt-3 px-4 py-3 rounded-xl"
+            className="px-4 py-3 rounded-xl"
             style={{ background: `${primary}08`, border: `1px solid ${primary}20` }}
           >
             <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: primary }}>
               Amount in words
             </p>
             <p className="text-xs italic mt-1 leading-relaxed" style={{ color: dark }}>
-              {numberToWords(remaining > 0 ? remaining : invoice.amount)}
+              {numberToWords(remaining > 0 ? remaining : finalTotal)}
             </p>
           </div>
         </div>
@@ -349,17 +415,41 @@ export function InvoiceDocument({
         </div>
       )}
 
+      <div className={padX}>
+        <DocumentBankDetails branding={branding} compact={compact} />
+      </div>
+
+      {/* Notes & terms */}
+      <div style={{ borderTop: `1px solid ${border}`, background: "#FDFDFE" }}>
+        <div className={`grid grid-cols-1 ${notesText ? "lg:grid-cols-2" : ""}`}>
+          {notesText ? (
+            <InvoiceDocumentTextSection title="Notes" compact={compact} padX={padX}>
+              {notesText}
+            </InvoiceDocumentTextSection>
+          ) : null}
+          <InvoiceDocumentTextSection
+            title="Terms &amp; Conditions"
+            variant="muted"
+            compact={compact}
+            padX={padX}
+          >
+            {termsText}
+          </InvoiceDocumentTextSection>
+        </div>
+      </div>
+
       {/* Footer */}
       <div
         className={`${padX} ${compact ? "py-4" : "py-6"} flex items-end justify-between gap-6`}
         style={{ borderTop: `1px dashed ${border}`, background: rowAlt }}
       >
-        <div className="space-y-3 text-xs" style={{ color: muted }}>
-          <p>
-            <span className="font-semibold" style={{ color: dark }}>Payment terms:</span>{" "}
-            Due by {format(new Date(invoice.dueDate), "dd MMMM yyyy")}. Please quote invoice number on remittance.
+        <div className="space-y-2 text-xs" style={{ color: muted }}>
+          <p className="font-medium" style={{ color: dark }}>
+            Thank you for your business.
           </p>
-          <p>Thank you for your business.</p>
+          <p className="text-[10px] leading-relaxed" style={{ color: subtle }}>
+            This is a computer-generated tax invoice and is valid without a physical signature when issued electronically.
+          </p>
         </div>
         <div className="text-right flex-shrink-0">
           <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>

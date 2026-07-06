@@ -23,6 +23,7 @@ import {
   SalesStatusBadge,
   SalesEmptyState,
   RecordPaymentDialog,
+  ExecutiveAvatar,
 } from "@/modules/sales/components";
 
 const METHOD_LABELS: Record<string, string> = {
@@ -102,7 +103,8 @@ export default function Payments() {
                 <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Invoice status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Created</TableHead>
+                <TableHead className="text-xs">Created at</TableHead>
+                <TableHead className="text-xs">Created by</TableHead>
                 <TableHead className="text-xs text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -130,6 +132,13 @@ export default function Payments() {
                   </TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</TableCell>
+                  <TableCell>
+                    {p.recordedByName ? (
+                      <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} />
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>

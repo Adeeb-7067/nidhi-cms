@@ -45,12 +45,11 @@ import {
   useReassignInvoiceCustomer,
   useListCustomers,
 } from "@/api/sales";
-import { useGetSettings } from "@/api/generated/api";
 import { toInvoicePreview, paymentToPartial } from "@/modules/sales/adapters";
 import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
-import { resolveDocumentCompany } from "@/modules/sales/company-branding";
+import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
-import { formatSalesDateTime } from "@/modules/sales/utils";
+import { formatSalesDateTime, formatProjectLabel, resolveInvoiceTotal } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesEmptyState,
@@ -69,6 +68,7 @@ export default function InvoiceDetailPage() {
   const [, params] = useRoute("/sales/invoices/:id");
   const [, navigate] = useLocation();
   const invoiceId = Number(params?.id);
+  const validId = Number.isFinite(invoiceId) && invoiceId > 0;
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -87,15 +87,14 @@ export default function InvoiceDetailPage() {
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
 
-  const { data: invoice, isLoading, isError } = useGetInvoice(invoiceId, !!invoiceId);
+  const { data: invoice, isLoading, isError } = useGetInvoice(invoiceId, validId);
   const { data: customer } = useGetCustomer(invoice?.customerId ?? 0, !!invoice?.customerId);
   const { data: installment } = useGetInstallment(invoice?.installmentId ?? 0, !!invoice?.installmentId);
   const { data: paymentsData } = useListPayments(
     invoiceId ? { invoiceId } : undefined,
     !!invoiceId,
   );
-  const { data: orgSettings } = useGetSettings();
-  const company = resolveDocumentCompany(orgSettings);
+  const branding = useSalesDocumentBranding();
 
   useEffect(() => {
     if (!invoice) return;
@@ -177,6 +176,17 @@ export default function InvoiceDetailPage() {
     }
   };
 
+  if (!validId) {
+    return (
+      <SalesEmptyState
+        title="Invalid invoice"
+        description="The invoice link is not valid."
+        actionLabel="Back to invoices"
+        onAction={() => navigate("/sales/invoices")}
+      />
+    );
+  }
+
   if (isLoading) {
     return (
       <PortalPageShell>
@@ -199,9 +209,15 @@ export default function InvoiceDetailPage() {
 
   const preview = toInvoicePreview(
     invoice,
-    customer?.companyName,
-    installment?.name,
+    customer?.companyName ?? invoice.customerName ?? undefined,
   );
+  const invoiceTotals = resolveInvoiceTotal({
+    lineItems: invoice.lineItems,
+    amount: invoice.amount,
+    calculatedAmount: invoice.calculatedAmount,
+    totalAdjustment: invoice.totalAdjustment,
+    adjustedTotal: invoice.adjustedTotal,
+  });
   const payments = (paymentsData?.payments ?? []).map(paymentToPartial);
   const isMilestoneInvoice = !!invoice.installmentId;
   const isCancelled = invoice.status === "cancelled";
@@ -333,7 +349,7 @@ export default function InvoiceDetailPage() {
           <div ref={docRef}>
             <InvoiceDocument
               invoice={preview}
-              company={company}
+              branding={branding}
               customerContact={customer?.contactPerson}
               customerEmail={customer?.email}
               customerPhone={customer?.phone ?? undefined}
@@ -360,22 +376,51 @@ export default function InvoiceDetailPage() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Invoice summary</CardTitle>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <p className="text-muted-foreground">Amount</p>
+            <CardContent className="space-y-3 text-xs">
+              {(invoiceTotals.hasLineItems || invoiceTotals.tax > 0) && (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span className="tabular-nums font-medium">{formatCurrency(invoiceTotals.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Tax (GST)</span>
+                    <span className="tabular-nums font-medium">{formatCurrency(invoiceTotals.tax)}</span>
+                  </div>
+                </>
+              )}
+              {invoiceTotals.adjustmentDelta !== 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Adjustment</span>
+                  <span className="tabular-nums font-medium">
+                    {invoiceTotals.adjustmentDelta > 0 ? "+ " : "− "}
+                    {formatCurrency(Math.abs(invoiceTotals.adjustmentDelta))}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between border-t pt-2">
+                <p className="text-muted-foreground">Invoice total</p>
                 <p className="font-bold tabular-nums">{formatCurrency(invoice.amount)}</p>
               </div>
+              <div className="grid grid-cols-2 gap-3">
               <div>
                 <p className="text-muted-foreground">Paid</p>
                 <p className="font-bold tabular-nums text-emerald-700">{formatCurrency(invoice.paidAmount)}</p>
               </div>
+              <div>
+                <p className="text-muted-foreground">Outstanding</p>
+                <p className="font-bold tabular-nums text-amber-700">{formatCurrency(remaining)}</p>
+              </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-t pt-2">
               <div>
                 <p className="text-muted-foreground">Customer</p>
                 <p className="font-medium truncate">{customer?.companyName ?? `#${invoice.customerId}`}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Project</p>
-                <p className="font-medium">{invoice.projectId ? `#${invoice.projectId}` : "—"}</p>
+                <p className="font-medium">{formatProjectLabel(invoice.projectId, invoice.projectName)}</p>
+              </div>
               </div>
             </CardContent>
           </Card>
@@ -607,7 +652,7 @@ export default function InvoiceDetailPage() {
             </Select>
             {invoice.projectId ? (
               <p className="text-[11px] text-muted-foreground">
-                Project #{invoice.projectId} must belong to the selected customer.
+                {formatProjectLabel(invoice.projectId, invoice.projectName)} must belong to the selected customer.
               </p>
             ) : null}
           </div>
@@ -637,7 +682,7 @@ export default function InvoiceDetailPage() {
       >
         <InvoiceDocument
           invoice={preview}
-          company={company}
+          branding={branding}
           customerContact={customer?.contactPerson}
           customerEmail={customer?.email}
           customerPhone={customer?.phone ?? undefined}

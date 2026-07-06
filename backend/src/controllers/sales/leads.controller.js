@@ -152,7 +152,7 @@ async function updateLead(req, res) {
       if (nextAssignee != null && nextAssignee !== req.user.id) {
         forbidden("BDE cannot assign leads to other executives.");
       }
-      updates.assignedTo = req.user.id;
+      if (nextAssignee != null) updates.assignedTo = nextAssignee;
     } else {
       updates.assignedTo = body.assignedTo ? Number(body.assignedTo) : null;
     }
@@ -222,6 +222,16 @@ async function updateLead(req, res) {
     await logActivity(id, req.user.id, "assigned",
       `Lead assigned to ${assignedUser?.name ?? "nobody"}`
     );
+    // Reassigning a lead that's already been converted must carry over to the
+    // linked customer record — otherwise the new executive can never see it,
+    // since customer ownership (assignedAdminId) is tracked separately from
+    // lead ownership (assignedTo).
+    if (existing.customerId) {
+      await clientsTable.updateOne(
+        { id: existing.customerId },
+        { $set: { assignedAdminId: updates.assignedTo } }
+      );
+    }
   }
   res.json(lead);
 }
@@ -231,13 +241,38 @@ async function bulkUpdateLeads(req, res) {
   if (!Array.isArray(ids) || ids.length === 0) badRequest("ids array is required.", "ids");
   const update = {};
   if (status) update.status = status;
-  if (assignedTo !== undefined) update.assignedTo = assignedTo ? Number(assignedTo) : null;
+  if (assignedTo !== undefined) {
+    if (req.user.role === "bde") {
+      const nextAssignee = assignedTo ? Number(assignedTo) : null;
+      if (nextAssignee != null && nextAssignee !== req.user.id) {
+        forbidden("BDE cannot assign leads to other executives.");
+      }
+      if (nextAssignee != null) update.assignedTo = nextAssignee;
+    } else {
+      update.assignedTo = assignedTo ? Number(assignedTo) : null;
+    }
+  }
   if (Object.keys(update).length === 0) badRequest("At least one field to update is required.");
   // BDE: restrict bulk operations to their own leads only
   const filter = req.user.role === "bde"
     ? { id: { $in: ids }, $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] }
     : { id: { $in: ids } };
   const result = await SalesLeads.updateMany(filter, { $set: update });
+  // Carry reassignment over to any already-converted customer records so the
+  // new executive isn't left unable to see the resulting customer.
+  if (update.assignedTo !== undefined) {
+    const convertedLeads = await SalesLeads.find(
+      { ...filter, customerId: { $ne: null } },
+      { customerId: 1 }
+    ).lean();
+    const customerIds = convertedLeads.map((l) => l.customerId).filter(Boolean);
+    if (customerIds.length) {
+      await clientsTable.updateMany(
+        { id: { $in: customerIds } },
+        { $set: { assignedAdminId: update.assignedTo } }
+      );
+    }
+  }
   res.json({ success: true, updated: result.modifiedCount });
 }
 
@@ -305,6 +340,9 @@ async function getLeadActivity(req, res) {
   const id = parseIdParam(req.params.id, "lead id");
   const lead = await SalesLeads.findOne({ id }).lean();
   if (!lead) notFound("Lead");
+  if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+    notFound("Lead");
+  }
   const { page, limit, skip } = parsePagination(req.query);
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesLeadActivity,
@@ -405,7 +443,9 @@ async function importLeads(req, res) {
         contactChannel: optionalString(row.contactChannel ?? row.channel) ?? null,
         status,
         priority,
-        assignedTo: row.assignedTo ? Number(row.assignedTo) : null,
+        assignedTo: req.user.role === "bde"
+          ? req.user.id
+          : (row.assignedTo ? Number(row.assignedTo) : null),
         expectedValue: Number(row.expectedValue) || 0,
         description: optionalString(row.description) ?? null,
         tags: Array.isArray(row.tags) ? row.tags.filter((t) => typeof t === "string") : [],

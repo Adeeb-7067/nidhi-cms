@@ -8,7 +8,7 @@ import {
   usersTable,
 } from "../../models/schema/index.js";
 import { billableInvoiceMatch } from "../../utils/sales-invoice-filters.js";
-import { buildBdeSalesScope } from "../../utils/sales-bde-customer-scope.js";
+import { buildBdeSalesScope, findBdeOwnedCustomerIds } from "../../utils/sales-bde-customer-scope.js";
 
 async function getBdeScope(userId) {
   return buildBdeSalesScope(clientsTable, userId);
@@ -122,7 +122,7 @@ async function getDashboard(req, res) {
 
 async function getPipeline(req, res) {
   const stages = [
-    "new", "contacted", "follow_up", "interested",
+    "new", "contacted", "follow_up", "interested", "project_planning",
     "proposal_sent", "approved", "converted", "lost",
   ];
   const matchStage = req.user.role === "bde"
@@ -156,20 +156,54 @@ async function getRevenueTrend(req, res) {
     startDate = new Date(now.getFullYear(), now.getMonth(), 1);
     groupFormat = "%Y-%m-%d";
   }
-  const payMatch = req.user.role === "bde"
-    ? { createdAt: { $gte: startDate }, recordedBy: req.user.id }
-    : { createdAt: { $gte: startDate } };
-  const data = await SalesPayments.aggregate([
-    { $match: payMatch },
-    {
-      $group: {
-        _id: { $dateToString: { format: groupFormat, date: "$createdAt" } },
-        revenue: { $sum: "$amount" },
+  const payMatch = { createdAt: { $gte: startDate } };
+  const invMatch = billableInvoiceMatch({ createdAt: { $gte: startDate } });
+  if (req.user.role === "bde") {
+    const myCustomerIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
+    const scope = { customerId: { $in: myCustomerIds.length ? myCustomerIds : [-1] } };
+    Object.assign(payMatch, scope);
+    Object.assign(invMatch, scope);
+  }
+  const [paymentRows, invoiceRows] = await Promise.all([
+    SalesPayments.aggregate([
+      { $match: payMatch },
+      {
+        $group: {
+          _id: { $dateToString: { format: groupFormat, date: "$createdAt" } },
+          collected: { $sum: "$amount" },
+        },
       },
-    },
-    { $sort: { _id: 1 } },
+      { $sort: { _id: 1 } },
+    ]),
+    SalesInvoices.aggregate([
+      { $match: invMatch },
+      {
+        $group: {
+          _id: { $dateToString: { format: groupFormat, date: "$createdAt" } },
+          billed: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]),
   ]);
-  res.json({ trend: data.map((d) => ({ date: d._id, revenue: d.revenue })) });
+  const byDate = new Map();
+  for (const row of invoiceRows) {
+    byDate.set(row._id, { date: row._id, billed: row.billed, collected: 0 });
+  }
+  for (const row of paymentRows) {
+    const entry = byDate.get(row._id) ?? { date: row._id, billed: 0, collected: 0 };
+    entry.collected = row.collected;
+    byDate.set(row._id, entry);
+  }
+  const trend = [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  res.json({
+    trend: trend.map((d) => ({
+      date: d.date,
+      billed: d.billed,
+      collected: d.collected,
+      revenue: d.collected,
+    })),
+  });
 }
 
 async function getReports(req, res) {

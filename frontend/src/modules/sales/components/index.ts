@@ -4,6 +4,7 @@ export { ActivityTimeline } from "./ActivityTimeline";
 export { SalesEmptyState } from "./SalesEmptyState";
 export { UserAvatarGroup, ExecutiveAvatar, LeadTeamAvatars } from "./UserAvatarGroup";
 export { SalesPageHeader } from "./SalesPageHeader";
+export { CustomersSummaryBar } from "./CustomersSummaryBar";
 export { LeadFormModal } from "./LeadFormModal";
 export { LeadImportDialog } from "./LeadImportDialog";
 export { LeadAddableSelect } from "./LeadAddableSelect";

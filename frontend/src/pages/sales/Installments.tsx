@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { API_PAGE_LIMIT_CAP } from "@/lib/table-pagination";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useListInstallments, useListCustomers } from "@/api/sales";
 import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
@@ -44,13 +45,15 @@ export default function InstallmentsPage() {
   const listParams = {
     ...(proposalId ? { proposalId } : {}),
     ...(customerId !== "all" ? { customerId: Number(customerId) } : {}),
-    limit: 200,
+    limit: API_PAGE_LIMIT_CAP,
   };
 
   const { data, isLoading, isError, refetch } = useListInstallments(
-    Object.keys(listParams).length ? listParams : { limit: 200 },
+    Object.keys(listParams).length ? listParams : { limit: API_PAGE_LIMIT_CAP },
   );
   const allInstallments = data?.installments ?? [];
+  const installmentsTotal = data?.total ?? allInstallments.length;
+  const installmentsTruncated = installmentsTotal > allInstallments.length;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -90,11 +93,17 @@ export default function InstallmentsPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FinancialSummaryCard title="Installments" value={allInstallments.length} icon={CalendarClock} accent="blue" />
+        <FinancialSummaryCard title="Installments" value={installmentsTotal} icon={CalendarClock} accent="blue" />
         <FinancialSummaryCard title="Partial" value={partialCount} icon={CalendarClock} accent="amber" />
         <FinancialSummaryCard title="Overdue" value={overdueCount} icon={CalendarClock} accent="red" alert={overdueCount > 0} />
         <FinancialSummaryCard title="Outstanding" value={formatCurrency(totalDue)} icon={CalendarClock} accent="violet" hint={overdueCount ? `${overdueCount} overdue` : undefined} />
       </div>
+
+      {installmentsTruncated ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          Showing {allInstallments.length} of {installmentsTotal} installments. Partial/overdue counts reflect the loaded set.
+        </p>
+      ) : null}
 
       <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search installment or client…">
         <Select value={customerId} onValueChange={setCustomerId}>
@@ -116,7 +125,7 @@ export default function InstallmentsPage() {
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {(["all", "pending", "partial", "paid", "overdue"] as StatusTab[]).map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s} ({s === "all" ? allInstallments.length : allInstallments.filter((i) => i.status === s).length})
+              {s} ({s === "all" ? installmentsTotal : allInstallments.filter((i) => i.status === s).length})
             </TabsTrigger>
           ))}
         </TabsList>

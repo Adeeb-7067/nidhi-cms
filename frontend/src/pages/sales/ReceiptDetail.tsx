@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { useGetReceipt } from "@/api/sales";
-import { useGetSettings } from "@/api/generated/api";
 import { toReceiptPreview } from "@/modules/sales/adapters";
-import { resolveDocumentCompany } from "@/modules/sales/company-branding";
+import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import { formatPaymentMethod } from "@/modules/sales/utils";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 import { SalesPageHeader, SalesEmptyState, ReceiptDocument } from "@/modules/sales/components";
@@ -21,8 +20,7 @@ export default function ReceiptDetailPage() {
   const [downloading, setDownloading] = useState(false);
 
   const { data, isLoading, isError } = useGetReceipt(receiptId, !!receiptId);
-  const { data: orgSettings } = useGetSettings();
-  const company = resolveDocumentCompany(orgSettings);
+  const branding = useSalesDocumentBranding();
 
   const handleDownloadPdf = async () => {
     const target = pdfRef.current ?? docRef.current;
@@ -58,7 +56,7 @@ export default function ReceiptDetailPage() {
     );
   }
 
-  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer ?? null, company, data.installment?.name);
+  const receipt = toReceiptPreview(data.payment, data.invoice, data.customer ?? null, branding, data.installment?.name);
 
   return (
     <PortalPageShell>

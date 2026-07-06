@@ -26,7 +26,10 @@ import {
   useDeleteSalesConfig,
   useSalesSettings,
   useUpdateSalesSettings,
+  type SalesDocumentBrandingFields,
 } from "@/api/sales";
+import { DocumentBrandingSettings, createDocumentBrandingState } from "@/modules/sales/components/DocumentBrandingSettings";
+import { serializeDocumentBrandingForSave } from "@/modules/sales/company-branding";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 
@@ -107,7 +110,7 @@ function ConfigItemList({ type, label }: { type: string; label: string }) {
 
 export default function SalesSettings() {
   const { user } = useAuth();
-  const { data: settings, isLoading } = useSalesSettings();
+  const { data: settings, isLoading, isError: settingsError, refetch: refetchSettings } = useSalesSettings();
   const updateSettings = useUpdateSalesSettings();
 
   const [prefix, setPrefix] = useState("PROP");
@@ -117,6 +120,7 @@ export default function SalesSettings() {
   const [pushNotifs, setPushNotifs] = useState(true);
   const [reminderHours, setReminderHours] = useState("24");
   const [overdueAlerts, setOverdueAlerts] = useState(true);
+  const [documentBranding, setDocumentBranding] = useState<SalesDocumentBrandingFields>(() => createDocumentBrandingState());
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -128,6 +132,7 @@ export default function SalesSettings() {
       setPushNotifs(settings.pushNotifications);
       setReminderHours(String(settings.reminderHours));
       setOverdueAlerts(settings.overdueAlerts);
+      setDocumentBranding(createDocumentBrandingState(settings.documentBranding));
       setHydrated(true);
     }
   }, [settings, hydrated]);
@@ -142,6 +147,7 @@ export default function SalesSettings() {
         pushNotifications: pushNotifs,
         reminderHours: Number(reminderHours) as 1 | 24 | 48,
         overdueAlerts,
+        documentBranding: serializeDocumentBrandingForSave(documentBranding),
       });
       toast.success("Settings saved");
     } catch (err) {
@@ -166,6 +172,13 @@ export default function SalesSettings() {
         }
       />
 
+      {settingsError ? (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between gap-3 mb-4">
+          <p className="text-sm text-destructive">Could not load sales settings.</p>
+          <Button size="sm" variant="outline" onClick={() => void refetchSettings()}>Retry</Button>
+        </div>
+      ) : null}
+
       {isLoading ? (
         <div className="space-y-3">
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
@@ -177,6 +190,7 @@ export default function SalesSettings() {
             <TabsTrigger value="tax" className="text-xs">Tax</TabsTrigger>
             <TabsTrigger value="notifications" className="text-xs">Notifications</TabsTrigger>
             <TabsTrigger value="reminders" className="text-xs">Reminders</TabsTrigger>
+            <TabsTrigger value="documents" className="text-xs">Document fields</TabsTrigger>
             <TabsTrigger value="sources" className="text-xs">Sources &amp; channels</TabsTrigger>
             <TabsTrigger value="statuses" className="text-xs">Lead statuses</TabsTrigger>
             <TabsTrigger value="account" className="text-xs">Account security</TabsTrigger>
@@ -283,6 +297,10 @@ export default function SalesSettings() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="documents" className="mt-4">
+            <DocumentBrandingSettings value={documentBranding} onChange={setDocumentBranding} />
           </TabsContent>
 
           <TabsContent value="sources" className="mt-4 space-y-4">

@@ -93,6 +93,44 @@ export function resolveProposalTotal(proposal: {
   };
 }
 
+export function calcInvoiceLineBreakdown(items: ProposalItem[]) {
+  let subtotal = 0;
+  let tax = 0;
+  for (const item of items) {
+    const line = item.quantity * item.unitPrice;
+    subtotal += line;
+    tax += line * (item.taxPercent / 100);
+  }
+  return {
+    subtotal: Math.round(subtotal),
+    tax: Math.round(tax),
+    total: Math.round(subtotal + tax),
+  };
+}
+
+export function resolveInvoiceTotal(invoice: {
+  lineItems?: ProposalItem[];
+  amount: number;
+  calculatedAmount?: number | null;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
+}) {
+  const items = invoice.lineItems ?? [];
+  const fromLines = items.length > 0 ? calcInvoiceLineBreakdown(items) : null;
+  const calculated = Math.round(invoice.calculatedAmount ?? fromLines?.total ?? invoice.amount);
+  const finalTotal = Math.round(invoice.amount);
+  return {
+    subtotal: fromLines?.subtotal ?? calculated,
+    tax: fromLines?.tax ?? 0,
+    calculated,
+    finalTotal,
+    adjustmentDelta: finalTotal - calculated,
+    hasLineItems: items.length > 0,
+    hasCustomTotal: invoice.adjustedTotal != null,
+    totalAdjustment: invoice.totalAdjustment ?? 0,
+  };
+}
+
 export function numberToWords(amount: number): string {
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine",
     "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];

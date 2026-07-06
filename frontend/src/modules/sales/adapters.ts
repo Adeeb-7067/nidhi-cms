@@ -5,29 +5,35 @@ import type {
   Installment,
 } from "@/api/sales";
 import type { PartialPayment, PaymentReceipt, SalesInvoice } from "./types";
-import { COMPANY_BILLING, calcRemaining } from "./constants";
-import type { DocumentCompanyBranding } from "./company-branding";
+import { calcRemaining } from "./constants";
+import type { SalesDocumentBranding } from "./company-branding";
+import { resolveSalesDocumentBranding } from "./company-branding";
 import { formatPaymentMethod } from "./utils";
 
 export function toInvoicePreview(
   invoice: ApiInvoice,
   customerName?: string,
-  installmentName?: string,
 ): SalesInvoice {
   return {
     id: invoice.id,
     number: invoice.number,
-    customer: customerName ?? `Customer #${invoice.customerId}`,
+    customer: customerName ?? invoice.customerName ?? `Customer #${invoice.customerId}`,
     customerId: invoice.customerId,
     projectId: invoice.projectId ?? undefined,
+    projectName: invoice.projectName ?? undefined,
     installmentId: invoice.installmentId ?? undefined,
-    installmentName,
+    installmentName: invoice.installmentName ?? undefined,
     amount: invoice.amount,
+    calculatedAmount: invoice.calculatedAmount ?? null,
+    totalAdjustment: invoice.totalAdjustment ?? 0,
+    adjustedTotal: invoice.adjustedTotal ?? null,
     paidAmount: invoice.paidAmount,
     status: invoice.status,
     dueDate: invoice.dueDate,
     createdAt: invoice.createdAt,
     lineItems: invoice.lineItems,
+    notes: invoice.notes ?? null,
+    terms: invoice.terms ?? null,
   };
 }
 
@@ -49,33 +55,35 @@ export function toReceiptPreview(
   payment: SalesPayment,
   invoice: ApiInvoice,
   customer: Customer | null | undefined,
-  company?: DocumentCompanyBranding,
+  branding?: SalesDocumentBranding,
   installmentName?: string | null,
 ): PaymentReceipt {
   const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
-  const branding = company ?? {
-    companyName: COMPANY_BILLING.name,
-    address: COMPANY_BILLING.address,
-    logoUrl: null,
-    sealUrl: null,
-  };
+  const resolved = branding ?? resolveSalesDocumentBranding();
   return {
     id: payment.id,
     number: payment.receiptNumber,
     invoiceNumber: invoice.number,
     installmentName: installmentName ?? (payment.installmentId ? `Installment #${payment.installmentId}` : "—"),
     customerName: customer?.companyName ?? `Customer #${payment.customerId}`,
-    projectName: invoice.projectId ? `Project #${invoice.projectId}` : "—",
+    projectName: invoice.projectName
+      ? invoice.projectName
+      : invoice.projectId
+        ? `Project #${invoice.projectId}`
+        : "—",
     amountPaid: payment.amount,
     remainingBalance: remaining,
     paymentMethod: formatPaymentMethod(payment.paymentMethod),
     transactionId: payment.transactionId ?? "—",
+    note: payment.note?.trim() || null,
     generatedAt: payment.createdAt,
-    companyName: branding.companyName,
-    companyAddress: branding.address,
-    companyGstin: COMPANY_BILLING.gstin,
-    logoUrl: branding.logoUrl,
-    sealUrl: branding.sealUrl,
+    companyName: resolved.companyName,
+    companyAddress: resolved.address,
+    companyGstin: resolved.gstin,
+    companyPhone: resolved.phone,
+    companyEmail: resolved.email,
+    logoUrl: resolved.logoUrl,
+    sealUrl: resolved.sealUrl,
   };
 }
 

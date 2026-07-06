@@ -769,6 +769,7 @@ export type HrmExitRequest = {
   assetReturnComplete: boolean;
   fnfSettled: boolean;
   noticeDaysRemaining: number;
+  deactivationDue?: boolean;
   assignedAssetCount?: number;
   assets?: HrmAsset[];
   notes?: string;

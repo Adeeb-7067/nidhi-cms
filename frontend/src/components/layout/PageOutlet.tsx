@@ -52,6 +52,7 @@ const SalesProposals = React.lazy(() => import("@/pages/sales/Proposals"));
 const SalesProposalCreate = React.lazy(() => import("@/pages/sales/ProposalCreate"));
 const SalesProposalDetail = React.lazy(() => import("@/pages/sales/ProposalDetail"));
 const SalesCustomers = React.lazy(() => import("@/pages/sales/Customers"));
+const SalesClientTeam = React.lazy(() => import("@/pages/sales/ClientTeam"));
 const SalesCustomerDetail = React.lazy(() => import("@/pages/sales/CustomerDetail"));
 const SalesTeam = React.lazy(() => import("@/pages/sales/Team"));
 const SalesReports = React.lazy(() => import("@/pages/sales/Reports"));
@@ -279,6 +280,11 @@ export function PageOutlet() {
       <Route path="/sales/customers/:id">
         <RoleGate>
           <SalesCustomerDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/client-team">
+        <RoleGate>
+          <SalesClientTeam />
         </RoleGate>
       </Route>
       <Route path="/sales/leads">

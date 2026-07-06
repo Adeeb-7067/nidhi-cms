@@ -11,6 +11,7 @@ import {
   getNextSequence,
 } from "../../models/schema/index.js";
 import { SalesPreferences } from "../../models/schema/sales/preferences.js";
+import { mergeDocumentBranding, publicProposalDocumentBranding } from "../../utils/sales-document-branding-defaults.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -34,6 +35,28 @@ import {
   statusAfterValidityExtension,
 } from "../../utils/sales-proposal-client.js";
 import { clientAsProposalCustomer } from "../../mappers/client-customer-format.js";
+import { assertBdeOwnsCustomerById, bdeOwnsCustomer } from "../../utils/sales-bde-customer-scope.js";
+
+const STAFF_MUTABLE_PROPOSAL_STATUSES = ["sent", "seen", "revised", "counter_offer", "expired"];
+const CLIENT_RESPONDABLE_STATUSES = ["sent", "seen", "revised", "counter_offer", "expired"];
+
+// A BDE has access if the proposal is assigned to them directly, or if it
+// hangs off a lead/customer they own — matching the list-endpoint scope so a
+// proposal visible in a lead/customer's tab is never a dead link when opened.
+async function assertProposalAccess(proposal, user) {
+  if (!proposal) notFound("Proposal");
+  if (user?.role !== "bde") return;
+  if (proposal.assignedTo === user.id) return;
+  if (proposal.leadId) {
+    const lead = await SalesLeads.findOne({ id: proposal.leadId }).select({ assignedTo: 1, createdBy: 1 }).lean();
+    if (lead && (lead.assignedTo === user.id || lead.createdBy === user.id)) return;
+  }
+  if (proposal.customerId) {
+    const customer = await clientsTable.findOne({ id: proposal.customerId }).select({ assignedAdminId: 1, createdBy: 1 }).lean();
+    if (customer && bdeOwnsCustomer(customer, user.id)) return;
+  }
+  notFound("Proposal");
+}
 
 function getClientIp(req) {
   return (
@@ -97,10 +120,18 @@ async function listProposals(req, res) {
   if (status) filter.status = status;
   if (assignedTo) filter.assignedTo = Number(assignedTo);
   if (leadId) filter.leadId = Number(leadId);
+  let customerOwnedByBde = false;
   if (customerId && !leadId) {
     const cid = Number(customerId);
-    const customer = await clientsTable.findOne({ id: cid }).select({ leadId: 1 }).lean();
+    const customer = await clientsTable.findOne({ id: cid }).select({ leadId: 1, assignedAdminId: 1, createdBy: 1 }).lean();
     andClauses.push(customerProposalOwnershipFilter(cid, customer?.leadId ?? null));
+    if (req.user.role === "bde") {
+      if (!customer || !bdeOwnsCustomer(customer, req.user.id)) {
+        res.json({ proposals: [], total: 0, page, limit });
+        return;
+      }
+      customerOwnedByBde = true;
+    }
   }
   if (search) {
     const q = String(search).trim();
@@ -115,9 +146,18 @@ async function listProposals(req, res) {
   }
   if (andClauses.length === 1) Object.assign(filter, andClauses[0]);
   else if (andClauses.length > 1) filter.$and = andClauses;
-  // BDE scope: only see proposals assigned to them
-  if (req.user.role === "bde") {
-    filter.assignedTo = req.user.id;
+  // BDE scope: within a lead/customer they own, show every proposal on it;
+  // otherwise (general list) restrict to proposals assigned to them.
+  if (req.user.role === "bde" && !customerOwnedByBde) {
+    if (leadId) {
+      const lead = await SalesLeads.findOne({ id: Number(leadId) }).select({ assignedTo: 1, createdBy: 1 }).lean();
+      if (!lead || (lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id)) {
+        res.json({ proposals: [], total: 0, page, limit });
+        return;
+      }
+    } else {
+      filter.assignedTo = req.user.id;
+    }
   }
   const { items, total, page: pg, limit: lim } = await paginateModel(
     SalesProposals,
@@ -125,13 +165,55 @@ async function listProposals(req, res) {
     { page, limit, skip },
     { sort: { createdAt: -1 } }
   );
-  res.json({ proposals: items, total, page: pg, limit: lim });
+
+  const assigneeIds = [...new Set(items.map((p) => p.assignedTo).filter(Boolean))];
+  const leadIds = [...new Set(items.map((p) => p.leadId).filter(Boolean))];
+  const customerIds = [...new Set(items.map((p) => p.customerId).filter(Boolean))];
+  const [assignees, leads, customers] = await Promise.all([
+    assigneeIds.length
+      ? usersTable.find({ id: { $in: assigneeIds } }).select({ id: 1, name: 1, avatarUrl: 1 }).lean()
+      : [],
+    leadIds.length
+      ? SalesLeads.find({ id: { $in: leadIds } }).select({ id: 1, name: 1, company: 1 }).lean()
+      : [],
+    customerIds.length
+      ? clientsTable
+          .find({ id: { $in: customerIds } })
+          .select({ id: 1, companyName: 1, contactPerson: 1 })
+          .lean()
+          .then((rows) => rows.map(clientAsProposalCustomer))
+      : [],
+  ]);
+  const assigneeMap = new Map(assignees.map((u) => [u.id, u]));
+  const leadMap = new Map(leads.map((l) => [l.id, l]));
+  const customerMap = new Map(customers.map((c) => [c.id, c]));
+
+  const proposals = items.map((p) => ({
+    ...p,
+    assignedToUser: p.assignedTo ? assigneeMap.get(p.assignedTo) ?? null : null,
+    lead: p.leadId ? leadMap.get(p.leadId) ?? { id: p.leadId } : null,
+    customer: p.customerId ? customerMap.get(p.customerId) ?? { id: p.customerId } : null,
+  }));
+
+  res.json({ proposals, total, page: pg, limit: lim });
 }
 
 async function createProposal(req, res) {
   const body = req.body;
   const title = optionalString(body.title);
   if (!title) badRequest("Title is required.", "title");
+  if (body.leadId) {
+    const lead = await SalesLeads.findOne({ id: Number(body.leadId) }).lean();
+    if (!lead) badRequest("leadId references a non-existent lead.", "leadId");
+    if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+      notFound("Lead");
+    }
+  }
+  if (body.customerId) {
+    await assertBdeOwnsCustomerById(clientsTable, req.user, body.customerId);
+    const client = await clientsTable.findOne({ id: Number(body.customerId) }).lean();
+    if (!client) notFound("Customer");
+  }
   const [number, id] = await Promise.all([
     nextProposalNumber(),
     getNextSequence("sales_proposals"),
@@ -180,9 +262,7 @@ async function getProposalById(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   let proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
-  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
-    notFound("Proposal");
-  }
+  await assertProposalAccess(proposal, req.user);
 
   // Back-fill viewToken for proposals created before the field was added
   if (!proposal.viewToken) {
@@ -210,9 +290,7 @@ async function updateProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
-  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
-    notFound("Proposal");
-  }
+  await assertProposalAccess(proposal, req.user);
   const body = req.body;
   const updates = {};
   if (body.title !== undefined) updates.title = optionalString(body.title);
@@ -253,6 +331,7 @@ async function sendProposal(req, res) {
   // Ensure viewToken exists before sending (back-fill for old proposals)
   const pre = await SalesProposals.findOne({ id }).lean();
   if (!pre) notFound("Proposal");
+  await assertProposalAccess(pre, req.user);
   if (!pre.viewToken) {
     await SalesProposals.updateOne({ id }, { $set: { viewToken: crypto.randomBytes(32).toString("hex") } });
   }
@@ -313,36 +392,51 @@ async function sendProposal(req, res) {
 
 async function approveProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
+  const existing = await SalesProposals.findOne({ id }).lean();
+  if (!existing) notFound("Proposal");
+  await assertProposalAccess(existing, req.user);
   const updated = await SalesProposals.findOneAndUpdate(
-    { id },
+    { id, status: { $in: STAFF_MUTABLE_PROPOSAL_STATUSES } },
     { $set: { status: "approved", approvedAt: new Date() } },
     { new: true }
   ).lean();
-  if (!updated) notFound("Proposal");
+  if (!updated) {
+    badRequest("This proposal cannot be approved in its current state.", "status");
+  }
   res.json(updated);
 }
 
 async function declineProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
+  const existing = await SalesProposals.findOne({ id }).lean();
+  if (!existing) notFound("Proposal");
+  await assertProposalAccess(existing, req.user);
   const reason = optionalString(req.body.reason) ?? null;
   const updated = await SalesProposals.findOneAndUpdate(
-    { id },
+    { id, status: { $in: STAFF_MUTABLE_PROPOSAL_STATUSES } },
     { $set: { status: "declined", declinedAt: new Date(), declinedReason: reason } },
     { new: true }
   ).lean();
-  if (!updated) notFound("Proposal");
+  if (!updated) {
+    badRequest("This proposal cannot be declined in its current state.", "status");
+  }
   res.json(updated);
 }
 
 async function counterProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
+  const existing = await SalesProposals.findOne({ id }).lean();
+  if (!existing) notFound("Proposal");
+  await assertProposalAccess(existing, req.user);
   const note = optionalString(req.body.note) ?? null;
   const updated = await SalesProposals.findOneAndUpdate(
-    { id },
+    { id, status: { $in: STAFF_MUTABLE_PROPOSAL_STATUSES } },
     { $set: { status: "counter_offer", counterOfferNote: note } },
     { new: true }
   ).lean();
-  if (!updated) notFound("Proposal");
+  if (!updated) {
+    badRequest("This proposal cannot be updated in its current state.", "status");
+  }
   res.json(updated);
 }
 
@@ -350,6 +444,7 @@ async function reviseProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const existing = await SalesProposals.findOne({ id }).lean();
   if (!existing) notFound("Proposal");
+  await assertProposalAccess(existing, req.user);
   const updated = await SalesProposals.findOneAndUpdate(
     { id },
     { $set: { status: "revised" }, $inc: { revision: 1 } },
@@ -362,9 +457,7 @@ async function deleteProposal(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
-  if (req.user.role === "bde" && proposal.assignedTo !== req.user.id) {
-    notFound("Proposal");
-  }
+  await assertProposalAccess(proposal, req.user);
   if (!["draft", "revised", "declined", "expired"].includes(proposal.status)) {
     badRequest("Only draft, revised, declined, or expired proposals can be deleted.", "status");
   }
@@ -403,7 +496,7 @@ async function viewProposal(req, res) {
   await appendLog(proposal.id, "viewed", req);
 
   // Populate lead/customer for client display
-  const [lead, customer, settings] = await Promise.all([
+  const [lead, customer, settings, salesPrefs] = await Promise.all([
     proposal.leadId
       ? SalesLeads.findOne({ id: proposal.leadId }).select({ id: 1, name: 1, email: 1, phone: 1, company: 1, address: 1, status: 1 }).lean()
       : null,
@@ -411,6 +504,7 @@ async function viewProposal(req, res) {
       ? clientsTable.findOne({ id: proposal.customerId }).select({ id: 1, companyName: 1, contactPerson: 1, email: 1, phone: 1, address: 1, gstNumber: 1 }).lean().then(clientAsProposalCustomer)
       : null,
     companySettingsTable.findOne({}).select({ companyName: 1, logoUrl: 1, sealUrl: 1, address: 1 }).lean(),
+    SalesPreferences.findOne({ id: 1 }).select({ documentBranding: 1 }).lean(),
   ]);
 
   const { viewToken, internalNotes, ...clientPayload } = proposal;
@@ -421,6 +515,7 @@ async function viewProposal(req, res) {
     companySettings: settings
       ? { companyName: settings.companyName, logoUrl: settings.logoUrl ?? null, sealUrl: settings.sealUrl ?? null, address: settings.address ?? null }
       : null,
+    documentBranding: publicProposalDocumentBranding(salesPrefs?.documentBranding),
   });
 }
 
@@ -436,10 +531,13 @@ async function publicApproveProposal(req, res) {
   const approvalNote = optionalString(req.body.note) ?? null;
   const clientSignature = optionalString(req.body.signature) ?? null;
   const updated = await SalesProposals.findOneAndUpdate(
-    { viewToken: token },
+    { viewToken: token, status: { $in: CLIENT_RESPONDABLE_STATUSES } },
     { $set: { status: "approved", approvedAt: new Date(), approvalNote, clientSignature } },
     { new: true }
   ).lean();
+  if (!updated) {
+    badRequest("This proposal cannot be accepted in its current state.", "status");
+  }
   await appendLog(proposal.id, "approved", req);
   const { viewToken: vt, internalNotes, ...clientPayload } = updated;
   res.json(clientPayload);
@@ -456,10 +554,13 @@ async function publicDeclineProposal(req, res) {
   }
   const reason = optionalString(req.body.reason) ?? null;
   const updated = await SalesProposals.findOneAndUpdate(
-    { viewToken: token },
+    { viewToken: token, status: { $in: CLIENT_RESPONDABLE_STATUSES } },
     { $set: { status: "declined", declinedAt: new Date(), declinedReason: reason } },
     { new: true }
   ).lean();
+  if (!updated) {
+    badRequest("This proposal cannot be declined in its current state.", "status");
+  }
   await appendLog(proposal.id, "declined", req, { reason });
   const { viewToken: vt, internalNotes, ...clientPayload } = updated;
   res.json(clientPayload);
@@ -476,10 +577,13 @@ async function publicCounterProposal(req, res) {
   }
   const note = optionalString(req.body.note) ?? null;
   const updated = await SalesProposals.findOneAndUpdate(
-    { viewToken: token },
+    { viewToken: token, status: { $in: CLIENT_RESPONDABLE_STATUSES } },
     { $set: { status: "counter_offer", counterOfferNote: note } },
     { new: true }
   ).lean();
+  if (!updated) {
+    badRequest("This proposal cannot receive a counter offer in its current state.", "status");
+  }
   await appendLog(proposal.id, "counter_offer", req, { note });
   const { viewToken: vt, internalNotes, ...clientPayload } = updated;
   res.json(clientPayload);
@@ -490,6 +594,7 @@ async function getProposalLogs(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
   const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
+  await assertProposalAccess(proposal, req.user);
   const logs = await SalesProposalLogs.find({ proposalId: id })
     .sort({ createdAt: 1 })
     .lean();
@@ -534,8 +639,9 @@ async function addPublicComment(req, res) {
 // GET /sales/proposals/:id/comments — authenticated, staff reads discussion
 async function listProposalComments(req, res) {
   const id = parseIdParam(req.params.id, "proposal id");
-  const proposal = await SalesProposals.findOne({ id }, { id: 1 }).lean();
+  const proposal = await SalesProposals.findOne({ id }).lean();
   if (!proposal) notFound("Proposal");
+  await assertProposalAccess(proposal, req.user);
   const comments = await SalesProposalComments.find({ proposalId: id })
     .sort({ createdAt: 1 })
     .lean();
@@ -547,8 +653,9 @@ async function addStaffComment(req, res) {
   const proposalId = parseIdParam(req.params.id, "proposal id");
   const content = optionalString(req.body.content);
   if (!content?.trim()) badRequest("Comment content is required.", "content");
-  const proposal = await SalesProposals.findOne({ id: proposalId }, { id: 1 }).lean();
+  const proposal = await SalesProposals.findOne({ id: proposalId }).lean();
   if (!proposal) notFound("Proposal");
+  await assertProposalAccess(proposal, req.user);
   const staffUser = await usersTable.findOne({ id: req.user.id }, { name: 1 }).lean();
   const id = await getNextSequence("sales_proposal_comments");
   const comment = await SalesProposalComments.create({

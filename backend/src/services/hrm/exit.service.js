@@ -42,6 +42,14 @@ export function computeNoticeDaysRemaining(lastWorkingDay) {
   return Math.max(0, diff);
 }
 
+/** True when today is strictly after the employee's last working day (UTC). */
+export function isExitDeactivationDue(lastWorkingDay, asOf = new Date()) {
+  if (!lastWorkingDay) return false;
+  const today = startOfUtcDay(asOf);
+  const lwd = startOfUtcDay(lastWorkingDay);
+  return today.getTime() > lwd.getTime();
+}
+
 async function loadEmployeeBrief(userId) {
   return usersTable
     .findOne(
@@ -98,6 +106,7 @@ async function mapExitRequest(row, { includeAssets = false } = {}) {
     assetReturnComplete: Boolean(row.assetReturnComplete),
     fnfSettled: Boolean(row.fnfSettled),
     noticeDaysRemaining,
+    deactivationDue: isExitDeactivationDue(row.lastWorkingDay),
     assignedAssetCount,
     notes: row.notes ?? "",
     createdAt: row.createdAt,
@@ -105,12 +114,15 @@ async function mapExitRequest(row, { includeAssets = false } = {}) {
   };
 }
 
-export async function listExitRequests({ status } = {}) {
+export async function listExitRequests({ status, approvalStatus } = {}) {
   const query = {};
   if (status && exitRequestStatuses.includes(status)) {
     query.status = status;
   } else {
     query.status = "active";
+  }
+  if (approvalStatus && ["pending", "approved", "rejected"].includes(approvalStatus)) {
+    query.approvalStatus = approvalStatus;
   }
   const rows = await hrmExitRequestsTable.find(query).sort({ lastWorkingDay: 1 }).lean();
   return Promise.all(rows.map((row) => mapExitRequest(row, { includeAssets: true })));
@@ -193,32 +205,53 @@ async function finalizeEmployeeExit(userId, lastWorkingDay) {
   evictUserFromAuthCache(userId);
 }
 
+async function tryDeactivateExitRequest(row, actorId = null, auditAction = "exit_auto_deactivated") {
+  if ((row.approvalStatus ?? "pending") !== "approved") return row;
+  if (row.autoDeactivatedAt) return row;
+  if (row.status === "cancelled") return row;
+  if (!isExitDeactivationDue(row.lastWorkingDay)) return row;
+
+  await finalizeEmployeeExit(row.userId, row.lastWorkingDay);
+  const updated = await hrmExitRequestsTable
+    .findOneAndUpdate(
+      { id: row.id },
+      {
+        $set: {
+          autoDeactivatedAt: new Date(),
+          status: "completed",
+          stage: EXIT_WORKFLOW_STAGES.length,
+        },
+      },
+      { new: true },
+    )
+    .lean();
+
+  await logHrmAudit({
+    actorId,
+    action: auditAction,
+    entityType: "hrm_exit",
+    entityId: row.id,
+    severity: "warning",
+    metadata: { userId: row.userId, lastWorkingDay: row.lastWorkingDay },
+  });
+
+  return updated;
+}
+
 export async function autoDeactivateDueEmployees(actorId = null) {
   const today = startOfUtcDay(new Date());
   const dueRequests = await hrmExitRequestsTable.find({
-    status: "active",
     approvalStatus: "approved",
-    lastWorkingDay: { $lte: today },
+    status: { $ne: "cancelled" },
+    lastWorkingDay: { $lt: today },
     autoDeactivatedAt: null,
   }).lean();
   if (!dueRequests.length) return { processed: 0 };
 
   let processed = 0;
   for (const row of dueRequests) {
-    await finalizeEmployeeExit(row.userId, row.lastWorkingDay);
-    await hrmExitRequestsTable.updateOne(
-      { id: row.id },
-      { $set: { autoDeactivatedAt: new Date() } },
-    );
-    await logHrmAudit({
-      actorId,
-      action: "exit_auto_deactivated",
-      entityType: "hrm_exit",
-      entityId: row.id,
-      severity: "warning",
-      metadata: { userId: row.userId, lastWorkingDay: row.lastWorkingDay },
-    });
-    processed += 1;
+    const updated = await tryDeactivateExitRequest(row, actorId);
+    if (updated?.autoDeactivatedAt) processed += 1;
   }
 
   return { processed };
@@ -279,56 +312,112 @@ export async function updateExitRequest(id, body, actorId = null) {
       badRequest("Approve the exit request before completing it.");
     }
     update.stage = EXIT_WORKFLOW_STAGES.length;
-    update.status = "completed";
+    if (isExitDeactivationDue(lastWorkingDay)) {
+      update.status = "completed";
+    }
     completeExit = true;
   }
 
-  if (body.approvalStatus != null) {
-    const approvalStatus = String(body.approvalStatus);
-    if (!["pending", "approved", "rejected"].includes(approvalStatus)) {
-      badRequest("Invalid approval status.");
-    }
-    if (approvalStatus === "approved") {
-      update.approvalStatus = "approved";
-      update.approvedAt = new Date();
-      update.approvedByUserId = actorId ?? null;
-      update.rejectedAt = null;
-      update.rejectedByUserId = null;
-      update.rejectionReason = "";
-      update.stage = Math.max(update.stage ?? row.stage ?? 1, 2);
-    } else if (approvalStatus === "rejected") {
-      update.approvalStatus = "rejected";
-      update.rejectedAt = new Date();
-      update.rejectedByUserId = actorId ?? null;
-      update.rejectionReason = String(body.rejectionReason ?? "").trim();
-      update.status = "cancelled";
-    } else {
-      update.approvalStatus = "pending";
-      update.approvedAt = null;
-      update.approvedByUserId = null;
-      update.rejectedAt = null;
-      update.rejectedByUserId = null;
-      update.rejectionReason = "";
-    }
+  if (!Object.keys(update).length) badRequest("No exit fields to update.");
+
+  let updated = await hrmExitRequestsTable
+    .findOneAndUpdate({ id }, { $set: update }, { new: true })
+    .lean();
+
+  if (completeExit) {
+    updated = (await tryDeactivateExitRequest(updated, actorId, "exit_completed")) ?? updated;
   }
 
-  if (!Object.keys(update).length) badRequest("No exit fields to update.");
+  await logHrmAudit({
+    actorId,
+    action: completeExit && updated.autoDeactivatedAt ? "exit_completed" : "exit_updated",
+    entityType: "hrm_exit",
+    entityId: id,
+    severity: completeExit && updated.autoDeactivatedAt ? "warning" : "info",
+    metadata: { fields: Object.keys(update), userId: updated.userId },
+  });
+
+  return mapExitRequest(updated, { includeAssets: true });
+}
+
+export async function approveExitRequest(id, body = {}, actorId = null) {
+  const row = await hrmExitRequestsTable.findOne({ id }).lean();
+  if (!row) notFound("Exit request");
+  if (row.status !== "active") badRequest("Only active exit requests can be approved.");
+  if ((row.approvalStatus ?? "pending") !== "pending") {
+    badRequest("Exit request is not pending approval.");
+  }
+
+  const update = {
+    approvalStatus: "approved",
+    approvedAt: new Date(),
+    approvedByUserId: actorId ?? null,
+    rejectedAt: null,
+    rejectedByUserId: null,
+    rejectionReason: "",
+    stage: Math.max(row.stage ?? 1, 2),
+  };
+
+  if (body.lastWorkingDay != null && body.lastWorkingDay !== "") {
+    const lastWorkingDay = new Date(body.lastWorkingDay);
+    if (Number.isNaN(lastWorkingDay.getTime())) badRequest("Invalid last working day.");
+    if (lastWorkingDay < row.resignationDate) {
+      badRequest("Last working day must be on or after resignation date.");
+    }
+    update.lastWorkingDay = lastWorkingDay;
+  }
+  if (body.notes != null) update.notes = String(body.notes).trim();
+
+  let updated = await hrmExitRequestsTable
+    .findOneAndUpdate({ id }, { $set: update }, { new: true })
+    .lean();
+
+  updated = (await tryDeactivateExitRequest(updated, actorId, "exit_approved_deactivated")) ?? updated;
+
+  await logHrmAudit({
+    actorId,
+    action: "exit_approved",
+    entityType: "hrm_exit",
+    entityId: id,
+    severity: "info",
+    metadata: { userId: updated.userId },
+  });
+
+  return mapExitRequest(updated, { includeAssets: true });
+}
+
+export async function rejectExitRequest(id, body = {}, actorId = null) {
+  const row = await hrmExitRequestsTable.findOne({ id }).lean();
+  if (!row) notFound("Exit request");
+  if (row.status !== "active") badRequest("Only active exit requests can be rejected.");
+  if ((row.approvalStatus ?? "pending") !== "pending") {
+    badRequest("Exit request is not pending approval.");
+  }
+
+  const rejectionReason = String(body.rejectionReason ?? "").trim();
+  if (!rejectionReason) badRequest("Rejection reason is required.");
+
+  const update = {
+    approvalStatus: "rejected",
+    rejectedAt: new Date(),
+    rejectedByUserId: actorId ?? null,
+    rejectionReason,
+    status: "cancelled",
+    approvedAt: null,
+    approvedByUserId: null,
+  };
 
   const updated = await hrmExitRequestsTable
     .findOneAndUpdate({ id }, { $set: update }, { new: true })
     .lean();
 
-  if (completeExit) {
-    await finalizeEmployeeExit(updated.userId, updated.lastWorkingDay);
-  }
-
   await logHrmAudit({
     actorId,
-    action: completeExit ? "exit_completed" : "exit_updated",
+    action: "exit_rejected",
     entityType: "hrm_exit",
     entityId: id,
-    severity: completeExit ? "warning" : "info",
-    metadata: { fields: Object.keys(update), userId: updated.userId },
+    severity: "warning",
+    metadata: { userId: updated.userId, rejectionReason },
   });
 
   return mapExitRequest(updated, { includeAssets: true });
@@ -344,27 +433,26 @@ export async function advanceExitStage(id, actorId = null) {
 
   const nextStage = Math.min((row.stage ?? 1) + 1, EXIT_WORKFLOW_STAGES.length);
   const update = { stage: nextStage };
-  let completeExit = false;
+  const reachedFinalStage = nextStage === EXIT_WORKFLOW_STAGES.length;
 
-  if (nextStage === EXIT_WORKFLOW_STAGES.length) {
+  if (reachedFinalStage && isExitDeactivationDue(row.lastWorkingDay)) {
     update.status = "completed";
-    completeExit = true;
   }
 
-  const updated = await hrmExitRequestsTable
+  let updated = await hrmExitRequestsTable
     .findOneAndUpdate({ id }, { $set: update }, { new: true })
     .lean();
 
-  if (completeExit) {
-    await finalizeEmployeeExit(updated.userId, updated.lastWorkingDay);
+  if (reachedFinalStage) {
+    updated = (await tryDeactivateExitRequest(updated, actorId, "exit_completed")) ?? updated;
   }
 
   await logHrmAudit({
     actorId,
-    action: completeExit ? "exit_completed" : "exit_stage_advanced",
+    action: reachedFinalStage && updated.autoDeactivatedAt ? "exit_completed" : "exit_stage_advanced",
     entityType: "hrm_exit",
     entityId: id,
-    severity: completeExit ? "warning" : "info",
+    severity: reachedFinalStage && updated.autoDeactivatedAt ? "warning" : "info",
     metadata: { stage: nextStage, userId: updated.userId },
   });
 

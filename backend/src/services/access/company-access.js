@@ -63,11 +63,11 @@ async function getProjectAccess(req, projectId) {
     const allowed = !!company && company.id === companyId;
     return { allowed, canManage: false, isClient: true, companyId };
   }
-  if (isDevPortalStaffRole(role)) {
+  if (isDevPortalStaffRole(role) || role === "bde") {
     const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
     return {
       allowed: !!member,
-      canManage: isDeveloperRole(role),
+      canManage: isDeveloperRole(role) || role === "bde",
       isClient: false,
       companyId
     };

@@ -59,7 +59,9 @@ export async function buildBdeSalesScope(clientsTable, userId) {
     leadFilter: { $or: [{ assignedTo: id }, { createdBy: id }] },
     proposalFilter: { assignedTo: id },
     followUpFilter: { executiveId: id },
-    paymentFilter: { recordedBy: id },
+    paymentFilter: {
+      customerId: { $in: myCustomerIds.length ? myCustomerIds : [-1] },
+    },
     customerFilter: { ...bdeCustomerOwnershipFilter(userId), status: "active" },
     invoiceFilter: { customerId: { $in: myCustomerIds.length ? myCustomerIds : [-1] } },
     myCustomerIds,
@@ -72,4 +74,24 @@ export async function assertBdeOwnsCustomerById(clientsTable, user, customerId, 
   if (!client || !bdeOwnsCustomer(client, user.id)) {
     notFound(label);
   }
+}
+
+/** BDE proposal scope matches proposals.controller — assigned executive only. */
+export function bdeOwnsProposal(proposal, userId) {
+  const id = Number(userId);
+  if (!proposal || !Number.isFinite(id)) return false;
+  return proposal.assignedTo === id;
+}
+
+export async function findBdeAssignedProposalIds(SalesProposals, userId) {
+  const id = Number(userId);
+  if (!Number.isFinite(id) || id <= 0) return [];
+  const rows = await SalesProposals.find({ assignedTo: id }).select({ id: 1 }).lean();
+  return rows.map((p) => p.id);
+}
+
+export async function assertBdeOwnsProposal(proposal, user, label = "Proposal") {
+  if (user?.role !== "bde") return;
+  if (bdeOwnsProposal(proposal, user.id)) return;
+  notFound(label);
 }

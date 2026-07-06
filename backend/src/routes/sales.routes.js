@@ -9,6 +9,7 @@ import * as leadsCtrl from "../controllers/sales/leads.controller.js";
 import * as followupsCtrl from "../controllers/sales/followups.controller.js";
 import * as proposalsCtrl from "../controllers/sales/proposals.controller.js";
 import * as customersCtrl from "../controllers/sales/customers.controller.js";
+import * as salesClientTeamCtrl from "../controllers/sales/client-team.controller.js";
 import * as installmentsCtrl from "../controllers/sales/installments.controller.js";
 import * as invoicesCtrl from "../controllers/sales/invoices.controller.js";
 import * as paymentsCtrl from "../controllers/sales/payments.controller.js";
@@ -78,6 +79,7 @@ router.post("/sales/proposals/:id/revise", ...p("sales_proposals", "edit"), wrap
 
 // ── Customers ─────────────────────────────────────────────────────────────
 router.get("/sales/customers", ...p("sales_customers"), wrap(customersCtrl.listCustomers));
+router.get("/sales/customers/summary", ...p("sales_customers"), wrap(customersCtrl.getCustomersSummary));
 router.post("/sales/customers", ...p("sales_customers", "create"), wrap(customersCtrl.createCustomer));
 router.get("/sales/customers/:id", ...p("sales_customers"), wrap(customersCtrl.getCustomerById));
 router.patch("/sales/customers/:id", ...p("sales_customers", "edit"), wrap(customersCtrl.updateCustomer));
@@ -87,6 +89,28 @@ router.post("/sales/customers/:id/bootstrap-discussion", ...p("sales_customers",
 router.get("/sales/customers/:id/hub", ...p("sales_customers"), wrap(customersCtrl.getCustomerHub));
 router.get("/sales/customers/:id/statement", ...p("sales_customers"), wrap(customersCtrl.getCustomerStatement));
 router.post("/sales/customers/:id/remind", ...p("sales_customers", "edit"), wrap(customersCtrl.remindCustomer));
+
+router.get("/sales/client-team", ...p("sales_customers"), wrap(salesClientTeamCtrl.listSalesClientTeamMembers));
+router.post(
+  "/sales/client-team/:id/deactivate",
+  ...p("sales_customers", "edit"),
+  wrap(salesClientTeamCtrl.deactivateSalesClientTeamMember),
+);
+router.post(
+  "/sales/client-team/:id/reactivate",
+  ...p("sales_customers", "edit"),
+  wrap(salesClientTeamCtrl.reactivateSalesClientTeamMember),
+);
+router.post(
+  "/sales/client-team/:id/resend-invitation",
+  ...p("sales_customers", "edit"),
+  wrap(salesClientTeamCtrl.resendSalesClientTeamInvitation),
+);
+router.post(
+  "/sales/client-team/:id/reset-password",
+  ...p("sales_customers", "edit"),
+  wrap(salesClientTeamCtrl.resetSalesClientTeamPassword),
+);
 
 // ── Installments ──────────────────────────────────────────────────────────
 router.get("/sales/installments", ...p("sales_installments"), wrap(installmentsCtrl.listInstallments));

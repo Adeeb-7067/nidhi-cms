@@ -838,13 +838,13 @@ export default function AdminEmployees() {
   return (
     <PortalPageShell>
       <PortalPageHero
-        title="Team"
-        subtitle="Manage your agency's team members"
+        title="All team"
+        subtitle="All agency team members and roles"
         actions={
         <div className="flex items-center gap-2">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
             <PortalTabsList>
-              <PortalTabsTrigger value="list">Team List</PortalTabsTrigger>
+              <PortalTabsTrigger value="list">All team</PortalTabsTrigger>
               <PortalTabsTrigger value="analytics">Analytics</PortalTabsTrigger>
             </PortalTabsList>
           </Tabs>
@@ -1015,7 +1015,7 @@ export default function AdminEmployees() {
       <PortalKpiGrid
         loading={statsLoading}
         items={[
-          { title: "Team members", value: teamStats.total, hint: "Developers & QA", icon: UsersIcon, accent: "violet" },
+          { title: "All team", value: teamStats.total, hint: "Developers & QA", icon: UsersIcon, accent: "violet" },
           { title: "Active", value: teamStats.active, hint: "Can sign in", icon: Zap, accent: "green" },
           { title: "Inactive", value: teamStats.inactive, hint: "Deactivated accounts", icon: Clock, accent: "amber", alert: teamStats.inactive > 0 },
           { title: "Avg utilization", value: `${teamStats.avgUtilization}%`, hint: "This month (logged hours)", icon: BarChart3, accent: "blue" },

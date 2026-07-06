@@ -24,8 +24,7 @@ import {
 import { formatCurrency } from "@/modules/sales/constants";
 import { resolveProposalTotal, formatSalesDateTime, formatInstallmentSequence } from "@/modules/sales/utils";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
-import { useGetSettings } from "@/api/generated/api";
-import { resolveDocumentCompany } from "@/modules/sales/company-branding";
+import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import {
   SalesPageHeader, SalesStatusBadge, ExecutiveAvatar, SalesEmptyState, ProposalDocument, ProposalFormSheet,
   InstallmentsFromProposalDialog,
@@ -142,7 +141,7 @@ export default function ProposalDetail() {
 
   const { data: proposal, isLoading, isError } = useGetProposal(proposalId, !!proposalId);
   const { data: logsData } = useGetProposalLogs(proposalId, !!proposalId);
-  const { data: orgSettings } = useGetSettings();
+  const documentBranding = useSalesDocumentBranding();
   const { data: installmentsData } = useListInstallments(
     { proposalId, limit: 50 },
     !!proposalId && proposal?.status === "approved",
@@ -246,14 +245,13 @@ export default function ProposalDetail() {
   const pdfCurrentStatus = ["approved", "declined", "counter_offer"].includes(proposal.status)
     ? (proposal.status as "approved" | "declined" | "counter_offer")
     : null;
-  const orgBranding = resolveDocumentCompany(orgSettings);
   const proposalForPdf = {
     ...proposal,
     companySettings: {
-      companyName: orgBranding.companyName,
-      logoUrl: orgBranding.logoUrl,
-      sealUrl: orgBranding.sealUrl,
-      address: orgBranding.address,
+      companyName: documentBranding.companyName,
+      logoUrl: documentBranding.logoUrl,
+      sealUrl: documentBranding.sealUrl,
+      address: documentBranding.address,
     },
   } as PublicProposal;
 
@@ -1018,6 +1016,7 @@ export default function ProposalDetail() {
           proposal={proposalForPdf}
           currentStatus={pdfCurrentStatus}
           statusChip={sCfg}
+          branding={documentBranding}
           forPdf
         />
       </div>

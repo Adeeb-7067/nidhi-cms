@@ -1577,12 +1577,14 @@ export function RecordPaymentDialog({
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
+  const [note, setNote] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setInvoiceId(defaultInvoiceId ? String(defaultInvoiceId) : "");
     setAmount("");
     setTransactionId("");
+    setNote("");
   }, [open, defaultInvoiceId]);
 
   const selectedInvoice = unpaid.find((i) => String(i.id) === invoiceId);
@@ -1608,10 +1610,12 @@ export function RecordPaymentDialog({
         amount: amt,
         paymentMethod,
         transactionId: transactionId.trim() || undefined,
+        note: note.trim() || undefined,
       });
       toast.success("Payment recorded");
       onOpenChange(false);
       setAmount("");
+      setNote("");
       onSuccess?.(payment.id);
     } catch (err) {
       toastApiError(err, "Failed to record payment");
@@ -1665,6 +1669,14 @@ export function RecordPaymentDialog({
           </div>
           <SalesField label="Transaction ID" hint="Optional — reference number, UTR, or cheque number.">
             <Input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} placeholder="e.g. UTR123456789" />
+          </SalesField>
+          <SalesField label="Note" hint="Optional — internal note about this payment.">
+            <Textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={2}
+              placeholder="e.g. Part payment for milestone 1"
+            />
           </SalesField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

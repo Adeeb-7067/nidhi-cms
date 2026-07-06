@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   bdeCustomerOwnershipFilter,
   bdeOwnsCustomer,
+  bdeOwnsProposal,
   resolveCustomerAssignedAdminId,
   isSalesAdminRole,
 } from "../../src/utils/sales-bde-customer-scope.js";
@@ -52,4 +53,10 @@ test("isSalesAdminRole is limited to super_admin and hr", () => {
   assert.equal(isSalesAdminRole("hr"), true);
   assert.equal(isSalesAdminRole("bde"), false);
   assert.equal(isSalesAdminRole("manager"), false);
+});
+
+test("bdeOwnsProposal matches assigned executive", () => {
+  assert.equal(bdeOwnsProposal({ assignedTo: 63 }, 63), true);
+  assert.equal(bdeOwnsProposal({ assignedTo: 63 }, 30), false);
+  assert.equal(bdeOwnsProposal(null, 63), false);
 });

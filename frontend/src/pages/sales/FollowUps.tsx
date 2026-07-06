@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { API_PAGE_LIMIT_CAP } from "@/lib/table-pagination";
 import { useListFollowUps, type FollowUp as ApiFollowUp } from "@/api/sales";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
@@ -49,7 +50,9 @@ function FollowUpRow({ fu }: { fu: ApiFollowUp }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">Lead #{fu.leadId}</span>
+            <span className="text-sm font-medium">
+              {fu.leadName ?? `Lead #${fu.leadId}`}
+            </span>
             <Badge variant="outline" className="h-5 text-[10px] capitalize">
               {statusLabel[fu.status] ?? fu.status}
             </Badge>
@@ -73,17 +76,19 @@ export default function FollowUps() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterTab>("all");
 
-  const { data, isLoading, isError, refetch } = useListFollowUps({ limit: 500 });
+  const { data, isLoading, isError, refetch } = useListFollowUps({ limit: API_PAGE_LIMIT_CAP });
   const allFollowUps = data?.followUps ?? [];
+  const apiTotal = data?.total ?? allFollowUps.length;
+  const truncated = apiTotal > allFollowUps.length;
 
   const counts = useMemo(
     () => ({
-      all: allFollowUps.length,
+      all: apiTotal,
       overdue: allFollowUps.filter((f) => f.status === "overdue").length,
       scheduled: allFollowUps.filter((f) => f.status === "scheduled").length,
       completed: allFollowUps.filter((f) => f.status === "completed").length,
     }),
-    [allFollowUps],
+    [allFollowUps, apiTotal],
   );
 
   const filtered = useMemo(() => {
@@ -142,6 +147,12 @@ export default function FollowUps() {
           />
         </div>
       </div>
+
+      {truncated ? (
+        <p className="text-xs text-amber-700 dark:text-amber-400">
+          Showing {allFollowUps.length} of {apiTotal} follow-ups. Status counts below reflect the loaded set only.
+        </p>
+      ) : null}
 
       {isLoading ? (
         <div className="space-y-2">

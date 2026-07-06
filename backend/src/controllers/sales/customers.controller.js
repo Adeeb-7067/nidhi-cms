@@ -121,6 +121,12 @@ function computeCustomerFinancials(invoices) {
   return financials;
 }
 
+async function customerIdsWithPayments(customerIds) {
+  if (!customerIds.length) return new Set();
+  const ids = await SalesPayments.distinct("customerId", { customerId: { $in: customerIds } });
+  return new Set(ids.map(Number));
+}
+
 async function getCustomerHub(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
@@ -298,11 +304,57 @@ async function listCustomers(req, res) {
         .lean()
     : [];
   const financials = computeCustomerFinancials(invoices);
+  const paymentCustomerIds = await customerIdsWithPayments(customerIds);
   const customers = await attachCreatedByUsers(
-    items.map((c) => formatClientAsCustomer(c, financials.get(c.id) ?? {})),
+    items.map((c) =>
+      formatClientAsCustomer(c, {
+        ...(financials.get(c.id) ?? {}),
+        hasPayments: paymentCustomerIds.has(c.id),
+      }),
+    ),
     items,
   );
   res.json({ customers, total, page: pg, limit: lim });
+}
+
+async function getCustomersSummary(req, res) {
+  const customerFilter =
+    req.user.role === "bde" ? bdeCustomerOwnershipFilter(req.user.id) : {};
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const [totalCustomers, activeCustomers, inactiveCustomers, companyIds] = await Promise.all([
+    clientsTable.countDocuments(customerFilter),
+    clientsTable.countDocuments({ ...customerFilter, status: "active" }),
+    clientsTable.countDocuments({ ...customerFilter, status: "inactive" }),
+    clientsTable.find(customerFilter).select({ id: 1 }).lean().then((rows) => rows.map((c) => c.id)),
+  ]);
+
+  const companyScope = companyIds.length
+    ? { clientCompanyId: { $in: companyIds } }
+    : { clientCompanyId: -1 };
+
+  const [activeContacts, inactiveContacts, memberUserIds] = await Promise.all([
+    clientTeamMembersTable.countDocuments({ ...companyScope, status: "active" }),
+    clientTeamMembersTable.countDocuments({ ...companyScope, status: "inactive" }),
+    clientTeamMembersTable.distinct("userId", companyScope),
+  ]);
+
+  const contactsLoggedInToday = memberUserIds.length
+    ? await usersTable.countDocuments({
+        id: { $in: memberUserIds },
+        lastLoginAt: { $gte: todayStart },
+      })
+    : 0;
+
+  res.json({
+    totalCustomers,
+    activeCustomers,
+    inactiveCustomers,
+    activeContacts,
+    inactiveContacts,
+    contactsLoggedInToday,
+  });
 }
 
 async function createCustomer(req, res) {
@@ -342,16 +394,17 @@ async function createCustomer(req, res) {
 async function getCustomerById(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
-  const [installments, invoices, assignedAdmin, createdByUser] = await Promise.all([
+  const [installments, invoices, assignedAdmin, createdByUser, hasPayments] = await Promise.all([
     SalesInstallments.find({ customerId: id }).sort({ dueDate: 1 }).lean(),
     SalesInvoices.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
     loadStaffUser(client.assignedAdminId),
     loadStaffUser(resolveCustomerCreatorUserId(client)),
+    SalesPayments.exists({ customerId: id }),
   ]);
   const totalSales = sumInvoiceBilled(invoices);
   const outstanding = sumInvoiceOutstanding(invoices);
   res.json({
-    ...formatClientAsCustomer(client, { totalSales, outstanding }),
+    ...formatClientAsCustomer(client, { totalSales, outstanding, hasPayments: Boolean(hasPayments) }),
     installments,
     invoices,
     assignedAdmin,
@@ -420,6 +473,13 @@ async function updateCustomer(req, res) {
 async function deleteCustomer(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
+  const hasPayments = await SalesPayments.exists({ customerId: id });
+  if (hasPayments) {
+    badRequest(
+      "Cannot delete a customer with recorded payments. Set status to inactive instead.",
+      "payments",
+    );
+  }
   await deleteClientCompany(client);
   res.json({ success: true });
 }
@@ -453,10 +513,11 @@ async function provisionCustomerPortal(req, res) {
 async function getCustomerStatement(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
-  const [invoices, payments] = await Promise.all([
+  const [allInvoices, payments] = await Promise.all([
     SalesInvoices.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
     SalesPayments.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
   ]);
+  const invoices = allInvoices.filter(isBillableInvoice);
   const totalBilled = sumInvoiceBilled(invoices);
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const outstanding = sumInvoiceOutstanding(invoices);
@@ -480,6 +541,9 @@ async function remindCustomer(req, res) {
   const outstanding = sumInvoiceOutstanding(invoices);
   if (outstanding <= 0) {
     badRequest("This customer has no outstanding balance.", "outstanding");
+  }
+  if (!client.email?.trim()) {
+    badRequest("Customer has no email address on file.", "email");
   }
 
   const emailResult = await sendCustomerPaymentReminderEmail({
@@ -536,6 +600,7 @@ async function bootstrapCustomerDiscussion(req, res) {
 
 export {
   listCustomers,
+  getCustomersSummary,
   createCustomer,
   getCustomerById,
   getCustomerHub,

@@ -9,7 +9,11 @@ import {
 } from "../../models/schema/index.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { paginateModel } from "../../utils/mongo-list.js";
-import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
+import {
+  loadProjectNameMap,
+  resolveSalesProjectId,
+  collectProposalIdsFromRecords,
+} from "../../utils/sales-project-labels.js";
 import {
   badRequest,
   notFound,
@@ -81,21 +85,35 @@ async function listInvoices(req, res) {
   );
   const installmentIds = [...new Set(items.map((i) => i.installmentId).filter(Boolean))];
   const installments = installmentIds.length
-    ? await SalesInstallments.find({ id: { $in: installmentIds } }).select({ id: 1, name: 1, projectId: 1 }).lean()
+    ? await SalesInstallments.find({ id: { $in: installmentIds } }).select({ id: 1, name: 1, projectId: 1, proposalId: 1 }).lean()
     : [];
   const installmentMap = new Map(installments.map((i) => [i.id, i]));
+  const proposalIds = collectProposalIdsFromRecords(items, installments);
+  const proposals = proposalIds.length
+    ? await SalesProposals.find({ id: { $in: proposalIds } }).select({ id: 1, projectId: 1 }).lean()
+    : [];
+  const proposalMap = new Map(proposals.map((p) => [p.id, p]));
   const projectNameMap = await loadProjectNameMap([
     ...items.map((i) => i.projectId),
     ...installments.map((i) => i.projectId),
+    ...proposals.map((p) => p.projectId),
   ]);
+  const customerIds = [...new Set(items.map((i) => i.customerId))];
+  const customerRows = customerIds.length
+    ? await clientsTable.find({ id: { $in: customerIds } }).select({ id: 1, companyName: 1 }).lean()
+    : [];
+  const customerNameMap = new Map(customerRows.map((c) => [c.id, c.companyName]));
   const invoices = items.map((inv) => {
     const installment = inv.installmentId ? installmentMap.get(inv.installmentId) : null;
-    const projectId = inv.projectId ?? installment?.projectId ?? null;
+    const proposalId = installment?.proposalId ?? inv.proposalId ?? null;
+    const proposal = proposalId ? proposalMap.get(proposalId) ?? null : null;
+    const projectId = resolveSalesProjectId({ invoice: inv, installment, proposal });
     return {
       ...inv,
       installmentName: installment?.name ?? null,
       projectId,
       projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+      customerName: customerNameMap.get(inv.customerId) ?? null,
     };
   });
   res.json({ invoices, total, page: pg, limit: lim });
@@ -105,6 +123,8 @@ async function createInvoice(req, res) {
   const body = req.body;
   if (!body.customerId) badRequest("customerId is required.", "customerId");
   await assertBdeOwnsCustomerById(clientsTable, req.user, body.customerId);
+  const customer = await clientsTable.findOne({ id: Number(body.customerId) }).select({ id: 1 }).lean();
+  if (!customer) notFound("Customer");
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = new Date(body.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
@@ -149,6 +169,7 @@ async function createInvoice(req, res) {
         proposalId: body.proposalId ? Number(body.proposalId) : null,
         lineItems,
         notes: body.notes?.trim() || null,
+        terms: body.terms?.trim() || null,
         amount,
         calculatedAmount: Math.round(calculatedAmount),
         totalAdjustment,
@@ -161,11 +182,14 @@ async function createInvoice(req, res) {
     );
     invoice = invoice[0];
     if (installmentId) {
-      await SalesInstallments.updateOne(
+      const linkResult = await SalesInstallments.updateOne(
         { id: installmentId, invoiceId: null },
         { $set: { invoiceId: id } },
         { session }
       );
+      if (linkResult.matchedCount === 0) {
+        badRequest("This installment already has an invoice.", "installmentId");
+      }
     }
   });
   res.status(201).json(invoice.toObject());
@@ -182,7 +206,31 @@ async function getInvoiceById(req, res) {
   const invoice = await SalesInvoices.findOne({ id }).lean();
   if (!invoice) notFound("Invoice");
   await assertBdeInvoiceAccess(invoice, req.user);
-  res.json(invoice);
+
+  const installment = invoice.installmentId
+    ? await SalesInstallments.findOne({ id: invoice.installmentId })
+        .select({ id: 1, name: 1, projectId: 1, proposalId: 1 })
+        .lean()
+    : null;
+  const proposalId = installment?.proposalId ?? invoice.proposalId ?? null;
+  const proposal = proposalId
+    ? await SalesProposals.findOne({ id: proposalId }).select({ id: 1, projectId: 1 }).lean()
+    : null;
+  const projectId = resolveSalesProjectId({ invoice, installment, proposal });
+  const projectNameMap = await loadProjectNameMap([
+    invoice.projectId,
+    installment?.projectId,
+    proposal?.projectId,
+  ].filter(Boolean));
+  const customer = await clientsTable.findOne({ id: invoice.customerId }).select({ companyName: 1 }).lean();
+
+  res.json({
+    ...invoice,
+    installmentName: installment?.name ?? null,
+    projectId,
+    projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+    customerName: customer?.companyName ?? null,
+  });
 }
 
 async function updateInvoice(req, res) {
@@ -211,7 +259,10 @@ async function updateInvoice(req, res) {
   // Core editable fields
   if (body.title !== undefined) updates.title = body.title?.trim() || null;
   if (body.notes !== undefined) updates.notes = body.notes?.trim() || null;
-  if (body.customerId !== undefined) updates.customerId = Number(body.customerId);
+  if (body.terms !== undefined) updates.terms = body.terms?.trim() || null;
+  if (body.customerId !== undefined) {
+    badRequest("Use POST /sales/invoices/:id/reassign-customer to change the customer.", "customerId");
+  }
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   if (body.installmentId !== undefined) updates.installmentId = body.installmentId ? Number(body.installmentId) : null;
   if (body.proposalId !== undefined) updates.proposalId = body.proposalId ? Number(body.proposalId) : null;
@@ -259,6 +310,11 @@ async function updateInvoice(req, res) {
       updates.adjustedTotal = adjustedTotal;
       updates.amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
     }
+  }
+
+  const nextAmount = updates.amount ?? invoice.amount;
+  if (nextAmount < (invoice.paidAmount ?? 0)) {
+    badRequest("Invoice amount cannot be less than the amount already received.", "amount");
   }
 
   const updated = await SalesInvoices.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
@@ -325,7 +381,8 @@ async function createInvoiceFromInstallment(req, res) {
         installmentId,
         proposalId,
         lineItems,
-        notes: null,
+        notes: proposal?.clientNote?.trim() || null,
+        terms: proposal?.terms?.trim() || null,
         amount,
         calculatedAmount: Math.round(calculatedAmount),
         totalAdjustment,

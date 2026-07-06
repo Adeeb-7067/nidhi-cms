@@ -219,8 +219,11 @@ export interface PaymentReceipt {
   companyName: string;
   companyAddress: string;
   companyGstin: string;
+  companyPhone?: string;
+  companyEmail?: string;
   logoUrl?: string | null;
   sealUrl?: string | null;
+  note?: string | null;
 }
 
 export interface InvoiceLineItem {
@@ -242,6 +245,9 @@ export interface SalesInvoice {
   installmentId?: number;
   installmentName?: string;
   amount: number;
+  calculatedAmount?: number | null;
+  totalAdjustment?: number;
+  adjustedTotal?: number | null;
   paidAmount: number;
   status: InvoiceStatus;
   dueDate: string;
@@ -249,6 +255,8 @@ export interface SalesInvoice {
   cancelledAt?: string | null;
   cancelReason?: string | null;
   lineItems?: InvoiceLineItem[];
+  notes?: string | null;
+  terms?: string | null;
 }
 
 export interface SalesActivity {

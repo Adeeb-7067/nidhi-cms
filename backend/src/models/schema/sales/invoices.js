@@ -25,6 +25,7 @@ const invoiceSchema = new Schema(
     proposalId: { type: Number, ref: "SalesProposals", default: null },
     lineItems: { type: [invoiceLineItemSchema], default: [] },
     notes: { type: String, default: null, trim: true },
+    terms: { type: String, default: null, trim: true },
     amount: { type: Number, required: true, min: 0 },
     calculatedAmount: { type: Number, default: null, min: 0 },
     totalAdjustment: { type: Number, default: 0 },

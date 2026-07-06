@@ -23,6 +23,7 @@ import {
   useGetCustomerHub,
   useGetCustomerStatement,
   useListProposals,
+  useListInvoices,
   useListPayments,
   useDeleteCustomer,
   useBootstrapCustomerDiscussion,
@@ -45,6 +46,7 @@ import {
   CustomerInstallmentsSection,
   CustomerInventorySection,
   CustomerInvoicesSection,
+  CustomerPaymentsSection,
   CustomerOverviewExtras,
   CustomerProjectsSection,
   CustomerProposalsSection,
@@ -58,6 +60,7 @@ export default function CustomerDetail() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/sales/customers/:id");
   const customerId = Number(params?.id);
+  const validId = Number.isFinite(customerId) && customerId > 0;
   const [tab, setTab] = useState("overview");
   const [editOpen, setEditOpen] = useState(false);
   const [remindOpen, setRemindOpen] = useState(false);
@@ -68,17 +71,31 @@ export default function CustomerDetail() {
   const deleteCustomer = useDeleteCustomer();
   const bootstrapDiscussion = useBootstrapCustomerDiscussion();
 
-  const { data: customer, isLoading, isError } = useGetCustomer(customerId, !!customerId);
-  const { data: hub, isLoading: hubLoading } = useGetCustomerHub(customerId, !!customerId);
-  const { data: proposalsData } = useListProposals({ customerId }, !!customerId);
-  const { data: paymentsData } = useListPayments({ customerId }, !!customerId);
+  const { data: customer, isLoading, isError } = useGetCustomer(customerId, validId);
+  const { data: hub, isLoading: hubLoading } = useGetCustomerHub(customerId, validId);
+  const { data: proposalsData } = useListProposals({ customerId, limit: 500 }, validId);
+  const billingListParams = { customerId, limit: 500 };
+  const { data: invoicesData, isLoading: invoicesLoading } = useListInvoices(billingListParams, validId);
+  const { data: paymentsData, isLoading: paymentsLoading } = useListPayments(billingListParams, validId);
   const { data: statement, isLoading: statementLoading } = useGetCustomerStatement(
     customerId,
-    !!customerId && tab === "statement",
+    validId && tab === "statement",
   );
 
   const proposals = proposalsData?.proposals ?? [];
+  const proposalsTotal = proposalsData?.total ?? proposals.length;
   const payments = paymentsData?.payments ?? [];
+
+  if (!validId) {
+    return (
+      <SalesEmptyState
+        title="Invalid customer"
+        description="The customer link is not valid."
+        actionLabel="Back to customers"
+        onAction={() => navigate("/sales/customers")}
+      />
+    );
+  }
 
   if (isLoading) {
     return (
@@ -101,9 +118,8 @@ export default function CustomerDetail() {
   }
 
   const installments = customer.installments ?? [];
-  const invoices = customer.invoices ?? [];
-  const hasBillingHistory =
-    proposals.length > 0 || invoices.length > 0 || installments.length > 0 || payments.length > 0;
+  const invoices = invoicesData?.invoices ?? customer.invoices ?? [];
+  const canDeleteCustomer = !(customer.hasPayments ?? false) && payments.length === 0;
 
   const handleDelete = async () => {
     try {
@@ -131,6 +147,7 @@ export default function CustomerDetail() {
   const taskCount = hub?.tasks.length ?? 0;
   const teamCount = hub?.teamMembers.length ?? 0;
   const projectCount = hub?.projects.length ?? 0;
+  const tabCount = (n: number) => (n > 0 ? ` (${n})` : "");
 
   return (
     <PortalPageShell>
@@ -187,7 +204,7 @@ export default function CustomerDetail() {
               <Pencil className="h-3.5 w-3.5" />
               Edit
             </Button>
-            {!hasBillingHistory ? (
+            {canDeleteCustomer ? (
               <Button variant="outline" size="sm" className="h-8 gap-1.5 text-destructive hover:text-destructive" onClick={() => setDeleteOpen(true)}>
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
@@ -222,19 +239,46 @@ export default function CustomerDetail() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 p-1">
-          <TabsTrigger value="overview" className="text-xs">Customer info</TabsTrigger>
-          <TabsTrigger value="proposals" className="text-xs">Proposals ({proposals.length})</TabsTrigger>
-          <TabsTrigger value="invoices" className="text-xs">Invoices &amp; payments ({invoices.length})</TabsTrigger>
-          <TabsTrigger value="projects" className="text-xs">Projects ({projectCount})</TabsTrigger>
-          <TabsTrigger value="admin" className="text-xs">Custom admin</TabsTrigger>
-          <TabsTrigger value="team" className="text-xs">Team ({teamCount})</TabsTrigger>
-          <TabsTrigger value="credentials" className="text-xs">Credentials</TabsTrigger>
-          <TabsTrigger value="tickets" className="text-xs">Tickets ({ticketCount})</TabsTrigger>
-          <TabsTrigger value="tasks" className="text-xs">Tasks ({taskCount})</TabsTrigger>
-          <TabsTrigger value="inventory" className="text-xs">Inventory</TabsTrigger>
-          <TabsTrigger value="statement" className="text-xs">Statement</TabsTrigger>
-          <TabsTrigger value="installments" className="text-xs">Installments ({installments.length})</TabsTrigger>
+        <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-border/40 bg-muted/50 p-1">
+          <TabsTrigger value="overview" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Overview
+          </TabsTrigger>
+          <TabsTrigger value="proposals" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Proposals{tabCount(proposalsTotal)}
+          </TabsTrigger>
+          <TabsTrigger value="invoices" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Invoices{tabCount(invoices.length)}
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Payments{tabCount(payments.length)}
+          </TabsTrigger>
+          <TabsTrigger value="installments" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Installments{tabCount(installments.length)}
+          </TabsTrigger>
+          <TabsTrigger value="statement" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Statement
+          </TabsTrigger>
+          <TabsTrigger value="projects" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Projects{tabCount(projectCount)}
+          </TabsTrigger>
+          <TabsTrigger value="team" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Team{tabCount(teamCount)}
+          </TabsTrigger>
+          <TabsTrigger value="admin" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Admin
+          </TabsTrigger>
+          <TabsTrigger value="credentials" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Credentials
+          </TabsTrigger>
+          <TabsTrigger value="tickets" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Tickets{tabCount(ticketCount)}
+          </TabsTrigger>
+          <TabsTrigger value="tasks" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Tasks{tabCount(taskCount)}
+          </TabsTrigger>
+          <TabsTrigger value="inventory" className="h-7 rounded-md px-2.5 text-xs font-medium">
+            Inventory
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -311,7 +355,7 @@ export default function CustomerDetail() {
           </Card>
 
           <CustomerOverviewExtras
-            proposalsCount={proposals.length}
+            proposalsCount={proposalsTotal}
             invoicesCount={invoices.length}
             paymentsCount={payments.length}
           />
@@ -343,7 +387,22 @@ export default function CustomerDetail() {
         </TabsContent>
 
         <TabsContent value="invoices" className="mt-4">
-          <CustomerInvoicesSection invoices={invoices} payments={payments} customerId={customer.id} />
+          <CustomerInvoicesSection
+            invoices={invoices}
+            customerId={customer.id}
+            outstanding={customer.outstanding}
+            isLoading={invoicesLoading}
+            invoicesTotal={invoicesData?.total}
+          />
+        </TabsContent>
+
+        <TabsContent value="payments" className="mt-4">
+          <CustomerPaymentsSection
+            payments={payments}
+            customerId={customer.id}
+            isLoading={paymentsLoading}
+            paymentsTotal={paymentsData?.total}
+          />
         </TabsContent>
 
         <TabsContent value="projects" className="mt-4">
@@ -384,7 +443,6 @@ export default function CustomerDetail() {
             customer={customer}
             statement={statement}
             statementLoading={statementLoading}
-            payments={payments}
           />
         </TabsContent>
 
@@ -418,8 +476,8 @@ export default function CustomerDetail() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete customer?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently removes <strong>{customer.companyName}</strong> from the sales database.
-              Customers with billing history cannot be deleted — set status to inactive instead.
+              This permanently removes <strong>{customer.companyName}</strong> from the sales customer list.
+              Customers with recorded payments cannot be deleted — set status to inactive instead.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

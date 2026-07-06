@@ -8,6 +8,7 @@ import {
 import { formatUser } from "../../mappers/user-format.js";
 import { notFound, forbidden, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { toIso } from "../../utils/mongo-list.js";
+import { calcLineItemsTotal, resolveFinalTotal } from "../../utils/sales-totals.js";
 
 const BDE_USER_SELECT = {
   id: 1,
@@ -222,7 +223,16 @@ async function getSalesTeamMember(req, res) {
       .limit(8)
       .lean(),
     SalesProposals.find({ assignedTo: userId })
-      .select({ id: 1, title: 1, status: 1, totalAmount: 1, createdAt: 1 })
+      .select({
+        id: 1,
+        title: 1,
+        status: 1,
+        items: 1,
+        discount: 1,
+        totalAdjustment: 1,
+        adjustedTotal: 1,
+        createdAt: 1,
+      })
       .sort({ createdAt: -1 })
       .limit(8)
       .lean(),
@@ -234,6 +244,12 @@ async function getSalesTeamMember(req, res) {
     SalesLeads.countDocuments({ assignedTo: userId }),
     SalesProposals.countDocuments({ assignedTo: userId }),
   ]);
+
+  const followUpLeadIds = [...new Set(followUps.map((f) => f.leadId).filter(Boolean))];
+  const followUpLeads = followUpLeadIds.length
+    ? await SalesLeads.find({ id: { $in: followUpLeadIds } }).select({ id: 1, name: 1 }).lean()
+    : [];
+  const followUpLeadMap = new Map(followUpLeads.map((l) => [l.id, l]));
 
   res.json({
     member: formatUser(user, { withPresence: true, includeSensitive: true }),
@@ -255,16 +271,20 @@ async function getSalesTeamMember(req, res) {
       expectedValue: l.expectedValue ?? 0,
       createdAt: toIso(l.createdAt),
     })),
-    recentProposals: recentProposals.map((p) => ({
-      id: p.id,
-      title: p.title,
-      status: p.status,
-      totalAmount: p.totalAmount ?? 0,
-      createdAt: toIso(p.createdAt),
-    })),
+    recentProposals: recentProposals.map((p) => {
+      const calculated = calcLineItemsTotal(p.items ?? [], p.discount ?? 0);
+      return {
+        id: p.id,
+        title: p.title,
+        status: p.status,
+        totalAmount: resolveFinalTotal(calculated, p.totalAdjustment ?? 0, p.adjustedTotal ?? null),
+        createdAt: toIso(p.createdAt),
+      };
+    }),
     followUps: followUps.map((f) => ({
       id: f.id,
       leadId: f.leadId,
+      leadName: followUpLeadMap.get(f.leadId)?.name ?? null,
       type: f.type,
       status: f.status,
       scheduledAt: toIso(f.scheduledAt),

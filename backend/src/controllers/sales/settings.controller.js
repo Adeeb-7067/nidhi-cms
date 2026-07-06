@@ -1,6 +1,7 @@
 import { SalesPreferences } from "../../models/schema/sales/preferences.js";
 import { badRequest } from "../../utils/route-errors.js";
 import { assertSalesAdmin } from "../../utils/sales-admin-guard.js";
+import { mergeDocumentBranding, normalizeCustomFields } from "../../utils/sales-document-branding-defaults.js";
 
 const DEFAULTS = {
   proposalPrefix: "PROP",
@@ -12,6 +13,20 @@ const DEFAULTS = {
   overdueAlerts: true,
 };
 
+function formatSettingsResponse(prefs) {
+  return {
+    proposalPrefix: prefs.proposalPrefix ?? DEFAULTS.proposalPrefix,
+    proposalNextNumber: prefs.proposalNextNumber ?? DEFAULTS.proposalNextNumber,
+    defaultTax: prefs.defaultTax ?? DEFAULTS.defaultTax,
+    emailNotifications: prefs.emailNotifications ?? DEFAULTS.emailNotifications,
+    pushNotifications: prefs.pushNotifications ?? DEFAULTS.pushNotifications,
+    reminderHours: prefs.reminderHours ?? DEFAULTS.reminderHours,
+    overdueAlerts: prefs.overdueAlerts ?? DEFAULTS.overdueAlerts,
+    documentBranding: mergeDocumentBranding(prefs.documentBranding),
+    updatedAt: prefs.updatedAt?.toISOString?.() ?? null,
+  };
+}
+
 async function getOrCreatePreferences() {
   let doc = await SalesPreferences.findOne({ id: 1 }).lean();
   if (!doc) {
@@ -22,16 +37,38 @@ async function getOrCreatePreferences() {
 
 async function getSettings(_req, res) {
   const prefs = await getOrCreatePreferences();
-  res.json({
-    proposalPrefix: prefs.proposalPrefix ?? DEFAULTS.proposalPrefix,
-    proposalNextNumber: prefs.proposalNextNumber ?? DEFAULTS.proposalNextNumber,
-    defaultTax: prefs.defaultTax ?? DEFAULTS.defaultTax,
-    emailNotifications: prefs.emailNotifications ?? DEFAULTS.emailNotifications,
-    pushNotifications: prefs.pushNotifications ?? DEFAULTS.pushNotifications,
-    reminderHours: prefs.reminderHours ?? DEFAULTS.reminderHours,
-    overdueAlerts: prefs.overdueAlerts ?? DEFAULTS.overdueAlerts,
-    updatedAt: prefs.updatedAt?.toISOString?.() ?? null,
-  });
+  res.json(formatSettingsResponse(prefs));
+}
+
+function applyDocumentBrandingUpdates(body, updates, existing) {
+  if (body.documentBranding === undefined) return;
+  const src = body.documentBranding;
+  if (!src || typeof src !== "object") {
+    badRequest("documentBranding must be an object.", "documentBranding");
+  }
+  const base = mergeDocumentBranding(existing?.documentBranding);
+  const next = { ...base };
+  const stringFields = [
+    "gstin",
+    "email",
+    "phone",
+    "pan",
+    "cin",
+    "website",
+    "bankName",
+    "bankAccount",
+    "bankIfsc",
+  ];
+  for (const key of stringFields) {
+    if (src[key] !== undefined) {
+      const value = src[key] == null ? null : String(src[key]).trim();
+      next[key] = value || null;
+    }
+  }
+  if (src.customFields !== undefined) {
+    next.customFields = normalizeCustomFields(src.customFields);
+  }
+  updates.documentBranding = mergeDocumentBranding(next);
 }
 
 async function patchSettings(req, res) {
@@ -65,20 +102,14 @@ async function patchSettings(req, res) {
   }
   if (body.overdueAlerts !== undefined) updates.overdueAlerts = Boolean(body.overdueAlerts);
 
+  const existing = await getOrCreatePreferences();
+  applyDocumentBrandingUpdates(body, updates, existing);
+
   if (Object.keys(updates).length <= 1) badRequest("No settings to update.");
 
   await SalesPreferences.updateOne({ id: 1 }, { $set: updates }, { upsert: true });
   const prefs = await getOrCreatePreferences();
-  res.json({
-    proposalPrefix: prefs.proposalPrefix,
-    proposalNextNumber: prefs.proposalNextNumber,
-    defaultTax: prefs.defaultTax,
-    emailNotifications: prefs.emailNotifications,
-    pushNotifications: prefs.pushNotifications,
-    reminderHours: prefs.reminderHours,
-    overdueAlerts: prefs.overdueAlerts,
-    updatedAt: prefs.updatedAt?.toISOString?.() ?? null,
-  });
+  res.json(formatSettingsResponse(prefs));
 }
 
 export { getSettings, patchSettings };

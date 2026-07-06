@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { HrmApprovalActions, HrmWorkflowBadge } from "@/modules/hrm/components";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
-import type { HrmHoliday, HrmLeaveBalance, HrmLeaveRequest, HrmWfhRequest } from "@/modules/hrm/types";
+import type { HrmHoliday, HrmLeaveBalance, HrmLeaveRequest, HrmWfhRequest, HrmExitRequest } from "@/modules/hrm/types";
 import { getLeaveBalanceAvailable } from "@/modules/hrm/employee-profile-types";
 
 type LeaveColumnOptions = {
@@ -103,6 +103,97 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
     });
   }
   return cols;
+}
+
+type ExitColumnOptions = {
+  canApprove: boolean;
+  reviewPending?: boolean;
+  onApprove?: (request: HrmExitRequest) => void;
+  onReject?: (request: HrmExitRequest) => void;
+};
+
+export function buildExitRequestColumns(opts: ExitColumnOptions): Column<HrmExitRequest>[] {
+  return [
+    {
+      id: "employee",
+      header: "Employee",
+      cell: (r) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <HrmEmployeeAvatar name={r.employeeName} avatarUrl={r.employeeAvatarUrl} className="h-7 w-7 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold truncate">{r.employeeName}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{r.employeeDesignation ?? r.employeeCode ?? "—"}</p>
+          </div>
+        </div>
+      ),
+      exportValue: (r) => r.employeeName,
+    },
+    {
+      id: "reason",
+      header: "Reason",
+      cell: (r) => (
+        <span className="block max-w-[180px] truncate text-xs" title={r.reason}>
+          {r.reason}
+        </span>
+      ),
+      exportValue: (r) => r.reason,
+    },
+    {
+      id: "resigned",
+      header: "Resigned",
+      cell: (r) => (
+        <span className="text-xs tabular-nums whitespace-nowrap">{format(new Date(r.resignationDate), "MMM d, yyyy")}</span>
+      ),
+      exportValue: (r) => format(new Date(r.resignationDate), "MMM d, yyyy"),
+    },
+    {
+      id: "lwd",
+      header: "Last day",
+      cell: (r) => (
+        <span className="text-xs tabular-nums whitespace-nowrap">{format(new Date(r.lastWorkingDay), "MMM d, yyyy")}</span>
+      ),
+      exportValue: (r) => format(new Date(r.lastWorkingDay), "MMM d, yyyy"),
+    },
+    {
+      id: "notice",
+      header: "Notice left",
+      cell: (r) => <span className="text-xs tabular-nums">{r.noticeDaysRemaining}d</span>,
+      exportValue: (r) => `${r.noticeDaysRemaining}d`,
+    },
+    {
+      id: "stage",
+      header: "Stage",
+      cell: (r) => (
+        <span className="text-xs whitespace-nowrap">
+          {r.stageLabel} ({r.stage}/{r.stageCount})
+        </span>
+      ),
+      exportValue: (r) => `${r.stageLabel} (${r.stage}/${r.stageCount})`,
+    },
+    {
+      id: "approval",
+      header: "Approval",
+      cell: (r) => <HrmWorkflowBadge status={r.approvalStatus} />,
+      exportValue: (r) => r.approvalStatus,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      className: "text-right",
+      cell: (r) => (
+        <div onClick={(e) => e.stopPropagation()}>
+          {opts.canApprove && r.approvalStatus === "pending" ? (
+            <HrmApprovalActions
+              compact
+              disabled={opts.reviewPending}
+              onApprove={() => opts.onApprove?.(r)}
+              onReject={() => opts.onReject?.(r)}
+            />
+          ) : null}
+        </div>
+      ),
+    },
+  ];
 }
 
 export function buildLeaveBalanceColumns(): Column<HrmLeaveBalance>[] {

@@ -186,6 +186,7 @@ export function InvoiceFormSheet({
   const [projectId, setProjectId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
   const [notes, setNotes] = useState("");
+  const [terms, setTerms] = useState("");
   const [items, setItems] = useState<ProposalLineItem[]>([emptyItem(defaultTax)]);
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
@@ -201,6 +202,7 @@ export function InvoiceFormSheet({
       setProjectId(invoice.projectId ? String(invoice.projectId) : "");
       setInstallmentId(invoice.installmentId ? String(invoice.installmentId) : "");
       setNotes(invoice.notes ?? "");
+      setTerms(invoice.terms ?? "");
       const seedItems = (invoice.lineItems ?? []).map((li) => ({
         id: li.itemId ?? crypto.randomUUID(),
         name: li.name,
@@ -220,6 +222,7 @@ export function InvoiceFormSheet({
       setProjectId("");
       setInstallmentId("");
       setNotes("");
+      setTerms("");
       setItems([emptyItem(defaultTax)]);
       setTotalAdjustment(0);
       setAdjustedTotal(null);
@@ -260,6 +263,7 @@ export function InvoiceFormSheet({
       projectId: projectId ? Number(projectId) : null,
       installmentId: installmentId ? Number(installmentId) : null,
       notes: notes.trim() || null,
+      terms: terms.trim() || null,
       lineItems: lineItemsPayload,
       calculatedAmount: payload.calculatedAmount,
       totalAdjustment: payload.totalAdjustment ?? 0,
@@ -403,10 +407,34 @@ export function InvoiceFormSheet({
             compact
           />
 
-          {/* Notes */}
-          <div className="space-y-1">
-            <Label className="text-xs">Notes / payment instructions (optional)</Label>
-            <Textarea rows={3} className="text-xs resize-none" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. Bank transfer details, payment terms…" />
+          {/* Notes & terms */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Shown on the invoice — payment instructions, bank reference, or a message to the client.
+              </p>
+              <Textarea
+                rows={4}
+                className="text-xs resize-none"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="e.g. Please remit to the bank account listed below. Mention invoice number in the transfer reference."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Terms &amp; conditions (optional)</Label>
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Legal or commercial terms. If left blank, standard payment terms apply on the PDF.
+              </p>
+              <Textarea
+                rows={4}
+                className="text-xs resize-none"
+                value={terms}
+                onChange={(e) => setTerms(e.target.value)}
+                placeholder="e.g. Goods once sold will not be taken back. Disputes subject to Indore jurisdiction."
+              />
+            </div>
           </div>
         </form>
 

@@ -25,11 +25,12 @@ export function buildCustomerStatementLedger(
   from: Date | null,
   to: Date | null,
 ): StatementLedger {
-  const invoiceById = new Map(invoices.map((inv) => [inv.id, inv]));
+  const billableInvoices = invoices.filter((inv) => inv.status !== "cancelled");
+  const invoiceById = new Map(billableInvoices.map((inv) => [inv.id, inv]));
 
   let beginningBalance = 0;
   if (from) {
-    for (const inv of invoices) {
+    for (const inv of billableInvoices) {
       if (new Date(inv.createdAt) < from) beginningBalance += inv.amount;
     }
     for (const pay of payments) {
@@ -38,7 +39,7 @@ export function buildCustomerStatementLedger(
   }
 
   const entries = [
-    ...invoices
+    ...billableInvoices
       .filter((i) => {
         const d = new Date(i.createdAt);
         if (from && d < from) return false;

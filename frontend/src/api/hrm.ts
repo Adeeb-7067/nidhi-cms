@@ -1374,14 +1374,22 @@ export function useDeleteAsset() {
   });
 }
 
-export function useHrmExitRequests(status?: string, options?: { enabled?: boolean }) {
+export function useHrmExitRequests(
+  params?: { status?: string; approvalStatus?: string },
+  options?: { enabled?: boolean },
+) {
   return useHrmQuery({
-    queryKey: hrmExitQueryKey({ status }),
+    queryKey: hrmExitQueryKey(params),
     enabled: options?.enabled ?? true,
     staleTime: QUERY_STALE.list,
     queryFn: () => {
-      const qs = status ? `?status=${encodeURIComponent(status)}` : "";
-      return customFetch<{ requests: HrmExitRequest[] }>(apiUrl(`/api/hrm/exit${qs}`));
+      const search = new URLSearchParams();
+      if (params?.status) search.set("status", params.status);
+      if (params?.approvalStatus) search.set("approvalStatus", params.approvalStatus);
+      const qs = search.toString();
+      return customFetch<{ requests: HrmExitRequest[] }>(
+        apiUrl(`/api/hrm/exit${qs ? `?${qs}` : ""}`),
+      );
     },
     meta: { errorMessage: "Could not load exit requests" },
   });
@@ -1429,6 +1437,46 @@ export function useUpdateExitRequest() {
       qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
     },
     meta: { errorMessage: "Could not update exit request" },
+  });
+}
+
+export function useApproveExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({
+      id,
+      lastWorkingDay,
+      notes,
+    }: {
+      id: number;
+      lastWorkingDay?: string;
+      notes?: string;
+    }) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}/approve`), {
+        method: "POST",
+        body: JSON.stringify({ lastWorkingDay, notes }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+    },
+    meta: { errorMessage: "Could not approve exit request" },
+  });
+}
+
+export function useRejectExitRequest() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({ id, rejectionReason }: { id: number; rejectionReason: string }) =>
+      customFetch<HrmExitRequest>(apiUrl(`/api/hrm/exit/${id}/reject`), {
+        method: "POST",
+        body: JSON.stringify({ rejectionReason }),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "exit"] });
+      qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
+    },
+    meta: { errorMessage: "Could not reject exit request" },
   });
 }
 

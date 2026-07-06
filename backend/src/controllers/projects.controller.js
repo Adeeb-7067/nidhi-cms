@@ -17,6 +17,7 @@ import { toIso } from "../utils/mongo-list.js";
 import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
 import { assertProjectAccess } from "../services/access/access-helpers.js";
 import { assertClientPermission, findClientCompanyForUser } from "../services/client-team.js";
+import { bdeOwnsCustomer } from "../utils/sales-bde-customer-scope.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import { resolveLogProjectName } from "../services/daily-log-virtual-projects.js";
 import {
@@ -93,6 +94,12 @@ async function postProjects(req, res) {
   if (!priority) badRequest("Priority is required.", "priority");
   if (!startDate) badRequest("Start date is required.", "startDate");
   if (!deadline) badRequest("Deadline is required.", "deadline");
+  if (req.user.role === "bde") {
+    const client = await clientsTable.findOne({ id: resolvedCompanyId }).lean();
+    if (!client || !bdeOwnsCustomer(client, req.user.id)) {
+      forbidden("You can only create projects for your own customers.");
+    }
+  }
   const logoUrl = optionalString(body.logoUrl);
   if (logoUrl) validateStoredFileUrl(logoUrl, "logoUrl");
   const nextId = await getNextSequence("projects");
@@ -118,6 +125,17 @@ async function postProjects(req, res) {
     websiteUrl: optionalString(body.websiteUrl) ?? null,
     postmanJson: body.postmanJson ?? null
   });
+  if (req.user.role === "bde") {
+    const memberId = await getNextSequence("project_members");
+    await projectMembersTable.create({
+      id: memberId,
+      projectId: nextId,
+      userId: req.user.id,
+      subType: null,
+      joinedAt: new Date(),
+      completionPct: 0
+    });
+  }
   res.status(201).json(await formatProject(project));
 }
 async function getProjectsById(req, res) {
@@ -132,6 +150,9 @@ async function getProjectsById(req, res) {
 async function patchProjectsById(req, res) {
   const id = parseInt(req.params["id"]);
   const { name, pmId, description, status, type, priority, startDate, deadline, techStack, figmaUrl, repoUrl, stagingUrl, productionUrl, completionOverride, adminUrl, websiteUrl, postmanJson, logoUrl } = req.body;
+  if (req.user.role !== "super_admin") {
+    await assertProjectAccess(req, id, { needManage: true });
+  }
   if (logoUrl !== void 0) {
     const normalized = optionalString(logoUrl);
     if (normalized) validateStoredFileUrl(normalized, "logoUrl");
@@ -167,6 +188,9 @@ async function patchProjectsById(req, res) {
 }
 async function deleteProjectsById(req, res) {
   const id = parseInt(req.params["id"]);
+  if (req.user.role !== "super_admin") {
+    await assertProjectAccess(req, id, { needManage: true });
+  }
   await projectsTable.deleteOne({ id });
   await projectMembersTable.deleteMany({ projectId: id });
   await apkSchedulesTable.deleteMany({ projectId: id });

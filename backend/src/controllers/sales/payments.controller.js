@@ -1,8 +1,58 @@
-import { SalesPayments, SalesInvoices, SalesInstallments, clientsTable, getNextSequence } from "../../models/schema/index.js";
+import {
+  SalesPayments,
+  SalesInvoices,
+  SalesInstallments,
+  SalesProposals,
+  clientsTable,
+  usersTable,
+  getNextSequence,
+} from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
-import { bdeOwnsCustomer } from "../../utils/sales-bde-customer-scope.js";
+import {
+  loadProjectNameMap,
+  resolvePaymentInstallment,
+  resolveSalesProjectId,
+  collectInstallmentIdsFromPayments,
+  collectProposalIdsFromRecords,
+} from "../../utils/sales-project-labels.js";
+import {
+  assertBdeOwnsCustomerById,
+  bdeOwnsCustomer,
+  findBdeOwnedCustomerIds,
+} from "../../utils/sales-bde-customer-scope.js";
+
+async function applyBdePaymentListScope(req, filter) {
+  if (req.user.role !== "bde") return;
+
+  const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+  const invoiceId = req.query.invoiceId ? Number(req.query.invoiceId) : null;
+  const installmentId = req.query.installmentId ? Number(req.query.installmentId) : null;
+
+  if (customerId != null && Number.isFinite(customerId)) {
+    await assertBdeOwnsCustomerById(clientsTable, req.user, customerId, "Customer");
+    return;
+  }
+
+  if (invoiceId != null && Number.isFinite(invoiceId)) {
+    const invoice = await SalesInvoices.findOne({ id: invoiceId }).select({ customerId: 1 }).lean();
+    if (!invoice) notFound("Invoice");
+    await assertBdeOwnsCustomerById(clientsTable, req.user, invoice.customerId, "Invoice");
+    return;
+  }
+
+  if (installmentId != null && Number.isFinite(installmentId)) {
+    const installment = await SalesInstallments.findOne({ id: installmentId })
+      .select({ customerId: 1 })
+      .lean();
+    if (!installment) notFound("Installment");
+    await assertBdeOwnsCustomerById(clientsTable, req.user, installment.customerId, "Installment");
+    return;
+  }
+
+  const myCustomerIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
+  filter.customerId = { $in: myCustomerIds.length ? myCustomerIds : [-1] };
+}
 
 async function listPayments(req, res) {
   const { search } = req.query;
@@ -18,12 +68,11 @@ async function listPayments(req, res) {
         { receiptNumber: { $regex: q, $options: "i" } },
         { paymentMethod: { $regex: q, $options: "i" } },
         { transactionId: { $regex: q, $options: "i" } },
+        { note: { $regex: q, $options: "i" } },
       ];
     }
   }
-  if (req.user.role === "bde") {
-    filter.recordedBy = req.user.id;
-  }
+  await applyBdePaymentListScope(req, filter);
 
   const [payments, total] = await Promise.all([
     SalesPayments.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -31,24 +80,43 @@ async function listPayments(req, res) {
   ]);
 
   const invoiceIds = [...new Set(payments.map((p) => p.invoiceId))];
-  const installmentIds = [...new Set(payments.map((p) => p.installmentId).filter(Boolean))];
-  const [invoices, installments] = await Promise.all([
-    invoiceIds.length ? SalesInvoices.find({ id: { $in: invoiceIds } }).lean() : [],
-    installmentIds.length
-      ? SalesInstallments.find({ id: { $in: installmentIds } }).select({ id: 1, name: 1, projectId: 1 }).lean()
+  const invoices = invoiceIds.length
+    ? await SalesInvoices.find({ id: { $in: invoiceIds } }).lean()
+    : [];
+  const installmentIds = collectInstallmentIdsFromPayments(payments, invoices);
+  const recorderIds = [...new Set(payments.map((p) => p.recordedBy).filter(Boolean))];
+  const installments = installmentIds.length
+    ? await SalesInstallments.find({ id: { $in: installmentIds } })
+      .select({ id: 1, name: 1, projectId: 1, proposalId: 1 })
+      .lean()
+    : [];
+  const proposalIds = collectProposalIdsFromRecords(invoices, installments);
+  const [proposals, recorders] = await Promise.all([
+    proposalIds.length
+      ? SalesProposals.find({ id: { $in: proposalIds } }).select({ id: 1, projectId: 1 }).lean()
+      : [],
+    recorderIds.length
+      ? usersTable.find({ id: { $in: recorderIds } }).select({ id: 1, name: 1, avatarUrl: 1 }).lean()
       : [],
   ]);
   const invoiceMap = new Map(invoices.map((i) => [i.id, i]));
   const installmentMap = new Map(installments.map((i) => [i.id, i]));
+  const proposalMap = new Map(proposals.map((p) => [p.id, p]));
+  const recorderMap = new Map(
+    recorders.map((u) => [u.id, { name: u.name, avatarUrl: u.avatarUrl ?? null }]),
+  );
   const projectNameMap = await loadProjectNameMap([
     ...invoices.map((i) => i.projectId),
     ...installments.map((i) => i.projectId),
+    ...proposals.map((p) => p.projectId),
   ]);
 
   const rows = payments.map((p) => {
     const invoice = invoiceMap.get(p.invoiceId);
-    const installment = p.installmentId ? installmentMap.get(p.installmentId) : null;
-    const projectId = invoice?.projectId ?? installment?.projectId ?? null;
+    const installment = resolvePaymentInstallment(p, invoice, installmentMap);
+    const proposalId = installment?.proposalId ?? invoice?.proposalId ?? null;
+    const proposal = proposalId ? proposalMap.get(proposalId) ?? null : null;
+    const projectId = resolveSalesProjectId({ invoice, installment, proposal });
     return {
       ...p,
       invoiceStatus: invoice?.status ?? "unknown",
@@ -56,6 +124,8 @@ async function listPayments(req, res) {
       installmentName: installment?.name ?? null,
       projectId,
       projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+      recordedByName: recorderMap.get(p.recordedBy)?.name ?? null,
+      recordedByAvatarUrl: recorderMap.get(p.recordedBy)?.avatarUrl ?? null,
     };
   });
 
@@ -140,7 +210,10 @@ async function recordPayment(req, res) {
 
     // Update invoice paidAmount regardless
     const remaining = invoice.amount - invoice.paidAmount;
-    const appliedAmount = Math.min(amount, remaining);
+    if (amount > remaining) {
+      badRequest(`Payment exceeds remaining balance of ${remaining}.`, "amount");
+    }
+    const appliedAmount = amount;
     const newPaidAmount = invoice.paidAmount + appliedAmount;
     newStatus = deriveInvoiceStatus(invoice, newPaidAmount);
 
@@ -153,6 +226,7 @@ async function recordPayment(req, res) {
         amount: appliedAmount,
         paymentMethod: body.paymentMethod,
         transactionId: optionalString(body.transactionId) ?? null,
+        note: optionalString(body.note) ?? null,
         recordedBy: req.user.id,
         receiptNumber,
       }],
@@ -169,6 +243,32 @@ async function recordPayment(req, res) {
   res.status(201).json({ ...payment, invoiceStatus: newStatus });
 }
 
+async function enrichInvoiceForReceipt(invoice, paymentInstallmentId = null) {
+  if (!invoice) return null;
+  const installmentId = paymentInstallmentId ?? invoice.installmentId ?? null;
+  const installment = installmentId
+    ? await SalesInstallments.findOne({ id: installmentId })
+        .select({ id: 1, name: 1, projectId: 1, proposalId: 1 })
+        .lean()
+    : null;
+  const proposalId = installment?.proposalId ?? invoice.proposalId ?? null;
+  const proposal = proposalId
+    ? await SalesProposals.findOne({ id: proposalId }).select({ id: 1, projectId: 1 }).lean()
+    : null;
+  const projectId = resolveSalesProjectId({ invoice, installment, proposal });
+  const projectNameMap = await loadProjectNameMap([
+    invoice.projectId,
+    installment?.projectId,
+    proposal?.projectId,
+  ].filter(Boolean));
+  return {
+    ...invoice,
+    installmentName: installment?.name ?? null,
+    projectId,
+    projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
+  };
+}
+
 async function getReceiptById(req, res) {
   const id = parseIdParam(req.params.id, "payment id");
   const payment = await SalesPayments.findOne({ id }).lean();
@@ -181,7 +281,8 @@ async function getReceiptById(req, res) {
       ? SalesInstallments.findOne({ id: payment.installmentId }).lean()
       : Promise.resolve(null),
   ]);
-  res.json({ payment, invoice, customer, installment });
+  const enrichedInvoice = await enrichInvoiceForReceipt(invoice, payment.installmentId);
+  res.json({ payment, invoice: enrichedInvoice, customer, installment });
 }
 
 export { listPayments, recordPayment, getReceiptById };

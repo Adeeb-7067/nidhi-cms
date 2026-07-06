@@ -226,11 +226,11 @@ export default function Proposals() {
               <TableBody>
                 {proposals.map((p) => {
                   const total = resolveProposalTotal(p).finalTotal;
-                  const forLabel = p.leadId
-                    ? `Lead #${p.leadId}`
-                    : p.customerId
-                    ? `Customer #${p.customerId}`
-                    : "—";
+                  const forLabel =
+                    p.lead?.name ??
+                    p.customer?.companyName ??
+                    p.customer?.contactPerson ??
+                    (p.leadId ? `Lead #${p.leadId}` : p.customerId ? `Customer #${p.customerId}` : "—");
                   const canSend = ["draft", "revised", "counter_offer"].includes(p.status);
                   const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
                   return (

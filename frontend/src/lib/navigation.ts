@@ -21,6 +21,7 @@ import {
   TrendingDown,
   Target,
   Handshake,
+  UsersRound,
   FileSpreadsheet,
   UserPlus,
   Rocket,
@@ -139,9 +140,9 @@ export function getNavSections(role: UserRole): NavSection[] {
       items: [
         { title: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
         { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"], group: "Overview" },
-        { title: "Companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
-        { title: "Projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
-        { title: "Team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
+        { title: "All companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
+        { title: "All projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
+        { title: "All team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
         {
           title: "Requests",
@@ -216,6 +217,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
         { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
         { title: "Customers", href: "/sales/customers", icon: Handshake, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
+        { title: "Client team", href: "/sales/client-team", icon: UsersRound, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
         { title: "Installments", href: "/sales/installments", icon: Layers, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
         { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
         { title: "Payments", href: "/sales/payments", icon: Wallet, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
