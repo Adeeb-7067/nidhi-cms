@@ -66,7 +66,6 @@ async function postCompanies(req, res) {
     status: optionalString(body.status),
     createdByUserId: req.user.id,
     createdByLabel: req.user.name,
-    bootstrapDiscussion: true,
   });
   res.status(201).json(await formatCompanyRecord(client));
 }

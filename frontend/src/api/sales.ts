@@ -203,6 +203,8 @@ export interface Customer {
   directConversationId?: number | null;
   assignedAdminId?: number | null;
   assignedAdmin?: StaffUserSummary | null;
+  createdBy?: number | null;
+  createdByUser?: SalesUser | null;
   totalSales: number;
   outstanding: number;
   createdAt: string;
@@ -1020,7 +1022,10 @@ export function useCreateCustomer() {
       password?: string;
       industry?: string | null;
     }) =>
-      customFetch<Customer>(apiUrl("/api/sales/customers"), { method: "POST", body: JSON.stringify(body) }),
+      customFetch<Customer & { directConversationId?: number | null }>(
+        apiUrl("/api/sales/customers"),
+        { method: "POST", body: JSON.stringify(body) }
+      ),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-customers"] }),
   });
 }
@@ -1078,13 +1083,36 @@ export function useProvisionCustomerPortal() {
       companyName?: string;
       industry?: string;
     }) =>
-      customFetch<{ success: boolean; customerId: number; clientId: number; portalUserId: number; customer: Customer }>(
+      customFetch<{
+        success: boolean;
+        customerId: number;
+        clientId: number;
+        portalUserId: number;
+        directConversationId: number | null;
+        customer: Customer;
+      }>(
         apiUrl(`/api/sales/customers/${id}/provision-portal`),
         { method: "POST", body: JSON.stringify(body) }
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.customer(vars.id) });
       qc.invalidateQueries({ queryKey: [...salesKeys.customer(vars.id), "hub"] });
+      qc.invalidateQueries({ queryKey: ["sales-customers"] });
+    },
+  });
+}
+
+export function useBootstrapCustomerDiscussion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ directConversationId: number; customer: Customer }>(
+        apiUrl(`/api/sales/customers/${id}/bootstrap-discussion`),
+        { method: "POST" }
+      ),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: salesKeys.customer(id) });
+      qc.invalidateQueries({ queryKey: [...salesKeys.customer(id), "hub"] });
       qc.invalidateQueries({ queryKey: ["sales-customers"] });
     },
   });
@@ -1305,6 +1333,24 @@ export function useCancelInvoice() {
   });
 }
 
+export function useReassignInvoiceCustomer() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, customerId }: { id: number; customerId: number }) =>
+      customFetch<SalesInvoice>(apiUrl(`/api/sales/invoices/${id}/reassign-customer`), {
+        method: "POST",
+        body: JSON.stringify({ customerId }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.id) });
+      qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      qc.invalidateQueries({ queryKey: ["sales-customers"] });
+      qc.invalidateQueries({ queryKey: salesKeys.dashboard() });
+    },
+    meta: { errorMessage: "Could not reassign customer" },
+  });
+}
+
 export function useCreateInvoiceFromInstallment() {
   const qc = useQueryClient();
   return useMutation({
@@ -1521,6 +1567,8 @@ export interface SalesTeamListParams {
   search?: string;
   page?: number;
   limit?: number;
+  /** BDE dashboard leaderboard — returns stats-only rows (no roster/contact fields). */
+  leaderboard?: boolean;
 }
 
 export interface SalesTeamMemberDetail {

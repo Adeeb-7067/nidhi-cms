@@ -17,6 +17,7 @@ import { formatUser } from "../../mappers/user-format.js";
 import {
   formatClientAsCustomer,
   customerUpdatesToClientSet,
+  resolveCustomerCreatorUserId,
 } from "../../mappers/client-customer-format.js";
 import {
   badRequest,
@@ -31,6 +32,8 @@ import {
   enablePortalForClientCompany,
   deleteClientCompany,
   syncPortalEmailIfLinked,
+  bootstrapClientDirectDiscussion,
+  resolveDiscussionStaffUserId,
 } from "../../services/client-company-provision.js";
 import { sendCustomerPaymentReminderEmail } from "../../lib/email.js";
 import {
@@ -38,6 +41,11 @@ import {
   sumInvoiceBilled,
   sumInvoiceOutstanding,
 } from "../../utils/sales-invoice-filters.js";
+import {
+  bdeCustomerOwnershipFilter,
+  bdeOwnsCustomer,
+  resolveCustomerAssignedAdminId,
+} from "../../utils/sales-bde-customer-scope.js";
 
 async function loadStaffUser(userId) {
   if (!userId) return null;
@@ -46,6 +54,30 @@ async function loadStaffUser(userId) {
     .select({ id: 1, name: 1, email: 1, avatarUrl: 1, role: 1, designation: 1, phoneNumber: 1, status: 1 })
     .lean();
   return user ? formatUser(user) : null;
+}
+
+async function loadUserAvatarSummaries(userIds) {
+  const ids = [...new Set(userIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0))];
+  if (!ids.length) return new Map();
+  const users = await usersTable
+    .find({ id: { $in: ids } })
+    .select({ id: 1, name: 1, avatarUrl: 1 })
+    .lean();
+  return new Map(
+    users.map((u) => [Number(u.id), { id: u.id, name: u.name, avatarUrl: u.avatarUrl ?? null }]),
+  );
+}
+
+async function attachCreatedByUsers(customers, clientRows) {
+  const creatorIds = clientRows.map((c) => resolveCustomerCreatorUserId(c));
+  const userMap = await loadUserAvatarSummaries(creatorIds);
+  return customers.map((customer, index) => {
+    const creatorId = creatorIds[index];
+    return {
+      ...customer,
+      createdByUser: creatorId ? (userMap.get(creatorId) ?? null) : null,
+    };
+  });
 }
 
 async function formatTeamMember(member) {
@@ -71,7 +103,7 @@ async function formatTeamMember(member) {
 async function findClientOr404(id, user) {
   const client = await clientsTable.findOne({ id }).lean();
   if (!client) notFound("Customer");
-  if (user?.role === "bde" && client.assignedAdminId !== user.id) {
+  if (user?.role === "bde" && !bdeOwnsCustomer(client, user.id)) {
     notFound("Customer");
   }
   return client;
@@ -241,16 +273,18 @@ async function getCustomerHub(req, res) {
 async function listCustomers(req, res) {
   const { status, type, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = {};
-  if (status) filter.status = status;
-  if (type) filter.customerType = type;
+  const clauses = [];
+  if (status) clauses.push({ status });
+  if (type) clauses.push({ customerType: type });
   if (search?.trim()) {
     const re = { $regex: search.trim(), $options: "i" };
-    filter.$or = [{ companyName: re }, { contactPerson: re }, { email: re }];
+    clauses.push({ $or: [{ companyName: re }, { contactPerson: re }, { email: re }] });
   }
   if (req.user.role === "bde") {
-    filter.assignedAdminId = req.user.id;
+    clauses.push(bdeCustomerOwnershipFilter(req.user.id));
   }
+  const filter =
+    clauses.length === 0 ? {} : clauses.length === 1 ? clauses[0] : { $and: clauses };
   const { items, total, page: pg, limit: lim } = await paginateModel(
     clientsTable,
     filter,
@@ -264,14 +298,20 @@ async function listCustomers(req, res) {
         .lean()
     : [];
   const financials = computeCustomerFinancials(invoices);
-  const customers = items.map((c) =>
-    formatClientAsCustomer(c, financials.get(c.id) ?? {}),
+  const customers = await attachCreatedByUsers(
+    items.map((c) => formatClientAsCustomer(c, financials.get(c.id) ?? {})),
+    items,
   );
   res.json({ customers, total, page: pg, limit: lim });
 }
 
 async function createCustomer(req, res) {
   const body = req.body;
+  const assignedAdminId = resolveCustomerAssignedAdminId({
+    userRole: req.user.role,
+    userId: req.user.id,
+    bodyAssignedAdminId: body.assignedAdminId,
+  });
   const { client, directConversationId } = await createClientCompanyRecord({
     companyName: optionalString(body.companyName),
     contactPerson: optionalString(body.contactPerson),
@@ -289,23 +329,24 @@ async function createCustomer(req, res) {
     status: optionalString(body.status),
     customerType: optionalString(body.type),
     leadId: body.leadId ? Number(body.leadId) : null,
+    assignedAdminId,
     createdByUserId: req.user.id,
     createdByLabel: req.user.name,
-    bootstrapDiscussion: true,
   });
   res.status(201).json({
-    ...formatClientAsCustomer(client),
-    directConversationId: directConversationId ?? null,
+    ...(await attachCreatedByUsers([formatClientAsCustomer(client)], [client]))[0],
+    directConversationId: directConversationId ?? client.directConversationId ?? null,
   });
 }
 
 async function getCustomerById(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
-  const [installments, invoices, assignedAdmin] = await Promise.all([
+  const [installments, invoices, assignedAdmin, createdByUser] = await Promise.all([
     SalesInstallments.find({ customerId: id }).sort({ dueDate: 1 }).lean(),
     SalesInvoices.find({ customerId: id }).sort({ createdAt: -1 }).lean(),
     loadStaffUser(client.assignedAdminId),
+    loadStaffUser(resolveCustomerCreatorUserId(client)),
   ]);
   const totalSales = sumInvoiceBilled(invoices);
   const outstanding = sumInvoiceOutstanding(invoices);
@@ -314,6 +355,9 @@ async function getCustomerById(req, res) {
     installments,
     invoices,
     assignedAdmin,
+    createdByUser: createdByUser
+      ? { id: createdByUser.id, name: createdByUser.name, avatarUrl: createdByUser.avatarUrl ?? null }
+      : null,
   });
 }
 
@@ -360,8 +404,17 @@ async function updateCustomer(req, res) {
   const updated = Object.keys(clientSet).length
     ? await clientsTable.findOneAndUpdate({ id }, { $set: clientSet }, { new: true }).lean()
     : client;
-  const assignedAdmin = await loadStaffUser(updated.assignedAdminId);
-  res.json({ ...formatClientAsCustomer(updated), assignedAdmin });
+  const [assignedAdmin, createdByUser] = await Promise.all([
+    loadStaffUser(updated.assignedAdminId),
+    loadStaffUser(resolveCustomerCreatorUserId(updated)),
+  ]);
+  res.json({
+    ...formatClientAsCustomer(updated),
+    assignedAdmin,
+    createdByUser: createdByUser
+      ? { id: createdByUser.id, name: createdByUser.name, avatarUrl: createdByUser.avatarUrl ?? null }
+      : null,
+  });
 }
 
 async function deleteCustomer(req, res) {
@@ -385,7 +438,6 @@ async function provisionCustomerPortal(req, res) {
     companyName: optionalString(body.companyName),
     createdByUserId: req.user.id,
     createdByLabel: req.user.name,
-    bootstrapDiscussion: true,
   });
 
   res.status(201).json({
@@ -448,6 +500,40 @@ async function remindCustomer(req, res) {
   });
 }
 
+async function bootstrapCustomerDiscussion(req, res) {
+  const id = parseIdParam(req.params.id, "customer id");
+  const client = await findClientOr404(id, req.user);
+  if (!client.userId) {
+    badRequest("Enable client portal before creating a discussion channel.", "portal");
+  }
+
+  const staffUserId = resolveDiscussionStaffUserId({
+    assignedAdminId: client.assignedAdminId,
+    createdByUserId: client.createdBy ?? req.user.id,
+    portalUserId: client.userId,
+  });
+  if (!staffUserId) {
+    badRequest("No valid staff account to own this client discussion.", "staffUserId");
+  }
+
+  const directConversationId = await bootstrapClientDirectDiscussion({
+    staffUserId,
+    portalUserId: client.userId,
+    companyName: client.companyName,
+    welcomeAuthorId: req.user.id,
+    clientId: client.id,
+  });
+  if (!directConversationId) {
+    badRequest("Discussion channel could not be created.", "discussion");
+  }
+
+  const refreshed = await clientsTable.findOne({ id }).lean();
+  res.json({
+    directConversationId,
+    customer: formatClientAsCustomer(refreshed),
+  });
+}
+
 export {
   listCustomers,
   createCustomer,
@@ -456,6 +542,7 @@ export {
   updateCustomer,
   deleteCustomer,
   provisionCustomerPortal,
+  bootstrapCustomerDiscussion,
   getCustomerStatement,
   remindCustomer,
 };

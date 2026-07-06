@@ -6,7 +6,7 @@ import {
   usersTable,
 } from "../../models/schema/index.js";
 import { formatUser } from "../../mappers/user-format.js";
-import { notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
+import { notFound, forbidden, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { toIso } from "../../utils/mongo-list.js";
 
 const BDE_USER_SELECT = {
@@ -108,7 +108,31 @@ function buildBdeFilter(query) {
   return filter;
 }
 
+function isLeaderboardRequest(query) {
+  return query.leaderboard === "true" || query.leaderboard === "1";
+}
+
+/** BDE dashboard leaderboard — stats only, no contact/admin fields. */
+function toLeaderboardMember(member) {
+  return {
+    id: member.id,
+    name: member.name,
+    avatarUrl: member.avatarUrl ?? null,
+    designation: member.designation ?? "BDE",
+    role: member.role,
+    status: member.status,
+    revenue: member.revenue,
+    dealsClosed: member.dealsClosed,
+    pendingFollowUps: member.pendingFollowUps,
+  };
+}
+
 async function getSalesTeam(req, res) {
+  const leaderboard = isLeaderboardRequest(req.query);
+  if (req.user.role === "bde" && !leaderboard) {
+    forbidden("Sales team roster is only available to admins.");
+  }
+
   const filter = buildBdeFilter(req.query);
   const paginate = req.query.page != null || req.query.limit != null;
   const { page, limit, skip } = parsePagination(req.query);
@@ -128,7 +152,10 @@ async function getSalesTeam(req, res) {
 
   const bdeIds = bdeUsers.map((u) => u.id);
   const stats = await aggregateBdeStats(bdeIds);
-  const team = bdeUsers.map((u) => mapBdeUserToTeamMember(u, stats));
+  let team = bdeUsers.map((u) => mapBdeUserToTeamMember(u, stats));
+  if (req.user.role === "bde" && leaderboard) {
+    team = team.map(toLeaderboardMember);
+  }
 
   const totals = team.reduce(
     (acc, m) => ({
@@ -163,6 +190,9 @@ async function getSalesTeam(req, res) {
 
 async function getSalesTeamMember(req, res) {
   const userId = parseIdParam(req.params.userId, "user id");
+  if (req.user.role === "bde" && req.user.id !== userId) {
+    notFound("BDE team member");
+  }
   const user = await usersTable.findOne({ id: userId, role: "bde" }).lean();
   if (!user) notFound("BDE team member");
 

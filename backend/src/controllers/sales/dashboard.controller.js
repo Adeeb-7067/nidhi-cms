@@ -8,18 +8,10 @@ import {
   usersTable,
 } from "../../models/schema/index.js";
 import { billableInvoiceMatch } from "../../utils/sales-invoice-filters.js";
+import { buildBdeSalesScope } from "../../utils/sales-bde-customer-scope.js";
 
 async function getBdeScope(userId) {
-  const myCustomers = await clientsTable.find({ assignedAdminId: userId }).select({ id: 1 }).lean();
-  const myCustomerIds = myCustomers.map((c) => c.id);
-  return {
-    leadFilter: { $or: [{ assignedTo: userId }, { createdBy: userId }] },
-    proposalFilter: { assignedTo: userId },
-    followUpFilter: { executiveId: userId },
-    paymentFilter: { recordedBy: userId },
-    customerFilter: { assignedAdminId: userId, status: "active" },
-    invoiceFilter: { customerId: { $in: myCustomerIds } },
-  };
+  return buildBdeSalesScope(clientsTable, userId);
 }
 
 async function getDashboard(req, res) {
@@ -181,6 +173,12 @@ async function getRevenueTrend(req, res) {
 }
 
 async function getReports(req, res) {
+  const isBde = req.user.role === "bde";
+  const scope = isBde ? await getBdeScope(req.user.id) : null;
+  const lf = scope?.leadFilter ?? {};
+  const pf = scope?.paymentFilter ?? {};
+  const invF = scope?.invoiceFilter ?? {};
+
   const now = new Date();
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
@@ -194,17 +192,22 @@ async function getReports(req, res) {
     invoiceTotals,
   ] = await Promise.all([
     SalesLeads.aggregate([
+      ...(Object.keys(lf).length ? [{ $match: lf }] : []),
       { $group: { _id: { $ifNull: ["$source", "other"] }, count: { $sum: 1 } } },
       { $sort: { count: -1 } },
     ]),
-    SalesLeads.aggregate([{ $group: { _id: "$status", count: { $sum: 1 } } }]),
-    SalesPayments.aggregate([
-      { $group: { _id: "$recordedBy", revenue: { $sum: "$amount" }, payments: { $sum: 1 } } },
-      { $sort: { revenue: -1 } },
-      { $limit: 12 },
+    SalesLeads.aggregate([
+      ...(Object.keys(lf).length ? [{ $match: lf }] : []),
+      { $group: { _id: "$status", count: { $sum: 1 } } },
     ]),
     SalesPayments.aggregate([
-      { $match: { createdAt: { $gte: sixMonthsAgo } } },
+      ...(Object.keys(pf).length ? [{ $match: pf }] : []),
+      { $group: { _id: "$recordedBy", revenue: { $sum: "$amount" }, payments: { $sum: 1 } } },
+      { $sort: { revenue: -1 } },
+      { $limit: isBde ? 1 : 12 },
+    ]),
+    SalesPayments.aggregate([
+      { $match: { createdAt: { $gte: sixMonthsAgo }, ...pf } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
@@ -214,7 +217,7 @@ async function getReports(req, res) {
       { $sort: { _id: 1 } },
     ]),
     SalesInvoices.aggregate([
-      { $match: billableInvoiceMatch({ createdAt: { $gte: sixMonthsAgo } }) },
+      { $match: billableInvoiceMatch({ createdAt: { $gte: sixMonthsAgo }, ...invF }) },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
@@ -224,9 +227,12 @@ async function getReports(req, res) {
       },
       { $sort: { _id: 1 } },
     ]),
-    SalesPayments.aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }]),
+    SalesPayments.aggregate([
+      ...(Object.keys(pf).length ? [{ $match: pf }] : []),
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]),
     SalesInvoices.aggregate([
-      { $match: billableInvoiceMatch() },
+      { $match: billableInvoiceMatch(invF) },
       {
         $group: {
           _id: null,

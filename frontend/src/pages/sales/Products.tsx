@@ -44,6 +44,7 @@ import {
 import { formatCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
+import { usePermissions } from "@/modules/permissions/usePermission";
 
 type ProductForm = {
   name: string;
@@ -62,6 +63,8 @@ const emptyForm = (): ProductForm => ({
 });
 
 export default function Products() {
+  const { can } = usePermissions();
+  const canManageCatalog = can("sales_products", "edit");
   const { data, isLoading, isError, refetch } = useListProducts();
   const createProduct = useCreateProduct();
   const updateProduct = useUpdateProduct();
@@ -165,6 +168,7 @@ export default function Products() {
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        {canManageCatalog ? (
         <Card className="lg:col-span-4">
           <CardHeader>
             <CardTitle className="text-sm flex items-center gap-2">
@@ -200,8 +204,9 @@ export default function Products() {
             </Button>
           </CardContent>
         </Card>
+        ) : null}
 
-        <div className="lg:col-span-8 space-y-3">
+        <div className={canManageCatalog ? "lg:col-span-8 space-y-3" : "lg:col-span-12 space-y-3"}>
           <p className="text-xs text-muted-foreground">{activeCount} active · {products.length} total in catalog</p>
           {isLoading ? (
             <div className="space-y-2">
@@ -222,7 +227,9 @@ export default function Products() {
                     <TableHead className="text-xs text-right">Tax</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                     <TableHead className="text-xs">Created</TableHead>
-                    <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
+                    {canManageCatalog ? (
+                      <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
+                    ) : null}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -236,15 +243,20 @@ export default function Products() {
                       <TableCell className="text-xs text-right tabular-nums">{formatCurrency(p.price)}</TableCell>
                       <TableCell className="text-xs text-right">{p.taxPercent}%</TableCell>
                       <TableCell>
-                        <Switch
-                          checked={p.status === "active"}
-                          onCheckedChange={() => toggleStatus(p.id, p.status)}
-                          disabled={updateProduct.isPending}
-                        />
+                        {canManageCatalog ? (
+                          <Switch
+                            checked={p.status === "active"}
+                            onCheckedChange={() => toggleStatus(p.id, p.status)}
+                            disabled={updateProduct.isPending}
+                          />
+                        ) : (
+                          <span className="text-xs capitalize text-muted-foreground">{p.status}</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                         {formatSalesDateTime(p.createdAt)}
                       </TableCell>
+                      {canManageCatalog ? (
                       <TableCell>
                         <div className="flex items-center justify-end gap-0.5">
                           <Button
@@ -269,6 +281,7 @@ export default function Products() {
                           </Button>
                         </div>
                       </TableCell>
+                      ) : null}
                     </TableRow>
                   ))}
                 </TableBody>

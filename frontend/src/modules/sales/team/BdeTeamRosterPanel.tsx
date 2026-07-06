@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   BarChart3,
   Clock,
@@ -18,7 +19,6 @@ import {
 import { toast } from "sonner";
 import { useDeleteUser, type User } from "@/api";
 import { useSalesTeam, type SalesTeamMember } from "@/api/sales";
-import { useAuth } from "@/contexts/AuthContext";
 import { usePresence } from "@/contexts/PresenceContext";
 import { toastApiError } from "@/lib/api-error";
 import { getAdminEmployeeDetailHref } from "@/lib/employee-routes";
@@ -63,8 +63,8 @@ import { formatCompactCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { BdeTeamFormDialog } from "./BdeTeamFormDialog";
 
-function canViewAsBde(user: SalesTeamMember): boolean {
-  return user.status === "active" && user.role === "bde";
+function canViewAsBde(user: SalesTeamMember, viewerRole?: string | null): boolean {
+  return viewerRole === "super_admin" && user.status === "active" && user.role === "bde";
 }
 
 function RosterPresenceCell({ member }: { member: SalesTeamMember }) {
@@ -181,7 +181,8 @@ export function BdeTeamRosterPanel({
 }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
-  const { impersonate, isImpersonating } = useAuth();
+  const { user: viewer, impersonate, isImpersonating } = useAuth();
+  const isTeamAdmin = viewer?.role === "super_admin" || viewer?.role === "hr";
   const { getPresence } = usePresence();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -216,7 +217,7 @@ export function BdeTeamRosterPanel({
 
   const handleViewAs = async (member: SalesTeamMember, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!canViewAsBde(member)) return;
+    if (!canViewAsBde(member, viewer?.role)) return;
     if (isImpersonating) {
       toast.error("Exit the current view-as session first.");
       return;
@@ -385,7 +386,7 @@ export function BdeTeamRosterPanel({
           >
             <Eye className="h-3.5 w-3.5" />
           </RosterActionButton>
-          {onOpenSalesDetail ? (
+          {onOpenSalesDetail && isTeamAdmin ? (
             <RosterActionButton
               label="Sales performance"
               className="text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
@@ -397,7 +398,7 @@ export function BdeTeamRosterPanel({
               <LineChart className="h-3.5 w-3.5" />
             </RosterActionButton>
           ) : null}
-          {canViewAsBde(member) ? (
+          {isTeamAdmin && canViewAsBde(member, viewer?.role) ? (
             <RosterActionButton
               label="View as BDE"
               className="text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
@@ -407,27 +408,31 @@ export function BdeTeamRosterPanel({
               <LogIn className="h-3.5 w-3.5" />
             </RosterActionButton>
           ) : null}
-          <RosterActionButton
-            label="Edit"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditMember(memberToUser(member));
-              setIsDialogOpen(true);
-            }}
-          >
-            <Edit className="h-3.5 w-3.5" />
-          </RosterActionButton>
-          <RosterActionButton
-            label={member.status !== "active" ? "Already deactivated" : "Deactivate"}
-            className="text-red-500 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-30"
-            disabled={member.status !== "active"}
-            onClick={(e) => {
-              e.stopPropagation();
-              setDeleteId(member.id);
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </RosterActionButton>
+          {isTeamAdmin ? (
+            <RosterActionButton
+              label="Edit"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditMember(memberToUser(member));
+                setIsDialogOpen(true);
+              }}
+            >
+              <Edit className="h-3.5 w-3.5" />
+            </RosterActionButton>
+          ) : null}
+          {isTeamAdmin ? (
+            <RosterActionButton
+              label={member.status !== "active" ? "Already deactivated" : "Deactivate"}
+              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-30"
+              disabled={member.status !== "active"}
+              onClick={(e) => {
+                e.stopPropagation();
+                setDeleteId(member.id);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </RosterActionButton>
+          ) : null}
         </div>
       ),
     },
@@ -480,18 +485,20 @@ export function BdeTeamRosterPanel({
             </SelectContent>
           </Select>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          className={portalActionButtonClass("bg-primary text-primary-foreground")}
-          onClick={() => {
-            setEditMember(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Add BDE
-        </Button>
+        {isTeamAdmin ? (
+          <Button
+            type="button"
+            size="sm"
+            className={portalActionButtonClass("bg-primary text-primary-foreground")}
+            onClick={() => {
+              setEditMember(null);
+              setIsDialogOpen(true);
+            }}
+          >
+            <Plus className="h-3.5 w-3.5 mr-1" />
+            Add BDE
+          </Button>
+        ) : null}
       </div>
 
       <PortalContentCard className="p-0 overflow-hidden">

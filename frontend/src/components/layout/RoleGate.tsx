@@ -59,6 +59,18 @@ export function RoleGate({
     return <>{children}</>;
   }
 
+  const pathOnly = location.split("?")[0];
+  if (user.role === "bde") {
+    if (
+      pathOnly === "/sales" ||
+      pathOnly === "/sales/settings" ||
+      pathOnly === "/sales/team" ||
+      pathOnly.startsWith("/sales/team/")
+    ) {
+      return <Redirect to="/sales/bde" replace />;
+    }
+  }
+
   if (permModule) {
     if (isLoading) {
       return (

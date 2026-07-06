@@ -26,12 +26,22 @@ const ALL_MODULE_ACTIONS = cmsModules.flatMap((module) =>
   cmsActions.map((action) => ({ module, action })),
 );
 
-const SALES_BDE_GRANTS = salesModules.flatMap((module) => [
-  { module, action: "view" },
-  { module, action: "create" },
-  { module, action: "edit" },
-  { module, action: "delete" },
-]);
+const SALES_BDE_EXCLUDED = new Set(["sales_team"]);
+const SALES_BDE_VIEW_ONLY = new Set(["sales_settings", "sales_products"]);
+
+const SALES_BDE_GRANTS = salesModules
+  .filter((module) => !SALES_BDE_EXCLUDED.has(module))
+  .flatMap((module) => {
+    if (SALES_BDE_VIEW_ONLY.has(module)) {
+      return [{ module, action: "view" }];
+    }
+    return [
+      { module, action: "view" },
+      { module, action: "create" },
+      { module, action: "edit" },
+      { module, action: "delete" },
+    ];
+  });
 
 const DEV_PORTAL_VIEW = [
   "dev_workspace",
@@ -263,6 +273,21 @@ export async function backfillSystemTemplatePermissions() {
         module: normalizePermissionModule(g.module),
         action: g.action,
       });
+      have.add(key);
+    }
+
+    if (tpl.grants !== "all" && existing.isSystem) {
+      const expected = new Set(
+        grants.map((g) => `${normalizePermissionModule(g.module)}:${g.action}`),
+      );
+      let pruned = false;
+      for (const row of rows) {
+        const key = `${normalizePermissionModule(row.module)}:${row.action}`;
+        if (expected.has(key)) continue;
+        await hrmPermissionsTable.deleteOne({ id: row.id });
+        pruned = true;
+      }
+      if (pruned) evictPermissionCache(null);
     }
   }
 }

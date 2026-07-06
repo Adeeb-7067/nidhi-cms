@@ -1,12 +1,14 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { format } from "date-fns";
-import { Plus, FileText, Send, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, FileText, Send, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import {
   Table,
   TableBody,
@@ -36,8 +38,6 @@ import {
 } from "@/modules/sales/components";
 import { resolveProposalTotal } from "@/modules/sales/utils";
 
-const PAGE_SIZE = 20;
-
 const STATUS_ORDER: (ProposalStatus | "all")[] = [
   "all",
   "draft",
@@ -54,19 +54,19 @@ export default function Proposals() {
   const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [sendingId, setSendingId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
 
-  useEffect(() => { setPage(1); }, [search, statusTab]);
+  useEffect(() => { resetPage(); }, [search, statusTab, resetPage]);
 
   const listParams = {
     search: search || undefined,
     status: statusTab === "all" ? undefined : (statusTab as ProposalStatus),
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   };
 
   const { data, isLoading, isError, refetch } = useListProposals(listParams);
@@ -76,7 +76,6 @@ export default function Proposals() {
 
   const proposals = data?.proposals ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const statusCounts = useMemo(() => {
     const pbs = dashData?.proposalByStatus ?? {};
@@ -311,21 +310,14 @@ export default function Proposals() {
               </TableBody>
             </Table>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages} · {total} proposal{total === 1 ? "" : "s"}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <DataPagination
+            page={page}
+            total={total}
+            limit={limit}
+            loadedRowCount={proposals.length}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+          />
         </div>
       )}
     </PortalPageShell>

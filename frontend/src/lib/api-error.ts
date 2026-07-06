@@ -13,6 +13,26 @@ type ErrorPayload = {
 
 export const DEFAULT_API_ERROR = "Something went wrong. Please try again.";
 
+/** Human-readable labels for API `field` keys (used in conflict / validation toasts). */
+export const API_FIELD_LABELS: Record<string, string> = {
+  email: "Contact email",
+  portalEmail: "Portal login email",
+  password: "Portal password",
+  companyName: "Company name",
+  companyCode: "Company code",
+  phone: "Phone number",
+  gstin: "GSTIN",
+  gstNumber: "GSTIN",
+  contactPerson: "Contact person",
+};
+
+export type ParsedApiError = {
+  message: string;
+  field?: string;
+  code?: string;
+  status?: number;
+};
+
 const STATUS_HINTS: Record<number, string> = {
   400: "Check your input and try again.",
   401: "Your session expired. Please sign in again.",
@@ -39,6 +59,31 @@ function firstDetailMessage(details: Record<string, string[]>): string | undefin
   return undefined;
 }
 
+export function apiFieldLabel(field: string): string {
+  return (
+    API_FIELD_LABELS[field] ??
+    field.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())
+  );
+}
+
+function enrichMessageWithField(payload: ErrorPayload | undefined, message: string): string {
+  if (!payload?.field) return message;
+  const label = apiFieldLabel(payload.field);
+  const lowerMsg = message.toLowerCase();
+  if (
+    lowerMsg.includes(label.toLowerCase()) ||
+    lowerMsg.includes(payload.field.toLowerCase())
+  ) {
+    return message;
+  }
+  return `${label}: ${message}`;
+}
+
+function conflictHintForField(field: string): string {
+  const label = apiFieldLabel(field);
+  return `${label} is already in use. Choose a different value or open the existing record.`;
+}
+
 /** Extract a user-facing message from an API error JSON body or plain text. */
 export function payloadMessage(data: unknown): string | undefined {
   if (typeof data === "string") {
@@ -53,7 +98,7 @@ export function payloadMessage(data: unknown): string | undefined {
     return p.message.trim();
   }
 
-  const msg =
+  return (
     p.error?.trim() ||
     p.message?.trim() ||
     (Array.isArray(p.errors) && p.errors.length
@@ -61,17 +106,14 @@ export function payloadMessage(data: unknown): string | undefined {
         ? p.errors[0].trim()
         : p.errors[0]?.message?.trim()
       : undefined) ||
-    (p.details ? firstDetailMessage(p.details) : undefined);
-
-  if (!msg) return undefined;
-
-  if (p.field && !msg.toLowerCase().includes(String(p.field).toLowerCase())) {
-    return `${msg} (${p.field})`;
-  }
-  return msg;
+    (p.details ? firstDetailMessage(p.details) : undefined)
+  );
 }
 
-function statusHint(status: number, fallback: string): string {
+function statusHint(status: number, fallback: string, payload?: ErrorPayload): string {
+  if (status === 409 && payload?.field) {
+    return conflictHintForField(payload.field);
+  }
   return STATUS_HINTS[status] ?? fallback;
 }
 
@@ -84,26 +126,56 @@ function isApiLikeError(error: unknown): error is { status: number; data?: unkno
   return isRecord(error) && typeof error.status === "number";
 }
 
-/** User-facing message from API errors, network failures, or generic Error. */
-export function getApiErrorMessage(error: unknown, fallback = DEFAULT_API_ERROR): string {
+function errorPayload(error: unknown): ErrorPayload | undefined {
+  if (!isApiLikeError(error) || !isRecord(error.data)) return undefined;
+  return error.data as ErrorPayload;
+}
+
+/** Structured API error for toasts and inline form field messages. */
+export function parseApiError(error: unknown, fallback = DEFAULT_API_ERROR): ParsedApiError {
   if (isApiLikeError(error)) {
-    const fromBody = payloadMessage(error.data);
-    if (fromBody) return fromBody;
-    return statusHint(error.status, fallback);
+    const payload = errorPayload(error);
+    let message =
+      payloadMessage(error.data) ??
+      (error instanceof Error && error.message
+        ? stripHttpErrorPrefix(error.message.trim())
+        : undefined);
+
+    if (!message || message.startsWith("HTTP ")) {
+      message = statusHint(error.status, fallback, payload);
+    } else {
+      message = enrichMessageWithField(payload, message);
+    }
+
+    return {
+      message,
+      field: payload?.field,
+      code: payload?.code,
+      status: error.status,
+    };
   }
 
   if (error instanceof Error) {
     if (error.name === "ResponseParseError") {
-      return fallback;
+      return { message: fallback };
     }
     if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
-      return "Cannot reach the server. Check that the API is running and refresh the page.";
+      return {
+        message: "Cannot reach the server. Check that the API is running and refresh the page.",
+      };
     }
     const trimmed = stripHttpErrorPrefix(error.message.trim());
-    if (trimmed && !trimmed.startsWith("HTTP ")) return trimmed;
+    if (trimmed && !trimmed.startsWith("HTTP ")) {
+      return { message: trimmed };
+    }
   }
 
-  return fallback;
+  return { message: fallback };
+}
+
+/** User-facing message from API errors, network failures, or generic Error. */
+export function getApiErrorMessage(error: unknown, fallback = DEFAULT_API_ERROR): string {
+  return parseApiError(error, fallback).message;
 }
 
 /** Parse a non-ok fetch Response into a friendly message (for raw fetch calls). */

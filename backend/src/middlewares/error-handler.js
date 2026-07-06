@@ -2,29 +2,14 @@ import { ZodError } from "zod";
 import { isHttpError } from "../lib/http-error.js";
 import { UPLOAD_MAX_BYTES } from "../config/upload-limits.js";
 import { formatZodError, toApiErrorBody } from "../utils/route-errors.js";
+import {
+  duplicateKeyToApiBody,
+  isMongoDuplicateKeyError,
+} from "../utils/mongo-duplicate-error.js";
 
 const UPLOAD_MAX_MB = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024));
-function isMongoDuplicateKey(err) {
-  return typeof err === "object" && err !== null && err.code === 11e3;
-}
 function duplicateKeyMessage(err) {
-  const keys = err.keyPattern ? Object.keys(err.keyPattern) : [];
-  if (keys.includes("email")) {
-    return {
-      message: "This email is already registered. Use a different email or sign in to the existing account.",
-      field: "email"
-    };
-  }
-  if (keys.includes("employeeId")) {
-    return {
-      message: "This employee ID is already in use.",
-      field: "employeeId"
-    };
-  }
-  if (keys.includes("id")) {
-    return { message: "A record with this identifier already exists." };
-  }
-  return { message: "This value is already in use. Please change it and try again." };
+  return duplicateKeyToApiBody(err);
 }
 function isCastError(err) {
   return typeof err === "object" && err !== null && err.name === "CastError";
@@ -90,7 +75,7 @@ function errorHandler(err, req, res, _next) {
     res.status(mapped.status).json({ error: mapped.message, code: "UPLOAD_ERROR" });
     return;
   }
-  if (isMongoDuplicateKey(err)) {
+  if (isMongoDuplicateKeyError(err)) {
     const { message, field } = duplicateKeyMessage(err);
     res.status(409).json({
       error: message,

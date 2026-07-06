@@ -1,10 +1,12 @@
 import { useMemo, useState, useEffect } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import {
   Table,
   TableBody,
@@ -26,8 +28,6 @@ import {
   InvoiceFormSheet,
 } from "@/modules/sales/components";
 
-const PAGE_SIZE = 20;
-
 type InvoiceStatus = "paid" | "unpaid" | "partial" | "overdue" | "cancelled";
 
 const STATUS_TABS: (InvoiceStatus | "all")[] = ["all", "unpaid", "partial", "paid", "overdue", "cancelled"];
@@ -38,23 +38,22 @@ export default function Invoices() {
   const [statusTab, setStatusTab] = useState<string>(
     initialStatus && STATUS_TABS.includes(initialStatus as InvoiceStatus | "all") ? initialStatus : "all",
   );
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [createOpen, setCreateOpen] = useState(false);
 
-  useEffect(() => { setPage(1); }, [search, statusTab]);
+  useEffect(() => { resetPage(); }, [search, statusTab, resetPage]);
 
   const listParams = {
     search: search || undefined,
     status: statusTab === "all" ? undefined : (statusTab as InvoiceStatus),
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   };
 
   const { data: invData, isLoading, isError, refetch } = useListInvoices(listParams);
   const { data: dashData } = useSalesDashboard();
   const invoices = invData?.invoices ?? [];
   const total = invData?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const statusCounts = useMemo(() => {
     const ibs = dashData?.invoiceByStatus ?? {};
@@ -121,6 +120,7 @@ export default function Invoices() {
       ) : total === 0 ? (
         <SalesEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="New invoice" onAction={() => setCreateOpen(true)} />
       ) : (
+        <>
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -168,22 +168,16 @@ export default function Invoices() {
               ))}
             </TableBody>
           </Table>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages} · {total} invoice{total === 1 ? "" : "s"}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
+        <DataPagination
+          page={page}
+          total={total}
+          limit={limit}
+          loadedRowCount={invoices.length}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+        />
+        </>
       )}
 
       <InvoiceFormSheet open={createOpen} onOpenChange={setCreateOpen} />

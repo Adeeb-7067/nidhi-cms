@@ -18,6 +18,7 @@ import {
 import { customerProposalOwnershipFilter } from "../utils/sales-proposal-links.js";
 import { logger } from "../lib/logger.js";
 import { HttpError } from "../lib/http-error.js";
+import { duplicateKeyToHttpError } from "../utils/mongo-duplicate-error.js";
 
 function optionalString(value) {
   if (value == null) return null;
@@ -82,13 +83,25 @@ export async function deleteClientCompany(client) {
   return { success: true };
 }
 
+/** Staff user who should own the 1:1 client discussion channel. */
+export function resolveDiscussionStaffUserId({ assignedAdminId, createdByUserId, portalUserId }) {
+  for (const id of [assignedAdminId, createdByUserId]) {
+    const staffId = Number(id);
+    if (!Number.isFinite(staffId) || staffId <= 0) continue;
+    if (staffId === portalUserId) continue;
+    return staffId;
+  }
+  return null;
+}
+
 async function persistDirectConversationId(clientId, directConversationId) {
   if (!clientId || !directConversationId) return;
   await clientsTable.updateOne({ id: clientId }, { $set: { directConversationId } });
 }
 
 /**
- * Open a direct 1:1 discussion between the creating staff user and the client portal account.
+ * Open a direct 1:1 discussion between staff and the client portal account.
+ * Only runs when callers pass bootstrapDiscussion: true (e.g. POST .../bootstrap-discussion).
  */
 export async function bootstrapClientDirectDiscussion({
   staffUserId,
@@ -97,9 +110,17 @@ export async function bootstrapClientDirectDiscussion({
   welcomeAuthorId,
   clientId,
 }) {
-  if (!staffUserId || !portalUserId || staffUserId === portalUserId) return null;
+  const resolvedStaffId = Number(staffUserId);
+  const resolvedPortalId = Number(portalUserId);
+  if (!resolvedStaffId || !resolvedPortalId || resolvedStaffId === resolvedPortalId) {
+    logger.warn(
+      { staffUserId, portalUserId, clientId },
+      "Skipped client discussion bootstrap: invalid or matching staff/portal user ids",
+    );
+    return null;
+  }
 
-  const conversation = await getOrCreateDirectConversation(staffUserId, portalUserId);
+  const conversation = await getOrCreateDirectConversation(resolvedStaffId, resolvedPortalId);
   if (!conversation?.id) return null;
 
   const existingMessages = await commentsTable.countDocuments({
@@ -156,19 +177,29 @@ export async function createClientCompanyRecord(params) {
     });
   }
 
-  const duplicate = await clientsTable.findOne({ email: contactEmail }).lean();
+  const duplicate = await clientsTable
+    .findOne({ email: contactEmail })
+    .select({ id: 1, companyName: 1 })
+    .lean();
   if (duplicate) {
     throw new HttpError(
       409,
-      "A company with this contact email already exists. Open it from Customers or Companies.",
+      `Contact email "${contactEmail}" is already used by "${duplicate.companyName}" (company #${duplicate.id}). Open Customers or Companies.`,
       { code: "CONFLICT", field: "email" },
     );
   }
 
   if (enablePortal) {
-    const portalDup = await usersTable.findOne({ email: portalEmail }).select({ id: 1 }).lean();
+    const portalDup = await usersTable
+      .findOne({ email: portalEmail })
+      .select({ id: 1, role: 1 })
+      .lean();
     if (portalDup) {
-      throw new HttpError(409, "Portal login email is already in use.", { code: "CONFLICT", field: "portalEmail" });
+      throw new HttpError(
+        409,
+        `Portal login email "${portalEmail}" is already registered (${portalDup.role} account, user #${portalDup.id}).`,
+        { code: "CONFLICT", field: "portalEmail" },
+      );
     }
   }
 
@@ -187,10 +218,13 @@ export async function createClientCompanyRecord(params) {
     }
 
     clientId = await getNextSequence("clients");
+    const assignedAdminId =
+      params.assignedAdminId != null ? Number(params.assignedAdminId) : null;
+    const companyCode = optionalString(params.companyCode);
     const client = await clientsTable.create({
       id: clientId,
       companyName,
-      companyCode: optionalString(params.companyCode),
+      ...(companyCode ? { companyCode } : {}),
       contactPerson,
       primaryContact: optionalString(params.primaryContact) ?? contactPerson,
       email: contactEmail,
@@ -205,25 +239,38 @@ export async function createClientCompanyRecord(params) {
       status: optionalString(params.status) ?? "active",
       customerType: optionalString(params.customerType) ?? "corporate",
       leadId: params.leadId != null ? Number(params.leadId) : null,
+      assignedAdminId: Number.isFinite(assignedAdminId) ? assignedAdminId : null,
       portalLogin: enablePortal,
       userId: portalUserId,
       createdBy: params.createdByUserId ?? null,
     });
 
     let directConversationId = null;
-    if (enablePortal && portalUserId && params.bootstrapDiscussion !== false && params.createdByUserId) {
-      try {
-        directConversationId = await bootstrapClientDirectDiscussion({
-          staffUserId: params.createdByUserId,
-          portalUserId,
-          companyName,
-          welcomeAuthorId: params.createdByUserId,
-          clientId,
-        });
-      } catch (err) {
+    if (enablePortal && portalUserId && params.bootstrapDiscussion === true) {
+      const discussionStaffUserId = resolveDiscussionStaffUserId({
+        assignedAdminId: client.assignedAdminId,
+        createdByUserId: params.createdByUserId,
+        portalUserId,
+      });
+      if (discussionStaffUserId) {
+        try {
+          directConversationId = await bootstrapClientDirectDiscussion({
+            staffUserId: discussionStaffUserId,
+            portalUserId,
+            companyName,
+            welcomeAuthorId: params.createdByUserId ?? discussionStaffUserId,
+            clientId,
+          });
+        } catch (err) {
+          logger.error(
+            { err, clientId, portalUserId, discussionStaffUserId },
+            "Client company created but direct discussion bootstrap failed",
+          );
+        }
+      } else {
         logger.warn(
-          { err, clientId, portalUserId, createdBy: params.createdByUserId },
-          "Client company created but direct discussion bootstrap failed",
+          { clientId, portalUserId, createdBy: params.createdByUserId },
+          "Portal enabled but no valid staff user for discussion bootstrap",
         );
       }
     }
@@ -239,6 +286,9 @@ export async function createClientCompanyRecord(params) {
   } catch (err) {
     if (clientId) await clientsTable.deleteOne({ id: clientId }).catch(() => {});
     if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
+    if (err instanceof HttpError) throw err;
+    const dupErr = duplicateKeyToHttpError(err);
+    if (dupErr) throw dupErr;
     throw err;
   }
 }
@@ -260,7 +310,11 @@ export async function enablePortalForClientCompany(params) {
 
   const portalDup = await usersTable.findOne({ email: portalEmail.toLowerCase() }).select({ id: 1 }).lean();
   if (portalDup) {
-    throw new HttpError(409, "Portal login email is already in use.", { code: "CONFLICT", field: "portalEmail" });
+    throw new HttpError(
+      409,
+      `Portal login email "${portalEmail}" is already registered to another user account.`,
+      { code: "CONFLICT", field: "portalEmail" },
+    );
   }
 
   let portalUserId = null;
@@ -288,20 +342,27 @@ export async function enablePortalForClientCompany(params) {
       .lean();
 
     let directConversationId = updated.directConversationId ?? null;
-    if (params.bootstrapDiscussion !== false && params.createdByUserId && !directConversationId) {
-      try {
-        directConversationId = await bootstrapClientDirectDiscussion({
-          staffUserId: params.createdByUserId,
-          portalUserId,
-          companyName: updated.companyName,
-          welcomeAuthorId: params.createdByUserId,
-          clientId: client.id,
-        });
-      } catch (err) {
-        logger.warn(
-          { err, clientId: client.id, portalUserId },
-          "Portal enabled but direct discussion bootstrap failed",
-        );
+    if (params.bootstrapDiscussion === true && !directConversationId) {
+      const discussionStaffUserId = resolveDiscussionStaffUserId({
+        assignedAdminId: updated.assignedAdminId,
+        createdByUserId: params.createdByUserId,
+        portalUserId,
+      });
+      if (discussionStaffUserId) {
+        try {
+          directConversationId = await bootstrapClientDirectDiscussion({
+            staffUserId: discussionStaffUserId,
+            portalUserId,
+            companyName: updated.companyName,
+            welcomeAuthorId: params.createdByUserId ?? discussionStaffUserId,
+            clientId: client.id,
+          });
+        } catch (err) {
+          logger.error(
+            { err, clientId: client.id, portalUserId, discussionStaffUserId },
+            "Portal enabled but direct discussion bootstrap failed",
+          );
+        }
       }
     }
 
@@ -312,6 +373,9 @@ export async function enablePortalForClientCompany(params) {
     return { client: updated, portalUserId, directConversationId };
   } catch (err) {
     if (portalUserId) await usersTable.deleteOne({ id: portalUserId }).catch(() => {});
+    if (err instanceof HttpError) throw err;
+    const dupErr = duplicateKeyToHttpError(err);
+    if (dupErr) throw dupErr;
     throw err;
   }
 }

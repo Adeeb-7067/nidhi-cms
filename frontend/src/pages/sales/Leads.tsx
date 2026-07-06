@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Plus, Users, Upload, Pencil, Eye, Trash2, ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
+import { Plus, Users, Upload, Pencil, Eye, Trash2, Download, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
@@ -32,6 +32,8 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
 import { useDeleteLead, useListLeads, salesKeys, type Lead, type LeadStatus } from "@/api/sales";
 import {
   LEAD_STATUS_LABELS,
@@ -44,14 +46,12 @@ import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
-  LeadTeamAvatars,
+  ExecutiveAvatar,
   SalesEmptyState,
   LeadFormModal,
   BulkLeadActions,
   LeadImportDialog,
 } from "@/modules/sales/components";
-
-const PAGE_SIZE = 20;
 
 function csvCell(value: string | number | null | undefined): string {
   const s = value == null ? "" : String(value);
@@ -82,7 +82,7 @@ function downloadLeadsCsv(leads: Lead[]) {
 export default function SalesLeads() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<LeadStatus | "all">("all");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
@@ -92,19 +92,19 @@ export default function SalesLeads() {
 
   const qc = useQueryClient();
 
-  useEffect(() => { setPage(1); }, [search, statusTab]);
+  useEffect(() => { resetPage(); }, [search, statusTab, resetPage]);
 
   const listParams = {
     search: search || undefined,
     status: statusTab !== "all" ? statusTab : undefined,
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   };
 
   const exportLeads = async () => {
     setExporting(true);
     try {
-      const exportParams = { ...listParams, page: 1, limit: 1000 };
+      const exportParams = { ...listParams, page: 1, limit: API_PAGE_LIMIT_CAP };
       const qs = new URLSearchParams(
         Object.entries(exportParams).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
       ).toString();
@@ -158,7 +158,6 @@ export default function SalesLeads() {
   const filtered = data?.leads ?? [];
 
   const totalCount = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
   const toggleAll = () => {
@@ -287,7 +286,8 @@ export default function SalesLeads() {
                   <TableHead className="text-xs">Source</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                   <TableHead className="text-xs">Priority</TableHead>
-                  <TableHead className="text-xs">Team</TableHead>
+                  <TableHead className="text-xs">Assigned to</TableHead>
+                  <TableHead className="text-xs">Created by</TableHead>
                   <TableHead className="text-xs text-right">Expected value</TableHead>
                   <TableHead className="text-xs">Next reminder</TableHead>
                   <TableHead className="text-xs">Created</TableHead>
@@ -331,10 +331,24 @@ export default function SalesLeads() {
                       <SalesStatusBadge variant="priority" value={lead.priority} />
                     </TableCell>
                     <TableCell>
-                      <LeadTeamAvatars
-                        assigned={lead.assignedToUser}
-                        creator={lead.createdByUser}
-                      />
+                      {lead.assignedToUser ? (
+                        <ExecutiveAvatar
+                          name={lead.assignedToUser.name}
+                          avatarUrl={lead.assignedToUser.avatarUrl}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {lead.createdByUser ? (
+                        <ExecutiveAvatar
+                          name={lead.createdByUser.name}
+                          avatarUrl={lead.createdByUser.avatarUrl}
+                        />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-xs text-right font-medium tabular-nums">
                       {formatCompactCurrency(lead.expectedValue)}
@@ -389,21 +403,14 @@ export default function SalesLeads() {
               </TableBody>
             </Table>
           </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages} · {totalCount} lead{totalCount === 1 ? "" : "s"}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <DataPagination
+            page={page}
+            total={totalCount}
+            limit={limit}
+            loadedRowCount={filtered.length}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+          />
         </div>
       )}
 

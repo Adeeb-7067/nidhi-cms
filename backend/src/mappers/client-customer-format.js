@@ -1,4 +1,12 @@
 /** Map unified Clients record to sales customer API shape. */
+export function resolveCustomerCreatorUserId(client) {
+  const createdBy = Number(client?.createdBy);
+  if (Number.isFinite(createdBy) && createdBy > 0) return createdBy;
+  const assignedAdminId = Number(client?.assignedAdminId);
+  if (Number.isFinite(assignedAdminId) && assignedAdminId > 0) return assignedAdminId;
+  return null;
+}
+
 export function formatClientAsCustomer(client, financials = {}) {
   if (!client) return null;
   return {
@@ -18,6 +26,7 @@ export function formatClientAsCustomer(client, financials = {}) {
     portalLogin: Boolean(client.portalLogin),
     directConversationId: client.directConversationId ?? null,
     assignedAdminId: client.assignedAdminId ?? null,
+    createdBy: client.createdBy ?? null,
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
     totalSales: financials.totalSales ?? 0,

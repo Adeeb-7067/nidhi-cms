@@ -829,16 +829,27 @@ async function getExperienceLetters(req, res) {
 
 async function postExperienceLetterPreview(req, res) {
   const userId = parseIdParam(req.body.userId, "employee id");
-  const { relievingDate, letterType, additionalNotes } = req.body ?? {};
-  res.json(await lettersService.previewExperienceLetter({ userId, relievingDate, letterType, additionalNotes }));
+  const { relievingDate, joiningDate, offeredCtc, letterType, additionalNotes } = req.body ?? {};
+  res.json(
+    await lettersService.previewExperienceLetter({
+      userId,
+      relievingDate,
+      joiningDate,
+      offeredCtc,
+      letterType,
+      additionalNotes,
+    }),
+  );
 }
 
 async function postExperienceLetter(req, res) {
   const userId = parseIdParam(req.body.userId, "employee id");
-  const { relievingDate, letterType, additionalNotes } = req.body ?? {};
+  const { relievingDate, joiningDate, offeredCtc, letterType, additionalNotes } = req.body ?? {};
   const letter = await lettersService.createExperienceLetter(req.user, {
     userId,
     relievingDate,
+    joiningDate,
+    offeredCtc,
     letterType,
     additionalNotes,
   });

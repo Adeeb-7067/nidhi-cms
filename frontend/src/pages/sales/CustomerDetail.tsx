@@ -25,6 +25,7 @@ import {
   useListProposals,
   useListPayments,
   useDeleteCustomer,
+  useBootstrapCustomerDiscussion,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
@@ -65,6 +66,7 @@ export default function CustomerDetail() {
   const [proposalOpen, setProposalOpen] = useState(false);
 
   const deleteCustomer = useDeleteCustomer();
+  const bootstrapDiscussion = useBootstrapCustomerDiscussion();
 
   const { data: customer, isLoading, isError } = useGetCustomer(customerId, !!customerId);
   const { data: hub, isLoading: hubLoading } = useGetCustomerHub(customerId, !!customerId);
@@ -113,6 +115,18 @@ export default function CustomerDetail() {
     }
   };
 
+  const handleCreateDiscussion = async () => {
+    try {
+      const result = await bootstrapDiscussion.mutateAsync(customer.id);
+      toast.success("Discussion channel created");
+      if (result.directConversationId) {
+        navigate(getDiscussionsHref(null, { directConversationId: result.directConversationId }));
+      }
+    } catch (err) {
+      toastApiError(err, "Failed to create discussion channel");
+    }
+  };
+
   const ticketCount = hub?.tickets.length ?? 0;
   const taskCount = hub?.tasks.length ?? 0;
   const teamCount = hub?.teamMembers.length ?? 0;
@@ -135,18 +149,27 @@ export default function CustomerDetail() {
               New proposal
             </Button>
             {customer.portalUserId ? (
-              <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
-                <Link
-                  href={
-                    customer.directConversationId
-                      ? getDiscussionsHref(null, { directConversationId: customer.directConversationId })
-                      : "/discussions"
-                  }
+              customer.directConversationId ? (
+                <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
+                  <Link
+                    href={getDiscussionsHref(null, { directConversationId: customer.directConversationId })}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Open discussion
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 gap-1.5"
+                  onClick={() => void handleCreateDiscussion()}
+                  disabled={bootstrapDiscussion.isPending}
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
-                  Open discussion
-                </Link>
-              </Button>
+                  Create discussion
+                </Button>
+              )
             ) : null}
             {!customer.portalUserId ? (
               <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setPortalOpen(true)}>
@@ -272,7 +295,11 @@ export default function CustomerDetail() {
               <div className="rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground space-y-0.5">
                 <p>Company record #{customer.id} (shared with Admin → Companies)</p>
                 {customer.portalUserId ? (
-                  <p>Portal access enabled — direct discussion channel available under Discussions</p>
+                  customer.directConversationId ? (
+                    <p>Portal enabled — client discussion channel is active</p>
+                  ) : (
+                    <p>Portal enabled — use Create discussion to open a client chat channel</p>
+                  )
                 ) : (
                   <p>Portal access not enabled — use Enable portal to add login</p>
                 )}

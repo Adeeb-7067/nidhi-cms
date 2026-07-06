@@ -709,6 +709,24 @@ export default function LeadDetail() {
                       )}
                     </div>
                   </div>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
+                      style={{ background: P.blueLight, color: P.blue }}
+                    >
+                      {lead.createdByUser ? lead.createdByUser.name.charAt(0).toUpperCase() : "?"}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: P.blue }}>
+                        Created by
+                      </p>
+                      {lead.createdByUser ? (
+                        <p className="text-sm font-semibold" style={{ color: P.dark }}>{lead.createdByUser.name}</p>
+                      ) : (
+                        <p className="text-sm" style={{ color: P.subtle }}>Unknown</p>
+                      )}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="rounded-xl p-3 text-center" style={{ background: "#F9FAFB", border: `1px solid ${P.border}` }}>
                       <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: P.muted }}>Status</p>

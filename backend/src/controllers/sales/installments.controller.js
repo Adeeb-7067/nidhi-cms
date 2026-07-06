@@ -13,6 +13,11 @@ import {
   parseAdjustedTotal,
   parseTotalAdjustment,
 } from "../../utils/sales-totals.js";
+import {
+  bdeOwnsCustomer,
+  findBdeOwnedCustomerIds,
+  assertBdeOwnsCustomerById,
+} from "../../utils/sales-bde-customer-scope.js";
 
 function proposalFinalTotal(proposal) {
   const calculated = calcLineItemsTotal(proposal.items ?? [], proposal.discount ?? 0);
@@ -73,8 +78,7 @@ async function listInstallments(req, res) {
   if (status) filter.status = status;
   // BDE scope: only see installments for their own customers
   if (req.user.role === "bde") {
-    const myCustomers = await clientsTable.find({ assignedAdminId: req.user.id }).select({ id: 1 }).lean();
-    const myIds = myCustomers.map((c) => c.id);
+    const myIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
     if (filter.customerId != null) {
       if (!myIds.includes(Number(filter.customerId))) filter.customerId = -1;
     } else {
@@ -116,6 +120,7 @@ async function createInstallment(req, res) {
     if (!projectId && inv.projectId) projectId = inv.projectId;
   }
   if (!customerId) badRequest("customerId is required.", "customerId");
+  await assertBdeOwnsCustomerById(clientsTable, req.user, customerId);
 
   const calculatedAmount =
     body.calculatedAmount != null ? Number(body.calculatedAmount) : Number(body.dueAmount);
@@ -144,8 +149,8 @@ async function createInstallment(req, res) {
 
 async function assertBdeInstallmentAccess(installment, user) {
   if (user.role !== "bde") return;
-  const mine = await clientsTable.findOne({ id: installment.customerId, assignedAdminId: user.id }).lean();
-  if (!mine) notFound("Installment");
+  const client = await clientsTable.findOne({ id: installment.customerId }).lean();
+  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Installment");
 }
 
 async function getInstallmentById(req, res) {
@@ -222,11 +227,8 @@ async function createInstallmentsFromProposal(req, res) {
   if (!proposal) notFound("Proposal");
   if (req.user.role === "bde") {
     if (proposal.assignedTo !== req.user.id) notFound("Proposal");
-    const mine = await clientsTable.findOne({
-      id: proposal.customerId,
-      assignedAdminId: req.user.id,
-    }).lean();
-    if (!mine) notFound("Proposal");
+    const client = await clientsTable.findOne({ id: proposal.customerId }).lean();
+    if (!client || !bdeOwnsCustomer(client, req.user.id)) notFound("Proposal");
   }
   if (proposal.status !== "approved") {
     badRequest("Only approved proposals can be converted to installments.", "status");

@@ -9,6 +9,9 @@ function parseOptionalNumber(val) {
 
 async function getBdeTargets(req, res) {
   const userId = parseIdParam(req.params.userId, "user id");
+  if (req.user.role === "bde" && req.user.id !== userId) {
+    forbidden("You can only view your own targets.");
+  }
   const year = Number(req.query.year) || new Date().getFullYear();
   const targets = await SalesBdeTargets.find({ userId, year }).sort({ month: 1 }).lean();
   res.json({ targets });
@@ -57,6 +60,9 @@ async function getMyTarget(req, res) {
 }
 
 async function getAllTargetsForMonth(req, res) {
+  if (req.user.role === "bde") {
+    forbidden("Only admins can view all BDE targets.");
+  }
   const now = new Date();
   const month = Number(req.query.month) || now.getMonth() + 1;
   const year = Number(req.query.year) || now.getFullYear();

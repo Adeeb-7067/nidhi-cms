@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   formatClientAsCustomer,
   customerUpdatesToClientSet,
+  resolveCustomerCreatorUserId,
 } from "../../src/mappers/client-customer-format.js";
 
 test("formatClientAsCustomer maps unified client to sales API shape", () => {
@@ -20,6 +21,7 @@ test("formatClientAsCustomer maps unified client to sales API shape", () => {
     leadId: 7,
     userId: 3,
     assignedAdminId: 5,
+    createdBy: 9,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-02"),
   }, { totalSales: 1000, outstanding: 200 });
@@ -30,7 +32,20 @@ test("formatClientAsCustomer maps unified client to sales API shape", () => {
   assert.equal(row.location, "Mumbai");
   assert.equal(row.gstin, "27AAAAA0000A1Z5");
   assert.equal(row.portalUserId, 3);
+  assert.equal(row.createdBy, 9);
   assert.equal(row.totalSales, 1000);
+});
+
+test("resolveCustomerCreatorUserId prefers createdBy over assignedAdminId", () => {
+  assert.equal(
+    resolveCustomerCreatorUserId({ createdBy: 3, assignedAdminId: 5 }),
+    3,
+  );
+  assert.equal(
+    resolveCustomerCreatorUserId({ createdBy: null, assignedAdminId: 5 }),
+    5,
+  );
+  assert.equal(resolveCustomerCreatorUserId({}), null);
 });
 
 test("customerUpdatesToClientSet maps sales patch fields onto client columns", () => {

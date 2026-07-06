@@ -1,13 +1,8 @@
-import {
-  SalesPayments,
-  SalesInvoices,
-  SalesInstallments,
-  clientsTable,
-  getNextSequence,
-} from "../../models/schema/index.js";
+import { SalesPayments, SalesInvoices, SalesInstallments, clientsTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
+import { bdeOwnsCustomer } from "../../utils/sales-bde-customer-scope.js";
 
 async function listPayments(req, res) {
   const { search } = req.query;
@@ -85,6 +80,12 @@ function deriveInstallmentStatus(installment, newPaidAmount) {
   return "pending";
 }
 
+async function assertBdePaymentAccess(payment, user) {
+  if (user.role !== "bde") return;
+  const client = await clientsTable.findOne({ id: payment.customerId }).lean();
+  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Receipt");
+}
+
 async function recordPayment(req, res) {
   const body = req.body;
   if (!body.invoiceId) badRequest("invoiceId is required.", "invoiceId");
@@ -104,6 +105,10 @@ async function recordPayment(req, res) {
   await runInTx(async (session) => {
     const invoice = await SalesInvoices.findOne({ id: invoiceId }).session(session).lean();
     if (!invoice) notFound("Invoice");
+    if (req.user.role === "bde") {
+      const client = await clientsTable.findOne({ id: invoice.customerId }).session(session).lean();
+      if (!client || !bdeOwnsCustomer(client, req.user.id)) notFound("Invoice");
+    }
     if (invoice.status === "cancelled") badRequest("This invoice has been cancelled.", "invoiceId");
     if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
 
@@ -168,6 +173,7 @@ async function getReceiptById(req, res) {
   const id = parseIdParam(req.params.id, "payment id");
   const payment = await SalesPayments.findOne({ id }).lean();
   if (!payment) notFound("Receipt");
+  await assertBdePaymentAccess(payment, req.user);
   const [invoice, customer, installment] = await Promise.all([
     SalesInvoices.findOne({ id: payment.invoiceId }).lean(),
     clientsTable.findOne({ id: payment.customerId }).lean(),

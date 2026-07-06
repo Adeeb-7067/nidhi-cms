@@ -1,5 +1,6 @@
 import { SalesPreferences } from "../../models/schema/sales/preferences.js";
 import { badRequest } from "../../utils/route-errors.js";
+import { assertSalesAdmin } from "../../utils/sales-admin-guard.js";
 
 const DEFAULTS = {
   proposalPrefix: "PROP",
@@ -34,6 +35,7 @@ async function getSettings(_req, res) {
 }
 
 async function patchSettings(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can change automation settings.");
   const body = req.body ?? {};
   const updates = { updatedBy: req.user.id };
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { requireAuth } from "../middlewares/auth.js";
-import { requirePermission } from "../middlewares/permission.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permission.js";
 import * as configCtrl from "../controllers/sales/config.controller.js";
 import * as settingsCtrl from "../controllers/sales/settings.controller.js";
 import * as notificationsCtrl from "../controllers/sales/notifications.controller.js";
@@ -83,6 +83,7 @@ router.get("/sales/customers/:id", ...p("sales_customers"), wrap(customersCtrl.g
 router.patch("/sales/customers/:id", ...p("sales_customers", "edit"), wrap(customersCtrl.updateCustomer));
 router.delete("/sales/customers/:id", ...p("sales_customers", "delete"), wrap(customersCtrl.deleteCustomer));
 router.post("/sales/customers/:id/provision-portal", ...p("sales_customers", "edit"), wrap(customersCtrl.provisionCustomerPortal));
+router.post("/sales/customers/:id/bootstrap-discussion", ...p("sales_customers", "edit"), wrap(customersCtrl.bootstrapCustomerDiscussion));
 router.get("/sales/customers/:id/hub", ...p("sales_customers"), wrap(customersCtrl.getCustomerHub));
 router.get("/sales/customers/:id/statement", ...p("sales_customers"), wrap(customersCtrl.getCustomerStatement));
 router.post("/sales/customers/:id/remind", ...p("sales_customers", "edit"), wrap(customersCtrl.remindCustomer));
@@ -100,6 +101,7 @@ router.post("/sales/invoices", ...p("sales_invoices", "create"), wrap(invoicesCt
 router.post("/sales/invoices/from-proposal/:proposalId", ...p("sales_invoices", "create"), wrap(invoicesCtrl.createInvoiceFromProposal));
 router.post("/sales/invoices/from-installment/:installmentId", ...p("sales_invoices", "create"), wrap(invoicesCtrl.createInvoiceFromInstallment));
 router.post("/sales/invoices/:id/cancel", ...p("sales_invoices", "edit"), wrap(invoicesCtrl.cancelInvoice));
+router.post("/sales/invoices/:id/reassign-customer", ...p("sales_invoices", "edit"), wrap(invoicesCtrl.reassignInvoiceCustomer));
 router.get("/sales/invoices/:id", ...p("sales_invoices"), wrap(invoicesCtrl.getInvoiceById));
 router.patch("/sales/invoices/:id", ...p("sales_invoices", "edit"), wrap(invoicesCtrl.updateInvoice));
 
@@ -114,18 +116,20 @@ router.post("/sales/products", ...p("sales_products", "create"), wrap(productsCt
 router.patch("/sales/products/:id", ...p("sales_products", "edit"), wrap(productsCtrl.updateProduct));
 router.delete("/sales/products/:id", ...p("sales_products", "delete"), wrap(productsCtrl.deleteProduct));
 
+const teamRead = [requireAuth, requireAnyPermission(["sales_team", "view"], ["sales_dashboard", "view"])];
+
 // ── Dashboard & reports ───────────────────────────────────────────────────
 router.get("/sales/dashboard", ...p("sales_dashboard"), wrap(dashboardCtrl.getDashboard));
 router.get("/sales/dashboard/pipeline", ...p("sales_dashboard"), wrap(dashboardCtrl.getPipeline));
 router.get("/sales/dashboard/revenue-trend", ...p("sales_dashboard"), wrap(dashboardCtrl.getRevenueTrend));
 router.get("/sales/reports", ...p("sales_reports"), wrap(dashboardCtrl.getReports));
-router.get("/sales/team", ...p("sales_team"), wrap(teamCtrl.getSalesTeam));
-router.get("/sales/team/:userId", ...p("sales_team"), wrap(teamCtrl.getSalesTeamMember));
+router.get("/sales/team", ...teamRead, wrap(teamCtrl.getSalesTeam));
+router.get("/sales/team/:userId", ...teamRead, wrap(teamCtrl.getSalesTeamMember));
 
 // ── BDE Targets ───────────────────────────────────────────────────────────
 router.get("/sales/targets/me", requireAuth, wrap(targetsCtrl.getMyTarget));
 router.get("/sales/targets", ...p("sales_team"), wrap(targetsCtrl.getAllTargetsForMonth));
-router.get("/sales/team/:userId/targets", ...p("sales_team"), wrap(targetsCtrl.getBdeTargets));
+router.get("/sales/team/:userId/targets", ...teamRead, wrap(targetsCtrl.getBdeTargets));
 router.put("/sales/team/:userId/targets", ...p("sales_team"), wrap(targetsCtrl.upsertBdeTarget));
 
 export default router;

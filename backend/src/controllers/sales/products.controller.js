@@ -1,5 +1,6 @@
 import { SalesProducts, getNextSequence } from "../../models/schema/index.js";
 import { paginateModel } from "../../utils/mongo-list.js";
+import { assertSalesAdmin } from "../../utils/sales-admin-guard.js";
 import {
   badRequest,
   notFound,
@@ -23,6 +24,7 @@ async function listProducts(req, res) {
 }
 
 async function createProduct(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can manage the product catalog.");
   const body = req.body;
   const name = optionalString(body.name);
   if (!name) badRequest("Name is required.", "name");
@@ -42,6 +44,7 @@ async function createProduct(req, res) {
 }
 
 async function updateProduct(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can manage the product catalog.");
   const id = parseIdParam(req.params.id, "product id");
   const product = await SalesProducts.findOne({ id }).lean();
   if (!product) notFound("Product");
@@ -58,6 +61,7 @@ async function updateProduct(req, res) {
 }
 
 async function deleteProduct(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can manage the product catalog.");
   const id = parseIdParam(req.params.id, "product id");
   const product = await SalesProducts.findOne({ id }).lean();
   if (!product) notFound("Product");

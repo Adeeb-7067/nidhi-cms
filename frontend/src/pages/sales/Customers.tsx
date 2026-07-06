@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Building2, Plus, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from "lucide-react";
+import { Building2, Plus, Download, Pencil, Trash2, KeyRound } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -25,6 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
 import {
   Table,
   TableBody,
@@ -53,11 +55,11 @@ import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
+  ExecutiveAvatar,
   SalesEmptyState,
   CustomerFormModal,
+  CustomerProvisionPortalDialog,
 } from "@/modules/sales/components";
-
-const PAGE_SIZE = 20;
 
 function csvCell(value: string | number | null | undefined): string {
   const s = value == null ? "" : String(value);
@@ -76,6 +78,7 @@ function downloadCustomersCsv(customers: Customer[]) {
     "Status",
     "Total Sales",
     "Outstanding",
+    "Created by",
     "Created",
   ];
   const rows = customers.map((c) => [
@@ -89,6 +92,7 @@ function downloadCustomersCsv(customers: Customer[]) {
     c.status,
     c.totalSales,
     c.outstanding,
+    c.createdByUser?.name ?? "",
     formatSalesDateTime(c.createdAt),
   ]);
   const csv = [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
@@ -106,10 +110,11 @@ export default function Customers() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
   const [typeFilter, setTypeFilter] = useState<CustomerType | "all">("all");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [formOpen, setFormOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Customer | null>(null);
+  const [provisionTarget, setProvisionTarget] = useState<Customer | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const deleteCustomer = useDeleteCustomer();
@@ -119,18 +124,17 @@ export default function Customers() {
     status: statusFilter === "all" ? undefined : statusFilter,
     type: typeFilter === "all" ? undefined : typeFilter,
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   };
 
   const { data, isLoading, isError, refetch } = useListCustomers(listParams);
   const customers = data?.customers ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const exportParams = { ...listParams, page: 1, limit: 1000 };
+      const exportParams = { ...listParams, page: 1, limit: API_PAGE_LIMIT_CAP };
       const qs = new URLSearchParams(
         Object.entries(exportParams).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)]),
       ).toString();
@@ -150,8 +154,8 @@ export default function Customers() {
   };
 
   useEffect(() => {
-    setPage(1);
-  }, [search, statusFilter, typeFilter]);
+    resetPage();
+  }, [search, statusFilter, typeFilter, resetPage]);
 
   const openCreate = () => {
     setEditingCustomer(null);
@@ -256,10 +260,12 @@ export default function Customers() {
       ) : (
         <>
           <div className="rounded-xl border bg-card overflow-hidden">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/30">
                   <TableHead className="text-xs">Company</TableHead>
+                  <TableHead className="text-xs">Created by</TableHead>
                   <TableHead className="text-xs">Contact</TableHead>
                   <TableHead className="text-xs">Phone</TableHead>
                   <TableHead className="text-xs">Location</TableHead>
@@ -283,6 +289,13 @@ export default function Customers() {
                         ) : null}
                       </Link>
                     </TableCell>
+                    <TableCell className="min-w-[120px]">
+                      {c.createdByUser ? (
+                        <ExecutiveAvatar name={c.createdByUser.name} avatarUrl={c.createdByUser.avatarUrl} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Unknown</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-xs">{c.contactPerson}</TableCell>
                     <TableCell className="text-xs">{c.phone ?? "—"}</TableCell>
                     <TableCell className="text-xs max-w-[140px] truncate">{c.location ?? "—"}</TableCell>
@@ -297,6 +310,18 @@ export default function Customers() {
                     <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(c.createdAt)}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-0.5">
+                        {!c.portalUserId ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-amber-700 hover:text-amber-800"
+                            title="Enable client portal"
+                            onClick={() => setProvisionTarget(c)}
+                          >
+                            <KeyRound className="h-3.5 w-3.5" />
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           variant="ghost"
@@ -323,35 +348,17 @@ export default function Customers() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </div>
 
-          {totalPages > 1 ? (
-            <div className="flex items-center justify-between pt-3 text-xs text-muted-foreground">
-              <span>
-                Page {page} of {totalPages} · {total} customer{total === 1 ? "" : "s"}
-              </span>
-              <div className="flex gap-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={page <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8"
-                  disabled={page >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                >
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <DataPagination
+            page={page}
+            total={total}
+            limit={limit}
+            loadedRowCount={customers.length}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+          />
         </>
       )}
       <CustomerFormModal
@@ -359,6 +366,20 @@ export default function Customers() {
         onOpenChange={handleFormOpenChange}
         customer={editingCustomer}
       />
+
+      {provisionTarget ? (
+        <CustomerProvisionPortalDialog
+          open={provisionTarget != null}
+          onOpenChange={(open) => !open && setProvisionTarget(null)}
+          customerId={provisionTarget.id}
+          defaultEmail={provisionTarget.email}
+          defaultCompany={provisionTarget.companyName}
+          onSuccess={() => {
+            void refetch();
+            setProvisionTarget(null);
+          }}
+        />
+      ) : null}
 
       <AlertDialog open={deleteTarget != null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>

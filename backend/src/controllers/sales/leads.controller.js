@@ -10,10 +10,12 @@ import {
   leadPriorities,
 } from "../../models/schema/index.js";
 import { createClientCompanyRecord, deleteClientCompany } from "../../services/client-company-provision.js";
+import { resolveCustomerAssignedAdminId } from "../../utils/sales-bde-customer-scope.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
   notFound,
+  forbidden,
   parseIdParam,
   parsePagination,
   optionalString,
@@ -93,7 +95,9 @@ async function createLead(req, res) {
     contactChannel: optionalString(body.contactChannel) ?? null,
     status: optionalString(body.status) ?? "new",
     priority: optionalString(body.priority) ?? "medium",
-    assignedTo: body.assignedTo ? Number(body.assignedTo) : null,
+    assignedTo: req.user.role === "bde"
+      ? req.user.id
+      : (body.assignedTo ? Number(body.assignedTo) : null),
     expectedValue: Number(body.expectedValue) || 0,
     description: optionalString(body.description) ?? null,
     tags: Array.isArray(body.tags) ? body.tags.filter((t) => typeof t === "string") : [],
@@ -142,7 +146,17 @@ async function updateLead(req, res) {
   if (body.contactChannel !== undefined) updates.contactChannel = optionalString(body.contactChannel) ?? null;
   if (body.status !== undefined) updates.status = body.status;
   if (body.priority !== undefined) updates.priority = body.priority;
-  if (body.assignedTo !== undefined) updates.assignedTo = body.assignedTo ? Number(body.assignedTo) : null;
+  if (body.assignedTo !== undefined) {
+    if (req.user.role === "bde") {
+      const nextAssignee = body.assignedTo ? Number(body.assignedTo) : null;
+      if (nextAssignee != null && nextAssignee !== req.user.id) {
+        forbidden("BDE cannot assign leads to other executives.");
+      }
+      updates.assignedTo = req.user.id;
+    } else {
+      updates.assignedTo = body.assignedTo ? Number(body.assignedTo) : null;
+    }
+  }
   if (body.expectedValue !== undefined) updates.expectedValue = Number(body.expectedValue) || 0;
   if (body.description !== undefined) updates.description = optionalString(body.description) ?? null;
   if (body.tags !== undefined) updates.tags = Array.isArray(body.tags) ? body.tags : [];
@@ -262,9 +276,13 @@ async function convertLead(req, res) {
       industry: optionalString(body.industry),
       customerType: optionalString(body.type) ?? "corporate",
       leadId: id,
+      assignedAdminId: resolveCustomerAssignedAdminId({
+        userRole: req.user.role,
+        userId: req.user.id,
+        leadAssignedTo: lead.assignedTo,
+      }),
       createdByUserId: req.user.id,
       createdByLabel: req.user.name,
-      bootstrapDiscussion: true,
     });
     clientId = client.id;
     await SalesProposals.updateMany({ leadId: id }, { $set: { customerId: client.id } });

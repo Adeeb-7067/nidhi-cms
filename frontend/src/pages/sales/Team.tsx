@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { Redirect } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 import { PortalPageShell, PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { SalesPageHeader } from "@/modules/sales/components";
@@ -12,6 +14,7 @@ import {
 } from "@/modules/sales/team";
 
 export default function Team() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState("roster");
   const [sheetUserId, setSheetUserId] = useState<number | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -28,6 +31,10 @@ export default function Team() {
     setEditUser({ id: userId, name: "", email: "", role: "bde", status: "active", createdAt: "" } as User);
     setFormOpen(true);
   };
+
+  if (user?.role === "bde") {
+    return <Redirect to="/sales/bde" replace />;
+  }
 
   return (
     <PortalPageShell>

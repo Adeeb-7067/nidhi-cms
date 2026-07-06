@@ -16,6 +16,7 @@ import {
   Receipt,
   Shield,
   Trash2,
+  User as UserIcon,
   UserCog,
   Users,
 } from "lucide-react";
@@ -159,7 +160,7 @@ export function CustomerAdminSection({
   if (hubLoading) return <LoadingBlock />;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -206,6 +207,30 @@ export function CustomerAdminSection({
               </SelectContent>
             </Select>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <UserIcon className="h-4 w-4" />
+            Created by
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {customer.createdByUser ? (
+            <div className="flex items-start gap-3">
+              <ExecutiveAvatar name={customer.createdByUser.name} avatarUrl={customer.createdByUser.avatarUrl} />
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">{customer.createdByUser.name}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Added {formatSalesDateTime(customer.createdAt)}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">Creator not recorded for this customer.</p>
+          )}
         </CardContent>
       </Card>
 

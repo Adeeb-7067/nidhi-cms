@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { Plus, IndianRupee, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, IndianRupee, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import {
   Table,
   TableBody,
@@ -23,8 +25,6 @@ import {
   RecordPaymentDialog,
 } from "@/modules/sales/components";
 
-const PAGE_SIZE = 20;
-
 const METHOD_LABELS: Record<string, string> = {
   bank_transfer: "Bank Transfer",
   upi: "UPI",
@@ -35,22 +35,21 @@ const METHOD_LABELS: Record<string, string> = {
 
 export default function Payments() {
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [recordOpen, setRecordOpen] = useState(false);
 
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => { resetPage(); }, [search, resetPage]);
 
   const listParams = {
     search: search || undefined,
     page,
-    limit: PAGE_SIZE,
+    limit: apiLimit,
   };
 
   const { data, isLoading, isError, refetch } = useListPayments(listParams);
   const { data: dashData } = useSalesDashboard();
   const payments = data?.payments ?? [];
   const total = data?.total ?? 0;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const collected = dashData?.totalRevenue ?? payments.reduce((s, p) => s + p.amount, 0);
 
@@ -91,6 +90,7 @@ export default function Payments() {
       ) : total === 0 ? (
         <SalesEmptyState icon={IndianRupee} title="No payments found" description="Record a payment against an invoice." actionLabel="Record payment" onAction={() => setRecordOpen(true)} />
       ) : (
+        <>
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
             <TableHeader>
@@ -144,22 +144,16 @@ export default function Payments() {
               ))}
             </TableBody>
           </Table>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-4 py-3 border-t bg-muted/20">
-              <span className="text-xs text-muted-foreground">
-                Page {page} of {totalPages} · {total} payment{total === 1 ? "" : "s"}
-              </span>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" className="h-7 w-7" disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
-                  <ChevronRight className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          )}
         </div>
+        <DataPagination
+          page={page}
+          total={total}
+          limit={limit}
+          loadedRowCount={payments.length}
+          onPageChange={setPage}
+          onLimitChange={setLimit}
+        />
+        </>
       )}
 
       <RecordPaymentDialog

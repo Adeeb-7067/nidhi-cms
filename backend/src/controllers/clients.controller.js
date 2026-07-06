@@ -125,7 +125,6 @@ async function postClients(req, res) {
     customerType: optionalString(body.customerType),
     createdByUserId: req.user?.id,
     createdByLabel: req.user?.name,
-    bootstrapDiscussion: true,
   });
   res.status(201).json(await formatClient(client));
 }
@@ -161,7 +160,6 @@ async function patchClientsById(req, res) {
       contactPerson: optionalString(body.contactPerson) ?? existing.contactPerson,
       createdByUserId: req.user.id,
       createdByLabel: req.user.name,
-      bootstrapDiscussion: true,
     });
     existing = enabled.client;
   } else {

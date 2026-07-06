@@ -167,12 +167,29 @@ function getStringField(value: unknown, key: string): string | undefined {
 
 
 function buildErrorMessage(response: Response, data: unknown): string {
-  const fromBody = getStringField(data, "message") ??
-    getStringField(data, "error_description") ??
-    getStringField(data, "error") ??
-    getStringField(data, "detail");
+  const payload = data && typeof data === "object" ? (data as Record<string, unknown>) : null;
+  const field = typeof payload?.field === "string" ? payload.field : undefined;
 
-  if (fromBody) return fromBody;
+  const fromBody =
+    (typeof payload?.message === "string" && payload.message.trim()) ||
+    (typeof payload?.error === "string" && payload.error.trim()) ||
+    (typeof payload?.error_description === "string" && payload.error_description.trim()) ||
+    (typeof payload?.detail === "string" && payload.detail.trim());
+
+  if (fromBody) {
+    if (field && !fromBody.toLowerCase().includes(field.toLowerCase())) {
+      const labels: Record<string, string> = {
+        email: "Contact email",
+        portalEmail: "Portal login email",
+        password: "Portal password",
+      };
+      const label = labels[field] ?? field;
+      if (!fromBody.toLowerCase().includes(label.toLowerCase())) {
+        return `${label}: ${fromBody}`;
+      }
+    }
+    return fromBody;
+  }
 
   const title = getStringField(data, "title");
   const detail = getStringField(data, "detail");
@@ -183,7 +200,9 @@ function buildErrorMessage(response: Response, data: unknown): string {
     401: "Your session expired. Please sign in again.",
     403: "You do not have permission to do that.",
     404: "That item was not found.",
-    409: "This conflicts with existing data.",
+    409: field
+      ? `${field === "portalEmail" ? "Portal login email" : field === "email" ? "Contact email" : field} is already in use.`
+      : "This conflicts with existing data.",
     422: "Some fields are invalid.",
     429: "Too many requests. Wait a moment and try again.",
     500: "Something went wrong. Please try again.",

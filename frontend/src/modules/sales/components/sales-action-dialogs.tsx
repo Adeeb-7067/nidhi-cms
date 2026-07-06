@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { addDays, format } from "date-fns";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { toastApiError } from "@/lib/api-error";
+import { toastApiError, parseApiError } from "@/lib/api-error";
 import {
   Dialog,
   DialogBody,
@@ -78,17 +78,23 @@ function SalesField({
   children,
   hint,
   className,
+  error,
 }: {
   label: string;
   children: React.ReactNode;
   hint?: string;
   className?: string;
+  error?: string;
 }) {
   return (
     <div className={`space-y-1.5 ${className ?? ""}`}>
       <Label className="text-xs font-medium text-foreground">{label}</Label>
       {children}
-      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
+      {error ? (
+        <p className="text-[11px] text-destructive leading-snug">{error}</p>
+      ) : hint ? (
+        <p className="text-[11px] text-muted-foreground">{hint}</p>
+      ) : null}
     </div>
   );
 }
@@ -159,9 +165,23 @@ export function CustomerFormModal({
   const [portalEmail, setPortalEmail] = useState("");
   const [portalPassword, setPortalPassword] = useState("");
   const [industry, setIndustry] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (field: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const inputErrorClass = (field: string) =>
+    fieldErrors[field] ? "border-destructive focus-visible:ring-destructive" : undefined;
 
   useEffect(() => {
     if (!open) return;
+    setFieldErrors({});
     const values = customer ? customerToFormValues(customer) : EMPTY_CUSTOMER_FORM;
     setCompanyName(values.companyName);
     setContactPerson(values.contactPerson);
@@ -189,6 +209,7 @@ export function CustomerFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFieldErrors({});
     if (!companyName.trim() || !contactPerson.trim() || !email.trim()) {
       toast.error("Company name, contact person, and email are required");
       return;
@@ -234,17 +255,24 @@ export function CustomerFormModal({
         await updateCustomer.mutateAsync({ id: customer.id, ...payload });
         toast.success(`Customer "${payload.companyName}" updated`);
       } else {
-        await createCustomer.mutateAsync(payload);
-        toast.success(
-          enablePortal
-            ? `Customer "${payload.companyName}" created with portal access and discussion channel`
-            : `Customer "${payload.companyName}" created`,
-        );
+        const created = await createCustomer.mutateAsync(payload);
+        if (enablePortal) {
+          toast.success(`Customer "${payload.companyName}" created with portal access`);
+        } else {
+          toast.success(`Customer "${payload.companyName}" created`);
+        }
       }
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, isEdit ? "Failed to update customer" : "Failed to create customer");
+      const parsed = parseApiError(
+        err,
+        isEdit ? "Failed to update customer" : "Failed to create customer",
+      );
+      if (parsed.field) {
+        setFieldErrors({ [parsed.field]: parsed.message });
+      }
+      toast.error(parsed.message);
     }
   };
 
@@ -259,8 +287,8 @@ export function CustomerFormModal({
               : "Creates one company record for Sales and Admin → Companies. Portal access is enabled by default — set a login password before saving."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit}>
-          <DialogBody className="px-6 py-4 space-y-5 max-h-[min(70vh,560px)] overflow-y-auto">
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+          <DialogBody className="px-6 py-4 space-y-5">
             <CustomerFormSection title="Company & contact">
               <SalesField label="Company name">
                 <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Acme Corp" required />
@@ -269,8 +297,18 @@ export function CustomerFormModal({
                 <Input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} placeholder="Jane Smith" required />
               </SalesField>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <SalesField label="Email">
-                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="jane@acme.com" required />
+                <SalesField label="Email" error={fieldErrors.email}>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      clearFieldError("email");
+                    }}
+                    placeholder="jane@acme.com"
+                    required
+                    className={inputErrorClass("email")}
+                  />
                 </SalesField>
                 <SalesField label="Phone">
                   <PhoneInput value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -297,22 +335,38 @@ export function CustomerFormModal({
                 </div>
                 {enablePortal ? (
                   <div className="space-y-3 pt-1">
-                    <SalesField label="Portal login email" hint="Defaults to contact email; can differ from billing email.">
+                    <SalesField
+                      label="Portal login email"
+                      hint="Defaults to contact email; can differ from billing email."
+                      error={fieldErrors.portalEmail}
+                    >
                       <Input
                         type="email"
                         value={portalEmail}
-                        onChange={(e) => setPortalEmail(e.target.value)}
+                        onChange={(e) => {
+                          setPortalEmail(e.target.value);
+                          clearFieldError("portalEmail");
+                        }}
                         placeholder="login@company.com"
                         required
+                        className={inputErrorClass("portalEmail")}
                       />
                     </SalesField>
-                    <SalesField label="Portal password" hint="Required — minimum 8 characters. Share securely with the client.">
+                    <SalesField
+                      label="Portal password"
+                      hint="Required — minimum 8 characters. Share securely with the client."
+                      error={fieldErrors.password}
+                    >
                       <PasswordInput
                         value={portalPassword}
-                        onChange={(e) => setPortalPassword(e.target.value)}
+                        onChange={(e) => {
+                          setPortalPassword(e.target.value);
+                          clearFieldError("password");
+                        }}
                         minLength={8}
                         required
                         autoComplete="new-password"
+                        className={inputErrorClass("password")}
                       />
                     </SalesField>
                     <SalesField label="Industry">
@@ -494,9 +548,11 @@ export function CustomerProvisionPortalDialog({
   const [password, setPassword] = useState("");
   const [companyName, setCompanyName] = useState(defaultCompany ?? "");
   const [industry, setIndustry] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
+    setFieldErrors({});
     setPortalEmail(defaultEmail ?? "");
     setCompanyName(defaultCompany ?? "");
     setPassword("");
@@ -521,7 +577,11 @@ export function CustomerProvisionPortalDialog({
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, "Failed to provision portal access");
+      const parsed = parseApiError(err, "Failed to provision portal access");
+      if (parsed.field) {
+        setFieldErrors({ [parsed.field]: parsed.message });
+      }
+      toast.error(parsed.message);
     }
   };
 
@@ -535,11 +595,40 @@ export function CustomerProvisionPortalDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          <SalesField label="Portal login email">
-            <Input type="email" value={portalEmail} onChange={(e) => setPortalEmail(e.target.value)} required />
+          <SalesField label="Portal login email" error={fieldErrors.portalEmail}>
+            <Input
+              type="email"
+              value={portalEmail}
+              onChange={(e) => {
+                setPortalEmail(e.target.value);
+                setFieldErrors((prev) => {
+                  if (!prev.portalEmail) return prev;
+                  const next = { ...prev };
+                  delete next.portalEmail;
+                  return next;
+                });
+              }}
+              required
+              className={fieldErrors.portalEmail ? "border-destructive focus-visible:ring-destructive" : undefined}
+            />
           </SalesField>
-          <SalesField label="Portal password" hint="Minimum 8 characters.">
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
+          <SalesField label="Portal password" hint="Minimum 8 characters." error={fieldErrors.password}>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setFieldErrors((prev) => {
+                  if (!prev.password) return prev;
+                  const next = { ...prev };
+                  delete next.password;
+                  return next;
+                });
+              }}
+              minLength={8}
+              required
+              className={fieldErrors.password ? "border-destructive focus-visible:ring-destructive" : undefined}
+            />
           </SalesField>
           <SalesField label="Company name">
             <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} placeholder="Optional override" />

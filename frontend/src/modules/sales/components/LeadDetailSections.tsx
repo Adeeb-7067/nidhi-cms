@@ -308,9 +308,24 @@ export function LeadAssignmentCard({ lead }: { lead: Lead }) {
               Assigned person
             </p>
             {lead.assignedToUser ? (
-              <ExecutiveAvatar name={lead.assignedToUser.name} className="mt-1" />
+              <ExecutiveAvatar name={lead.assignedToUser.name} avatarUrl={lead.assignedToUser.avatarUrl} className="mt-1" />
             ) : (
               <p className="mt-1 text-sm text-muted-foreground">Unassigned</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+          <div className="flex size-9 items-center justify-center rounded-full bg-background text-muted-foreground ring-1 ring-border">
+            <User className="size-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Created by
+            </p>
+            {lead.createdByUser ? (
+              <ExecutiveAvatar name={lead.createdByUser.name} avatarUrl={lead.createdByUser.avatarUrl} className="mt-1" />
+            ) : (
+              <p className="mt-1 text-sm text-muted-foreground">Unknown</p>
             )}
           </div>
         </div>

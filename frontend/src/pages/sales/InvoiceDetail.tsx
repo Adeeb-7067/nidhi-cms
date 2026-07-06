@@ -1,13 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, Download, Loader2, Pencil, Ban, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Pencil, Ban, AlertTriangle, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,6 +42,8 @@ import {
   useGetInstallment,
   useUpdateInvoice,
   useCancelInvoice,
+  useReassignInvoiceCustomer,
+  useListCustomers,
 } from "@/api/sales";
 import { useGetSettings } from "@/api/generated/api";
 import { toInvoicePreview, paymentToPartial } from "@/modules/sales/adapters";
@@ -61,6 +78,11 @@ export default function InvoiceDetailPage() {
   const pdfRef = useRef<HTMLDivElement>(null);
   const updateInvoice = useUpdateInvoice();
   const cancelInvoice = useCancelInvoice();
+  const reassignCustomer = useReassignInvoiceCustomer();
+  const [reassignOpen, setReassignOpen] = useState(false);
+  const [reassignCustomerId, setReassignCustomerId] = useState("");
+  const { data: customersData } = useListCustomers({ limit: 200 }, reassignOpen);
+  const customers = customersData?.customers ?? [];
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
@@ -106,6 +128,20 @@ export default function InvoiceDetailPage() {
       toast.success("Invoice amount updated");
     } catch (err) {
       toastApiError(err, "Failed to update invoice amount");
+    }
+  };
+
+  const handleReassignCustomer = async () => {
+    if (!invoice || !reassignCustomerId) return;
+    try {
+      await reassignCustomer.mutateAsync({
+        id: invoice.id,
+        customerId: Number(reassignCustomerId),
+      });
+      toast.success("Customer reassigned — totals updated on both customers");
+      setReassignOpen(false);
+    } catch (err) {
+      toastApiError(err, "Could not reassign customer");
     }
   };
 
@@ -170,6 +206,7 @@ export default function InvoiceDetailPage() {
   const isMilestoneInvoice = !!invoice.installmentId;
   const isCancelled = invoice.status === "cancelled";
   const isActive = !isCancelled && invoice.status !== "paid";
+  const canReassignCustomer = !isCancelled && invoice.status === "paid";
   const canCancel = isActive && invoice.paidAmount === 0;
   const remaining = calcRemaining(invoice.amount, invoice.paidAmount);
   const installmentRemaining = installment
@@ -208,6 +245,20 @@ export default function InvoiceDetailPage() {
               )}
               Download PDF
             </Button>
+            {canReassignCustomer && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={() => {
+                  setReassignCustomerId(String(invoice.customerId));
+                  setReassignOpen(true);
+                }}
+              >
+                <UserRound className="h-3.5 w-3.5" />
+                Reassign customer
+              </Button>
+            )}
             {isActive && (
               <Button
                 variant="outline"
@@ -530,6 +581,54 @@ export default function InvoiceDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={reassignOpen} onOpenChange={setReassignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reassign customer</DialogTitle>
+            <DialogDescription>
+              Move this paid invoice (and its payment records) to the correct customer.
+              Amounts and line items stay unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label className="text-xs">Customer</Label>
+            <Select value={reassignCustomerId} onValueChange={setReassignCustomerId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select customer" />
+              </SelectTrigger>
+              <SelectContent>
+                {customers.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.companyName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {invoice.projectId ? (
+              <p className="text-[11px] text-muted-foreground">
+                Project #{invoice.projectId} must belong to the selected customer.
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReassignOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={
+                !reassignCustomerId ||
+                Number(reassignCustomerId) === invoice.customerId ||
+                reassignCustomer.isPending
+              }
+              onClick={() => void handleReassignCustomer()}
+            >
+              {reassignCustomer.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reassign
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div
         ref={pdfRef}

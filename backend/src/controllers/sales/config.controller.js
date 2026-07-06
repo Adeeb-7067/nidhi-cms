@@ -5,6 +5,7 @@ import {
   parseIdParam,
   optionalString,
 } from "../../utils/route-errors.js";
+import { assertSalesAdmin } from "../../utils/sales-admin-guard.js";
 
 async function getConfig(req, res) {
   const { type } = req.query;
@@ -14,6 +15,7 @@ async function getConfig(req, res) {
 }
 
 async function postConfig(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can manage sales config options.");
   const type = optionalString(req.body.type);
   const value = optionalString(req.body.value);
   const label = optionalString(req.body.label);
@@ -30,6 +32,7 @@ async function postConfig(req, res) {
 }
 
 async function deleteConfig(req, res) {
+  assertSalesAdmin(req.user, "Only sales admins can manage sales config options.");
   const id = parseIdParam(req.params.id, "config id");
   const item = await SalesConfig.findOne({ id });
   if (!item) notFound("Config option");

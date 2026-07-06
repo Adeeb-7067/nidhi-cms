@@ -1,4 +1,12 @@
-import { SalesInvoices, SalesProposals, clientsTable, SalesInstallments, getNextSequence } from "../../models/schema/index.js";
+import {
+  SalesInvoices,
+  SalesProposals,
+  SalesPayments,
+  clientsTable,
+  SalesInstallments,
+  projectsTable,
+  getNextSequence,
+} from "../../models/schema/index.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import { loadProjectNameMap } from "../../utils/sales-project-labels.js";
@@ -15,6 +23,11 @@ import {
   parseAdjustedTotal,
   parseTotalAdjustment,
 } from "../../utils/sales-totals.js";
+import {
+  bdeOwnsCustomer,
+  findBdeOwnedCustomerIds,
+  assertBdeOwnsCustomerById,
+} from "../../utils/sales-bde-customer-scope.js";
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
@@ -47,8 +60,7 @@ async function listInvoices(req, res) {
   }
   // BDE scope: only see invoices for customers assigned to them
   if (req.user.role === "bde") {
-    const myCustomers = await clientsTable.find({ assignedAdminId: req.user.id }).select({ id: 1 }).lean();
-    const myCustomerIds = myCustomers.map((c) => c.id);
+    const myCustomerIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
     if (filter.customerId != null) {
       if (!myCustomerIds.includes(Number(filter.customerId))) {
         filter.customerId = -1;
@@ -92,6 +104,7 @@ async function listInvoices(req, res) {
 async function createInvoice(req, res) {
   const body = req.body;
   if (!body.customerId) badRequest("customerId is required.", "customerId");
+  await assertBdeOwnsCustomerById(clientsTable, req.user, body.customerId);
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = new Date(body.dueDate);
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
@@ -160,8 +173,8 @@ async function createInvoice(req, res) {
 
 async function assertBdeInvoiceAccess(invoice, user) {
   if (user.role !== "bde") return;
-  const mine = await clientsTable.findOne({ id: invoice.customerId, assignedAdminId: user.id }).lean();
-  if (!mine) notFound("Invoice");
+  const client = await clientsTable.findOne({ id: invoice.customerId }).lean();
+  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Invoice");
 }
 
 async function getInvoiceById(req, res) {
@@ -254,8 +267,8 @@ async function updateInvoice(req, res) {
 
 async function assertBdeInstallmentAccess(installment, user) {
   if (user.role !== "bde") return;
-  const mine = await clientsTable.findOne({ id: installment.customerId, assignedAdminId: user.id }).lean();
-  if (!mine) notFound("Installment");
+  const client = await clientsTable.findOne({ id: installment.customerId }).lean();
+  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Installment");
 }
 
 async function createInvoiceFromInstallment(req, res) {
@@ -343,6 +356,63 @@ async function createInvoiceFromProposal(req, res) {
   );
 }
 
+async function reassignInvoiceCustomer(req, res) {
+  const id = parseIdParam(req.params.id, "invoice id");
+  const newCustomerId = parseIdParam(req.body?.customerId, "customer id");
+  const invoice = await SalesInvoices.findOne({ id }).lean();
+  if (!invoice) notFound("Invoice");
+  await assertBdeInvoiceAccess(invoice, req.user);
+  if (invoice.status === "cancelled") {
+    badRequest("Cancelled invoices cannot be reassigned.", "status");
+  }
+  if (invoice.customerId === newCustomerId) {
+    badRequest("Invoice is already assigned to this customer.", "customerId");
+  }
+
+  const client = await clientsTable.findOne({ id: newCustomerId }).lean();
+  if (!client) notFound("Customer");
+  if (req.user.role === "bde" && !bdeOwnsCustomer(client, req.user.id)) {
+    notFound("Customer");
+  }
+
+  if (invoice.installmentId) {
+    const inst = await SalesInstallments.findOne({ id: invoice.installmentId }).lean();
+    if (inst && inst.customerId !== newCustomerId) {
+      badRequest(
+        "Linked installment belongs to a different customer. Update the installment first.",
+        "customerId",
+      );
+    }
+  }
+
+  if (invoice.projectId) {
+    const project = await projectsTable.findOne({ id: invoice.projectId }).lean();
+    const projectClientId = project?.clientId ?? project?.companyId ?? null;
+    if (projectClientId && projectClientId !== newCustomerId) {
+      badRequest(
+        "This invoice's project belongs to a different customer.",
+        "customerId",
+      );
+    }
+  }
+
+  await runInTx(async (session) => {
+    await SalesInvoices.updateOne(
+      { id },
+      { $set: { customerId: newCustomerId } },
+      { session },
+    );
+    await SalesPayments.updateMany(
+      { invoiceId: id },
+      { $set: { customerId: newCustomerId } },
+      { session },
+    );
+  });
+
+  const updated = await SalesInvoices.findOne({ id }).lean();
+  res.json(updated);
+}
+
 async function cancelInvoice(req, res) {
   const id = parseIdParam(req.params.id, "invoice id");
   const invoice = await SalesInvoices.findOne({ id }).lean();
@@ -393,6 +463,7 @@ export {
   getInvoiceById,
   updateInvoice,
   cancelInvoice,
+  reassignInvoiceCustomer,
   createInvoiceFromProposal,
   createInvoiceFromInstallment,
 };

@@ -378,7 +378,7 @@ export default function AdminClients() {
         await createClientMutation.mutateAsync({
           data: { ...values, phone, portalEmail, password: values.password } as any,
         });
-        toast.success("Company, portal login, and discussion channel created");
+        toast.success("Company and portal login created");
         setIsDialogOpen(false);
       }
       form.reset();

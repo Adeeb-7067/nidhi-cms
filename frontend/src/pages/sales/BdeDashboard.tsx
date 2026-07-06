@@ -269,7 +269,7 @@ export default function BdeDashboard() {
   const [activityTab, setActivityTab] = useState("leads");
 
   const { data: myData, isLoading: myLoading } = useSalesTeamMember(userId, !!userId);
-  const { data: teamData, isLoading: teamLoading } = useSalesTeam({ limit: 100 });
+  const { data: teamData, isLoading: teamLoading } = useSalesTeam({ limit: 100, leaderboard: true });
   const { data: targetData } = useMyBdeTarget();
 
   const stats = myData?.stats;

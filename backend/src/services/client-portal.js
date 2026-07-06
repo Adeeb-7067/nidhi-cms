@@ -23,8 +23,8 @@ async function createClientPortalUser(params) {
   if (existing) {
     throw new HttpError(
       409,
-      "This portal login email is already registered. Use a different email or link the existing user.",
-      { code: "CONFLICT", field: "portalEmail" }
+      `Portal login email "${email}" is already registered. Use a different email or link the existing user.`,
+      { code: "CONFLICT", field: "portalEmail" },
     );
   }
   const passwordHash = await hashPassword(params.password);

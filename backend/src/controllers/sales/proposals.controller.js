@@ -18,6 +18,7 @@ import {
   parseIdParam,
   parsePagination,
   optionalString,
+  forbidden,
 } from "../../utils/route-errors.js";
 import { sendProposalEmail } from "../../lib/email.js";
 import { logger } from "../../lib/logger.js";
@@ -142,7 +143,9 @@ async function createProposal(req, res) {
     title,
     leadId: body.leadId ? Number(body.leadId) : null,
     customerId: body.customerId ? Number(body.customerId) : null,
-    assignedTo: body.assignedTo ? Number(body.assignedTo) : req.user.id,
+    assignedTo: req.user.role === "bde"
+      ? req.user.id
+      : (body.assignedTo ? Number(body.assignedTo) : req.user.id),
     status: "draft",
     items: parseItems(body.items),
     discount: Number(body.discount) || 0,
@@ -229,7 +232,16 @@ async function updateProposal(req, res) {
   if (body.clientNote !== undefined) updates.clientNote = optionalString(body.clientNote) ?? "";
   if (body.terms !== undefined) updates.terms = optionalString(body.terms) ?? "";
   if (body.internalNotes !== undefined) updates.internalNotes = optionalString(body.internalNotes) ?? "";
-  if (body.assignedTo !== undefined) updates.assignedTo = body.assignedTo ? Number(body.assignedTo) : null;
+  if (body.assignedTo !== undefined) {
+    if (req.user.role === "bde") {
+      const nextAssignee = body.assignedTo ? Number(body.assignedTo) : null;
+      if (nextAssignee != null && nextAssignee !== req.user.id) {
+        forbidden("BDE cannot reassign proposals to other executives.");
+      }
+    } else {
+      updates.assignedTo = body.assignedTo ? Number(body.assignedTo) : null;
+    }
+  }
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   const updated = await SalesProposals.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   res.json(updated);
