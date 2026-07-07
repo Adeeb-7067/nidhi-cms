@@ -31,7 +31,9 @@ import {
   bdeOwnsCustomer,
   findBdeOwnedCustomerIds,
   assertBdeOwnsCustomerById,
+  assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
+import { ensureInvoiceForInstallment, resolveInstallmentInvoiceDueDate } from "../../services/sales/installment-billing.service.js";
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
@@ -60,7 +62,15 @@ async function listInvoices(req, res) {
   if (projectId) filter.projectId = Number(projectId);
   if (search) {
     const q = String(search).trim();
-    if (q) filter.number = { $regex: q, $options: "i" };
+    if (q) {
+      const re = { $regex: q, $options: "i" };
+      const matchingCustomers = await clientsTable
+        .find({ $or: [{ companyName: re }, { contactPerson: re }, { email: re }] })
+        .select({ id: 1 })
+        .lean();
+      const customerIds = matchingCustomers.map((c) => c.id);
+      filter.$or = [{ number: re }, { customerId: { $in: customerIds } }];
+    }
   }
   // BDE scope: only see invoices for customers assigned to them
   if (req.user.role === "bde") {
@@ -74,7 +84,7 @@ async function listInvoices(req, res) {
     }
   }
   await SalesInvoices.updateMany(
-    { status: "unpaid", dueDate: { $lt: new Date() } },
+    { status: { $in: ["unpaid", "partial"] }, dueDate: { $lt: new Date() } },
     { $set: { status: "overdue" } }
   );
   const { items, total, page: pg, limit: lim } = await paginateModel(
@@ -321,89 +331,31 @@ async function updateInvoice(req, res) {
   res.json(updated);
 }
 
-async function assertBdeInstallmentAccess(installment, user) {
-  if (user.role !== "bde") return;
-  const client = await clientsTable.findOne({ id: installment.customerId }).lean();
-  if (!client || !bdeOwnsCustomer(client, user.id)) notFound("Installment");
-}
-
 async function createInvoiceFromInstallment(req, res) {
   const installmentId = parseIdParam(req.params.installmentId, "installment id");
   const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
   if (!installment) notFound("Installment");
-  await assertBdeInstallmentAccess(installment, req.user);
+  await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user);
   if (installment.invoiceId) {
+    const existing = await SalesInvoices.findOne({ id: installment.invoiceId }).lean();
+    if (existing) return res.status(200).json(existing);
     badRequest("This installment already has an invoice.", "invoiceId");
   }
   if (installment.dueAmount <= 0) {
     badRequest("Installment amount must be greater than zero.", "dueAmount");
   }
   const body = req.body ?? {};
-  const dueDate = body.dueDate ? new Date(body.dueDate) : new Date(installment.dueDate);
-  if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+  resolveInstallmentInvoiceDueDate(installment, body.dueDate);
 
-  let title = installment.name;
-  const proposalId = installment.proposalId ?? null;
-  let proposal = null;
-  if (proposalId) {
-    proposal = await SalesProposals.findOne({ id: proposalId }).lean();
-    if (proposal?.title) title = `${proposal.title} — ${installment.name}`;
-  }
-
-  const amount = installment.dueAmount;
-  const calculatedAmount = installment.calculatedAmount ?? installment.dueAmount;
-  const totalAdjustment = installment.totalAdjustment ?? 0;
-  const adjustedTotal = installment.adjustedTotal ?? null;
-  const lineItems = [
-    {
-      itemId: `inst-${installmentId}`,
-      name: installment.name,
-      description: proposal ? `From proposal ${proposal.number}` : "",
-      quantity: 1,
-      unitPrice: amount,
-      taxPercent: 0,
-    },
-  ];
-  const [number, id] = await Promise.all([nextInvoiceNumber(), getNextSequence("sales_invoices")]);
   let invoice;
+  let created = false;
   await runInTx(async (session) => {
-    const existing = await SalesInstallments.findOne({ id: installmentId }).session(session).lean();
-    if (existing?.invoiceId) {
-      badRequest("This installment already has an invoice.", "invoiceId");
-    }
-    invoice = await SalesInvoices.create(
-      [{
-        id,
-        number,
-        title,
-        customerId: installment.customerId,
-        projectId: installment.projectId ?? null,
-        installmentId,
-        proposalId,
-        lineItems,
-        notes: proposal?.clientNote?.trim() || null,
-        terms: proposal?.terms?.trim() || null,
-        amount,
-        calculatedAmount: Math.round(calculatedAmount),
-        totalAdjustment,
-        adjustedTotal,
-        paidAmount: 0,
-        status: "unpaid",
-        dueDate,
-      }],
-      { session }
-    );
-    invoice = invoice[0];
-    const linked = await SalesInstallments.updateOne(
-      { id: installmentId, invoiceId: null },
-      { $set: { invoiceId: id } },
-      { session }
-    );
-    if (linked.matchedCount === 0) {
-      badRequest("This installment already has an invoice.", "invoiceId");
-    }
+    const result = await ensureInvoiceForInstallment(installmentId, session, { dueDate: body.dueDate });
+    invoice = result.invoice;
+    created = result.created;
   });
-  res.status(201).json(invoice.toObject());
+
+  res.status(created ? 201 : 200).json(invoice);
 }
 
 async function createInvoiceFromProposal(req, res) {
@@ -432,16 +384,6 @@ async function reassignInvoiceCustomer(req, res) {
     notFound("Customer");
   }
 
-  if (invoice.installmentId) {
-    const inst = await SalesInstallments.findOne({ id: invoice.installmentId }).lean();
-    if (inst && inst.customerId !== newCustomerId) {
-      badRequest(
-        "Linked installment belongs to a different customer. Update the installment first.",
-        "customerId",
-      );
-    }
-  }
-
   if (invoice.projectId) {
     const project = await projectsTable.findOne({ id: invoice.projectId }).lean();
     const projectClientId = project?.clientId ?? project?.companyId ?? null;
@@ -464,6 +406,13 @@ async function reassignInvoiceCustomer(req, res) {
       { $set: { customerId: newCustomerId } },
       { session },
     );
+    if (invoice.installmentId) {
+      await SalesInstallments.updateOne(
+        { id: invoice.installmentId },
+        { $set: { customerId: newCustomerId } },
+        { session },
+      );
+    }
   });
 
   const updated = await SalesInvoices.findOne({ id }).lean();

@@ -4,11 +4,14 @@ import {
   SalesPayments,
   SalesFollowUps,
   usersTable,
+  clientsTable,
 } from "../../models/schema/index.js";
 import { formatUser } from "../../mappers/user-format.js";
 import { notFound, forbidden, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { toIso } from "../../utils/mongo-list.js";
 import { calcLineItemsTotal, resolveFinalTotal } from "../../utils/sales-totals.js";
+import { findBdeAssignedProposalIds, findBdeOwnedCustomerIds } from "../../utils/sales-bde-customer-scope.js";
+import { computeSalesKpis, computeOverdueByCustomer } from "../../services/sales/sales-kpis.service.js";
 
 const BDE_USER_SELECT = {
   id: 1,
@@ -29,27 +32,40 @@ const BDE_USER_SELECT = {
   createdAt: 1,
 };
 
-async function aggregateBdeStats(bdeIds) {
+/**
+ * @param {number[]} bdeIds
+ * @param {{ start: Date, end: Date } | null} [dateRange] Scopes revenue/deals/leads to a period;
+ *   pendingFollowUps always reflects current state regardless of period.
+ */
+async function aggregateBdeStats(bdeIds, dateRange = null) {
   if (!bdeIds.length) {
     return {
       revenueMap: new Map(),
       dealsMap: new Map(),
       followUpMap: new Map(),
+      leadMap: new Map(),
     };
   }
 
-  const [paymentAgg, proposalAgg, followUpAgg] = await Promise.all([
+  const periodMatch = dateRange ? { createdAt: { $gte: dateRange.start, $lt: dateRange.end } } : {};
+  const approvedMatch = dateRange ? { approvedAt: { $gte: dateRange.start, $lt: dateRange.end } } : {};
+
+  const [paymentAgg, proposalAgg, followUpAgg, leadAgg] = await Promise.all([
     SalesPayments.aggregate([
-      { $match: { recordedBy: { $in: bdeIds } } },
+      { $match: { recordedBy: { $in: bdeIds }, ...periodMatch } },
       { $group: { _id: "$recordedBy", revenue: { $sum: "$amount" } } },
     ]),
     SalesProposals.aggregate([
-      { $match: { assignedTo: { $in: bdeIds }, status: "approved" } },
+      { $match: { assignedTo: { $in: bdeIds }, status: "approved", ...approvedMatch } },
       { $group: { _id: "$assignedTo", dealsClosed: { $sum: 1 } } },
     ]),
     SalesFollowUps.aggregate([
       { $match: { executiveId: { $in: bdeIds }, status: { $in: ["scheduled", "overdue"] } } },
       { $group: { _id: "$executiveId", pendingFollowUps: { $sum: 1 } } },
+    ]),
+    SalesLeads.aggregate([
+      { $match: { assignedTo: { $in: bdeIds }, ...periodMatch } },
+      { $group: { _id: "$assignedTo", leadCount: { $sum: 1 } } },
     ]),
   ]);
 
@@ -57,11 +73,19 @@ async function aggregateBdeStats(bdeIds) {
     revenueMap: new Map(paymentAgg.map((r) => [r._id, r.revenue])),
     dealsMap: new Map(proposalAgg.map((r) => [r._id, r.dealsClosed])),
     followUpMap: new Map(followUpAgg.map((r) => [r._id, r.pendingFollowUps])),
+    leadMap: new Map(leadAgg.map((r) => [r._id, r.leadCount])),
   };
 }
 
+function parseMonthYear(query) {
+  const month = Number(query.month);
+  const year = Number(query.year);
+  if (!month || month < 1 || month > 12 || !year || year < 2000) return null;
+  return { month, year, start: new Date(year, month - 1, 1), end: new Date(year, month, 1) };
+}
+
 function mapBdeUserToTeamMember(u, stats) {
-  const { revenueMap, dealsMap, followUpMap } = stats;
+  const { revenueMap, dealsMap, followUpMap, leadMap } = stats;
   const formatted = formatUser(u, { withPresence: true });
   return {
     id: u.id,
@@ -84,6 +108,7 @@ function mapBdeUserToTeamMember(u, stats) {
     isActiveNow: formatted.isActiveNow ?? false,
     revenue: revenueMap.get(u.id) ?? 0,
     dealsClosed: dealsMap.get(u.id) ?? 0,
+    leadCount: leadMap.get(u.id) ?? 0,
     pendingFollowUps: followUpMap.get(u.id) ?? 0,
   };
 }
@@ -152,7 +177,8 @@ async function getSalesTeam(req, res) {
   ]);
 
   const bdeIds = bdeUsers.map((u) => u.id);
-  const stats = await aggregateBdeStats(bdeIds);
+  const period = parseMonthYear(req.query);
+  const stats = await aggregateBdeStats(bdeIds, period);
   let team = bdeUsers.map((u) => mapBdeUserToTeamMember(u, stats));
   if (req.user.role === "bde" && leaderboard) {
     team = team.map(toLeaderboardMember);
@@ -199,6 +225,38 @@ async function getSalesTeamMember(req, res) {
 
   const stats = await aggregateBdeStats([userId]);
   const member = mapBdeUserToTeamMember(user, stats);
+
+  const [myProposalIds, myCustomerIds] = await Promise.all([
+    findBdeAssignedProposalIds(SalesProposals, userId),
+    findBdeOwnedCustomerIds(clientsTable, userId),
+  ]);
+  const installmentFilter = { proposalId: { $in: myProposalIds.length ? myProposalIds : [-1] } };
+  const paymentFilter = { recordedBy: userId };
+  const overdueScope = { customerId: { $in: myCustomerIds.length ? myCustomerIds : [-1] } };
+
+  const period = parseMonthYear(req.query);
+  let periodStats = null;
+  if (period) {
+    const [periodAgg, salesKpis] = await Promise.all([
+      aggregateBdeStats([userId], period),
+      computeSalesKpis({
+        installmentFilter,
+        paymentFilter,
+        periodStart: period.start,
+        periodEnd: period.end,
+      }),
+    ]);
+    periodStats = {
+      month: period.month,
+      year: period.year,
+      revenue: periodAgg.revenueMap.get(userId) ?? 0,
+      dealsClosed: periodAgg.dealsMap.get(userId) ?? 0,
+      leadCount: periodAgg.leadMap.get(userId) ?? 0,
+      ...salesKpis,
+    };
+  }
+
+  const overdueByCustomer = await computeOverdueByCustomer(overdueScope);
 
   const [
     leadsByStatusRows,
@@ -253,6 +311,8 @@ async function getSalesTeamMember(req, res) {
 
   res.json({
     member: formatUser(user, { withPresence: true, includeSensitive: true }),
+    periodStats,
+    overdueByCustomer,
     stats: {
       revenue: member.revenue,
       dealsClosed: member.dealsClosed,

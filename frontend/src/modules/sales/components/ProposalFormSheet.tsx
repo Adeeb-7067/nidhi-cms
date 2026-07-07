@@ -17,11 +17,12 @@ import {
 import type { ProposalLineItem } from "@/modules/sales/types";
 import { formatCurrency } from "@/modules/sales/constants";
 import { TotalAmountAdjustFields, proposalAdjustPayload } from "@/modules/sales/components/total-amount-adjust";
-import { resolveFinalTotal } from "@/modules/sales/utils";
+import { calcProposalTotal, formatDiscountPercent, resolveFinalTotal } from "@/modules/sales/utils";
 import { useSalesStaff } from "@/modules/sales/use-sales-staff";
 import type { User } from "@/api/generated/api.schemas";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput, decimalInputClass } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -43,18 +44,6 @@ import {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function calcTotals(items: ProposalLineItem[], discount: number) {
-  let subtotal = 0;
-  let tax = 0;
-  for (const item of items) {
-    const line = item.quantity * item.unitPrice;
-    subtotal += line;
-    tax += line * (item.taxPercent / 100);
-  }
-  const df = 1 - discount / 100;
-  return { subtotal: subtotal * df, tax: tax * df, total: (subtotal + tax) * df };
-}
-
 const emptyItem = (defaultTax = 18): ProposalLineItem => ({
   id: crypto.randomUUID(),
   name: "",
@@ -64,8 +53,7 @@ const emptyItem = (defaultTax = 18): ProposalLineItem => ({
   taxPercent: defaultTax,
 });
 
-const numInputClass =
-  "h-8 text-xs tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+const numInputClass = `h-8 text-xs ${decimalInputClass}`;
 
 // ── ProposalLineItemCard ──────────────────────────────────────────────────────
 
@@ -135,15 +123,35 @@ function ProposalLineItemCard({
       <div className="grid grid-cols-4 gap-2 pl-9">
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Qty</Label>
-          <Input type="number" min={1} step={1} className={numInputClass} value={item.quantity} onChange={(e) => onChange({ quantity: Number(e.target.value) || 1 })} />
+          <DecimalInput
+            integer
+            min={1}
+            fallback={1}
+            hideZero={false}
+            className={numInputClass}
+            value={item.quantity}
+            onChange={(quantity) => onChange({ quantity })}
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit price</Label>
-          <Input type="number" min={0} step="any" className={numInputClass} value={item.unitPrice} onChange={(e) => onChange({ unitPrice: Number(e.target.value) || 0 })} />
+          <DecimalInput
+            min={0}
+            className={numInputClass}
+            value={item.unitPrice}
+            onChange={(unitPrice) => onChange({ unitPrice })}
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax %</Label>
-          <Input type="number" min={0} max={100} step="any" className={numInputClass} value={item.taxPercent} onChange={(e) => onChange({ taxPercent: Number(e.target.value) || 0 })} />
+          <DecimalInput
+            min={0}
+            max={100}
+            hideZero={false}
+            className={numInputClass}
+            value={item.taxPercent}
+            onChange={(taxPercent) => onChange({ taxPercent })}
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Line total</Label>
@@ -264,7 +272,10 @@ export function ProposalFormSheet({
     setHydrated(true);
   }, [isEdit, editData, hydrated, open]);
 
-  const totals = useMemo(() => calcTotals(items, discount), [items, discount]);
+  const totals = useMemo(
+    () => calcProposalTotal({ items: items.map((i) => ({ ...i, itemId: i.id })), discount }),
+    [items, discount],
+  );
   const finalTotal = useMemo(
     () => resolveFinalTotal(totals.total, totalAdjustment, useCustomTotal ? adjustedTotal : null),
     [totals.total, totalAdjustment, useCustomTotal, adjustedTotal]
@@ -446,18 +457,24 @@ export function ProposalFormSheet({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Discount %</Label>
-                <Input type="number" min={0} max={100} className={numInputClass} value={discount} onChange={(e) => setDiscount(Number(e.target.value))} />
+                <DecimalInput
+                  min={0}
+                  max={100}
+                  hideZero={false}
+                  className={numInputClass}
+                  value={discount}
+                  onChange={setDiscount}
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Default tax % (applies to all rows)</Label>
-                <Input
-                  type="number"
+                <DecimalInput
                   min={0}
                   max={100}
+                  hideZero={false}
                   className={numInputClass}
                   value={taxRate}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
+                  onChange={(v) => {
                     setTaxRate(v);
                     setItems((prev) => prev.map((i) => ({ ...i, taxPercent: v })));
                   }}
@@ -467,10 +484,13 @@ export function ProposalFormSheet({
 
             {/* Totals */}
             <div className="rounded-lg border bg-muted/20 p-3 space-y-1 text-xs">
-              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{formatCurrency(totals.subtotal)}</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>Tax</span><span className="tabular-nums">{formatCurrency(totals.tax)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Subtotal</span><span className="tabular-nums">{formatCurrency(totals.grossSubtotal)}</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Tax</span><span className="tabular-nums">{formatCurrency(totals.grossTax)}</span></div>
               {discount > 0 && (
-                <div className="flex justify-between text-muted-foreground"><span>Discount ({discount}%)</span><span className="tabular-nums text-emerald-600">applied above</span></div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Discount ({formatDiscountPercent(discount)}%)</span>
+                  <span className="tabular-nums text-emerald-600">− {formatCurrency(totals.discountAmount)}</span>
+                </div>
               )}
               <div className="flex justify-between font-semibold border-t pt-1 mt-1">
                 <span>Total (before adjustments)</span>

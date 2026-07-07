@@ -52,8 +52,9 @@ export function isPausedSessionResumableToday(session, now = new Date(), tz) {
   const todayKey = workDayKey(now, tz);
   const startDay = workDayKey(session.startedAt, tz);
   if (startDay === todayKey) return true;
-  if (session.stopReason === "shift_ended" && session.endedAt) {
-    return workDayKey(session.endedAt, tz) === todayKey;
+  // Overnight shift or midnight auto-close: session started yesterday but ended today.
+  if (session.endedAt && workDayKey(session.endedAt, tz) === todayKey) {
+    return true;
   }
   return false;
 }

@@ -55,7 +55,9 @@ import {
   todayAttendanceRow,
 } from "@/modules/hrm/employee-detail-sections";
 import { EmployeeDocumentsPanel } from "@/modules/hrm/EmployeeDocumentsPanel";
+import { EmployeeCredentialsPanel } from "@/modules/hrm/EmployeeCredentialsPanel";
 import { EmployeeWorkTab } from "@/modules/hrm/EmployeeWorkTab";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   hrmEmployeeQueryKey,
   useHrmEmployee,
@@ -90,7 +92,9 @@ export default function HrmEmployeeDetailPage() {
   const backHref = fromSalesTeam ? "/sales/team" : fromAdminTeam ? "/admin/employees" : "/hrm/employees";
   const backLabel = fromSalesTeam ? "Back to sales team" : fromAdminTeam ? "Back to team" : "Back to employees";
 
+  const { user: authUser } = useAuth();
   const canEdit = useHrmPermission("employees", "edit");
+  const canViewCredentials = authUser?.role === "super_admin";
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [refreshing, setRefreshing] = useState(false);
@@ -639,6 +643,9 @@ export default function HrmEmployeeDetailPage() {
                   canDelete={canEdit}
                   fetchEnabled={fileTabActive}
                 />
+                {canViewCredentials ? (
+                  <EmployeeCredentialsPanel userId={employee.id} enabled={fileTabActive} />
+                ) : null}
               </>
             ) : null}
           </TabsContent>

@@ -14,14 +14,20 @@ import {
   Flame,
   ArrowRight,
   Crown,
+  ShoppingBag,
+  IndianRupee,
+  Sparkles,
+  History,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { useSalesTeam, useSalesTeamMember, useMyBdeTarget } from "@/api/sales";
-import { formatCompactCurrency, formatCurrency, LEAD_STATUS_LABELS } from "@/modules/sales/constants";
+import { useSalesTeam, useSalesTeamMember, useMyBdeTarget, useSalesRevenueTrend, type SalesOverdueCustomer } from "@/api/sales";
+import { formatCompactCurrency, formatCurrency, LEAD_STATUS_LABELS, PROPOSAL_STATUS_LABELS } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { SalesPageHeader, SalesStatusBadge } from "@/modules/sales/components";
+import { ChartPanel, DashboardTrendChart, DashboardPipelineChart } from "@/components/dashboard/admin-dashboard-charts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -111,45 +117,6 @@ function RankBadgeCard({
   );
 }
 
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  accent,
-  sub,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  accent?: "blue" | "green" | "amber" | "violet" | "red";
-  sub?: string;
-}) {
-  const colors: Record<string, string> = {
-    blue: "text-blue-600 bg-blue-500/10",
-    green: "text-emerald-600 bg-emerald-500/10",
-    amber: "text-amber-600 bg-amber-500/10",
-    violet: "text-violet-600 bg-violet-500/10",
-    red: "text-red-600 bg-red-500/10",
-  };
-  const colorClass = colors[accent ?? "blue"];
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="text-xl font-bold mt-1 tabular-nums">{value}</p>
-            {sub ? <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p> : null}
-          </div>
-          <div className={cn("rounded-lg p-2 shrink-0", colorClass)}>
-            <Icon className="h-4 w-4" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -198,7 +165,7 @@ function TargetMetric({
   );
 }
 
-function MonthlyTargetCard({
+function TargetProgressContent({
   target,
   revenue,
   dealsClosed,
@@ -209,27 +176,20 @@ function MonthlyTargetCard({
   dealsClosed: number;
   leadCount: number;
 }) {
-  const monthName = MONTH_NAMES[target.month - 1];
   const daysLeft = getDaysLeft();
   const trackedCount = [target.revenueTarget, target.dealsTarget, target.leadsTarget].filter(Boolean).length;
 
   return (
-    <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Target className="h-4 w-4 text-primary" />
-            {monthName} {target.year} Target
-          </CardTitle>
-          <Badge variant="outline" className="text-[10px]">
-            {daysLeft} day{daysLeft !== 1 ? "s" : ""} left
-          </Badge>
-        </div>
-        {target.notes ? (
-          <p className="text-[10px] text-muted-foreground italic">{target.notes}</p>
-        ) : null}
-      </CardHeader>
-      <CardContent className={cn("grid gap-4", trackedCount > 1 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1")}>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Badge variant="outline" className="text-[10px]">
+          {daysLeft} day{daysLeft !== 1 ? "s" : ""} left this month
+        </Badge>
+      </div>
+      {target.notes ? (
+        <p className="text-[10px] text-muted-foreground italic">{target.notes}</p>
+      ) : null}
+      <div className={cn("grid gap-4", trackedCount > 1 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1")}>
         {target.revenueTarget != null ? (
           <TargetMetric
             label="Revenue"
@@ -257,8 +217,31 @@ function MonthlyTargetCard({
             accent="[&>div]:bg-violet-500"
           />
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
+  );
+}
+
+function OverdueClientsList({ rows }: { rows: SalesOverdueCustomer[] }) {
+  if (rows.length === 0) {
+    return <p className="text-xs text-center text-muted-foreground py-6">No overdue balances — nice work!</p>;
+  }
+  return (
+    <div className="space-y-2">
+      {rows.slice(0, 6).map((row) => (
+        <Link key={row.customerId} href={`/sales/customers/${row.customerId}`}>
+          <div className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2 hover:bg-muted/40 transition-colors">
+            <div className="min-w-0">
+              <p className="text-xs font-medium truncate">{row.companyName}</p>
+              {row.contactPerson ? <p className="text-[10px] text-muted-foreground truncate">{row.contactPerson}</p> : null}
+            </div>
+            <span className="text-xs font-semibold text-destructive tabular-nums shrink-0">
+              {formatCompactCurrency(row.overdueAmount)}
+            </span>
+          </div>
+        </Link>
+      ))}
+    </div>
   );
 }
 
@@ -267,12 +250,20 @@ export default function BdeDashboard() {
   const userId = user?.id ?? null;
 
   const [activityTab, setActivityTab] = useState("leads");
+  const now = new Date();
 
-  const { data: myData, isLoading: myLoading, isError: myError } = useSalesTeamMember(userId, !!userId);
-  const { data: teamData, isLoading: teamLoading } = useSalesTeam({ limit: 100, leaderboard: true });
   const { data: targetData } = useMyBdeTarget();
+  const { data: myData, isLoading: myLoading, isError: myError } = useSalesTeamMember(
+    userId,
+    !!userId,
+    targetData?.target?.month ?? now.getMonth() + 1,
+    targetData?.target?.year ?? now.getFullYear(),
+  );
+  const { data: teamData, isLoading: teamLoading } = useSalesTeam({ limit: 100, leaderboard: true });
+  const { data: trendData, isLoading: trendLoading } = useSalesRevenueTrend("month");
 
   const stats = myData?.stats;
+  const periodStats = myData?.periodStats;
   const member = myData?.member;
 
   const rankedTeam = useMemo(
@@ -288,12 +279,37 @@ export default function BdeDashboard() {
   const topRevenue = rankedTeam[0]?.revenue ?? 0;
   const myRevenue = stats?.revenue ?? 0;
   const revenueProgress = topRevenue > 0 ? Math.round((myRevenue / topRevenue) * 100) : 100;
+  const overdueTotal = (myData?.overdueByCustomer ?? []).reduce((s, r) => s + r.overdueAmount, 0);
 
   const recentLeads = myData?.recentLeads ?? [];
   const recentProposals = myData?.recentProposals ?? [];
   const followUps = myData?.followUps ?? [];
   const leadsByStatus = (myData?.leadsByStatus ?? []).filter((r) => r.count > 0);
   const proposalsByStatus = (myData?.proposalsByStatus ?? []).filter((r) => r.count > 0);
+
+  const leadPipelineData = useMemo(
+    () => leadsByStatus.map((r) => ({ name: LEAD_STATUS_LABELS[r.status as keyof typeof LEAD_STATUS_LABELS] ?? r.status, value: r.count })),
+    [leadsByStatus],
+  );
+  const proposalPipelineData = useMemo(
+    () => proposalsByStatus.map((r) => ({ name: PROPOSAL_STATUS_LABELS[r.status as keyof typeof PROPOSAL_STATUS_LABELS] ?? r.status, value: r.count })),
+    [proposalsByStatus],
+  );
+
+  const trendChartData = useMemo(
+    () => (trendData?.trend ?? []).map((t) => ({ month: format(new Date(t.date), "MMM d"), count: t.collected })),
+    [trendData?.trend],
+  );
+
+  const moneySplitData = useMemo(
+    () => periodStats
+      ? [
+          { name: "New project money", value: periodStats.newProjectMoney },
+          { name: "Old project money", value: periodStats.oldProjectMoney },
+        ].filter((d) => d.value > 0)
+      : [],
+    [periodStats],
+  );
 
   const upcomingFollowUps = useMemo(
     () =>
@@ -302,6 +318,8 @@ export default function BdeDashboard() {
         .sort((a, b) => new Date(a.scheduledAt ?? 0).getTime() - new Date(b.scheduledAt ?? 0).getTime()),
     [followUps],
   );
+
+  const monthLabel = periodStats ? MONTH_NAMES[periodStats.month - 1] : MONTH_NAMES[now.getMonth()];
 
   return (
     <PortalPageShell>
@@ -346,37 +364,79 @@ export default function BdeDashboard() {
         </motion.div>
       ) : null}
 
-      {/* ── Monthly Target Progress ── */}
-      {targetData?.target && (
-        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.04 }}>
-          <MonthlyTargetCard
-            target={targetData.target}
-            revenue={myRevenue}
-            dealsClosed={stats?.dealsClosed ?? 0}
-            leadCount={stats?.leadCount ?? 0}
+      {/* ── This month: sales & collections ── */}
+      <motion.div className="space-y-2" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, delay: 0.04 }}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{monthLabel} at a glance</p>
+        {myLoading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : (
+          <PortalKpiGrid
+            columns={4}
+            count={4}
+            items={[
+              { title: "Total sales", value: formatCompactCurrency(periodStats?.salesValue ?? 0), hint: `${periodStats?.salesCount ?? 0} deal${periodStats?.salesCount === 1 ? "" : "s"}`, icon: ShoppingBag, accent: "blue", delay: 0 },
+              { title: "Total collected", value: formatCompactCurrency(periodStats?.totalCollected ?? 0), hint: "Via invoices", icon: IndianRupee, accent: "green", delay: 1 },
+              { title: "New project money", value: formatCompactCurrency(periodStats?.newProjectMoney ?? 0), hint: "From deals closed this month", icon: Sparkles, accent: "sky", delay: 2 },
+              { title: "Old project money", value: formatCompactCurrency(periodStats?.oldProjectMoney ?? 0), hint: "Collected on earlier deals", icon: History, accent: "violet", delay: 3 },
+            ]}
           />
-        </motion.div>
-      )}
-
-      {/* ── Personal KPIs ── */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
-      >
-        {myLoading
-          ? [...Array(5)].map((_, i) => <Skeleton key={i} className="h-[88px] rounded-xl" />)
-          : (
-            <>
-              <StatCard label="Revenue" value={formatCompactCurrency(myRevenue)} icon={Trophy} accent="green" sub="Total collected" />
-              <StatCard label="Deals closed" value={stats?.dealsClosed ?? 0} icon={Star} accent="blue" sub="Approved proposals" />
-              <StatCard label="Leads" value={stats?.leadCount ?? 0} icon={Users} accent="violet" sub="Total assigned" />
-              <StatCard label="Proposals" value={stats?.proposalCount ?? 0} icon={Briefcase} accent="amber" sub="All statuses" />
-              <StatCard label="Follow-ups due" value={upcomingFollowUps.length} icon={CalendarClock} accent={upcomingFollowUps.some(f => f.status === "overdue") ? "red" : "amber"} sub={upcomingFollowUps.some(f => f.status === "overdue") ? "Some overdue!" : "Scheduled"} />
-            </>
-          )}
+        )}
       </motion.div>
+
+      {/* ── Bento row: Target progress + New/Old split ── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-8 flex min-h-0 flex-col h-full">
+          <ChartPanel title="Monthly target progress" description={targetData?.target ? `${monthLabel} ${targetData.target.year}` : "No target set yet"} icon={Target} accent="blue">
+            {targetData?.target ? (
+              <TargetProgressContent
+                target={targetData.target}
+                revenue={periodStats?.revenue ?? 0}
+                dealsClosed={periodStats?.dealsClosed ?? 0}
+                leadCount={periodStats?.leadCount ?? 0}
+              />
+            ) : (
+              <p className="text-xs text-muted-foreground py-6 text-center">Your admin hasn't set a target for this month yet.</p>
+            )}
+          </ChartPanel>
+        </div>
+        <div className="lg:col-span-4 flex min-h-0 flex-col h-full">
+          <ChartPanel title="New vs old money" description="Where this month's collections came from" icon={Sparkles} accent="violet">
+            {moneySplitData.length > 0 ? (
+              <DashboardPipelineChart data={moneySplitData} />
+            ) : (
+              <p className="text-xs text-muted-foreground py-6 text-center">No collections recorded yet this month.</p>
+            )}
+          </ChartPanel>
+        </div>
+      </div>
+
+      {/* ── Bento row: Collections trend + Overdue by client ── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-8 flex min-h-0 flex-col h-full">
+          <ChartPanel title="Collections trend" description="Money collected day by day this month" icon={TrendingUp} accent="emerald">
+            {trendLoading ? (
+              <Skeleton className="h-[180px] w-full rounded-lg" />
+            ) : trendChartData.length > 0 ? (
+              <DashboardTrendChart data={trendChartData} stroke="#22c55e" gradientId="bdeCollectionsTrend" summaryLabel="Collected this month" />
+            ) : (
+              <p className="text-xs text-muted-foreground py-10 text-center">No collections yet this month.</p>
+            )}
+          </ChartPanel>
+        </div>
+        <div className="lg:col-span-4 flex min-h-0 flex-col h-full">
+          <ChartPanel
+            title="Overdue by client"
+            description="Needs follow-up right now"
+            icon={AlertCircle}
+            accent="rose"
+            badge={overdueTotal > 0 ? formatCompactCurrency(overdueTotal) : undefined}
+          >
+            <OverdueClientsList rows={myData?.overdueByCustomer ?? []} />
+          </ChartPanel>
+        </div>
+      </div>
 
       {/* ── Main Grid: Leaderboard + Revenue Progress ── */}
       <motion.div
@@ -483,7 +543,7 @@ export default function BdeDashboard() {
           </Card>
         </div>
 
-        {/* Right column: My progress + Pipeline breakdown */}
+        {/* Right column: My progress */}
         <div className="lg:col-span-4 space-y-3">
           {/* Revenue vs #1 */}
           <Card>
@@ -496,7 +556,7 @@ export default function BdeDashboard() {
             <CardContent className="space-y-3">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs text-muted-foreground">My revenue</span>
+                  <span className="text-xs text-muted-foreground">My revenue (all time)</span>
                   <span className="text-xs font-semibold tabular-nums">{formatCompactCurrency(myRevenue)}</span>
                 </div>
                 <Progress value={revenueProgress} className="h-2.5" />
@@ -523,27 +583,6 @@ export default function BdeDashboard() {
               ) : null}
             </CardContent>
           </Card>
-
-          {/* Lead pipeline */}
-          {leadsByStatus.length > 0 ? (
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm">My lead pipeline</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {leadsByStatus.slice(0, 6).map((row) => (
-                  <div key={row.status} className="flex items-center justify-between">
-                    <span className="text-xs text-muted-foreground capitalize">
-                      {LEAD_STATUS_LABELS[row.status as keyof typeof LEAD_STATUS_LABELS] ?? row.status}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px] tabular-nums min-w-[28px] justify-center">
-                      {row.count}
-                    </Badge>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ) : null}
         </div>
       </motion.div>
 
@@ -745,30 +784,27 @@ export default function BdeDashboard() {
         </Card>
       </motion.div>
 
-      {/* ── Proposal pipeline breakdown ── */}
-      {proposalsByStatus.length > 0 ? (
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.2 }}
-        >
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">My proposal pipeline</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {proposalsByStatus.map((row) => (
-                  <div key={row.status} className="flex items-center gap-2 rounded-lg border px-3 py-2">
-                    <SalesStatusBadge variant="proposal" value={row.status} />
-                    <span className="text-sm font-bold tabular-nums">{row.count}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      ) : null}
+      {/* ── Pipeline breakdown: leads + proposals ── */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-6 flex min-h-0 flex-col h-full">
+          <ChartPanel title="My lead pipeline" description={`${leadPipelineData.reduce((s, d) => s + d.value, 0)} leads by status`} icon={Users} accent="blue">
+            {leadPipelineData.length > 0 ? (
+              <DashboardPipelineChart data={leadPipelineData} />
+            ) : (
+              <p className="text-xs text-muted-foreground py-10 text-center">No leads assigned yet.</p>
+            )}
+          </ChartPanel>
+        </div>
+        <div className="lg:col-span-6 flex min-h-0 flex-col h-full">
+          <ChartPanel title="My proposal pipeline" description={`${proposalPipelineData.reduce((s, d) => s + d.value, 0)} proposals by status`} icon={Briefcase} accent="amber">
+            {proposalPipelineData.length > 0 ? (
+              <DashboardPipelineChart data={proposalPipelineData} />
+            ) : (
+              <p className="text-xs text-muted-foreground py-10 text-center">No proposals yet.</p>
+            )}
+          </ChartPanel>
+        </div>
+      </div>
     </PortalPageShell>
   );
 }

@@ -39,7 +39,8 @@ export function canClientRespondToProposal(proposal: {
   validUntil?: string | null;
   sentAt?: string | null;
 }): boolean {
-  if (["approved", "declined", "draft"].includes(proposal.status)) return false;
+  if (["approved", "declined"].includes(proposal.status)) return false;
+  if (proposal.status === "draft") return false;
   if (["sent", "seen"].includes(proposal.status)) return true;
   if (!isProposalValidityActive(proposal.validUntil)) return false;
   if (proposal.status === "expired") return true;
@@ -48,17 +49,34 @@ export function canClientRespondToProposal(proposal: {
 }
 
 export function calcProposalTotal(proposal: { items: ProposalItem[]; discount: number }) {
-  let subtotal = 0;
-  let tax = 0;
+  let grossSubtotal = 0;
+  let grossTax = 0;
   for (const item of proposal.items) {
     const line = item.quantity * item.unitPrice;
-    subtotal += line;
-    tax += line * (item.taxPercent / 100);
+    grossSubtotal += line;
+    grossTax += line * (item.taxPercent / 100);
   }
-  const discountFactor = 1 - (proposal.discount ?? 0) / 100;
-  subtotal *= discountFactor;
-  tax *= discountFactor;
-  return { subtotal, tax, total: subtotal + tax };
+  const discountPct = proposal.discount ?? 0;
+  const discountFactor = 1 - discountPct / 100;
+  const subtotal = grossSubtotal * discountFactor;
+  const tax = grossTax * discountFactor;
+  const grossTotal = grossSubtotal + grossTax;
+  const total = subtotal + tax;
+  return {
+    grossSubtotal: Math.round(grossSubtotal),
+    grossTax: Math.round(grossTax),
+    grossTotal: Math.round(grossTotal),
+    subtotal: Math.round(subtotal),
+    tax: Math.round(tax),
+    total: Math.round(total),
+    discountAmount: Math.round(grossTotal - total),
+  };
+}
+
+export function formatDiscountPercent(value: number): string {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return "0";
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(n);
 }
 
 export function resolveFinalTotal(

@@ -3,10 +3,10 @@ import { Button } from "./button";
 import { Loader2, UploadCloud, CheckCircle2, X } from "lucide-react";
 import { Progress } from "./progress";
 import { toast } from "sonner";
-import { toastApiError } from "@/lib/api-error";
-import { apiUrl } from "@/lib/api-base";
+import { toastUploadError, type ParsedApiError } from "@/lib/api-error";
 import { resolveFileUrl } from "@/lib/resolve-file-url";
 import { compressImageFile } from "@/lib/image-compression";
+import { uploadFileWithProgress } from "@/lib/upload-file";
 import { cn } from "@/lib/utils";
 
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
@@ -26,6 +26,8 @@ const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
 
 interface FileUploaderProps {
   onUploadComplete: (url: string, meta?: { fileName: string }) => void;
+  /** Called when upload fails — use to set react-hook-form field errors. */
+  onUploadError?: (error: ParsedApiError) => void;
   accept?: string;
   label?: string;
   value?: string | null;
@@ -38,6 +40,7 @@ interface FileUploaderProps {
 
 export function FileUploader({
   onUploadComplete,
+  onUploadError,
   accept = "*/*",
   label = "Drag & drop or click to upload",
   value = "",
@@ -51,6 +54,7 @@ export function FileUploader({
   const [progress, setProgress] = useState(0);
   const [currentFileUrl, setCurrentFileUrl] = useState<string | null>(value || null);
   const [displayName, setDisplayName] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -69,56 +73,15 @@ export function FileUploader({
     }
 
     setDisplayName(selected.name);
+    setUploadError(null);
     setIsUploading(true);
     setProgress(10);
 
     try {
-      const file = await compressImageFile(selected);
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const xhr = new XMLHttpRequest();
-
-      xhr.upload.addEventListener("progress", (event) => {
-        if (event.lengthComputable) {
-          const pct = Math.round((event.loaded / event.total) * 100);
-          setProgress(Math.max(10, Math.min(pct, 95)));
-        }
+      const file = category === "apk" ? selected : await compressImageFile(selected);
+      const response = await uploadFileWithProgress(file, category, {
+        onProgress: (pct) => setProgress(Math.max(10, Math.min(pct, 95))),
       });
-
-      const uploadPromise = new Promise<{ url: string; publicUrl?: string }>((resolve, reject) => {
-        const uploadPath = category
-          ? `/api/upload?category=${encodeURIComponent(category)}`
-          : "/api/upload";
-        xhr.open("POST", apiUrl(uploadPath), true);
-
-        const token = localStorage.getItem("accessToken");
-        if (token) {
-          xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-        }
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              resolve(JSON.parse(xhr.responseText));
-            } catch {
-              reject(new Error("Invalid server response format"));
-            }
-          } else {
-            try {
-              const err = JSON.parse(xhr.responseText);
-              reject(new Error(err.message || "Upload failed"));
-            } catch {
-              reject(new Error(`Upload failed (${xhr.status})`));
-            }
-          }
-        };
-
-        xhr.onerror = () => reject(new Error("Network error occurred"));
-        xhr.send(formData);
-      });
-
-      const response = await uploadPromise;
 
       setProgress(100);
       const storedUrl = response.url;
@@ -126,10 +89,16 @@ export function FileUploader({
       setCurrentFileUrl(displayUrl);
       setDisplayName(file.name);
       onUploadComplete(storedUrl, { fileName: file.name });
+      setUploadError(null);
       toast.success("File uploaded successfully!");
     } catch (err: unknown) {
-      toastApiError(err, "Failed to upload file.");
+      setProgress(0);
       setDisplayName(null);
+      setCurrentFileUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      const parsed = toastUploadError(err, "Failed to upload file.");
+      setUploadError(parsed.message);
+      onUploadError?.(parsed);
     } finally {
       setIsUploading(false);
     }
@@ -139,6 +108,7 @@ export function FileUploader({
     e.stopPropagation();
     setCurrentFileUrl(null);
     setDisplayName(null);
+    setUploadError(null);
     onUploadComplete("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -253,6 +223,11 @@ export function FileUploader({
           </Button>
         </div>
       )}
+      {uploadError ? (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          {uploadError}
+        </p>
+      ) : null}
     </div>
   );
 }

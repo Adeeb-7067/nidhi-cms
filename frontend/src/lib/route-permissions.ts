@@ -52,6 +52,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/sales/follow-ups", "sales_follow_ups"],
   ["/sales/proposals", "sales_proposals"],
   ["/sales/customers", "sales_customers"],
+  ["/sales/client-team", "sales_customers"],
   ["/sales/installments", "sales_installments"],
   ["/sales/invoices", "sales_invoices"],
   ["/sales/payments", "sales_payments"],

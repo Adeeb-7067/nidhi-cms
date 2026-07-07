@@ -8,15 +8,38 @@ import {
   usersTable,
 } from "../../models/schema/index.js";
 import { billableInvoiceMatch } from "../../utils/sales-invoice-filters.js";
-import { buildBdeSalesScope, findBdeOwnedCustomerIds } from "../../utils/sales-bde-customer-scope.js";
+import { buildBdeSalesScope, findBdeOwnedCustomerIds, findBdeAssignedProposalIds } from "../../utils/sales-bde-customer-scope.js";
+import { computeSalesKpis, computeOverdueByCustomer } from "../../services/sales/sales-kpis.service.js";
 
 async function getBdeScope(userId) {
   return buildBdeSalesScope(clientsTable, userId);
 }
 
+/** Custom date-range filter for the sales dashboard — both bounds optional. */
+function parseDateRange(query) {
+  const from = query.dateFrom ? new Date(query.dateFrom) : null;
+  const to = query.dateTo ? new Date(query.dateTo) : null;
+  const start = from && !isNaN(from.getTime()) ? from : null;
+  let end = to && !isNaN(to.getTime()) ? to : null;
+  if (end) {
+    // dateTo is inclusive of the whole day from the UI's point of view.
+    end = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
+  }
+  return start || end ? { start, end } : null;
+}
+
+function withCreatedAtRange(filter, range) {
+  if (!range) return filter;
+  const createdAt = {};
+  if (range.start) createdAt.$gte = range.start;
+  if (range.end) createdAt.$lt = range.end;
+  return { ...filter, createdAt };
+}
+
 async function getDashboard(req, res) {
   const isBde = req.user.role === "bde";
   const scope = isBde ? await getBdeScope(req.user.id) : null;
+  const range = parseDateRange(req.query);
 
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -25,12 +48,12 @@ async function getDashboard(req, res) {
   startOfWeek.setHours(0, 0, 0, 0);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const lf = scope?.leadFilter ?? {};
-  const pf = scope?.proposalFilter ?? {};
+  const lf = withCreatedAtRange(scope?.leadFilter ?? {}, range);
+  const pf = withCreatedAtRange(scope?.proposalFilter ?? {}, range);
   const fuf = scope?.followUpFilter ?? {};
-  const pyf = scope?.paymentFilter ?? {};
+  const pyf = withCreatedAtRange(scope?.paymentFilter ?? {}, range);
   const cf = scope?.customerFilter ?? { status: "active" };
-  const invF = scope?.invoiceFilter ?? {};
+  const invF = withCreatedAtRange(scope?.invoiceFilter ?? {}, range);
 
   const [
     totalLeads,
@@ -81,6 +104,23 @@ async function getDashboard(req, res) {
     ]),
   ]);
 
+  // Sales-KPI cards default to "this month" when no explicit range is picked, so
+  // the new-vs-old-project split always has a meaningful window; the legacy
+  // all-time metrics above are untouched unless a range is explicitly chosen.
+  const kpiRange = range ?? { start: startOfMonth, end: null };
+  const myProposalIds = isBde ? await findBdeAssignedProposalIds(SalesProposals, req.user.id) : [];
+  const [salesKpis, overdueByCustomer] = await Promise.all([
+    computeSalesKpis({
+      installmentFilter: isBde ? { proposalId: { $in: myProposalIds.length ? myProposalIds : [-1] } } : {},
+      paymentFilter: scope?.paymentFilter ?? {},
+      periodStart: kpiRange.start,
+      periodEnd: kpiRange.end,
+    }),
+    computeOverdueByCustomer(
+      isBde ? { customerId: { $in: scope.myCustomerIds.length ? scope.myCustomerIds : [-1] } } : {},
+    ),
+  ]);
+
   const invoiceByStatus = {};
   const proposalByStatus = {};
   let totalBilled = 0;
@@ -108,7 +148,12 @@ async function getDashboard(req, res) {
     activeCustomers,
     totalRevenue,
     totalBilled,
-    totalSales: totalBilled,
+    totalSales: { count: salesKpis.salesCount, value: salesKpis.salesValue },
+    totalCollected: salesKpis.totalCollected,
+    newProjectMoney: salesKpis.newProjectMoney,
+    oldProjectMoney: salesKpis.oldProjectMoney,
+    salesKpisPeriod: { from: kpiRange.start?.toISOString() ?? null, to: kpiRange.end?.toISOString() ?? null },
+    overdueByCustomer,
     outstanding: totalOutstanding,
     pendingInvoices,
     invoiceByStatus,

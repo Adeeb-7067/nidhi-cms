@@ -9,6 +9,7 @@ import {
 } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
+import { applyPaymentInTx } from "../../services/sales/payment-ledger.service.js";
 import {
   loadProjectNameMap,
   resolvePaymentInstallment,
@@ -18,6 +19,7 @@ import {
 } from "../../utils/sales-project-labels.js";
 import {
   assertBdeOwnsCustomerById,
+  assertBdeInstallmentAccess,
   bdeOwnsCustomer,
   findBdeOwnedCustomerIds,
 } from "../../utils/sales-bde-customer-scope.js";
@@ -42,11 +44,9 @@ async function applyBdePaymentListScope(req, filter) {
   }
 
   if (installmentId != null && Number.isFinite(installmentId)) {
-    const installment = await SalesInstallments.findOne({ id: installmentId })
-      .select({ customerId: 1 })
-      .lean();
+    const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
     if (!installment) notFound("Installment");
-    await assertBdeOwnsCustomerById(clientsTable, req.user, installment.customerId, "Installment");
+    await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user, "Installment");
     return;
   }
 
@@ -138,18 +138,6 @@ async function nextReceiptNumber() {
   return `REC-${year}-${String(seq).padStart(4, "0")}`;
 }
 
-function deriveInvoiceStatus(invoice, newPaidAmount) {
-  if (newPaidAmount >= invoice.amount) return "paid";
-  if (newPaidAmount > 0) return "partial";
-  return "unpaid";
-}
-
-function deriveInstallmentStatus(installment, newPaidAmount) {
-  if (newPaidAmount >= installment.dueAmount) return "paid";
-  if (newPaidAmount > 0) return "partial";
-  return "pending";
-}
-
 async function assertBdePaymentAccess(payment, user) {
   if (user.role !== "bde") return;
   const client = await clientsTable.findOne({ id: payment.customerId }).lean();
@@ -162,7 +150,7 @@ async function recordPayment(req, res) {
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
   const invoiceId = Number(body.invoiceId);
-  let installmentId = body.installmentId ? Number(body.installmentId) : null;
+  const installmentId = body.installmentId ? Number(body.installmentId) : null;
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
 
@@ -173,70 +161,19 @@ async function recordPayment(req, res) {
 
   let newStatus;
   await runInTx(async (session) => {
-    const invoice = await SalesInvoices.findOne({ id: invoiceId }).session(session).lean();
-    if (!invoice) notFound("Invoice");
-    if (req.user.role === "bde") {
-      const client = await clientsTable.findOne({ id: invoice.customerId }).session(session).lean();
-      if (!client || !bdeOwnsCustomer(client, req.user.id)) notFound("Invoice");
-    }
-    if (invoice.status === "cancelled") badRequest("This invoice has been cancelled.", "invoiceId");
-    if (invoice.status === "paid") badRequest("This invoice is already fully paid.", "invoiceId");
-
-    // Milestone invoices are 1:1 with an installment — apply payment to both ledgers.
-    if (!installmentId && invoice.installmentId) {
-      installmentId = invoice.installmentId;
-    }
-
-    // If paying against a specific installment, validate and update it too
-    if (installmentId) {
-      const inst = await SalesInstallments.findOne({ id: installmentId }).session(session).lean();
-      if (!inst) notFound("Installment");
-      if (inst.invoiceId && inst.invoiceId !== invoiceId) {
-        badRequest("Installment does not belong to this invoice.", "installmentId");
-      }
-      if (inst.status === "paid") badRequest("This installment is already fully paid.", "installmentId");
-
-      const instRemaining = inst.dueAmount - inst.paidAmount;
-      const appliedToInst = Math.min(amount, instRemaining);
-      const newInstPaid = inst.paidAmount + appliedToInst;
-      const newInstStatus = deriveInstallmentStatus(inst, newInstPaid);
-
-      await SalesInstallments.updateOne(
-        { id: installmentId },
-        { $set: { paidAmount: newInstPaid, status: newInstStatus } },
-        { session }
-      );
-    }
-
-    // Update invoice paidAmount regardless
-    const remaining = invoice.amount - invoice.paidAmount;
-    if (amount > remaining) {
-      badRequest(`Payment exceeds remaining balance of ${remaining}.`, "amount");
-    }
-    const appliedAmount = amount;
-    const newPaidAmount = invoice.paidAmount + appliedAmount;
-    newStatus = deriveInvoiceStatus(invoice, newPaidAmount);
-
-    await SalesPayments.create(
-      [{
-        id,
-        invoiceId,
-        installmentId,
-        customerId: invoice.customerId,
-        amount: appliedAmount,
-        paymentMethod: body.paymentMethod,
-        transactionId: optionalString(body.transactionId) ?? null,
-        note: optionalString(body.note) ?? null,
-        recordedBy: req.user.id,
-        receiptNumber,
-      }],
-      { session }
-    );
-    await SalesInvoices.updateOne(
-      { id: invoiceId },
-      { $set: { paidAmount: newPaidAmount, status: newStatus } },
-      { session }
-    );
+    const result = await applyPaymentInTx(session, {
+      invoiceId,
+      installmentId,
+      amount,
+      paymentMethod: body.paymentMethod,
+      transactionId: body.transactionId,
+      note: body.note,
+      recordedBy: req.user.id,
+      receiptNumber,
+      paymentId: id,
+      bdeUser: req.user,
+    });
+    newStatus = result.invoiceStatus;
   });
 
   const payment = await SalesPayments.findOne({ id }).lean();

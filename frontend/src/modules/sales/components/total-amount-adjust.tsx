@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrency } from "@/modules/sales/constants";
@@ -102,26 +102,24 @@ export function TotalAmountAdjustFields({
       {useCustomTotal ? (
         <div className="space-y-1.5">
           <Label className="text-xs">Final total (₹)</Label>
-          <Input
-            type="number"
+          <DecimalInput
             min={0}
-            step={1}
-            value={adjustedTotal ?? ""}
-            onChange={(e) => {
-              const raw = e.target.value;
-              onAdjustedTotalChange(raw === "" ? null : Number(raw));
-            }}
+            integer
+            hideZero
+            fallback={Math.round(calculatedTotal)}
+            value={adjustedTotal ?? 0}
+            onChange={(v) => onAdjustedTotalChange(v)}
             placeholder={String(Math.round(calculatedTotal))}
           />
         </div>
       ) : (
         <div className="space-y-1.5">
           <Label className="text-xs">Adjustment (+/− ₹)</Label>
-          <Input
-            type="number"
-            step={1}
-            value={totalAdjustment || ""}
-            onChange={(e) => onTotalAdjustmentChange(Number(e.target.value) || 0)}
+          <DecimalInput
+            integer
+            hideZero
+            value={totalAdjustment}
+            onChange={onTotalAdjustmentChange}
             placeholder="0"
           />
         </div>

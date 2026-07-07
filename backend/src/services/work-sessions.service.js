@@ -18,6 +18,7 @@ import { broadcastWorkSessionSync } from "./work-session-sync.js";
 const RESUMABLE_STOP_REASONS = [
   "clock_out",
   "shift_ended",
+  "day_ended",
   "app_quit",
   "logout",
   "system_sleep",
@@ -113,9 +114,10 @@ async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = 
   await workSessionsTable.updateMany({ userId, isActive: true }, { $set: update });
 }
 
-async function findResumableSession(userId) {
+async function listResumableSessions(userId) {
   const tz = await resolveTimezone();
   const now = new Date();
+  const matching = [];
 
   const candidates = await workSessionsTable
     .find({
@@ -123,7 +125,7 @@ async function findResumableSession(userId) {
       isActive: false,
       stopReason: { $in: RESUMABLE_STOP_REASONS },
     })
-    .sort({ startedAt: 1 })
+    .sort({ endedAt: -1 })
     .limit(10)
     .lean();
 
@@ -131,10 +133,9 @@ async function findResumableSession(userId) {
     if (!session.endedAt) continue;
     if (!isPausedSessionResumableToday(session, now, tz)) continue;
     if (!isSessionWithinMaxDuration(session, now)) continue;
-    return session;
+    matching.push(session);
   }
 
-  // Fallback: sessions auto-closed before shift_ended enum existed (stopReason may be null).
   const orphans = await workSessionsTable
     .find({
       userId,
@@ -142,7 +143,7 @@ async function findResumableSession(userId) {
       endedAt: { $ne: null },
       stopReason: null,
     })
-    .sort({ startedAt: 1 })
+    .sort({ endedAt: -1 })
     .limit(5)
     .lean();
 
@@ -150,10 +151,15 @@ async function findResumableSession(userId) {
     if (!isPausedSessionResumableToday(session, now, tz)) continue;
     if (!isSessionWithinMaxDuration(session, now)) continue;
     if (computeSessionDurations(session).activeDurationMs < 30 * 60 * 1000) continue;
-    return session;
+    matching.push(session);
   }
 
-  return null;
+  return matching;
+}
+
+async function findResumableSession(userId) {
+  const sessions = await listResumableSessions(userId);
+  return sessions[0] ?? null;
 }
 
 async function resumeSession(session, deviceInfo) {
@@ -237,14 +243,28 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
   }
 
   if (!forceNew) {
-    const resumable = await findResumableSession(userId);
-    if (resumable) {
+    const resumableSessions = await listResumableSessions(userId);
+    for (const resumable of resumableSessions) {
       const session = await resumeSession(resumable, deviceInfo);
       if (session) return { session, resumed: true };
     }
+
+    // Concurrent clock-in: another request may have resumed while we were trying.
+    const racedActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+    if (racedActive) {
+      const enforced = await enforceActiveSessionPolicy(racedActive);
+      if (enforced) {
+        const refreshed = await workSessionsTable.findOneAndUpdate(
+          { userId, isActive: true },
+          { $set: { lastHeartbeatAt: new Date() } },
+          { new: true },
+        );
+        return { session: refreshed ?? enforced, resumed: false };
+      }
+    }
   }
 
-  await closeActiveSessions(userId);
+  await closeActiveSessions(userId, { stopReason: "clock_out" });
 
   const id = await getNextSequence("workSession");
   const now = new Date();

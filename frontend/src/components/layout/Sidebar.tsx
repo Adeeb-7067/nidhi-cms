@@ -37,6 +37,7 @@ import {
   type NavItem,
   isDevPortalRole,
 } from "@/lib/navigation";
+import { ALL_AUTHENTICATED_ROLES } from "@/lib/user-roles";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { useClientTeam } from "@/contexts/ClientTeamContext";
 
@@ -190,9 +191,13 @@ function useSidebarNavState() {
           .map((section) => ({
             ...section,
             // Role allowlist (e.g. BDE-only "My Dashboard") plus permission matrix.
-            items: section.items.filter(
-              (item) => item.roles.includes(role) && canViewHref(item.href),
-            ),
+            // Custom roles (anything outside the fixed built-in role set) have no
+            // entry in these hardcoded allowlists, so for them visibility falls
+            // through entirely to the permission matrix via canViewHref.
+            items: section.items.filter((item) => {
+              const roleAllowed = !ALL_AUTHENTICATED_ROLES.includes(role) || item.roles.includes(role);
+              return roleAllowed && canViewHref(item.href);
+            }),
           }))
           .filter((section) => section.items.length > 0);
 

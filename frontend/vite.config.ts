@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
   const apiProxy = {
     target: apiProxyTarget,
     changeOrigin: true,
+    // Large APK uploads can take several minutes through the dev proxy.
+    timeout: 600_000,
+    proxyTimeout: 600_000,
   };
 
   const socketProxy = {

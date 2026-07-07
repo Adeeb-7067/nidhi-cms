@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, Plus, Loader2, FileText } from "lucide-react";
+import { ArrowLeft, IndianRupee, Loader2, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ import {
   PaymentHistoryTable,
   PaymentTimeline,
   OutstandingBadge,
-  RecordPaymentDialog,
+  ReceiveInstallmentPaymentDialog,
   TotalAmountAdjustFields,
   totalAdjustPayload,
 } from "@/modules/sales/components";
@@ -36,7 +36,7 @@ export default function InstallmentDetailPage() {
   const [, params] = useRoute("/sales/installments/:id");
   const [, navigate] = useLocation();
   const installmentId = Number(params?.id);
-  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [receiveOpen, setReceiveOpen] = useState(false);
   const updateInstallment = useUpdateInstallment();
   const createInvoice = useCreateInvoiceFromInstallment();
   const [totalAdjustment, setTotalAdjustment] = useState(0);
@@ -46,10 +46,7 @@ export default function InstallmentDetailPage() {
   const { data: installment, isLoading, isError } = useGetInstallment(installmentId, !!installmentId);
   const { data: customer } = useGetCustomer(installment?.customerId ?? 0, !!installment?.customerId);
   const { data: invoice } = useGetInvoice(installment?.invoiceId ?? 0, !!installment?.invoiceId);
-  const { data: paymentsData } = useListPayments(
-    invoice?.id ? { invoiceId: invoice.id } : undefined,
-    !!invoice?.id,
-  );
+  const { data: paymentsData } = useListPayments({ installmentId }, !!installmentId);
 
   useEffect(() => {
     if (!installment) return;
@@ -63,14 +60,14 @@ export default function InstallmentDetailPage() {
     ? totalAdjustPayload(calculatedAmount, totalAdjustment, useCustomTotal, adjustedTotal).dueAmount
     : 0;
 
-  const handleGenerateInvoice = async () => {
+  const handleIssueInvoice = async () => {
     if (!installment) return;
     try {
       const inv = await createInvoice.mutateAsync({ installmentId: installment.id });
-      toast.success(`Invoice ${inv.number} created`);
+      toast.success(`Invoice ${inv.number} ready to send`);
       navigate(`/sales/invoices/${inv.id}`);
     } catch (err) {
-      toastApiError(err, "Failed to generate invoice");
+      toastApiError(err, "Failed to create invoice");
     }
   };
 
@@ -123,6 +120,7 @@ export default function InstallmentDetailPage() {
     installment.sequenceTotal,
   );
   const customerLabel = installment.customerName ?? customer?.companyName ?? `Customer #${installment.customerId}`;
+  const canReceive = remaining > 0;
 
   return (
     <PortalPageShell>
@@ -144,19 +142,34 @@ export default function InstallmentDetailPage() {
         ]}
         actions={
           <>
+            {canReceive && (
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => setReceiveOpen(true)}>
+                <IndianRupee className="h-3.5 w-3.5" />
+                Receive payment
+              </Button>
+            )}
             {!invoice && (
               <Button
+                variant="outline"
                 size="sm"
                 className="h-8 gap-1.5"
                 disabled={createInvoice.isPending}
-                onClick={handleGenerateInvoice}
+                onClick={() => void handleIssueInvoice()}
               >
                 {createInvoice.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <FileText className="h-3.5 w-3.5" />
                 )}
-                Generate invoice
+                Issue invoice only
+              </Button>
+            )}
+            {invoice && (
+              <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
+                <Link href={`/sales/invoices/${invoice.id}`}>
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  {invoice.number}
+                </Link>
               </Button>
             )}
             <Button variant="outline" size="sm" className="h-8" asChild>
@@ -181,34 +194,28 @@ export default function InstallmentDetailPage() {
           {customerLabel}
         </Link>
         <OutstandingBadge amount={remaining} />
-        {invoice && (
-          <Link href={`/sales/invoices/${invoice.id}`} className="text-xs text-primary hover:underline font-mono">
-            {invoice.number}
-          </Link>
-        )}
       </div>
+
+      {!invoice && canReceive && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Receive payment</span> records the money and creates the invoice automatically.
+          Use <span className="font-medium text-foreground">Issue invoice only</span> when you need to send a bill before any payment arrives.
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Installment progress</CardTitle>
-              <Button
-                size="sm"
-                className="h-8 gap-1.5"
-                disabled={remaining <= 0 || !invoice}
-                onClick={() => setPaymentOpen(true)}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Record payment
-              </Button>
+              <CardTitle className="text-sm">Milestone progress</CardTitle>
+              {canReceive && (
+                <Button size="sm" className="h-8 gap-1.5" onClick={() => setReceiveOpen(true)}>
+                  <IndianRupee className="h-3.5 w-3.5" />
+                  Receive payment
+                </Button>
+              )}
             </CardHeader>
             <CardContent className="space-y-4">
-              {!invoice && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  Generate an invoice for this installment before recording payments.
-                </p>
-              )}
               <InstallmentProgress paid={installment.paidAmount} total={installment.dueAmount} />
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                 <div><p className="text-muted-foreground">Due amount</p><p className="font-bold">{formatCurrency(installment.dueAmount)}</p></div>
@@ -222,7 +229,12 @@ export default function InstallmentDetailPage() {
 
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Payment history</CardTitle></CardHeader>
-            <CardContent><PaymentHistoryTable payments={payments} /></CardContent>
+            <CardContent>
+              <PaymentHistoryTable payments={payments} />
+              {payments.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">No payments recorded yet.</p>
+              )}
+            </CardContent>
           </Card>
         </div>
 
@@ -269,21 +281,18 @@ export default function InstallmentDetailPage() {
             <CardContent>
               <PaymentTimeline payments={payments} />
               {payments.length === 0 && (
-                <p className="text-xs text-muted-foreground">No payments yet.</p>
+                <p className="text-xs text-muted-foreground">Payments will appear here after you receive one.</p>
               )}
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {invoice && (
-        <RecordPaymentDialog
-          open={paymentOpen}
-          onOpenChange={setPaymentOpen}
-          defaultInvoiceId={invoice.id}
-          defaultInstallmentId={installment.id}
-        />
-      )}
+      <ReceiveInstallmentPaymentDialog
+        open={receiveOpen}
+        onOpenChange={setReceiveOpen}
+        installment={installment}
+      />
     </PortalPageShell>
   );
 }

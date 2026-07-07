@@ -18,10 +18,6 @@ async function getBdeTargets(req, res) {
 }
 
 async function upsertBdeTarget(req, res) {
-  if (req.user.role !== "super_admin" && req.user.role !== "hr") {
-    forbidden("Only admins can set monthly targets.");
-  }
-
   const userId = parseIdParam(req.params.userId, "user id");
   const body = req.body;
   const month = Number(body.month);

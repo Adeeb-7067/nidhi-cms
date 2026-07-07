@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import type { PublicProposal } from "@/api/sales";
 import { COMPANY_BILLING, formatCurrency } from "../constants";
-import { numberToWords, resolveProposalTotal } from "../utils";
+import { numberToWords, resolveProposalTotal, formatDiscountPercent } from "../utils";
 import type { SalesDocumentBranding } from "../company-branding";
 import { DocumentIssuerMeta } from "./DocumentIssuerMeta";
 
@@ -71,10 +71,11 @@ export function ProposalDocument({
   forPdf?: boolean;
 }) {
   const items = proposal.items ?? [];
-  const { subtotal, tax, calculated, finalTotal, adjustmentDelta } = resolveProposalTotal({
-    ...proposal,
-    items,
-  });
+  const { grossSubtotal, grossTax, discountAmount, finalTotal, adjustmentDelta } =
+    resolveProposalTotal({
+      ...proposal,
+      items,
+    });
   const isPastValidity = !!(proposal.validUntil && new Date(proposal.validUntil) < new Date());
 
   const company = proposal.companySettings;
@@ -271,18 +272,22 @@ export function ProposalDocument({
       <div className={`${padX} ${padYSection} flex justify-end`} style={{ borderTop: `1px solid ${border}` }}>
         <div className="w-full max-w-xs">
           <div className={`space-y-2.5 ${compact ? "pb-2" : "pb-4"}`} style={{ borderBottom: `1px solid ${border}` }}>
-            <TotRow label="Subtotal" val={formatCurrency(subtotal)} />
-            <TotRow label="Tax (GST)" val={formatCurrency(tax)} />
+            <TotRow label="Subtotal" val={formatCurrency(grossSubtotal)} />
+            <TotRow label="Tax (GST)" val={formatCurrency(grossTax)} />
             {proposal.discount > 0 && (
               <TotRow
-                label={`Discount (${proposal.discount}%)`}
-                val={`− ${formatCurrency(calculated - (subtotal + tax))}`}
+                label={`Discount (${formatDiscountPercent(proposal.discount)}%)`}
+                val={`− ${formatCurrency(discountAmount)}`}
                 valColor={orange}
               />
             )}
             {adjustmentDelta !== 0 && (
               <TotRow
-                label="Amount Adjustment"
+                label={
+                  proposal.adjustedTotal != null
+                    ? "Custom total adjustment"
+                    : "Amount adjustment"
+                }
                 val={`${adjustmentDelta > 0 ? "+ " : "− "}${formatCurrency(Math.abs(adjustmentDelta))}`}
                 valColor={primary}
               />

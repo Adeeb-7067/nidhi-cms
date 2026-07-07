@@ -1,11 +1,15 @@
+import fs from "fs/promises";
 import {
   getStorageBackend,
   resolvePublicFileUrl,
+  storeGeneratedFile,
   storeUpload,
-  UPLOAD_CATEGORIES
+  UPLOAD_CATEGORIES,
+  isObjectStorageEnabled,
 } from "../lib/file-storage.js";
 import { getUploadMaxBytesForCategory } from "../config/upload-limits.js";
 import { badRequest } from "../utils/route-errors.js";
+import { HttpError } from "../lib/http-error.js";
 function parseCategory(raw) {
   if (typeof raw !== "string" || !raw) return "misc";
   const c = raw.toLowerCase();
@@ -17,16 +21,37 @@ async function postUpload(req, res) {
   }
   const category = parseCategory(req.query.category);
   const maxBytes = getUploadMaxBytesForCategory(category);
-  if (req.file.size > maxBytes) {
+  const fileSize = req.file.size ?? req.file.buffer?.length ?? 0;
+  if (fileSize > maxBytes) {
+    if (req.file.path) await fs.unlink(req.file.path).catch(() => {});
     const maxMb = Math.round(maxBytes / (1024 * 1024));
     badRequest(`File is too large. Maximum size for ${category} uploads is ${maxMb} MB.`, "file");
   }
-  const stored = await storeUpload(
-    req.file.buffer,
-    req.file.originalname,
-    req.file.mimetype,
-    category
-  );
+  let stored;
+  try {
+    if (req.file.path) {
+      stored = await storeGeneratedFile(
+        req.file.path,
+        req.file.originalname,
+        req.file.mimetype,
+        category,
+      );
+    } else {
+      stored = await storeUpload(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+        category,
+      );
+    }
+  } catch (err) {
+    if (req.file.path) await fs.unlink(req.file.path).catch(() => {});
+    if (err instanceof HttpError) throw err;
+    const storageHint = isObjectStorageEnabled()
+      ? "Cloud storage upload failed. Check object storage credentials and bucket permissions."
+      : "Could not save the uploaded file. Check that the uploads folder is writable.";
+    throw new HttpError(500, storageHint, { code: "UPLOAD_FAILED", field: "file" });
+  }
   const publicUrl = resolvePublicFileUrl(stored.url, req) ?? stored.url;
   res.status(200).json({
     message: "File uploaded successfully",

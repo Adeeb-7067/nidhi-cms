@@ -22,7 +22,7 @@ import {
   type ProposalComment, type ProposalLog, type PublicProposal,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { resolveProposalTotal, formatSalesDateTime, formatInstallmentSequence } from "@/modules/sales/utils";
+import { resolveProposalTotal, formatSalesDateTime, formatInstallmentSequence, formatDiscountPercent } from "@/modules/sales/utils";
 import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import {
@@ -202,7 +202,8 @@ export default function ProposalDetail() {
     );
   }
 
-  const { subtotal, tax, calculated, finalTotal, adjustmentDelta } = resolveProposalTotal(proposal);
+  const { grossSubtotal, grossTax, discountAmount, finalTotal, adjustmentDelta } =
+    resolveProposalTotal(proposal);
 
   const clientName    = proposal.lead?.name ?? proposal.customer?.contactPerson ?? (proposal.leadId ? `Lead #${proposal.leadId}` : proposal.customerId ? `Customer #${proposal.customerId}` : "—");
   const clientEmail   = proposal.lead?.email   ?? proposal.customer?.email   ?? null;
@@ -472,7 +473,7 @@ export default function ProposalDetail() {
             <div>
               <p className="text-sm font-bold" style={{ color: P.dark }}>Payment schedule</p>
               <p className="text-xs" style={{ color: P.muted }}>
-                {proposalInstallments.length} milestone{proposalInstallments.length === 1 ? "" : "s"} · generate an invoice per installment when due
+                {proposalInstallments.length} milestone{proposalInstallments.length === 1 ? "" : "s"} · receive payment on each when due
               </p>
             </div>
             <Button size="sm" variant="outline" className="h-8" asChild>
@@ -621,10 +622,14 @@ export default function ProposalDetail() {
             <div className="px-6 py-5 flex justify-end" style={{ borderTop: `1px solid ${P.border}` }}>
               <div style={{ width: 280 }}>
                 <div className="space-y-2 pb-3" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <TRow label="Subtotal" val={formatCurrency(subtotal)} />
-                  <TRow label="Tax (GST)" val={formatCurrency(tax)} />
+                  <TRow label="Subtotal" val={formatCurrency(grossSubtotal)} />
+                  <TRow label="Tax (GST)" val={formatCurrency(grossTax)} />
                   {proposal.discount > 0 && (
-                    <TRow label={`Discount (${proposal.discount}%)`} val={`− ${formatCurrency(calculated - (subtotal + tax))}`} valColor={P.orange} />
+                    <TRow
+                      label={`Discount (${formatDiscountPercent(proposal.discount)}%)`}
+                      val={`− ${formatCurrency(discountAmount)}`}
+                      valColor={P.orange}
+                    />
                   )}
                   {adjustmentDelta !== 0 && (
                     <TRow

@@ -33,11 +33,10 @@ export function ClockInButton() {
     {},
     { refetchInterval: isClockedIn ? 60_000 : false },
   );
-  const todayKey = new Date().toLocaleDateString("en-CA");
+  // Daily totals use company compliance timezone — match `to` from the API, not browser local date.
+  const todayKey = dailyData?.to ?? new Date().toLocaleDateString("en-CA");
   const todayTotalMs =
-    dailyData?.data.find((row) => row.date === todayKey)?.totalMs ??
-    dailyData?.data[0]?.totalMs ??
-    0;
+    dailyData?.data.find((row) => row.date === todayKey)?.totalMs ?? 0;
 
   const [elapsed, setElapsed] = useState(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);

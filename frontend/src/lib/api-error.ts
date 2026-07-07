@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import type { ApiError } from "@/api";
+import { isUploadError } from "@/lib/upload-file";
 
 type ErrorPayload = {
   error?: string;
@@ -24,6 +25,8 @@ export const API_FIELD_LABELS: Record<string, string> = {
   gstin: "GSTIN",
   gstNumber: "GSTIN",
   contactPerson: "Contact person",
+  file: "File",
+  fileUrl: "Build file",
 };
 
 export type ParsedApiError = {
@@ -133,6 +136,15 @@ function errorPayload(error: unknown): ErrorPayload | undefined {
 
 /** Structured API error for toasts and inline form field messages. */
 export function parseApiError(error: unknown, fallback = DEFAULT_API_ERROR): ParsedApiError {
+  if (isUploadError(error)) {
+    return {
+      message: error.message,
+      field: error.field,
+      code: error.code,
+      status: error.status,
+    };
+  }
+
   if (isApiLikeError(error)) {
     const payload = errorPayload(error);
     let message =
@@ -202,6 +214,13 @@ export async function getResponseErrorMessage(
 /** Show a Sonner toast with a friendly API error message. */
 export function toastApiError(error: unknown, fallback = DEFAULT_API_ERROR): void {
   toast.error(getApiErrorMessage(error, fallback));
+}
+
+/** Parse an upload failure and show a toast; returns structured error for form fields. */
+export function toastUploadError(error: unknown, fallback = "Failed to upload file."): ParsedApiError {
+  const parsed = parseApiError(error, fallback);
+  toast.error(parsed.message);
+  return parsed;
 }
 
 /** Type guard for ApiError from customFetch. */

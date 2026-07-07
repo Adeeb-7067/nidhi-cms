@@ -116,6 +116,7 @@ router.post(
 router.get("/sales/installments", ...p("sales_installments"), wrap(installmentsCtrl.listInstallments));
 router.post("/sales/installments", ...p("sales_installments", "create"), wrap(installmentsCtrl.createInstallment));
 router.post("/sales/proposals/:proposalId/installments", ...p("sales_installments", "create"), wrap(installmentsCtrl.createInstallmentsFromProposal));
+router.post("/sales/installments/:id/receive-payment", ...p("sales_payments", "create"), wrap(installmentsCtrl.receiveInstallmentPayment));
 router.get("/sales/installments/:id", ...p("sales_installments"), wrap(installmentsCtrl.getInstallmentById));
 router.patch("/sales/installments/:id", ...p("sales_installments", "edit"), wrap(installmentsCtrl.updateInstallment));
 
@@ -154,6 +155,6 @@ router.get("/sales/team/:userId", ...teamRead, wrap(teamCtrl.getSalesTeamMember)
 router.get("/sales/targets/me", requireAuth, wrap(targetsCtrl.getMyTarget));
 router.get("/sales/targets", ...p("sales_team"), wrap(targetsCtrl.getAllTargetsForMonth));
 router.get("/sales/team/:userId/targets", ...teamRead, wrap(targetsCtrl.getBdeTargets));
-router.put("/sales/team/:userId/targets", ...p("sales_team"), wrap(targetsCtrl.upsertBdeTarget));
+router.put("/sales/team/:userId/targets", ...p("sales_team", "edit"), wrap(targetsCtrl.upsertBdeTarget));
 
 export default router;

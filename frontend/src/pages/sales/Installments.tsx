@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarClock, Layers, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,10 +10,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { API_PAGE_LIMIT_CAP } from "@/lib/table-pagination";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useListInstallments, useListCustomers } from "@/api/sales";
-import { calcRemaining, formatCurrency } from "@/modules/sales/constants";
+import { formatCurrency } from "@/modules/sales/constants";
 import { readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
@@ -38,6 +39,9 @@ export default function InstallmentsPage() {
     initialCustomerId ? String(initialCustomerId) : "all",
   );
   const [createOpen, setCreateOpen] = useState(false);
+  const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
+
+  useEffect(() => { resetPage(); }, [search, statusTab, customerId, resetPage]);
 
   const { data: customersData } = useListCustomers({ limit: 300 });
   const customers = customersData?.customers ?? [];
@@ -45,34 +49,16 @@ export default function InstallmentsPage() {
   const listParams = {
     ...(proposalId ? { proposalId } : {}),
     ...(customerId !== "all" ? { customerId: Number(customerId) } : {}),
-    limit: API_PAGE_LIMIT_CAP,
+    ...(statusTab !== "all" ? { status: statusTab } : {}),
+    search: search.trim() || undefined,
+    page,
+    limit: apiLimit,
   };
 
-  const { data, isLoading, isError, refetch } = useListInstallments(
-    Object.keys(listParams).length ? listParams : { limit: API_PAGE_LIMIT_CAP },
-  );
-  const allInstallments = data?.installments ?? [];
-  const installmentsTotal = data?.total ?? allInstallments.length;
-  const installmentsTruncated = installmentsTotal > allInstallments.length;
-
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return allInstallments.filter((i) => {
-      const matchesSearch =
-        !q ||
-        i.name.toLowerCase().includes(q) ||
-        (i.customerName?.toLowerCase().includes(q) ?? false);
-      const matchesStatus = statusTab === "all" || i.status === statusTab;
-      return matchesSearch && matchesStatus;
-    });
-  }, [allInstallments, search, statusTab]);
-
-  const totalDue = allInstallments.reduce(
-    (s, i) => s + calcRemaining(i.dueAmount, i.paidAmount),
-    0,
-  );
-  const overdueCount = allInstallments.filter((i) => i.status === "overdue").length;
-  const partialCount = allInstallments.filter((i) => i.status === "partial").length;
+  const { data, isLoading, isError, refetch } = useListInstallments(listParams);
+  const installments = data?.installments ?? [];
+  const total = data?.total ?? 0;
+  const summary = data?.summary ?? { total: 0, pending: 0, partial: 0, paid: 0, overdue: 0, outstanding: 0 };
 
   return (
     <PortalPageShell>
@@ -80,8 +66,8 @@ export default function InstallmentsPage() {
         title="Installment management"
         description={
           proposalId
-            ? `Milestones for proposal #${proposalId}. Generate an invoice per installment when ready to bill.`
-            : "Track milestone billing from approved proposals, then generate invoices per installment."
+            ? `Milestones for proposal #${proposalId}. Open a milestone and receive payment when the client pays.`
+            : "Track milestone billing from approved proposals. Receive payment on each installment — invoices are created automatically."
         }
         breadcrumbs={[{ label: "Sales", href: "/sales" }, { label: "Installments" }]}
         actions={
@@ -93,17 +79,11 @@ export default function InstallmentsPage() {
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FinancialSummaryCard title="Installments" value={installmentsTotal} icon={CalendarClock} accent="blue" />
-        <FinancialSummaryCard title="Partial" value={partialCount} icon={CalendarClock} accent="amber" />
-        <FinancialSummaryCard title="Overdue" value={overdueCount} icon={CalendarClock} accent="red" alert={overdueCount > 0} />
-        <FinancialSummaryCard title="Outstanding" value={formatCurrency(totalDue)} icon={CalendarClock} accent="violet" hint={overdueCount ? `${overdueCount} overdue` : undefined} />
+        <FinancialSummaryCard title="Installments" value={summary.total} icon={CalendarClock} accent="blue" />
+        <FinancialSummaryCard title="Partial" value={summary.partial} icon={CalendarClock} accent="amber" />
+        <FinancialSummaryCard title="Overdue" value={summary.overdue} icon={CalendarClock} accent="red" alert={summary.overdue > 0} />
+        <FinancialSummaryCard title="Outstanding" value={formatCurrency(summary.outstanding)} icon={CalendarClock} accent="violet" hint={summary.overdue ? `${summary.overdue} overdue` : undefined} />
       </div>
-
-      {installmentsTruncated ? (
-        <p className="text-xs text-amber-700 dark:text-amber-400">
-          Showing {allInstallments.length} of {installmentsTotal} installments. Partial/overdue counts reflect the loaded set.
-        </p>
-      ) : null}
 
       <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search installment or client…">
         <Select value={customerId} onValueChange={setCustomerId}>
@@ -125,7 +105,7 @@ export default function InstallmentsPage() {
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {(["all", "pending", "partial", "paid", "overdue"] as StatusTab[]).map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s} ({s === "all" ? installmentsTotal : allInstallments.filter((i) => i.status === s).length})
+              {s} ({s === "all" ? summary.total : summary[s]})
             </TabsTrigger>
           ))}
         </TabsList>
@@ -137,14 +117,24 @@ export default function InstallmentsPage() {
         </div>
       ) : isError ? (
         <SalesEmptyState icon={Layers} title="Failed to load installments" description="Could not fetch installments." actionLabel="Retry" onAction={() => refetch()} />
-      ) : filtered.length === 0 ? (
+      ) : installments.length === 0 ? (
         <SalesEmptyState icon={Layers} title="No installments found" description="Create an installment plan from an approved proposal or change the client filter." />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((inst) => (
-            <InstallmentCard key={inst.id} installment={installmentCardData(inst)} href={`/sales/installments/${inst.id}`} />
-          ))}
-        </div>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {installments.map((inst) => (
+              <InstallmentCard key={inst.id} installment={installmentCardData(inst)} href={`/sales/installments/${inst.id}`} />
+            ))}
+          </div>
+          <DataPagination
+            page={page}
+            total={total}
+            limit={limit}
+            loadedRowCount={installments.length}
+            onPageChange={setPage}
+            onLimitChange={setLimit}
+          />
+        </>
       )}
       <CreateInstallmentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </PortalPageShell>

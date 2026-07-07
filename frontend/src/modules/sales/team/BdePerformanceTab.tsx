@@ -91,6 +91,7 @@ export function BdePerformanceTab({
   const [targetYear, setTargetYear] = useState(now.getFullYear());
 
   const { data, isLoading, isError } = useSalesTeam({ status: "active" });
+  const { data: periodData } = useSalesTeam({ status: "active", month: targetMonth, year: targetYear });
   const { data: targetsData, isLoading: targetsLoading } = useAllBdeTargets(targetMonth, targetYear);
 
   const team = data?.team ?? [];
@@ -110,6 +111,13 @@ export function BdePerformanceTab({
     return map;
   }, [targetsData?.targets]);
 
+  // Map userId → actuals scoped to the selected target month (falls back to all-time until loaded)
+  const periodStatsByUserId = useMemo(() => {
+    const map = new Map<number, { revenue: number; dealsClosed: number; leadCount: number }>();
+    for (const m of periodData?.team ?? []) map.set(m.id, m);
+    return map;
+  }, [periodData?.team]);
+
   // Summarize target statuses for the banner
   const targetSummary = useMemo(() => {
     const counts = { completed: 0, on_track: 0, behind: 0, no_target: 0 };
@@ -117,15 +125,16 @@ export function BdePerformanceTab({
       const t = targetByUserId.get(m.id);
       const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
       if (!hasAny) { counts.no_target++; continue; }
-      const revPct = t.revenueTarget != null ? (m.revenue / t.revenueTarget) * 100 : 100;
-      const dealsPct = t.dealsTarget != null ? (m.dealsClosed / t.dealsTarget) * 100 : 100;
-      const leadsPct = t.leadsTarget != null ? (m.leadCount / t.leadsTarget) * 100 : 100;
+      const actual = periodStatsByUserId.get(m.id) ?? m;
+      const revPct = t.revenueTarget != null ? (actual.revenue / t.revenueTarget) * 100 : 100;
+      const dealsPct = t.dealsTarget != null ? (actual.dealsClosed / t.dealsTarget) * 100 : 100;
+      const leadsPct = t.leadsTarget != null ? (actual.leadCount / t.leadsTarget) * 100 : 100;
       const worstPct = Math.min(revPct, dealsPct, leadsPct);
       const s = getTargetStatus(worstPct, true);
       counts[s]++;
     }
     return counts;
-  }, [sorted, targetByUserId]);
+  }, [sorted, targetByUserId, periodStatsByUserId]);
 
   const currentYear = now.getFullYear();
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
@@ -243,12 +252,13 @@ export function BdePerformanceTab({
                   {sorted.map((exec) => {
                     const t = targetByUserId.get(exec.id);
                     const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
+                    const actual = periodStatsByUserId.get(exec.id) ?? exec;
 
                     // Overall status = worst metric
                     let worstPct = 100;
-                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (exec.revenue / t.revenueTarget) * 100 : 0);
-                    if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (exec.dealsClosed / t.dealsTarget) * 100 : 0);
-                    if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (exec.leadCount / t.leadsTarget) * 100 : 0);
+                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (actual.revenue / t.revenueTarget) * 100 : 0);
+                    if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (actual.dealsClosed / t.dealsTarget) * 100 : 0);
+                    if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (actual.leadCount / t.leadsTarget) * 100 : 0);
                     const status = getTargetStatus(worstPct, hasAny);
 
                     return (
@@ -267,21 +277,21 @@ export function BdePerformanceTab({
                         </TableCell>
                         <TableCell className="text-xs">
                           <TargetCell
-                            actual={exec.revenue}
+                            actual={actual.revenue}
                             target={t?.revenueTarget ?? null}
                             format={formatCompactCurrency}
                           />
                         </TableCell>
                         <TableCell className="text-xs">
                           <TargetCell
-                            actual={exec.dealsClosed}
+                            actual={actual.dealsClosed}
                             target={t?.dealsTarget ?? null}
                             format={(v) => String(v)}
                           />
                         </TableCell>
                         <TableCell className="text-xs">
                           <TargetCell
-                            actual={exec.leadCount}
+                            actual={actual.leadCount}
                             target={t?.leadsTarget ?? null}
                             format={(v) => String(v)}
                           />

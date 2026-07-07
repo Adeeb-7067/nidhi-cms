@@ -425,6 +425,13 @@ export interface SalesProduct {
   createdAt: string;
 }
 
+export interface SalesOverdueCustomer {
+  customerId: number;
+  companyName: string;
+  contactPerson: string | null;
+  overdueAmount: number;
+}
+
 export interface SalesDashboard {
   leads: { total: number; today: number; thisWeek: number; thisMonth: number; closed?: number };
   totalLeadsClosed?: number;
@@ -433,7 +440,17 @@ export interface SalesDashboard {
   activeCustomers: number;
   totalRevenue: number;
   totalBilled: number;
-  totalSales: number;
+  /** Sales = deals whose installment plan has been created. */
+  totalSales: { count: number; value: number };
+  /** Money actually collected via invoice payments, for the same window as totalSales. */
+  totalCollected: number;
+  /** Collected money from deals created within the window (see salesKpisPeriod). */
+  newProjectMoney: number;
+  /** Collected money from deals that predate the window — old-project collections. */
+  oldProjectMoney: number;
+  /** Effective window backing totalSales/totalCollected/new-old split (defaults to this month when no date filter is set). */
+  salesKpisPeriod: { from: string | null; to: string | null };
+  overdueByCustomer: SalesOverdueCustomer[];
   outstanding: number;
   pendingInvoices: number;
   invoiceByStatus: Record<string, { count: number; amount: number }>;
@@ -511,14 +528,14 @@ export const salesKeys = {
   invoice: (id: number) => ["sales-invoice", id] as const,
   payment: (id: number) => ["sales-payment", id] as const,
   products: (params?: object) => ["sales-products", params] as const,
-  dashboard: () => ["sales-dashboard"] as const,
+  dashboard: (params?: object) => ["sales-dashboard", params] as const,
   pipeline: () => ["sales-pipeline"] as const,
   revenueTrend: (period?: string) => ["sales-revenue-trend", period] as const,
   reports: () => ["sales-reports"] as const,
   settings: () => ["sales-settings"] as const,
   notifications: (params?: object) => ["sales-notifications", params] as const,
   team: (params?: object) => ["sales-team", params] as const,
-  teamMember: (id?: number | null) => ["sales-team-member", id] as const,
+  teamMember: (id?: number | null, month?: number, year?: number) => ["sales-team-member", id, month, year] as const,
   bdeTargets: (userId?: number | null, year?: number) => ["sales-bde-targets", userId, year] as const,
   myTarget: (month?: number, year?: number) => ["sales-my-target", month, year] as const,
 };
@@ -799,7 +816,7 @@ export function useGetDueReminders(enabled = true) {
 // ─── Follow-ups ───────────────────────────────────────────────────────────
 
 export function useListFollowUps(
-  params?: { leadId?: number; status?: FollowUpStatus; executiveId?: number; page?: number; limit?: number },
+  params?: { leadId?: number; status?: FollowUpStatus; executiveId?: number; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
@@ -1306,13 +1323,17 @@ export function useRemindCustomer() {
 // ─── Installments ─────────────────────────────────────────────────────────
 
 export function useListInstallments(
-  params?: { customerId?: number; projectId?: number; invoiceId?: number; proposalId?: number; status?: InstallmentStatus; page?: number; limit?: number },
+  params?: { customerId?: number; projectId?: number; invoiceId?: number; proposalId?: number; status?: InstallmentStatus; search?: string; page?: number; limit?: number },
   enabled = true
 ) {
   const qs = new URLSearchParams(
     Object.entries(params ?? {}).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])
   ).toString();
-  return useQuery<{ installments: Installment[]; total: number }>({
+  return useQuery<{
+    installments: Installment[];
+    total: number;
+    summary: { total: number; pending: number; partial: number; paid: number; overdue: number; outstanding: number };
+  }>({
     queryKey: salesKeys.installments(params),
     queryFn: () => customFetch(apiUrl(`/api/sales/installments${qs ? `?${qs}` : ""}`)),
     enabled,
@@ -1392,6 +1413,39 @@ export function useUpdateInstallment() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.installment(vars.id) });
       qc.invalidateQueries({ queryKey: ["sales-installments"] });
+    },
+  });
+}
+
+export function useReceiveInstallmentPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      installmentId,
+      amount,
+      paymentMethod,
+      transactionId,
+      note,
+    }: {
+      installmentId: number;
+      amount: number;
+      paymentMethod: PaymentMethod;
+      transactionId?: string;
+      note?: string;
+    }) =>
+      customFetch<{
+        payment: SalesPayment;
+        invoice: SalesInvoice;
+        invoiceCreated: boolean;
+      }>(apiUrl(`/api/sales/installments/${installmentId}/receive-payment`), {
+        method: "POST",
+        body: JSON.stringify({ amount, paymentMethod, transactionId, note }),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: salesKeys.installment(vars.installmentId) });
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      qc.invalidateQueries({ queryKey: ["sales-payments"] });
     },
   });
 }
@@ -1669,10 +1723,13 @@ export function useDeleteProduct() {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────
 
-export function useSalesDashboard(enabled = true) {
+export function useSalesDashboard(dateRange?: { dateFrom?: string; dateTo?: string }, enabled = true) {
+  const qs = new URLSearchParams(
+    Object.entries(dateRange ?? {}).filter(([, v]) => v != null && v !== "").map(([k, v]) => [k, String(v)])
+  ).toString();
   return useQuery<SalesDashboard>({
-    queryKey: salesKeys.dashboard(),
-    queryFn: () => customFetch(apiUrl("/api/sales/dashboard")),
+    queryKey: salesKeys.dashboard(dateRange),
+    queryFn: () => customFetch(apiUrl(`/api/sales/dashboard${qs ? `?${qs}` : ""}`)),
     enabled,
     staleTime: 60_000,
   });
@@ -1746,10 +1803,29 @@ export interface SalesTeamListParams {
   limit?: number;
   /** BDE dashboard leaderboard — returns stats-only rows (no roster/contact fields). */
   leaderboard?: boolean;
+  /** When both are set, scopes each member's revenue/dealsClosed/leadCount to that month instead of all-time. */
+  month?: number;
+  year?: number;
 }
 
 export interface SalesTeamMemberDetail {
   member: Record<string, unknown> & SalesTeamMember;
+  /** Present only when month/year were passed to useSalesTeamMember — scopes revenue/deals/leads to that period. */
+  periodStats: {
+    month: number;
+    year: number;
+    revenue: number;
+    dealsClosed: number;
+    leadCount: number;
+    /** Deals whose installment plan was created within the period. */
+    salesCount: number;
+    salesValue: number;
+    totalCollected: number;
+    newProjectMoney: number;
+    oldProjectMoney: number;
+  } | null;
+  /** Current overdue balance per customer this BDE owns, regardless of period. */
+  overdueByCustomer: SalesOverdueCustomer[];
   stats: {
     revenue: number;
     dealsClosed: number;
@@ -1803,10 +1879,11 @@ export function useSalesTeam(params?: SalesTeamListParams, enabled = true) {
   });
 }
 
-export function useSalesTeamMember(userId: number | null, enabled = true) {
+export function useSalesTeamMember(userId: number | null, enabled = true, month?: number, year?: number) {
+  const qs = month != null && year != null ? `?month=${month}&year=${year}` : "";
   return useQuery<SalesTeamMemberDetail>({
-    queryKey: salesKeys.teamMember(userId),
-    queryFn: () => customFetch(apiUrl(`/api/sales/team/${userId}`)),
+    queryKey: salesKeys.teamMember(userId, month, year),
+    queryFn: () => customFetch(apiUrl(`/api/sales/team/${userId}${qs}`)),
     enabled: enabled && userId != null && userId > 0,
     staleTime: 30_000,
   });

@@ -19,6 +19,7 @@ import { TotalAmountAdjustFields, totalAdjustPayload } from "@/modules/sales/com
 import { useListProjects, getListProjectsQueryKey } from "@/api/generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput, decimalInputClass } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -59,8 +60,7 @@ const emptyItem = (defaultTax = 0): ProposalLineItem => ({
   taxPercent: defaultTax,
 });
 
-const numInputClass =
-  "h-8 text-xs tabular-nums text-right [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+const numInputClass = `h-8 text-xs ${decimalInputClass}`;
 
 // ── LineItemCard ──────────────────────────────────────────────────────────────
 
@@ -131,15 +131,33 @@ function LineItemCard({
       <div className="grid grid-cols-3 gap-2 pl-9">
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Qty</Label>
-          <Input type="number" min={0.01} step="any" className={numInputClass} value={item.quantity} onChange={(e) => onChange({ quantity: Number(e.target.value) || 1 })} />
+          <DecimalInput
+            min={0.01}
+            fallback={1}
+            className={numInputClass}
+            value={item.quantity}
+            onChange={(quantity) => onChange({ quantity })}
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit price</Label>
-          <Input type="number" min={0} step="any" className={numInputClass} value={item.unitPrice} onChange={(e) => onChange({ unitPrice: Number(e.target.value) || 0 })} />
+          <DecimalInput
+            min={0}
+            className={numInputClass}
+            value={item.unitPrice}
+            onChange={(unitPrice) => onChange({ unitPrice })}
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax %</Label>
-          <Input type="number" min={0} max={100} step="any" className={numInputClass} value={item.taxPercent} onChange={(e) => onChange({ taxPercent: Number(e.target.value) || 0 })} />
+          <DecimalInput
+            min={0}
+            max={100}
+            hideZero={false}
+            className={numInputClass}
+            value={item.taxPercent}
+            onChange={(taxPercent) => onChange({ taxPercent })}
+          />
         </div>
       </div>
       <div className="pl-9 text-right">

@@ -1,4 +1,5 @@
-import { SalesInstallments, SalesInvoices, SalesProposals, clientsTable, getNextSequence, getNextSequenceRange } from "../../models/schema/index.js";
+import { SalesInstallments, SalesInvoices, SalesProposals, SalesPayments, clientsTable, getNextSequence, getNextSequenceRange } from "../../models/schema/index.js";
+import { runInTx } from "../../lib/db-tx.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
   badRequest,
@@ -14,13 +15,14 @@ import {
   parseTotalAdjustment,
 } from "../../utils/sales-totals.js";
 import {
-  bdeOwnsCustomer,
-  bdeOwnsProposal,
   findBdeOwnedCustomerIds,
   findBdeAssignedProposalIds,
   assertBdeOwnsCustomerById,
   assertBdeOwnsProposal,
+  assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
+import { ensureInvoiceForInstallment } from "../../services/sales/installment-billing.service.js";
+import { applyPaymentInTx } from "../../services/sales/payment-ledger.service.js";
 
 function proposalFinalTotal(proposal) {
   const calculated = calcLineItemsTotal(proposal.items ?? [], proposal.discount ?? 0);
@@ -71,14 +73,21 @@ async function enrichInstallments(items) {
 }
 
 async function listInstallments(req, res) {
-  const { customerId, projectId, invoiceId, proposalId, status } = req.query;
+  const { customerId, projectId, invoiceId, proposalId, status, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = {};
-  if (customerId) filter.customerId = Number(customerId);
-  if (projectId) filter.projectId = Number(projectId);
-  if (invoiceId) filter.invoiceId = Number(invoiceId);
-  if (proposalId) filter.proposalId = Number(proposalId);
-  if (status) filter.status = status;
+  // baseFilter excludes status so the summary aggregation below always reflects
+  // every status bucket, regardless of which status tab is currently selected.
+  const baseFilter = {};
+  if (customerId) baseFilter.customerId = Number(customerId);
+  if (projectId) baseFilter.projectId = Number(projectId);
+  if (invoiceId) baseFilter.invoiceId = Number(invoiceId);
+  if (proposalId) baseFilter.proposalId = Number(proposalId);
+  if (search?.trim()) {
+    const re = { $regex: search.trim(), $options: "i" };
+    const matchingCustomers = await clientsTable.find({ companyName: re }).select({ id: 1 }).lean();
+    const searchCustomerIds = matchingCustomers.map((c) => c.id);
+    baseFilter.$or = [{ name: re }, { customerId: { $in: searchCustomerIds } }];
+  }
   // BDE scope: own customers or installments tied to proposals assigned to them
   if (req.user.role === "bde") {
     const [myIds, myProposalIds] = await Promise.all([
@@ -89,22 +98,40 @@ async function listInstallments(req, res) {
     if (myIds.length) scopeOr.push({ customerId: { $in: myIds } });
     if (myProposalIds.length) scopeOr.push({ proposalId: { $in: myProposalIds } });
     const bdeScope = scopeOr.length ? { $or: scopeOr } : { id: -1 };
-    const explicit = { ...filter };
-    for (const key of Object.keys(filter)) delete filter[key];
-    filter.$and = [bdeScope, explicit];
+    const explicit = { ...baseFilter };
+    for (const key of Object.keys(baseFilter)) delete baseFilter[key];
+    baseFilter.$and = [bdeScope, explicit];
   }
   await SalesInstallments.updateMany(
-    { status: "pending", dueDate: { $lt: new Date() } },
+    { status: { $in: ["pending", "partial"] }, dueDate: { $lt: new Date() } },
     { $set: { status: "overdue" } }
   );
-  const { items, total, page: pg, limit: lim } = await paginateModel(
-    SalesInstallments,
-    filter,
-    { page, limit, skip },
-    { sort: { dueDate: 1 } }
-  );
+
+  const filter = status ? { $and: [baseFilter, { status }] } : baseFilter;
+
+  const [{ items, total, page: pg, limit: lim }, statusAgg] = await Promise.all([
+    paginateModel(SalesInstallments, filter, { page, limit, skip }, { sort: { dueDate: 1 } }),
+    SalesInstallments.aggregate([
+      { $match: baseFilter },
+      {
+        $group: {
+          _id: "$status",
+          count: { $sum: 1 },
+          outstanding: { $sum: { $subtract: ["$dueAmount", "$paidAmount"] } },
+        },
+      },
+    ]),
+  ]);
   const installments = await enrichInstallments(items);
-  res.json({ installments, total, page: pg, limit: lim });
+
+  const summary = { total: 0, pending: 0, partial: 0, paid: 0, overdue: 0, outstanding: 0 };
+  for (const row of statusAgg) {
+    summary.total += row.count;
+    if (row._id in summary) summary[row._id] = row.count;
+    summary.outstanding += row.outstanding;
+  }
+
+  res.json({ installments, total, page: pg, limit: lim, summary });
 }
 
 async function createInstallment(req, res) {
@@ -121,11 +148,14 @@ async function createInstallment(req, res) {
   let invoiceId = body.invoiceId ? Number(body.invoiceId) : null;
   const proposalId = body.proposalId ? Number(body.proposalId) : null;
 
-  if (invoiceId && !customerId) {
-    const inv = await SalesInvoices.findOne({ id: invoiceId }).lean();
-    if (!inv) badRequest("invoiceId references a non-existent invoice.", "invoiceId");
-    customerId = inv.customerId;
-    if (!projectId && inv.projectId) projectId = inv.projectId;
+  let invoice = null;
+  if (invoiceId) {
+    invoice = await SalesInvoices.findOne({ id: invoiceId }).lean();
+    if (!invoice) badRequest("invoiceId references a non-existent invoice.", "invoiceId");
+    if (!customerId) {
+      customerId = invoice.customerId;
+      if (!projectId && invoice.projectId) projectId = invoice.projectId;
+    }
   }
   if (!customerId) badRequest("customerId is required.", "customerId");
   await assertBdeOwnsCustomerById(clientsTable, req.user, customerId);
@@ -135,6 +165,18 @@ async function createInstallment(req, res) {
   const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
   const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
   const dueAmount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+
+  if (invoice) {
+    const existing = await SalesInstallments.find({ invoiceId }).select({ dueAmount: 1 }).lean();
+    const existingSum = existing.reduce((sum, row) => sum + row.dueAmount, 0);
+    if (existingSum + dueAmount > invoice.amount + 1) {
+      badRequest(
+        `Installment total (${Math.round(existingSum + dueAmount)}) would exceed the invoice amount (${Math.round(invoice.amount)}).`,
+        "dueAmount",
+      );
+    }
+  }
+
   const id = await getNextSequence("sales_installments");
   const installment = await SalesInstallments.create({
     id,
@@ -155,24 +197,11 @@ async function createInstallment(req, res) {
   res.status(201).json(installment.toObject());
 }
 
-async function assertBdeInstallmentAccess(installment, user) {
-  if (user.role !== "bde") return;
-  const client = await clientsTable.findOne({ id: installment.customerId }).lean();
-  if (client && bdeOwnsCustomer(client, user.id)) return;
-  if (installment.proposalId) {
-    const proposal = await SalesProposals.findOne({ id: installment.proposalId })
-      .select({ assignedTo: 1 })
-      .lean();
-    if (bdeOwnsProposal(proposal, user.id)) return;
-  }
-  notFound("Installment");
-}
-
 async function getInstallmentById(req, res) {
   const id = parseIdParam(req.params.id, "installment id");
   const installment = await SalesInstallments.findOne({ id }).lean();
   if (!installment) notFound("Installment");
-  await assertBdeInstallmentAccess(installment, req.user);
+  await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user);
   const [enriched] = await enrichInstallments([installment]);
   res.json(enriched);
 }
@@ -181,7 +210,7 @@ async function updateInstallment(req, res) {
   const id = parseIdParam(req.params.id, "installment id");
   const installment = await SalesInstallments.findOne({ id }).lean();
   if (!installment) notFound("Installment");
-  await assertBdeInstallmentAccess(installment, req.user);
+  await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user);
   const body = req.body;
   const updates = {};
   const amountFieldsTouched =
@@ -313,10 +342,77 @@ async function createInstallmentsFromProposal(req, res) {
   res.status(201).json({ installments: created.map((d) => d.toObject()) });
 }
 
+async function nextReceiptNumber() {
+  const year = new Date().getFullYear();
+  const seq = await getNextSequence(`rec_num_${year}`);
+  return `REC-${year}-${String(seq).padStart(4, "0")}`;
+}
+
+async function receiveInstallmentPayment(req, res) {
+  const installmentId = parseIdParam(req.params.id, "installment id");
+  const body = req.body ?? {};
+  if (body.amount == null) badRequest("amount is required.", "amount");
+  if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
+  const amount = Number(body.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    badRequest("amount must be a positive number.", "amount");
+  }
+
+  const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
+  if (!installment) notFound("Installment");
+  await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user);
+  if (installment.status === "paid") {
+    badRequest("This installment is already fully paid.", "status");
+  }
+  const remaining = installment.dueAmount - installment.paidAmount;
+  if (amount > remaining) {
+    badRequest(`Payment exceeds remaining balance of ${remaining}.`, "amount");
+  }
+
+  const [receiptNumber, paymentId] = await Promise.all([
+    nextReceiptNumber(),
+    getNextSequence("sales_payments"),
+  ]);
+
+  let invoice;
+  let invoiceCreated = false;
+  let invoiceStatus;
+
+  await runInTx(async (session) => {
+    const ensured = await ensureInvoiceForInstallment(installmentId, session, {
+      dueDate: body.dueDate,
+    });
+    invoice = ensured.invoice;
+    invoiceCreated = ensured.created;
+
+    const result = await applyPaymentInTx(session, {
+      invoiceId: invoice.id,
+      installmentId,
+      amount,
+      paymentMethod: body.paymentMethod,
+      transactionId: body.transactionId,
+      note: body.note,
+      recordedBy: req.user.id,
+      receiptNumber,
+      paymentId,
+      bdeUser: null,
+    });
+    invoiceStatus = result.invoiceStatus;
+  });
+
+  const payment = await SalesPayments.findOne({ id: paymentId }).lean();
+  res.status(201).json({
+    payment: { ...payment, invoiceStatus },
+    invoice,
+    invoiceCreated,
+  });
+}
+
 export {
   listInstallments,
   createInstallment,
   getInstallmentById,
   updateInstallment,
   createInstallmentsFromProposal,
+  receiveInstallmentPayment,
 };

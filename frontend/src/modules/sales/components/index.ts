@@ -29,6 +29,7 @@ export {
   CreateInvoiceDialog,
   InstallmentsFromProposalDialog,
   InvoiceFromProposalDialog,
+  ReceiveInstallmentPaymentDialog,
   RecordPaymentDialog,
 } from "./sales-action-dialogs";
 export { SalesDonutPanel } from "./SalesDonutPanel";

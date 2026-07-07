@@ -1,6 +1,6 @@
-import { apiUrl } from "@/lib/api-base";
 import type { UploadCategory } from "@/components/ui/file-uploader";
 import { compressImageFile } from "@/lib/image-compression";
+import { uploadFileWithProgress } from "@/lib/upload-file";
 
 const CHAT_FILE_MAX_MB = 10;
 const CHAT_VOICE_MAX_MB = 10;
@@ -70,48 +70,17 @@ export async function uploadChatAttachment(
       ? CHAT_VOICE_MAX_MB
       : CHAT_FILE_MAX_MB;
 
-  const uploadFile = await compressImageFile(file);
+  const uploadFile = isChatApkFile(file) ? file : await compressImageFile(file);
   if (uploadFile.size > maxMb * 1024 * 1024) {
     throw new Error(`File is too large. Maximum size is ${maxMb} MB.`);
   }
 
-  const formData = new FormData();
-  formData.append("file", uploadFile);
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", apiUrl(`/api/upload?category=${encodeURIComponent(category)}`), true);
-    const token = localStorage.getItem("accessToken");
-    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText) as {
-            url: string;
-            originalName?: string;
-            mimetype?: string;
-          };
-          resolve({
-            url: data.url,
-            originalName: data.originalName ?? file.name,
-            mimetype: data.mimetype ?? file.type,
-          });
-        } catch {
-          reject(new Error("Invalid server response"));
-        }
-        return;
-      }
-      try {
-        const err = JSON.parse(xhr.responseText) as { message?: string };
-        reject(new Error(err.message ?? `Upload failed (${xhr.status})`));
-      } catch {
-        reject(new Error(`Upload failed (${xhr.status})`));
-      }
-    };
-    xhr.onerror = () => reject(new Error("Network error during upload"));
-    xhr.send(formData);
-  });
+  const data = await uploadFileWithProgress(uploadFile, category);
+  return {
+    url: data.url,
+    originalName: data.originalName ?? file.name,
+    mimetype: data.mimetype ?? file.type,
+  };
 }
 
 /** @deprecated Use uploadChatAttachment */

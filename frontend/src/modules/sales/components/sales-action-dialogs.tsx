@@ -45,6 +45,7 @@ import {
   useConvertLead,
   useSetLeadReminder,
   useRecordPayment,
+  useReceiveInstallmentPayment,
   useBulkUpdateLeads,
   useListCustomers,
   useListProposals,
@@ -1455,7 +1456,7 @@ export function InstallmentsFromProposalDialog({
         <DialogHeader>
           <DialogTitle>Payment schedule from proposal</DialogTitle>
           <DialogDescription>
-            Split {proposal.number} ({formatCurrency(proposalTotal)}) into milestones. Invoices are generated per installment later.
+            Split {proposal.number} ({formatCurrency(proposalTotal)}) into milestones. Open each milestone and use Receive payment when the client pays — the invoice is created automatically.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
@@ -1537,7 +1538,7 @@ export function InvoiceFromProposalDialog({
         <DialogHeader>
           <DialogTitle>Billing flow updated</DialogTitle>
           <DialogDescription>
-            Invoices are no longer created directly from proposals. Open an approved proposal, create a payment schedule (installments), then generate an invoice for each milestone when you are ready to bill.
+            Invoices are no longer created directly from proposals. Open an approved proposal, create a payment schedule, then receive payment on each milestone — the invoice is created automatically.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -1552,6 +1553,132 @@ export function InvoiceFromProposalDialog({
 }
 
 // ─── Payment ──────────────────────────────────────────────────────────────
+
+const RECEIVE_PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: "bank_transfer", label: "Bank transfer" },
+  { value: "upi", label: "UPI" },
+  { value: "cheque", label: "Cheque" },
+  { value: "cash", label: "Cash" },
+  { value: "card", label: "Card" },
+];
+
+export function ReceiveInstallmentPaymentDialog({
+  open,
+  onOpenChange,
+  installment,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  installment: { id: number; name: string; dueAmount: number; paidAmount: number };
+  onSuccess?: (result: { paymentId: number; invoiceId: number; invoiceNumber: string; invoiceCreated: boolean }) => void;
+}) {
+  const receive = useReceiveInstallmentPayment();
+  const remaining = Math.max(0, installment.dueAmount - installment.paidAmount);
+  const [amount, setAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
+  const [transactionId, setTransactionId] = useState("");
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setAmount(remaining > 0 ? String(Math.round(remaining)) : "");
+    setTransactionId("");
+    setNote("");
+    setPaymentMethod("bank_transfer");
+  }, [open, remaining]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amt = Number(amount);
+    if (!amt || amt <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+    if (amt > remaining) {
+      toast.error(`Max payable is ${formatCurrency(remaining)}`);
+      return;
+    }
+    try {
+      const result = await receive.mutateAsync({
+        installmentId: installment.id,
+        amount: amt,
+        paymentMethod,
+        transactionId: transactionId.trim() || undefined,
+        note: note.trim() || undefined,
+      });
+      toast.success("Payment recorded", {
+        description: result.invoiceCreated
+          ? `Invoice ${result.invoice.number} created automatically`
+          : `Applied to invoice ${result.invoice.number}`,
+      });
+      onOpenChange(false);
+      onSuccess?.({
+        paymentId: result.payment.id,
+        invoiceId: result.invoice.id,
+        invoiceNumber: result.invoice.number,
+        invoiceCreated: result.invoiceCreated,
+      });
+    } catch (err) {
+      toastApiError(err, "Failed to record payment");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px] bg-card border-border">
+        <DialogHeader>
+          <DialogTitle>Receive payment</DialogTitle>
+          <DialogDescription>
+            {installment.name} · {formatCurrency(remaining)} remaining
+            {!installment.paidAmount && (
+              <span className="block mt-1 text-muted-foreground">
+                An invoice will be created automatically if one is not linked yet.
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <div className="grid grid-cols-2 gap-3">
+            <SalesField label="Amount (₹)">
+              <Input
+                type="number"
+                min={1}
+                max={remaining}
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder={`Max ${Math.round(remaining)}`}
+              />
+            </SalesField>
+            <SalesField label="Method">
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {RECEIVE_PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </SalesField>
+          </div>
+          <SalesField label="Transaction / UTR ID (optional)">
+            <Input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} placeholder="e.g. UTR123456789" />
+          </SalesField>
+          <SalesField label="Note (optional)">
+            <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Internal note" />
+          </SalesField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={receive.isPending || remaining <= 0}>
+              {receive.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Receive payment
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function RecordPaymentDialog({
   open,

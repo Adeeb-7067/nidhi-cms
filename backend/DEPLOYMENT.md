@@ -220,6 +220,9 @@ server {
 
     # ssl_certificate ... (managed by Plesk / certbot)
 
+    # Required for APK uploads (default nginx limit is 1 MB).
+    client_max_body_size 512m;
+
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_http_version 1.1;
@@ -227,6 +230,8 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
     }
 
     location /socket.io/ {

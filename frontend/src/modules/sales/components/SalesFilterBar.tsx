@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Search, SlidersHorizontal, Calendar, Download } from "lucide-react";
+import { Search, Calendar, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,12 +85,6 @@ export function SalesFilterBar({
         </Select>
       )}
       <motion.div className="flex gap-2 sm:ml-auto">
-        {children ? (
-          <Button variant="outline" size="sm" className="h-9 gap-1.5" type="button">
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            Filters
-          </Button>
-        ) : null}
         {onExport && (
           <Button variant="outline" size="sm" className="h-9 gap-1.5" onClick={onExport}>
             <Download className="h-3.5 w-3.5" />

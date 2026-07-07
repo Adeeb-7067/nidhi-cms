@@ -16,8 +16,11 @@ import {
   BarChart2,
   ArrowRight,
   ShoppingBag,
+  Sparkles,
+  History,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
@@ -57,8 +60,13 @@ function NoDataPlaceholder({ label }: { label: string }) {
 export default function SalesDashboard() {
   const [leadPeriod, setLeadPeriod] = useState<"today" | "week" | "month">("month");
   const [trendPeriod, setTrendPeriod] = useState<"week" | "month" | "year">("month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
-  const { data: dash, isLoading: dashLoading, isError: dashError, refetch: refetchDash } = useSalesDashboard();
+  const { data: dash, isLoading: dashLoading, isError: dashError, refetch: refetchDash } = useSalesDashboard({
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  });
   const { data: trendData, isLoading: trendLoading, isError: trendError } = useSalesRevenueTrend(trendPeriod);
   const { data: fuData, isLoading: fuLoading } = useListFollowUps({ limit: 50 });
   const { data: teamData } = useSalesTeam({ limit: 8 });
@@ -96,8 +104,12 @@ export default function SalesDashboard() {
     if (!dash) { toast.error("Dashboard data not loaded yet"); return; }
     const rows = [
       ["Metric", "Value"],
-      ["Revenue (month)", dash.totalRevenue ?? 0],
-      ["Total sales", dash.totalSales ?? dash.totalBilled ?? 0],
+      ["Revenue (all time)", dash.totalRevenue ?? 0],
+      ["Total sales (deals)", dash.totalSales?.count ?? 0],
+      ["Total sales (value)", dash.totalSales?.value ?? 0],
+      ["Total collected", dash.totalCollected ?? 0],
+      ["New project money", dash.newProjectMoney ?? 0],
+      ["Old project money collected", dash.oldProjectMoney ?? 0],
       ["Outstanding", dash.outstanding ?? 0],
       ["Leads today", dash.leads?.today ?? 0],
       ["Leads this week", dash.leads?.thisWeek ?? 0],
@@ -132,7 +144,44 @@ export default function SalesDashboard() {
         }
       />
 
-      <SalesFilterBar onExport={exportDashboardCsv} />
+      <SalesFilterBar onExport={exportDashboardCsv}>
+        <div className="flex items-center gap-2">
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="h-9 w-[150px] bg-background text-xs"
+            aria-label="From date"
+          />
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="h-9 w-[150px] bg-background text-xs"
+            aria-label="To date"
+          />
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 text-xs"
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
+      </SalesFilterBar>
+      {dash?.salesKpisPeriod ? (
+        <p className="text-[11px] text-muted-foreground">
+          Sales KPIs below cover{" "}
+          {dash.salesKpisPeriod.from ? format(new Date(dash.salesKpisPeriod.from), "MMM d, yyyy") : "the beginning"}
+          {" – "}
+          {dash.salesKpisPeriod.to ? format(new Date(dash.salesKpisPeriod.to), "MMM d, yyyy") : "now"}
+          {!dateFrom && !dateTo ? " (this month by default — pick a date range above to change it)" : ""}
+        </p>
+      ) : null}
 
       {dashError ? (
         <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 flex items-center justify-between gap-3">
@@ -166,8 +215,8 @@ export default function SalesDashboard() {
               { title: "Active follow-ups", value: dash?.activeFollowUps ?? 0, icon: CalendarClock, accent: "amber", href: "/sales/follow-ups", delay: 2 },
               { title: "Proposals", value: dash?.totalProposals ?? 0, icon: FileText, accent: "violet", href: "/sales/proposals", delay: 3 },
               { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, icon: Receipt, accent: "sky", href: "/sales/invoices", delay: 4 },
-              { title: "Total sales", value: formatCompactCurrency(dash?.totalSales ?? dash?.totalBilled ?? 0), icon: ShoppingBag, accent: "green", href: "/sales/invoices", delay: 5 },
-              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 6 },
+              { title: "Total sales", value: formatCompactCurrency(dash?.totalSales?.value ?? 0), hint: `${dash?.totalSales?.count ?? 0} deals`, icon: ShoppingBag, accent: "green", href: "/sales/installments", delay: 5 },
+              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), hint: "All time", icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 6 },
               { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), icon: AlertCircle, accent: "red", alert: true, href: "/sales/payments", delay: 7 },
             ]}
           />
@@ -180,19 +229,20 @@ export default function SalesDashboard() {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Financial KPIs</p>
         {dashLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+            {[...Array(7)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
           </div>
         ) : (
           <PortalKpiGrid
             columns={4}
-            count={6}
+            count={7}
             items={[
-              { title: "Total sales", value: formatCompactCurrency(dash?.totalSales ?? dash?.totalBilled ?? 0), icon: ShoppingBag, accent: "green", href: "/sales/invoices", delay: 0 },
-              { title: "Total revenue", value: formatCompactCurrency(dash?.totalRevenue ?? 0), icon: IndianRupee, accent: "green", href: "/sales/reports", delay: 1 },
-              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), hint: "Across all customers", icon: AlertCircle, accent: "red", alert: true, href: "/sales/installments", delay: 2 },
-              { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, hint: "Awaiting collection", icon: Receipt, accent: "violet", href: "/sales/installments", delay: 3 },
-              { title: "Active customers", value: dash?.activeCustomers ?? 0, icon: Users, accent: "sky", href: "/sales/customers", delay: 4 },
-              { title: "Overdue invoices", value: dash?.invoiceByStatus?.overdue?.count ?? 0, hint: "Needs follow-up", icon: AlertCircle, accent: "amber", alert: true, href: "/sales/invoices", delay: 5 },
+              { title: "Total collected", value: formatCompactCurrency(dash?.totalCollected ?? 0), hint: "This period", icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 0 },
+              { title: "New project money", value: formatCompactCurrency(dash?.newProjectMoney ?? 0), hint: "From deals closed this period", icon: Sparkles, accent: "blue", href: "/sales/payments", delay: 1 },
+              { title: "Old project money", value: formatCompactCurrency(dash?.oldProjectMoney ?? 0), hint: "Collected on earlier deals", icon: History, accent: "violet", href: "/sales/payments", delay: 2 },
+              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), hint: "Across all customers", icon: AlertCircle, accent: "red", alert: true, href: "/sales/installments", delay: 3 },
+              { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, hint: "Awaiting collection", icon: Receipt, accent: "violet", href: "/sales/installments", delay: 4 },
+              { title: "Active customers", value: dash?.activeCustomers ?? 0, icon: Users, accent: "sky", href: "/sales/customers", delay: 5 },
+              { title: "Overdue invoices", value: dash?.invoiceByStatus?.overdue?.count ?? 0, hint: "Needs follow-up", icon: AlertCircle, accent: "amber", alert: true, href: "/sales/invoices", delay: 6 },
             ]}
           />
         )}
@@ -374,6 +424,45 @@ export default function SalesDashboard() {
             <Link href="/sales/invoices?status=unpaid">View unpaid invoices</Link>
           </Button>
         </div>
+      </ChartPanel>
+
+      <ChartPanel title="Overdue by client" description="Clients with an overdue balance right now" icon={AlertCircle} accent="rose" viewAllHref="/sales/customers">
+        {dashLoading ? (
+          <div className="space-y-2">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+          </div>
+        ) : (dash?.overdueByCustomer ?? []).length === 0 ? (
+          <SalesEmptyState title="No overdue balances" description="Every client is current on their payments." />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="text-xs">Client</TableHead>
+                <TableHead className="text-xs">Contact</TableHead>
+                <TableHead className="text-xs text-right">Overdue amount</TableHead>
+                <TableHead className="text-xs text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(dash?.overdueByCustomer ?? []).map((row) => (
+                <TableRow key={row.customerId}>
+                  <TableCell className="text-xs font-medium">{row.companyName}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{row.contactPerson ?? "—"}</TableCell>
+                  <TableCell className="text-xs text-right font-semibold text-destructive tabular-nums">
+                    {formatCurrency(row.overdueAmount)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                      <Link href={`/sales/customers/${row.customerId}`}>
+                        Open <ArrowRight className="h-3 w-3 ml-1 inline" />
+                      </Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
       </ChartPanel>
     </PortalPageShell>
   );

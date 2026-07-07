@@ -29,7 +29,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "sonner";
-import { toastApiError } from "@/lib/api-error";
+import { parseApiError, toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { ApkAudienceField } from "@/components/apk/apk-audience-field";
 import {
@@ -135,7 +135,18 @@ export default function DevApk() {
         queryKey: getGetApkReleasesQueryKey(selectedProjectId),
       });
     } catch (error: unknown) {
-      toastApiError(error, "Action failed. Please try again.");
+      const parsed = parseApiError(error, "Could not save this release.");
+      const formField =
+        parsed.field === "file" || parsed.field === "fileUrl"
+          ? "fileUrl"
+          : parsed.field && Object.prototype.hasOwnProperty.call(APK_FORM_DEFAULTS, parsed.field)
+            ? (parsed.field as keyof ApkReleaseFormValues)
+            : null;
+      if (formField) {
+        form.setError(formField, { message: parsed.message });
+      } else {
+        toastApiError(error, parsed.message);
+      }
     }
   };
 
@@ -376,6 +387,7 @@ export default function DevApk() {
                           onUploadComplete={(url, meta) => {
                             field.onChange(url);
                             if (url) {
+                              form.clearErrors("fileUrl");
                               void form.trigger("fileUrl");
                             }
                             if (meta?.fileName && !form.getValues("name")?.trim()) {
@@ -387,6 +399,9 @@ export default function DevApk() {
                                 form.setValue("name", suggested, { shouldValidate: true });
                               }
                             }
+                          }}
+                          onUploadError={(err) => {
+                            form.setError("fileUrl", { message: err.message });
                           }}
                           value={field.value}
                           accept=".apk,.ipa,.zip,.aar,.app"

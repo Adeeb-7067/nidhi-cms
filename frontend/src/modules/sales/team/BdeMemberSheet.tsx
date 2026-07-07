@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  AlertCircle,
   Briefcase,
   Calendar,
   ExternalLink,
+  History,
   Mail,
   Pencil,
   Phone,
   Plus,
+  ShoppingBag,
+  Sparkles,
   Target,
   Trophy,
   Users,
@@ -75,7 +79,13 @@ export function BdeMemberSheet({
   const [editingMonth, setEditingMonth] = useState<number>(new Date().getMonth() + 1);
   const [editingYear, setEditingYear] = useState<number>(new Date().getFullYear());
 
-  const { data, isLoading, isError } = useSalesTeamMember(userId, open && userId != null);
+  const now = new Date();
+  const { data, isLoading, isError } = useSalesTeamMember(
+    userId,
+    open && userId != null,
+    now.getMonth() + 1,
+    now.getFullYear(),
+  );
   const { data: targetsData, isLoading: targetsLoading } = useBdeTargets(
     userId,
     targetYear,
@@ -260,6 +270,57 @@ export function BdeMemberSheet({
                     </div>
                   </div>
                 ) : null}
+
+                {data?.periodStats ? (
+                  <div className="rounded-lg border p-3 space-y-3">
+                    <p className="text-xs font-medium flex items-center gap-1.5">
+                      <ShoppingBag className="h-3.5 w-3.5 text-primary" />
+                      This month&apos;s sales &amp; collections
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Total sales</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatCompactCurrency(data.periodStats.salesValue)}</p>
+                        <p className="text-[10px] text-muted-foreground">{data.periodStats.salesCount} deal{data.periodStats.salesCount === 1 ? "" : "s"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground">Total collected</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatCompactCurrency(data.periodStats.totalCollected)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><Sparkles className="h-3 w-3 text-blue-500" />New project money</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatCompactCurrency(data.periodStats.newProjectMoney)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1"><History className="h-3 w-3 text-violet-500" />Old project money</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatCompactCurrency(data.periodStats.oldProjectMoney)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <p className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                    <AlertCircle className="h-3.5 w-3.5 text-destructive" />
+                    Overdue by client
+                  </p>
+                  {(data?.overdueByCustomer ?? []).length === 0 ? (
+                    <p className="text-[10px] text-muted-foreground">No overdue balances.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {(data?.overdueByCustomer ?? []).slice(0, 6).map((row) => (
+                        <Link key={row.customerId} href={`/sales/customers/${row.customerId}`}>
+                          <div className="flex items-center justify-between rounded-lg border px-3 py-2 hover:bg-muted/40 transition-colors">
+                            <span className="text-xs font-medium truncate">{row.companyName}</span>
+                            <span className="text-xs font-semibold text-destructive tabular-nums shrink-0">
+                              {formatCompactCurrency(row.overdueAmount)}
+                            </span>
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </TabsContent>
 
               <TabsContent value="pipeline" className="mt-4">

@@ -76,4 +76,14 @@ describe("isPausedSessionResumableToday", () => {
     const now = new Date("2026-07-03T15:00:00.000Z");
     assert.equal(isPausedSessionResumableToday(session, now, TZ), false);
   });
+
+  test("day_ended overnight session resumes on the morning it ended", () => {
+    const session = {
+      startedAt: new Date("2026-07-03T16:30:00.000Z"),
+      endedAt: new Date("2026-07-03T18:30:00.000Z"),
+      stopReason: "day_ended",
+    };
+    const now = new Date("2026-07-04T02:00:00.000Z");
+    assert.equal(isPausedSessionResumableToday(session, now, TZ), true);
+  });
 });

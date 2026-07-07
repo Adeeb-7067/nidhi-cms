@@ -32,6 +32,7 @@ import {
 import { customerProposalOwnershipFilter } from "../../utils/sales-proposal-links.js";
 import {
   canClientRespondToProposal,
+  publicViewStatusUpdates,
   statusAfterValidityExtension,
 } from "../../utils/sales-proposal-client.js";
 import { clientAsProposalCustomer } from "../../mappers/client-customer-format.js";
@@ -39,6 +40,27 @@ import { assertBdeOwnsCustomerById, bdeOwnsCustomer } from "../../utils/sales-bd
 
 const STAFF_MUTABLE_PROPOSAL_STATUSES = ["sent", "seen", "revised", "counter_offer", "expired"];
 const CLIENT_RESPONDABLE_STATUSES = ["sent", "seen", "revised", "counter_offer", "expired"];
+
+// Keeps the lead pipeline in sync with a proposal's outcome — the lead schema has
+// no decline/counter equivalent, so only the unambiguous "approved" case is synced.
+async function markLeadApprovedFromProposal(leadId, actorId, proposalNumber) {
+  if (!leadId) return;
+  const result = await SalesLeads.updateOne(
+    { id: leadId, status: { $nin: ["converted", "lost", "approved"] } },
+    { $set: { status: "approved" } }
+  );
+  if (result.modifiedCount > 0) {
+    const actId = await getNextSequence("sales_lead_activity");
+    await SalesLeadActivity.create({
+      id: actId,
+      leadId,
+      type: "proposal_approved",
+      description: `Lead marked approved — proposal ${proposalNumber} was accepted`,
+      actorId: actorId ?? null,
+      meta: { proposalNumber },
+    });
+  }
+}
 
 // A BDE has access if the proposal is assigned to them directly, or if it
 // hangs off a lead/customer they own — matching the list-endpoint scope so a
@@ -403,6 +425,7 @@ async function approveProposal(req, res) {
   if (!updated) {
     badRequest("This proposal cannot be approved in its current state.", "status");
   }
+  await markLeadApprovedFromProposal(updated.leadId, req.user.id, updated.number);
   res.json(updated);
 }
 
@@ -446,10 +469,13 @@ async function reviseProposal(req, res) {
   if (!existing) notFound("Proposal");
   await assertProposalAccess(existing, req.user);
   const updated = await SalesProposals.findOneAndUpdate(
-    { id },
+    { id, status: { $in: ["declined", "counter_offer", "expired"] } },
     { $set: { status: "revised" }, $inc: { revision: 1 } },
     { new: true }
   ).lean();
+  if (!updated) {
+    badRequest("This proposal cannot be revised in its current state.", "status");
+  }
   res.json(updated);
 }
 
@@ -482,14 +508,10 @@ async function viewProposal(req, res) {
   const proposal = await SalesProposals.findOne({ viewToken: token }).lean();
   if (!proposal) notFound("Proposal");
 
-  if (!proposal.seenAt) {
-    const newStatus = proposal.status === "sent" ? "seen" : proposal.status;
-    await SalesProposals.updateOne(
-      { viewToken: token },
-      { $set: { seenAt: new Date(), status: newStatus } }
-    );
-    proposal.seenAt = new Date();
-    proposal.status = newStatus;
+  const viewUpdates = publicViewStatusUpdates(proposal);
+  if (Object.keys(viewUpdates).length > 0) {
+    await SalesProposals.updateOne({ viewToken: token }, { $set: viewUpdates });
+    Object.assign(proposal, viewUpdates);
   }
 
   // Log every view with IP
@@ -539,6 +561,7 @@ async function publicApproveProposal(req, res) {
     badRequest("This proposal cannot be accepted in its current state.", "status");
   }
   await appendLog(proposal.id, "approved", req);
+  await markLeadApprovedFromProposal(updated.leadId, null, updated.number);
   const { viewToken: vt, internalNotes, ...clientPayload } = updated;
   res.json(clientPayload);
 }

@@ -77,7 +77,7 @@ export default function Invoices() {
     <PortalPageShell>
       <SalesPageHeader
         title="Invoices"
-        description="Generate invoices from installments after the payment schedule is set up."
+        description="Receive payment on installments from approved proposals. Invoices are created automatically when you record a payment."
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Invoices" },

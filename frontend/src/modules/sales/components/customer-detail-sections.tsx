@@ -1795,7 +1795,7 @@ export function CustomerInstallmentsSection({
       <>
         <SalesEmptyState
           title="No installments"
-          description="Open an approved proposal and use Create payment schedule to split it into milestones, then generate an invoice for each one."
+          description="Open an approved proposal, create a payment schedule, then receive payment on each milestone when the client pays."
           actionLabel="View proposals"
           onAction={() => { window.location.href = "/sales/proposals"; }}
         />

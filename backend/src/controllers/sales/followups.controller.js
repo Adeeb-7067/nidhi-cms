@@ -15,12 +15,20 @@ import {
 } from "../../utils/route-errors.js";
 
 async function listFollowUps(req, res) {
-  const { leadId, status, executiveId } = req.query;
+  const { leadId, status, executiveId, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (leadId) filter.leadId = Number(leadId);
   if (status) filter.status = status;
   if (executiveId) filter.executiveId = Number(executiveId);
+  if (search?.trim()) {
+    const re = { $regex: search.trim(), $options: "i" };
+    const matchingLeads = await SalesLeads.find({ $or: [{ name: re }, { company: re }] })
+      .select({ id: 1 })
+      .lean();
+    const leadIds = matchingLeads.map((l) => l.id);
+    filter.$or = [{ notes: re }, { leadId: { $in: leadIds } }];
+  }
   // BDE scope: within a lead they own, show every follow-up on it;
   // otherwise (general list) restrict to follow-ups assigned to them.
   if (req.user.role === "bde") {

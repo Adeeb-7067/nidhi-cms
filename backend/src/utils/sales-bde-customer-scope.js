@@ -95,3 +95,23 @@ export async function assertBdeOwnsProposal(proposal, user, label = "Proposal") 
   if (bdeOwnsProposal(proposal, user.id)) return;
   notFound(label);
 }
+
+/** BDE may access installments for owned customers or proposals assigned to them. */
+export async function assertBdeInstallmentAccess(
+  clientsTable,
+  SalesProposals,
+  installment,
+  user,
+  label = "Installment",
+) {
+  if (user?.role !== "bde") return;
+  const client = await clientsTable.findOne({ id: installment.customerId }).lean();
+  if (client && bdeOwnsCustomer(client, user.id)) return;
+  if (installment.proposalId) {
+    const proposal = await SalesProposals.findOne({ id: installment.proposalId })
+      .select({ assignedTo: 1 })
+      .lean();
+    if (bdeOwnsProposal(proposal, user.id)) return;
+  }
+  notFound(label);
+}
