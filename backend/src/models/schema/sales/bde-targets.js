@@ -6,7 +6,10 @@ const bdeTargetSchema = new Schema(
     userId: { type: Number, ref: "Users", required: true, index: true },
     month: { type: Number, required: true, min: 1, max: 12 },
     year: { type: Number, required: true },
-    /** null = not tracked for this BDE this month */
+    /**
+     * Closed project value target (₹). Progress = sum of installment schedules
+     * created this month for deals this BDE closed. null = not tracked.
+     */
     revenueTarget: { type: Number, default: null },
     dealsTarget: { type: Number, default: null },
     leadsTarget: { type: Number, default: null },

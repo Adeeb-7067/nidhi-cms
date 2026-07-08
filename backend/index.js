@@ -7,6 +7,7 @@ import { initRealtime } from "./src/lib/realtime.js";
 import { initFirebaseAdmin } from "./src/lib/firebase.js";
 import { verifyMailer } from "./src/lib/email.js";
 import { startInventoryExpiryJob } from "./src/services/inventory/expiry-job.js";
+import { startAlertSchedulerJob } from "./src/services/alerts/alert-scheduler-job.js";
 import { startDailyLogComplianceJob } from "./src/services/daily-log-compliance.js";
 import { startScreenshotPurgeJob } from "./src/services/screenshot-purge-job.js";
 import { startReportPurgeJob } from "./src/services/report-purge-job.js";
@@ -29,6 +30,7 @@ initRealtime(server);
 initFirebaseAdmin();
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
+const runAlertSchedulerTick = startAlertSchedulerJob();
 const runScreenshotJobs = startScreenshotPurgeJob();
 const runReportJobs = startReportPurgeJob();
 startDailyLogComplianceJob();
@@ -46,8 +48,9 @@ const bootstrapBackgroundJobs = () => {
   runLeaveAccrualTick();
   runAttendanceMaterializeTick();
   runEmployeeExitTick();
+  void runAlertSchedulerTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler)",
   );
 };
 void whenDatabaseReady()

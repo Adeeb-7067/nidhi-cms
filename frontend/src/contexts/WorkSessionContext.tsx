@@ -9,6 +9,7 @@ import {
 import { isElectron } from "@/lib/electron-bridge";
 import { getApiBaseUrl } from "@/lib/api-base";
 import { useAuth } from "@/contexts/AuthContext";
+import { useRealtime } from "@/contexts/RealtimeContext";
 import { useMonitoringStatus, useConsentStatus } from "@/api/monitoring";
 import { useActiveSession, useClockIn, useClockOut, activeSessionQueryKey, type WorkSession } from "@/api/work-sessions";
 import { useListNotifications, getListNotificationsQueryKey } from "@/api";
@@ -40,6 +41,7 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
 
 export function WorkSessionProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const { isConnected } = useRealtime();
   const queryClient = useQueryClient();
 
   // Only clockable staff roles have work sessions. On web, skip polling for other roles
@@ -116,7 +118,9 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     if (activeSession) shownStopReasonRef.current = null;
   }, [activeSession]);
   useEffect(() => {
-    if (!isClockableRole || !unreadAlerts?.notifications?.length) return;
+    // RealtimeContext handles live work-session toasts via dedicated socket events.
+    // Only fall back to polling unread notifications when the socket is disconnected.
+    if (!isClockableRole || isConnected || !unreadAlerts?.notifications?.length) return;
     for (const item of unreadAlerts.notifications) {
       if (item.type !== "work_session" || shownSessionAlertRef.current.has(item.id)) continue;
       const alertKey = `notif:${item.id}`;
@@ -128,7 +132,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
         duration: 12_000,
       });
     }
-  }, [isClockableRole, unreadAlerts]);
+  }, [isClockableRole, isConnected, unreadAlerts]);
 
   // Sync Electron session + screenshot scheduler once active session is confirmed from API.
   useEffect(() => {

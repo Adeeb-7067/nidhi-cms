@@ -124,6 +124,7 @@ export type NavSection = {
 export function getHomeHref(role: UserRole): string {
   if (role === "super_admin") return "/admin";
   if (role === "hr") return "/hrm";
+  if (role === "bde") return "/sales/bde";
   if (role === "client") return "/client";
   return "/dev";
 }
@@ -151,6 +152,13 @@ export function getNavSections(role: UserRole): NavSection[] {
           icon: Inbox,
           roles: ["super_admin"],
           badgeKey: "requests",
+          group: "Operations",
+        },
+        {
+          title: "Alerts",
+          href: "/admin/alerts",
+          icon: Megaphone,
+          roles: ["super_admin"],
           group: "Operations",
         },
       ],

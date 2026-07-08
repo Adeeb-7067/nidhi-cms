@@ -3,6 +3,7 @@ import {
   SalesProposals,
   SalesPayments,
   SalesFollowUps,
+  SalesInstallments,
   usersTable,
   clientsTable,
 } from "../../models/schema/index.js";
@@ -44,6 +45,7 @@ async function aggregateBdeStats(bdeIds, dateRange = null, { includeFollowUps = 
     return {
       revenueMap: new Map(),
       dealsMap: new Map(),
+      closedProjectValueMap: new Map(),
       followUpMap: new Map(),
       leadMap: new Map(),
     };
@@ -51,8 +53,11 @@ async function aggregateBdeStats(bdeIds, dateRange = null, { includeFollowUps = 
 
   const periodMatch = dateRange ? { createdAt: { $gte: dateRange.start, $lt: dateRange.end } } : {};
   const approvedMatch = dateRange ? { approvedAt: { $gte: dateRange.start, $lt: dateRange.end } } : {};
+  const installmentDateMatch = dateRange
+    ? { createdAt: { $gte: dateRange.start, $lt: dateRange.end } }
+    : {};
 
-  const [paymentAgg, proposalAgg, followUpAgg, leadAgg] = await Promise.all([
+  const [paymentAgg, proposalAgg, closedProjectAgg, followUpAgg, leadAgg] = await Promise.all([
     SalesPayments.aggregate([
       { $match: { recordedBy: { $in: bdeIds }, ...periodMatch } },
       { $group: { _id: "$recordedBy", revenue: { $sum: "$amount" } } },
@@ -60,6 +65,23 @@ async function aggregateBdeStats(bdeIds, dateRange = null, { includeFollowUps = 
     SalesProposals.aggregate([
       { $match: { assignedTo: { $in: bdeIds }, status: "approved", ...approvedMatch } },
       { $group: { _id: "$assignedTo", dealsClosed: { $sum: 1 } } },
+    ]),
+    // Closed project value = sum of installment due amounts for deals whose
+    // payment schedule was created in-period (matches sales-kpis salesValue).
+    SalesInstallments.aggregate([
+      { $match: { proposalId: { $ne: null }, ...installmentDateMatch } },
+      { $group: { _id: "$proposalId", value: { $sum: "$dueAmount" } } },
+      {
+        $lookup: {
+          from: SalesProposals.collection.name,
+          localField: "_id",
+          foreignField: "id",
+          as: "proposal",
+        },
+      },
+      { $unwind: "$proposal" },
+      { $match: { "proposal.assignedTo": { $in: bdeIds } } },
+      { $group: { _id: "$proposal.assignedTo", closedProjectValue: { $sum: "$value" } } },
     ]),
     includeFollowUps
       ? SalesFollowUps.aggregate([
@@ -76,6 +98,7 @@ async function aggregateBdeStats(bdeIds, dateRange = null, { includeFollowUps = 
   return {
     revenueMap: new Map(paymentAgg.map((r) => [r._id, r.revenue])),
     dealsMap: new Map(proposalAgg.map((r) => [r._id, r.dealsClosed])),
+    closedProjectValueMap: new Map(closedProjectAgg.map((r) => [r._id, r.closedProjectValue])),
     followUpMap: new Map(followUpAgg.map((r) => [r._id, r.pendingFollowUps])),
     leadMap: new Map(leadAgg.map((r) => [r._id, r.leadCount])),
   };
@@ -91,7 +114,7 @@ function parseMonthYear(query) {
 }
 
 function mapBdeUserToTeamMember(u, stats) {
-  const { revenueMap, dealsMap, followUpMap, leadMap } = stats;
+  const { revenueMap, dealsMap, closedProjectValueMap, followUpMap, leadMap } = stats;
   const formatted = formatUser(u, { withPresence: true });
   return {
     id: u.id,
@@ -113,6 +136,7 @@ function mapBdeUserToTeamMember(u, stats) {
     presenceStatus: formatted.presenceStatus ?? null,
     isActiveNow: formatted.isActiveNow ?? false,
     revenue: revenueMap.get(u.id) ?? 0,
+    closedProjectValue: closedProjectValueMap.get(u.id) ?? 0,
     dealsClosed: dealsMap.get(u.id) ?? 0,
     leadCount: leadMap.get(u.id) ?? 0,
     pendingFollowUps: followUpMap.get(u.id) ?? 0,
@@ -154,6 +178,7 @@ function toLeaderboardMember(member) {
     role: member.role,
     status: member.status,
     revenue: member.revenue,
+    closedProjectValue: member.closedProjectValue,
     dealsClosed: member.dealsClosed,
     pendingFollowUps: member.pendingFollowUps,
   };
@@ -259,6 +284,7 @@ async function getSalesTeamMember(req, res) {
       month: period.month,
       year: period.year,
       revenue: periodAgg.revenueMap.get(userId) ?? 0,
+      closedProjectValue: salesKpis.salesValue ?? periodAgg.closedProjectValueMap.get(userId) ?? 0,
       dealsClosed: periodAgg.dealsMap.get(userId) ?? 0,
       leadCount: periodAgg.leadMap.get(userId) ?? 0,
       ...salesKpis,

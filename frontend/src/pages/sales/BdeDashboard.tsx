@@ -167,17 +167,19 @@ function TargetMetric({
 
 function TargetProgressContent({
   target,
-  revenue,
+  closedProjectValue,
+  moneyReceived,
   dealsClosed,
   leadCount,
 }: {
   target: { month: number; year: number; revenueTarget: number | null; dealsTarget: number | null; leadsTarget: number | null; notes: string | null };
-  revenue: number;
+  closedProjectValue: number;
+  moneyReceived: number;
   dealsClosed: number;
   leadCount: number;
 }) {
   const daysLeft = getDaysLeft();
-  const trackedCount = [target.revenueTarget, target.dealsTarget, target.leadsTarget].filter(Boolean).length;
+  const trackedCount = [target.revenueTarget, target.dealsTarget, target.leadsTarget].filter((v) => v != null).length;
 
   return (
     <div className="space-y-3">
@@ -191,13 +193,21 @@ function TargetProgressContent({
       ) : null}
       <div className={cn("grid gap-4", trackedCount > 1 ? "grid-cols-1 sm:grid-cols-3" : "grid-cols-1")}>
         {target.revenueTarget != null ? (
-          <TargetMetric
-            label="Revenue"
-            current={revenue}
-            target={target.revenueTarget}
-            format={formatCompactCurrency}
-            accent="[&>div]:bg-emerald-500"
-          />
+          <div className="space-y-2">
+            <TargetMetric
+              label="Closed project value"
+              current={closedProjectValue}
+              target={target.revenueTarget}
+              format={formatCompactCurrency}
+              accent="[&>div]:bg-emerald-500"
+            />
+            <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5">
+              <span className="text-[10px] text-muted-foreground">Money received this month</span>
+              <span className="text-[11px] font-semibold tabular-nums text-foreground">
+                {formatCompactCurrency(moneyReceived)}
+              </span>
+            </div>
+          </div>
         ) : null}
         {target.dealsTarget != null ? (
           <TargetMetric
@@ -218,6 +228,14 @@ function TargetProgressContent({
           />
         ) : null}
       </div>
+      {target.revenueTarget == null ? (
+        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5">
+          <span className="text-[10px] text-muted-foreground">Money received this month</span>
+          <span className="text-[11px] font-semibold tabular-nums text-foreground">
+            {formatCompactCurrency(moneyReceived)}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -392,7 +410,8 @@ export default function BdeDashboard() {
             {targetData?.target ? (
               <TargetProgressContent
                 target={targetData.target}
-                revenue={periodStats?.revenue ?? 0}
+                closedProjectValue={periodStats?.salesValue ?? periodStats?.closedProjectValue ?? 0}
+                moneyReceived={periodStats?.totalCollected ?? 0}
                 dealsClosed={periodStats?.dealsClosed ?? 0}
                 leadCount={periodStats?.leadCount ?? 0}
               />

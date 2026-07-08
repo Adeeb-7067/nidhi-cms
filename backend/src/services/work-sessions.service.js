@@ -30,6 +30,15 @@ const RESUMABLE_STOP_REASONS = [
 /** Client-initiated clock-out — never push from the API (user already knows). */
 const USER_INITIATED_STOP_REASONS = new Set(["clock_out", "app_quit", "logout"]);
 
+/** Surface auto-close reason on poll/heartbeat shortly after background cleanup (web has no socket). */
+const RECENT_STOP_SURFACING_MS = 5 * 60 * 1000;
+const SURFACED_AUTO_STOP_REASONS = [
+  "shift_ended",
+  "day_ended",
+  "session_expired",
+  "client_disconnected",
+];
+
 function sumPauseDurationMs(pausePeriods = []) {
   return pausePeriods.reduce((sum, period) => {
     if (!period?.pausedAt || !period?.resumedAt) return sum;
@@ -120,6 +129,22 @@ async function synchronizeActiveSession(session, { updateHeartbeat = true } = {}
 async function deliverClockInSession(session) {
   const { session: active, stopReason } = await synchronizeActiveSession(session);
   return { session: active, stopReason };
+}
+
+/** When cleanup already closed the session, clients still need the stop reason for toasts. */
+async function resolveRecentSessionStopReason(userId) {
+  const cutoff = new Date(Date.now() - RECENT_STOP_SURFACING_MS);
+  const recent = await workSessionsTable
+    .findOne({
+      userId,
+      isActive: false,
+      endedAt: { $gte: cutoff },
+      stopReason: { $in: SURFACED_AUTO_STOP_REASONS },
+    })
+    .sort({ endedAt: -1 })
+    .lean();
+
+  return recent?.stopReason ?? null;
 }
 
 async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = null } = {}) {
@@ -290,7 +315,10 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
 
 export async function touchHeartbeat(userId) {
   const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
-  if (!active) return { session: null, stopReason: null };
+  if (!active) {
+    const stopReason = await resolveRecentSessionStopReason(userId);
+    return { session: null, stopReason };
+  }
   return synchronizeActiveSession(active);
 }
 
@@ -327,7 +355,10 @@ export async function getActiveSession(userId) {
   if (session) {
     session = (await tryReclaimStrayActiveSession(userId)) ?? session;
   }
-  if (!session) return { session: null, stopReason: null };
+  if (!session) {
+    const stopReason = await resolveRecentSessionStopReason(userId);
+    return { session: null, stopReason };
+  }
   return synchronizeActiveSession(session);
 }
 

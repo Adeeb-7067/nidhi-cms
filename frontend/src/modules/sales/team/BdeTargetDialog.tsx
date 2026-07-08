@@ -50,7 +50,7 @@ const schema = z.object({
   notes: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.trackRevenue && (data.revenueTarget == null || data.revenueTarget <= 0)) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["revenueTarget"], message: "Enter a revenue target" });
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["revenueTarget"], message: "Enter a closed project value target" });
   }
   if (data.trackDeals && (data.dealsTarget == null || data.dealsTarget <= 0)) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dealsTarget"], message: "Enter a deals target" });
@@ -231,12 +231,14 @@ export function BdeTargetDialog({
                 />
               </div>
 
-              {/* Revenue target */}
+              {/* Closed project value target */}
               <div className="rounded-lg border p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-medium">Revenue</p>
-                    <p className="text-[10px] text-muted-foreground">Total amount collected</p>
+                    <p className="text-xs font-medium">Closed project value</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Sum of deal values when you create a payment schedule (e.g. close ₹20,000 → target +₹20,000)
+                    </p>
                   </div>
                   <Switch
                     checked={trackRevenue}

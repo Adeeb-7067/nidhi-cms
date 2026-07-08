@@ -24,6 +24,7 @@ const AdminClients = React.lazy(() => import("@/pages/admin/Clients"));
 const AdminTickets = React.lazy(() => import("@/pages/admin/Tickets"));
 const AdminAnalytics = React.lazy(() => import("@/pages/admin/Analytics"));
 const AdminRequests = React.lazy(() => import("@/pages/admin/Requests"));
+const AdminAlerts = React.lazy(() => import("@/pages/admin/Alerts"));
 const DiscussionsPage = React.lazy(() => import("@/pages/admin/Discussions"));
 const DevWorkspace = React.lazy(() => import("@/pages/dev/Workspace"));
 const DevProjects = React.lazy(() => import("@/pages/dev/Projects"));
@@ -245,6 +246,11 @@ export function PageOutlet() {
       <Route path="/admin/requests">
         <RoleGate>
           <AdminRequests />
+        </RoleGate>
+      </Route>
+      <Route path="/admin/alerts">
+        <RoleGate>
+          <AdminAlerts />
         </RoleGate>
       </Route>
 

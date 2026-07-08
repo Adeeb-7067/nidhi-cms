@@ -92,6 +92,75 @@ describe("shouldAutoClockOutAtShiftEnd", () => {
     const now = new Date("2026-07-03T15:00:00.000Z");
     assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
   });
+
+  test("regression: overtime segment survives repeated policy checks (heartbeat simulation)", () => {
+    const shiftEnd = computeShiftEndUtc("2026-07-03", SHIFT, TZ);
+    const overtimeStart = new Date("2026-07-03T13:30:00.000Z"); // 19:00 IST
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      segmentStartedAt: overtimeStart,
+      isActive: true,
+      pausePeriods: [
+        {
+          pausedAt: shiftEnd.toISOString(),
+          resumedAt: overtimeStart.toISOString(),
+          stopReason: "shift_ended",
+        },
+      ],
+    };
+
+    const checks = [
+      new Date("2026-07-03T14:00:00.000Z"), // 19:30 IST
+      new Date("2026-07-03T16:00:00.000Z"), // 21:30 IST
+      new Date("2026-07-03T18:00:00.000Z"), // 23:30 IST
+    ];
+
+    for (const now of checks) {
+      assert.equal(
+        shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ),
+        false,
+        `should stay open at ${now.toISOString()}`,
+      );
+    }
+  });
+
+  test("regression: legacy rows without segmentStartedAt infer overtime from pause periods", () => {
+    const shiftEnd = computeShiftEndUtc("2026-07-03", SHIFT, TZ);
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      pausePeriods: [
+        {
+          pausedAt: shiftEnd.toISOString(),
+          resumedAt: new Date("2026-07-03T13:30:00.000Z").toISOString(),
+          stopReason: "shift_ended",
+        },
+      ],
+    };
+    const now = new Date("2026-07-03T16:00:00.000Z");
+    assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
+    assert.equal(
+      resolveActiveSegmentStart(session, shiftEnd).toISOString(),
+      "2026-07-03T13:30:00.000Z",
+    );
+  });
+
+  test("regression: pre-fix bug would have re-closed resumed session (startedAt-only check)", () => {
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"), // during shift — old logic used only this
+    };
+    const now = new Date("2026-07-03T15:00:00.000Z"); // after shift end
+    const shiftEnd = computeShiftEndUtc("2026-07-03", SHIFT, TZ);
+    const legacyWouldClose =
+      session.startedAt.getTime() < shiftEnd.getTime() && now.getTime() > shiftEnd.getTime();
+    assert.equal(legacyWouldClose, true, "sanity: old startedAt-only logic would wrongly close");
+    assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), true);
+
+    const resumed = {
+      ...session,
+      segmentStartedAt: new Date("2026-07-03T13:30:00.000Z"),
+    };
+    assert.equal(shouldAutoClockOutAtShiftEnd(resumed, now, SHIFT, TZ), false);
+  });
 });
 
 describe("isPausedSessionResumableToday", () => {

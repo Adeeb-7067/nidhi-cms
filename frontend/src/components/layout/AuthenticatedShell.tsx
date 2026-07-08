@@ -6,6 +6,7 @@ import { WorkSessionProvider } from "@/contexts/WorkSessionContext";
 import { ClientTeamProvider } from "@/contexts/ClientTeamContext";
 import { ALL_AUTHENTICATED_ROLES } from "@/lib/user-roles";
 import { SalesAlerts } from "@/modules/sales/components/SalesAlerts";
+import { GlobalAlertModal } from "@/components/alerts/GlobalAlertModal";
 
 /** Single persistent shell — sidebar/navbar stay mounted while pages change. */
 export function AuthenticatedShell() {
@@ -18,6 +19,7 @@ export function AuthenticatedShell() {
           </AppLayout>
           <ConsentDialog />
           <SalesAlerts />
+          <GlobalAlertModal />
         </ClientTeamProvider>
       </WorkSessionProvider>
     </ProtectedRoute>

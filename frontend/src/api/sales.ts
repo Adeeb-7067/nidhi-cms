@@ -1806,6 +1806,8 @@ export interface SalesTeamMember {
   presenceStatus?: string | null;
   isActiveNow?: boolean;
   revenue: number;
+  /** Sum of installment schedules created for deals this BDE closed (period-scoped when month/year set). */
+  closedProjectValue: number;
   dealsClosed: number;
   leadCount: number;
   pendingFollowUps: number;
@@ -1818,7 +1820,7 @@ export interface SalesTeamListParams {
   limit?: number;
   /** BDE dashboard leaderboard — returns stats-only rows (no roster/contact fields). */
   leaderboard?: boolean;
-  /** When both are set, scopes each member's revenue/dealsClosed/leadCount to that month instead of all-time. */
+  /** When both are set, scopes each member's revenue/closedProjectValue/dealsClosed/leadCount to that month instead of all-time. */
   month?: number;
   year?: number;
 }
@@ -1830,6 +1832,8 @@ export interface SalesTeamMemberDetail {
     month: number;
     year: number;
     revenue: number;
+    /** Closed project value this month (installment schedule totals for deals closed). */
+    closedProjectValue: number;
     dealsClosed: number;
     leadCount: number;
     /** Deals whose installment plan was created within the period. */
@@ -1913,6 +1917,7 @@ export interface BdeTarget {
   userId: number;
   month: number;
   year: number;
+  /** Closed project value target (₹). Progress = installment schedule value for deals closed this month. */
   revenueTarget: number | null;
   dealsTarget: number | null;
   leadsTarget: number | null;

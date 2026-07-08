@@ -118,7 +118,14 @@ async function notifyUser(userId, event, data) {
   if (io) {
     io.to(`user:${userId}`).emit(event, data);
   }
-  if (event === "notification" && data.title && data.body && active) {
+  // Work-session alerts use sendWebPushToUser (high-urgency webpush config) — skip generic FCM here to avoid duplicates.
+  if (
+    event === "notification" &&
+    data.title &&
+    data.body &&
+    active &&
+    data.type !== "work_session"
+  ) {
     try {
       if (user?.fcmTokens?.length > 0) {
         const admin = getFirebaseAdmin();

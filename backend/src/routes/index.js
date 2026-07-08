@@ -21,6 +21,7 @@ import reportsRoutes from "./reports.routes.js";
 import settingsRoutes from "./settings.routes.js";
 import uploadsRoutes from "./uploads.routes.js";
 import ticketsRoutes from "./tickets.routes.js";
+import alertsRoutes from "./alerts.routes.js";
 import inventoryRoutes from "./inventory.routes.js";
 import presenceRoutes from "./presence.routes.js";
 import screenshotsRoutes from "./screenshots.routes.js";
@@ -71,6 +72,7 @@ const featureRouters = [
   settingsRoutes,
   uploadsRoutes,
   ticketsRoutes,
+  alertsRoutes,
   inventoryRoutes,
   presenceRoutes,
   screenshotsRoutes,

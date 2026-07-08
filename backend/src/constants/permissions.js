@@ -15,6 +15,7 @@ export const cmsModuleGroups = [
       "admin_requests",
       "admin_tickets",
       "admin_discussions",
+      "admin_alerts",
     ],
   },
   {

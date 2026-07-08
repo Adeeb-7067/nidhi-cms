@@ -15,6 +15,7 @@ export const CMS_MODULE_GROUPS = [
       "admin_requests",
       "admin_tickets",
       "admin_discussions",
+      "admin_alerts",
     ],
   },
   {
@@ -158,6 +159,7 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   admin_requests: "Requests",
   admin_tickets: "Tickets",
   admin_discussions: "Discussions",
+  admin_alerts: "Alerts",
   monitor_screenshots: "Screenshots",
   monitor_attendance: "Live attendance monitor",
   monitor_policy: "Monitoring policy",
@@ -234,6 +236,7 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/admin/employees": "admin_team",
   "/admin/requests": "admin_requests",
   "/admin/tickets": "admin_tickets",
+  "/admin/alerts": "admin_alerts",
   "/discussions": "admin_discussions",
   "/admin/screenshots": "monitor_screenshots",
   "/admin/monitoring/analytics": "monitor_attendance",

@@ -397,7 +397,7 @@ export function BdeMemberSheet({
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-xs">Month</TableHead>
-                        <TableHead className="text-xs text-right">Revenue</TableHead>
+                        <TableHead className="text-xs text-right">Closed value</TableHead>
                         <TableHead className="text-xs text-right">Deals</TableHead>
                         <TableHead className="text-xs text-right">Leads</TableHead>
                         {isAdmin ? <TableHead className="text-xs w-8" /> : null}

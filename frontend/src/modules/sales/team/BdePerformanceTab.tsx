@@ -113,7 +113,7 @@ export function BdePerformanceTab({
 
   // Map userId → actuals scoped to the selected target month (falls back to all-time until loaded)
   const periodStatsByUserId = useMemo(() => {
-    const map = new Map<number, { revenue: number; dealsClosed: number; leadCount: number }>();
+    const map = new Map<number, { revenue: number; closedProjectValue: number; dealsClosed: number; leadCount: number }>();
     for (const m of periodData?.team ?? []) map.set(m.id, m);
     return map;
   }, [periodData?.team]);
@@ -126,7 +126,8 @@ export function BdePerformanceTab({
       const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
       if (!hasAny) { counts.no_target++; continue; }
       const actual = periodStatsByUserId.get(m.id) ?? m;
-      const revPct = t.revenueTarget != null ? (actual.revenue / t.revenueTarget) * 100 : 100;
+      const closedValue = actual.closedProjectValue ?? 0;
+      const revPct = t.revenueTarget != null ? (closedValue / t.revenueTarget) * 100 : 100;
       const dealsPct = t.dealsTarget != null ? (actual.dealsClosed / t.dealsTarget) * 100 : 100;
       const leadsPct = t.leadsTarget != null ? (actual.leadCount / t.leadsTarget) * 100 : 100;
       const worstPct = Math.min(revPct, dealsPct, leadsPct);
@@ -242,7 +243,7 @@ export function BdePerformanceTab({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="text-xs">Employee</TableHead>
-                    <TableHead className="text-xs">Revenue target</TableHead>
+                    <TableHead className="text-xs">Closed project value</TableHead>
                     <TableHead className="text-xs">Deals target</TableHead>
                     <TableHead className="text-xs">Leads target</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
@@ -256,7 +257,8 @@ export function BdePerformanceTab({
 
                     // Overall status = worst metric
                     let worstPct = 100;
-                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (actual.revenue / t.revenueTarget) * 100 : 0);
+                    const closedValue = actual.closedProjectValue ?? 0;
+                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (closedValue / t.revenueTarget) * 100 : 0);
                     if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (actual.dealsClosed / t.dealsTarget) * 100 : 0);
                     if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (actual.leadCount / t.leadsTarget) * 100 : 0);
                     const status = getTargetStatus(worstPct, hasAny);
@@ -277,7 +279,7 @@ export function BdePerformanceTab({
                         </TableCell>
                         <TableCell className="text-xs">
                           <TargetCell
-                            actual={actual.revenue}
+                            actual={closedValue}
                             target={t?.revenueTarget ?? null}
                             format={formatCompactCurrency}
                           />

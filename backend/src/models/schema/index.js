@@ -13,6 +13,8 @@ export * from "./settings.js";
 export * from "./audit.js";
 export * from "./counter.js";
 export * from "./tickets.js";
+export * from "./alerts.js";
+export * from "./alert-deliveries.js";
 export * from "./inventory.js";
 export * from "./EmployeeScreenshot.js";
 export * from "./MonitoringConsent.js";
