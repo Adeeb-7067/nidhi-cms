@@ -97,3 +97,57 @@ export async function ensureInvoiceForInstallment(installmentId, session, option
 
   return { invoice, created: true };
 }
+
+/**
+ * Create a paid invoice for the exact payment amount on an installment milestone.
+ * Each partial/full collection gets its own invoice document (matching the receipt).
+ */
+export async function createPaidInvoiceForInstallmentPayment(
+  session,
+  installment,
+  amount,
+  { proposal = null } = {},
+) {
+  const dueDate = new Date();
+  let title = installment.name;
+  if (proposal?.title) title = `${proposal.title} — ${installment.name}`;
+  title = `${title} · Payment`;
+
+  const lineDescription = proposal
+    ? `Payment for ${installment.name} (${proposal.number})`
+    : `Payment for ${installment.name}`;
+
+  const [number, id] = await Promise.all([nextInvoiceNumber(), getNextSequence("sales_invoices")]);
+
+  const doc = {
+    id,
+    number,
+    title,
+    customerId: installment.customerId,
+    projectId: installment.projectId ?? null,
+    installmentId: installment.id,
+    proposalId: installment.proposalId ?? null,
+    lineItems: [
+      {
+        itemId: `inst-${installment.id}-payment-${id}`,
+        name: `${installment.name} — payment`,
+        description: lineDescription,
+        quantity: 1,
+        unitPrice: amount,
+        taxPercent: 0,
+      },
+    ],
+    notes: null,
+    terms: null,
+    amount,
+    calculatedAmount: amount,
+    totalAdjustment: 0,
+    adjustedTotal: null,
+    paidAmount: amount,
+    status: "paid",
+    dueDate,
+  };
+
+  const created = await SalesInvoices.create([doc], { session });
+  return created[0].toObject ? created[0].toObject() : created[0];
+}

@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { useListPayments, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { formatProjectLabel, formatSalesDateTime } from "@/modules/sales/utils";
+import { formatProjectLabel, formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -109,15 +109,17 @@ export default function Payments() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments.map((p) => (
+              {payments.map((p) => {
+                const docInvoiceId = paymentDocumentInvoiceId(p);
+                return (
                 <TableRow key={p.id} className="hover:bg-muted/30">
                   <TableCell className="text-xs font-mono text-primary">{p.receiptNumber}</TableCell>
                   <TableCell className="text-xs font-mono">
                     <Link
-                      href={`/sales/invoices/${p.invoiceId}`}
+                      href={`/sales/invoices/${docInvoiceId}`}
                       className="hover:text-primary hover:underline underline-offset-2"
                     >
-                      {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                      {p.invoiceNumber ?? `INV-${docInvoiceId}`}
                     </Link>
                   </TableCell>
                   <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(p.projectId, p.projectName)}>
@@ -142,7 +144,7 @@ export default function Payments() {
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                        <Link href={`/sales/invoices/${p.invoiceId}`}>Invoice</Link>
+                        <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
                       </Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
                         <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
@@ -150,7 +152,8 @@ export default function Payments() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
         </div>

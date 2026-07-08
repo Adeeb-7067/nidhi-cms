@@ -9,7 +9,7 @@ import {
 } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { applyPaymentInTx } from "../../services/sales/payment-ledger.service.js";
+import { applyPaymentInTx, applyInstallmentPaymentInTx, repairPaymentInvoiceLinkInTx } from "../../services/sales/payment-ledger.service.js";
 import {
   loadProjectNameMap,
   resolvePaymentInstallment,
@@ -79,7 +79,7 @@ async function listPayments(req, res) {
     SalesPayments.countDocuments(filter),
   ]);
 
-  const invoiceIds = [...new Set(payments.map((p) => p.invoiceId))];
+  const invoiceIds = [...new Set(payments.flatMap((p) => [p.invoiceId, p.paymentInvoiceId].filter(Boolean)))];
   const invoices = invoiceIds.length
     ? await SalesInvoices.find({ id: { $in: invoiceIds } }).lean()
     : [];
@@ -111,16 +111,40 @@ async function listPayments(req, res) {
     ...proposals.map((p) => p.projectId),
   ]);
 
+  const needsRepair = payments.filter((p) => p.installmentId && !p.paymentInvoiceId);
+  if (needsRepair.length) {
+    for (const p of needsRepair) {
+      await runInTx((session) => repairPaymentInvoiceLinkInTx(session, p.id));
+    }
+    const repaired = await SalesPayments.find({ id: { $in: needsRepair.map((p) => p.id) } }).lean();
+    const extraInvoiceIds = repaired
+      .flatMap((p) => [p.invoiceId, p.paymentInvoiceId])
+      .filter((id) => id && !invoiceMap.has(id));
+    if (extraInvoiceIds.length) {
+      const extraInvoices = await SalesInvoices.find({ id: { $in: extraInvoiceIds } }).lean();
+      for (const inv of extraInvoices) invoiceMap.set(inv.id, inv);
+    }
+    for (const row of repaired) {
+      const idx = payments.findIndex((p) => p.id === row.id);
+      if (idx >= 0) payments[idx] = row;
+    }
+  }
+
   const rows = payments.map((p) => {
-    const invoice = invoiceMap.get(p.invoiceId);
-    const installment = resolvePaymentInstallment(p, invoice, installmentMap);
-    const proposalId = installment?.proposalId ?? invoice?.proposalId ?? null;
+    const masterInvoice = invoiceMap.get(p.invoiceId);
+    const paymentInvoice = p.paymentInvoiceId ? invoiceMap.get(p.paymentInvoiceId) : null;
+    const displayInvoice = paymentInvoice ?? masterInvoice;
+    const installment = resolvePaymentInstallment(p, masterInvoice, installmentMap);
+    const proposalId = installment?.proposalId ?? masterInvoice?.proposalId ?? null;
     const proposal = proposalId ? proposalMap.get(proposalId) ?? null : null;
-    const projectId = resolveSalesProjectId({ invoice, installment, proposal });
+    const projectId = resolveSalesProjectId({ invoice: masterInvoice, installment, proposal });
     return {
       ...p,
-      invoiceStatus: invoice?.status ?? "unknown",
-      invoiceNumber: invoice?.number ?? null,
+      invoiceStatus: displayInvoice?.status ?? "unknown",
+      invoiceNumber: displayInvoice?.number ?? null,
+      masterInvoiceId: masterInvoice?.id ?? p.invoiceId,
+      masterInvoiceNumber: masterInvoice?.number ?? null,
+      masterInvoiceStatus: masterInvoice?.status ?? null,
       installmentName: installment?.name ?? null,
       projectId,
       projectName: projectId ? projectNameMap.get(projectId) ?? null : null,
@@ -146,13 +170,34 @@ async function assertBdePaymentAccess(payment, user) {
 
 async function recordPayment(req, res) {
   const body = req.body;
-  if (!body.invoiceId) badRequest("invoiceId is required.", "invoiceId");
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
-  const invoiceId = Number(body.invoiceId);
-  const installmentId = body.installmentId ? Number(body.installmentId) : null;
+
+  let invoiceId = body.invoiceId != null ? Number(body.invoiceId) : null;
+  let installmentId = body.installmentId != null ? Number(body.installmentId) : null;
+  if (!invoiceId && !installmentId) {
+    badRequest("invoiceId or installmentId is required.", "invoiceId");
+  }
+
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
+
+  if (!installmentId && invoiceId) {
+    const selected = await SalesInvoices.findOne({ id: invoiceId }).select({ installmentId: 1 }).lean();
+    if (selected?.installmentId) installmentId = selected.installmentId;
+  }
+
+  if (installmentId) {
+    const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
+    if (!installment) notFound("Installment");
+    await assertBdeInstallmentAccess(clientsTable, SalesProposals, installment, req.user, "Installment");
+  } else if (invoiceId) {
+    const invoice = await SalesInvoices.findOne({ id: invoiceId }).lean();
+    if (!invoice) notFound("Invoice");
+    if (req.user.role === "bde") {
+      await assertBdeOwnsCustomerById(clientsTable, req.user, invoice.customerId, "Invoice");
+    }
+  }
 
   const [receiptNumber, id] = await Promise.all([
     nextReceiptNumber(),
@@ -160,10 +205,29 @@ async function recordPayment(req, res) {
   ]);
 
   let newStatus;
+  let invoiceCreated = false;
+
   await runInTx(async (session) => {
+    if (installmentId) {
+      const result = await applyInstallmentPaymentInTx(session, {
+        installmentId,
+        amount,
+        paymentMethod: body.paymentMethod,
+        transactionId: body.transactionId,
+        note: body.note,
+        recordedBy: req.user.id,
+        receiptNumber,
+        paymentId: id,
+        bdeUser: req.user,
+      });
+      newStatus = result.invoiceStatus;
+      invoiceCreated = result.invoiceCreated;
+      return;
+    }
+
     const result = await applyPaymentInTx(session, {
       invoiceId,
-      installmentId,
+      installmentId: null,
       amount,
       paymentMethod: body.paymentMethod,
       transactionId: body.transactionId,
@@ -177,7 +241,11 @@ async function recordPayment(req, res) {
   });
 
   const payment = await SalesPayments.findOne({ id }).lean();
-  res.status(201).json({ ...payment, invoiceStatus: newStatus });
+  res.status(201).json({
+    ...payment,
+    invoiceStatus: newStatus,
+    invoiceCreated,
+  });
 }
 
 async function enrichInvoiceForReceipt(invoice, paymentInstallmentId = null) {
@@ -208,18 +276,33 @@ async function enrichInvoiceForReceipt(invoice, paymentInstallmentId = null) {
 
 async function getReceiptById(req, res) {
   const id = parseIdParam(req.params.id, "payment id");
-  const payment = await SalesPayments.findOne({ id }).lean();
+  let payment = await SalesPayments.findOne({ id }).lean();
   if (!payment) notFound("Receipt");
   await assertBdePaymentAccess(payment, req.user);
+
+  if (payment.installmentId) {
+    await runInTx((session) => repairPaymentInvoiceLinkInTx(session, id));
+    payment = await SalesPayments.findOne({ id }).lean();
+  }
+
   const [invoice, customer, installment] = await Promise.all([
-    SalesInvoices.findOne({ id: payment.invoiceId }).lean(),
+    SalesInvoices.findOne({ id: payment.paymentInvoiceId ?? payment.invoiceId }).lean(),
     clientsTable.findOne({ id: payment.customerId }).lean(),
     payment.installmentId
       ? SalesInstallments.findOne({ id: payment.installmentId }).lean()
       : Promise.resolve(null),
   ]);
   const enrichedInvoice = await enrichInvoiceForReceipt(invoice, payment.installmentId);
-  res.json({ payment, invoice: enrichedInvoice, customer, installment });
+  const masterInvoice = payment.paymentInvoiceId && payment.invoiceId !== payment.paymentInvoiceId
+    ? await SalesInvoices.findOne({ id: payment.invoiceId }).lean()
+    : null;
+  res.json({
+    payment,
+    invoice: enrichedInvoice,
+    masterInvoice: masterInvoice ? await enrichInvoiceForReceipt(masterInvoice, payment.installmentId) : null,
+    customer,
+    installment,
+  });
 }
 
 export { listPayments, recordPayment, getReceiptById };

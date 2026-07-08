@@ -42,5 +42,9 @@ function uploadMiddleware(req, res, next) {
 
 const router = Router();
 router.post("/upload", requireAuth, uploadMiddleware, asyncHandler(uploadsController.postUpload));
+// Direct-to-bucket flow: presign a PUT URL, browser uploads straight to object
+// storage, then finalize sets the ACL. Bypasses nginx/Node for the file bytes.
+router.post("/upload/presign", requireAuth, asyncHandler(uploadsController.postUploadPresign));
+router.post("/upload/finalize", requireAuth, asyncHandler(uploadsController.postUploadFinalize));
 
 export default router;

@@ -45,6 +45,7 @@ const NotificationsPage = React.lazy(() => import("@/pages/Notifications"));
 
 const SalesDashboard = React.lazy(() => import("@/pages/sales/Dashboard"));
 const BdeDashboard = React.lazy(() => import("@/pages/sales/BdeDashboard"));
+const BdeProjects = React.lazy(() => import("@/pages/sales/BdeProjects"));
 const SalesLeads = React.lazy(() => import("@/pages/sales/Leads"));
 const SalesLeadDetail = React.lazy(() => import("@/pages/sales/LeadDetail"));
 const SalesFollowUps = React.lazy(() => import("@/pages/sales/FollowUps"));
@@ -353,6 +354,11 @@ export function PageOutlet() {
       <Route path="/sales/bde">
         <RoleGate>
           <BdeDashboard />
+        </RoleGate>
+      </Route>
+      <Route path="/sales/bde/projects">
+        <RoleGate>
+          <BdeProjects />
         </RoleGate>
       </Route>
       <Route path="/sales">

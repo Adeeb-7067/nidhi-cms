@@ -8,7 +8,7 @@ import type { PartialPayment, PaymentReceipt, SalesInvoice } from "./types";
 import { calcRemaining } from "./constants";
 import type { SalesDocumentBranding } from "./company-branding";
 import { resolveSalesDocumentBranding } from "./company-branding";
-import { formatPaymentMethod } from "./utils";
+import { formatPaymentMethod, paymentDocumentInvoiceId } from "./utils";
 
 export function toInvoicePreview(
   invoice: ApiInvoice,
@@ -38,6 +38,7 @@ export function toInvoicePreview(
 }
 
 export function paymentToPartial(p: SalesPayment): PartialPayment {
+  const docInvoiceId = paymentDocumentInvoiceId(p);
   return {
     id: p.id,
     installmentId: p.installmentId ?? 0,
@@ -48,6 +49,8 @@ export function paymentToPartial(p: SalesPayment): PartialPayment {
     status: "received",
     receiptId: p.id,
     receiptNumber: p.receiptNumber,
+    invoiceId: docInvoiceId,
+    invoiceNumber: p.invoiceNumber,
   };
 }
 

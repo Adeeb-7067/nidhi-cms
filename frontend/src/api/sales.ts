@@ -209,6 +209,7 @@ export interface Customer {
   createdBy?: number | null;
   createdByUser?: SalesUser | null;
   totalSales: number;
+  totalCollected?: number;
   outstanding: number;
   hasPayments: boolean;
   createdAt: string;
@@ -396,6 +397,7 @@ export interface SalesInvoice {
 export interface SalesPayment {
   id: number;
   invoiceId: number;
+  paymentInvoiceId?: number | null;
   invoiceNumber: string | null;
   installmentId: number | null;
   installmentName?: string | null;
@@ -450,7 +452,11 @@ export interface SalesDashboard {
   oldProjectMoney: number;
   /** Effective window backing totalSales/totalCollected/new-old split (defaults to this month when no date filter is set). */
   salesKpisPeriod: { from: string | null; to: string | null };
+  /** True when the caller supplied dateFrom/dateTo — the legacy metrics below (totalRevenue, outstanding, invoiceByStatus, pendingInvoices) are scoped to it when true, all-time when false. */
+  isFiltered: boolean;
   overdueByCustomer: SalesOverdueCustomer[];
+  /** True total across every overdue customer — overdueByCustomer is capped to the top 10 for display. */
+  overdueTotal: number;
   outstanding: number;
   pendingInvoices: number;
   invoiceByStatus: Record<string, { count: number; amount: number }>;
@@ -925,6 +931,7 @@ export function useCreateProposal() {
       clientNote?: string;
       terms?: string;
       internalNotes?: string;
+      status?: ProposalStatus;
     }) =>
       customFetch<Proposal>(apiUrl("/api/sales/proposals"), { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-proposals"] }),
@@ -1410,9 +1417,14 @@ export function useUpdateInstallment() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: (_data, vars) => {
+    onSuccess: (data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.installment(vars.id) });
       qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      const customerId = data?.customerId ?? vars.customerId;
+      if (customerId) {
+        qc.invalidateQueries({ queryKey: salesKeys.customer(customerId) });
+        qc.invalidateQueries({ queryKey: [...salesKeys.customer(customerId), "hub"] });
+      }
     },
   });
 }
@@ -1639,7 +1651,7 @@ export function useRecordPayment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: {
-      invoiceId: number;
+      invoiceId?: number;
       installmentId?: number;
       amount: number;
       paymentMethod: PaymentMethod;
@@ -1652,7 +1664,10 @@ export function useRecordPayment() {
       }),
     onSuccess: (data, vars) => {
       qc.invalidateQueries({ queryKey: ["sales-invoices"] });
-      qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.invoiceId) });
+      const invoiceId = vars.invoiceId ?? data?.invoiceId;
+      if (invoiceId) {
+        qc.invalidateQueries({ queryKey: salesKeys.invoice(invoiceId) });
+      }
       qc.invalidateQueries({ queryKey: ["sales-payments"] });
       qc.invalidateQueries({ queryKey: ["sales-installments"] });
       qc.invalidateQueries({ queryKey: salesKeys.dashboard() });
@@ -1826,6 +1841,8 @@ export interface SalesTeamMemberDetail {
   } | null;
   /** Current overdue balance per customer this BDE owns, regardless of period. */
   overdueByCustomer: SalesOverdueCustomer[];
+  /** True total across every overdue customer — overdueByCustomer is capped to the top 10 for display. */
+  overdueTotal: number;
   stats: {
     revenue: number;
     dealsClosed: number;

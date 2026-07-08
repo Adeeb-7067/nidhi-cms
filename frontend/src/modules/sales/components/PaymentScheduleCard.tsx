@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "wouter";
 import { format } from "date-fns";
 import { Plus, ChevronDown, ChevronUp, Loader2, CreditCard, CheckCircle2, Clock, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -13,7 +14,7 @@ import {
   type PaymentMethod,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { formatSalesDateTime } from "@/modules/sales/utils";
+import { formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -305,10 +306,20 @@ function InstallmentRow({
           {payments.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-2">No payments yet</p>
           ) : (
-            payments.map((p) => (
+            payments.map((p) => {
+              const docInvoiceId = paymentDocumentInvoiceId(p);
+              return (
               <div key={p.id} className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[10px] text-muted-foreground">{p.receiptNumber}</span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <Link href={`/sales/receipts/${p.id}`} className="font-mono text-[10px] text-primary hover:underline">
+                    {p.receiptNumber}
+                  </Link>
+                  <Link
+                    href={`/sales/invoices/${docInvoiceId}`}
+                    className="font-mono text-[10px] text-primary hover:underline"
+                  >
+                    {p.invoiceNumber ?? `INV-${docInvoiceId}`}
+                  </Link>
                   <span className="text-muted-foreground">{p.paymentMethod.replace("_", " ")}</span>
                   {p.transactionId && <span className="text-muted-foreground/70 text-[10px]">· {p.transactionId}</span>}
                 </div>
@@ -317,7 +328,8 @@ function InstallmentRow({
                   <span className="text-muted-foreground text-[10px] whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

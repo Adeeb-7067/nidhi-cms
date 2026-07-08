@@ -72,7 +72,7 @@ async function requireAuth(req, _res, next) {
       { code: "USER_INACTIVE" }
     );
   }
-  req.user = { id: user.id, role: user.role, name: user.name, email: user.email };
+  req.user = { id: user.id, role: user.role, name: user.name, email: user.email, status: user.status };
   next();
 }
 function requireRole(...roles) {

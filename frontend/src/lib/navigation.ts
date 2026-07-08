@@ -58,6 +58,7 @@ import {
   Share2,
   Search,
   ScrollText,
+  FolderKanban,
 } from "lucide-react";
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
@@ -212,6 +213,7 @@ export function getNavSections(role: UserRole): NavSection[] {
       roles: [...INTERNAL_STAFF_ROLES],
       items: [
         { title: "My Dashboard", href: "/sales/bde", icon: LayoutDashboard, roles: ["bde"], group: "Overview" },
+        { title: "My Projects", href: "/sales/bde/projects", icon: FolderKanban, roles: ["bde"], group: "Overview" },
         { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde"), group: "Overview" },
         { title: "Lead management", href: "/sales/leads", icon: Target, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
         { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },

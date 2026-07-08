@@ -15,6 +15,11 @@ export function formatProjectLabel(projectId?: number | null, projectName?: stri
   return projectName?.trim() || (projectId ? `Project #${projectId}` : "—");
 }
 
+/** Per-payment paid invoice (installment partials); falls back to the main invoice link. */
+export function paymentDocumentInvoiceId(p: { paymentInvoiceId?: number | null; invoiceId: number }) {
+  return p.paymentInvoiceId ?? p.invoiceId;
+}
+
 export function formatInstallmentSequence(
   sequenceNumber?: number | null,
   sequenceTotal?: number | null,

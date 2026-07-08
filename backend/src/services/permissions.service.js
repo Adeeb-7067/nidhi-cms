@@ -78,6 +78,7 @@ const DEFAULT_TEMPLATES = [
       ...salesModules.map((module) => ({ module, action: "view" })),
       { module: "sales_settings", action: "edit" },
       { module: "sales_team", action: "view" },
+      { module: "sales_team", action: "edit" },
       { module: "admin_team", action: "view" },
       { module: "admin_team", action: "edit" },
       { module: "roles_permissions", action: "view" },

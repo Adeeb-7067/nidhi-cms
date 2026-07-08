@@ -88,9 +88,9 @@ export function usePermissions() {
   const canViewHref = useCallback(
     (href: string) => {
       const path = href.split("?")[0];
+      if (isPrivileged) return true;
       const perm = resolveRoutePermission(path);
       if (!perm) return isNavHrefPublic(path);
-      if (isPrivileged) return true;
       if (isLoading && !data) return false;
       return permissionMatches(data?.permissions ?? [], permissionSet, perm, "view");
     },

@@ -15,7 +15,8 @@ import {
   type SalesProduct,
 } from "@/api/sales";
 import type { ProposalLineItem } from "@/modules/sales/types";
-import { formatCurrency } from "@/modules/sales/constants";
+import { formatCurrency, PROPOSAL_STATUS_OPTIONS } from "@/modules/sales/constants";
+import type { ProposalStatus } from "@/modules/sales/types";
 import { TotalAmountAdjustFields, proposalAdjustPayload } from "@/modules/sales/components/total-amount-adjust";
 import { calcProposalTotal, formatDiscountPercent, resolveFinalTotal } from "@/modules/sales/utils";
 import { useSalesStaff } from "@/modules/sales/use-sales-staff";
@@ -210,6 +211,7 @@ export function ProposalFormSheet({
   const [notes, setNotes] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
+  const [status, setStatus] = useState<ProposalStatus>("draft");
   const [hydrated, setHydrated] = useState(false);
 
   // Reset when sheet closes or opens fresh
@@ -229,6 +231,7 @@ export function ProposalFormSheet({
       setNotes("");
       setInternalNotes("");
       setAssignedTo("");
+      setStatus("draft");
     }
   }, [open, isEdit, editId]);
 
@@ -258,6 +261,7 @@ export function ProposalFormSheet({
     setNotes(editData.clientNote ?? "");
     setInternalNotes(editData.internalNotes ?? "");
     setAssignedTo(editData.assignedTo ? String(editData.assignedTo) : "");
+    setStatus(editData.status ?? "draft");
     if (editData.items?.length) {
       setTaxRate(editData.items[0]?.taxPercent ?? 18);
       setItems(editData.items.map((item: { name?: string; description: string; quantity: number; unitPrice: number; taxPercent: number }) => ({
@@ -310,6 +314,7 @@ export function ProposalFormSheet({
       terms: terms.trim() || undefined,
       internalNotes: internalNotes.trim() || undefined,
       assignedTo: assignedTo ? Number(assignedTo) : undefined,
+      status: mode === "send" ? undefined : status,
     };
 
     try {
@@ -338,7 +343,7 @@ export function ProposalFormSheet({
       }
 
       onOpenChange(false);
-      navigate(`/sales/proposals/${savedId}`);
+      if (!isEdit) navigate(`/sales/proposals/${savedId}`);
     } catch (err) {
       toastApiError(err, mode === "send" ? "Failed to save & send" : isEdit ? "Failed to update" : "Failed to create");
     }
@@ -405,11 +410,22 @@ export function ProposalFormSheet({
               </div>
             )}
 
-            {/* Valid until + Assigned to */}
+            {/* Valid until + Status + Assigned to */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Valid until</Label>
                 <Input type="date" className="h-8 text-xs" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as ProposalStatus)}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROPOSAL_STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs">{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               {staff.length > 0 && (
                 <div className="space-y-1">

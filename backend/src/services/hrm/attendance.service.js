@@ -112,6 +112,7 @@ async function recordAdminManualClockSessions(userId, date, body, timezone) {
       id,
       userId,
       startedAt,
+      segmentStartedAt: startedAt,
       endedAt: endedAt ?? null,
       isActive: !endedAt,
       stopReason: endedAt ? "admin_manual" : null,

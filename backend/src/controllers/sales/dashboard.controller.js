@@ -22,8 +22,11 @@ function parseDateRange(query) {
   const start = from && !isNaN(from.getTime()) ? from : null;
   let end = to && !isNaN(to.getTime()) ? to : null;
   if (end) {
-    // dateTo is inclusive of the whole day from the UI's point of view.
-    end = new Date(end.getFullYear(), end.getMonth(), end.getDate() + 1);
+    // dateTo is inclusive of the whole day from the UI's point of view. A
+    // date-only string like "2026-07-07" parses as UTC midnight, so the +1-day
+    // boundary must also be reconstructed in UTC — local getters here would
+    // shift the boundary by the server's timezone offset.
+    end = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate() + 1));
   }
   return start || end ? { start, end } : null;
 }
@@ -104,12 +107,13 @@ async function getDashboard(req, res) {
     ]),
   ]);
 
-  // Sales-KPI cards default to "this month" when no explicit range is picked, so
-  // the new-vs-old-project split always has a meaningful window; the legacy
-  // all-time metrics above are untouched unless a range is explicitly chosen.
-  const kpiRange = range ?? { start: startOfMonth, end: null };
+  // Sales-KPI cards default to "this month" when no explicit start is picked, so
+  // the new-vs-old-project split always has a meaningful window (a lone dateTo
+  // filter shouldn't fall back to "since the epoch"); the legacy all-time
+  // metrics above are untouched unless a range is explicitly chosen.
+  const kpiRange = { start: range?.start ?? startOfMonth, end: range?.end ?? null };
   const myProposalIds = isBde ? await findBdeAssignedProposalIds(SalesProposals, req.user.id) : [];
-  const [salesKpis, overdueByCustomer] = await Promise.all([
+  const [salesKpis, overdueResult] = await Promise.all([
     computeSalesKpis({
       installmentFilter: isBde ? { proposalId: { $in: myProposalIds.length ? myProposalIds : [-1] } } : {},
       paymentFilter: scope?.paymentFilter ?? {},
@@ -153,7 +157,9 @@ async function getDashboard(req, res) {
     newProjectMoney: salesKpis.newProjectMoney,
     oldProjectMoney: salesKpis.oldProjectMoney,
     salesKpisPeriod: { from: kpiRange.start?.toISOString() ?? null, to: kpiRange.end?.toISOString() ?? null },
-    overdueByCustomer,
+    overdueByCustomer: overdueResult.rows,
+    overdueTotal: overdueResult.totalAmount,
+    isFiltered: !!range,
     outstanding: totalOutstanding,
     pendingInvoices,
     invoiceByStatus,

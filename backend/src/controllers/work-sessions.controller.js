@@ -29,6 +29,7 @@ function formatSession(session) {
     id: session.id,
     userId: session.userId,
     startedAt: session.startedAt,
+    segmentStartedAt: session.segmentStartedAt ?? session.startedAt,
     endedAt: session.endedAt,
     isActive: session.isActive,
     deviceInfo: session.deviceInfo ?? null,
@@ -44,11 +45,20 @@ function formatSession(session) {
 
 export async function handleClockIn(req, res) {
   const forceNew = req.body.forceNew === true;
-  const { session, resumed } = await clockIn(
-    req.user.id,
-    req.body.deviceInfo ?? req.headers["user-agent"],
-    { forceNew },
-  );
+  let session;
+  let resumed;
+  try {
+    ({ session, resumed } = await clockIn(
+      req.user.id,
+      req.body.deviceInfo ?? req.headers["user-agent"],
+      { forceNew },
+    ));
+  } catch (err) {
+    badRequest(err?.message ?? "Could not start work session. Please try again.");
+  }
+  if (!session?.isActive) {
+    badRequest("Could not start work session. Please try again.");
+  }
   const formatted = formatSession(session);
   broadcastWorkSessionSync(req.user.id, {
     action: resumed ? "resume" : "clock_in",

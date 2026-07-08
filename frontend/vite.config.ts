@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
   const basePath = env.BASE_PATH || process.env.BASE_PATH || "/";
   /** Used only when `VITE_API_BASE_URL` is unset (relative `/api` on the dev server). */
   const apiProxyTarget =
-    env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "http://127.0.0.1:8080";
+    env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "http://127.0.0.1:15000";
 
   const apiProxy = {
     target: apiProxyTarget,

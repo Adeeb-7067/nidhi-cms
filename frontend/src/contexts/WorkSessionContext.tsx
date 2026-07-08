@@ -91,8 +91,30 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   // Guard against concurrent clock-in calls (e.g. rapid double-click).
   const isClockingInRef = useRef(false);
   const shownSessionAlertRef = useRef<Set<number>>(new Set());
+  const shownStopReasonRef = useRef<string | null>(null);
 
-  // Surface unread work-session alerts once (persisted) — not on every app restart.
+  const SESSION_END_POLL_MESSAGES: Record<string, string> = {
+    shift_ended: "Automatically clocked out at shift end. Clock in again to continue your day.",
+    day_ended: "Work session ended — a new work day started.",
+    session_expired: "Work session ended — 24-hour limit reached.",
+    client_disconnected: "Work session ended — connection was lost.",
+  };
+
+  // Server-side policy closed the session between polls (shift end, day end, etc.).
+  useEffect(() => {
+    if (!sessionEnabled || activeSession) return;
+    const reason = activeData?.stopReason;
+    if (!reason || reason === shownStopReasonRef.current) return;
+    shownStopReasonRef.current = reason;
+    const message = SESSION_END_POLL_MESSAGES[reason];
+    if (message) {
+      toast.info(message, { duration: 10_000 });
+    }
+  }, [sessionEnabled, activeSession, activeData?.stopReason]);
+
+  useEffect(() => {
+    if (activeSession) shownStopReasonRef.current = null;
+  }, [activeSession]);
   useEffect(() => {
     if (!isClockableRole || !unreadAlerts?.notifications?.length) return;
     for (const item of unreadAlerts.notifications) {
@@ -182,17 +204,22 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   }, [activeSession]); // stable: clockOutMutationRef never changes identity
 
   const clockIn = useCallback(async () => {
+    if (isClockingInRef.current) return;
     if (activeSession?.isActive) {
       toast.info("You are already clocked in.");
       return;
     }
-    if (isClockingInRef.current) return;
     isClockingInRef.current = true;
     try {
       const deviceInfo = isElectron()
         ? `Electron/${window.electron?.platform ?? "desktop"}`
         : "Web";
       const result = await clockInMutation.mutateAsync(deviceInfo);
+      if (!result.session?.isActive) {
+        toast.error("Clock-in did not start a session. Please try again.");
+        await queryClient.invalidateQueries({ queryKey: activeSessionQueryKey() });
+        return;
+      }
       if (isClockableRole) {
         void ensureNotificationPermission();
       }
@@ -206,7 +233,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     } finally {
       isClockingInRef.current = false;
     }
-  }, [activeSession, clockInMutation]);
+  }, [activeSession, clockInMutation, queryClient]);
 
   const clockOut = useCallback(
     async (reason: "clock_out" | "app_quit" | "logout" = "clock_out") => {

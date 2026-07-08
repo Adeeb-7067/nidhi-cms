@@ -279,7 +279,7 @@ export default function BdeDashboard() {
   const topRevenue = rankedTeam[0]?.revenue ?? 0;
   const myRevenue = stats?.revenue ?? 0;
   const revenueProgress = topRevenue > 0 ? Math.round((myRevenue / topRevenue) * 100) : 100;
-  const overdueTotal = (myData?.overdueByCustomer ?? []).reduce((s, r) => s + r.overdueAmount, 0);
+  const overdueTotal = myData?.overdueTotal ?? 0;
 
   const recentLeads = myData?.recentLeads ?? [];
   const recentProposals = myData?.recentProposals ?? [];

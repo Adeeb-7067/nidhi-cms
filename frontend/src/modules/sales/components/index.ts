@@ -26,6 +26,7 @@ export {
   ConvertLeadDialog,
   BulkLeadActions,
   CreateInstallmentDialog,
+  EditInstallmentNameDialog,
   CreateInvoiceDialog,
   InstallmentsFromProposalDialog,
   InvoiceFromProposalDialog,

@@ -119,6 +119,12 @@ export default function CustomerDetail() {
 
   const installments = customer.installments ?? [];
   const invoices = invoicesData?.invoices ?? customer.invoices ?? [];
+  const hasInstallmentSchedule = installments.length > 0;
+  const totalCollected =
+    customer.totalCollected ??
+    (hasInstallmentSchedule
+      ? installments.reduce((sum, row) => sum + row.paidAmount, 0)
+      : Math.max(0, customer.totalSales - customer.outstanding));
   const canDeleteCustomer = !(customer.hasPayments ?? false) && payments.length === 0;
 
   const handleDelete = async () => {
@@ -285,10 +291,25 @@ export default function CustomerDetail() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">Total sales</CardTitle>
+                <CardTitle className="text-[10px] uppercase text-muted-foreground">
+                  {hasInstallmentSchedule ? "Scheduled" : "Total sales"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="px-3 pb-3">
                 <p className="text-lg font-bold">{formatCurrency(customer.totalSales)}</p>
+                {hasInstallmentSchedule ? (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {installments.length} milestone{installments.length === 1 ? "" : "s"}
+                  </p>
+                ) : null}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-2 pt-3 px-3">
+                <CardTitle className="text-[10px] uppercase text-muted-foreground">Collected</CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <p className="text-lg font-bold text-emerald-700">{formatCurrency(totalCollected)}</p>
               </CardContent>
             </Card>
             <Card>

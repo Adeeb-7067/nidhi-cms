@@ -5,6 +5,8 @@ import fsSync from "fs";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import {
   assertValidStoredFileUrl,
+  createPresignedUploadUrl,
+  finalizeObjectUpload,
   getS3Client,
   isObjectStorageEnabled,
   uploadBufferToObjectStorage,
@@ -82,8 +84,10 @@ function validateStoredFileUrls(urls, fieldName = "attachments") {
 }
 export {
   UPLOAD_CATEGORIES,
+  createPresignedUploadUrl,
   deleteStoredFile,
   ensureLocalUploadDir,
+  finalizeObjectUpload,
   getStorageBackend,
   isObjectStorageEnabled,
   resolvePublicFileUrl,

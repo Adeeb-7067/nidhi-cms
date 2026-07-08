@@ -21,8 +21,8 @@ import {
   assertBdeOwnsProposal,
   assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
-import { ensureInvoiceForInstallment } from "../../services/sales/installment-billing.service.js";
-import { applyPaymentInTx } from "../../services/sales/payment-ledger.service.js";
+import { applyInstallmentPaymentInTx } from "../../services/sales/payment-ledger.service.js";
+import { escapeRegex } from "../../utils/regex.js";
 
 function proposalFinalTotal(proposal) {
   const calculated = calcLineItemsTotal(proposal.items ?? [], proposal.discount ?? 0);
@@ -83,7 +83,7 @@ async function listInstallments(req, res) {
   if (invoiceId) baseFilter.invoiceId = Number(invoiceId);
   if (proposalId) baseFilter.proposalId = Number(proposalId);
   if (search?.trim()) {
-    const re = { $regex: search.trim(), $options: "i" };
+    const re = { $regex: escapeRegex(search.trim()), $options: "i" };
     const matchingCustomers = await clientsTable.find({ companyName: re }).select({ id: 1 }).lean();
     const searchCustomerIds = matchingCustomers.map((c) => c.id);
     baseFilter.$or = [{ name: re }, { customerId: { $in: searchCustomerIds } }];
@@ -379,14 +379,7 @@ async function receiveInstallmentPayment(req, res) {
   let invoiceStatus;
 
   await runInTx(async (session) => {
-    const ensured = await ensureInvoiceForInstallment(installmentId, session, {
-      dueDate: body.dueDate,
-    });
-    invoice = ensured.invoice;
-    invoiceCreated = ensured.created;
-
-    const result = await applyPaymentInTx(session, {
-      invoiceId: invoice.id,
+    const result = await applyInstallmentPaymentInTx(session, {
       installmentId,
       amount,
       paymentMethod: body.paymentMethod,
@@ -395,8 +388,10 @@ async function receiveInstallmentPayment(req, res) {
       recordedBy: req.user.id,
       receiptNumber,
       paymentId,
-      bdeUser: null,
+      bdeUser: req.user,
     });
+    invoice = result.invoice;
+    invoiceCreated = result.invoiceCreated;
     invoiceStatus = result.invoiceStatus;
   });
 

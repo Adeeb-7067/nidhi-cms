@@ -202,6 +202,8 @@ export interface PartialPayment {
   notes?: string;
   receiptId?: number;
   receiptNumber?: string;
+  invoiceId?: number;
+  invoiceNumber?: string | null;
 }
 
 export interface PaymentReceipt {

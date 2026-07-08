@@ -30,6 +30,7 @@ export function formatClientAsCustomer(client, financials = {}) {
     createdAt: client.createdAt,
     updatedAt: client.updatedAt,
     totalSales: financials.totalSales ?? 0,
+    totalCollected: financials.totalCollected ?? 0,
     outstanding: financials.outstanding ?? 0,
     hasPayments: Boolean(financials.hasPayments),
   };

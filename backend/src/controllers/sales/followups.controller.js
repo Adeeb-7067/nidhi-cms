@@ -13,6 +13,7 @@ import {
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+import { escapeRegex } from "../../utils/regex.js";
 
 async function listFollowUps(req, res) {
   const { leadId, status, executiveId, search } = req.query;
@@ -22,7 +23,7 @@ async function listFollowUps(req, res) {
   if (status) filter.status = status;
   if (executiveId) filter.executiveId = Number(executiveId);
   if (search?.trim()) {
-    const re = { $regex: search.trim(), $options: "i" };
+    const re = { $regex: escapeRegex(search.trim()), $options: "i" };
     const matchingLeads = await SalesLeads.find({ $or: [{ name: re }, { company: re }] })
       .select({ id: 1 })
       .lean();

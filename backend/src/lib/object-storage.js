@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs/promises";
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutObjectAclCommand, GetObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { logger } from "./logger.js";
 import { HttpError } from "./http-error.js";
 const UPLOAD_CATEGORIES = [
@@ -107,6 +108,49 @@ async function uploadBufferToObjectStorage(buffer, originalName, mimetype, categ
 async function uploadToObjectStorage(buffer, originalName, mimetype, category) {
   return uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
 }
+/**
+ * Presigned direct-to-bucket PUT — the browser uploads straight to object storage,
+ * bypassing nginx/Node entirely for the file bytes (avoids proxy body-size/timeout
+ * limits for large files like APKs). ACL is set afterward via finalizeObjectUpload,
+ * not baked into the presigned request, so the client only needs to match the
+ * Content-Type header — no custom x-amz-* headers required on the PUT itself.
+ */
+async function createPresignedUploadUrl(originalName, mimetype, category, expiresInSeconds = 900) {
+  const key = buildObjectKey(originalName, category);
+  const client = getS3Client();
+  const command = new PutObjectCommand({
+    Bucket: process.env.LINODE_OBJECT_BUCKET,
+    Key: key,
+    ContentType: mimetype || "application/octet-stream",
+  });
+  const uploadUrl = await getSignedUrl(client, command, { expiresIn: expiresInSeconds });
+  return { uploadUrl, key, url: getPublicUrl(key) };
+}
+
+/** Confirm a direct-to-bucket upload actually landed, then set its final ACL. */
+async function finalizeObjectUpload(key, category) {
+  const client = getS3Client();
+  const bucket = process.env.LINODE_OBJECT_BUCKET;
+  let head;
+  try {
+    head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  } catch {
+    throw new HttpError(400, "Upload not found in storage yet — the direct upload may not have completed.", {
+      code: "UPLOAD_NOT_FOUND",
+      field: "key",
+    });
+  }
+  const isPrivate = PRIVATE_CATEGORIES.has(category);
+  await client.send(
+    new PutObjectAclCommand({
+      Bucket: bucket,
+      Key: key,
+      ACL: isPrivate ? "private" : "public-read",
+    })
+  );
+  return { url: getPublicUrl(key), size: head.ContentLength ?? 0, mimetype: head.ContentType ?? null };
+}
+
 async function uploadLocalFileToObjectStorage(localPath, originalName, mimetype, category) {
   const buffer = await fs.readFile(localPath);
   const result = await uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
@@ -122,6 +166,8 @@ export {
   UPLOAD_CATEGORIES,
   assertValidStoredFileUrl,
   buildObjectKey,
+  createPresignedUploadUrl,
+  finalizeObjectUpload,
   getPublicUrl,
   getS3Client,
   isObjectStorageEnabled,

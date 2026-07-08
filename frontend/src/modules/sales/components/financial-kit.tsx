@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertCircle,
@@ -7,6 +8,7 @@ import {
   CheckCircle2,
   FileText,
   IndianRupee,
+  Pencil,
   Receipt,
   TrendingUp,
 } from "lucide-react";
@@ -37,6 +39,7 @@ import {
 } from "../constants";
 import { formatSalesDateTime, formatInstallmentSequence } from "../utils";
 import { SalesStatusBadge } from "./SalesStatusBadge";
+import { EditInstallmentNameDialog } from "./sales-action-dialogs";
 
 export function OutstandingBadge({
   amount,
@@ -135,6 +138,7 @@ export function InstallmentCard({
   installment,
   href,
   compact,
+  editable,
 }: {
   installment: {
     id: number;
@@ -155,8 +159,10 @@ export function InstallmentCard({
   };
   href?: string;
   compact?: boolean;
+  editable?: boolean;
 }) {
   const [, navigate] = useLocation();
+  const [editOpen, setEditOpen] = useState(false);
   const remaining = calcRemaining(installment.dueAmount, installment.paidAmount);
   const projectLabel =
     installment.projectName ??
@@ -184,7 +190,22 @@ export function InstallmentCard({
                 {sequenceLabel}
               </p>
             )}
-            <p className="text-sm font-semibold truncate">{installment.name}</p>
+            <div className="flex items-center gap-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{installment.name}</p>
+              {editable && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-primary hover:bg-muted transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditOpen(true);
+                  }}
+                  aria-label="Edit installment name"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              )}
+            </div>
             {installment.customerName && (
               <p className="text-[10px] text-muted-foreground truncate">{installment.customerName}</p>
             )}
@@ -225,6 +246,14 @@ export function InstallmentCard({
           )}
         </div>
       </CardContent>
+      {editable && (
+        <EditInstallmentNameDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          installmentId={installment.id}
+          currentName={installment.name}
+        />
+      )}
     </Card>
   );
 }
@@ -232,9 +261,11 @@ export function InstallmentCard({
 export function PaymentHistoryTable({
   payments,
   showReceiptLink = true,
+  showInvoiceLink = false,
 }: {
   payments: PartialPayment[];
   showReceiptLink?: boolean;
+  showInvoiceLink?: boolean;
 }) {
   if (payments.length === 0) {
     return (
@@ -251,6 +282,7 @@ export function PaymentHistoryTable({
             <TableHead className="text-xs">Mode</TableHead>
             <TableHead className="text-xs">Transaction ID</TableHead>
             <TableHead className="text-xs">Status</TableHead>
+            {showInvoiceLink && <TableHead className="text-xs">Invoice</TableHead>}
             {showReceiptLink && <TableHead className="text-xs text-right">Receipt</TableHead>}
           </TableRow>
         </TableHeader>
@@ -270,6 +302,20 @@ export function PaymentHistoryTable({
               <TableCell>
                 <SalesStatusBadge variant="partialPayment" value={p.status} />
               </TableCell>
+              {showInvoiceLink && (
+                <TableCell className="text-xs font-mono">
+                  {p.invoiceId ? (
+                    <Link
+                      href={`/sales/invoices/${p.invoiceId}`}
+                      className="text-primary hover:underline"
+                    >
+                      {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                    </Link>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
+              )}
               {showReceiptLink && (
                 <TableCell className="text-right">
                   {p.receiptId ? (
@@ -306,11 +352,19 @@ export function PaymentTimeline({ payments }: { payments: PartialPayment[] }) {
             {p.receiptNumber && (
               <Link
                 href={`/sales/receipts/${p.receiptId}`}
-                className="text-[10px] text-primary hover:underline"
+                className="text-[10px] text-primary hover:underline font-mono"
               >
                 {p.receiptNumber}
               </Link>
             )}
+            {p.invoiceId ? (
+              <Link
+                href={`/sales/invoices/${p.invoiceId}`}
+                className="text-[10px] text-primary hover:underline font-mono ml-2"
+              >
+                {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+              </Link>
+            ) : null}
           </div>
         </div>
       ))}

@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { customFetch } from "./custom-fetch";
 import { apiUrl } from "@/lib/api-base";
-import { useRealtime } from "@/contexts/RealtimeContext";
 
 export type StopReason =
   | "clock_out"
@@ -26,6 +25,7 @@ export interface WorkSession {
   id: number;
   userId: number;
   startedAt: string;
+  segmentStartedAt?: string | null;
   endedAt: string | null;
   isActive: boolean;
   deviceInfo: string | null;
@@ -46,24 +46,24 @@ export interface ClockInResponse {
 export const activeSessionQueryKey = () => ["work-sessions", "active"] as const;
 export const workSessionsQueryKey = (params?: object) => ["work-sessions", params] as const;
 
+export type ActiveSessionState = {
+  session: WorkSession | null;
+  stopReason?: StopReason | string;
+};
+
 export function useActiveSession(enabled = true) {
-  const { isConnected } = useRealtime();
   return useQuery({
     queryKey: activeSessionQueryKey(),
     queryFn: () =>
-      customFetch<{ session: WorkSession | null; stopReason?: string }>(
-        apiUrl("/api/work-sessions/active"),
-      ),
-    select: (data) => ({
-      ...data,
-      // Clock-out API returns an ended session; /active only ever returns isActive sessions.
+      customFetch<ActiveSessionState>(apiUrl("/api/work-sessions/active")),
+    select: (data): ActiveSessionState => ({
       session: data.session?.isActive ? data.session : null,
+      stopReason: data.session?.isActive ? undefined : data.stopReason,
     }),
     enabled,
     refetchInterval: (query) => {
       const session = query.state.data?.session;
       if (session?.isActive) return 60_000;
-      if (isConnected) return false;
       return 30_000;
     },
     staleTime: 15_000,
@@ -83,7 +83,7 @@ export function useClockIn() {
         headers: { "Content-Type": "application/json" },
       }),
     onSuccess: (data) => {
-      qc.setQueryData(activeSessionQueryKey(), { session: data.session });
+      qc.setQueryData(activeSessionQueryKey(), { session: data.session, stopReason: undefined });
       qc.invalidateQueries({ queryKey: ["work-sessions"] });
     },
   });

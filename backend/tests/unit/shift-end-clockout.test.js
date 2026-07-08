@@ -4,7 +4,10 @@ import {
   computeShiftEndUtc,
   shouldAutoClockOutAtShiftEnd,
 } from "../../src/services/shift-end-clockout.service.js";
-import { isPausedSessionResumableToday } from "../../src/services/work-session-policy.js";
+import {
+  isPausedSessionResumableToday,
+  resolveActiveSegmentStart,
+} from "../../src/services/work-session-policy.js";
 
 const TZ = "Asia/Kolkata";
 const SHIFT = { startTime: "09:30", endTime: "18:00" };
@@ -42,6 +45,51 @@ describe("shouldAutoClockOutAtShiftEnd", () => {
   test("does not close before shift end", () => {
     const session = { startedAt: new Date("2026-07-03T04:30:00.000Z") };
     const now = new Date("2026-07-03T11:00:00.000Z"); // 16:30 IST
+    assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
+  });
+
+  test("does not close same-day session resumed after shift end (overtime)", () => {
+    const shiftEnd = computeShiftEndUtc("2026-07-03", SHIFT, TZ);
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"), // 10:00 IST
+      pausePeriods: [
+        {
+          pausedAt: shiftEnd.toISOString(),
+          resumedAt: new Date("2026-07-03T13:30:00.000Z").toISOString(), // 19:00 IST
+          stopReason: "shift_ended",
+        },
+      ],
+    };
+    const now = new Date("2026-07-03T15:00:00.000Z"); // 20:30 IST
+    assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
+  });
+
+  test("does not close session resumed after shift end following a manual break", () => {
+    const shiftEnd = computeShiftEndUtc("2026-07-03", SHIFT, TZ);
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      pausePeriods: [
+        {
+          pausedAt: new Date("2026-07-03T11:00:00.000Z").toISOString(),
+          resumedAt: new Date("2026-07-03T13:30:00.000Z").toISOString(), // after shift end
+          stopReason: "clock_out",
+        },
+      ],
+    };
+    const now = new Date("2026-07-03T15:00:00.000Z");
+    assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
+    assert.equal(
+      resolveActiveSegmentStart(session, shiftEnd).toISOString(),
+      "2026-07-03T13:30:00.000Z",
+    );
+  });
+
+  test("uses explicit segmentStartedAt for overtime (preferred over startedAt)", () => {
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      segmentStartedAt: new Date("2026-07-03T13:30:00.000Z"),
+    };
+    const now = new Date("2026-07-03T15:00:00.000Z");
     assert.equal(shouldAutoClockOutAtShiftEnd(session, now, SHIFT, TZ), false);
   });
 });

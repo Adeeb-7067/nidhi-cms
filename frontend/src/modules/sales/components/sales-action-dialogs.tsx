@@ -46,6 +46,7 @@ import {
   useSetLeadReminder,
   useRecordPayment,
   useReceiveInstallmentPayment,
+  useUpdateInstallment,
   useBulkUpdateLeads,
   useListCustomers,
   useListProposals,
@@ -1178,6 +1179,78 @@ export function CreateInstallmentDialog({
   );
 }
 
+export function EditInstallmentNameDialog({
+  open,
+  onOpenChange,
+  installmentId,
+  currentName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  installmentId: number;
+  currentName: string;
+}) {
+  const updateInstallment = useUpdateInstallment();
+  const [name, setName] = useState(currentName);
+
+  useEffect(() => {
+    if (open) setName(currentName);
+  }, [open, currentName]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error("Milestone name is required");
+      return;
+    }
+    if (trimmed === currentName.trim()) {
+      onOpenChange(false);
+      return;
+    }
+    try {
+      await updateInstallment.mutateAsync({ id: installmentId, name: trimmed });
+      toast.success("Installment name updated");
+      onOpenChange(false);
+    } catch (err) {
+      toastApiError(err, "Failed to update installment name");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[400px] bg-card border-border">
+        <DialogHeader>
+          <DialogTitle>Edit milestone name</DialogTitle>
+          <DialogDescription>Update how this installment appears across sales views.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <SalesField label="Milestone name">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Milestone 1 — Design"
+              autoFocus
+            />
+          </SalesField>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={updateInstallment.isPending || !name.trim() || name.trim() === currentName.trim()}
+            >
+              {updateInstallment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Invoice ──────────────────────────────────────────────────────────────
 
 export function CreateInvoiceDialog({
@@ -1608,9 +1681,7 @@ export function ReceiveInstallmentPaymentDialog({
         note: note.trim() || undefined,
       });
       toast.success("Payment recorded", {
-        description: result.invoiceCreated
-          ? `Invoice ${result.invoice.number} created automatically`
-          : `Applied to invoice ${result.invoice.number}`,
+        description: `Receipt ${result.payment.receiptNumber} and invoice ${result.invoice.number} (${formatCurrency(amt)}) created`,
       });
       onOpenChange(false);
       onSuccess?.({
@@ -1631,11 +1702,9 @@ export function ReceiveInstallmentPaymentDialog({
           <DialogTitle>Receive payment</DialogTitle>
           <DialogDescription>
             {installment.name} · {formatCurrency(remaining)} remaining
-            {!installment.paidAmount && (
-              <span className="block mt-1 text-muted-foreground">
-                An invoice will be created automatically if one is not linked yet.
-              </span>
-            )}
+            <span className="block mt-1 text-muted-foreground">
+              A receipt and a paid invoice will be created for the amount you enter.
+            </span>
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">

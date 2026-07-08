@@ -123,7 +123,12 @@ export default function InstallmentsPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {installments.map((inst) => (
-              <InstallmentCard key={inst.id} installment={installmentCardData(inst)} href={`/sales/installments/${inst.id}`} />
+              <InstallmentCard
+                key={inst.id}
+                installment={installmentCardData(inst)}
+                href={`/sales/installments/${inst.id}`}
+                editable
+              />
             ))}
           </div>
           <DataPagination

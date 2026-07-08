@@ -5,6 +5,8 @@ import { ArrowLeft, IndianRupee, Loader2, FileText, ExternalLink } from "lucide-
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +44,7 @@ export default function InstallmentDetailPage() {
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
+  const [name, setName] = useState("");
 
   const { data: installment, isLoading, isError } = useGetInstallment(installmentId, !!installmentId);
   const { data: customer } = useGetCustomer(installment?.customerId ?? 0, !!installment?.customerId);
@@ -53,7 +56,8 @@ export default function InstallmentDetailPage() {
     setTotalAdjustment(installment.totalAdjustment ?? 0);
     setAdjustedTotal(installment.adjustedTotal ?? null);
     setUseCustomTotal(installment.adjustedTotal != null);
-  }, [installment?.id, installment?.totalAdjustment, installment?.adjustedTotal]);
+    setName(installment.name);
+  }, [installment?.id, installment?.totalAdjustment, installment?.adjustedTotal, installment?.name]);
 
   const calculatedAmount = installment?.calculatedAmount ?? installment?.dueAmount ?? 0;
   const finalDueAmount = installment
@@ -68,6 +72,22 @@ export default function InstallmentDetailPage() {
       navigate(`/sales/invoices/${inv.id}`);
     } catch (err) {
       toastApiError(err, "Failed to create invoice");
+    }
+  };
+
+  const handleSaveName = async () => {
+    if (!installment) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      toast.error("Milestone name is required");
+      return;
+    }
+    if (trimmed === installment.name) return;
+    try {
+      await updateInstallment.mutateAsync({ id: installment.id, name: trimmed });
+      toast.success("Installment name updated");
+    } catch (err) {
+      toastApiError(err, "Failed to update installment name");
     }
   };
 
@@ -230,7 +250,7 @@ export default function InstallmentDetailPage() {
           <Card>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Payment history</CardTitle></CardHeader>
             <CardContent>
-              <PaymentHistoryTable payments={payments} />
+              <PaymentHistoryTable payments={payments} showInvoiceLink />
               {payments.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-4">No payments recorded yet.</p>
               )}
@@ -239,6 +259,38 @@ export default function InstallmentDetailPage() {
         </div>
 
         <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Milestone name</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="installment-name" className="text-xs text-muted-foreground">
+                  Name
+                </Label>
+                <Input
+                  id="installment-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Milestone 1 — Design"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <Button
+                size="sm"
+                className="w-full h-8"
+                onClick={() => void handleSaveName()}
+                disabled={
+                  updateInstallment.isPending ||
+                  !name.trim() ||
+                  name.trim() === installment.name
+                }
+              >
+                {updateInstallment.isPending && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
+                Save name
+              </Button>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Adjust amount</CardTitle>

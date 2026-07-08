@@ -1,8 +1,6 @@
 import { apiUrl, getApiBaseUrl } from "@/lib/api-base";
 import type { UploadCategory } from "@/components/ui/file-uploader";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
-
 const CATEGORY_MAX_MB: Record<string, number> = {
   apk: 500,
   avatars: 5,
@@ -12,6 +10,9 @@ const CATEGORY_MAX_MB: Record<string, number> = {
   misc: 50,
   hrm: 10,
 };
+
+/** Categories that upload directly to object storage (bypassing nginx/Node for the file bytes) when available. */
+const DIRECT_UPLOAD_CATEGORIES = new Set(["apk"]);
 
 export class UploadError extends Error {
   readonly name = "UploadError";
@@ -36,28 +37,18 @@ export function isUploadError(error: unknown): error is UploadError {
 }
 
 /**
- * Prefer same-origin `/api/upload` in local dev so Vite proxies large APK bodies
- * instead of cross-origin POSTs to localhost:8080 (CORS / connection drops).
+ * Use the same API origin as the rest of the app (`VITE_API_BASE_URL`).
+ * When unset, stay on same-origin `/api/...` so the Vite dev proxy (or the
+ * production reverse proxy) handles routing.
  */
-export function resolveUploadRequestUrl(category: UploadCategory | string): string {
-  const path = `/api/upload?category=${encodeURIComponent(category)}`;
+function resolveApiPath(path: string): string {
   const apiBase = getApiBaseUrl();
-  if (!apiBase || typeof window === "undefined") {
-    return apiBase ? apiUrl(path) : path;
-  }
-  try {
-    const api = new URL(apiBase);
-    const pageHost = window.location.hostname;
-    if (LOCAL_HOSTS.has(api.hostname) && LOCAL_HOSTS.has(pageHost)) {
-      return path;
-    }
-    if (api.origin === window.location.origin) {
-      return path;
-    }
-  } catch {
-    // fall through to absolute API URL
-  }
-  return apiUrl(path);
+  if (apiBase) return apiUrl(path);
+  return path;
+}
+
+export function resolveUploadRequestUrl(category: UploadCategory | string): string {
+  return resolveApiPath(`/api/upload?category=${encodeURIComponent(category)}`);
 }
 
 export type FileUploadResponse = {
@@ -71,6 +62,11 @@ function maxMbForCategory(category: UploadCategory | string): number {
   return CATEGORY_MAX_MB[category] ?? 50;
 }
 
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("accessToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 function parseUploadFailure(
   xhr: XMLHttpRequest,
   category: UploadCategory | string,
@@ -81,7 +77,7 @@ function parseUploadFailure(
   if (status === 0) {
     return new UploadError(
       category === "apk"
-        ? "Could not reach the server while uploading the APK. Check your connection, restart the API if needed, and ensure nginx/proxy allows large uploads (client_max_body_size)."
+        ? "Could not reach the server while uploading the APK. In local dev, ensure backend PORT matches frontend VITE_API_BASE_URL (e.g. :15000), restart both servers, then retry. On production, raise nginx client_max_body_size (512m+ for APKs)."
         : "Could not reach the server. Check your connection and try again.",
       { status: 0, code: "NETWORK_ERROR", field: "file" },
     );
@@ -166,7 +162,8 @@ function parseUploadFailure(
   });
 }
 
-export function uploadFileWithProgress(
+/** Classic flow: multipart POST straight through the API (and whatever proxy sits in front of it). */
+function uploadClassic(
   file: File,
   category: UploadCategory | string,
   options?: { onProgress?: (pct: number) => void; timeoutMs?: number },
@@ -231,4 +228,150 @@ export function uploadFileWithProgress(
 
     xhr.send(formData);
   });
+}
+
+type PresignResponse = { uploadUrl: string; key: string; url: string };
+
+/** PUT the raw file straight to object storage — never touches nginx/Node for the body. */
+function putDirectToBucket(
+  file: File,
+  uploadUrl: string,
+  options?: { onProgress?: (pct: number) => void; timeoutMs?: number },
+): Promise<void> {
+  const timeoutMs = options?.timeoutMs ?? 600_000;
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", uploadUrl, true);
+    xhr.timeout = timeoutMs;
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (event.lengthComputable && options?.onProgress) {
+        // Cap at 95% — the finalize call still has to confirm + set ACL.
+        options.onProgress(Math.round((event.loaded / event.total) * 95));
+      }
+    });
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(
+        new UploadError(`Object storage rejected the upload (HTTP ${xhr.status}).`, {
+          status: xhr.status,
+          code: "BUCKET_UPLOAD_FAILED",
+          field: "file",
+        }),
+      );
+    };
+    xhr.onerror = () =>
+      reject(
+        new UploadError("Could not reach object storage while uploading. Check your connection and try again.", {
+          status: 0,
+          code: "NETWORK_ERROR",
+          field: "file",
+        }),
+      );
+    xhr.ontimeout = () =>
+      reject(
+        new UploadError(
+          `Upload to storage timed out after ${Math.round(timeoutMs / 60_000)} minutes. Try again or check your connection.`,
+          { status: 0, code: "TIMEOUT", field: "file" },
+        ),
+      );
+    xhr.onabort = () =>
+      reject(new UploadError("Upload was cancelled.", { status: 0, code: "ABORTED", field: "file" }));
+
+    xhr.send(file);
+  });
+}
+
+/**
+ * Direct-to-bucket flow: ask the API for a presigned URL, PUT the file straight
+ * to object storage, then tell the API to finalize (set ACL) it. The file bytes
+ * never pass through nginx/Node, so proxy body-size/timeout limits don't apply.
+ * Throws with `code: "PRESIGN_UNAVAILABLE"` if the presign step itself fails —
+ * callers should fall back to `uploadClassic` in that case.
+ */
+async function uploadDirectToBucket(
+  file: File,
+  category: UploadCategory | string,
+  options?: { onProgress?: (pct: number) => void; timeoutMs?: number },
+): Promise<FileUploadResponse> {
+  let presign: PresignResponse;
+  try {
+    const res = await fetch(resolveApiPath("/api/upload/presign"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({
+        category,
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        size: file.size,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new UploadError(body?.error ?? body?.message ?? `Could not start direct upload (HTTP ${res.status}).`, {
+        status: res.status,
+        code: "PRESIGN_UNAVAILABLE",
+        field: "file",
+      });
+    }
+    presign = await res.json();
+  } catch (err) {
+    if (isUploadError(err)) throw err;
+    throw new UploadError("Could not reach the server to start the upload.", {
+      status: 0,
+      code: "PRESIGN_UNAVAILABLE",
+      field: "file",
+    });
+  }
+
+  await putDirectToBucket(file, presign.uploadUrl, options);
+
+  const finalizeRes = await fetch(resolveApiPath("/api/upload/finalize"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      category,
+      key: presign.key,
+      originalName: file.name,
+      mimetype: file.type || "application/octet-stream",
+      size: file.size,
+    }),
+  });
+  if (!finalizeRes.ok) {
+    const body = await finalizeRes.json().catch(() => null);
+    throw new UploadError(body?.error ?? body?.message ?? `Upload finished but could not be finalized (HTTP ${finalizeRes.status}).`, {
+      status: finalizeRes.status,
+      code: "FINALIZE_FAILED",
+      field: "file",
+    });
+  }
+  const data = (await finalizeRes.json()) as FileUploadResponse;
+  options?.onProgress?.(100);
+  return data;
+}
+
+export async function uploadFileWithProgress(
+  file: File,
+  category: UploadCategory | string,
+  options?: { onProgress?: (pct: number) => void; timeoutMs?: number },
+): Promise<FileUploadResponse> {
+  if (!DIRECT_UPLOAD_CATEGORIES.has(category)) {
+    return uploadClassic(file, category, options);
+  }
+  try {
+    return await uploadDirectToBucket(file, category, options);
+  } catch (err) {
+    // Object storage isn't configured (e.g. local dev) — fall back to the classic
+    // proxy-through-Node flow. Once a direct PUT has actually started, failures
+    // are surfaced as-is (falling back there would risk a confusing double-upload).
+    if (isUploadError(err) && err.code === "PRESIGN_UNAVAILABLE") {
+      return uploadClassic(file, category, options);
+    }
+    throw err;
+  }
 }

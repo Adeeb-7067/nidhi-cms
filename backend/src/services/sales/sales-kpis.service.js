@@ -33,9 +33,18 @@ export async function computeSalesKpis({
     if (periodEnd) dateMatch.createdAt.$lt = periodEnd;
   }
 
+  const installmentMatch = { ...installmentFilter, ...dateMatch };
+  // Only default to "must have a proposal" when the caller hasn't already
+  // constrained proposalId themselves (e.g. scoping to a BDE's own proposals) —
+  // a literal { $ne: null } written after the spread would otherwise silently
+  // clobber that scope.
+  if (installmentMatch.proposalId === undefined) {
+    installmentMatch.proposalId = { $ne: null };
+  }
+
   const [salesAgg, payments] = await Promise.all([
     SalesInstallments.aggregate([
-      { $match: { ...installmentFilter, ...dateMatch, proposalId: { $ne: null } } },
+      { $match: installmentMatch },
       { $group: { _id: "$proposalId", value: { $sum: "$dueAmount" } } },
     ]),
     SalesPayments.find({ ...paymentFilter, ...dateMatch }).select({ amount: 1, invoiceId: 1 }).lean(),
@@ -80,10 +89,28 @@ export async function computeSalesKpis({
  * once billed; un-invoiced overdue installments (no invoice generated yet)
  * are added separately so the two never double-count the same debt.
  *
+ * Returns `{ rows, totalAmount }` — `rows` is capped at `topN` for display,
+ * `totalAmount` is the true sum across every overdue customer so a UI badge
+ * summing only `rows` doesn't silently undercount past the cap.
+ *
  * @param {object} [scope] extra Mongo match merged into both queries (e.g. `{ customerId: { $in: [...] } }`)
  * @param {number} [topN] max rows to return, sorted by overdue amount desc
  */
 export async function computeOverdueByCustomer(scope = {}, topN = 10) {
+  // Callers of this function (dashboard/team-member endpoints) never visit the
+  // Installments/Invoices list pages first, so the "overdue" status flag needs
+  // its own refresh here too — mirrors the exact filters those list endpoints use.
+  await Promise.all([
+    SalesInstallments.updateMany(
+      { status: { $in: ["pending", "partial"] }, dueDate: { $lt: new Date() } },
+      { $set: { status: "overdue" } },
+    ),
+    SalesInvoices.updateMany(
+      { status: "unpaid", dueDate: { $lt: new Date() } },
+      { $set: { status: "overdue" } },
+    ),
+  ]);
+
   const [overdueInvoices, overdueBareInstallments] = await Promise.all([
     SalesInvoices.aggregate([
       { $match: { status: "overdue", ...scope } },
@@ -105,7 +132,7 @@ export async function computeOverdueByCustomer(scope = {}, topN = 10) {
     : [];
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
-  return [...totals.entries()]
+  const sorted = [...totals.entries()]
     .map(([customerId, overdueAmount]) => ({
       customerId,
       companyName: customerMap.get(customerId)?.companyName ?? `Customer #${customerId}`,
@@ -113,6 +140,8 @@ export async function computeOverdueByCustomer(scope = {}, topN = 10) {
       overdueAmount,
     }))
     .filter((row) => row.overdueAmount > 0)
-    .sort((a, b) => b.overdueAmount - a.overdueAmount)
-    .slice(0, topN);
+    .sort((a, b) => b.overdueAmount - a.overdueAmount);
+
+  const totalAmount = sorted.reduce((sum, row) => sum + row.overdueAmount, 0);
+  return { rows: sorted.slice(0, topN), totalAmount };
 }

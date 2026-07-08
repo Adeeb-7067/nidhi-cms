@@ -4,6 +4,12 @@ const workSessionSchema = new Schema({
   id: { type: Number, unique: true, required: true },
   userId: { type: Number, ref: "Users", required: true, index: true },
   startedAt: { type: Date, default: Date.now, required: true },
+  /**
+   * Start of the current active segment (updated on every resume).
+   * Shift-end auto clock-out uses this — not the original startedAt — so overtime
+   * after shift end is never immediately closed again.
+   */
+  segmentStartedAt: { type: Date, default: null },
   endedAt: { type: Date, default: null },
   isActive: { type: Boolean, default: true, index: true },
   deviceInfo: { type: String, default: null },

@@ -36,8 +36,10 @@ const BDE_USER_SELECT = {
  * @param {number[]} bdeIds
  * @param {{ start: Date, end: Date } | null} [dateRange] Scopes revenue/deals/leads to a period;
  *   pendingFollowUps always reflects current state regardless of period.
+ * @param {{ includeFollowUps?: boolean }} [options] Set includeFollowUps:false when the caller
+ *   already has (or doesn't need) the period-independent follow-up counts, to skip the redundant query.
  */
-async function aggregateBdeStats(bdeIds, dateRange = null) {
+async function aggregateBdeStats(bdeIds, dateRange = null, { includeFollowUps = true } = {}) {
   if (!bdeIds.length) {
     return {
       revenueMap: new Map(),
@@ -59,10 +61,12 @@ async function aggregateBdeStats(bdeIds, dateRange = null) {
       { $match: { assignedTo: { $in: bdeIds }, status: "approved", ...approvedMatch } },
       { $group: { _id: "$assignedTo", dealsClosed: { $sum: 1 } } },
     ]),
-    SalesFollowUps.aggregate([
-      { $match: { executiveId: { $in: bdeIds }, status: { $in: ["scheduled", "overdue"] } } },
-      { $group: { _id: "$executiveId", pendingFollowUps: { $sum: 1 } } },
-    ]),
+    includeFollowUps
+      ? SalesFollowUps.aggregate([
+          { $match: { executiveId: { $in: bdeIds }, status: { $in: ["scheduled", "overdue"] } } },
+          { $group: { _id: "$executiveId", pendingFollowUps: { $sum: 1 } } },
+        ])
+      : Promise.resolve([]),
     SalesLeads.aggregate([
       { $match: { assignedTo: { $in: bdeIds }, ...periodMatch } },
       { $group: { _id: "$assignedTo", leadCount: { $sum: 1 } } },
@@ -81,7 +85,9 @@ function parseMonthYear(query) {
   const month = Number(query.month);
   const year = Number(query.year);
   if (!month || month < 1 || month > 12 || !year || year < 2000) return null;
-  return { month, year, start: new Date(year, month - 1, 1), end: new Date(year, month, 1) };
+  // UTC-based so the boundary doesn't shift relative to createdAt/approvedAt
+  // (stored as UTC instants) depending on the server's local timezone.
+  return { month, year, start: new Date(Date.UTC(year, month - 1, 1)), end: new Date(Date.UTC(year, month, 1)) };
 }
 
 function mapBdeUserToTeamMember(u, stats) {
@@ -231,14 +237,17 @@ async function getSalesTeamMember(req, res) {
     findBdeOwnedCustomerIds(clientsTable, userId),
   ]);
   const installmentFilter = { proposalId: { $in: myProposalIds.length ? myProposalIds : [-1] } };
-  const paymentFilter = { recordedBy: userId };
+  // Scoped by customer ownership, not by who recorded the payment — matches
+  // dashboard.controller.js's definition of "this BDE's collected money" so the
+  // same-named metric means the same thing in both the dashboard and this view.
   const overdueScope = { customerId: { $in: myCustomerIds.length ? myCustomerIds : [-1] } };
+  const paymentFilter = overdueScope;
 
   const period = parseMonthYear(req.query);
   let periodStats = null;
   if (period) {
     const [periodAgg, salesKpis] = await Promise.all([
-      aggregateBdeStats([userId], period),
+      aggregateBdeStats([userId], period, { includeFollowUps: false }),
       computeSalesKpis({
         installmentFilter,
         paymentFilter,
@@ -256,7 +265,7 @@ async function getSalesTeamMember(req, res) {
     };
   }
 
-  const overdueByCustomer = await computeOverdueByCustomer(overdueScope);
+  const overdueResult = await computeOverdueByCustomer(overdueScope);
 
   const [
     leadsByStatusRows,
@@ -312,7 +321,8 @@ async function getSalesTeamMember(req, res) {
   res.json({
     member: formatUser(user, { withPresence: true, includeSensitive: true }),
     periodStats,
-    overdueByCustomer,
+    overdueByCustomer: overdueResult.rows,
+    overdueTotal: overdueResult.totalAmount,
     stats: {
       revenue: member.revenue,
       dealsClosed: member.dealsClosed,

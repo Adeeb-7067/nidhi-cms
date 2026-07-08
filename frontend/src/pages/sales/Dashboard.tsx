@@ -104,7 +104,7 @@ export default function SalesDashboard() {
     if (!dash) { toast.error("Dashboard data not loaded yet"); return; }
     const rows = [
       ["Metric", "Value"],
-      ["Revenue (all time)", dash.totalRevenue ?? 0],
+      [dash.isFiltered ? "Revenue (selected period)" : "Revenue (all time)", dash.totalRevenue ?? 0],
       ["Total sales (deals)", dash.totalSales?.count ?? 0],
       ["Total sales (value)", dash.totalSales?.value ?? 0],
       ["Total collected", dash.totalCollected ?? 0],
@@ -216,7 +216,7 @@ export default function SalesDashboard() {
               { title: "Proposals", value: dash?.totalProposals ?? 0, icon: FileText, accent: "violet", href: "/sales/proposals", delay: 3 },
               { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, icon: Receipt, accent: "sky", href: "/sales/invoices", delay: 4 },
               { title: "Total sales", value: formatCompactCurrency(dash?.totalSales?.value ?? 0), hint: `${dash?.totalSales?.count ?? 0} deals`, icon: ShoppingBag, accent: "green", href: "/sales/installments", delay: 5 },
-              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), hint: "All time", icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 6 },
+              { title: "Revenue collected", value: formatCompactCurrency(dash?.totalRevenue ?? 0), hint: dash?.isFiltered ? "Selected period" : "All time", icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 6 },
               { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), icon: AlertCircle, accent: "red", alert: true, href: "/sales/payments", delay: 7 },
             ]}
           />
@@ -239,7 +239,7 @@ export default function SalesDashboard() {
               { title: "Total collected", value: formatCompactCurrency(dash?.totalCollected ?? 0), hint: "This period", icon: IndianRupee, accent: "green", href: "/sales/payments", delay: 0 },
               { title: "New project money", value: formatCompactCurrency(dash?.newProjectMoney ?? 0), hint: "From deals closed this period", icon: Sparkles, accent: "blue", href: "/sales/payments", delay: 1 },
               { title: "Old project money", value: formatCompactCurrency(dash?.oldProjectMoney ?? 0), hint: "Collected on earlier deals", icon: History, accent: "violet", href: "/sales/payments", delay: 2 },
-              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), hint: "Across all customers", icon: AlertCircle, accent: "red", alert: true, href: "/sales/installments", delay: 3 },
+              { title: "Outstanding", value: formatCompactCurrency(dash?.outstanding ?? 0), hint: dash?.isFiltered ? "Selected period" : "Across all customers", icon: AlertCircle, accent: "red", alert: true, href: "/sales/installments", delay: 3 },
               { title: "Pending invoices", value: dash?.pendingInvoices ?? 0, hint: "Awaiting collection", icon: Receipt, accent: "violet", href: "/sales/installments", delay: 4 },
               { title: "Active customers", value: dash?.activeCustomers ?? 0, icon: Users, accent: "sky", href: "/sales/customers", delay: 5 },
               { title: "Overdue invoices", value: dash?.invoiceByStatus?.overdue?.count ?? 0, hint: "Needs follow-up", icon: AlertCircle, accent: "amber", alert: true, href: "/sales/invoices", delay: 6 },

@@ -70,6 +70,10 @@ export const PROPOSAL_STATUS_LABELS: Record<ProposalStatus, string> = {
   expired: "Expired",
 };
 
+export const PROPOSAL_STATUS_OPTIONS: { value: ProposalStatus; label: string }[] = (
+  Object.entries(PROPOSAL_STATUS_LABELS) as [ProposalStatus, string][]
+).map(([value, label]) => ({ value, label }));
+
 export const LEAD_PRIORITY_OPTIONS: { value: import("./types").LeadPriority; label: string }[] = [
   { value: "low", label: "Low" },
   { value: "medium", label: "Medium" },

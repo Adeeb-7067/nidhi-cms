@@ -34,6 +34,7 @@ import {
   assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
 import { ensureInvoiceForInstallment, resolveInstallmentInvoiceDueDate } from "../../services/sales/installment-billing.service.js";
+import { escapeRegex } from "../../utils/regex.js";
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
@@ -63,7 +64,7 @@ async function listInvoices(req, res) {
   if (search) {
     const q = String(search).trim();
     if (q) {
-      const re = { $regex: q, $options: "i" };
+      const re = { $regex: escapeRegex(q), $options: "i" };
       const matchingCustomers = await clientsTable
         .find({ $or: [{ companyName: re }, { contactPerson: re }, { email: re }] })
         .select({ id: 1 })

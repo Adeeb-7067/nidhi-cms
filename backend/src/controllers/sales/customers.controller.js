@@ -38,9 +38,11 @@ import {
 import { sendCustomerPaymentReminderEmail } from "../../lib/email.js";
 import {
   isBillableInvoice,
-  sumInvoiceBilled,
-  sumInvoiceOutstanding,
 } from "../../utils/sales-invoice-filters.js";
+import {
+  loadCustomerFinancialsMap,
+  resolveCustomerFinancials,
+} from "../../utils/sales-customer-financials.js";
 import {
   bdeCustomerOwnershipFilter,
   bdeOwnsCustomer,
@@ -107,18 +109,6 @@ async function findClientOr404(id, user) {
     notFound("Customer");
   }
   return client;
-}
-
-function computeCustomerFinancials(invoices) {
-  const financials = new Map();
-  for (const inv of invoices) {
-    if (!isBillableInvoice(inv)) continue;
-    if (!financials.has(inv.customerId)) financials.set(inv.customerId, { totalSales: 0, outstanding: 0 });
-    const entry = financials.get(inv.customerId);
-    entry.totalSales += inv.amount;
-    entry.outstanding += Math.max(0, inv.amount - inv.paidAmount);
-  }
-  return financials;
 }
 
 async function customerIdsWithPayments(customerIds) {
@@ -298,12 +288,7 @@ async function listCustomers(req, res) {
     { sort: { createdAt: -1 } }
   );
   const customerIds = items.map((c) => c.id);
-  const invoices = customerIds.length
-    ? await SalesInvoices.find({ customerId: { $in: customerIds } })
-        .select({ customerId: 1, amount: 1, paidAmount: 1, status: 1 })
-        .lean()
-    : [];
-  const financials = computeCustomerFinancials(invoices);
+  const financials = await loadCustomerFinancialsMap(SalesInstallments, SalesInvoices, customerIds);
   const paymentCustomerIds = await customerIdsWithPayments(customerIds);
   const customers = await attachCreatedByUsers(
     items.map((c) =>
@@ -401,10 +386,14 @@ async function getCustomerById(req, res) {
     loadStaffUser(resolveCustomerCreatorUserId(client)),
     SalesPayments.exists({ customerId: id }),
   ]);
-  const totalSales = sumInvoiceBilled(invoices);
-  const outstanding = sumInvoiceOutstanding(invoices);
+  const financials = resolveCustomerFinancials(installments, invoices);
   res.json({
-    ...formatClientAsCustomer(client, { totalSales, outstanding, hasPayments: Boolean(hasPayments) }),
+    ...formatClientAsCustomer(client, {
+      totalSales: financials.totalSales,
+      totalCollected: financials.totalCollected,
+      outstanding: financials.outstanding,
+      hasPayments: Boolean(hasPayments),
+    }),
     installments,
     invoices,
     assignedAdmin,
@@ -513,19 +502,23 @@ async function provisionCustomerPortal(req, res) {
 async function getCustomerStatement(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
-  const [allInvoices, payments] = await Promise.all([
+  const [allInvoices, payments, installments] = await Promise.all([
     SalesInvoices.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
     SalesPayments.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
+    SalesInstallments.find({ customerId: id }).lean(),
   ]);
   const invoices = allInvoices.filter(isBillableInvoice);
-  const totalBilled = sumInvoiceBilled(invoices);
-  const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const outstanding = sumInvoiceOutstanding(invoices);
+  const financials = resolveCustomerFinancials(installments, invoices);
   res.json({
     customer: formatClientAsCustomer(client),
     invoices,
     payments,
-    summary: { totalBilled, totalPaid, outstanding },
+    installments,
+    summary: {
+      totalBilled: financials.totalSales,
+      totalPaid: financials.totalCollected,
+      outstanding: financials.outstanding,
+    },
   });
 }
 
@@ -535,10 +528,11 @@ async function remindCustomer(req, res) {
   const message =
     optionalString(req.body.message) ?? "You have a pending payment. Please review your account.";
 
-  const invoices = await SalesInvoices.find({ customerId: id })
-    .select({ amount: 1, paidAmount: 1, status: 1 })
-    .lean();
-  const outstanding = sumInvoiceOutstanding(invoices);
+  const [invoices, installments] = await Promise.all([
+    SalesInvoices.find({ customerId: id }).select({ amount: 1, paidAmount: 1, status: 1 }).lean(),
+    SalesInstallments.find({ customerId: id }).select({ dueAmount: 1, paidAmount: 1 }).lean(),
+  ]);
+  const outstanding = resolveCustomerFinancials(installments, invoices).outstanding;
   if (outstanding <= 0) {
     badRequest("This customer has no outstanding balance.", "outstanding");
   }

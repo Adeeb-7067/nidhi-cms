@@ -58,3 +58,41 @@ export function isPausedSessionResumableToday(session, now = new Date(), tz) {
   }
   return false;
 }
+
+/**
+ * Legacy fallback: infer overtime segment start from pause periods when segmentStartedAt
+ * is missing on older sessions.
+ */
+export function resolveShiftPolicySegmentStartFromPauses(session, shiftEndUtc) {
+  const originalStart = new Date(session.startedAt);
+  if (!shiftEndUtc || !Number.isFinite(originalStart.getTime())) return originalStart;
+
+  const shiftEndMs = shiftEndUtc.getTime();
+  const periods = session.pausePeriods ?? [];
+  let latestOvertimeResume = null;
+
+  for (const period of periods) {
+    if (!period?.resumedAt) continue;
+    const resumedAt = new Date(period.resumedAt);
+    if (!Number.isFinite(resumedAt.getTime())) continue;
+    if (resumedAt.getTime() >= shiftEndMs) {
+      if (!latestOvertimeResume || resumedAt > latestOvertimeResume) {
+        latestOvertimeResume = resumedAt;
+      }
+    }
+  }
+
+  return latestOvertimeResume ?? originalStart;
+}
+
+/**
+ * When evaluating shift-end auto clock-out, use the current segment start.
+ * Prefers explicit segmentStartedAt; falls back to pause-period inference for legacy rows.
+ */
+export function resolveActiveSegmentStart(session, shiftEndUtc) {
+  if (session?.segmentStartedAt) {
+    const segment = new Date(session.segmentStartedAt);
+    if (Number.isFinite(segment.getTime())) return segment;
+  }
+  return resolveShiftPolicySegmentStartFromPauses(session, shiftEndUtc);
+}

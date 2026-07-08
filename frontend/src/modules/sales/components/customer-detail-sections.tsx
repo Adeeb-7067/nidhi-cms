@@ -39,7 +39,7 @@ import type {
   SalesPayment,
 } from "@/api/sales";
 import { salesKeys, useAssignCustomerAdmin, useDeleteProposal } from "@/api/sales";
-import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime } from "@/modules/sales/utils";
+import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import { customFieldsForDocument } from "@/modules/sales/company-branding";
 import {
@@ -1328,22 +1328,28 @@ export function CustomerPaymentsSection({
             <TableRow className="bg-muted/30 hover:bg-muted/30">
               <TableHead className="text-xs">Receipt #</TableHead>
               <TableHead className="text-xs">Invoice</TableHead>
+              <TableHead className="text-xs">Installment</TableHead>
               <TableHead className="text-xs">Mode</TableHead>
               <TableHead className="text-xs text-right">Amount</TableHead>
               <TableHead className="text-xs">Invoice status</TableHead>
               <TableHead className="text-xs">Created at</TableHead>
               <TableHead className="text-xs">Created by</TableHead>
-              <TableHead className="text-xs text-right">Receipt</TableHead>
+              <TableHead className="text-xs text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedPayments.map((p) => (
+            {sortedPayments.map((p) => {
+              const docInvoiceId = paymentDocumentInvoiceId(p);
+              return (
               <TableRow key={p.id} className="hover:bg-muted/20">
                 <TableCell className="text-xs font-mono font-medium">{p.receiptNumber}</TableCell>
                 <TableCell className="text-xs font-mono">
-                  <Link href={`/sales/invoices/${p.invoiceId}`} className="text-primary hover:underline">
-                    {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+                  <Link href={`/sales/invoices/${docInvoiceId}`} className="text-primary hover:underline">
+                    {p.invoiceNumber ?? `INV-${docInvoiceId}`}
                   </Link>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
+                  {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
                 </TableCell>
                 <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
                 <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">
@@ -1363,12 +1369,18 @@ export function CustomerPaymentsSection({
                   )}
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                    <Link href={`/sales/receipts/${p.id}`}>View</Link>
-                  </Button>
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                      <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                      <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            ))}
+            );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -1834,6 +1846,7 @@ export function CustomerInstallmentsSection({
             installment={installmentCardData(inst)}
             href={`/sales/installments/${inst.id}`}
             compact
+            editable
           />
         ))}
       </div>
@@ -1848,8 +1861,14 @@ export function CustomerInstallmentsSection({
               .filter((i) => i.status === "partial")
               .map((inst) => {
                 const remaining = calcRemaining(inst.dueAmount, inst.paidAmount);
-                const invoice = invoices.find((inv) => inv.installmentId === inst.id);
-                const instPayments = invoice ? paymentsByInvoice.get(invoice.id) ?? [] : [];
+                const invoice =
+                  invoices.find((inv) => inv.id === inst.invoiceId) ??
+                  invoices.find((inv) => inv.installmentId === inst.id);
+                const instPayments = payments.filter(
+                  (p) =>
+                    p.installmentId === inst.id ||
+                    (invoice ? p.invoiceId === invoice.id : inst.invoiceId ? p.invoiceId === inst.invoiceId : false),
+                );
                 return (
                   <div key={inst.id} className="rounded-lg border p-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
@@ -1861,6 +1880,18 @@ export function CustomerInstallmentsSection({
                       </div>
                       <SalesStatusBadge variant="installment" value={inst.status} />
                     </div>
+                    {(invoice || inst.invoiceId) ? (
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Invoice</span>
+                        <Link
+                          href={`/sales/invoices/${invoice?.id ?? inst.invoiceId}`}
+                          className="font-mono text-primary hover:underline"
+                        >
+                          {invoice?.number ?? `INV-${inst.invoiceId}`}
+                        </Link>
+                        {invoice ? <SalesStatusBadge variant="invoice" value={invoice.status} /> : null}
+                      </div>
+                    ) : null}
                     <InstallmentProgress paid={inst.paidAmount} total={inst.dueAmount} />
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div><span className="text-muted-foreground">Paid</span><p className="font-semibold tabular-nums">{formatCurrency(inst.paidAmount)}</p></div>
@@ -1870,15 +1901,26 @@ export function CustomerInstallmentsSection({
                     {instPayments.length > 0 ? (
                       <div className="pt-2 border-t">
                         <p className="text-[10px] uppercase text-muted-foreground mb-1">Payment history</p>
-                        {instPayments.map((p) => (
-                          <div key={p.id} className="flex justify-between text-xs py-0.5">
-                            <Link href={`/sales/receipts/${p.id}`} className="text-primary hover:underline font-mono">
-                              {p.receiptNumber}
-                            </Link>
+                        {instPayments.map((p) => {
+                          const docInvoiceId = paymentDocumentInvoiceId(p);
+                          return (
+                          <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-xs py-0.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Link href={`/sales/receipts/${p.id}`} className="text-primary hover:underline font-mono">
+                                {p.receiptNumber}
+                              </Link>
+                              <Link
+                                href={`/sales/invoices/${docInvoiceId}`}
+                                className="text-primary hover:underline font-mono"
+                              >
+                                {p.invoiceNumber ?? `INV-${docInvoiceId}`}
+                              </Link>
+                            </div>
                             <span className="tabular-nums">{formatCurrency(p.amount)}</span>
                             <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                     {remaining > 0 ? <OutstandingBadge amount={remaining} /> : null}

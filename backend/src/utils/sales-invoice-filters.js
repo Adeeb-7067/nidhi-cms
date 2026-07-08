@@ -21,6 +21,13 @@ export function sumInvoiceOutstanding(invoices) {
   return invoices.reduce((sum, inv) => sum + invoiceOutstanding(inv), 0);
 }
 
+export function sumInvoiceCollected(invoices) {
+  return invoices.reduce(
+    (sum, inv) => sum + (isBillableInvoice(inv) ? inv.paidAmount ?? 0 : 0),
+    0,
+  );
+}
+
 /** Merge a base Mongo filter with the billable-invoice constraint. */
 export function billableInvoiceMatch(base = {}) {
   return { ...base, ...BILLABLE_INVOICE_STATUS_FILTER };

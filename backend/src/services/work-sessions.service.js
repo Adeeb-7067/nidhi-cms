@@ -84,27 +84,42 @@ async function closeActiveSession(session, stopReason, endedAt = new Date()) {
   return updated ?? null;
 }
 
-async function enforceShiftEndPolicy(session, tz, settings) {
-  const shiftEnd = await evaluateShiftEndPolicy(session, new Date(), tz, settings);
-  if (!shiftEnd) return session;
-
-  await closeActiveSession(session, shiftEnd.reason, shiftEnd.endedAt);
-  return null;
-}
-
-/** Auto-close when session crosses a work-day boundary, the 24 h cap, or shift end. */
-async function enforceActiveSessionPolicy(session) {
-  if (!session?.isActive) return session ?? null;
+/**
+ * Single gate for day-end, max-duration, and shift-end policies.
+ * Every code path that returns or keeps an active session must go through this.
+ */
+async function synchronizeActiveSession(session, { updateHeartbeat = true } = {}) {
+  if (!session?.isActive) return { session: null, stopReason: null };
 
   const settings = await getOrCreateSettings();
   const tz = resolveWorkDayTimezone(settings.complianceTimezone);
-  const reason = sessionPolicyStopReason(session, new Date(), tz);
+  const now = new Date();
+
+  const reason = sessionPolicyStopReason(session, now, tz);
   if (reason) {
     await closeActiveSession(session, reason);
-    return null;
+    return { session: null, stopReason: reason };
   }
 
-  return enforceShiftEndPolicy(session, tz, settings);
+  const shiftEnd = await evaluateShiftEndPolicy(session, now, tz, settings);
+  if (shiftEnd) {
+    await closeActiveSession(session, shiftEnd.reason, shiftEnd.endedAt);
+    return { session: null, stopReason: shiftEnd.reason };
+  }
+
+  if (!updateHeartbeat) return { session, stopReason: null };
+
+  const refreshed = await workSessionsTable.findOneAndUpdate(
+    { id: session.id, userId: session.userId, isActive: true },
+    { $set: { lastHeartbeatAt: now } },
+    { new: true },
+  );
+  return { session: refreshed ?? session, stopReason: null };
+}
+
+async function deliverClockInSession(session) {
+  const { session: active, stopReason } = await synchronizeActiveSession(session);
+  return { session: active, stopReason };
 }
 
 async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = null } = {}) {
@@ -181,6 +196,7 @@ async function resumeSession(session, deviceInfo) {
         isActive: true,
         endedAt: null,
         stopReason: null,
+        segmentStartedAt: now,
         lastHeartbeatAt: now,
         deviceInfo: deviceInfo ?? session.deviceInfo ?? null,
         pausePeriods,
@@ -226,19 +242,11 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
   if (existingActive) {
     const reclaimed = !forceNew ? await tryReclaimStrayActiveSession(userId) : null;
     if (reclaimed && reclaimed.id !== existingActive.id) {
-      return { session: reclaimed, resumed: true };
-    }
-
-    const enforced = await enforceActiveSessionPolicy(existingActive);
-    if (enforced) {
-      // Another client (web + desktop) may clock in while a session is already active.
-      const now = new Date();
-      const refreshed = await workSessionsTable.findOneAndUpdate(
-        { userId, isActive: true },
-        { $set: { lastHeartbeatAt: now } },
-        { new: true },
-      );
-      return { session: refreshed ?? enforced, resumed: false };
+      const delivered = await deliverClockInSession(reclaimed);
+      if (delivered.session) return { session: delivered.session, resumed: true };
+    } else {
+      const delivered = await deliverClockInSession(existingActive);
+      if (delivered.session) return { session: delivered.session, resumed: false };
     }
   }
 
@@ -246,21 +254,15 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
     const resumableSessions = await listResumableSessions(userId);
     for (const resumable of resumableSessions) {
       const session = await resumeSession(resumable, deviceInfo);
-      if (session) return { session, resumed: true };
+      if (!session) continue;
+      const delivered = await deliverClockInSession(session);
+      if (delivered.session) return { session: delivered.session, resumed: true };
     }
 
-    // Concurrent clock-in: another request may have resumed while we were trying.
     const racedActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
     if (racedActive) {
-      const enforced = await enforceActiveSessionPolicy(racedActive);
-      if (enforced) {
-        const refreshed = await workSessionsTable.findOneAndUpdate(
-          { userId, isActive: true },
-          { $set: { lastHeartbeatAt: new Date() } },
-          { new: true },
-        );
-        return { session: refreshed ?? enforced, resumed: false };
-      }
+      const delivered = await deliverClockInSession(racedActive);
+      if (delivered.session) return { session: delivered.session, resumed: false };
     }
   }
 
@@ -268,45 +270,28 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
 
   const id = await getNextSequence("workSession");
   const now = new Date();
-  const session = await workSessionsTable.create({
+  const created = await workSessionsTable.create({
     id,
     userId,
     startedAt: now,
+    segmentStartedAt: now,
     endedAt: null,
     isActive: true,
     deviceInfo: deviceInfo ?? null,
     lastHeartbeatAt: now,
     pausePeriods: [],
   });
+  const session = created.toObject ? created.toObject() : created;
+  const delivered = await deliverClockInSession(session);
+  if (delivered.session) return { session: delivered.session, resumed: false };
 
-  return { session, resumed: false };
+  throw new Error("Clock-in could not start an active session after policy sync.");
 }
 
 export async function touchHeartbeat(userId) {
   const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (!active) return { session: null, stopReason: null };
-
-  const settings = await getOrCreateSettings();
-  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
-  const reason = sessionPolicyStopReason(active, new Date(), tz);
-  if (reason) {
-    await closeActiveSession(active, reason);
-    return { session: null, stopReason: reason };
-  }
-
-  const shiftEnd = await evaluateShiftEndPolicy(active, new Date(), tz, settings);
-  if (shiftEnd) {
-    await closeActiveSession(active, shiftEnd.reason, shiftEnd.endedAt);
-    return { session: null, stopReason: shiftEnd.reason };
-  }
-
-  const now = new Date();
-  const session = await workSessionsTable.findOneAndUpdate(
-    { userId, isActive: true },
-    { $set: { lastHeartbeatAt: now } },
-    { new: true },
-  );
-  return { session: session ?? null, stopReason: null };
+  return synchronizeActiveSession(active);
 }
 
 export async function clockOut(userId, stopReason = "clock_out") {
@@ -343,29 +328,7 @@ export async function getActiveSession(userId) {
     session = (await tryReclaimStrayActiveSession(userId)) ?? session;
   }
   if (!session) return { session: null, stopReason: null };
-
-  const settings = await getOrCreateSettings();
-  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
-  const reason = sessionPolicyStopReason(session, new Date(), tz);
-  if (reason) {
-    await closeActiveSession(session, reason);
-    return { session: null, stopReason: reason };
-  }
-
-  const shiftEnd = await evaluateShiftEndPolicy(session, new Date(), tz, settings);
-  if (shiftEnd) {
-    await closeActiveSession(session, shiftEnd.reason, shiftEnd.endedAt);
-    return { session: null, stopReason: shiftEnd.reason };
-  }
-
-  // App is open and polling — refresh heartbeat so stale cleanup does not fire falsely.
-  const now = new Date();
-  const refreshed = await workSessionsTable.findOneAndUpdate(
-    { userId, isActive: true },
-    { $set: { lastHeartbeatAt: now } },
-    { new: true },
-  );
-  return { session: refreshed ?? session, stopReason: null };
+  return synchronizeActiveSession(session);
 }
 
 export async function listSessions(userId, { page = 1, limit = 20 } = {}) {

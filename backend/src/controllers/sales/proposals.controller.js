@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { proposalStatuses } from "../../models/schema/sales/proposals.js";
 import {
   SalesProposals,
   SalesLeads,
@@ -115,6 +116,15 @@ async function nextProposalNumber() {
   const prefix = prefs?.proposalPrefix ?? "PROP";
   const seq = prefs?.proposalNextNumber ?? 1;
   return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
+}
+
+function parseProposalStatus(raw, fallback = "draft") {
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const status = String(raw).trim();
+  if (!proposalStatuses.includes(status)) {
+    badRequest(`Invalid status. Allowed: ${proposalStatuses.join(", ")}`, "status");
+  }
+  return status;
 }
 
 function parseItems(rawItems) {
@@ -250,7 +260,7 @@ async function createProposal(req, res) {
     assignedTo: req.user.role === "bde"
       ? req.user.id
       : (body.assignedTo ? Number(body.assignedTo) : req.user.id),
-    status: "draft",
+    status: parseProposalStatus(body.status, "draft"),
     items: parseItems(body.items),
     discount: Number(body.discount) || 0,
     totalAdjustment: parseTotalAdjustment(body.totalAdjustment) ?? 0,
@@ -343,6 +353,7 @@ async function updateProposal(req, res) {
     }
   }
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
+  if (body.status !== undefined) updates.status = parseProposalStatus(body.status);
   const updated = await SalesProposals.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   res.json(updated);
 }

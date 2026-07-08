@@ -6,6 +6,8 @@ const paymentSchema = new Schema(
   {
     id: { type: Number, unique: true, required: true },
     invoiceId: { type: Number, ref: "SalesInvoices", required: true, index: true },
+    /** Paid invoice for this exact payment amount (installment partials). */
+    paymentInvoiceId: { type: Number, ref: "SalesInvoices", default: null, index: true },
     installmentId: { type: Number, ref: "SalesInstallments", default: null, index: true },
     customerId: { type: Number, ref: "Clients", required: true, index: true },
     amount: { type: Number, required: true, min: 0.01 },

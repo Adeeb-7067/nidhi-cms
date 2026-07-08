@@ -5,6 +5,7 @@ import {
   workDayKey,
   isSameWorkDay,
   addDaysToDateString,
+  resolveActiveSegmentStart,
 } from "./work-session-policy.js";
 import { zonedDateTimeToUtc } from "./hrm/hrm-date-utils.js";
 import {
@@ -45,14 +46,15 @@ export function computeShiftEndUtc(dateStr, shift, tz) {
 
 /**
  * True when an active session started during the shift and the shift end time has passed.
- * Sessions started after shift end (overtime) are left open until manual clock-out.
+ * Uses segmentStartedAt (current segment) — overtime after shift end stays open until manual clock-out.
  */
 export function shouldAutoClockOutAtShiftEnd(session, now, shift, tz) {
   if (!session?.startedAt || !shift?.endTime) return false;
   const dateStr = workDayKey(session.startedAt, tz);
   const shiftEnd = computeShiftEndUtc(dateStr, shift, tz);
   if (!shiftEnd) return false;
-  const startedAt = new Date(session.startedAt).getTime();
+  const segmentStart = resolveActiveSegmentStart(session, shiftEnd);
+  const startedAt = segmentStart.getTime();
   if (startedAt >= shiftEnd.getTime()) return false;
   return now.getTime() > shiftEnd.getTime();
 }
