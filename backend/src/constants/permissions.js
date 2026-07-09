@@ -50,7 +50,19 @@ export const cmsModuleGroups = [
   },
   {
     label: "Finance",
-    modules: ["finance"],
+    modules: [
+      "finance_dashboard",
+      "finance_expenses",
+      "finance_income",
+      "finance_invoices",
+      "finance_payments",
+      "finance_budgets",
+      "finance_ledgers",
+      "finance_tax",
+      "finance_reports",
+      "finance_notifications",
+      "finance_vendors",
+    ],
   },
   {
     label: "CA",
@@ -111,6 +123,8 @@ export const cmsModuleGroups = [
 ];
 
 export const salesModules = cmsModuleGroups.find((g) => g.label === "Sales & CRM")?.modules ?? [];
+
+export const financeModules = cmsModuleGroups.find((g) => g.label === "Finance")?.modules ?? [];
 
 export const cmsModules = cmsModuleGroups.flatMap((g) => g.modules);
 

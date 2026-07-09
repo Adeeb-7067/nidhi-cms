@@ -41,6 +41,9 @@ const clientSchema = new Schema({
   status: { type: String, enum: clientStatuses, default: "active", required: true },
   /** Sales CRM classification (corporate / sme / individual). */
   customerType: { type: String, enum: customerTypes, default: "corporate", required: true },
+  /** Finance: marks this record as a payee (vendor/supplier) rather than — or in addition to — a paying client. */
+  isVendor: { type: Boolean, default: false, required: true, index: true },
+  vendorCategory: { type: String, default: null, trim: true },
   /** Originating sales lead when converted from CRM. */
   leadId: { type: Number, ref: "SalesLeads", default: null, index: true },
   /** Internal staff admin assigned to manage this account in sales. */

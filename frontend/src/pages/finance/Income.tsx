@@ -20,23 +20,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { mockIncome, financeClients, incomeVsExpenseTrend, revenueTrend } from "@/modules/finance/mock-data";
-import { formatCurrency, formatCompactCurrency } from "@/modules/finance/constants";
+import { formatCurrency, formatCompactCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import type { IncomeStatus } from "@/modules/finance/types";
 import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
   FinanceEmptyState,
-  FinancePageLoader,
+  FinanceErrorState,
   FinanceDualLineChart,
   FinanceAreaTrendChart,
-  IncomeFormDrawer,
+  RecordPaymentModal,
 } from "@/modules/finance/components";
-import { PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
-import { useMockPageState } from "@/modules/finance/hooks/use-mock-page-state";
-import { useClientPagination } from "@/lib/table-pagination";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { FinanceListPageSkeleton } from "@/components/loading";
+import { useListIncome, useFinanceRevenueTrend, useFinancePnl, type ListIncomeParams } from "@/api/finance";
+import { useListClients } from "@/api/generated/api";
 import { toast } from "sonner";
 
 const STATUS_TABS: (IncomeStatus | "all")[] = ["all", "received", "partial", "pending"];
@@ -45,32 +43,40 @@ export default function IncomePage() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
+  const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const { loading } = useMockPageState();
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return mockIncome.filter((i) => {
-      const matchesSearch =
-        !q ||
-        i.reference.toLowerCase().includes(q) ||
-        i.clientName.toLowerCase().includes(q) ||
-        i.projectName?.toLowerCase().includes(q);
-      const matchesStatus = statusTab === "all" || i.status === statusTab;
-      const matchesClient = clientFilter === "all" || String(i.clientId) === clientFilter;
-      return matchesSearch && matchesStatus && matchesClient;
-    });
-  }, [search, statusTab, clientFilter]);
+  const { data: clientsData } = useListClients({ limit: 200 });
+  const { data: revenueTrendData } = useFinanceRevenueTrend(6);
+  const { data: pnlData } = useFinancePnl();
 
-  const { pageItems, pagination } = useClientPagination(filtered);
+  const params: ListIncomeParams = useMemo(
+    () => ({
+      page,
+      limit: 20,
+      search: search || undefined,
+      status: statusTab === "all" ? undefined : (statusTab as IncomeStatus),
+      clientId: clientFilter === "all" ? undefined : Number(clientFilter),
+    }),
+    [page, search, statusTab, clientFilter],
+  );
+  const { data, isLoading, isError, refetch } = useListIncome(params);
+  const income = data?.income ?? [];
+  const total = data?.total ?? 0;
 
-  const totalReceived = mockIncome.filter((i) => i.status === "received").reduce((s, i) => s + i.amount, 0);
-  const totalPending = mockIncome.filter((i) => i.status !== "received").reduce((s, i) => s + i.amount, 0);
+  const totalReceived = income.filter((i) => i.status === "received").reduce((s, i) => s + i.amount, 0);
+  const totalPending = income.filter((i) => i.status !== "received").reduce((s, i) => s + i.amount, 0);
 
-  if (loading) {
+  const incomeVsExpenseTrend = (pnlData?.monthly ?? []).map((m) => ({ month: m.month, income: m.income, expense: m.expenses }));
+  const revenueTrend = revenueTrendData?.trend ?? [];
+
+  if (isLoading) {
+    return <FinanceListPageSkeleton kpiCount={3} showCharts />;
+  }
+  if (isError) {
     return (
       <PortalPageShell>
-        <FinancePageLoader label="Loading income…" />
+        <FinanceErrorState onRetry={() => refetch()} />
       </PortalPageShell>
     );
   }
@@ -93,7 +99,7 @@ export default function IncomePage() {
         items={[
           { title: "Total received", value: formatCompactCurrency(totalReceived), icon: TrendingUp, accent: "green", delay: 0 },
           { title: "Pending / partial", value: formatCompactCurrency(totalPending), icon: TrendingUp, accent: "amber", delay: 1 },
-          { title: "Transactions", value: mockIncome.length, icon: TrendingUp, accent: "blue", delay: 2 },
+          { title: "Transactions", value: total, icon: TrendingUp, accent: "blue", delay: 2 },
         ]}
       />
 
@@ -110,19 +116,19 @@ export default function IncomePage() {
         </ChartGridCell>
       </div>
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search client, reference…" onExport={() => toast.success("Income export started (demo)")}>
-        <Select value={clientFilter} onValueChange={setClientFilter}>
+      <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); setPage(1); }} searchPlaceholder="Search client, reference…" onExport={() => toast.success("Income export started")}>
+        <Select value={clientFilter} onValueChange={(v) => { setClientFilter(v); setPage(1); }}>
           <SelectTrigger className="w-full sm:w-[200px] h-9"><SelectValue placeholder="Client" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All clients</SelectItem>
-            {financeClients.map((c) => (
-              <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+            {(clientsData?.clients ?? []).map((c) => (
+              <SelectItem key={c.id} value={String(c.id)}>{c.companyName}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </FinanceFilterBar>
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
+      <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); setPage(1); }}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {STATUS_TABS.map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
@@ -132,43 +138,47 @@ export default function IncomePage() {
         </TabsList>
       </Tabs>
 
-      {filtered.length === 0 ? (
+      {income.length === 0 ? (
         <FinanceEmptyState icon={TrendingUp} title="No income records" description="Adjust filters or record a payment." actionLabel="Record payment" onAction={() => setDrawerOpen(true)} />
       ) : (
-        <>
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs">Reference</TableHead>
-                  <TableHead className="text-xs">Client</TableHead>
-                  <TableHead className="text-xs">Project</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs">Mode</TableHead>
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="text-xs">Date</TableHead>
+                <TableHead className="text-xs">Reference</TableHead>
+                <TableHead className="text-xs">Client</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs text-right">Amount</TableHead>
+                <TableHead className="text-xs">Mode</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {income.map((i) => (
+                <TableRow key={i.id} className="hover:bg-muted/30">
+                  <TableCell className="text-xs">{format(new Date(i.date), "MMM d, yyyy")}</TableCell>
+                  <TableCell className="text-xs font-mono">{i.reference}</TableCell>
+                  <TableCell className="text-xs font-medium">{i.clientName}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{i.projectName ?? "—"}</TableCell>
+                  <TableCell><FinanceStatusBadge variant="income" value={i.status} /></TableCell>
+                  <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</TableCell>
+                  <TableCell className="text-xs">{PAYMENT_MODE_LABELS[i.paymentMode]}</TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageItems.map((i) => (
-                  <TableRow key={i.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs">{format(new Date(i.date), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-xs font-mono">{i.reference}</TableCell>
-                    <TableCell className="text-xs font-medium">{i.clientName}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{i.projectName ?? "—"}</TableCell>
-                    <TableCell><FinanceStatusBadge variant="income" value={i.status} /></TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</TableCell>
-                    <TableCell className="text-xs">{PAYMENT_MODE_LABELS[i.paymentMode]}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
+            <span>{total} total</span>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={income.length < 20} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
           </div>
-          <DataPagination {...pagination} />
-        </>
+        </div>
       )}
 
-      <IncomeFormDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <RecordPaymentModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
     </PortalPageShell>
   );
 }

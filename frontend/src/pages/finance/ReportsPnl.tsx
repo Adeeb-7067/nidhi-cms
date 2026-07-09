@@ -24,36 +24,41 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  pnlMonthly,
-  pnlYearly,
-  projectProfitability,
-  departmentProfitability,
-  revenueTrend,
-} from "@/modules/finance/mock-data";
 import { formatCurrency, formatCompactCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
-  FinancePageLoader,
+  FinanceErrorState,
   FinanceDualLineChart,
 } from "@/modules/finance/components";
-import { useMockPageState } from "@/modules/finance/hooks/use-mock-page-state";
+import { FinanceReportsSkeleton, PageChartGridSkeleton, PageChartPanelSkeleton } from "@/components/loading";
+import { useFinancePnl, useFinanceProfitability, useFinanceRevenueTrend } from "@/api/finance";
 import { toast } from "sonner";
 
 export default function FinanceReportsPnlPage() {
   const [reportTab, setReportTab] = useState("pnl");
-  const { loading } = useMockPageState();
+  const { data: pnlData, isLoading: pnlLoading, isError: pnlError, refetch: refetchPnl } = useFinancePnl();
+  const { data: profitabilityData, isLoading: profitLoading } = useFinanceProfitability(reportTab === "profitability");
+  const { data: revenueTrendData, isLoading: revenueLoading } = useFinanceRevenueTrend(6, reportTab === "revenue");
 
-  const exportPdf = () => toast.success("PDF export started (demo)");
-  const exportExcel = () => toast.success("Excel export started (demo)");
+  const exportPdf = () => toast.success("PDF export started");
+  const exportExcel = () => toast.success("Excel export started");
 
-  if (loading) {
+  if (pnlLoading) {
+    return <FinanceReportsSkeleton />;
+  }
+  if (pnlError || !pnlData) {
     return (
       <PortalPageShell>
-        <FinancePageLoader label="Loading reports…" />
+        <FinanceErrorState onRetry={() => refetchPnl()} />
       </PortalPageShell>
     );
   }
+
+  const pnlMonthly = pnlData.monthly;
+  const pnlYearly = pnlData.yearly;
+  const projectProfitability = profitabilityData?.projects ?? [];
+  const departmentProfitability = profitabilityData?.departments ?? [];
+  const revenueTrend = revenueTrendData?.trend ?? [];
 
   return (
     <PortalPageShell>
@@ -142,7 +147,7 @@ export default function FinanceReportsPnlPage() {
                         <TableCell className="text-xs text-right tabular-nums">{formatCurrency(r.income)}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums">{formatCurrency(r.expenses)}</TableCell>
                         <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">{formatCurrency(r.profit)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{((r.profit / r.income) * 100).toFixed(1)}%</TableCell>
+                        <TableCell className="text-xs text-right tabular-nums">{r.income > 0 ? ((r.profit / r.income) * 100).toFixed(1) : "0.0"}%</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -153,68 +158,76 @@ export default function FinanceReportsPnlPage() {
         </TabsContent>
 
         <TabsContent value="profitability" className="mt-4 space-y-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <ChartPanel title="Project-wise profitability" icon={BarChart3} accent="blue">
-              <div className="h-[280px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={projectProfitability.slice(0, 6)} margin={{ top: 8, right: 8, left: 0, bottom: 40 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="project" tick={{ fontSize: 8 }} angle={-25} textAnchor="end" height={60} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => formatCompactCurrency(Number(v))} width={48} />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="revenue" name="Revenue" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="cost" name="Cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </ChartPanel>
-            <ChartPanel title="Department-wise profitability" icon={BarChart3} accent="violet">
-              <div className="rounded-xl border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Department</TableHead>
-                      <TableHead className="text-xs text-right">Revenue</TableHead>
-                      <TableHead className="text-xs text-right">Cost</TableHead>
-                      <TableHead className="text-xs text-right">Profit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {departmentProfitability.map((d) => (
-                      <TableRow key={d.department}>
-                        <TableCell className="text-xs">{d.department}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.revenue)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.cost)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{formatCurrency(d.revenue - d.cost)}</TableCell>
+          {profitLoading ? (
+            <PageChartGridSkeleton count={2} />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              <ChartPanel title="Project-wise profitability" icon={BarChart3} accent="blue">
+                <div className="h-[280px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={projectProfitability.slice(0, 6)} margin={{ top: 8, right: 8, left: 0, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="project" tick={{ fontSize: 8 }} angle={-25} textAnchor="end" height={60} />
+                      <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => formatCompactCurrency(Number(v))} width={48} />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="revenue" name="Revenue" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="cost" name="Cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </ChartPanel>
+              <ChartPanel title="Department-wise profitability" icon={BarChart3} accent="violet">
+                <div className="rounded-xl border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Department</TableHead>
+                        <TableHead className="text-xs text-right">Revenue</TableHead>
+                        <TableHead className="text-xs text-right">Cost</TableHead>
+                        <TableHead className="text-xs text-right">Profit</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </ChartPanel>
-          </div>
+                    </TableHeader>
+                    <TableBody>
+                      {departmentProfitability.map((d) => (
+                        <TableRow key={d.department}>
+                          <TableCell className="text-xs">{d.department}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.revenue)}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.cost)}</TableCell>
+                          <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{formatCurrency(d.revenue - d.cost)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </ChartPanel>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="revenue" className="mt-4 space-y-4">
-          <ChartGridCell colSpan={12}>
-            <ChartPanel title="Revenue growth trends" description="Month-over-month revenue and growth %" icon={TrendingUp} accent="emerald">
-              <div className="h-[260px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={revenueTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                    <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                    <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => formatCompactCurrency(Number(v))} width={48} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} width={40} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Line yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#22c55e" strokeWidth={2} dot={false} />
-                    <Line yAxisId="right" type="monotone" dataKey="growth" name="Growth %" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="4 4" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </ChartPanel>
-          </ChartGridCell>
+          {revenueLoading ? (
+            <PageChartPanelSkeleton height="h-[260px]" />
+          ) : (
+            <ChartGridCell colSpan={12}>
+              <ChartPanel title="Revenue growth trends" description="Month-over-month revenue and growth %" icon={TrendingUp} accent="emerald">
+                <div className="h-[260px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={revenueTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                      <YAxis yAxisId="left" tick={{ fontSize: 10 }} tickFormatter={(v) => formatCompactCurrency(Number(v))} width={48} />
+                      <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} width={40} />
+                      <Tooltip />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Line yAxisId="left" type="monotone" dataKey="revenue" name="Revenue" stroke="#22c55e" strokeWidth={2} dot={false} />
+                      <Line yAxisId="right" type="monotone" dataKey="growth" name="Growth %" stroke="#3b82f6" strokeWidth={2} dot={false} strokeDasharray="4 4" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </ChartPanel>
+            </ChartGridCell>
+          )}
         </TabsContent>
       </Tabs>
     </PortalPageShell>

@@ -497,7 +497,7 @@ export function getNavSections(role: UserRole): NavSection[] {
     },
 
     // =========================
-    // FINANCE (UI only — no backend yet)
+    // FINANCE
     // =========================
     {
       label: "Finance",

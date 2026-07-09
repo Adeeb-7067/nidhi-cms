@@ -40,15 +40,6 @@ export function FinanceEmptyState({
   );
 }
 
-export function FinancePageLoader({ label = "Loading…" }: { label?: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-xl border bg-muted/10 px-6 py-20">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent mb-3" />
-      <p className="text-xs text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
 export function FinanceErrorState({
   message = "Something went wrong loading data.",
   onRetry,

@@ -20,7 +20,6 @@ export const COMPANY_FINANCE = {
 };
 
 export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
-  salary: "Salary & Wages",
   software: "Software & Subscriptions",
   hardware: "Hardware & Equipment",
   travel: "Travel & Conveyance",
@@ -48,6 +47,7 @@ export const FINANCE_INVOICE_STATUS_LABELS: Record<FinanceInvoiceStatus, string>
   partially_paid: "Partially Paid",
   unpaid: "Unpaid",
   overdue: "Overdue",
+  cancelled: "Cancelled",
 };
 
 export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
@@ -67,7 +67,8 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
 
 export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {
   draft: "Draft",
-  processed: "Processed",
+  reviewed: "Reviewed",
+  finalized: "Finalized",
   paid: "Paid",
 };
 
@@ -108,37 +109,3 @@ export function calcInvoiceTotal(
   return { subtotal, tax, total: afterDiscount + tax };
 }
 
-export const financeDashboardKpis = {
-  totalIncome: 2847500,
-  totalExpenses: 1923400,
-  netProfit: 924100,
-  pendingInvoices: 7,
-  overdueAmount: 485000,
-  trends: {
-    totalIncome: 14.2,
-    totalExpenses: 8.6,
-    netProfit: 22.4,
-    pendingInvoices: -2,
-    overdueAmount: -5.1,
-  },
-};
-
-export const monthlyRevenueVsExpense = [
-  { month: "Jan", revenue: 420000, expense: 310000 },
-  { month: "Feb", revenue: 485000, expense: 335000 },
-  { month: "Mar", revenue: 520000, expense: 358000 },
-  { month: "Apr", revenue: 610000, expense: 402000 },
-  { month: "May", revenue: 584500, expense: 389400 },
-  { month: "Jun", revenue: 228000, expense: 129000 },
-];
-
-export const expenseCategoryBreakdown = [
-  { name: "Salary & Wages", count: 42, value: 45 },
-  { name: "Software", count: 18, value: 12 },
-  { name: "Office & Admin", count: 14, value: 10 },
-  { name: "Travel", count: 9, value: 8 },
-  { name: "Marketing", count: 7, value: 9 },
-  { name: "Hardware", count: 6, value: 7 },
-  { name: "Utilities", count: 5, value: 5 },
-  { name: "Other", count: 8, value: 4 },
-];

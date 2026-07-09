@@ -32,6 +32,7 @@ import directConversationsRoutes from "./direct-conversations.routes.js";
 import permissionsRoutes from "./permissions.routes.js";
 import hrmRoutes from "./hrm.routes.js";
 import salesRoutes from "./sales.routes.js";
+import financeRoutes from "./finance.routes.js";
 const router = Router();
 
 // Normalize ?token= query param to the Authorization header.
@@ -83,6 +84,7 @@ const featureRouters = [
   permissionsRoutes,
   hrmRoutes,
   salesRoutes,
+  financeRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

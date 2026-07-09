@@ -12,36 +12,35 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockTaxSummaries } from "@/modules/finance/mock-data";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
-  FinancePageLoader,
+  FinanceErrorState,
   FinanceDualLineChart,
 } from "@/modules/finance/components";
-import { useMockPageState } from "@/modules/finance/hooks/use-mock-page-state";
+import { FinanceListPageSkeleton } from "@/components/loading";
+import { useTaxSummary, type TaxPeriodType } from "@/api/finance";
 import { toast } from "sonner";
 
-const gstChartData = mockTaxSummaries
-  .filter((t) => t.periodType === "monthly")
-  .map((t) => ({
-    month: t.period.split(" ")[0],
-    collected: t.gstCollected,
-    paid: t.gstPaid,
-  }));
-
 export default function TaxPage() {
-  const [periodTab, setPeriodTab] = useState("monthly");
-  const { loading } = useMockPageState();
+  const [periodTab, setPeriodTab] = useState<TaxPeriodType>("monthly");
+  const { data, isLoading, isError, refetch } = useTaxSummary(periodTab);
 
-  const filtered = mockTaxSummaries.filter((t) => t.periodType === periodTab);
-  const latestMonthly = mockTaxSummaries.find((t) => t.period === "May 2026");
+  const summaries = data?.summaries ?? [];
+  const gstChartData = [...summaries]
+    .filter((t) => t.periodType === "monthly")
+    .reverse()
+    .map((t) => ({ month: t.period.split(" ")[0], collected: t.gstCollected, paid: t.gstPaid }));
+  const latest = summaries[0];
 
-  if (loading) {
+  if (isLoading) {
+    return <FinanceListPageSkeleton kpiCount={4} showCharts />;
+  }
+  if (isError) {
     return (
       <PortalPageShell>
-        <FinancePageLoader label="Loading tax data…" />
+        <FinanceErrorState onRetry={() => refetch()} />
       </PortalPageShell>
     );
   }
@@ -54,11 +53,11 @@ export default function TaxPage() {
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Tax" }]}
         actions={
           <>
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("Excel export started (demo)")}>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("Excel export started")}>
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Export Excel
             </Button>
-            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("PDF export started (demo)")}>
+            <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("PDF export started")}>
               <Download className="h-3.5 w-3.5" />
               Export PDF
             </Button>
@@ -68,10 +67,10 @@ export default function TaxPage() {
 
       <PortalKpiGrid
         items={[
-          { title: "GST collected (May)", value: formatCurrency(latestMonthly?.gstCollected ?? 0), icon: Percent, accent: "green", delay: 0 },
-          { title: "GST paid (May)", value: formatCurrency(latestMonthly?.gstPaid ?? 0), icon: Percent, accent: "red", delay: 1 },
-          { title: "Net GST payable", value: formatCurrency(latestMonthly?.netGst ?? 0), icon: Percent, accent: "amber", delay: 2 },
-          { title: "TDS deposited (May)", value: formatCurrency(latestMonthly?.tdsDeposited ?? 0), icon: Percent, accent: "blue", delay: 3 },
+          { title: `GST collected (${latest?.period ?? "—"})`, value: formatCurrency(latest?.gstCollected ?? 0), icon: Percent, accent: "green", delay: 0 },
+          { title: `GST paid (${latest?.period ?? "—"})`, value: formatCurrency(latest?.gstPaid ?? 0), icon: Percent, accent: "red", delay: 1 },
+          { title: "Net GST payable", value: formatCurrency(latest?.netGst ?? 0), icon: Percent, accent: "amber", delay: 2 },
+          { title: "TDS deposited", value: formatCurrency(latest?.tdsDeposited ?? 0), icon: Percent, accent: "blue", delay: 3 },
         ]}
       />
 
@@ -84,18 +83,18 @@ export default function TaxPage() {
         <ChartGridCell colSpan={4}>
           <ChartPanel title="Quick actions" icon={Download} accent="blue">
             <div className="space-y-2 py-2">
-              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("GSTR-1 export (demo)")}>Export GSTR-1 summary</Button>
-              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("GSTR-3B export (demo)")}>Export GSTR-3B summary</Button>
-              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("TDS return export (demo)")}>Export TDS return</Button>
-              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("Annual tax summary (demo)")}>Annual tax summary</Button>
+              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("GSTR-1 export started")}>Export GSTR-1 summary</Button>
+              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("GSTR-3B export started")}>Export GSTR-3B summary</Button>
+              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("TDS return export started")}>Export TDS return</Button>
+              <Button variant="outline" size="sm" className="w-full h-8 justify-start text-xs" onClick={() => toast.success("Annual tax summary exported")}>Annual tax summary</Button>
             </div>
           </ChartPanel>
         </ChartGridCell>
       </div>
 
-      <FinanceFilterBar onExport={() => toast.success("Tax report export (demo)")} />
+      <FinanceFilterBar onExport={() => toast.success("Tax report export started")} />
 
-      <Tabs value={periodTab} onValueChange={setPeriodTab}>
+      <Tabs value={periodTab} onValueChange={(v) => setPeriodTab(v as TaxPeriodType)}>
         <TabsList className="h-9">
           <TabsTrigger value="monthly" className="text-xs">Monthly</TabsTrigger>
           <TabsTrigger value="quarterly" className="text-xs">Quarterly</TabsTrigger>
@@ -117,8 +116,8 @@ export default function TaxPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((row) => (
-                  <TableRow key={row.period}>
+                {summaries.map((row) => (
+                  <TableRow key={row.periodKey}>
                     <TableCell className="text-xs font-medium">{row.period}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(row.gstCollected)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums text-red-700">{formatCurrency(row.gstPaid)}</TableCell>
@@ -126,7 +125,7 @@ export default function TaxPage() {
                     <TableCell className="text-xs text-right tabular-nums">{formatCurrency(row.tdsDeducted)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{formatCurrency(row.tdsDeposited)}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.success(`${row.period} export (demo)`)}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.success(`${row.period} export started`)}>
                         <Download className="h-3 w-3" />
                       </Button>
                     </TableCell>

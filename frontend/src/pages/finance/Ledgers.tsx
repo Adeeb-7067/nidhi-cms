@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { BookOpen, ArrowRight } from "lucide-react";
+import { BookOpen, Plus, ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
   Table,
@@ -13,15 +14,16 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockLedgers } from "@/modules/finance/mock-data";
 import { formatCurrency } from "@/modules/finance/constants";
 import type { LedgerType } from "@/modules/finance/types";
 import {
   FinancePageHeader,
   FinanceFilterBar,
-  FinancePageLoader,
+  FinanceErrorState,
+  BankAccountFormModal,
 } from "@/modules/finance/components";
-import { useMockPageState } from "@/modules/finance/hooks/use-mock-page-state";
+import { FinanceSectionSkeleton } from "@/components/loading";
+import { useClientLedgers, useVendorLedgers, useExpenseCategoryLedgers, useBankLedgers } from "@/api/finance";
 import { toast } from "sonner";
 
 const LEDGER_TABS: { value: LedgerType; label: string }[] = [
@@ -34,15 +36,24 @@ const LEDGER_TABS: { value: LedgerType; label: string }[] = [
 export default function LedgersPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<LedgerType>("client");
-  const { loading } = useMockPageState();
+  const [bankModalOpen, setBankModalOpen] = useState(false);
 
-  const accounts = mockLedgers.filter((l) => l.type === activeTab);
+  const clientLedgers = useClientLedgers(null, activeTab === "client");
+  const vendorLedgers = useVendorLedgers(null, activeTab === "vendor");
+  const expenseLedgers = useExpenseCategoryLedgers(activeTab === "expense");
+  const bankLedgers = useBankLedgers(null, activeTab === "bank");
+
+  const activeQuery = { client: clientLedgers, vendor: vendorLedgers, expense: expenseLedgers, bank: bankLedgers }[activeTab];
+  const accounts = activeQuery.data?.accounts ?? [];
   const filteredAccounts = accounts.filter((a) => !search || a.name.toLowerCase().includes(search.toLowerCase()));
 
-  if (loading) {
+  if (activeQuery.isLoading) {
+    return <FinanceSectionSkeleton />;
+  }
+  if (activeQuery.isError) {
     return (
       <PortalPageShell>
-        <FinancePageLoader label="Loading ledgers…" />
+        <FinanceErrorState onRetry={() => activeQuery.refetch()} />
       </PortalPageShell>
     );
   }
@@ -54,13 +65,20 @@ export default function LedgersPage() {
         description="Client, vendor, expense, and bank account ledgers."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Ledgers" }]}
         actions={
-          <button type="button" className="text-xs text-primary hover:underline" onClick={() => toast.success("Ledger export started (demo)")}>
-            Export ledger
-          </button>
+          activeTab === "bank" ? (
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => setBankModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Add bank account
+            </Button>
+          ) : (
+            <button type="button" className="text-xs text-primary hover:underline" onClick={() => toast.success("Ledger export started")}>
+              Export ledger
+            </button>
+          )
         }
       />
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search account name…" onExport={() => toast.success("Export started (demo)")} />
+      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search account name…" onExport={() => toast.success("Export started")} />
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LedgerType)}>
         <TabsList className="h-9">
@@ -69,26 +87,28 @@ export default function LedgersPage() {
           ))}
         </TabsList>
 
-        {LEDGER_TABS.map((t) => (
-          <TabsContent key={t.value} value={t.value} className="mt-4 space-y-4">
-            {filteredAccounts.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">No accounts in this ledger.</p>
-            ) : (
-              filteredAccounts.map((account) => (
-                <Card key={account.id}>
-                  <CardHeader className="pb-2">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        {account.name}
-                      </CardTitle>
-                      <div className="flex gap-4 text-xs">
-                        <span><span className="text-muted-foreground">Opening:</span> <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong></span>
-                        <span><span className="text-muted-foreground">Closing:</span> <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong></span>
-                      </div>
+        <TabsContent value={activeTab} className="mt-4 space-y-4">
+          {filteredAccounts.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-8">No accounts in this ledger.</p>
+          ) : (
+            filteredAccounts.map((account) => (
+              <Card key={account.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      {account.name}
+                    </CardTitle>
+                    <div className="flex gap-4 text-xs">
+                      <span><span className="text-muted-foreground">Opening:</span> <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong></span>
+                      <span><span className="text-muted-foreground">Closing:</span> <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong></span>
                     </div>
-                  </CardHeader>
-                  <CardContent>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {account.entries.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No activity yet.</p>
+                  ) : (
                     <div className="rounded-lg border overflow-hidden">
                       <Table>
                         <TableHeader>
@@ -123,13 +143,15 @@ export default function LedgersPage() {
                         </TableBody>
                       </Table>
                     </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </TabsContent>
-        ))}
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
       </Tabs>
+
+      <BankAccountFormModal open={bankModalOpen} onOpenChange={setBankModalOpen} onSuccess={() => bankLedgers.refetch()} />
     </PortalPageShell>
   );
 }

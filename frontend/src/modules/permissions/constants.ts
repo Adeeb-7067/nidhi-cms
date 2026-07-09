@@ -42,7 +42,22 @@ export const CMS_MODULE_GROUPS = [
   },
   { label: "Legal", modules: ["legal"] },
   { label: "Digital", modules: ["marketing"] },
-  { label: "Finance", modules: ["finance"] },
+  {
+    label: "Finance",
+    modules: [
+      "finance_dashboard",
+      "finance_expenses",
+      "finance_income",
+      "finance_invoices",
+      "finance_payments",
+      "finance_budgets",
+      "finance_ledgers",
+      "finance_tax",
+      "finance_reports",
+      "finance_notifications",
+      "finance_vendors",
+    ],
+  },
   { label: "CA", modules: ["ca"] },
   {
     label: "Delivery",
@@ -96,6 +111,8 @@ export const CMS_MODULE_GROUPS = [
 ] as const;
 
 export const SALES_MODULES = CMS_MODULE_GROUPS.find((g) => g.label === "Sales & CRM")?.modules ?? [];
+
+export const FINANCE_MODULES = CMS_MODULE_GROUPS.find((g) => g.label === "Finance")?.modules ?? [];
 
 export const CMS_MODULES = CMS_MODULE_GROUPS.flatMap((g) => g.modules);
 
@@ -179,7 +196,17 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   sales: "Sales & CRM (all pages)",
   legal: "Legal",
   marketing: "Digital",
-  finance: "Finance",
+  finance_dashboard: "Finance dashboard",
+  finance_expenses: "Expenses",
+  finance_income: "Income",
+  finance_invoices: "Invoices",
+  finance_payments: "Payments",
+  finance_budgets: "Budgets",
+  finance_ledgers: "Ledgers",
+  finance_tax: "Tax",
+  finance_reports: "Finance reports",
+  finance_notifications: "Finance alerts",
+  finance_vendors: "Vendors",
   ca: "CA Master",
   dev_workspace: "Dev workspace",
   dev_projects: "My projects",
@@ -245,7 +272,7 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/sales": "sales_dashboard",
   "/legal": "legal",
   "/marketing": "marketing",
-  "/finance": "finance",
+  "/finance": "finance_dashboard",
   "/ca": "ca",
   "/dev": "dev_workspace",
   "/hrm": "hrm_dashboard",

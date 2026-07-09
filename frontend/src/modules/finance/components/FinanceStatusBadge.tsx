@@ -35,6 +35,7 @@ const invoiceStyles: Record<FinanceInvoiceStatus, string> = {
   unpaid: "bg-amber-500/10 text-amber-700 border-amber-500/25",
   partially_paid: "bg-violet-500/10 text-violet-700 border-violet-500/25",
   overdue: "bg-red-500/10 text-red-600 border-red-500/25",
+  cancelled: "bg-slate-500/10 text-slate-700 border-slate-500/25",
 };
 
 const budgetStyles: Record<BudgetStatus, string> = {
@@ -45,7 +46,8 @@ const budgetStyles: Record<BudgetStatus, string> = {
 
 const payrollStyles: Record<PayrollStatus, string> = {
   draft: "bg-slate-500/10 text-slate-700 border-slate-500/25",
-  processed: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  reviewed: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  finalized: "bg-violet-500/10 text-violet-700 border-violet-500/25",
   paid: "bg-green-500/10 text-green-700 border-green-500/25",
 };
 

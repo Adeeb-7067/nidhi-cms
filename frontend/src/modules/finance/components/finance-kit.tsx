@@ -1,10 +1,9 @@
 import { format } from "date-fns";
-import { Link } from "wouter";
-import { ArrowRight, AlertCircle, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import type { Budget, FinanceInvoice, FinanceTransaction } from "../types";
+import type { Budget, FinanceInvoice } from "@/api/finance";
 import { calcBudgetConsumption, calcInvoiceTotal, formatCurrency, COMPANY_FINANCE } from "../constants";
 import { FinanceStatusBadge } from "./FinanceStatusBadge";
 
@@ -67,43 +66,6 @@ export function BudgetConsumptionCard({ budget }: { budget: Budget }) {
         </div>
       </CardContent>
     </Card>
-  );
-}
-
-export function RecentTransactionsList({ transactions, limit }: { transactions: FinanceTransaction[]; limit?: number }) {
-  const rows = limit ? transactions.slice(0, limit) : transactions;
-  return (
-    <div className="space-y-0">
-      {rows.map((tx, i) => (
-        <div key={tx.id} className="flex gap-3 pb-4 last:pb-0">
-          <div className="flex flex-col items-center">
-            <div
-              className={cn(
-                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
-                tx.type === "income" ? "bg-emerald-500/10 text-emerald-600" : tx.type === "expense" ? "bg-red-500/10 text-red-600" : "bg-blue-500/10 text-blue-600",
-              )}
-            >
-              {tx.type === "income" ? <TrendingUp className="h-3.5 w-3.5" /> : tx.type === "expense" ? <TrendingDown className="h-3.5 w-3.5" /> : <ArrowRight className="h-3.5 w-3.5" />}
-            </div>
-            {i < rows.length - 1 && <div className="w-px flex-1 bg-border mt-1 min-h-[1rem]" />}
-          </div>
-          <div className="flex-1 min-w-0 pt-0.5">
-            <p className="text-xs font-semibold truncate">{tx.description}</p>
-            <p className="text-[10px] text-muted-foreground">{tx.party} · {format(new Date(tx.date), "MMM d, yyyy")}</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span className={cn("text-xs font-medium tabular-nums", tx.type === "expense" ? "text-red-700" : "text-emerald-700")}>
-                {tx.type === "expense" ? "−" : "+"}{formatCurrency(tx.amount)}
-              </span>
-              {tx.href && (
-                <Link href={tx.href} className="text-[10px] text-primary inline-flex items-center gap-0.5 hover:underline">
-                  View <ArrowRight className="h-3 w-3" />
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PiggyBank, AlertTriangle } from "lucide-react";
+import { PiggyBank, AlertTriangle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
@@ -13,39 +13,42 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { mockBudgets } from "@/modules/finance/mock-data";
 import { formatCurrency, calcBudgetConsumption } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
   FinanceEmptyState,
-  FinancePageLoader,
+  FinanceErrorState,
   BudgetConsumptionCard,
   FinanceBarChart,
+  BudgetFormModal,
 } from "@/modules/finance/components";
-import { useMockPageState } from "@/modules/finance/hooks/use-mock-page-state";
+import { FinanceBudgetsSkeleton } from "@/components/loading";
+import { useListBudgets } from "@/api/finance";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function BudgetsPage() {
   const [search, setSearch] = useState("");
   const [typeTab, setTypeTab] = useState<string>("all");
-  const { loading } = useMockPageState();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { data, isLoading, isError, refetch } = useListBudgets();
+  const budgets = data?.budgets ?? [];
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return mockBudgets.filter((b) => {
+    return budgets.filter((b) => {
       const matchesSearch = !q || b.name.toLowerCase().includes(q) || b.department?.toLowerCase().includes(q);
       const matchesType = typeTab === "all" || b.type === typeTab;
       return matchesSearch && matchesType;
     });
-  }, [search, typeTab]);
+  }, [budgets, search, typeTab]);
 
-  const exceededCount = mockBudgets.filter((b) => b.status === "exceeded").length;
-  const warningCount = mockBudgets.filter((b) => b.status === "warning").length;
-  const totalAllocated = mockBudgets.reduce((s, b) => s + b.allocated, 0);
-  const totalSpent = mockBudgets.reduce((s, b) => s + b.spent, 0);
+  const exceededCount = budgets.filter((b) => b.status === "exceeded").length;
+  const warningCount = budgets.filter((b) => b.status === "warning").length;
+  const totalAllocated = budgets.reduce((s, b) => s + b.allocated, 0);
+  const totalSpent = budgets.reduce((s, b) => s + b.spent, 0);
 
   const chartData = filtered.map((b) => ({
     name: b.name.length > 18 ? b.name.slice(0, 16) + "…" : b.name,
@@ -53,10 +56,13 @@ export default function BudgetsPage() {
     allocated: b.allocated,
   }));
 
-  if (loading) {
+  if (isLoading) {
+    return <FinanceBudgetsSkeleton />;
+  }
+  if (isError) {
     return (
       <PortalPageShell>
-        <FinancePageLoader label="Loading budgets…" />
+        <FinanceErrorState onRetry={() => refetch()} />
       </PortalPageShell>
     );
   }
@@ -68,7 +74,8 @@ export default function BudgetsPage() {
         description="Annual and project budgets with variance tracking."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Budgets" }]}
         actions={
-          <Button size="sm" className="h-8" onClick={() => toast.success("Create budget (demo)")}>
+          <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+            <Plus className="h-3.5 w-3.5" />
             Add budget
           </Button>
         }
@@ -82,13 +89,13 @@ export default function BudgetsPage() {
         ]}
       />
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search budget name…" onExport={() => toast.success("Budget export started (demo)")} />
+      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search budget name…" onExport={() => toast.success("Budget export started")} />
 
       <Tabs value={typeTab} onValueChange={setTypeTab}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {(["all", "annual", "project"] as const).map((t) => (
             <TabsTrigger key={t} value={t} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {t === "all" ? "All" : t} ({t === "all" ? mockBudgets.length : mockBudgets.filter((b) => b.type === t).length})
+              {t === "all" ? "All" : t} ({t === "all" ? budgets.length : budgets.filter((b) => b.type === t).length})
             </TabsTrigger>
           ))}
         </TabsList>
@@ -112,7 +119,7 @@ export default function BudgetsPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <FinanceEmptyState icon={PiggyBank} title="No budgets found" description="Adjust filters or create a new budget." />
+        <FinanceEmptyState icon={PiggyBank} title="No budgets found" description="Adjust filters or create a new budget." actionLabel="Add budget" onAction={() => setDrawerOpen(true)} />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
@@ -154,6 +161,8 @@ export default function BudgetsPage() {
           </Table>
         </div>
       )}
+
+      <BudgetFormModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
     </PortalPageShell>
   );
 }
