@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -34,7 +35,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FileUploader } from "@/components/ui/file-uploader";
-import { useListProjects, useListClients, useListUsers } from "@/api/generated/api";
+import { useListProjects, useListClients } from "@/api/generated/api";
+import { useHrmEmployees } from "@/api/hrm";
 import {
   useCreateExpense,
   useRecordIncome,
@@ -62,12 +64,28 @@ type ModalBaseProps = {
 
 const EXPENSE_FORM_CATEGORIES = Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[];
 
+function optionalSelectId(value: string | undefined): number | null {
+  if (!value || value === "none") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+const positiveAmountString = z
+  .string()
+  .min(1, "Amount is required")
+  .refine((v) => Number(v) > 0, "Amount must be greater than zero");
+
+const positiveRateString = z
+  .string()
+  .min(1, "Rate is required")
+  .refine((v) => Number(v) > 0, "Rate must be greater than zero");
+
 // ─── Expense ────────────────────────────────────────────────────────────
 
 const expenseSchema = z.object({
   date: z.string().min(1, "Date is required"),
   category: z.string(),
-  amount: z.string().min(1, "Amount is required"),
+  amount: positiveAmountString,
   paymentMode: z.string(),
   projectId: z.string().optional(),
   employeeId: z.string().optional(),
@@ -79,7 +97,7 @@ type ExpenseFormValues = z.infer<typeof expenseSchema>;
 export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBaseProps) {
   const createExpense = useCreateExpense();
   const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
-  const { data: usersData } = useListUsers({ limit: 200 }, { query: { enabled: open } });
+  const { data: employeesData } = useHrmEmployees({ limit: 200, status: "active" }, { enabled: open });
   const { data: vendorsData } = useListVendors(undefined, open);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
 
@@ -119,9 +137,9 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
         category: values.category as ExpenseCategory,
         amount: Number(values.amount),
         paymentMode: values.paymentMode as FinancePaymentMode,
-        projectId: values.projectId ? Number(values.projectId) : null,
-        employeeId: values.employeeId ? Number(values.employeeId) : null,
-        vendorId: values.vendorId ? Number(values.vendorId) : null,
+        projectId: optionalSelectId(values.projectId),
+        employeeId: optionalSelectId(values.employeeId),
+        vendorId: optionalSelectId(values.vendorId),
         notes: values.notes || undefined,
         attachments,
       });
@@ -181,7 +199,7 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
                 <FormField control={form.control} name="projectId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Project</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
+                    <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -196,11 +214,11 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
                 <FormField control={form.control} name="employeeId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Employee</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
+                    <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
-                        {(usersData?.users ?? []).map((u) => (
+                        {(employeesData?.employees ?? []).map((u) => (
                           <SelectItem key={u.id} value={String(u.id)}>{u.name}</SelectItem>
                         ))}
                       </SelectContent>
@@ -212,7 +230,7 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vendor</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || "none"}>
+                  <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -228,7 +246,7 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
                 <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={3} {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <div>
-                <FormLabel className="mb-2 block">Bill attachment</FormLabel>
+                <Label className="mb-2 block text-sm font-medium">Bill attachment</Label>
                 <FileUploader
                   accept="image/*,.pdf"
                   category="finance"
@@ -265,7 +283,7 @@ const paymentSchema = z.object({
   date: z.string().min(1),
   clientId: z.string().min(1, "Client is required"),
   projectId: z.string().optional(),
-  amount: z.string().min(1),
+  amount: positiveAmountString,
   paymentMode: z.string(),
 });
 type PaymentFormValues = z.infer<typeof paymentSchema>;
@@ -307,7 +325,7 @@ export function RecordPaymentModal({
     try {
       const result = await recordIncome.mutateAsync({
         clientId: Number(values.clientId),
-        projectId: values.projectId ? Number(values.projectId) : null,
+        projectId: optionalSelectId(values.projectId),
         invoiceId: invoice?.id ?? null,
         amount: Number(values.amount),
         paymentMode: values.paymentMode as FinancePaymentMode,
@@ -354,7 +372,7 @@ export function RecordPaymentModal({
               <FormField control={form.control} name="projectId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Project</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || "none"} disabled={!!invoice}>
+                  <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"} disabled={!!invoice}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
@@ -412,8 +430,8 @@ const invoiceSchema = z.object({
     .array(
       z.object({
         description: z.string().min(1, "Description is required"),
-        quantity: z.string().min(1),
-        rate: z.string().min(1),
+        quantity: z.string().min(1).refine((v) => Number(v) > 0, "Quantity must be greater than zero"),
+        rate: positiveRateString,
         taxPercent: z.string(),
       }),
     )
@@ -465,10 +483,14 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
   );
 
   const onSubmit = async (values: InvoiceFormValues) => {
+    if (totals.total <= 0) {
+      toast.error("Invoice total must be greater than ₹0");
+      return;
+    }
     try {
       await createInvoice.mutateAsync({
         clientId: Number(values.clientId),
-        projectId: values.projectId ? Number(values.projectId) : null,
+        projectId: optionalSelectId(values.projectId),
         issueDate: values.issueDate,
         dueDate: values.dueDate,
         discount: Number(values.discount) || 0,
@@ -517,7 +539,7 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
                 <FormField control={form.control} name="projectId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Project</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || "none"}>
+                    <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
@@ -540,7 +562,7 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               </div>
 
               <div className="space-y-2">
-                <FormLabel>Line items</FormLabel>
+                <Label className="text-sm font-medium">Line items</Label>
                 {fields.map((item, index) => (
                   <div key={item.id} className="grid grid-cols-[1fr_70px_90px_70px_auto] gap-2 items-start">
                     <FormField control={form.control} name={`items.${index}.description`} render={({ field }) => (
@@ -618,7 +640,7 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
 // ─── Credit note ──────────────────────────────────────────────────────────
 
 const creditNoteSchema = z.object({
-  amount: z.string().min(1, "Amount is required"),
+  amount: positiveAmountString,
   reason: z.string().min(1, "Reason is required"),
 });
 type CreditNoteFormValues = z.infer<typeof creditNoteSchema>;
@@ -683,14 +705,19 @@ export function CreditNoteModal({
 
 // ─── Budget ───────────────────────────────────────────────────────────────
 
-const budgetSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  type: z.string(),
-  projectId: z.string().optional(),
-  fiscalYear: z.string().min(1, "Fiscal year is required"),
-  allocated: z.string().min(1, "Allocated amount is required"),
-  department: z.string().optional(),
-});
+const budgetSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    type: z.string(),
+    projectId: z.string().optional(),
+    fiscalYear: z.string().min(1, "Fiscal year is required"),
+    allocated: positiveAmountString,
+    department: z.string().optional(),
+  })
+  .refine((data) => data.type !== "project" || Boolean(data.projectId?.trim()), {
+    message: "Project is required for project budgets",
+    path: ["projectId"],
+  });
 type BudgetFormValues = z.infer<typeof budgetSchema>;
 
 export function BudgetFormModal({
@@ -988,7 +1015,7 @@ const outgoingPaymentSchema = z.object({
   date: z.string().min(1),
   vendorId: z.string().optional(),
   partyName: z.string().optional(),
-  amount: z.string().min(1),
+  amount: positiveAmountString,
   mode: z.string(),
   reference: z.string().optional(),
 });
@@ -1010,7 +1037,8 @@ export function RecordOutgoingPaymentModal({ open, onOpenChange, onSuccess }: Mo
   const watchedVendorId = form.watch("vendorId");
 
   const onSubmit = async (values: OutgoingPaymentFormValues) => {
-    if (!values.vendorId && !values.partyName?.trim()) {
+    const vendorId = optionalSelectId(values.vendorId);
+    if (!vendorId && !values.partyName?.trim()) {
       form.setError("partyName", { message: "Select a vendor or enter a payee name" });
       return;
     }
@@ -1021,8 +1049,8 @@ export function RecordOutgoingPaymentModal({ open, onOpenChange, onSuccess }: Mo
         mode: values.mode as FinancePaymentMode,
         date: values.date,
         reference: values.reference || undefined,
-        vendorId: values.vendorId ? Number(values.vendorId) : null,
-        partyName: values.vendorId ? undefined : values.partyName?.trim(),
+        vendorId,
+        partyName: vendorId ? undefined : values.partyName?.trim(),
       });
       toast.success(`Payment of ${formatCurrency(Number(values.amount))} recorded`);
       onOpenChange(false);
@@ -1048,7 +1076,7 @@ export function RecordOutgoingPaymentModal({ open, onOpenChange, onSuccess }: Mo
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Vendor</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || "none"}>
+                  <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
                     <FormControl><SelectTrigger><SelectValue placeholder="Select vendor" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">Other payee (enter name)</SelectItem>

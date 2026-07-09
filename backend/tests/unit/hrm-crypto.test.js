@@ -50,7 +50,7 @@ describe("hrm-crypto", () => {
     );
   });
 
-  test("decryptHrm throws on tampered ciphertext (GCM auth)", () => {
+  test("decryptHrm returns null on tampered ciphertext (GCM auth)", () => {
     const enc = encryptHrm("sensitive");
     const tampered = {
       ...enc,
@@ -58,7 +58,7 @@ describe("hrm-crypto", () => {
         .map((b, i) => (i === 0 ? b ^ 1 : b))
         .toString("base64"),
     };
-    assert.throws(() => decryptHrm(tampered));
+    assert.equal(decryptHrm(tampered), null);
   });
 
   test("encryptIntoFields produces flat shape with the prefix", () => {

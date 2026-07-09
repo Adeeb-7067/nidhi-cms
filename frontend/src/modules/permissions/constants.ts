@@ -273,6 +273,7 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/legal": "legal",
   "/marketing": "marketing",
   "/finance": "finance_dashboard",
+  "/finance/notifications": "finance_notifications",
   "/ca": "ca",
   "/dev": "dev_workspace",
   "/hrm": "hrm_dashboard",

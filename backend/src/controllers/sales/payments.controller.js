@@ -10,6 +10,7 @@ import {
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { applyPaymentInTx, applyInstallmentPaymentInTx, repairPaymentInvoiceLinkInTx } from "../../services/sales/payment-ledger.service.js";
+import { mirrorSalesPaymentToFinanceInTx } from "../../services/finance/sales-payment-sync.service.js";
 import {
   loadProjectNameMap,
   resolvePaymentInstallment,
@@ -241,6 +242,12 @@ async function recordPayment(req, res) {
   });
 
   const payment = await SalesPayments.findOne({ id }).lean();
+  try {
+    await runInTx((session) => mirrorSalesPaymentToFinanceInTx(session, payment));
+  } catch (syncErr) {
+    console.error("[sales-payment] finance sync failed for payment", id, syncErr);
+  }
+
   res.status(201).json({
     ...payment,
     invoiceStatus: newStatus,

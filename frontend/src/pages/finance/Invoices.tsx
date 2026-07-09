@@ -25,7 +25,10 @@ import {
   InvoiceFormModal,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useListInvoices, useInvoiceAging, type ListInvoicesParams } from "@/api/finance";
+import { useListInvoices, useInvoiceAging, useInvoicesSummary, type ListInvoicesParams } from "@/api/finance";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
+import { FinanceSourceBadge } from "@/modules/finance/components";
 import { toast } from "sonner";
 
 const STATUS_TABS: (FinanceInvoiceStatus | "all")[] = ["all", "unpaid", "partially_paid", "paid", "overdue"];
@@ -33,39 +36,27 @@ const STATUS_TABS: (FinanceInvoiceStatus | "all")[] = ["all", "unpaid", "partial
 export default function FinanceInvoicesPage() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit } = useTablePagination(20);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const params: ListInvoicesParams = useMemo(
     () => ({
       page,
-      limit: 20,
+      limit: apiLimit,
       search: search || undefined,
       status: statusTab === "all" ? undefined : (statusTab as FinanceInvoiceStatus),
     }),
-    [page, search, statusTab],
+    [page, apiLimit, search, statusTab],
   );
   const { data, isLoading, isError, refetch } = useListInvoices(params);
   const { data: agingData } = useInvoiceAging();
+  const { data: summaryData } = useInvoicesSummary();
 
   const invoices = data?.invoices ?? [];
   const total = data?.total ?? 0;
   const buckets = agingData?.buckets ?? [];
-
-  const { data: allInvoicesForCounts } = useListInvoices({ limit: 500 });
-  const statusCounts = useMemo(() => {
-    const rows = allInvoicesForCounts?.invoices ?? [];
-    const counts: Record<string, number> = { all: rows.length };
-    for (const s of STATUS_TABS) {
-      if (s === "all") continue;
-      counts[s] = rows.filter((i) => i.status === s).length;
-    }
-    return counts;
-  }, [allInvoicesForCounts]);
-  const totalOutstanding = (allInvoicesForCounts?.invoices ?? []).reduce(
-    (s, inv) => s + Math.max(0, (inv.total ?? 0) - inv.paidAmount),
-    0,
-  );
+  const statusCounts = summaryData?.counts ?? { all: 0 };
+  const totalOutstanding = summaryData?.outstanding ?? 0;
 
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={3} />;
@@ -106,9 +97,9 @@ export default function FinanceInvoicesPage() {
         ]}
       />
 
-      <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); setPage(1); }} searchPlaceholder="Search invoice # or client…" onExport={() => toast.success("Export started")} />
+      <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); resetPage(); }} searchPlaceholder="Search invoice # or client…" onExport={() => toast.success("Export started")} />
 
-      <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); setPage(1); }}>
+      <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); resetPage(); }}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {STATUS_TABS.map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
@@ -133,11 +124,12 @@ export default function FinanceInvoicesPage() {
       {invoices.length === 0 ? (
         <FinanceEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="Create invoice" onAction={() => setDrawerOpen(true)} />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Invoice #</TableHead>
+                <TableHead className="text-xs">Source</TableHead>
                 <TableHead className="text-xs">Client</TableHead>
                 <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
@@ -148,32 +140,32 @@ export default function FinanceInvoicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {invoices.map((inv) => (
-                <TableRow key={inv.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono">
-                    <Link href={`/finance/invoices/${inv.id}`} className="hover:text-primary">{inv.number}</Link>
-                  </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[160px] truncate">{inv.clientName}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{inv.projectName ?? "—"}</TableCell>
-                  <TableCell><FinanceStatusBadge variant="invoice" value={inv.status} /></TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(inv.total ?? 0)}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(inv.paidAmount)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/finance/invoices/${inv.id}`}>View</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {invoices.map((inv) => {
+                const href = inv.detailHref ?? `/finance/invoices/${inv.id}`;
+                return (
+                  <TableRow key={`${inv.source ?? "finance"}-${inv.id}`} className="hover:bg-muted/30">
+                    <TableCell className="text-xs font-mono">
+                      <Link href={href} className="hover:text-primary">{inv.number}</Link>
+                    </TableCell>
+                    <TableCell><FinanceSourceBadge source={inv.source} /></TableCell>
+                    <TableCell className="text-xs font-medium max-w-[160px] truncate">{inv.clientName}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{inv.projectName ?? "—"}</TableCell>
+                    <TableCell><FinanceStatusBadge variant="invoice" value={inv.status} /></TableCell>
+                    <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(inv.total ?? 0)}</TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(inv.paidAmount)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                        <Link href={href}>View</Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
-            <span>{total} total</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={invoices.length < 20} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
+          <div className="border-t px-4 py-3">
+            <DataPagination page={page} limit={limit} total={total} onPageChange={setPage} />
           </div>
         </div>
       )}

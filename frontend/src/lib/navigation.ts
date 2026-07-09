@@ -63,6 +63,7 @@ import {
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
 import { MARKETING_ACCESS_ROLES } from "@/modules/marketing/constants";
+import { FINANCE_ACCESS_ROLES } from "@/modules/finance/constants";
 
 import type { UserRole } from "@/lib/user-roles";
 import {
@@ -125,6 +126,7 @@ export function getHomeHref(role: UserRole): string {
   if (role === "super_admin") return "/admin";
   if (role === "hr") return "/hrm";
   if (role === "bde") return "/sales/bde";
+  if (role === "finance") return "/finance";
   if (role === "client") return "/client";
   return "/dev";
 }
@@ -503,18 +505,25 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "Finance",
       railLabel: "Finance",
       icon: Landmark,
-      roles: ["super_admin"],
+      roles: [...FINANCE_ACCESS_ROLES],
       items: [
-        { title: "Dashboard", href: "/finance", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
-        { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: ["super_admin"], group: "Transactions" },
-        { title: "Income", href: "/finance/income", icon: TrendingUp, roles: ["super_admin"], group: "Transactions" },
-        { title: "Payments", href: "/finance/payments", icon: Wallet, roles: ["super_admin"], group: "Transactions" },
-        { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: ["super_admin"], group: "Billing" },
-        { title: "Payroll", href: "/finance/payroll", icon: Users, roles: ["super_admin"], group: "Billing" },
-        { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: ["super_admin"], group: "Planning" },
-        { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: ["super_admin"], group: "Planning" },
-        { title: "Tax", href: "/finance/tax", icon: Percent, roles: ["super_admin"], group: "Planning" },
-        { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: ["super_admin"], group: "Reports" },
+        { title: "Dashboard", href: "/finance", icon: LayoutDashboard, roles: [...FINANCE_ACCESS_ROLES], group: "Overview" },
+        { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
+        { title: "Income", href: "/finance/income", icon: TrendingUp, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
+        { title: "Payments", href: "/finance/payments", icon: Wallet, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
+        { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
+        { title: "Payroll", href: "/finance/payroll", icon: Users, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
+        { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
+        { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
+        { title: "Tax", href: "/finance/tax", icon: Percent, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
+        { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: [...FINANCE_ACCESS_ROLES], group: "Reports" },
+        {
+          title: "Notifications",
+          href: "/finance/notifications",
+          icon: Bell,
+          roles: [...FINANCE_ACCESS_ROLES],
+          group: "Overview",
+        },
       ],
     },
 
@@ -525,26 +534,26 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "Account",
       railLabel: "Account",
       icon: UserCircle,
-      roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+      roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
       items: [
         {
           title: "Profile",
           href: "/profile",
           icon: UserCircle,
-          roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
         },
         {
           title: "Notifications",
           href: "/notifications",
           icon: Bell,
-          roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
           badgeKey: "notifications",
         },
         {
           title: "Settings",
           href: "/settings",
           icon: Settings,
-          roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
         },
       ],
     },

@@ -26,6 +26,8 @@ import {
   resolveFinalTotal,
   parseAdjustedTotal,
   parseTotalAdjustment,
+  assertPositiveInvoiceAmount,
+  assertValidInvoiceLineItems,
 } from "../../utils/sales-totals.js";
 import {
   bdeOwnsCustomer,
@@ -85,7 +87,11 @@ async function listInvoices(req, res) {
     }
   }
   await SalesInvoices.updateMany(
-    { status: { $in: ["unpaid", "partial"] }, dueDate: { $lt: new Date() } },
+    { amount: { $lte: 0 }, status: { $nin: ["cancelled", "paid"] } },
+    { $set: { status: "paid" } }
+  );
+  await SalesInvoices.updateMany(
+    { status: { $in: ["unpaid", "partial"] }, dueDate: { $lt: new Date() }, amount: { $gt: 0 } },
     { $set: { status: "overdue" } }
   );
   const { items, total, page: pg, limit: lim } = await paginateModel(
@@ -141,6 +147,9 @@ async function createInvoice(req, res) {
   if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
 
   const lineItems = parseLineItems(body.lineItems);
+  if (lineItems.length > 0) {
+    assertValidInvoiceLineItems(lineItems, badRequest);
+  }
   const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
   const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
 
@@ -156,6 +165,7 @@ async function createInvoice(req, res) {
   }
 
   const amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+  assertPositiveInvoiceAmount(amount, badRequest);
   const installmentId = body.installmentId ? Number(body.installmentId) : null;
   if (installmentId) {
     const inst = await SalesInstallments.findOne({ id: installmentId }).lean();
@@ -290,6 +300,9 @@ async function updateInvoice(req, res) {
   // Line items — recalculate amount when provided
   if (body.lineItems !== undefined) {
     const lineItems = parseLineItems(body.lineItems);
+    if (lineItems.length > 0) {
+      assertValidInvoiceLineItems(lineItems, badRequest);
+    }
     updates.lineItems = lineItems;
     const fromItems = lineItems.length > 0 ? calcLineItemsTotal(lineItems, 0) : invoice.calculatedAmount ?? invoice.amount;
     const totalAdjustment = body.totalAdjustment !== undefined
@@ -324,6 +337,9 @@ async function updateInvoice(req, res) {
   }
 
   const nextAmount = updates.amount ?? invoice.amount;
+  if (amountFieldsTouched || body.amount !== undefined) {
+    assertPositiveInvoiceAmount(nextAmount, badRequest);
+  }
   if (nextAmount < (invoice.paidAmount ?? 0)) {
     badRequest("Invoice amount cannot be less than the amount already received.", "amount");
   }

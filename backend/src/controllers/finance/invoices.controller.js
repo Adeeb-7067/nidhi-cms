@@ -2,6 +2,11 @@ import { FinanceInvoices, Projects, clientsTable, getNextSequence } from "../../
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { sweepOverdueInvoices } from "./dashboard.controller.js";
+import {
+  listUnifiedInvoices,
+  computeInvoicesSummary,
+  computeUnifiedInvoiceAging,
+} from "../../services/finance/unified-ledger.service.js";
 
 async function nextInvoiceNumber() {
   const year = new Date().getFullYear();
@@ -45,46 +50,26 @@ async function enrichInvoices(items) {
 async function listInvoices(req, res) {
   await sweepOverdueInvoices();
   const { status, clientId, search } = req.query;
-  const { page, limit, skip } = parsePagination(req.query);
-  const filter = {};
-  if (status) filter.status = status;
-  if (clientId) filter.clientId = Number(clientId);
-  if (search) {
-    const q = String(search).trim();
-    if (q) {
-      const re = { $regex: q, $options: "i" };
-      const matchingClients = await clientsTable.find({ companyName: re }).select({ id: 1 }).lean();
-      filter.$or = [{ number: re }, { clientId: { $in: matchingClients.map((c) => c.id) } }];
-    }
-  }
-  const [items, total] = await Promise.all([
-    FinanceInvoices.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-    FinanceInvoices.countDocuments(filter),
-  ]);
-  const invoices = await enrichInvoices(items);
-  res.json({ invoices, total, page, limit });
+  const { page, limit } = parsePagination(req.query);
+  const result = await listUnifiedInvoices({
+    status: status ? String(status) : undefined,
+    clientId: clientId ? Number(clientId) : undefined,
+    search: search ? String(search) : undefined,
+    page,
+    limit,
+  });
+  res.json(result);
+}
+
+async function getInvoicesSummary(req, res) {
+  await sweepOverdueInvoices();
+  const summary = await computeInvoicesSummary();
+  res.json(summary);
 }
 
 async function getInvoiceAging(req, res) {
   await sweepOverdueInvoices();
-  const invoices = await FinanceInvoices.find({ status: { $in: ["unpaid", "partially_paid", "overdue"] } }).lean();
-  const now = new Date();
-  const buckets = [
-    { bucket: "Current", count: 0, amount: 0 },
-    { bucket: "1–30 days", count: 0, amount: 0 },
-    { bucket: "31–60 days", count: 0, amount: 0 },
-    { bucket: "61–90 days", count: 0, amount: 0 },
-    { bucket: "90+ days", count: 0, amount: 0 },
-  ];
-  for (const inv of invoices) {
-    const { total } = calcInvoiceTotal(inv.items, inv.discount, inv.gstEnabled);
-    const outstanding = Math.max(0, total - inv.paidAmount);
-    if (outstanding <= 0) continue;
-    const daysPastDue = Math.floor((now - new Date(inv.dueDate)) / (24 * 60 * 60 * 1000));
-    const idx = daysPastDue <= 0 ? 0 : daysPastDue <= 30 ? 1 : daysPastDue <= 60 ? 2 : daysPastDue <= 90 ? 3 : 4;
-    buckets[idx].count += 1;
-    buckets[idx].amount += outstanding;
-  }
+  const buckets = await computeUnifiedInvoiceAging();
   res.json({ buckets });
 }
 
@@ -106,6 +91,10 @@ async function createInvoice(req, res) {
   const dueDate = new Date(body.dueDate);
   if (Number.isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
   const items = parseLineItems(body.items);
+  const discount = Math.max(0, Number(body.discount) || 0);
+  const gstEnabled = body.gstEnabled !== false;
+  const { total } = calcInvoiceTotal(items, discount, gstEnabled);
+  if (!(total > 0)) badRequest("Invoice total must be greater than zero.", "items");
 
   const [id, number] = await Promise.all([getNextSequence("finance_invoices"), nextInvoiceNumber()]);
   const invoice = await FinanceInvoices.create({
@@ -117,8 +106,8 @@ async function createInvoice(req, res) {
     dueDate,
     status: "unpaid",
     items,
-    discount: Math.max(0, Number(body.discount) || 0),
-    gstEnabled: body.gstEnabled !== false,
+    discount,
+    gstEnabled,
     paidAmount: 0,
     notes: optionalString(body.notes) ?? null,
     creditNotes: [],
@@ -195,6 +184,7 @@ async function remindInvoice(req, res) {
 
 export {
   listInvoices,
+  getInvoicesSummary,
   getInvoiceAging,
   getInvoiceById,
   createInvoice,

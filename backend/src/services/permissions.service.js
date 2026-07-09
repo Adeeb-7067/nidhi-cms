@@ -64,6 +64,37 @@ const HRM_ADMIN_MODULES = cmsModuleGroups
   .filter((g) => g.label === "HRM" || g.label === "HRM self-service")
   .flatMap((g) => g.modules);
 
+const FINANCE_MODULES = cmsModuleGroups
+  .filter((g) => g.label === "Finance")
+  .flatMap((g) => g.modules);
+
+const FINANCE_FULL_ACCESS = new Set([
+  "finance_expenses",
+  "finance_invoices",
+  "finance_budgets",
+  "finance_notifications",
+]);
+
+const FINANCE_GRANTS = FINANCE_MODULES.flatMap((module) => {
+  const grants = [{ module, action: "view" }];
+  if (module === "finance_reports") {
+    grants.push({ module, action: "export" });
+    return grants;
+  }
+  if (module === "finance_dashboard") return grants;
+  grants.push({ module, action: "create" });
+  if (FINANCE_FULL_ACCESS.has(module)) {
+    grants.push({ module, action: "edit" });
+    if (module !== "finance_notifications") {
+      grants.push({ module, action: "delete" });
+    }
+  }
+  if (module === "finance_expenses") {
+    grants.push({ module, action: "approve" });
+  }
+  return grants;
+});
+
 const DEFAULT_TEMPLATES = [
   { code: "super_admin", name: "Super Admin", cmsRole: "super_admin", isSystem: true, grants: "all" },
   {
@@ -125,6 +156,26 @@ const DEFAULT_TEMPLATES = [
     isSystem: true,
     grants: [
       ...SALES_BDE_GRANTS,
+      { module: "hrm_dashboard", action: "view" },
+      { module: "hrm_my_attendance", action: "view" },
+      { module: "hrm_my_leave", action: "view" },
+      { module: "hrm_my_leave", action: "create" },
+      { module: "hrm_my_wfh", action: "view" },
+      { module: "hrm_my_wfh", action: "create" },
+      { module: "hrm_my_holidays", action: "view" },
+      { module: "hrm_my_payslips", action: "view" },
+      { module: "hrm_holidays", action: "view" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_tickets", action: "view" },
+    ],
+  },
+  {
+    code: "finance",
+    name: "Finance",
+    cmsRole: "finance",
+    isSystem: true,
+    grants: [
+      ...FINANCE_GRANTS,
       { module: "hrm_dashboard", action: "view" },
       { module: "hrm_my_attendance", action: "view" },
       { module: "hrm_my_leave", action: "view" },

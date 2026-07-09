@@ -14,6 +14,8 @@ const incomeSchema = new Schema(
     paymentMode: { type: String, enum: financePaymentModes, required: true },
     status: { type: String, enum: incomeStatuses, default: "received", required: true, index: true },
     invoiceId: { type: Number, ref: "FinanceInvoices", default: null, index: true },
+    /** Links income mirrored from CRM sales receipts (idempotent sync). */
+    salesPaymentId: { type: Number, ref: "SalesPayments", default: null, sparse: true, unique: true },
     recordedBy: { type: Number, ref: "Users", required: true },
   },
   { timestamps: true },

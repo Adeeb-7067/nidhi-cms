@@ -50,16 +50,14 @@ export function FinanceFilterBar({
       )}
       {children}
       {onDateRangeChange && (
-        <Select value={dateRange ?? "jun"} onValueChange={onDateRangeChange}>
+        <Select value={dateRange ?? "current"} onValueChange={onDateRangeChange}>
           <SelectTrigger className="w-full sm:w-[220px] h-9">
             <Calendar className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
             <SelectValue placeholder="Date range" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="jun">01 Jun – 30 Jun, 2026</SelectItem>
-            <SelectItem value="may">01 May – 31 May, 2026</SelectItem>
-            <SelectItem value="q1">Q1 FY 2026-27</SelectItem>
-            <SelectItem value="ytd">Year to date</SelectItem>
+            <SelectItem value="current">Current month</SelectItem>
+            <SelectItem value="previous">Previous month</SelectItem>
           </SelectContent>
         </Select>
       )}

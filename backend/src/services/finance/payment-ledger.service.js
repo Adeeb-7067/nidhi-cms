@@ -9,7 +9,7 @@ import {
 import { badRequest, notFound } from "../../utils/route-errors.js";
 import { calcInvoiceTotal, deriveInvoiceStatus, deriveIncomeStatus } from "../../utils/finance-totals.js";
 
-async function nextFinanceNumber(prefix, counterKey) {
+export async function nextFinanceNumber(prefix, counterKey) {
   const year = new Date().getFullYear();
   const seq = await getNextSequence(`${counterKey}_${year}`);
   return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;

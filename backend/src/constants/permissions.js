@@ -181,6 +181,7 @@ export const defaultTemplateByRole = {
   qa: "employee",
   freelancer: "employee",
   bde: "bde",
+  finance: "finance",
   client: null,
 };
 
@@ -194,4 +195,5 @@ export const builtInAssignableCmsRoles = [
   { value: "qa", label: "QA" },
   { value: "freelancer", label: "Freelancer" },
   { value: "bde", label: "BDE" },
+  { value: "finance", label: "Finance" },
 ];

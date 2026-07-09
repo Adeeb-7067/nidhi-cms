@@ -15,12 +15,13 @@ async function sweepOverdueInvoices() {
 
 async function getDashboard(req, res) {
   await sweepOverdueInvoices();
+  const period = req.query.period === "previous" ? "previous" : "current";
   const [kpis, expenseBreakdown, monthlyTrend] = await Promise.all([
-    computeDashboardKpis(),
+    computeDashboardKpis(period),
     computeExpenseCategoryBreakdown(),
     computeMonthlyRevenueVsExpense(),
   ]);
-  res.json({ kpis, expenseBreakdown, monthlyTrend });
+  res.json({ kpis, expenseBreakdown, monthlyTrend, period });
 }
 
 async function getRevenueTrend(req, res) {

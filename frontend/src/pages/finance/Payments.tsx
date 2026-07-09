@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { format } from "date-fns";
-import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus } from "lucide-react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -20,8 +21,11 @@ import {
   FinanceStatusBadge,
   FinanceEmptyState,
   FinanceErrorState,
+  FinanceSourceBadge,
   RecordOutgoingPaymentModal,
 } from "@/modules/finance/components";
+import { DataPagination } from "@/components/ui/data-pagination";
+import { useTablePagination } from "@/lib/table-pagination";
 import { PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import {
   PageHeroSkeleton,
@@ -30,38 +34,39 @@ import {
   PageTabsSkeleton,
   PageTableSkeleton,
 } from "@/components/loading";
-import { useListPayments, useListInvoices, useRemindInvoice, type ListPaymentsParams } from "@/api/finance";
+import { useListPayments, useListInvoices, useRemindInvoice, usePaymentsSummary, useSyncSalesPayments, type ListPaymentsParams } from "@/api/finance";
 import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
 
 export default function PaymentsPage() {
   const [search, setSearch] = useState("");
   const [directionTab, setDirectionTab] = useState<string>("all");
-  const [page, setPage] = useState(1);
+  const { page, setPage, resetPage, limit, apiLimit } = useTablePagination(20);
   const [outgoingModalOpen, setOutgoingModalOpen] = useState(false);
 
   const params: ListPaymentsParams = useMemo(
     () => ({
       page,
-      limit: 20,
+      limit: apiLimit,
       search: search || undefined,
       direction: directionTab === "all" ? undefined : (directionTab as "incoming" | "outgoing"),
     }),
-    [page, search, directionTab],
+    [page, apiLimit, search, directionTab],
   );
   const { data, isLoading, isError, refetch } = useListPayments(params);
-  const { data: allPayments } = useListPayments({ limit: 500 });
+  const { data: summary } = usePaymentsSummary();
   const { data: overdueInvoicesData } = useListInvoices({ status: "overdue", limit: 20 });
   const { data: upcomingInvoicesData } = useListInvoices({ status: "unpaid", limit: 4 });
   const remindInvoice = useRemindInvoice();
+  const syncSales = useSyncSalesPayments();
 
   const payments = data?.payments ?? [];
   const total = data?.total ?? 0;
   const overdueInvoices = overdueInvoicesData?.invoices ?? [];
   const upcomingInvoices = upcomingInvoicesData?.invoices ?? [];
 
-  const incomingTotal = (allPayments?.payments ?? []).filter((p) => p.direction === "incoming" && p.status === "completed").reduce((s, p) => s + p.amount, 0);
-  const outgoingTotal = (allPayments?.payments ?? []).filter((p) => p.direction === "outgoing" && p.status === "completed").reduce((s, p) => s + p.amount, 0);
+  const incomingTotal = summary?.incoming ?? 0;
+  const outgoingTotal = summary?.outgoing ?? 0;
 
   const handleRemind = async (id: number, number: string) => {
     try {
@@ -99,10 +104,30 @@ export default function PaymentsPage() {
         description="Track incoming and outgoing payments, receipts, and due reminders."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Payments" }]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => setOutgoingModalOpen(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            Record payment
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1.5"
+              disabled={syncSales.isPending}
+              onClick={async () => {
+                try {
+                  const result = await syncSales.mutateAsync({ limit: 500 });
+                  toast.success(`Synced ${result.mirrored} sales payment(s)`);
+                  refetch();
+                } catch (err) {
+                  toastApiError(err, "Sales sync failed");
+                }
+              }}
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncSales.isPending ? "animate-spin" : ""}`} />
+              Sync sales
+            </Button>
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => setOutgoingModalOpen(true)}>
+              <Plus className="h-3.5 w-3.5" />
+              Record payment
+            </Button>
+          </div>
         }
       />
 
@@ -125,14 +150,23 @@ export default function PaymentsPage() {
           <CardContent className="space-y-2">
             {overdueInvoices.length === 0 && <p className="text-xs text-muted-foreground py-4 text-center">No overdue invoices.</p>}
             {overdueInvoices.map((inv) => (
-              <div key={inv.id} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-xs">
+              <div key={`${inv.source ?? "finance"}-${inv.id}`} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-xs">
                 <div>
-                  <p className="font-medium">{inv.number}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium">{inv.number}</p>
+                    <FinanceSourceBadge source={inv.source} />
+                  </div>
                   <p className="text-muted-foreground">{inv.clientName}</p>
                 </div>
-                <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleRemind(inv.id, inv.number)} disabled={remindInvoice.isPending}>
-                  Send reminder
-                </Button>
+                {inv.source === "finance" ? (
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]" onClick={() => handleRemind(inv.id, inv.number)} disabled={remindInvoice.isPending}>
+                    Send reminder
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" className="h-7 text-[10px]" asChild>
+                    <Link href={inv.detailHref ?? `/sales/invoices/${inv.id}`}>View</Link>
+                  </Button>
+                )}
               </div>
             ))}
           </CardContent>
@@ -151,9 +185,9 @@ export default function PaymentsPage() {
         </Card>
       </div>
 
-      <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); setPage(1); }} searchPlaceholder="Search party, reference…" onExport={() => toast.success("Payments export started")} />
+      <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); resetPage(); }} searchPlaceholder="Search party, reference…" onExport={() => toast.success("Payments export started")} />
 
-      <Tabs value={directionTab} onValueChange={(v) => { setDirectionTab(v); setPage(1); }}>
+      <Tabs value={directionTab} onValueChange={(v) => { setDirectionTab(v); resetPage(); }}>
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {(["all", "incoming", "outgoing"] as const).map((d) => (
             <TabsTrigger key={d} value={d} className="text-xs capitalize data-[state=active]:bg-primary/10">
@@ -166,11 +200,12 @@ export default function PaymentsPage() {
       {payments.length === 0 ? (
         <FinanceEmptyState icon={Wallet} title="No payments found" description="Adjust filters to see payment records." />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
+        <div className="rounded-xl border bg-card overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Date</TableHead>
+                <TableHead className="text-xs">Source</TableHead>
                 <TableHead className="text-xs">Direction</TableHead>
                 <TableHead className="text-xs">Party</TableHead>
                 <TableHead className="text-xs">Reference</TableHead>
@@ -181,32 +216,33 @@ export default function PaymentsPage() {
             </TableHeader>
             <TableBody>
               {payments.map((p) => (
-                <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs">{format(new Date(p.date), "MMM d, yyyy")}</TableCell>
+                <TableRow key={`${p.source ?? "finance"}-${p.id}`} className="hover:bg-muted/30">
+                  <TableCell className="text-xs">
+                    <Link href={`/finance/payments/${p.source ?? "finance"}/${p.id}`} className="hover:text-primary">
+                      {format(new Date(p.date), "MMM d, yyyy")}
+                    </Link>
+                  </TableCell>
+                  <TableCell><FinanceSourceBadge source={p.source} /></TableCell>
                   <TableCell className="text-xs capitalize">
                     {p.direction === "incoming" ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-700"><ArrowDownLeft className="h-3 w-3" /> In</span>
+                      <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400"><ArrowDownLeft className="h-3 w-3" /> In</span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-red-700"><ArrowUpRight className="h-3 w-3" /> Out</span>
+                      <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400"><ArrowUpRight className="h-3 w-3" /> Out</span>
                     )}
                   </TableCell>
                   <TableCell className="text-xs font-medium max-w-[160px] truncate">{p.partyName}</TableCell>
                   <TableCell className="text-xs font-mono text-muted-foreground">{p.reference}</TableCell>
                   <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.mode]}</TableCell>
                   <TableCell><FinanceStatusBadge variant="payment" value={p.status} /></TableCell>
-                  <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? "text-emerald-700" : "text-red-700"}`}>
+                  <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {p.direction === "incoming" ? "+" : "−"}{formatCurrency(p.amount)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
-            <span>{total} total</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={payments.length < 20} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
+          <div className="border-t px-4 py-3">
+            <DataPagination page={page} limit={limit} total={total} onPageChange={setPage} />
           </div>
         </div>
       )}

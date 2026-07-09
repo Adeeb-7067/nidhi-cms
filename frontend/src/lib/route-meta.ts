@@ -170,6 +170,11 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Profit & loss, profitability analysis, and revenue analytics.",
     hideHeader: true,
   },
+  "/finance/notifications": {
+    title: "Finance alerts",
+    description: "Invoice reminders, budget thresholds, and payment updates.",
+    hideHeader: true,
+  },
   "/marketing": {
     title: "Marketing dashboard",
     description: "Agency overview — tasks, approvals, campaigns, and team performance.",

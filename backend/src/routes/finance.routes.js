@@ -13,6 +13,7 @@ import * as taxCtrl from "../controllers/finance/tax.controller.js";
 import * as reportsCtrl from "../controllers/finance/reports.controller.js";
 import * as vendorsCtrl from "../controllers/finance/vendors.controller.js";
 import * as notificationsCtrl from "../controllers/finance/notifications.controller.js";
+import * as syncCtrl from "../controllers/finance/sync.controller.js";
 
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
@@ -39,6 +40,7 @@ router.post("/finance/income", ...p("finance_income", "create"), wrap(incomeCtrl
 // ── Invoices ─────────────────────────────────────────────────────────────
 router.get("/finance/invoices", ...p("finance_invoices"), wrap(invoicesCtrl.listInvoices));
 router.get("/finance/invoices/aging", ...p("finance_invoices"), wrap(invoicesCtrl.getInvoiceAging));
+router.get("/finance/invoices/summary", ...p("finance_invoices"), wrap(invoicesCtrl.getInvoicesSummary));
 router.post("/finance/invoices", ...p("finance_invoices", "create"), wrap(invoicesCtrl.createInvoice));
 router.get("/finance/invoices/:id", ...p("finance_invoices"), wrap(invoicesCtrl.getInvoiceById));
 router.patch("/finance/invoices/:id", ...p("finance_invoices", "edit"), wrap(invoicesCtrl.updateInvoice));
@@ -48,6 +50,7 @@ router.post("/finance/invoices/:id/remind", ...p("finance_invoices", "edit"), wr
 
 // ── Payments ─────────────────────────────────────────────────────────────
 router.get("/finance/payments", ...p("finance_payments"), wrap(paymentsCtrl.listPayments));
+router.get("/finance/payments/summary", ...p("finance_payments"), wrap(paymentsCtrl.getPaymentsSummary));
 router.post("/finance/payments", ...p("finance_payments", "create"), wrap(paymentsCtrl.recordPayment));
 router.get("/finance/payments/:id", ...p("finance_payments"), wrap(paymentsCtrl.getPaymentById));
 
@@ -91,5 +94,7 @@ router.post(
   ...p("finance_notifications", "edit"),
   wrap(notificationsCtrl.markFinanceNotificationRead),
 );
+
+router.post("/finance/sync/sales-payments", ...p("finance_dashboard", "edit"), wrap(syncCtrl.syncSalesPayments));
 
 export default router;

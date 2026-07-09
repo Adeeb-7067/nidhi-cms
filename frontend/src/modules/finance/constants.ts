@@ -8,7 +8,7 @@ import type {
   PayrollStatus,
 } from "./types";
 
-export const FINANCE_ACCESS_ROLES = ["super_admin"] as const;
+export const FINANCE_ACCESS_ROLES = ["super_admin", "finance"] as const;
 
 export const COMPANY_FINANCE = {
   name: "Satyakabir Technologies Pvt. Ltd.",

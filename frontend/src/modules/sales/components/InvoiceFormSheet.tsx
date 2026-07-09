@@ -115,7 +115,7 @@ function LineItemCard({
             </div>
           )}
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Item name</Label>
+            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Item name <span className="text-destructive">*</span></Label>
             <Input className="h-8 text-xs" value={item.name} onChange={(e) => onChange({ name: e.target.value })} placeholder="e.g. UI Design" />
           </div>
           <div className="space-y-1">
@@ -140,9 +140,10 @@ function LineItemCard({
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit price</Label>
+          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Unit price <span className="text-destructive">*</span></Label>
           <DecimalInput
-            min={0}
+            min={0.01}
+            fallback={0}
             className={numInputClass}
             value={item.unitPrice}
             onChange={(unitPrice) => onChange({ unitPrice })}
@@ -261,9 +262,22 @@ export function InvoiceFormSheet({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customerId) { toast.error("Customer is required"); return; }
+    if (!isEdit && !customerId) { toast.error("Customer is required"); return; }
     if (!dueDate) { toast.error("Due date is required"); return; }
+    if (items.length === 0) { toast.error("Add at least one line item"); return; }
     if (items.some((it) => !it.name.trim())) { toast.error("All line items need a name"); return; }
+    if (items.some((it) => it.unitPrice <= 0)) {
+      toast.error("Each line item must have a unit price greater than zero");
+      return;
+    }
+    if (items.some((it) => it.quantity <= 0)) {
+      toast.error("Each line item must have a quantity greater than zero");
+      return;
+    }
+    if (finalAmount <= 0) {
+      toast.error("Invoice total must be greater than ₹0");
+      return;
+    }
 
     const lineItemsPayload = items.map((it) => ({
       itemId: it.id,
@@ -276,7 +290,6 @@ export function InvoiceFormSheet({
 
     const body = {
       title: title.trim() || null,
-      customerId: Number(customerId),
       dueDate,
       projectId: projectId ? Number(projectId) : null,
       installmentId: installmentId ? Number(installmentId) : null,
@@ -294,7 +307,7 @@ export function InvoiceFormSheet({
         toast.success("Invoice updated");
         onOpenChange(false);
       } else {
-        const inv = await createInvoice.mutateAsync(body);
+        const inv = await createInvoice.mutateAsync({ ...body, customerId: Number(customerId) });
         toast.success(`Invoice ${inv.number} created`);
         onOpenChange(false);
         setLocation(`/sales/invoices/${inv.id}`);
@@ -327,14 +340,32 @@ export function InvoiceFormSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">Customer <span className="text-destructive">*</span></Label>
-              <Select value={customerId} onValueChange={setCustomerId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select customer" /></SelectTrigger>
-                <SelectContent>
-                  {(customersData?.customers ?? []).map((c) => (
-                    <SelectItem key={c.id} value={String(c.id)} className="text-xs">{c.companyName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {isEdit ? (
+                <>
+                  <Input
+                    className="h-8 text-xs bg-muted/40"
+                    value={
+                      invoice.customerName
+                      ?? customersData?.customers?.find((c) => c.id === invoice.customerId)?.companyName
+                      ?? `Customer #${invoice.customerId}`
+                    }
+                    readOnly
+                    disabled
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    To change the customer, use Reassign customer on the invoice detail page.
+                  </p>
+                </>
+              ) : (
+                <Select value={customerId} onValueChange={setCustomerId}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select customer" /></SelectTrigger>
+                  <SelectContent>
+                    {(customersData?.customers ?? []).map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)} className="text-xs">{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Due date <span className="text-destructive">*</span></Label>
@@ -375,7 +406,7 @@ export function InvoiceFormSheet({
           {/* Line items */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold">Line items</Label>
+              <Label className="text-xs font-semibold">Line items <span className="text-destructive">*</span></Label>
               <Badge variant="secondary" className="text-[10px]">{items.length} item{items.length !== 1 ? "s" : ""}</Badge>
             </div>
             <div className="space-y-2">

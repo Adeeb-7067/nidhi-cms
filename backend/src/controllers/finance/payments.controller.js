@@ -1,43 +1,35 @@
-import { FinancePayments, clientsTable, usersTable } from "../../models/schema/index.js";
+import { clientsTable } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { recordIncomingPayment, recordOutgoingPayment } from "../../services/finance/payment-ledger.service.js";
-
-async function enrichPayments(items) {
-  const recorderIds = [...new Set(items.map((p) => p.recordedBy).filter(Boolean))];
-  const recorders = recorderIds.length
-    ? await usersTable.find({ id: { $in: recorderIds } }).select({ id: 1, name: 1 }).lean()
-    : [];
-  const recorderMap = new Map(recorders.map((u) => [u.id, u.name]));
-  return items.map((p) => ({ ...p, recordedByName: recorderMap.get(p.recordedBy) ?? null }));
-}
+import {
+  listUnifiedPayments,
+  getUnifiedPayment,
+  computePaymentsSummary,
+} from "../../services/finance/unified-ledger.service.js";
 
 async function listPayments(req, res) {
   const { direction, search } = req.query;
-  const { page, limit, skip } = parsePagination(req.query);
-  const filter = {};
-  if (direction) filter.direction = direction;
-  if (search) {
-    const q = String(search).trim();
-    if (q) {
-      const re = { $regex: q, $options: "i" };
-      filter.$or = [{ partyName: re }, { reference: re }, { receiptNumber: re }];
-    }
-  }
-  const [items, total] = await Promise.all([
-    FinancePayments.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
-    FinancePayments.countDocuments(filter),
-  ]);
-  const payments = await enrichPayments(items);
-  res.json({ payments, total, page, limit });
+  const { page, limit } = parsePagination(req.query);
+  const result = await listUnifiedPayments({
+    direction: direction ? String(direction) : undefined,
+    search: search ? String(search) : undefined,
+    page,
+    limit,
+  });
+  res.json(result);
+}
+
+async function getPaymentsSummary(req, res) {
+  const summary = await computePaymentsSummary();
+  res.json(summary);
 }
 
 async function getPaymentById(req, res) {
   const id = parseIdParam(req.params.id, "payment id");
-  const payment = await FinancePayments.findOne({ id }).lean();
-  if (!payment) notFound("Payment");
-  const [enriched] = await enrichPayments([payment]);
-  res.json(enriched);
+  const source = req.query.source === "sales" ? "sales" : "finance";
+  const payment = await getUnifiedPayment(source, id);
+  res.json(payment);
 }
 
 async function recordPayment(req, res) {
@@ -91,4 +83,4 @@ async function recordPayment(req, res) {
   res.status(201).json(result);
 }
 
-export { listPayments, getPaymentById, recordPayment };
+export { listPayments, getPaymentsSummary, getPaymentById, recordPayment };

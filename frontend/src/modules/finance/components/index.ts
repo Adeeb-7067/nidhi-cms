@@ -1,4 +1,5 @@
 export { FinancePageHeader } from "./FinancePageHeader";
+export { FinanceSourceBadge } from "./FinanceSourceBadge";
 export { FinanceFilterBar } from "./FinanceFilterBar";
 export { FinanceEmptyState, FinanceErrorState } from "./FinanceEmptyState";
 export { FinanceStatusBadge } from "./FinanceStatusBadge";

@@ -15,7 +15,7 @@ export type FinancePaymentStatus = "completed" | "pending" | "failed";
 export type BudgetType = "annual" | "project";
 export type BudgetStatus = "on_track" | "warning" | "exceeded";
 export type LedgerType = "client" | "vendor" | "expense" | "bank";
-export type TaxPeriodType = "monthly" | "quarterly" | "annual";
+export type FinanceLedgerSource = "finance" | "sales";
 
 export interface FinanceAttachment {
   name: string;
@@ -81,6 +81,7 @@ export interface FinanceCreditNote {
 
 export interface FinanceInvoice {
   id: number;
+  source?: FinanceLedgerSource;
   number: string;
   clientId: number;
   clientName?: string | null;
@@ -89,7 +90,7 @@ export interface FinanceInvoice {
   issueDate: string;
   dueDate: string;
   status: FinanceInvoiceStatus;
-  items: FinanceInvoiceLineItem[];
+  items?: FinanceInvoiceLineItem[];
   discount: number;
   gstEnabled: boolean;
   paidAmount: number;
@@ -98,11 +99,13 @@ export interface FinanceInvoice {
   subtotal?: number;
   tax?: number;
   total?: number;
+  detailHref?: string;
   createdAt: string;
 }
 
 export interface FinancePayment {
   id: number;
+  source?: FinanceLedgerSource;
   date: string;
   amount: number;
   mode: FinancePaymentMode;
@@ -119,6 +122,8 @@ export interface FinancePayment {
   expenseId: number | null;
   bankAccountId: number | null;
   recordedByName?: string | null;
+  salesPaymentId?: number | null;
+  salesReceiptHref?: string | null;
   createdAt: string;
 }
 
@@ -217,7 +222,7 @@ export interface FinanceNotification {
 // ─── Query Keys ───────────────────────────────────────────────────────────
 
 export const financeKeys = {
-  dashboard: () => ["finance-dashboard"] as const,
+  dashboard: (period?: string) => ["finance-dashboard", period] as const,
   revenueTrend: (months?: number) => ["finance-revenue-trend", months] as const,
   expenses: (params?: object) => ["finance-expenses", params] as const,
   expense: (id: number) => ["finance-expense", id] as const,
@@ -251,10 +256,10 @@ function toQueryString(params?: object) {
 
 // ─── Dashboard ────────────────────────────────────────────────────────────
 
-export function useFinanceDashboard(enabled = true) {
-  return useQuery<{ kpis: FinanceDashboardKpis; expenseBreakdown: { name: string; count: number; value: number }[]; monthlyTrend: { month: string; revenue: number; expense: number }[] }>({
-    queryKey: financeKeys.dashboard(),
-    queryFn: () => customFetch(apiUrl("/api/finance/dashboard")),
+export function useFinanceDashboard(period: "current" | "previous" = "current", enabled = true) {
+  return useQuery<{ kpis: FinanceDashboardKpis; expenseBreakdown: { name: string; count: number; value: number }[]; monthlyTrend: { month: string; revenue: number; expense: number }[]; period: string }>({
+    queryKey: financeKeys.dashboard(period),
+    queryFn: () => customFetch(apiUrl(`/api/finance/dashboard?period=${period}`)),
     enabled,
     staleTime: 30_000,
   });
@@ -395,6 +400,15 @@ export function useListInvoices(params?: ListInvoicesParams, enabled = true) {
   });
 }
 
+export function useInvoicesSummary(enabled = true) {
+  return useQuery<{ counts: Record<string, number>; outstanding: number }>({
+    queryKey: ["finance-invoices-summary"],
+    queryFn: () => customFetch(apiUrl("/api/finance/invoices/summary")),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
 export function useInvoiceAging(enabled = true) {
   return useQuery<{ buckets: { bucket: string; count: number; amount: number }[] }>({
     queryKey: financeKeys.invoiceAging(),
@@ -489,6 +503,40 @@ export function useListPayments(params?: ListPaymentsParams, enabled = true) {
     queryFn: () => customFetch(apiUrl(`/api/finance/payments${toQueryString(params)}`)),
     enabled,
     staleTime: 15_000,
+  });
+}
+
+export function usePaymentsSummary(enabled = true) {
+  return useQuery<{ incoming: number; outgoing: number; net: number }>({
+    queryKey: ["finance-payments-summary"],
+    queryFn: () => customFetch(apiUrl("/api/finance/payments/summary")),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+export function useGetPayment(source: FinanceLedgerSource, id: number, enabled = true) {
+  return useQuery<FinancePayment>({
+    queryKey: ["finance-payment", source, id],
+    queryFn: () => customFetch(apiUrl(`/api/finance/payments/${id}?source=${source}`)),
+    enabled: enabled && id > 0,
+  });
+}
+
+export function useSyncSalesPayments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body?: { limit?: number }) =>
+      customFetch<{ processed: number; mirrored: number; skipped: number; failed: number }>(
+        apiUrl("/api/finance/sync/sales-payments"),
+        { method: "POST", body: JSON.stringify(body ?? {}) },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance-payments"] });
+      qc.invalidateQueries({ queryKey: ["finance-payments-summary"] });
+      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-income"] });
+    },
   });
 }
 

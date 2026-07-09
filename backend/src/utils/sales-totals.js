@@ -26,4 +26,35 @@ function parseTotalAdjustment(value) {
   return Number(value) || 0;
 }
 
-export { calcLineItemsTotal, resolveFinalTotal, parseAdjustedTotal, parseTotalAdjustment };
+function assertPositiveInvoiceAmount(amount, badRequest, field = "amount") {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    badRequest("Invoice total must be greater than zero.", field);
+  }
+}
+
+function assertValidInvoiceLineItems(lineItems, badRequest) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) {
+    badRequest("At least one line item is required.", "lineItems");
+  }
+  lineItems.forEach((item, i) => {
+    const label = `Line item ${i + 1}`;
+    if (!String(item.name ?? "").trim()) {
+      badRequest(`${label}: name is required.`, "lineItems");
+    }
+    if (!Number.isFinite(item.unitPrice) || item.unitPrice <= 0) {
+      badRequest(`${label}: unit price must be greater than zero.`, "lineItems");
+    }
+    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
+      badRequest(`${label}: quantity must be greater than zero.`, "lineItems");
+    }
+  });
+}
+
+export {
+  calcLineItemsTotal,
+  resolveFinalTotal,
+  parseAdjustedTotal,
+  parseTotalAdjustment,
+  assertPositiveInvoiceAmount,
+  assertValidInvoiceLineItems,
+};

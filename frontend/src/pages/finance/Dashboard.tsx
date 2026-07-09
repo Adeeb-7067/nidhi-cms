@@ -28,9 +28,10 @@ import {
   FinanceDonutPanel,
   FinanceStatusBadge,
   FinanceErrorState,
+  FinanceSourceBadge,
 } from "@/modules/finance/components";
 import { FinanceDashboardSkeleton } from "@/components/loading";
-import { useFinanceDashboard, useListInvoices, useListBudgets, useListPayments } from "@/api/finance";
+import { useListPayments, useListInvoices, useListBudgets, useFinanceDashboard } from "@/api/finance";
 import { calcBudgetConsumption } from "@/modules/finance/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -38,8 +39,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function FinanceDashboard() {
-  const [dateRange, setDateRange] = useState("jun");
-  const { data, isLoading, isError, refetch } = useFinanceDashboard();
+  const [dateRange, setDateRange] = useState<"current" | "previous">("current");
+  const { data, isLoading, isError, refetch } = useFinanceDashboard(dateRange);
   const { data: pendingInvoicesData } = useListInvoices({ status: "unpaid", limit: 5 });
   const { data: overdueInvoicesData } = useListInvoices({ status: "overdue", limit: 5 });
   const { data: budgetsData } = useListBudgets();
@@ -118,15 +119,22 @@ export default function FinanceDashboard() {
             <div className="space-y-3">
               {payments.length === 0 && <p className="text-xs text-muted-foreground py-6 text-center">No transactions yet.</p>}
               {payments.map((tx) => (
-                <div key={tx.id} className="flex items-center justify-between gap-2 border-b pb-2 last:border-0">
+                <Link
+                  key={`${tx.source ?? "finance"}-${tx.id}`}
+                  href={`/finance/payments/${tx.source ?? "finance"}/${tx.id}`}
+                  className="flex items-center justify-between gap-2 border-b pb-2 last:border-0 hover:bg-muted/30 rounded-md px-1 -mx-1 transition-colors"
+                >
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold truncate">{tx.partyName}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs font-semibold truncate">{tx.partyName}</p>
+                      <FinanceSourceBadge source={tx.source} />
+                    </div>
                     <p className="text-[10px] text-muted-foreground">{format(new Date(tx.date), "MMM d, yyyy")} · {tx.reference}</p>
                   </div>
-                  <span className={cn("text-xs font-medium tabular-nums shrink-0", tx.direction === "outgoing" ? "text-red-700" : "text-emerald-700")}>
+                  <span className={cn("text-xs font-medium tabular-nums shrink-0", tx.direction === "outgoing" ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400")}>
                     {tx.direction === "outgoing" ? "−" : "+"}{formatCurrency(tx.amount)}
                   </span>
-                </div>
+                </Link>
               ))}
             </div>
           </ChartPanel>

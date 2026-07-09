@@ -106,7 +106,11 @@ export async function computeOverdueByCustomer(scope = {}, topN = 10) {
       { $set: { status: "overdue" } },
     ),
     SalesInvoices.updateMany(
-      { status: "unpaid", dueDate: { $lt: new Date() } },
+      { amount: { $lte: 0 }, status: { $nin: ["cancelled", "paid"] } },
+      { $set: { status: "paid" } },
+    ),
+    SalesInvoices.updateMany(
+      { status: "unpaid", dueDate: { $lt: new Date() }, amount: { $gt: 0 } },
       { $set: { status: "overdue" } },
     ),
   ]);

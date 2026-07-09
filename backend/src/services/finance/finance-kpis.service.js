@@ -1,10 +1,10 @@
 import {
   FinanceIncome,
-  FinanceInvoices,
   FinanceExpenses,
   PayrollRuns,
   PayrollLines,
 } from "../../models/schema/index.js";
+import { computeUnifiedOutstanding } from "./unified-ledger.service.js";
 
 /**
  * Read-only wrapper over HRM payroll — finance never stores its own payroll
@@ -43,11 +43,20 @@ function monthBounds(date = new Date()) {
   return { start, end, year: date.getFullYear(), month: date.getMonth() + 1 };
 }
 
-export async function computeDashboardKpis() {
+function resolvePeriodBounds(period) {
   const now = new Date();
-  const { start, end, year, month } = monthBounds(now);
-  const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const prev = monthBounds(prevMonthDate);
+  if (period === "previous") {
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { current: monthBounds(prev), previous: monthBounds(new Date(prev.getFullYear(), prev.getMonth() - 1, 1)) };
+  }
+  const current = monthBounds(now);
+  const previous = monthBounds(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+  return { current, previous };
+}
+
+export async function computeDashboardKpis(period = "current") {
+  const { current, previous: prev } = resolvePeriodBounds(period);
+  const { start, end, year, month } = current;
 
   const [
     incomeThisMonth,
@@ -56,8 +65,7 @@ export async function computeDashboardKpis() {
     expensePrevMonth,
     payrollThisMonth,
     payrollPrevMonth,
-    pendingInvoiceAgg,
-    overdueAgg,
+    outstandingAgg,
   ] = await Promise.all([
     FinanceIncome.aggregate([
       { $match: { date: { $gte: start, $lt: end } } },
@@ -77,24 +85,17 @@ export async function computeDashboardKpis() {
     ]),
     getPayrollCostForPeriod(year, month),
     getPayrollCostForPeriod(prev.year, prev.month),
-    FinanceInvoices.aggregate([
-      { $match: { status: { $in: ["unpaid", "partially_paid"] } } },
-      { $group: { _id: null, count: { $sum: 1 } } },
-    ]),
-    FinanceInvoices.aggregate([
-      { $match: { status: "overdue" } },
-      { $group: { _id: null, count: { $sum: 1 }, amount: { $sum: { $subtract: ["$amount", "$paidAmount"] } } } },
-    ]),
+    computeUnifiedOutstanding(),
   ]);
 
-  const totalIncome = (incomeThisMonth[0]?.total ?? 0);
-  const prevIncome = (incomePrevMonth[0]?.total ?? 0);
+  const totalIncome = incomeThisMonth[0]?.total ?? 0;
+  const prevIncome = incomePrevMonth[0]?.total ?? 0;
   const totalExpenses = (expenseThisMonth[0]?.total ?? 0) + payrollThisMonth.employerCost;
   const prevExpenses = (expensePrevMonth[0]?.total ?? 0) + payrollPrevMonth.employerCost;
   const netProfit = totalIncome - totalExpenses;
   const prevNetProfit = prevIncome - prevExpenses;
-  const pendingInvoices = pendingInvoiceAgg[0]?.count ?? 0;
-  const overdueAmount = overdueAgg[0]?.amount ?? 0;
+  const pendingInvoices = outstandingAgg.pendingCount ?? 0;
+  const overdueAmount = outstandingAgg.overdueAmount ?? 0;
 
   const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) * 1000) / 10 : 0);
 
@@ -136,6 +137,7 @@ export async function computeMonthlyRevenueVsExpense(monthsBack = 6) {
       { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expense: { $sum: "$amount" } } },
     ]),
   ]);
+
   const byMonth = new Map();
   for (const r of incomeRows) byMonth.set(r._id, { month: r._id, revenue: r.revenue, expense: 0 });
   for (const r of expenseRows) {
@@ -143,5 +145,20 @@ export async function computeMonthlyRevenueVsExpense(monthsBack = 6) {
     entry.expense = r.expense;
     byMonth.set(r._id, entry);
   }
+
+  const payrollMonths = await Promise.all(
+    Array.from({ length: monthsBack }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return getPayrollCostForPeriod(d.getFullYear(), d.getMonth() + 1).then((payroll) => ({ key, cost: payroll.employerCost }));
+    }),
+  );
+  for (const { key, cost } of payrollMonths) {
+    if (!cost) continue;
+    const entry = byMonth.get(key) ?? { month: key, revenue: 0, expense: 0 };
+    entry.expense += cost;
+    byMonth.set(key, entry);
+  }
+
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
 }

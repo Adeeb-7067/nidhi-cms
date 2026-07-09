@@ -24,6 +24,8 @@ const paymentSchema = new Schema(
     employeeId: { type: Number, ref: "Users", default: null, index: true },
     invoiceId: { type: Number, ref: "FinanceInvoices", default: null, index: true },
     incomeId: { type: Number, ref: "FinanceIncome", default: null, index: true },
+    /** Links ledger row mirrored from CRM sales receipts. */
+    salesPaymentId: { type: Number, ref: "SalesPayments", default: null, sparse: true, unique: true },
     expenseId: { type: Number, ref: "FinanceExpenses", default: null, index: true },
     bankAccountId: { type: Number, ref: "FinanceBankAccounts", default: null, index: true },
     recordedBy: { type: Number, ref: "Users", required: true },

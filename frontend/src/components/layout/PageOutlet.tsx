@@ -110,6 +110,8 @@ const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
 const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
+const FinanceNotifications = React.lazy(() => import("@/pages/finance/Notifications"));
+const FinancePaymentDetail = React.lazy(() => import("@/pages/finance/PaymentDetail"));
 
 const MarketingDashboard = React.lazy(() => import("@/pages/marketing/Dashboard"));
 const MarketingTasks = React.lazy(() => import("@/pages/marketing/Tasks"));
@@ -226,7 +228,7 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
       <Route path="/admin/tickets">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <AdminTickets />
         </RoleGate>
       </Route>
@@ -234,7 +236,7 @@ export function PageOutlet() {
         <Redirect to="/discussions" />
       </Route>
       <Route path="/discussions">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <DiscussionsPage />
         </RoleGate>
       </Route>
@@ -631,6 +633,11 @@ export function PageOutlet() {
           <FinanceLedgers />
         </RoleGate>
       </Route>
+      <Route path="/finance/payments/:source/:id">
+        <RoleGate>
+          <FinancePaymentDetail />
+        </RoleGate>
+      </Route>
       <Route path="/finance/payments">
         <RoleGate>
           <FinancePayments />
@@ -646,6 +653,11 @@ export function PageOutlet() {
           <FinanceReportsPnl />
         </RoleGate>
       </Route>
+      <Route path="/finance/notifications">
+        <RoleGate>
+          <FinanceNotifications />
+        </RoleGate>
+      </Route>
       <Route path="/finance">
         <RoleGate>
           <FinanceDashboard />
@@ -653,12 +665,12 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/settings/:section">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
       <Route path="/settings">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <SettingsPage />
         </RoleGate>
       </Route>
@@ -748,12 +760,12 @@ export function PageOutlet() {
       </Route>
 
       <Route path="/profile">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <ProfilePage />
         </RoleGate>
       </Route>
       <Route path="/notifications">
-        <RoleGate allowedRoles={["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
+        <RoleGate allowedRoles={["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"]}>
           <NotificationsPage />
         </RoleGate>
       </Route>

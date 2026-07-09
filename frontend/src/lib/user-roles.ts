@@ -8,6 +8,7 @@ export type UserRole =
   | "client"
   | "freelancer"
   | "bde"
+  | "finance"
   | (string & {});
 
 /** Same delivery permissions as developer — only the display label differs. */
@@ -28,6 +29,7 @@ export const STAFF_EMPLOYEE_ROLES: UserRole[] = [
   "qa",
   "freelancer",
   "bde",
+  "finance",
 ];
 
 /** Everyone listed on Admin → Team (non-client internal accounts). */
@@ -41,7 +43,7 @@ export const ADMIN_STAFF_ROLES: UserRole[] = [
 export const IMPERSONATABLE_STAFF_ROLES: UserRole[] = [...ADMIN_STAFF_ROLES];
 
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */
-export const HRM_EMPLOYEE_ROLES: UserRole[] = ["hr", "manager", "developer", "tester", "qa", "bde"];
+export const HRM_EMPLOYEE_ROLES: UserRole[] = ["hr", "manager", "developer", "tester", "qa", "bde", "finance"];
 
 /** Screenshot / attendance monitoring — mirrors developer for freelancers. */
 export const MONITORABLE_STAFF_ROLES: UserRole[] = [
@@ -65,6 +67,7 @@ export const INTERNAL_STAFF_ROLES: UserRole[] = [
   "super_admin",
   "hr",
   "bde",
+  "finance",
   ...DEV_PORTAL_STAFF_ROLES,
 ];
 
@@ -78,6 +81,7 @@ export const PROFILE_PAGE_ROLES: UserRole[] = [
   "super_admin",
   "hr",
   "bde",
+  "finance",
   ...DEV_PORTAL_STAFF_ROLES,
   "client",
 ];
@@ -155,6 +159,7 @@ export function formatStaffRoleLabel(role: string): string {
   if (role === "tester") return "Tester";
   if (role === "freelancer") return "Freelancer";
   if (role === "bde") return "BDE";
+  if (role === "finance") return "Finance";
   if (role === "developer") return "Developer";
   return role.replace(/_/g, " ");
 }
@@ -167,6 +172,7 @@ export function staffRoleBadgeClass(role: string): string {
   if (role === "tester") return "bg-cyan-500/10 text-cyan-700";
   if (role === "freelancer") return "bg-blue-500/10 text-blue-500";
   if (role === "bde") return "bg-emerald-500/10 text-emerald-700";
+  if (role === "finance") return "bg-violet-500/10 text-violet-700";
   return "bg-blue-500/10 text-blue-500";
 }
 
