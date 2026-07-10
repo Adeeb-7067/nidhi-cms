@@ -562,6 +562,23 @@ export function EmployeeFormTabs({
               </FormItem>
             )}
           />
+          <FormField
+            control={form.control}
+            name="githubId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{L.githubId}</FormLabel>
+                <FormControl>
+                  <Input
+                    className={employeeFormInputClass}
+                    placeholder="octocat or https://github.com/octocat"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
           <FormRow>
             <FormField
               control={form.control}

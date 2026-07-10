@@ -16,6 +16,9 @@ const incomeSchema = new Schema(
     invoiceId: { type: Number, ref: "FinanceInvoices", default: null, index: true },
     /** Links income mirrored from CRM sales receipts (idempotent sync). */
     salesPaymentId: { type: Number, ref: "SalesPayments", default: null, sparse: true, unique: true },
+    salesInvoiceId: { type: Number, ref: "SalesInvoices", default: null, index: true },
+    gstEnabled: { type: Boolean, default: null },
+    gstAmount: { type: Number, default: 0, min: 0 },
     recordedBy: { type: Number, ref: "Users", required: true },
   },
   { timestamps: true },

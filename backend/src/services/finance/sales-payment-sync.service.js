@@ -9,6 +9,7 @@ import {
   getNextSequence,
 } from "../../models/schema/index.js";
 import { resolveSalesProjectId } from "../../utils/sales-project-labels.js";
+import { apportionPaymentGst } from "../../utils/sales-totals.js";
 import { nextFinanceNumber } from "./payment-ledger.service.js";
 import { runInTx } from "../../lib/db-tx.js";
 
@@ -52,6 +53,10 @@ export async function mirrorSalesPaymentToFinanceInTx(session, salesPayment) {
       ? new Date(salesPayment.createdAt)
       : new Date();
   const paymentMode = salesPayment.paymentMethod;
+  const gst = invoice
+    ? apportionPaymentGst(salesPayment.amount, invoice)
+    : { gstEnabled: null, gstAmount: 0, taxableAmount: salesPayment.amount };
+  const salesInvoiceId = invoice?.id ?? salesPayment.invoiceId ?? null;
 
   const [incomeId, paymentId, receiptNumber] = await Promise.all([
     getNextSequence("finance_income"),
@@ -74,6 +79,9 @@ export async function mirrorSalesPaymentToFinanceInTx(session, salesPayment) {
         status: "received",
         invoiceId: null,
         salesPaymentId: salesPayment.id,
+        salesInvoiceId,
+        gstEnabled: gst.gstEnabled,
+        gstAmount: gst.gstAmount,
         recordedBy: salesPayment.recordedBy,
       },
     ],
@@ -97,6 +105,9 @@ export async function mirrorSalesPaymentToFinanceInTx(session, salesPayment) {
         invoiceId: null,
         incomeId,
         salesPaymentId: salesPayment.id,
+        salesInvoiceId,
+        gstEnabled: gst.gstEnabled,
+        gstAmount: gst.gstAmount,
         recordedBy: salesPayment.recordedBy,
       },
     ],

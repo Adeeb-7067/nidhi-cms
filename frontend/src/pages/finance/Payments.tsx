@@ -22,6 +22,7 @@ import {
   FinanceEmptyState,
   FinanceErrorState,
   FinanceSourceBadge,
+  GstClassificationBadge,
   RecordOutgoingPaymentModal,
 } from "@/modules/finance/components";
 import { DataPagination } from "@/components/ui/data-pagination";
@@ -67,6 +68,9 @@ export default function PaymentsPage() {
 
   const incomingTotal = summary?.incoming ?? 0;
   const outgoingTotal = summary?.outgoing ?? 0;
+  const gstIncoming = summary?.gstIncoming ?? 0;
+  const nonGstIncoming = summary?.nonGstIncoming ?? 0;
+  const gstTaxCollected = summary?.gstTaxCollected ?? 0;
 
   const handleRemind = async (id: number, number: string) => {
     try {
@@ -134,8 +138,11 @@ export default function PaymentsPage() {
       <PortalKpiGrid
         items={[
           { title: "Incoming", value: formatCurrency(incomingTotal), icon: ArrowDownLeft, accent: "green", delay: 0 },
-          { title: "Outgoing", value: formatCurrency(outgoingTotal), icon: ArrowUpRight, accent: "red", delay: 1 },
-          { title: "Net cash flow", value: formatCurrency(incomingTotal - outgoingTotal), icon: Wallet, accent: "blue", delay: 2 },
+          { title: "GST incoming", value: formatCurrency(gstIncoming), icon: ArrowDownLeft, accent: "blue", delay: 1 },
+          { title: "Non-GST incoming", value: formatCurrency(nonGstIncoming), icon: ArrowDownLeft, accent: "default", delay: 2 },
+          { title: "GST collected", value: formatCurrency(gstTaxCollected), icon: Wallet, accent: "amber", delay: 3 },
+          { title: "Outgoing", value: formatCurrency(outgoingTotal), icon: ArrowUpRight, accent: "red", delay: 4 },
+          { title: "Net cash flow", value: formatCurrency(incomingTotal - outgoingTotal), icon: Wallet, accent: "blue", delay: 5 },
         ]}
       />
 
@@ -211,6 +218,8 @@ export default function PaymentsPage() {
                 <TableHead className="text-xs">Reference</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">GST</TableHead>
+                <TableHead className="text-xs text-right">GST amt</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
               </TableRow>
             </TableHeader>
@@ -234,6 +243,10 @@ export default function PaymentsPage() {
                   <TableCell className="text-xs font-mono text-muted-foreground">{p.reference}</TableCell>
                   <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.mode]}</TableCell>
                   <TableCell><FinanceStatusBadge variant="payment" value={p.status} /></TableCell>
+                  <TableCell><GstClassificationBadge gstEnabled={p.gstEnabled} /></TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
+                    {(p.gstAmount ?? 0) > 0 ? formatCurrency(p.gstAmount ?? 0) : "—"}
+                  </TableCell>
                   <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {p.direction === "incoming" ? "+" : "−"}{formatCurrency(p.amount)}
                   </TableCell>

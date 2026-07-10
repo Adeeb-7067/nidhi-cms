@@ -72,10 +72,35 @@ function pickAddress(src) {
   };
 }
 
-function pickSocial(src, linkedinUrl) {
+function normalizeGithubId(value) {
+  const raw = optionalString(value);
+  if (!raw) return "";
+  let handle = raw.trim();
+  if (handle.startsWith("@")) handle = handle.slice(1);
+  const urlMatch = handle.match(/github\.com\/([^/?#]+)/i);
+  if (urlMatch) handle = urlMatch[1];
+  handle = handle.replace(/\/$/, "");
+  const valid = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/;
+  return valid.test(handle) ? handle : "";
+}
+
+function resolveGithubId(...candidates) {
+  for (const candidate of candidates) {
+    const raw = optionalString(candidate);
+    if (!raw) continue;
+    const normalized = normalizeGithubId(raw);
+    if (normalized) return normalized;
+    badRequest("Enter a valid GitHub username or profile URL.", "githubId");
+  }
+  return "";
+}
+
+function pickSocial(src, linkedinUrl, githubId) {
   const base = src && typeof src === "object" ? src : {};
+  const github = resolveGithubId(base.github, githubId, base.githubId);
   return {
     linkedin: optionalString(base.linkedin) ?? optionalString(linkedinUrl) ?? "",
+    github,
     twitter: optionalString(base.twitter) ?? "",
     facebook: optionalString(base.facebook) ?? "",
     instagram: optionalString(base.instagram) ?? "",
@@ -151,7 +176,7 @@ export function buildUserProfileCreateFields(body) {
 
   const phone = optionalString(body.phone) ?? optionalString(body.phoneNumber) ?? null;
   const image = optionalString(body.image) ?? optionalString(body.avatarUrl) ?? null;
-  const socialProfiles = pickSocial(body.socialProfiles, body.linkedinUrl);
+  const socialProfiles = pickSocial(body.socialProfiles, body.linkedinUrl, body.githubId);
   const managerId = body.managerId ?? body.reportingManagerId ?? null;
   const wfh = pickWfh(body.wfh, body.wfhMonthlyLimit);
   const leave = pickLeave(body.leave, body.leaveAccrualDaysPerMonth);
@@ -207,6 +232,7 @@ export function buildUserProfileCreateFields(body) {
     phoneNumber: phone,
     avatarUrl: image,
     linkedinUrl: socialProfiles.linkedin || null,
+    githubId: socialProfiles.github || null,
     joiningDate: parseDate(body.joiningDate),
     departmentId: body.departmentId ?? null,
     designation: optionalString(body.designation) ?? null,
@@ -238,6 +264,7 @@ export const SELF_SERVICE_PROFILE_BODY_KEYS = [
   "currentAddress",
   "socialProfiles",
   "linkedinUrl",
+  "githubId",
   "resumeUrl",
   "idProofUrl",
   "addressProofUrl",
@@ -383,10 +410,11 @@ export function buildUserProfilePatchSet(body) {
     set.leaveHistory = Array.isArray(body.leaveHistory) ? body.leaveHistory : [];
   }
 
-  if (body.socialProfiles !== undefined || body.linkedinUrl !== undefined) {
-    const social = pickSocial(body.socialProfiles, body.linkedinUrl);
+  if (body.socialProfiles !== undefined || body.linkedinUrl !== undefined || body.githubId !== undefined) {
+    const social = pickSocial(body.socialProfiles, body.linkedinUrl, body.githubId);
     set.socialProfiles = social;
     set.linkedinUrl = social.linkedin || null;
+    set.githubId = social.github || null;
   }
 
   if (body.leave !== undefined || body.leaveAccrualDaysPerMonth !== undefined) {
@@ -500,8 +528,10 @@ export function formatUserProfileFields(user, { includeSensitive = false } = {})
     weeklyOff: user.weeklyOff ?? ["Sunday"],
     bio: user.bio ?? "",
     bloodGroup: user.bloodGroup ?? "",
+    githubId: user.githubId ?? social.github ?? null,
     socialProfiles: {
       linkedin: social.linkedin ?? user.linkedinUrl ?? "",
+      github: social.github ?? user.githubId ?? "",
       twitter: social.twitter ?? "",
       facebook: social.facebook ?? "",
       instagram: social.instagram ?? "",

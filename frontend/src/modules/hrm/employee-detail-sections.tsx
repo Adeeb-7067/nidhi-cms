@@ -44,6 +44,7 @@ import {
   getEmployeeContractNet,
   getEmployeeDisplayName,
 } from "./employee-profile-types";
+import { githubProfileUrl } from "@/modules/admin/employee-form-shared";
 
 const CHART_TOOLTIP = {
   backgroundColor: "hsl(var(--card))",
@@ -584,6 +585,8 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
   const profileSalaryNet = contract?.configured ? contract.net : undefined;
   const bank = employee.salary?.bankAccount;
   const linkedin = employee.linkedinUrl ?? employee.socialProfiles?.linkedin;
+  const githubId = employee.githubId ?? employee.socialProfiles?.github;
+  const githubUrl = githubProfileUrl(githubId);
   const social = employee.socialProfiles ?? {};
   const permanent = employee.permanentAddress;
   const current = employee.currentAddress;
@@ -619,6 +622,9 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
           <ProfileDetailRow label="PAN" value={employee.panNumber} />
           {linkedin ? (
             <ProfileDetailRow label="LinkedIn" value="Open profile" href={linkedin} />
+          ) : null}
+          {githubUrl ? (
+            <ProfileDetailRow label="GitHub" value={githubId ?? "Open profile"} href={githubUrl} />
           ) : null}
         </CardContent>
       </Card>

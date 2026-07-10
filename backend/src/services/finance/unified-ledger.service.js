@@ -8,6 +8,7 @@ import {
   Projects,
 } from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
+import { calcSalesInvoiceBreakdown, resolvePaymentGstFields } from "../../utils/sales-totals.js";
 import { notFound } from "../../utils/route-errors.js";
 
 const SALES_INVOICE_STATUS_MAP = {
@@ -39,18 +40,22 @@ function matchesSearch(text, q) {
   return text?.toLowerCase().includes(q.toLowerCase());
 }
 
-function normalizeFinancePayment(row, recorderName = null) {
+function normalizeFinancePayment(row, recorderName = null, gst = null) {
   return {
     ...row,
     source: "finance",
     date: row.date ?? row.createdAt,
     salesPaymentId: row.salesPaymentId ?? null,
+    salesInvoiceId: row.salesInvoiceId ?? null,
     salesReceiptHref: row.salesPaymentId ? `/sales/receipts/${row.salesPaymentId}` : null,
     recordedByName: recorderName,
+    gstEnabled: gst?.gstEnabled ?? row.gstEnabled ?? null,
+    gstAmount: gst?.gstAmount ?? row.gstAmount ?? 0,
+    taxableAmount: gst?.taxableAmount ?? row.amount - (row.gstAmount ?? 0),
   };
 }
 
-function normalizeSalesPayment(row, clientName, recorderName = null) {
+function normalizeSalesPayment(row, clientName, recorderName = null, gst = null) {
   return {
     id: row.id,
     source: "sales",
@@ -67,12 +72,16 @@ function normalizeSalesPayment(row, clientName, recorderName = null) {
     vendorId: null,
     employeeId: null,
     invoiceId: row.invoiceId ?? null,
+    salesInvoiceId: row.invoiceId ?? null,
     expenseId: null,
     bankAccountId: null,
     salesPaymentId: row.id,
     salesReceiptHref: `/sales/receipts/${row.id}`,
     recordedBy: row.recordedBy,
     recordedByName: recorderName,
+    gstEnabled: gst?.gstEnabled ?? null,
+    gstAmount: gst?.gstAmount ?? 0,
+    taxableAmount: gst?.taxableAmount ?? row.amount,
     createdAt: row.createdAt,
   };
 }
@@ -90,7 +99,7 @@ function normalizeFinanceInvoice(row, clientName, projectName) {
 }
 
 function normalizeSalesInvoice(row, clientName, projectName) {
-  const total = salesInvoiceTotal(row);
+  const breakdown = calcSalesInvoiceBreakdown(row);
   return {
     id: row.id,
     source: "sales",
@@ -101,14 +110,20 @@ function normalizeSalesInvoice(row, clientName, projectName) {
     dueDate: row.dueDate,
     status: normalizeSalesInvoiceStatus(row.status),
     paidAmount: row.paidAmount ?? 0,
-    items: [],
+    items: (row.lineItems ?? []).map((item) => ({
+      id: item.itemId,
+      description: item.name || item.description || "",
+      quantity: item.quantity,
+      rate: item.unitPrice,
+      taxPercent: item.taxPercent ?? 0,
+    })),
     discount: 0,
-    gstEnabled: false,
-    notes: null,
+    gstEnabled: breakdown.gstEnabled,
+    notes: row.notes ?? null,
     creditNotes: [],
-    subtotal: total,
-    tax: 0,
-    total,
+    subtotal: breakdown.subtotal,
+    tax: breakdown.tax,
+    total: breakdown.total,
     clientName,
     projectName,
     detailHref: `/sales/invoices/${row.id}`,
@@ -135,6 +150,51 @@ async function loadProjectMap(ids) {
   if (!projectIds.length) return new Map();
   const rows = await Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean();
   return new Map(rows.map((p) => [p.id, p.name]));
+}
+
+async function loadSalesInvoiceMap(ids) {
+  const invoiceIds = [...new Set(ids.filter(Boolean))];
+  if (!invoiceIds.length) return new Map();
+  const rows = await SalesInvoices.find({ id: { $in: invoiceIds } }).lean();
+  return new Map(rows.map((inv) => [inv.id, inv]));
+}
+
+async function loadSalesPaymentMap(ids) {
+  const paymentIds = [...new Set(ids.filter(Boolean))];
+  if (!paymentIds.length) return new Map();
+  const rows = await SalesPayments.find({ id: { $in: paymentIds } }).select({ id: 1, invoiceId: 1 }).lean();
+  return new Map(rows.map((p) => [p.id, p]));
+}
+
+function collectPaymentInvoiceIds(financeRows, salesRows, salesPaymentMap) {
+  const ids = new Set();
+  for (const row of salesRows) {
+    if (row.invoiceId) ids.add(row.invoiceId);
+  }
+  for (const row of financeRows) {
+    if (row.salesInvoiceId) ids.add(row.salesInvoiceId);
+    else if (row.salesPaymentId) {
+      const sp = salesPaymentMap.get(row.salesPaymentId);
+      if (sp?.invoiceId) ids.add(sp.invoiceId);
+    }
+  }
+  return [...ids];
+}
+
+function resolvePaymentGst(row, source, invoiceMap, salesPaymentMap) {
+  let invoice = null;
+  if (row.salesInvoiceId) invoice = invoiceMap.get(row.salesInvoiceId) ?? null;
+  else if (source === "sales" && row.invoiceId) invoice = invoiceMap.get(row.invoiceId) ?? null;
+  else if (row.salesPaymentId) {
+    const sp = salesPaymentMap.get(row.salesPaymentId);
+    if (sp?.invoiceId) invoice = invoiceMap.get(sp.invoiceId) ?? null;
+  }
+  return resolvePaymentGstFields({
+    paymentAmount: row.amount,
+    invoice,
+    storedGstEnabled: row.gstEnabled,
+    storedGstAmount: row.gstAmount,
+  });
 }
 
 function paginateMerged(rows, page, limit) {
@@ -198,11 +258,24 @@ export async function listUnifiedPayments({ direction, search, page = 1, limit =
     ...financeRows.map((p) => p.recordedBy),
     ...salesRows.map((p) => p.recordedBy),
   ]);
+  const salesPaymentMap = await loadSalesPaymentMap(financeRows.map((p) => p.salesPaymentId));
+  const invoiceMap = await loadSalesInvoiceMap(collectPaymentInvoiceIds(financeRows, salesRows, salesPaymentMap));
 
   let merged = [
-    ...financeRows.map((p) => normalizeFinancePayment(p, recorderMap.get(p.recordedBy) ?? null)),
+    ...financeRows.map((p) =>
+      normalizeFinancePayment(
+        p,
+        recorderMap.get(p.recordedBy) ?? null,
+        resolvePaymentGst(p, "finance", invoiceMap, salesPaymentMap),
+      ),
+    ),
     ...salesRows.map((p) =>
-      normalizeSalesPayment(p, clientMap.get(p.customerId) ?? null, recorderMap.get(p.recordedBy) ?? null),
+      normalizeSalesPayment(
+        p,
+        clientMap.get(p.customerId) ?? null,
+        recorderMap.get(p.recordedBy) ?? null,
+        resolvePaymentGst(p, "sales", invoiceMap, salesPaymentMap),
+      ),
     ),
   ];
 
@@ -224,27 +297,46 @@ export async function getUnifiedPayment(source, id) {
   if (source === "sales") {
     const payment = await SalesPayments.findOne({ id }).lean();
     if (!payment) notFound("Payment");
-    const client = await clientsTable.findOne({ id: payment.customerId }).select({ companyName: 1 }).lean();
-    const recorderMap = await loadRecorderMap([payment.recordedBy]);
+    const [client, recorderMap, invoiceMap] = await Promise.all([
+      clientsTable.findOne({ id: payment.customerId }).select({ companyName: 1 }).lean(),
+      loadRecorderMap([payment.recordedBy]),
+      payment.invoiceId ? loadSalesInvoiceMap([payment.invoiceId]) : Promise.resolve(new Map()),
+    ]);
+    const gst = resolvePaymentGst(payment, "sales", invoiceMap, new Map());
     return normalizeSalesPayment(
       payment,
       client?.companyName ?? null,
       recorderMap.get(payment.recordedBy) ?? null,
+      gst,
     );
   }
 
   const payment = await FinancePayments.findOne({ id }).lean();
   if (!payment) notFound("Payment");
-  const recorderMap = await loadRecorderMap([payment.recordedBy]);
-  return normalizeFinancePayment(payment, recorderMap.get(payment.recordedBy) ?? null);
+  const [recorderMap, salesPaymentMap] = await Promise.all([
+    loadRecorderMap([payment.recordedBy]),
+    payment.salesPaymentId ? loadSalesPaymentMap([payment.salesPaymentId]) : Promise.resolve(new Map()),
+  ]);
+  const invoiceMap = await loadSalesInvoiceMap(collectPaymentInvoiceIds([payment], [], salesPaymentMap));
+  const gst = resolvePaymentGst(payment, "finance", invoiceMap, salesPaymentMap);
+  return normalizeFinancePayment(payment, recorderMap.get(payment.recordedBy) ?? null, gst);
 }
 
 export async function computePaymentsSummary() {
   const { payments } = await listUnifiedPayments({ page: 1, limit: 100_000 });
   const completed = payments.filter((p) => p.status === "completed");
-  const incoming = completed.filter((p) => p.direction === "incoming").reduce((s, p) => s + p.amount, 0);
-  const outgoing = completed.filter((p) => p.direction === "outgoing").reduce((s, p) => s + p.amount, 0);
-  return { incoming, outgoing, net: incoming - outgoing };
+  const incomingRows = completed.filter((p) => p.direction === "incoming");
+  const outgoingRows = completed.filter((p) => p.direction === "outgoing");
+  const incoming = incomingRows.reduce((s, p) => s + p.amount, 0);
+  const outgoing = outgoingRows.reduce((s, p) => s + p.amount, 0);
+  const gstIncoming = incomingRows
+    .filter((p) => p.gstEnabled !== false)
+    .reduce((s, p) => s + p.amount, 0);
+  const nonGstIncoming = incomingRows
+    .filter((p) => p.gstEnabled === false)
+    .reduce((s, p) => s + p.amount, 0);
+  const gstTaxCollected = incomingRows.reduce((s, p) => s + (p.gstAmount ?? 0), 0);
+  return { incoming, outgoing, net: incoming - outgoing, gstIncoming, nonGstIncoming, gstTaxCollected };
 }
 
 export async function listUnifiedInvoices({ status, clientId, search, page = 1, limit = 20 }) {
@@ -297,7 +389,16 @@ export async function computeInvoicesSummary() {
   const { invoices } = await listUnifiedInvoices({ page: 1, limit: 100_000 });
   const counts = { all: invoices.length, overdue: 0, unpaid: 0, partially_paid: 0, paid: 0 };
   let outstanding = 0;
+  let gstCount = 0;
+  let nonGstCount = 0;
+  let gstTaxTotal = 0;
   for (const inv of invoices) {
+    if (inv.gstEnabled) {
+      gstCount += 1;
+      gstTaxTotal += inv.tax ?? 0;
+    } else {
+      nonGstCount += 1;
+    }
     if (inv.status === "overdue") counts.overdue += 1;
     if (inv.status === "unpaid") counts.unpaid += 1;
     if (inv.status === "partially_paid") counts.partially_paid += 1;
@@ -306,7 +407,7 @@ export async function computeInvoicesSummary() {
       outstanding += Math.max(0, (inv.total ?? 0) - inv.paidAmount);
     }
   }
-  return { counts, outstanding };
+  return { counts, outstanding, gstCount, nonGstCount, gstTaxTotal };
 }
 
 export async function computeUnifiedOutstanding() {

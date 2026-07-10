@@ -22,6 +22,7 @@ import {
   assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
 import { parseSalesDocumentDate } from "../../utils/sales-dates.js";
+import { validateStoredFileUrl } from "../../lib/file-storage.js";
 import { paymentMethods } from "../../models/schema/sales/payments.js";
 import { applyInstallmentPaymentInTx } from "../../services/sales/payment-ledger.service.js";
 import { mirrorSalesPaymentToFinanceInTx } from "../../services/finance/sales-payment-sync.service.js";
@@ -366,6 +367,8 @@ async function receiveInstallmentPayment(req, res) {
     badRequest("amount must be a positive number.", "amount");
   }
   const paymentDate = parseSalesDocumentDate(body.paymentDate, "paymentDate");
+  const proofImageUrl = optionalString(body.proofImageUrl) ?? null;
+  if (proofImageUrl) validateStoredFileUrl(proofImageUrl, "proofImageUrl");
 
   const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
   if (!installment) notFound("Installment");
@@ -394,6 +397,7 @@ async function receiveInstallmentPayment(req, res) {
       paymentMethod: body.paymentMethod,
       transactionId: body.transactionId,
       note: body.note,
+      proofImageUrl,
       paymentDate,
       recordedBy: req.user.id,
       receiptNumber,

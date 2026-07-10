@@ -55,6 +55,7 @@ const salarySchema = new Schema(
 const socialProfilesSchema = new Schema(
   {
     linkedin: { type: String, default: "" },
+    github: { type: String, default: "" },
     twitter: { type: String, default: "" },
     facebook: { type: String, default: "" },
     instagram: { type: String, default: "" },
@@ -100,6 +101,8 @@ const userSchema = new Schema({
   exitDate: { type: Date },
   probationEndDate: { type: Date },
   linkedinUrl: { type: String },
+  /** GitHub username (handle only, e.g. octocat). */
+  githubId: { type: String, trim: true, default: "" },
   dob: { type: Date },
   gender: { type: String, enum: employeeGenders },
   maritalStatus: { type: String, enum: employeeMaritalStatuses },

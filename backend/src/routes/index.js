@@ -33,6 +33,7 @@ import permissionsRoutes from "./permissions.routes.js";
 import hrmRoutes from "./hrm.routes.js";
 import salesRoutes from "./sales.routes.js";
 import financeRoutes from "./finance.routes.js";
+import projectDocumentsRoutes from "./project-documents.routes.js";
 const router = Router();
 
 // Normalize ?token= query param to the Authorization header.
@@ -85,6 +86,7 @@ const featureRouters = [
   hrmRoutes,
   salesRoutes,
   financeRoutes,
+  projectDocumentsRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

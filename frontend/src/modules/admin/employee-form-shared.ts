@@ -50,6 +50,7 @@ export const teamEmployeeSchema = z
     exitDate: z.string().optional(),
     probationEndDate: z.string().optional(),
     linkedinUrl: z.string().optional(),
+    githubId: z.string().optional(),
     dob: z.string().optional(),
     gender: z.string().optional(),
     maritalStatus: z.string().optional(),
@@ -118,6 +119,15 @@ export const teamEmployeeSchema = z
         path: ["panNumber"],
       });
     }
+
+    const githubRaw = data.githubId?.trim() ?? "";
+    if (githubRaw && !normalizeGithubId(githubRaw)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid GitHub username or profile URL",
+        path: ["githubId"],
+      });
+    }
   });
 
 export type TeamEmployeeFormValues = z.infer<typeof teamEmployeeSchema>;
@@ -140,6 +150,22 @@ export function computeTeamEmployeeNetSalary(
     parseSalaryFieldNumber(allowances) -
     parseSalaryFieldNumber(deductions);
   return Math.max(0, Math.round(net * 100) / 100);
+}
+
+export function normalizeGithubId(value: unknown): string {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw) return "";
+  let handle = raw.startsWith("@") ? raw.slice(1) : raw;
+  const urlMatch = handle.match(/github\.com\/([^/?#]+)/i);
+  if (urlMatch) handle = urlMatch[1];
+  handle = handle.replace(/\/$/, "");
+  const valid = /^[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/;
+  return valid.test(handle) ? handle : "";
+}
+
+export function githubProfileUrl(githubId: string | null | undefined): string | null {
+  const handle = normalizeGithubId(githubId);
+  return handle ? `https://github.com/${handle}` : null;
 }
 
 export function formatTeamEmployeeNetSalaryField(
@@ -178,6 +204,7 @@ export function defaultTeamEmployeeFormValues(defaultDepartmentId: number | null
     exitDate: "",
     probationEndDate: "",
     linkedinUrl: "",
+    githubId: "",
     dob: "",
     gender: "",
     maritalStatus: "",
@@ -399,6 +426,7 @@ export function mapUserToTeamEmployeeForm(
     exitDate: dateInput(user.exitDate),
     probationEndDate: dateInput(user.probationEndDate),
     linkedinUrl: (user.linkedinUrl as string) ?? social.linkedin ?? "",
+    githubId: normalizeGithubId(user.githubId ?? social.github),
     dob: dateInput(user.dob),
     gender: normalizeEmployeeGender(user.gender),
     maritalStatus: normalizeEmployeeMaritalStatus(user.maritalStatus),
@@ -493,6 +521,7 @@ export function buildTeamEmployeePayload(
     exitDate: values.exitDate || null,
     probationEndDate: values.probationEndDate || null,
     linkedinUrl: values.linkedinUrl,
+    githubId: normalizeGithubId(values.githubId) || null,
     dob: values.dob || null,
     gender: values.gender?.trim() ?? "",
     maritalStatus: values.maritalStatus?.trim() ?? "",
@@ -508,6 +537,7 @@ export function buildTeamEmployeePayload(
     currentAddress: values.currentAddress,
     socialProfiles: {
       linkedin: values.linkedinUrl ?? "",
+      github: normalizeGithubId(values.githubId) || "",
       twitter: values.socialTwitter ?? "",
       facebook: values.socialFacebook ?? "",
       instagram: values.socialInstagram ?? "",

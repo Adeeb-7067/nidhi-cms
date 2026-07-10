@@ -34,6 +34,7 @@ export const LEGACY_EMPLOYEE_LABELS = {
   adharNumber: "Adhar number",
   panNumber: "PAN",
   linkedin: "Linkedin",
+  githubId: "GitHub ID",
   twitter: "Twitter",
   facebook: "Facebook",
   instagram: "Instagram",

@@ -23,6 +23,7 @@ import {
   FinanceEmptyState,
   FinanceErrorState,
   InvoiceFormModal,
+  GstClassificationBadge,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import { useListInvoices, useInvoiceAging, useInvoicesSummary, type ListInvoicesParams } from "@/api/finance";
@@ -57,6 +58,9 @@ export default function FinanceInvoicesPage() {
   const buckets = agingData?.buckets ?? [];
   const statusCounts = summaryData?.counts ?? { all: 0 };
   const totalOutstanding = summaryData?.outstanding ?? 0;
+  const gstCount = summaryData?.gstCount ?? 0;
+  const nonGstCount = summaryData?.nonGstCount ?? 0;
+  const gstTaxTotal = summaryData?.gstTaxTotal ?? 0;
 
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={3} />;
@@ -92,8 +96,11 @@ export default function FinanceInvoicesPage() {
       <PortalKpiGrid
         items={[
           { title: "Total invoices", value: statusCounts.all ?? 0, icon: Receipt, accent: "blue", delay: 0 },
-          { title: "Overdue", value: statusCounts.overdue ?? 0, icon: Receipt, accent: "red", alert: (statusCounts.overdue ?? 0) > 0, delay: 1 },
-          { title: "Outstanding", value: formatCurrency(totalOutstanding), icon: Receipt, accent: "amber", alert: totalOutstanding > 0, delay: 2 },
+          { title: "GST invoices", value: gstCount, icon: Receipt, accent: "blue", delay: 1 },
+          { title: "Non-GST invoices", value: nonGstCount, icon: Receipt, accent: "default", delay: 2 },
+          { title: "GST on invoices", value: formatCurrency(gstTaxTotal), icon: Receipt, accent: "amber", delay: 3 },
+          { title: "Overdue", value: statusCounts.overdue ?? 0, icon: Receipt, accent: "red", alert: (statusCounts.overdue ?? 0) > 0, delay: 4 },
+          { title: "Outstanding", value: formatCurrency(totalOutstanding), icon: Receipt, accent: "amber", alert: totalOutstanding > 0, delay: 5 },
         ]}
       />
 
@@ -133,6 +140,8 @@ export default function FinanceInvoicesPage() {
                 <TableHead className="text-xs">Client</TableHead>
                 <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">GST</TableHead>
+                <TableHead className="text-xs text-right">Tax</TableHead>
                 <TableHead className="text-xs text-right">Total</TableHead>
                 <TableHead className="text-xs text-right">Paid</TableHead>
                 <TableHead className="text-xs">Due date</TableHead>
@@ -151,6 +160,10 @@ export default function FinanceInvoicesPage() {
                     <TableCell className="text-xs font-medium max-w-[160px] truncate">{inv.clientName}</TableCell>
                     <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{inv.projectName ?? "—"}</TableCell>
                     <TableCell><FinanceStatusBadge variant="invoice" value={inv.status} /></TableCell>
+                    <TableCell><GstClassificationBadge gstEnabled={inv.gstEnabled} /></TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
+                      {inv.gstEnabled && (inv.tax ?? 0) > 0 ? formatCurrency(inv.tax ?? 0) : "—"}
+                    </TableCell>
                     <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(inv.total ?? 0)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(inv.paidAmount)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>

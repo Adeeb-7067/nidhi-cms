@@ -39,7 +39,9 @@ import {
   listInventoryEnvironments,
   createInventoryEnvironment,
   listInventoryDevices,
+  createInventoryDevice,
   listInventorySubscriptions,
+  createInventorySubscription,
   listInventoryBuilds,
   listInventoryActivities,
 } from "@/lib/inventory-api";
@@ -74,6 +76,8 @@ export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["inventory-summary", projectId] });
     qc.invalidateQueries({ queryKey: ["inventory-resources", projectId] });
+    qc.invalidateQueries({ queryKey: ["inventory-devices", projectId] });
+    qc.invalidateQueries({ queryKey: ["inventory-subs", projectId] });
     qc.invalidateQueries({ queryKey: ["inventory-activities", projectId] });
   };
 
@@ -169,10 +173,10 @@ export function ProjectInventoryPanel({ projectId }: { projectId: number }) {
           <EnvironmentsTab projectId={projectId} canManage={canManage} onChange={invalidate} />
         </TabsContent>
         <TabsContent value="devices" className="mt-3">
-          <DevicesTab projectId={projectId} />
+          <DevicesTab projectId={projectId} canManage={canManage} onChange={invalidate} />
         </TabsContent>
         <TabsContent value="subscriptions" className="mt-3">
-          <SubscriptionsTab projectId={projectId} />
+          <SubscriptionsTab projectId={projectId} canManage={canManage} onChange={invalidate} />
         </TabsContent>
         <TabsContent value="activity" className="mt-3">
           <ActivityTab projectId={projectId} />
@@ -472,6 +476,8 @@ function CredentialsTab({
   canManage: boolean;
   onChange: () => void;
 }) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
   const [revealId, setRevealId] = useState<number | null>(null);
   const [password, setPassword] = useState("");
   const [revealed, setRevealed] = useState<any>(null);
@@ -524,22 +530,43 @@ function CredentialsTab({
             <Skeleton className="h-20" />
           ) : (
             creds?.map((c: any) => (
-              <div
-                key={c.id}
-                className="flex justify-between items-center gap-2 border rounded p-2 min-w-0"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-medium truncate">{c.label}</p>
-                  <p className="text-[10px] text-muted-foreground capitalize">{c.type}</p>
+              <div key={c.id} className="border rounded p-2 min-w-0 space-y-1.5">
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium truncate">{c.label}</p>
+                    <p className="text-[10px] text-muted-foreground capitalize">{c.type}</p>
+                    {c.username && (
+                      <p className="text-[10px] text-muted-foreground truncate">User: {c.username}</p>
+                    )}
+                  </div>
+                  {!isSuperAdmin && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 text-xs shrink-0"
+                      onClick={() => setRevealId(c.id)}
+                    >
+                      <Eye className="h-3 w-3 mr-1" /> Reveal
+                    </Button>
+                  )}
                 </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-xs shrink-0"
-                  onClick={() => setRevealId(c.id)}
-                >
-                  <Eye className="h-3 w-3 mr-1" /> Reveal
-                </Button>
+                {isSuperAdmin && c.value != null && (
+                  <div className="flex items-center gap-2 rounded bg-muted/50 px-2 py-1.5">
+                    <code className="text-[10px] font-mono break-all flex-1">{c.value}</code>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-[10px] shrink-0"
+                      onClick={() => {
+                        navigator.clipboard.writeText(c.value);
+                        toast.success("Copied");
+                      }}
+                    >
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -547,7 +574,7 @@ function CredentialsTab({
       </Card>
 
       <Dialog
-        open={revealId !== null}
+        open={!isSuperAdmin && revealId !== null}
         onOpenChange={() => {
           setRevealId(null);
           setRevealed(null);
@@ -599,7 +626,9 @@ function CredentialsTab({
           <DialogHeader>
             <DialogTitle className="text-sm">Add credential</DialogTitle>
             <DialogDescription className="text-xs">
-              Stored encrypted. Reveal requires your password.
+              {isSuperAdmin
+                ? "Stored encrypted in the database."
+                : "Stored encrypted. Reveal requires your password."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -828,66 +857,375 @@ function EnvironmentsTab({
   );
 }
 
-function DevicesTab({ projectId }: { projectId: number }) {
-  const { data } = useQuery({
+function DevicesTab({
+  projectId,
+  canManage,
+  onChange,
+}: {
+  projectId: number;
+  canManage: boolean;
+  onChange: () => void;
+}) {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    deviceName: "",
+    brand: "",
+    model: "",
+    serialNumber: "",
+    status: "available",
+    notes: "",
+  });
+
+  const { data, isLoading } = useQuery({
     queryKey: ["inventory-devices", projectId],
     queryFn: () => listInventoryDevices(projectId),
   });
+
+  const handleAdd = async () => {
+    if (!form.deviceName.trim()) {
+      toast.error("Device name is required");
+      return;
+    }
+    try {
+      await createInventoryDevice(projectId, {
+        deviceName: form.deviceName.trim(),
+        brand: form.brand.trim() || undefined,
+        model: form.model.trim() || undefined,
+        serialNumber: form.serialNumber.trim() || undefined,
+        status: form.status,
+        notes: form.notes.trim() || undefined,
+      });
+      toast.success("Device added");
+      setAddOpen(false);
+      setForm({
+        deviceName: "",
+        brand: "",
+        model: "",
+        serialNumber: "",
+        status: "available",
+        notes: "",
+      });
+      qc.invalidateQueries({ queryKey: ["inventory-devices", projectId] });
+      onChange();
+    } catch (error) {
+      toastApiError(error, "Failed to add device");
+    }
+  };
+
   return (
-    <Card className="min-w-0">
-      <CardHeader className="p-3">
-        <CardTitle className="text-sm">Devices</CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 space-y-2">
-        {data?.length ? (
-          data.map((d: any) => (
-            <div key={d.id} className="border rounded p-2 text-xs min-w-0">
-              <p className="font-medium truncate">{d.deviceName}</p>
-              <p className="text-muted-foreground truncate">
-                {d.brand} {d.model} · {d.status} · {d.assignedName || "Unassigned"}
-              </p>
+    <>
+      <Card className="min-w-0">
+        <CardHeader className="p-3 flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <CardTitle className="text-sm">Devices</CardTitle>
+          {canManage && (
+            <Button size="sm" className="h-7 text-xs w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" /> Add device
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="p-3 space-y-2">
+          {isLoading ? (
+            <Skeleton className="h-16" />
+          ) : data?.length ? (
+            data.map((d: any) => (
+              <div key={d.id} className="border rounded p-2 text-xs min-w-0">
+                <p className="font-medium truncate">{d.deviceName}</p>
+                <p className="text-muted-foreground truncate">
+                  {[d.brand, d.model].filter(Boolean).join(" ") || "—"} · {d.status} ·{" "}
+                  {d.assignedName || "Unassigned"}
+                </p>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-6">No devices tracked</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Add device</DialogTitle>
+            <DialogDescription className="text-xs">
+              Track test phones, tablets, or hardware used on this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Device name</Label>
+              <Input
+                value={form.deviceName}
+                onChange={(e) => setForm({ ...form, deviceName: e.target.value })}
+                className="h-8 text-xs"
+                placeholder="e.g. QA iPhone 14"
+              />
             </div>
-          ))
-        ) : (
-          <p className="text-xs text-muted-foreground text-center py-6">No devices tracked</p>
-        )}
-      </CardContent>
-    </Card>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Brand</Label>
+                <Input
+                  value={form.brand}
+                  onChange={(e) => setForm({ ...form, brand: e.target.value })}
+                  className="h-8 text-xs"
+                  placeholder="Apple"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Model</Label>
+                <Input
+                  value={form.model}
+                  onChange={(e) => setForm({ ...form, model: e.target.value })}
+                  className="h-8 text-xs"
+                  placeholder="iPhone 14"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Serial number (optional)</Label>
+              <Input
+                value={form.serialNumber}
+                onChange={(e) => setForm({ ...form, serialNumber: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Status</Label>
+              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="available">Available</SelectItem>
+                  <SelectItem value="assigned">Assigned</SelectItem>
+                  <SelectItem value="repair">Repair</SelectItem>
+                  <SelectItem value="retired">Retired</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                className="h-8 text-xs"
+                placeholder="SIM, screen lock PIN location…"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleAdd}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-function SubscriptionsTab({ projectId }: { projectId: number }) {
-  const { data } = useQuery({
+function SubscriptionsTab({
+  projectId,
+  canManage,
+  onChange,
+}: {
+  projectId: number;
+  canManage: boolean;
+  onChange: () => void;
+}) {
+  const qc = useQueryClient();
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    type: "domain",
+    name: "",
+    provider: "",
+    expiresAt: "",
+    renewalUrl: "",
+    cost: "",
+    notes: "",
+  });
+
+  const { data, isLoading } = useQuery({
     queryKey: ["inventory-subs", projectId],
     queryFn: () => listInventorySubscriptions(projectId),
   });
+
+  const handleAdd = async () => {
+    if (!form.name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
+    if (!form.expiresAt) {
+      toast.error("Expiry date is required");
+      return;
+    }
+    try {
+      await createInventorySubscription(projectId, {
+        type: form.type,
+        name: form.name.trim(),
+        provider: form.provider.trim() || undefined,
+        expiresAt: form.expiresAt,
+        renewalUrl: form.renewalUrl.trim() || undefined,
+        cost: form.cost.trim() || undefined,
+        notes: form.notes.trim() || undefined,
+      });
+      toast.success("Subscription added");
+      setAddOpen(false);
+      setForm({
+        type: "domain",
+        name: "",
+        provider: "",
+        expiresAt: "",
+        renewalUrl: "",
+        cost: "",
+        notes: "",
+      });
+      qc.invalidateQueries({ queryKey: ["inventory-subs", projectId] });
+      onChange();
+    } catch (error) {
+      toastApiError(error, "Failed to add subscription");
+    }
+  };
+
   return (
-    <Card className="min-w-0">
-      <CardHeader className="p-3">
-        <CardTitle className="text-sm">Subscriptions & licenses</CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 space-y-2">
-        {data?.map((s: any) => (
-          <div
-            key={s.id}
-            className="border rounded p-2 flex justify-between items-center gap-2 min-w-0"
-          >
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium truncate">{s.name}</p>
-              <p className="text-[10px] text-muted-foreground truncate capitalize">
-                {s.type} · expires {new Date(s.expiresAt).toLocaleDateString()}
-              </p>
+    <>
+      <Card className="min-w-0">
+        <CardHeader className="p-3 flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+          <CardTitle className="text-sm">Subscriptions & licenses</CardTitle>
+          {canManage && (
+            <Button size="sm" className="h-7 text-xs w-full sm:w-auto" onClick={() => setAddOpen(true)}>
+              <Plus className="h-3 w-3 mr-1" /> Add subscription
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="p-3 space-y-2">
+          {isLoading ? (
+            <Skeleton className="h-16" />
+          ) : data?.length ? (
+            data.map((s: any) => (
+              <div
+                key={s.id}
+                className="border rounded p-2 flex justify-between items-center gap-2 min-w-0"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium truncate">{s.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate capitalize">
+                    {s.type}
+                    {s.provider ? ` · ${s.provider}` : ""} · expires{" "}
+                    {new Date(s.expiresAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <Badge
+                  variant={s.daysUntilExpiry <= 7 ? "destructive" : "secondary"}
+                  className="text-[9px] shrink-0"
+                >
+                  {s.daysUntilExpiry <= 0 ? "expired" : `${s.daysUntilExpiry}d left`}
+                </Badge>
+              </div>
+            ))
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-6">No subscriptions tracked</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Add subscription</DialogTitle>
+            <DialogDescription className="text-xs">
+              Track domain, hosting, SSL, and licenses. Expiry alerts run at 30 days, 7 days, and on expiry.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Type</Label>
+              <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="domain">Domain</SelectItem>
+                  <SelectItem value="hosting">Hosting</SelectItem>
+                  <SelectItem value="ssl">SSL</SelectItem>
+                  <SelectItem value="api">API</SelectItem>
+                  <SelectItem value="license">License</SelectItem>
+                  <SelectItem value="software">Software</SelectItem>
+                  <SelectItem value="cloud">Cloud</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Badge
-              variant={s.daysUntilExpiry <= 7 ? "destructive" : "secondary"}
-              className="text-[9px] shrink-0"
-            >
-              {s.daysUntilExpiry}d left
-            </Badge>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Name</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-8 text-xs"
+                placeholder="e.g. acme.com or AWS production"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Provider</Label>
+                <Input
+                  value={form.provider}
+                  onChange={(e) => setForm({ ...form, provider: e.target.value })}
+                  className="h-8 text-xs"
+                  placeholder="GoDaddy"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Cost (optional)</Label>
+                <Input
+                  value={form.cost}
+                  onChange={(e) => setForm({ ...form, cost: e.target.value })}
+                  className="h-8 text-xs"
+                  placeholder="₹12,000/yr"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Expires on</Label>
+              <Input
+                type="date"
+                value={form.expiresAt}
+                onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Renewal URL (optional)</Label>
+              <Input
+                value={form.renewalUrl}
+                onChange={(e) => setForm({ ...form, renewalUrl: e.target.value })}
+                className="h-8 text-xs"
+                placeholder="https://..."
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Notes (optional)</Label>
+              <Input
+                value={form.notes}
+                onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                className="h-8 text-xs"
+              />
+            </div>
           </div>
-        ))}
-      </CardContent>
-    </Card>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" size="sm" onClick={() => setAddOpen(false)}>
+              Cancel
+            </Button>
+            <Button size="sm" onClick={handleAdd}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

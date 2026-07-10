@@ -9,6 +9,7 @@ import {
   FinancePageHeader,
   FinanceStatusBadge,
   FinanceSourceBadge,
+  GstClassificationBadge,
   FinanceErrorState,
 } from "@/modules/finance/components";
 import { useGetPayment, type FinanceLedgerSource } from "@/api/finance";
@@ -108,6 +109,22 @@ export default function FinancePaymentDetail() {
               <p className="text-xs text-muted-foreground">Recorded by</p>
               <p className="font-medium">{payment.recordedByName}</p>
             </div>
+          ) : null}
+          <div>
+            <p className="text-xs text-muted-foreground">GST classification</p>
+            <GstClassificationBadge gstEnabled={payment.gstEnabled} />
+          </div>
+          {(payment.gstAmount ?? 0) > 0 ? (
+            <>
+              <div>
+                <p className="text-xs text-muted-foreground">Taxable amount</p>
+                <p className="font-medium tabular-nums">{formatCurrency(payment.taxableAmount ?? payment.amount - (payment.gstAmount ?? 0))}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">GST amount</p>
+                <p className="font-medium tabular-nums">{formatCurrency(payment.gstAmount ?? 0)}</p>
+              </div>
+            </>
           ) : null}
         </div>
       </div>

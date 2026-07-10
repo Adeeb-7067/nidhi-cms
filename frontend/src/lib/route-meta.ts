@@ -20,6 +20,11 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     title: "Projects",
     description: "Browse and manage all client projects.",
   },
+  "/admin/project-documents": {
+    title: "Project documents",
+    description: "Handover vault for credentials, server access, and project files.",
+    hideHeader: true,
+  },
   "/admin/employees": {
     title: "Team",
     description: "Manage employees, roles, and access.",

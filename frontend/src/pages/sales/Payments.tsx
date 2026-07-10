@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table";
 import { useListPayments, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { formatProjectLabel, formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
+import { formatProjectLabel, formatSalesDateTime, formatSalesPaymentDate, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
@@ -92,17 +92,19 @@ export default function Payments() {
         <SalesEmptyState icon={IndianRupee} title="No payments found" description="Record a payment against an invoice." actionLabel="Record payment" onAction={() => setRecordOpen(true)} />
       ) : (
         <>
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
+        <div className="rounded-xl border bg-card overflow-x-auto">
+          <Table className="min-w-[1200px]">
             <TableHeader>
               <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Receipt #</TableHead>
-                <TableHead className="text-xs">Invoice</TableHead>
+                <TableHead className="text-xs whitespace-nowrap min-w-[132px]">Receipt #</TableHead>
+                <TableHead className="text-xs whitespace-nowrap min-w-[120px]">Invoice</TableHead>
                 <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Installment</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
+                <TableHead className="text-xs">Transaction ID</TableHead>
                 <TableHead className="text-xs">Invoice status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
+                <TableHead className="text-xs">Payment date</TableHead>
                 <TableHead className="text-xs">Created at</TableHead>
                 <TableHead className="text-xs">Created by</TableHead>
                 <TableHead className="text-xs text-right">Actions</TableHead>
@@ -113,11 +115,18 @@ export default function Payments() {
                 const docInvoiceId = paymentDocumentInvoiceId(p);
                 return (
                 <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono text-primary">{p.receiptNumber}</TableCell>
-                  <TableCell className="text-xs font-mono">
+                  <TableCell className="text-xs font-mono whitespace-nowrap">
+                    <Link
+                      href={`/sales/receipts/${p.id}`}
+                      className="text-primary hover:underline underline-offset-2"
+                    >
+                      {p.receiptNumber}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-xs font-mono whitespace-nowrap">
                     <Link
                       href={`/sales/invoices/${docInvoiceId}`}
-                      className="hover:text-primary hover:underline underline-offset-2"
+                      className="text-primary hover:underline underline-offset-2"
                     >
                       {p.invoiceNumber ?? `INV-${docInvoiceId}`}
                     </Link>
@@ -129,10 +138,16 @@ export default function Payments() {
                     {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
                   </TableCell>
                   <TableCell className="text-xs">{METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</TableCell>
+                  <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate" title={p.transactionId ?? undefined}>
+                    {p.transactionId ?? "—"}
+                  </TableCell>
                   <TableCell>
                     <SalesStatusBadge variant="invoice" value={p.invoiceStatus as "paid" | "partial" | "unpaid" | "overdue"} />
                   </TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {formatSalesPaymentDate(p.paymentDate)}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</TableCell>
                   <TableCell>
                     {p.recordedByName ? (

@@ -39,7 +39,7 @@ import type {
   SalesPayment,
 } from "@/api/sales";
 import { salesKeys, useAssignCustomerAdmin, useDeleteProposal } from "@/api/sales";
-import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
+import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime, formatSalesPaymentDate, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import { customFieldsForDocument } from "@/modules/sales/company-branding";
 import {
@@ -1278,7 +1278,8 @@ export function CustomerPaymentsSection({
 
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
   const sortedPayments = [...payments].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    (a, b) =>
+      new Date(b.paymentDate ?? b.createdAt).getTime() - new Date(a.paymentDate ?? a.createdAt).getTime(),
   );
   const paymentsTruncated = paymentsTotal != null && paymentsTotal > payments.length;
 
@@ -1322,16 +1323,18 @@ export function CustomerPaymentsSection({
         </p>
       ) : null}
 
-      <div className="rounded-xl border overflow-hidden">
-        <Table>
+      <div className="rounded-xl border overflow-x-auto">
+        <Table className="min-w-[1100px]">
           <TableHeader>
             <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="text-xs">Receipt #</TableHead>
-              <TableHead className="text-xs">Invoice</TableHead>
+              <TableHead className="text-xs whitespace-nowrap min-w-[132px]">Receipt #</TableHead>
+              <TableHead className="text-xs whitespace-nowrap min-w-[120px]">Invoice</TableHead>
               <TableHead className="text-xs">Installment</TableHead>
               <TableHead className="text-xs">Mode</TableHead>
+              <TableHead className="text-xs">Transaction ID</TableHead>
               <TableHead className="text-xs text-right">Amount</TableHead>
               <TableHead className="text-xs">Invoice status</TableHead>
+              <TableHead className="text-xs">Payment date</TableHead>
               <TableHead className="text-xs">Created at</TableHead>
               <TableHead className="text-xs">Created by</TableHead>
               <TableHead className="text-xs text-right">Actions</TableHead>
@@ -1342,8 +1345,12 @@ export function CustomerPaymentsSection({
               const docInvoiceId = paymentDocumentInvoiceId(p);
               return (
               <TableRow key={p.id} className="hover:bg-muted/20">
-                <TableCell className="text-xs font-mono font-medium">{p.receiptNumber}</TableCell>
-                <TableCell className="text-xs font-mono">
+                <TableCell className="text-xs font-mono font-medium whitespace-nowrap">
+                  <Link href={`/sales/receipts/${p.id}`} className="text-primary hover:underline">
+                    {p.receiptNumber}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-xs font-mono whitespace-nowrap">
                   <Link href={`/sales/invoices/${docInvoiceId}`} className="text-primary hover:underline">
                     {p.invoiceNumber ?? `INV-${docInvoiceId}`}
                   </Link>
@@ -1352,11 +1359,17 @@ export function CustomerPaymentsSection({
                   {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
                 </TableCell>
                 <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
+                <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate" title={p.transactionId ?? undefined}>
+                  {p.transactionId ?? "—"}
+                </TableCell>
                 <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">
                   {formatCurrency(p.amount)}
                 </TableCell>
                 <TableCell>
                   <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                  {formatSalesPaymentDate(p.paymentDate)}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                   {formatSalesDateTime(p.createdAt)}
@@ -1917,7 +1930,8 @@ export function CustomerInstallmentsSection({
                               </Link>
                             </div>
                             <span className="tabular-nums">{formatCurrency(p.amount)}</span>
-                            <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>
+                            <span className="text-muted-foreground">{formatSalesPaymentDate(p.paymentDate)}</span>
+                            <span className="text-muted-foreground/70 text-[10px]">· {formatSalesDateTime(p.createdAt)}</span>
                           </div>
                           );
                         })}

@@ -18,6 +18,7 @@ describe("buildUserProfileCreateFields", () => {
       email: "jane@example.com",
       phoneNumber: "9999999999",
       linkedinUrl: "https://linkedin.com/in/jane",
+      githubId: "https://github.com/octocat",
       reportingManagerId: 5,
       wfhMonthlyLimit: 2,
       leaveAccrualDaysPerMonth: 1.5,
@@ -35,6 +36,8 @@ describe("buildUserProfileCreateFields", () => {
     assert.equal(fields.leaveAccrualDaysPerMonth, 1.5);
     assert.equal(fields.linkedinUrl, "https://linkedin.com/in/jane");
     assert.equal(fields.socialProfiles.linkedin, "https://linkedin.com/in/jane");
+    assert.equal(fields.githubId, "octocat");
+    assert.equal(fields.socialProfiles.github, "octocat");
     assert.ok(fields.joiningDate instanceof Date);
     assert.equal(fields.departmentId, 3);
   });
@@ -61,6 +64,13 @@ describe("buildUserProfilePatchSet", () => {
     assert.throws(
       () => buildUserProfilePatchSet({ gender: "Invalid" }),
       (err) => err.message.includes("Invalid gender"),
+    );
+  });
+
+  test("rejects invalid github id", () => {
+    assert.throws(
+      () => buildUserProfilePatchSet({ githubId: "not a valid handle!!!" }),
+      (err) => err.message.includes("GitHub"),
     );
   });
 

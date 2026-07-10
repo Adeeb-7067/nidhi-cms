@@ -10,6 +10,7 @@ export type EmployeeAddress = {
 
 export type EmployeeSocialProfiles = {
   linkedin?: string;
+  github?: string;
   twitter?: string;
   facebook?: string;
   instagram?: string;
@@ -197,6 +198,7 @@ export type HrmProfilePatchPayload = {
   lastName?: string | null;
   name?: string | null;
   linkedinUrl?: string | null;
+  githubId?: string | null;
   permanentAddress?: EmployeeAddress | null;
   currentAddress?: EmployeeAddress | null;
   salary?: EmployeeSalaryProfile | null;

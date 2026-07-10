@@ -437,6 +437,7 @@ export type HrmEmployee = EmployeeProfileExtension & {
   phoneNumber?: string | null;
   joiningDate?: string | null;
   linkedinUrl?: string | null;
+  githubId?: string | null;
   status: string;
   wfhMonthlyLimit?: number | null;
   leaveAccrualDaysPerMonth?: number | null;

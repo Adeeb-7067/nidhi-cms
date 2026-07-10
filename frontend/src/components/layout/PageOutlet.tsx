@@ -17,6 +17,7 @@ const AdminAttendance = React.lazy(() => import("@/pages/admin/Attendance"));
 const WorkAnalytics = React.lazy(() => import("@/pages/admin/WorkAnalytics"));
 const SettingsPage = React.lazy(() => import("@/pages/settings/SettingsPage"));
 const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
+const AdminProjectDocuments = React.lazy(() => import("@/pages/admin/ProjectDocuments"));
 const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
 const AdminEmployees = React.lazy(() => import("@/pages/admin/Employees"));
 const AdminRolesPermissions = React.lazy(() => import("@/pages/admin/RolesPermissions"));
@@ -108,6 +109,7 @@ const FinancePayroll = React.lazy(() => import("@/pages/finance/Payroll"));
 const FinanceBudgets = React.lazy(() => import("@/pages/finance/Budgets"));
 const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
+const FinanceVendors = React.lazy(() => import("@/pages/finance/Vendors"));
 const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
 const FinanceNotifications = React.lazy(() => import("@/pages/finance/Notifications"));
@@ -169,6 +171,11 @@ export function PageOutlet() {
       <Route path="/admin">
         <RoleGate>
           <AdminDashboard />
+        </RoleGate>
+      </Route>
+      <Route path="/admin/project-documents">
+        <RoleGate>
+          <AdminProjectDocuments />
         </RoleGate>
       </Route>
       <Route path="/admin/projects/:id">
@@ -641,6 +648,11 @@ export function PageOutlet() {
       <Route path="/finance/payments">
         <RoleGate>
           <FinancePayments />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/vendors">
+        <RoleGate>
+          <FinanceVendors />
         </RoleGate>
       </Route>
       <Route path="/finance/tax">

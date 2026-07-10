@@ -197,7 +197,8 @@ export interface PartialPayment {
   amount: number;
   mode: string;
   transactionId: string;
-  paymentDate: string;
+  paymentDate?: string | null;
+  createdAt?: string | null;
   status: PartialPaymentStatus;
   notes?: string;
   receiptId?: number;
@@ -226,6 +227,7 @@ export interface PaymentReceipt {
   logoUrl?: string | null;
   sealUrl?: string | null;
   note?: string | null;
+  proofImageUrl?: string | null;
 }
 
 export interface InvoiceLineItem {
@@ -260,6 +262,7 @@ export interface SalesInvoice {
   lineItems?: InvoiceLineItem[];
   notes?: string | null;
   terms?: string | null;
+  gstEnabled?: boolean;
 }
 
 export interface SalesActivity {

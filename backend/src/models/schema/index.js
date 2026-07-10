@@ -16,6 +16,7 @@ export * from "./tickets.js";
 export * from "./alerts.js";
 export * from "./alert-deliveries.js";
 export * from "./inventory.js";
+export * from "./project-documents.js";
 export * from "./EmployeeScreenshot.js";
 export * from "./MonitoringConsent.js";
 export * from "./WorkSession.js";

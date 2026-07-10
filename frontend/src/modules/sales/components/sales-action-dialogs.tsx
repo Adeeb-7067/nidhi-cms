@@ -33,6 +33,8 @@ import {
   totalAdjustPayload,
 } from "./total-amount-adjust";
 import { resolveProposalTotal } from "@/modules/sales/utils";
+import { FileUploader } from "@/components/ui/file-uploader";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import {
   useCreateCustomer,
   useUpdateCustomer,
@@ -1280,6 +1282,7 @@ export function CreateInvoiceDialog({
   const [projectId, setProjectId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
   const [proposalId, setProposalId] = useState("");
+  const [gstEnabled, setGstEnabled] = useState(true);
 
   const calculatedAmount = Number(baseAmount) || 0;
   const finalAmount = totalAdjustPayload(
@@ -1301,6 +1304,7 @@ export function CreateInvoiceDialog({
     setProjectId("");
     setInstallmentId("");
     setProposalId("");
+    setGstEnabled(true);
   }, [open, defaultCustomerId]);
 
   useEffect(() => {
@@ -1353,6 +1357,7 @@ export function CreateInvoiceDialog({
         adjustedTotal: payload.adjustedTotal,
         issueDate: resolvedIssueDate,
         dueDate,
+        gstEnabled,
         projectId: projectId ? Number(projectId) : undefined,
         installmentId: installmentId ? Number(installmentId) : undefined,
         proposalId: proposalId ? Number(proposalId) : undefined,
@@ -1390,6 +1395,15 @@ export function CreateInvoiceDialog({
             <SalesField label="Due date">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </SalesField>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+            <div>
+              <p className="text-xs font-medium">GST invoice</p>
+              <p className="text-[10px] text-muted-foreground">
+                {gstEnabled ? "Taxable invoice with GST" : "Non-GST bill (no tax)"}
+              </p>
+            </div>
+            <Switch checked={gstEnabled} onCheckedChange={setGstEnabled} />
           </div>
           <SalesField label="Base amount (₹)">
             <Input type="number" min={0} value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} placeholder="0" />
@@ -1657,6 +1671,46 @@ const RECEIVE_PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: "card", label: "Card" },
 ];
 
+export function PaymentProofUploadField({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (url: string) => void;
+}) {
+  return (
+    <SalesField label="Proof of payment" hint="Optional — screenshot, photo, or PDF of the transaction.">
+      <FileUploader
+        category="finance"
+        accept="image/*,.pdf"
+        variant="choose-file"
+        label="Upload file"
+        value={value || null}
+        onUploadComplete={onChange}
+        maxSizeMB={10}
+      />
+      {value ? (
+        /\.pdf($|\?)/i.test(value) ? (
+          <a
+            href={resolveFileUrl(value)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-block text-xs text-primary hover:underline"
+          >
+            View uploaded PDF
+          </a>
+        ) : (
+          <img
+            src={resolveFileUrl(value)}
+            alt="Payment proof preview"
+            className="mt-2 max-h-36 rounded-md border border-border object-contain"
+          />
+        )
+      ) : null}
+    </SalesField>
+  );
+}
+
 export function ReceiveInstallmentPaymentDialog({
   open,
   onOpenChange,
@@ -1675,6 +1729,7 @@ export function ReceiveInstallmentPaymentDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
   const [note, setNote] = useState("");
+  const [proofImageUrl, setProofImageUrl] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -1682,6 +1737,7 @@ export function ReceiveInstallmentPaymentDialog({
     setPaymentDate(format(new Date(), "yyyy-MM-dd"));
     setTransactionId("");
     setNote("");
+    setProofImageUrl("");
     setPaymentMethod("bank_transfer");
   }, [open, remaining]);
 
@@ -1704,6 +1760,7 @@ export function ReceiveInstallmentPaymentDialog({
         paymentDate,
         transactionId: transactionId.trim() || undefined,
         note: note.trim() || undefined,
+        proofImageUrl: proofImageUrl.trim() || undefined,
       });
       toast.success("Payment recorded", {
         description: `Receipt ${result.payment.receiptNumber} and invoice ${result.invoice.number} (${formatCurrency(amt)}) created`,
@@ -1764,6 +1821,7 @@ export function ReceiveInstallmentPaymentDialog({
           <SalesField label="Note (optional)">
             <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Internal note" />
           </SalesField>
+          <PaymentProofUploadField value={proofImageUrl} onChange={setProofImageUrl} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={receive.isPending || remaining <= 0}>
@@ -1813,14 +1871,17 @@ export function RecordPaymentDialog({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
   const [note, setNote] = useState("");
+  const [proofImageUrl, setProofImageUrl] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setInvoiceId(defaultInvoiceId ? String(defaultInvoiceId) : "");
     setAmount("");
     setPaymentDate(format(new Date(), "yyyy-MM-dd"));
+    setPaymentMethod("bank_transfer");
     setTransactionId("");
     setNote("");
+    setProofImageUrl("");
   }, [open, defaultInvoiceId]);
 
   const selectedInvoice = unpaid.find((i) => String(i.id) === invoiceId);
@@ -1852,6 +1913,7 @@ export function RecordPaymentDialog({
         paymentDate,
         transactionId: transactionId.trim() || undefined,
         note: note.trim() || undefined,
+        proofImageUrl: proofImageUrl.trim() || undefined,
       });
       toast.success("Payment recorded");
       onOpenChange(false);
@@ -1926,6 +1988,7 @@ export function RecordPaymentDialog({
               placeholder="e.g. Part payment for milestone 1"
             />
           </SalesField>
+          <PaymentProofUploadField value={proofImageUrl} onChange={setProofImageUrl} />
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={recordPayment.isPending || invoicesLoading || !invoiceId}>

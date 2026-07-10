@@ -80,7 +80,9 @@ router.get("/finance/reports/profitability", ...p("finance_reports"), wrap(repor
 
 // ── Vendors ──────────────────────────────────────────────────────────────
 router.get("/finance/vendors", ...p("finance_vendors"), wrap(vendorsCtrl.listVendors));
+router.get("/finance/vendors/:id", ...p("finance_vendors"), wrap(vendorsCtrl.getVendorById));
 router.post("/finance/vendors", ...p("finance_vendors", "create"), wrap(vendorsCtrl.createVendor));
+router.patch("/finance/vendors/:id", ...p("finance_vendors", "edit"), wrap(vendorsCtrl.updateVendor));
 
 // ── Notifications ────────────────────────────────────────────────────────
 router.get("/finance/notifications", ...p("finance_notifications"), wrap(notificationsCtrl.getFinanceNotifications));

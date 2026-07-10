@@ -11,6 +11,7 @@ export const cmsModuleGroups = [
       "admin_analytics",
       "admin_companies",
       "admin_projects",
+      "admin_project_documents",
       "admin_team",
       "admin_requests",
       "admin_tickets",

@@ -1,5 +1,6 @@
-import { FinanceInvoices, FinanceExpenses, PayrollRuns, PayrollLines, FinanceTaxDeposits } from "../../models/schema/index.js";
+import { FinanceInvoices, FinanceExpenses, FinanceIncome, PayrollRuns, PayrollLines, FinanceTaxDeposits, SalesInvoices } from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
+import { calcSalesInvoiceBreakdown } from "../../utils/sales-totals.js";
 
 function monthRange(year, month) {
   return { start: new Date(year, month - 1, 1), end: new Date(year, month, 1) };
@@ -16,11 +17,34 @@ function fiscalYearRange(fyStartYear) {
 }
 
 async function gstCollectedInRange(start, end) {
-  const invoices = await FinanceInvoices.find({
-    issueDate: { $gte: start, $lt: end },
-    status: { $ne: "cancelled" },
-  }).lean();
-  return invoices.reduce((sum, inv) => sum + calcInvoiceTotal(inv.items, inv.discount, inv.gstEnabled).tax, 0);
+  const [financeInvoices, salesInvoices, manualIncome] = await Promise.all([
+    FinanceInvoices.find({
+      issueDate: { $gte: start, $lt: end },
+      status: { $ne: "cancelled" },
+    }).lean(),
+    SalesInvoices.find({
+      issueDate: { $gte: start, $lt: end },
+      status: { $ne: "cancelled" },
+    }).lean(),
+    FinanceIncome.find({
+      date: { $gte: start, $lt: end },
+      status: "received",
+      salesPaymentId: null,
+      gstAmount: { $gt: 0 },
+    }).lean(),
+  ]);
+
+  const fromFinanceInvoices = financeInvoices.reduce(
+    (sum, inv) => sum + calcInvoiceTotal(inv.items, inv.discount, inv.gstEnabled).tax,
+    0,
+  );
+  const fromSalesInvoices = salesInvoices.reduce(
+    (sum, inv) => sum + calcSalesInvoiceBreakdown(inv).tax,
+    0,
+  );
+  const fromManualIncome = manualIncome.reduce((sum, row) => sum + (row.gstAmount ?? 0), 0);
+
+  return fromFinanceInvoices + fromSalesInvoices + fromManualIncome;
 }
 
 async function gstPaidInRange(start, end) {

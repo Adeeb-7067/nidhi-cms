@@ -59,6 +59,8 @@ import { Loader2, Plus, MapPin, ChevronDown, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
+import { ProjectDocumentPanel } from "@/components/project/ProjectDocumentPanel";
+import { PermissionGate } from "@/modules/permissions/PermissionGate";
 import { ProjectHubNav, type ProjectHubTab } from "@/components/project/ProjectHubNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { KpiSimpleCard } from "@/components/dashboard/dashboard-kit";
@@ -572,6 +574,12 @@ export default function AdminProjectDetail() {
 
         <TabsContent value="inventory" className="mt-4">
           <ProjectInventoryPanel projectId={projectId} />
+        </TabsContent>
+
+        <TabsContent value="documents" className="mt-4">
+          <PermissionGate module="admin_project_documents" action="view">
+            <ProjectDocumentPanel projectId={projectId} projectName={project?.name} />
+          </PermissionGate>
         </TabsContent>
 
         <TabsContent value="apk" className="mt-4">

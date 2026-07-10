@@ -146,6 +146,7 @@ async function createInvoice(req, res) {
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
   const dueDate = parseSalesDocumentDate(body.dueDate, "dueDate", { defaultNow: false });
   const issueDate = parseSalesDocumentDate(body.issueDate, "issueDate");
+  const gstEnabled = body.gstEnabled !== undefined ? Boolean(body.gstEnabled) : true;
 
   const lineItems = parseLineItems(body.lineItems);
   if (lineItems.length > 0) {
@@ -156,7 +157,7 @@ async function createInvoice(req, res) {
 
   let calculatedAmount;
   if (lineItems.length > 0) {
-    calculatedAmount = calcLineItemsTotal(lineItems, 0);
+    calculatedAmount = calcLineItemsTotal(lineItems, 0, gstEnabled);
   } else if (body.calculatedAmount != null) {
     calculatedAmount = Number(body.calculatedAmount);
   } else if (body.amount != null) {
@@ -197,6 +198,7 @@ async function createInvoice(req, res) {
         totalAdjustment,
         adjustedTotal,
         paidAmount: 0,
+        gstEnabled,
         status: "unpaid",
         issueDate,
         dueDate,
@@ -266,6 +268,12 @@ async function updateInvoice(req, res) {
   }
   const body = req.body;
   const updates = {};
+  const gstEnabled = body.gstEnabled !== undefined
+    ? Boolean(body.gstEnabled)
+    : (invoice.gstEnabled ?? true);
+  if (body.gstEnabled !== undefined) {
+    updates.gstEnabled = gstEnabled;
+  }
   const amountFieldsTouched =
     body.amount !== undefined ||
     body.calculatedAmount !== undefined ||
@@ -309,7 +317,7 @@ async function updateInvoice(req, res) {
       assertValidInvoiceLineItems(lineItems, badRequest);
     }
     updates.lineItems = lineItems;
-    const fromItems = lineItems.length > 0 ? calcLineItemsTotal(lineItems, 0) : invoice.calculatedAmount ?? invoice.amount;
+    const fromItems = lineItems.length > 0 ? calcLineItemsTotal(lineItems, 0, gstEnabled) : invoice.calculatedAmount ?? invoice.amount;
     const totalAdjustment = body.totalAdjustment !== undefined
       ? parseTotalAdjustment(body.totalAdjustment)
       : invoice.totalAdjustment ?? 0;
@@ -339,6 +347,14 @@ async function updateInvoice(req, res) {
       updates.adjustedTotal = adjustedTotal;
       updates.amount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
     }
+  } else if (body.gstEnabled !== undefined && (invoice.lineItems ?? []).length > 0) {
+    const fromItems = calcLineItemsTotal(invoice.lineItems, 0, gstEnabled);
+    updates.calculatedAmount = Math.round(fromItems);
+    updates.amount = resolveFinalTotal(
+      fromItems,
+      invoice.totalAdjustment ?? 0,
+      invoice.adjustedTotal ?? null,
+    );
   }
 
   const nextAmount = updates.amount ?? invoice.amount;

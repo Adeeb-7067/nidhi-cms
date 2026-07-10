@@ -64,6 +64,7 @@ const USER_LIST_PROJECTION = {
   phoneNumber: 1,
   joiningDate: 1,
   linkedinUrl: 1,
+  githubId: 1,
   status: 1,
   lastLoginAt: 1,
   lastSeenAt: 1,

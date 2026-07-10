@@ -146,6 +146,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"], group: "Overview" },
         { title: "All companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
         { title: "All projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
+        { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
         { title: "All team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
         {
@@ -511,6 +512,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Expenses", href: "/finance/expenses", icon: TrendingDown, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
         { title: "Income", href: "/finance/income", icon: TrendingUp, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
         { title: "Payments", href: "/finance/payments", icon: Wallet, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
+        { title: "Vendors", href: "/finance/vendors", icon: Building2, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
         { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
         { title: "Payroll", href: "/finance/payroll", icon: Users, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
         { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },

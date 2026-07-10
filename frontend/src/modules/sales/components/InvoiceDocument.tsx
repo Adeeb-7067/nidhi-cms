@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import type { ReactNode } from "react";
 import { calcRemaining, formatCurrency } from "../constants";
-import { numberToWords, formatSalesDateTime, resolveInvoiceTotal } from "../utils";
+import { numberToWords, formatSalesDateTime, formatSalesPaymentDate, resolveInvoiceTotal } from "../utils";
 import type { SalesDocumentBranding } from "../company-branding";
 import { defaultDocumentBrandingFields, resolveSalesDocumentBranding } from "../company-branding";
 import { DocumentBankDetails, DocumentIssuerMeta } from "./DocumentIssuerMeta";
@@ -121,7 +121,9 @@ export function InvoiceDocument({
   const visiblePayments = payments.slice(0, maxPaymentRows);
   const hiddenPaymentCount = payments.length - visiblePayments.length;
   const lineItems = invoice.lineItems ?? [];
-  const { subtotal, tax, calculated, finalTotal, adjustmentDelta, hasLineItems } = resolveInvoiceTotal(invoice);
+  const { subtotal, tax, calculated, finalTotal, adjustmentDelta, hasLineItems, gstEnabled } =
+    resolveInvoiceTotal(invoice);
+  const isGstInvoice = gstEnabled !== false;
   const notesText = invoice.notes?.trim() ?? "";
   const termsText =
     invoice.terms?.trim() ||
@@ -167,7 +169,7 @@ export function InvoiceDocument({
             className={`${titleSize} font-black uppercase tracking-wide`}
             style={{ color: primary, letterSpacing: "0.05em" }}
           >
-            Tax Invoice
+            {isGstInvoice ? "Tax Invoice" : "Invoice"}
           </p>
           <p className="text-sm font-mono font-semibold mt-1" style={{ color: muted }}>
             {invoice.number}
@@ -235,7 +237,9 @@ export function InvoiceDocument({
                 <>
                   <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Qty</th>
                   <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Rate</th>
-                  <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Tax</th>
+                  {isGstInvoice && (
+                    <th className={`text-right ${compact ? "py-2 px-3" : "py-3.5 px-4"} text-[10px] font-black uppercase tracking-widest`} style={{ color: "#9CA3AF" }}>Tax</th>
+                  )}
                 </>
               )}
               <th
@@ -250,7 +254,7 @@ export function InvoiceDocument({
             {lineItems.length > 0 ? (
               lineItems.map((item, idx) => {
                 const line = item.quantity * item.unitPrice;
-                const lineTax = line * (item.taxPercent / 100);
+                const lineTax = isGstInvoice ? line * (item.taxPercent / 100) : 0;
                 return (
                   <tr
                     key={item.itemId ?? idx}
@@ -275,9 +279,11 @@ export function InvoiceDocument({
                     <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right tabular-nums align-top`} style={{ color: muted }}>
                       {formatCurrency(item.unitPrice)}
                     </td>
-                    <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right text-xs align-top`} style={{ color: subtle }}>
-                      {item.taxPercent > 0 ? `GST ${item.taxPercent}%` : "—"}
-                    </td>
+                    {isGstInvoice && (
+                      <td className={`${compact ? "py-2 px-3" : "py-4 px-4"} text-right text-xs align-top`} style={{ color: subtle }}>
+                        {item.taxPercent > 0 ? `GST ${item.taxPercent}%` : "—"}
+                      </td>
+                    )}
                     <td className={`${compact ? "py-2 px-4" : "py-4 px-6"} text-right font-bold tabular-nums align-top`} style={{ color: dark }}>
                       {formatCurrency(line + lineTax)}
                     </td>
@@ -311,10 +317,10 @@ export function InvoiceDocument({
       {/* Totals */}
       <div className={`${padX} ${padYSection} flex justify-end`} style={{ borderTop: `1px solid ${border}` }}>
         <div className="w-full max-w-xs space-y-2.5">
-          {(hasLineItems || tax > 0 || adjustmentDelta !== 0) && (
+          {(hasLineItems || (isGstInvoice && tax > 0) || adjustmentDelta !== 0) && (
             <div className={`space-y-2.5 ${compact ? "pb-2" : "pb-4"}`} style={{ borderBottom: `1px solid ${border}` }}>
               <TotRow label="Subtotal" val={formatCurrency(subtotal)} />
-              <TotRow label="Tax (GST)" val={formatCurrency(tax)} />
+              {isGstInvoice && <TotRow label="Tax (GST)" val={formatCurrency(tax)} />}
               <TotRow label="Total (before adjustments)" val={formatCurrency(calculated)} />
               {adjustmentDelta !== 0 && (
                 <TotRow
@@ -393,7 +399,7 @@ export function InvoiceDocument({
                     }}
                   >
                     <td className={compact ? "py-1.5 px-3" : "py-2.5 px-4"} style={{ color: dark }}>
-                      {format(new Date(p.paymentDate), "dd MMM yyyy")}
+                      {formatSalesPaymentDate(p.paymentDate)}
                     </td>
                     <td className={`${compact ? "py-1.5 px-3" : "py-2.5 px-4"} font-mono`} style={{ color: muted }}>
                       {p.receiptNumber ?? "—"}
@@ -448,7 +454,9 @@ export function InvoiceDocument({
             Thank you for your business.
           </p>
           <p className="text-[10px] leading-relaxed" style={{ color: subtle }}>
-            This is a computer-generated tax invoice and is valid without a physical signature when issued electronically.
+            {isGstInvoice
+              ? "This is a computer-generated tax invoice and is valid without a physical signature when issued electronically."
+              : "This is a computer-generated invoice (non-GST) and is valid without a physical signature when issued electronically."}
           </p>
         </div>
         <div className="text-right flex-shrink-0">

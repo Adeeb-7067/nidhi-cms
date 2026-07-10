@@ -31,6 +31,7 @@ const invoiceSchema = new Schema(
     totalAdjustment: { type: Number, default: 0 },
     adjustedTotal: { type: Number, default: null, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
+    gstEnabled: { type: Boolean, default: true, required: true },
     status: { type: String, enum: invoiceStatuses, default: "unpaid", required: true, index: true },
     issueDate: { type: Date, default: Date.now },
     dueDate: { type: Date, required: true },

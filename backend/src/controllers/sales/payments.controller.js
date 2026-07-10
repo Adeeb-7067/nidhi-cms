@@ -8,6 +8,7 @@ import {
   getNextSequence,
 } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
+import { validateStoredFileUrl } from "../../lib/file-storage.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { applyPaymentInTx, applyInstallmentPaymentInTx, repairPaymentInvoiceLinkInTx } from "../../services/sales/payment-ledger.service.js";
 import { mirrorSalesPaymentToFinanceInTx } from "../../services/finance/sales-payment-sync.service.js";
@@ -183,6 +184,8 @@ async function recordPayment(req, res) {
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
   const paymentDate = parseSalesDocumentDate(body.paymentDate, "paymentDate");
+  const proofImageUrl = optionalString(body.proofImageUrl) ?? null;
+  if (proofImageUrl) validateStoredFileUrl(proofImageUrl, "proofImageUrl");
 
   if (!installmentId && invoiceId) {
     const selected = await SalesInvoices.findOne({ id: invoiceId }).select({ installmentId: 1 }).lean();
@@ -217,6 +220,7 @@ async function recordPayment(req, res) {
         paymentMethod: body.paymentMethod,
         transactionId: body.transactionId,
         note: body.note,
+        proofImageUrl,
         paymentDate,
         recordedBy: req.user.id,
         receiptNumber,
@@ -235,6 +239,7 @@ async function recordPayment(req, res) {
       paymentMethod: body.paymentMethod,
       transactionId: body.transactionId,
       note: body.note,
+      proofImageUrl,
       paymentDate,
       recordedBy: req.user.id,
       receiptNumber,

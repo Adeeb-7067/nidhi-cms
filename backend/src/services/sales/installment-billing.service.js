@@ -56,6 +56,7 @@ export function buildInvoicePayloadFromInstallment(installment, proposal, dueDat
     totalAdjustment: installment.totalAdjustment ?? 0,
     adjustedTotal: installment.adjustedTotal ?? null,
     paidAmount: 0,
+    gstEnabled: true,
     status: "unpaid",
     dueDate,
   };
@@ -144,6 +145,7 @@ export async function createPaidInvoiceForInstallmentPayment(
     totalAdjustment: 0,
     adjustedTotal: null,
     paidAmount: amount,
+    gstEnabled: true,
     status: "paid",
     issueDate: new Date(issueDate),
     dueDate,

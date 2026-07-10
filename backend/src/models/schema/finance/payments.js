@@ -26,6 +26,9 @@ const paymentSchema = new Schema(
     incomeId: { type: Number, ref: "FinanceIncome", default: null, index: true },
     /** Links ledger row mirrored from CRM sales receipts. */
     salesPaymentId: { type: Number, ref: "SalesPayments", default: null, sparse: true, unique: true },
+    salesInvoiceId: { type: Number, ref: "SalesInvoices", default: null, index: true },
+    gstEnabled: { type: Boolean, default: null },
+    gstAmount: { type: Number, default: 0, min: 0 },
     expenseId: { type: Number, ref: "FinanceExpenses", default: null, index: true },
     bankAccountId: { type: Number, ref: "FinanceBankAccounts", default: null, index: true },
     recordedBy: { type: Number, ref: "Users", required: true },

@@ -37,7 +37,7 @@ import {
   formatCurrency,
   FINANCIAL_EVENT_LABELS,
 } from "../constants";
-import { formatSalesDateTime, formatInstallmentSequence } from "../utils";
+import { formatSalesDateTime, formatSalesPaymentDate, formatInstallmentSequence } from "../utils";
 import { SalesStatusBadge } from "./SalesStatusBadge";
 import { EditInstallmentNameDialog } from "./sales-action-dialogs";
 
@@ -277,7 +277,8 @@ export function PaymentHistoryTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/30">
-            <TableHead className="text-xs">Created</TableHead>
+            <TableHead className="text-xs">Payment date</TableHead>
+            <TableHead className="text-xs">Created at</TableHead>
             <TableHead className="text-xs">Amount</TableHead>
             <TableHead className="text-xs">Mode</TableHead>
             <TableHead className="text-xs">Transaction ID</TableHead>
@@ -290,7 +291,10 @@ export function PaymentHistoryTable({
           {payments.map((p) => (
             <TableRow key={p.id}>
               <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatSalesDateTime(p.paymentDate)}
+                {formatSalesPaymentDate(p.paymentDate)}
+              </TableCell>
+              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                {formatSalesDateTime(p.createdAt)}
               </TableCell>
               <TableCell className="text-xs font-medium tabular-nums">
                 {formatCurrency(p.amount)}
@@ -347,7 +351,7 @@ export function PaymentTimeline({ payments }: { payments: PartialPayment[] }) {
               {formatCurrency(p.amount)} · {p.mode}
             </p>
             <p className="text-[10px] text-muted-foreground">
-              {format(new Date(p.paymentDate), "MMM d, yyyy h:mm a")} · {p.transactionId}
+              Payment {formatSalesPaymentDate(p.paymentDate)} · Recorded {formatSalesDateTime(p.createdAt)} · {p.transactionId}
             </p>
             {p.receiptNumber && (
               <Link

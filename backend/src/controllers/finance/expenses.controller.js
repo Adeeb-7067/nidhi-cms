@@ -1,6 +1,17 @@
 import { FinanceExpenses, Projects, clientsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
+import { escapeRegex } from "../../utils/regex.js";
 import { expenseCategories } from "../../models/schema/finance/expenses.js";
+import { resolveVendorFields } from "../../utils/vendor-fields.js";
+
+async function assertExpenseVendorId(vendorId) {
+  if (vendorId == null || vendorId === "") return null;
+  const id = Number(vendorId);
+  if (!Number.isFinite(id)) badRequest("vendorId must be a valid number.", "vendorId");
+  const vendor = await clientsTable.findOne({ id, isVendor: true }).select({ id: 1 }).lean();
+  if (!vendor) badRequest("Select a valid vendor.", "vendorId");
+  return id;
+}
 
 async function nextExpenseReference() {
   const year = new Date().getFullYear();
@@ -15,17 +26,33 @@ async function enrichExpenses(items) {
   const [projects, employees, vendors] = await Promise.all([
     projectIds.length ? Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean() : [],
     employeeIds.length ? usersTable.find({ id: { $in: employeeIds } }).select({ id: 1, name: 1 }).lean() : [],
-    vendorIds.length ? clientsTable.find({ id: { $in: vendorIds } }).select({ id: 1, companyName: 1 }).lean() : [],
+    vendorIds.length
+      ? clientsTable.find({ id: { $in: vendorIds }, isVendor: true }).select({
+          id: 1,
+          companyName: 1,
+          vendorCategory: 1,
+          vendorFields: 1,
+          vendorNotes: 1,
+        }).lean()
+      : [],
   ]);
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
   const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
-  const vendorMap = new Map(vendors.map((v) => [v.id, v.companyName]));
-  return items.map((e) => ({
-    ...e,
-    projectName: e.projectId ? projectMap.get(e.projectId) ?? null : null,
-    employeeName: e.employeeId ? employeeMap.get(e.employeeId) ?? null : null,
-    vendorName: e.vendorId ? vendorMap.get(e.vendorId) ?? null : null,
-  }));
+  const vendorMap = new Map(vendors.map((v) => [v.id, v]));
+  return items.map((e) => {
+    const vendor = e.vendorId ? vendorMap.get(e.vendorId) : null;
+    const vendorFields = vendor ? resolveVendorFields(vendor) : [];
+    return {
+      ...e,
+      projectName: e.projectId ? projectMap.get(e.projectId) ?? null : null,
+      employeeName: e.employeeId ? employeeMap.get(e.employeeId) ?? null : null,
+      vendorName: vendor?.companyName ?? null,
+      vendorFields,
+      vendorSummary: vendorFields.length
+        ? vendorFields.map((f) => `${f.label}: ${f.value}`).join(" · ")
+        : vendor?.vendorNotes ?? null,
+    };
+  });
 }
 
 async function listExpenses(req, res) {
@@ -36,10 +63,19 @@ async function listExpenses(req, res) {
   if (category) filter.category = category;
   if (projectId) filter.projectId = Number(projectId);
   if (search) {
-    const q = String(search).trim();
+    const q = escapeRegex(String(search).trim());
     if (q) {
       const re = { $regex: q, $options: "i" };
-      filter.$or = [{ reference: re }, { notes: re }];
+      const vendorMatches = await clientsTable
+        .find({ isVendor: true, companyName: re })
+        .select({ id: 1 })
+        .lean();
+      const vendorIdsFromSearch = vendorMatches.map((v) => v.id);
+      filter.$or = [
+        { reference: re },
+        { notes: re },
+        ...(vendorIdsFromSearch.length ? [{ vendorId: { $in: vendorIdsFromSearch } }] : []),
+      ];
     }
   }
   const [items, total] = await Promise.all([
@@ -71,6 +107,8 @@ async function createExpense(req, res) {
   if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
   if (!body.paymentMode) badRequest("paymentMode is required.", "paymentMode");
 
+  const vendorId = await assertExpenseVendorId(body.vendorId);
+
   const [id, reference] = await Promise.all([getNextSequence("finance_expenses"), nextExpenseReference()]);
 
   const expense = await FinanceExpenses.create({
@@ -82,7 +120,7 @@ async function createExpense(req, res) {
     paymentMode: body.paymentMode,
     projectId: body.projectId ? Number(body.projectId) : null,
     employeeId: body.employeeId ? Number(body.employeeId) : null,
-    vendorId: body.vendorId ? Number(body.vendorId) : null,
+    vendorId,
     notes: optionalString(body.notes) ?? null,
     status: "pending",
     gstEnabled: Boolean(body.gstEnabled),
@@ -90,7 +128,8 @@ async function createExpense(req, res) {
     attachments: Array.isArray(body.attachments) ? body.attachments : [],
     createdBy: req.user.id,
   });
-  res.status(201).json(expense.toObject());
+  const [enriched] = await enrichExpenses([expense.toObject()]);
+  res.status(201).json(enriched);
 }
 
 async function updateExpense(req, res) {
@@ -111,12 +150,13 @@ async function updateExpense(req, res) {
   if (body.paymentMode !== undefined) updates.paymentMode = body.paymentMode;
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   if (body.employeeId !== undefined) updates.employeeId = body.employeeId ? Number(body.employeeId) : null;
-  if (body.vendorId !== undefined) updates.vendorId = body.vendorId ? Number(body.vendorId) : null;
+  if (body.vendorId !== undefined) updates.vendorId = await assertExpenseVendorId(body.vendorId);
   if (body.notes !== undefined) updates.notes = optionalString(body.notes) ?? null;
   if (body.attachments !== undefined) updates.attachments = body.attachments;
 
   const updated = await FinanceExpenses.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
-  res.json(updated);
+  const [enriched] = await enrichExpenses([updated]);
+  res.json(enriched);
 }
 
 async function approveExpense(req, res) {

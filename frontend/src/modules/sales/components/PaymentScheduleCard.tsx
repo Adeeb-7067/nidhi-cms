@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Plus, ChevronDown, ChevronUp, Loader2, CreditCard, CheckCircle2, Clock, AlertCircle } from "lucide-react";
@@ -14,10 +14,12 @@ import {
   type PaymentMethod,
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { formatSalesDateTime, paymentDocumentInvoiceId } from "@/modules/sales/utils";
+import { formatSalesDateTime, formatSalesPaymentDate, paymentDocumentInvoiceId } from "@/modules/sales/utils";
+import { PaymentProofUploadField } from "./sales-action-dialogs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -142,8 +144,27 @@ function RecordInstallmentPaymentDialog({
   const [paymentDate, setPaymentDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
   const [txnId, setTxnId] = useState("");
+  const [note, setNote] = useState("");
+  const [proofImageUrl, setProofImageUrl] = useState("");
 
-  const reset = () => { setAmount(""); setPaymentDate(format(new Date(), "yyyy-MM-dd")); setTxnId(""); setMethod("bank_transfer"); };
+  useEffect(() => {
+    if (!open) return;
+    setAmount(remaining > 0 ? String(Math.round(remaining)) : "");
+    setPaymentDate(format(new Date(), "yyyy-MM-dd"));
+    setMethod("bank_transfer");
+    setTxnId("");
+    setNote("");
+    setProofImageUrl("");
+  }, [open, remaining]);
+
+  const reset = () => {
+    setAmount(remaining > 0 ? String(Math.round(remaining)) : "");
+    setPaymentDate(format(new Date(), "yyyy-MM-dd"));
+    setTxnId("");
+    setMethod("bank_transfer");
+    setNote("");
+    setProofImageUrl("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,6 +179,8 @@ function RecordInstallmentPaymentDialog({
         paymentMethod: method,
         paymentDate,
         transactionId: txnId.trim() || undefined,
+        note: note.trim() || undefined,
+        proofImageUrl: proofImageUrl.trim() || undefined,
       });
       toast.success(`Payment of ${formatCurrency(amt)} recorded`);
       reset();
@@ -216,6 +239,11 @@ function RecordInstallmentPaymentDialog({
             <Label className="text-xs">Transaction / UTR ID (optional)</Label>
             <Input className="h-8 text-xs" value={txnId} onChange={(e) => setTxnId(e.target.value)} placeholder="e.g. UTR123456789" />
           </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Note (optional)</Label>
+            <Textarea className="text-xs min-h-[60px]" value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Internal note" />
+          </div>
+          <PaymentProofUploadField value={proofImageUrl} onChange={setProofImageUrl} />
           <div className="flex justify-end gap-2 pt-1">
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button size="sm" type="submit" disabled={record.isPending}>
@@ -336,7 +364,12 @@ function InstallmentRow({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="tabular-nums font-semibold text-emerald-700">{formatCurrency(p.amount)}</span>
-                  <span className="text-muted-foreground text-[10px] whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
+                  <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                    {formatSalesPaymentDate(p.paymentDate)}
+                  </span>
+                  <span className="text-muted-foreground/70 text-[10px] whitespace-nowrap">
+                    {formatSalesDateTime(p.createdAt)}
+                  </span>
                 </div>
               </div>
               );

@@ -1,9 +1,80 @@
-function calcLineItemsTotal(items, discount = 0) {
+function calcLineItemsTotal(items, discount = 0, gstEnabled = true) {
   const lineTotal = (items ?? []).reduce((s, item) => {
     const line = item.quantity * item.unitPrice;
-    return s + line + line * (item.taxPercent / 100);
+    const tax = gstEnabled ? line * ((item.taxPercent ?? 0) / 100) : 0;
+    return s + line + tax;
   }, 0);
   return Math.round(lineTotal * (1 - (discount ?? 0) / 100));
+}
+
+/** Subtotal, GST, and total for a sales invoice (line items + optional adjusted total). */
+function calcSalesInvoiceBreakdown(inv) {
+  const gstEnabled = inv?.gstEnabled !== false;
+  const items = inv?.lineItems ?? [];
+  const discount = inv?.discount ?? 0;
+
+  let subtotal = 0;
+  let tax = 0;
+  for (const item of items) {
+    const line = item.quantity * item.unitPrice;
+    subtotal += line;
+    if (gstEnabled) tax += line * ((item.taxPercent ?? 0) / 100);
+  }
+
+  const subtotalAfterDiscount = Math.round(subtotal * (1 - discount / 100));
+  const taxAfterDiscount = gstEnabled ? Math.round(tax * (1 - discount / 100)) : 0;
+  const computedTotal = Math.round(subtotalAfterDiscount + taxAfterDiscount);
+  const total =
+    inv?.adjustedTotal != null && inv.adjustedTotal !== ""
+      ? Math.max(0, Math.round(Number(inv.adjustedTotal)))
+      : inv?.calculatedAmount != null
+        ? Math.max(0, Math.round(Number(inv.calculatedAmount)))
+        : inv?.amount != null
+          ? Math.max(0, Math.round(Number(inv.amount)))
+          : computedTotal;
+
+  if (!items.length) {
+    return { gstEnabled, subtotal: total, tax: 0, total };
+  }
+
+  return {
+    gstEnabled,
+    subtotal: subtotalAfterDiscount,
+    tax: taxAfterDiscount,
+    total,
+  };
+}
+
+/** Apportion invoice GST to a partial or full payment amount. */
+function apportionPaymentGst(paymentAmount, invoice) {
+  const breakdown = calcSalesInvoiceBreakdown(invoice);
+  if (!breakdown.gstEnabled || breakdown.tax <= 0 || breakdown.total <= 0) {
+    return {
+      gstEnabled: breakdown.gstEnabled,
+      gstAmount: 0,
+      taxableAmount: paymentAmount,
+    };
+  }
+  const ratio = paymentAmount / breakdown.total;
+  const gstAmount = Math.round(breakdown.tax * ratio);
+  return {
+    gstEnabled: true,
+    gstAmount,
+    taxableAmount: paymentAmount - gstAmount,
+  };
+}
+
+function resolvePaymentGstFields({ paymentAmount, invoice, storedGstEnabled, storedGstAmount }) {
+  if (storedGstEnabled != null) {
+    const gstAmount = storedGstAmount ?? 0;
+    return {
+      gstEnabled: storedGstEnabled,
+      gstAmount,
+      taxableAmount: paymentAmount - gstAmount,
+    };
+  }
+  if (invoice) return apportionPaymentGst(paymentAmount, invoice);
+  return { gstEnabled: null, gstAmount: 0, taxableAmount: paymentAmount };
 }
 
 function resolveFinalTotal(calculated, totalAdjustment = 0, adjustedTotal = null) {
@@ -52,6 +123,9 @@ function assertValidInvoiceLineItems(lineItems, badRequest) {
 
 export {
   calcLineItemsTotal,
+  calcSalesInvoiceBreakdown,
+  apportionPaymentGst,
+  resolvePaymentGstFields,
   resolveFinalTotal,
   parseAdjustedTotal,
   parseTotalAdjustment,

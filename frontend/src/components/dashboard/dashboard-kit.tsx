@@ -244,7 +244,7 @@ export function StatCard({
   alert,
   delay = 0,
 }: StatCardProps) {
-  const styles = accentMap[accent];
+  const styles = accentMap[accent] ?? accentMap.default;
   const inner = (
     <Card
       className={cn(
@@ -402,7 +402,7 @@ export function ExecutiveStatCard({
   delay = 0,
   trend,
 }: StatCardProps & { trend?: { label: string; positive?: boolean } }) {
-  const styles = accentMap[accent];
+  const styles = accentMap[accent] ?? accentMap.default;
   const inner = (
     <Card
       className={cn(

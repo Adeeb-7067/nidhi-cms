@@ -4,6 +4,7 @@ import {
   resolveFinalTotal,
   assertPositiveInvoiceAmount,
   assertValidInvoiceLineItems,
+  calcLineItemsTotal,
 } from "../../src/utils/sales-totals.js";
 
 describe("sales-totals", () => {
@@ -41,5 +42,41 @@ describe("sales-totals", () => {
     assert.doesNotThrow(() =>
       assertValidInvoiceLineItems([{ name: "Design", unitPrice: 5000, quantity: 1 }], badRequest),
     );
+  });
+
+  it("calcLineItemsTotal excludes tax when gstEnabled is false", () => {
+    const items = [{ quantity: 1, unitPrice: 1000, taxPercent: 18 }];
+    assert.equal(calcLineItemsTotal(items, 0, true), 1180);
+    assert.equal(calcLineItemsTotal(items, 0, false), 1000);
+  });
+
+  it("calcSalesInvoiceBreakdown computes tax from line items", async () => {
+    const { calcSalesInvoiceBreakdown, apportionPaymentGst } = await import("../../src/utils/sales-totals.js");
+    const inv = {
+      gstEnabled: true,
+      lineItems: [{ quantity: 1, unitPrice: 1000, taxPercent: 18 }],
+      amount: 1180,
+    };
+    const breakdown = calcSalesInvoiceBreakdown(inv);
+    assert.equal(breakdown.subtotal, 1000);
+    assert.equal(breakdown.tax, 180);
+    assert.equal(breakdown.total, 1180);
+
+    const partial = apportionPaymentGst(590, inv);
+    assert.equal(partial.gstAmount, 90);
+    assert.equal(partial.taxableAmount, 500);
+  });
+
+  it("calcSalesInvoiceBreakdown marks non-GST invoices with zero tax", async () => {
+    const { calcSalesInvoiceBreakdown } = await import("../../src/utils/sales-totals.js");
+    const inv = {
+      gstEnabled: false,
+      lineItems: [{ quantity: 1, unitPrice: 1000, taxPercent: 18 }],
+      amount: 1000,
+    };
+    const breakdown = calcSalesInvoiceBreakdown(inv);
+    assert.equal(breakdown.gstEnabled, false);
+    assert.equal(breakdown.tax, 0);
+    assert.equal(breakdown.total, 1000);
   });
 });

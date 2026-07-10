@@ -75,7 +75,7 @@ export default function ExpensesPage() {
   const monthlyTotal = expenses
     .filter((e) => e.date.startsWith(currentMonthKey) && e.status === "approved")
     .reduce((s, e) => s + e.amount, 0);
-  const yearlyTotal = expenses.filter((e) => e.status === "approved").reduce((s, e) => s + e.amount, 0);
+  const pageApprovedTotal = expenses.filter((e) => e.status === "approved").reduce((s, e) => s + e.amount, 0);
   const pendingCount = expenses.filter((e) => e.status === "pending").length;
 
   const handleApproval = async (id: number, action: "approve" | "reject") => {
@@ -116,7 +116,7 @@ export default function ExpensesPage() {
       <PortalKpiGrid
         items={[
           { title: "This month (approved)", value: formatCurrency(monthlyTotal), icon: TrendingDown, accent: "red", delay: 0 },
-          { title: "This page (approved)", value: formatCurrency(yearlyTotal), icon: TrendingDown, accent: "amber", delay: 1 },
+          { title: "Approved on this page", value: formatCurrency(pageApprovedTotal), icon: TrendingDown, accent: "amber", delay: 1 },
           { title: "Pending approvals", value: pendingCount, icon: TrendingDown, accent: "violet", alert: pendingCount > 0, delay: 2 },
         ]}
       />
@@ -167,6 +167,7 @@ export default function ExpensesPage() {
                 <TableHead className="text-xs">Date</TableHead>
                 <TableHead className="text-xs">Reference</TableHead>
                 <TableHead className="text-xs">Category</TableHead>
+                <TableHead className="text-xs">Vendor</TableHead>
                 <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
@@ -180,6 +181,14 @@ export default function ExpensesPage() {
                   <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
                   <TableCell className="text-xs font-mono">{e.reference}</TableCell>
                   <TableCell><FinanceStatusBadge variant="expenseCategory" value={e.category} /></TableCell>
+                  <TableCell className="text-xs max-w-[180px]">
+                    <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
+                    {e.vendorSummary ? (
+                      <div className="text-[10px] text-muted-foreground truncate" title={e.vendorSummary}>
+                        {e.vendorSummary}
+                      </div>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{e.projectName ?? "—"}</TableCell>
                   <TableCell><FinanceStatusBadge variant="expense" value={e.status} /></TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(e.amount)}</TableCell>

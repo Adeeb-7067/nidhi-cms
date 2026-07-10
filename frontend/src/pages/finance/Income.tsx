@@ -31,6 +31,7 @@ import {
   FinanceDualLineChart,
   FinanceAreaTrendChart,
   RecordPaymentModal,
+  GstClassificationBadge,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import { useListIncome, useFinanceRevenueTrend, useFinancePnl, type ListIncomeParams } from "@/api/finance";
@@ -66,6 +67,9 @@ export default function IncomePage() {
 
   const totalReceived = income.filter((i) => i.status === "received").reduce((s, i) => s + i.amount, 0);
   const totalPending = income.filter((i) => i.status !== "received").reduce((s, i) => s + i.amount, 0);
+  const gstReceived = income.filter((i) => i.gstEnabled !== false).reduce((s, i) => s + i.amount, 0);
+  const nonGstReceived = income.filter((i) => i.gstEnabled === false).reduce((s, i) => s + i.amount, 0);
+  const gstTaxTotal = income.reduce((s, i) => s + (i.gstAmount ?? 0), 0);
 
   const incomeVsExpenseTrend = (pnlData?.monthly ?? []).map((m) => ({ month: m.month, income: m.income, expense: m.expenses }));
   const revenueTrend = revenueTrendData?.trend ?? [];
@@ -98,8 +102,11 @@ export default function IncomePage() {
       <PortalKpiGrid
         items={[
           { title: "Total received", value: formatCompactCurrency(totalReceived), icon: TrendingUp, accent: "green", delay: 0 },
-          { title: "Pending / partial", value: formatCompactCurrency(totalPending), icon: TrendingUp, accent: "amber", delay: 1 },
-          { title: "Transactions", value: total, icon: TrendingUp, accent: "blue", delay: 2 },
+          { title: "GST income", value: formatCompactCurrency(gstReceived), icon: TrendingUp, accent: "blue", delay: 1 },
+          { title: "Non-GST income", value: formatCompactCurrency(nonGstReceived), icon: TrendingUp, accent: "default", delay: 2 },
+          { title: "GST collected", value: formatCompactCurrency(gstTaxTotal), icon: TrendingUp, accent: "amber", delay: 3 },
+          { title: "Pending / partial", value: formatCompactCurrency(totalPending), icon: TrendingUp, accent: "amber", delay: 4 },
+          { title: "Transactions", value: total, icon: TrendingUp, accent: "blue", delay: 5 },
         ]}
       />
 
@@ -150,6 +157,8 @@ export default function IncomePage() {
                 <TableHead className="text-xs">Client</TableHead>
                 <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">GST</TableHead>
+                <TableHead className="text-xs text-right">GST amt</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
               </TableRow>
@@ -162,6 +171,10 @@ export default function IncomePage() {
                   <TableCell className="text-xs font-medium">{i.clientName}</TableCell>
                   <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{i.projectName ?? "—"}</TableCell>
                   <TableCell><FinanceStatusBadge variant="income" value={i.status} /></TableCell>
+                  <TableCell><GstClassificationBadge gstEnabled={i.gstEnabled} /></TableCell>
+                  <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
+                    {(i.gstAmount ?? 0) > 0 ? formatCurrency(i.gstAmount ?? 0) : "—"}
+                  </TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</TableCell>
                   <TableCell className="text-xs">{PAYMENT_MODE_LABELS[i.paymentMode]}</TableCell>
                 </TableRow>

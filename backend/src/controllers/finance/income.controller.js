@@ -1,7 +1,44 @@
-import { FinanceIncome, Projects, clientsTable } from "../../models/schema/index.js";
+import { FinanceIncome, Projects, clientsTable, SalesPayments, SalesInvoices } from "../../models/schema/index.js";
 import { badRequest, notFound, parsePagination } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
 import { recordIncomingPayment } from "../../services/finance/payment-ledger.service.js";
+import { resolvePaymentGstFields } from "../../utils/sales-totals.js";
+
+async function enrichIncomeGst(items) {
+  const needsLookup = items.filter((i) => i.gstEnabled == null && i.salesPaymentId);
+  if (!needsLookup.length) return items;
+
+  const salesPayments = await SalesPayments.find({
+    id: { $in: needsLookup.map((i) => i.salesPaymentId) },
+  })
+    .select({ id: 1, invoiceId: 1, amount: 1 })
+    .lean();
+  const salesPaymentMap = new Map(salesPayments.map((p) => [p.id, p]));
+  const invoiceIds = [...new Set(salesPayments.map((p) => p.invoiceId).filter(Boolean))];
+  const invoices = invoiceIds.length
+    ? await SalesInvoices.find({ id: { $in: invoiceIds } }).lean()
+    : [];
+  const invoiceMap = new Map(invoices.map((inv) => [inv.id, inv]));
+
+  return items.map((row) => {
+    if (row.gstEnabled != null) {
+      return {
+        ...row,
+        gstAmount: row.gstAmount ?? 0,
+        taxableAmount: row.amount - (row.gstAmount ?? 0),
+      };
+    }
+    const sp = row.salesPaymentId ? salesPaymentMap.get(row.salesPaymentId) : null;
+    const invoice = sp?.invoiceId ? invoiceMap.get(sp.invoiceId) ?? null : null;
+    const gst = resolvePaymentGstFields({
+      paymentAmount: row.amount,
+      invoice,
+      storedGstEnabled: row.gstEnabled,
+      storedGstAmount: row.gstAmount,
+    });
+    return { ...row, ...gst, salesInvoiceId: invoice?.id ?? row.salesInvoiceId ?? null };
+  });
+}
 
 async function enrichIncome(items) {
   const clientIds = [...new Set(items.map((i) => i.clientId).filter(Boolean))];
@@ -33,7 +70,8 @@ async function listIncome(req, res) {
     FinanceIncome.find(filter).sort({ date: -1 }).skip(skip).limit(limit).lean(),
     FinanceIncome.countDocuments(filter),
   ]);
-  const income = await enrichIncome(items);
+  const withGst = await enrichIncomeGst(items);
+  const income = await enrichIncome(withGst);
   res.json({ income, total, page, limit });
 }
 

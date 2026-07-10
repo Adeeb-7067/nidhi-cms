@@ -24,6 +24,7 @@ import { DecimalInput, decimalInputClass } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -41,13 +42,13 @@ import {
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function calcTotals(items: ProposalLineItem[]) {
+function calcTotals(items: ProposalLineItem[], gstEnabled: boolean) {
   let subtotal = 0;
   let tax = 0;
   for (const item of items) {
     const line = item.quantity * item.unitPrice;
     subtotal += line;
-    tax += line * (item.taxPercent / 100);
+    if (gstEnabled) tax += line * (item.taxPercent / 100);
   }
   return { subtotal, tax, total: Math.round(subtotal + tax) };
 }
@@ -72,6 +73,7 @@ function LineItemCard({
   onChange,
   onRemove,
   canRemove,
+  gstEnabled,
 }: {
   index: number;
   item: ProposalLineItem;
@@ -79,15 +81,16 @@ function LineItemCard({
   onChange: (patch: Partial<ProposalLineItem>) => void;
   onRemove: () => void;
   canRemove: boolean;
+  gstEnabled: boolean;
 }) {
   const line = item.quantity * item.unitPrice;
-  const lineTotal = line + line * (item.taxPercent / 100);
+  const lineTotal = line + (gstEnabled ? line * (item.taxPercent / 100) : 0);
 
   const applyProduct = (productId: string) => {
     if (productId === "custom") return;
     const product = products.find((p) => String(p.id) === productId);
     if (!product) return;
-    onChange({ name: product.name, description: product.description ?? "", unitPrice: product.price, taxPercent: product.taxPercent });
+    onChange({ name: product.name, description: product.description ?? "", unitPrice: product.price, taxPercent: gstEnabled ? product.taxPercent : 0 });
   };
 
   return (
@@ -129,7 +132,7 @@ function LineItemCard({
         </Button>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pl-9">
+      <div className={`grid gap-2 pl-9 ${gstEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
         <div className="space-y-1">
           <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Qty</Label>
           <DecimalInput
@@ -150,17 +153,19 @@ function LineItemCard({
             onChange={(unitPrice) => onChange({ unitPrice })}
           />
         </div>
-        <div className="space-y-1">
-          <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax %</Label>
-          <DecimalInput
-            min={0}
-            max={100}
-            hideZero={false}
-            className={numInputClass}
-            value={item.taxPercent}
-            onChange={(taxPercent) => onChange({ taxPercent })}
-          />
-        </div>
+        {gstEnabled && (
+          <div className="space-y-1">
+            <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Tax %</Label>
+            <DecimalInput
+              min={0}
+              max={100}
+              hideZero={false}
+              className={numInputClass}
+              value={item.taxPercent}
+              onChange={(taxPercent) => onChange({ taxPercent })}
+            />
+          </div>
+        )}
       </div>
       <div className="pl-9 text-right">
         <span className="text-xs text-muted-foreground tabular-nums">Line total: {formatCurrency(Math.round(lineTotal))}</span>
@@ -211,6 +216,7 @@ export function InvoiceFormSheet({
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
+  const [gstEnabled, setGstEnabled] = useState(true);
 
   const installmentQueryCustomerId = customerId
     ? Number(customerId)
@@ -246,6 +252,7 @@ export function InvoiceFormSheet({
       setTotalAdjustment(invoice.totalAdjustment ?? 0);
       setAdjustedTotal(invoice.adjustedTotal ?? null);
       setUseCustomTotal(invoice.adjustedTotal != null);
+      setGstEnabled(invoice.gstEnabled !== false);
     } else {
       setTitle("");
       setCustomerId(defaultCustomerId ? String(defaultCustomerId) : "");
@@ -259,10 +266,11 @@ export function InvoiceFormSheet({
       setTotalAdjustment(0);
       setAdjustedTotal(null);
       setUseCustomTotal(false);
+      setGstEnabled(true);
     }
-  }, [open, invoice?.id, defaultCustomerId]);
+  }, [open, invoice?.id, defaultCustomerId, defaultTax]);
 
-  const { subtotal, tax, total: calculatedAmount } = useMemo(() => calcTotals(items), [items]);
+  const { subtotal, tax, total: calculatedAmount } = useMemo(() => calcTotals(items, gstEnabled), [items, gstEnabled]);
 
   const payload = totalAdjustPayload(calculatedAmount, totalAdjustment, useCustomTotal, adjustedTotal);
   const finalAmount = payload.amount;
@@ -323,6 +331,7 @@ export function InvoiceFormSheet({
       calculatedAmount: payload.calculatedAmount,
       totalAdjustment: payload.totalAdjustment ?? 0,
       adjustedTotal: payload.adjustedTotal,
+      gstEnabled,
     };
 
     try {
@@ -433,10 +442,27 @@ export function InvoiceFormSheet({
 
           {/* Line items */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <Label className="text-xs font-semibold">Line items <span className="text-destructive">*</span></Label>
-              <Badge variant="secondary" className="text-[10px]">{items.length} item{items.length !== 1 ? "s" : ""}</Badge>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="invoice-gst-enabled"
+                    checked={gstEnabled}
+                    onCheckedChange={setGstEnabled}
+                  />
+                  <Label htmlFor="invoice-gst-enabled" className="text-xs font-normal cursor-pointer">
+                    GST invoice
+                  </Label>
+                </div>
+                <Badge variant="secondary" className="text-[10px]">{items.length} item{items.length !== 1 ? "s" : ""}</Badge>
+              </div>
             </div>
+            <p className="text-[10px] text-muted-foreground -mt-1">
+              {gstEnabled
+                ? "Tax (GST) is added per line item. Use this for registered taxable supplies."
+                : "No GST on this invoice — amount is the final bill (bill of supply / exempt)."}
+            </p>
             <div className="space-y-2">
               {items.map((item, index) => (
                 <LineItemCard
@@ -447,6 +473,7 @@ export function InvoiceFormSheet({
                   onChange={(patch) => updateItem(index, patch)}
                   onRemove={() => removeItem(index)}
                   canRemove={items.length > 1}
+                  gstEnabled={gstEnabled}
                 />
               ))}
             </div>
@@ -461,10 +488,12 @@ export function InvoiceFormSheet({
               <span>Subtotal</span>
               <span className="tabular-nums">{formatCurrency(subtotal)}</span>
             </div>
-            <div className="flex justify-between text-muted-foreground">
-              <span>Tax</span>
-              <span className="tabular-nums">{formatCurrency(tax)}</span>
-            </div>
+            {gstEnabled && (
+              <div className="flex justify-between text-muted-foreground">
+                <span>Tax (GST)</span>
+                <span className="tabular-nums">{formatCurrency(tax)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-semibold border-t pt-1 mt-1">
               <span>Total (before adjustments)</span>
               <span className="tabular-nums">{formatCurrency(calculatedAmount)}</span>

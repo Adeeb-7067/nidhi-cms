@@ -46,20 +46,23 @@ import {
   useCreateBudget,
   useUpdateBudget,
   useCreateVendor,
+  useUpdateVendor,
   useCreateBankAccount,
   useListVendors,
   type FinanceInvoice,
+  type FinanceVendor,
   type Budget,
   type ExpenseCategory,
   type FinancePaymentMode,
   type BudgetType,
 } from "@/api/finance";
+import { vendorToFormDefaults } from "@/modules/finance/vendor-utils";
 import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, calcInvoiceTotal, formatCurrency } from "../constants";
 
 type ModalBaseProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSuccess?: () => void;
+  onSuccess?: (result?: unknown) => void;
 };
 
 const EXPENSE_FORM_CATEGORIES = Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[];
@@ -98,8 +101,9 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
   const createExpense = useCreateExpense();
   const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
   const { data: employeesData } = useHrmEmployees({ limit: 200, status: "active" }, { enabled: open });
-  const { data: vendorsData } = useListVendors(undefined, open);
+  const { data: vendorsData, refetch: refetchVendors } = useListVendors(undefined, open);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
+  const [vendorModalOpen, setVendorModalOpen] = useState(false);
 
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
@@ -152,6 +156,7 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
@@ -229,9 +234,14 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               </div>
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Vendor</FormLabel>
+                  <div className="flex items-center justify-between gap-2">
+                    <FormLabel>Service vendor</FormLabel>
+                    <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => setVendorModalOpen(true)}>
+                      + Add vendor
+                    </Button>
+                  </div>
                   <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="AWS, hosting, SaaS…" /></SelectTrigger></FormControl>
                     <SelectContent>
                       <SelectItem value="none">None</SelectItem>
                       {(vendorsData?.vendors ?? []).map((v) => (
@@ -274,10 +284,18 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
         </Form>
       </DialogContent>
     </Dialog>
+    <VendorFormModal
+      open={vendorModalOpen}
+      onOpenChange={setVendorModalOpen}
+      onSuccess={(vendor) => {
+        void refetchVendors();
+        const saved = vendor as FinanceVendor | undefined;
+        if (saved?.id) form.setValue("vendorId", String(saved.id));
+      }}
+    />
+    </>
   );
 }
-
-// ─── Record payment (Income + Invoice detail share this) ─────────────────
 
 const paymentSchema = z.object({
   date: z.string().min(1),
@@ -849,76 +867,194 @@ export function BudgetFormModal({
 
 // ─── Vendor ───────────────────────────────────────────────────────────────
 
+const vendorFieldRowSchema = z.object({
+  label: z.string(),
+  value: z.string(),
+});
+
 const vendorSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email"),
+  contactPerson: z.string().optional(),
   phone: z.string().optional(),
-  city: z.string().optional(),
+  address: z.string().optional(),
+  website: z.string().optional(),
   gstin: z.string().optional(),
-  category: z.string().optional(),
+  notes: z.string().optional(),
+  fields: z.array(vendorFieldRowSchema).optional(),
 });
 type VendorFormValues = z.infer<typeof vendorSchema>;
 
-export function VendorFormModal({ open, onOpenChange, onSuccess }: ModalBaseProps) {
+function VendorFieldsEditor({
+  fields,
+  onChange,
+}: {
+  fields: { label: string; value: string }[];
+  onChange: (next: { label: string; value: string }[]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <Label className="text-sm font-medium">Service details</Label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs gap-1"
+          onClick={() => onChange([...fields, { label: "", value: "" }])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add field
+        </Button>
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Add whatever you track for this provider — e.g. Service → AWS hosting, Account ID → 1234.
+      </p>
+      {fields.length === 0 ? (
+        <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-3 py-4 text-center">
+          No custom fields yet.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {fields.map((row, index) => (
+            <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-start">
+              <Input
+                placeholder="Label (e.g. Service)"
+                value={row.label}
+                onChange={(e) => {
+                  const next = [...fields];
+                  next[index] = { ...next[index], label: e.target.value };
+                  onChange(next);
+                }}
+              />
+              <Input
+                placeholder="Value (e.g. Cloud hosting)"
+                value={row.value}
+                onChange={(e) => {
+                  const next = [...fields];
+                  next[index] = { ...next[index], value: e.target.value };
+                  onChange(next);
+                }}
+              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => onChange(fields.filter((_, i) => i !== index))}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function VendorFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  vendor,
+}: ModalBaseProps & { vendor?: FinanceVendor | null }) {
   const createVendor = useCreateVendor();
+  const updateVendor = useUpdateVendor();
+  const isEdit = !!vendor?.id;
   const form = useForm<VendorFormValues>({
     resolver: zodResolver(vendorSchema),
-    defaultValues: { name: "", email: "", phone: "", city: "", gstin: "", category: "" },
+    defaultValues: vendorToFormDefaults(null),
   });
+  const [fieldRows, setFieldRows] = useState<{ label: string; value: string }[]>([{ label: "", value: "" }]);
 
   useEffect(() => {
-    if (open) form.reset({ name: "", email: "", phone: "", city: "", gstin: "", category: "" });
-  }, [open, form]);
+    if (!open) return;
+    const defaults = vendorToFormDefaults(vendor);
+    form.reset(defaults);
+    setFieldRows(defaults.fields);
+  }, [open, vendor, form]);
 
   const onSubmit = async (values: VendorFormValues) => {
+    const fields = fieldRows
+      .map((row) => ({ label: row.label.trim(), value: row.value.trim() }))
+      .filter((row) => row.label && row.value);
+    const payload = {
+      name: values.name.trim(),
+      email: values.email.trim(),
+      contactPerson: values.contactPerson?.trim() || undefined,
+      phone: values.phone?.trim() || undefined,
+      address: values.address?.trim() || undefined,
+      website: values.website?.trim() || undefined,
+      gstin: values.gstin?.trim() || undefined,
+      notes: values.notes?.trim() || undefined,
+      fields,
+    };
     try {
-      await createVendor.mutateAsync(values);
-      toast.success(`Vendor "${values.name}" added`);
+      const saved = isEdit
+        ? await updateVendor.mutateAsync({ id: vendor!.id, ...payload })
+        : await createVendor.mutateAsync(payload);
+      toast.success(isEdit ? `Vendor "${saved.name}" updated` : `Vendor "${saved.name}" added`);
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(saved);
     } catch (err) {
-      toastApiError(err, "Failed to add vendor");
+      toastApiError(err, isEdit ? "Failed to update vendor" : "Failed to add vendor");
     }
   };
 
+  const pending = createVendor.isPending || updateVendor.isPending;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
+      <DialogContent className="sm:max-w-lg bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
-          <DialogTitle>Add vendor</DialogTitle>
-          <DialogDescription>Vendors are the companies you pay — cloud, software, office, etc.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit vendor" : "Add vendor"}</DialogTitle>
+          <DialogDescription>
+            Service providers you pay — AWS, hosting, domains, SaaS tools, and similar vendors.
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
-            <DialogBody className="px-6 py-4 space-y-4">
+            <DialogBody className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem><FormLabel>Vendor name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Vendor name</FormLabel><FormControl><Input placeholder="AWS India" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" {...field} /></FormControl><FormMessage /></FormItem>
-              )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="email" render={({ field }) => (
+                  <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="billing@vendor.com" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="contactPerson" render={({ field }) => (
+                  <FormItem><FormLabel>Contact person</FormLabel><FormControl><Input placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="phone" render={({ field }) => (
                   <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
-                <FormField control={form.control} name="city" render={({ field }) => (
-                  <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                <FormField control={form.control} name="website" render={({ field }) => (
+                  <FormItem><FormLabel>Website</FormLabel><FormControl><Input placeholder="https://aws.amazon.com" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <FormField control={form.control} name="gstin" render={({ field }) => (
-                  <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="category" render={({ field }) => (
-                  <FormItem><FormLabel>Category</FormLabel><FormControl><Input placeholder="Cloud, Software…" {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-              </div>
+              <FormField control={form.control} name="address" render={({ field }) => (
+                <FormItem><FormLabel>Address</FormLabel><FormControl><Input placeholder="Billing address (optional)" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="gstin" render={({ field }) => (
+                <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <VendorFieldsEditor fields={fieldRows} onChange={setFieldRows} />
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notes</FormLabel>
+                  <FormControl><Textarea rows={2} placeholder="Renewal reminders, support contacts, etc." {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
             </DialogBody>
             <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={createVendor.isPending}>Cancel</Button>
-              <Button type="submit" disabled={createVendor.isPending}>
-                {createVendor.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add vendor
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button>
+              <Button type="submit" disabled={pending}>
+                {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save vendor" : "Add vendor"}
               </Button>
             </DialogFooter>
           </form>

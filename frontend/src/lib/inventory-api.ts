@@ -129,8 +129,19 @@ export function listInventoryDevices(projectId: number) {
   return inv<any[]>(`${projectId}/inventory/devices`);
 }
 
+export function createInventoryDevice(projectId: number, data: Record<string, unknown>) {
+  return inv<any>(`${projectId}/inventory/devices`, { method: "POST", body: JSON.stringify(data) });
+}
+
 export function listInventorySubscriptions(projectId: number) {
   return inv<any[]>(`${projectId}/inventory/subscriptions`);
+}
+
+export function createInventorySubscription(projectId: number, data: Record<string, unknown>) {
+  return inv<any>(`${projectId}/inventory/subscriptions`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
 export function listInventoryBuilds(projectId: number) {

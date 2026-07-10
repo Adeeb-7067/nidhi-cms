@@ -1,7 +1,7 @@
-import { format } from "date-fns";
 import { formatCurrency } from "../constants";
-import { numberToWords, formatSalesDateTime } from "../utils";
+import { numberToWords, formatSalesPaymentDate } from "../utils";
 import type { PaymentReceipt } from "../types";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 
 const primary = "#1A56DB";
 const green = "#057A55";
@@ -99,7 +99,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
               Receipt date
             </p>
             <p className="text-sm font-semibold" style={{ color: dark }}>
-              {formatSalesDateTime(receipt.generatedAt)}
+              {formatSalesPaymentDate(receipt.generatedAt)}
             </p>
           </div>
           <div className="text-right">
@@ -158,6 +158,26 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
             <p className="text-xs leading-relaxed whitespace-pre-wrap" style={{ color: dark }}>
               {receipt.note}
             </p>
+          </div>
+        ) : null}
+
+        {receipt.proofImageUrl ? (
+          <div className="rounded-xl px-4 py-3" style={{ border: `1px solid ${border}`, background: rowAlt }}>
+            <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>
+              Proof of payment
+            </p>
+            {/\.pdf($|\?)/i.test(receipt.proofImageUrl) ? (
+              <p className="text-xs" style={{ color: dark }}>
+                PDF attachment on file
+              </p>
+            ) : (
+              <img
+                src={resolveFileUrl(receipt.proofImageUrl)}
+                alt="Payment proof"
+                className="max-h-48 w-full rounded-lg border object-contain"
+                style={{ borderColor: border }}
+              />
+            )}
           </div>
         ) : null}
       </div>

@@ -43,7 +43,17 @@ const clientSchema = new Schema({
   customerType: { type: String, enum: customerTypes, default: "corporate", required: true },
   /** Finance: marks this record as a payee (vendor/supplier) rather than — or in addition to — a paying client. */
   isVendor: { type: Boolean, default: false, required: true, index: true },
+  /** @deprecated use vendorFields — kept for legacy rows */
   vendorCategory: { type: String, default: null, trim: true },
+  /** Free-form service/provider details (e.g. Service → AWS hosting, Account ID → …). */
+  vendorFields: {
+    type: [{
+      label: { type: String, trim: true, required: true },
+      value: { type: String, trim: true, default: "" },
+    }],
+    default: [],
+  },
+  vendorNotes: { type: String, default: null, trim: true },
   /** Originating sales lead when converted from CRM. */
   leadId: { type: Number, ref: "SalesLeads", default: null, index: true },
   /** Internal staff admin assigned to manage this account in sales. */

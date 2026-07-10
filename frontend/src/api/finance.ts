@@ -39,6 +39,8 @@ export interface Expense {
   employeeName?: string | null;
   vendorId: number | null;
   vendorName?: string | null;
+  vendorFields?: FinanceVendorField[];
+  vendorSummary?: string | null;
   notes: string | null;
   status: ExpenseStatus;
   gstEnabled: boolean;
@@ -61,6 +63,11 @@ export interface Income {
   paymentMode: FinancePaymentMode;
   status: IncomeStatus;
   invoiceId: number | null;
+  salesPaymentId?: number | null;
+  salesInvoiceId?: number | null;
+  gstEnabled?: boolean | null;
+  gstAmount?: number;
+  taxableAmount?: number;
   createdAt: string;
 }
 
@@ -119,11 +126,15 @@ export interface FinancePayment {
   vendorId: number | null;
   employeeId: number | null;
   invoiceId: number | null;
+  salesInvoiceId?: number | null;
   expenseId: number | null;
   bankAccountId: number | null;
   recordedByName?: string | null;
   salesPaymentId?: number | null;
   salesReceiptHref?: string | null;
+  gstEnabled?: boolean | null;
+  gstAmount?: number;
+  taxableAmount?: number;
   createdAt: string;
 }
 
@@ -180,14 +191,24 @@ export interface TaxSummary {
   tdsDeposited: number;
 }
 
+export interface FinanceVendorField {
+  label: string;
+  value: string;
+}
+
 export interface FinanceVendor {
   id: number;
   name: string;
-  gstin: string | null;
-  city: string | null;
-  category: string | null;
-  email?: string;
+  contactPerson?: string | null;
+  email: string;
   phone?: string | null;
+  address?: string | null;
+  website?: string | null;
+  gstin: string | null;
+  notes?: string | null;
+  fields?: FinanceVendorField[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface FinanceDashboardKpis {
@@ -401,7 +422,13 @@ export function useListInvoices(params?: ListInvoicesParams, enabled = true) {
 }
 
 export function useInvoicesSummary(enabled = true) {
-  return useQuery<{ counts: Record<string, number>; outstanding: number }>({
+  return useQuery<{
+    counts: Record<string, number>;
+    outstanding: number;
+    gstCount: number;
+    nonGstCount: number;
+    gstTaxTotal: number;
+  }>({
     queryKey: ["finance-invoices-summary"],
     queryFn: () => customFetch(apiUrl("/api/finance/invoices/summary")),
     enabled,
@@ -507,7 +534,14 @@ export function useListPayments(params?: ListPaymentsParams, enabled = true) {
 }
 
 export function usePaymentsSummary(enabled = true) {
-  return useQuery<{ incoming: number; outgoing: number; net: number }>({
+  return useQuery<{
+    incoming: number;
+    outgoing: number;
+    net: number;
+    gstIncoming: number;
+    nonGstIncoming: number;
+    gstTaxCollected: number;
+  }>({
     queryKey: ["finance-payments-summary"],
     queryFn: () => customFetch(apiUrl("/api/finance/payments/summary")),
     enabled,
@@ -745,11 +779,13 @@ export function useListVendors(params?: { search?: string }, enabled = true) {
 export interface CreateVendorPayload {
   name: string;
   email: string;
-  phone?: string;
-  city?: string;
-  gstin?: string;
-  category?: string;
   contactPerson?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+  gstin?: string;
+  notes?: string;
+  fields?: FinanceVendorField[];
 }
 
 export function useCreateVendor() {
@@ -757,6 +793,15 @@ export function useCreateVendor() {
   return useMutation({
     mutationFn: (body: CreateVendorPayload) =>
       customFetch<FinanceVendor>(apiUrl("/api/finance/vendors"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-vendors"] }),
+  });
+}
+
+export function useUpdateVendor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: CreateVendorPayload & { id: number }) =>
+      customFetch<FinanceVendor>(apiUrl(`/api/finance/vendors/${id}`), { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-vendors"] }),
   });
 }

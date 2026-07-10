@@ -10,6 +10,14 @@ export function formatSalesDateTime(value?: string | null): string {
   return format(d, SALES_DATETIME_FORMAT);
 }
 
+/** Calendar payment date from record-payment forms (date-only, no time). */
+export function formatSalesPaymentDate(value?: string | null): string {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return format(d, "MMM d, yyyy");
+}
+
 export function formatProjectLabel(projectId?: number | null, projectName?: string | null): string {
   if (!projectId && !projectName) return "—";
   return projectName?.trim() || (projectId ? `Project #${projectId}` : "—");
@@ -116,13 +124,13 @@ export function resolveProposalTotal(proposal: {
   };
 }
 
-export function calcInvoiceLineBreakdown(items: ProposalItem[]) {
+export function calcInvoiceLineBreakdown(items: ProposalItem[], gstEnabled = true) {
   let subtotal = 0;
   let tax = 0;
   for (const item of items) {
     const line = item.quantity * item.unitPrice;
     subtotal += line;
-    tax += line * (item.taxPercent / 100);
+    if (gstEnabled) tax += line * (item.taxPercent / 100);
   }
   return {
     subtotal: Math.round(subtotal),
@@ -137,9 +145,11 @@ export function resolveInvoiceTotal(invoice: {
   calculatedAmount?: number | null;
   totalAdjustment?: number;
   adjustedTotal?: number | null;
+  gstEnabled?: boolean;
 }) {
+  const gstEnabled = invoice.gstEnabled !== false;
   const items = invoice.lineItems ?? [];
-  const fromLines = items.length > 0 ? calcInvoiceLineBreakdown(items) : null;
+  const fromLines = items.length > 0 ? calcInvoiceLineBreakdown(items, gstEnabled) : null;
   const calculated = Math.round(invoice.calculatedAmount ?? fromLines?.total ?? invoice.amount);
   const finalTotal = Math.round(invoice.amount);
   return {
@@ -151,6 +161,7 @@ export function resolveInvoiceTotal(invoice: {
     hasLineItems: items.length > 0,
     hasCustomTotal: invoice.adjustedTotal != null,
     totalAdjustment: invoice.totalAdjustment ?? 0,
+    gstEnabled,
   };
 }
 

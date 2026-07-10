@@ -23,26 +23,34 @@ export async function getProjectsByProjectIdInventoryCredentials(req, res) {
     .lean();
 
   const role = req.user?.role;
+  const isSuperAdmin = role === "super_admin";
   const filtered = creds.filter((c) => {
-    if (role === "super_admin") return true;
+    if (isSuperAdmin) return true;
     return (c.allowedRoles ?? []).includes(role);
   });
 
   res.json(
-    filtered.map((c) => ({
-      id: c.id,
-      projectId: c.projectId,
-      type: c.type,
-      label: c.label,
-      username: c.username,
-      url: c.url,
-      notes: c.notes,
-      expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
-      visibility: c.visibility,
-      allowedRoles: c.allowedRoles,
-      createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : null,
-      hasValue: true,
-    })),
+    filtered.map((c) => {
+      const dto = {
+        id: c.id,
+        projectId: c.projectId,
+        type: c.type,
+        label: c.label,
+        username: c.username,
+        url: c.url,
+        notes: c.notes,
+        expiresAt: c.expiresAt ? new Date(c.expiresAt).toISOString() : null,
+        visibility: c.visibility,
+        allowedRoles: c.allowedRoles,
+        createdAt: c.createdAt ? new Date(c.createdAt).toISOString() : null,
+      };
+      if (isSuperAdmin) {
+        dto.value = decryptSecret(c.encryptedValue, c.iv, c.authTag);
+      } else {
+        dto.hasValue = true;
+      }
+      return dto;
+    }),
   );
 }
 
@@ -100,9 +108,11 @@ export async function postProjectsByProjectIdInventoryCredentialsByIdReveal(req,
   const role = req.user?.role;
   if (role !== "super_admin" && !(cred.allowedRoles ?? []).includes(role)) forbidden();
 
-  const user = await usersTable.findOne({ id: req.user.id }).lean();
-  if (!user || !(await bcrypt.compare(password ?? "", user.passwordHash))) {
-    unauthorized("Password confirmation required.");
+  if (role !== "super_admin") {
+    const user = await usersTable.findOne({ id: req.user.id }).lean();
+    if (!user || !(await bcrypt.compare(password ?? "", user.passwordHash))) {
+      unauthorized("Password confirmation required.");
+    }
   }
 
   const value = decryptSecret(cred.encryptedValue, cred.iv, cred.authTag);

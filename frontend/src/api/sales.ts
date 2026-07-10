@@ -386,6 +386,7 @@ export interface SalesInvoice {
   totalAdjustment?: number;
   adjustedTotal?: number | null;
   paidAmount: number;
+  gstEnabled?: boolean;
   status: InvoiceStatus;
   dueDate: string;
   issueDate?: string | null;
@@ -409,6 +410,7 @@ export interface SalesPayment {
   paymentMethod: PaymentMethod;
   transactionId: string | null;
   note: string | null;
+  proofImageUrl?: string | null;
   recordedBy: number;
   recordedByName?: string | null;
   recordedByAvatarUrl?: string | null;
@@ -1451,6 +1453,7 @@ export function useReceiveInstallmentPayment() {
       paymentDate,
       transactionId,
       note,
+      proofImageUrl,
     }: {
       installmentId: number;
       amount: number;
@@ -1458,6 +1461,7 @@ export function useReceiveInstallmentPayment() {
       paymentDate?: string;
       transactionId?: string;
       note?: string;
+      proofImageUrl?: string;
     }) =>
       customFetch<{
         payment: SalesPayment;
@@ -1465,7 +1469,7 @@ export function useReceiveInstallmentPayment() {
         invoiceCreated: boolean;
       }>(apiUrl(`/api/sales/installments/${installmentId}/receive-payment`), {
         method: "POST",
-        body: JSON.stringify({ amount, paymentMethod, paymentDate, transactionId, note }),
+        body: JSON.stringify({ amount, paymentMethod, paymentDate, transactionId, note, proofImageUrl }),
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.installment(vars.installmentId) });
@@ -1517,6 +1521,7 @@ export type InvoiceFormBody = {
   calculatedAmount?: number;
   totalAdjustment?: number;
   adjustedTotal?: number | null;
+  gstEnabled?: boolean;
 };
 
 export function useCreateInvoice() {
@@ -1673,6 +1678,7 @@ export function useRecordPayment() {
       paymentDate?: string;
       transactionId?: string;
       note?: string;
+      proofImageUrl?: string;
     }) =>
       customFetch<SalesPayment>(apiUrl("/api/sales/payments"), {
         method: "POST",

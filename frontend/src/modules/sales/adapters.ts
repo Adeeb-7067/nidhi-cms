@@ -35,6 +35,7 @@ export function toInvoicePreview(
     lineItems: invoice.lineItems,
     notes: invoice.notes ?? null,
     terms: invoice.terms ?? null,
+    gstEnabled: invoice.gstEnabled !== false,
   };
 }
 
@@ -46,7 +47,8 @@ export function paymentToPartial(p: SalesPayment): PartialPayment {
     amount: p.amount,
     mode: formatPaymentMethod(p.paymentMethod),
     transactionId: p.transactionId ?? "—",
-    paymentDate: p.paymentDate ?? p.createdAt,
+    paymentDate: p.paymentDate ?? null,
+    createdAt: p.createdAt ?? null,
     status: "received",
     receiptId: p.id,
     receiptNumber: p.receiptNumber,
@@ -80,6 +82,7 @@ export function toReceiptPreview(
     paymentMethod: formatPaymentMethod(payment.paymentMethod),
     transactionId: payment.transactionId ?? "—",
     note: payment.note?.trim() || null,
+    proofImageUrl: payment.proofImageUrl?.trim() || null,
     generatedAt: payment.paymentDate ?? payment.createdAt,
     companyName: resolved.companyName,
     companyAddress: resolved.address,

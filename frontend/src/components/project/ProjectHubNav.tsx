@@ -14,6 +14,7 @@ import {
 export type ProjectHubTab =
   | "overview"
   | "inventory"
+  | "documents"
   | "timeline"
   | "apk"
   | "bugs"
@@ -37,7 +38,16 @@ type HubSection = {
 
 const SECTIONS: HubSection[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, tab: "overview" },
-  { id: "resources", label: "Resources", icon: FolderOpen, tab: "inventory" },
+  {
+    id: "resources",
+    label: "Resources",
+    icon: FolderOpen,
+    tab: "inventory",
+    children: [
+      { id: "inventory", label: "Inventory" },
+      { id: "documents", label: "Documents" },
+    ],
+  },
   { id: "work", label: "Work", icon: ListTodo, tab: "tasks" },
   {
     id: "delivery",
