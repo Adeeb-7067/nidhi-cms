@@ -46,16 +46,17 @@ export default function FinanceDashboard() {
   const { data: budgetsData } = useListBudgets();
   const { data: paymentsData } = useListPayments({ limit: 6 });
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return <FinanceDashboardSkeleton />;
   }
-  if (isError || !data) {
+  if (isError && !data) {
     return (
       <PortalPageShell>
         <FinanceErrorState onRetry={() => refetch()} />
       </PortalPageShell>
     );
   }
+  if (!data) return <FinanceDashboardSkeleton />;
 
   const kpis = data.kpis;
   const pendingInvoices = [...(pendingInvoicesData?.invoices ?? []), ...(overdueInvoicesData?.invoices ?? [])].slice(0, 5);

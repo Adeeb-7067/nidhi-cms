@@ -106,9 +106,9 @@ export async function createPaidInvoiceForInstallmentPayment(
   session,
   installment,
   amount,
-  { proposal = null } = {},
+  { proposal = null, issueDate = new Date() } = {},
 ) {
-  const dueDate = new Date();
+  const dueDate = new Date(issueDate);
   let title = installment.name;
   if (proposal?.title) title = `${proposal.title} — ${installment.name}`;
   title = `${title} · Payment`;
@@ -145,6 +145,7 @@ export async function createPaidInvoiceForInstallmentPayment(
     adjustedTotal: null,
     paidAmount: amount,
     status: "paid",
+    issueDate: new Date(issueDate),
     dueDate,
   };
 

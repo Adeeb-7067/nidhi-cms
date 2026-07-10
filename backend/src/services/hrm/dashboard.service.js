@@ -13,11 +13,10 @@ import { salaryStructuresTable } from "../../models/schema/hrm/payroll.js";
 import { isHrmAdminRole, hrmEmployeeRoles } from "../../constants/user-roles.js";
 import { buildDashboardStatsFromSummaries, getAttendanceDailySummaries } from "./attendance.service.js";
 import { loadFirstSessionStarts } from "./attendance-context.js";
-import { listLeaveBalances } from "./leave.service.js";
 import { listLeaveRequests } from "./leave.service.js";
 import { listWfhRequests } from "./wfh.service.js";
 import { getDirectReportIds, resolveScopedUserIds } from "./team-scope.js";
-import { computeAvailableBalance } from "./leave-accrual.service.js";
+import { currentAccrualPeriodKey, ensureUserLeaveAccrualForPeriod } from "./leave-accrual.service.js";
 import { isPresentLikeStatus } from "../../constants/attendance-status.js";
 import { getHrmPolicyContext, workDayKeyForDate, minutesInTimezone } from "./hrm-date-utils.js";
 import { resolveContractSalary } from "./payroll-compute.js";
@@ -431,25 +430,27 @@ async function buildEmployeeSelfSummary(userId) {
   const { timezone } = await getHrmPolicyContext();
   const today = workDayKeyForDate(now, timezone);
 
-  const [{ summaries }, balances] = await Promise.all([
+  const periodKey = currentAccrualPeriodKey(now, timezone);
+  const userRow = await usersTable
+    .findOne({ id: userId })
+    .select({ lastLeaveAccrualPeriod: 1, leaveAvailable: 1 })
+    .lean();
+  const needsAccrual = !userRow?.lastLeaveAccrualPeriod || userRow.lastLeaveAccrualPeriod !== periodKey;
+  if (needsAccrual) {
+    await ensureUserLeaveAccrualForPeriod(userId);
+  }
+
+  const [{ summaries }, refreshedUser] = await Promise.all([
     getAttendanceDailySummaries({ startDate, endDate, userIds: [userId] }),
-    listLeaveBalances(userId, now.getFullYear()),
+    needsAccrual
+      ? usersTable.findOne({ id: userId }).select({ leaveAvailable: 1 }).lean()
+      : Promise.resolve(userRow),
   ]);
 
   const userSummaries = summaries.filter((s) => s.userId === userId);
   const todayRow = userSummaries.find((s) => s.date === today);
 
-  const leaveAvailableTotal = balances.reduce(
-    (sum, b) =>
-      sum +
-      computeAvailableBalance({
-        allocated: b.allocated,
-        carriedForward: b.carriedForward,
-        used: b.used,
-        pending: b.pending,
-      }),
-    0,
-  );
+  const leaveAvailableTotal = Math.round((refreshedUser?.leaveAvailable ?? 0) * 10) / 10;
 
   const latestSlip = await payrollSlipsTable.findOne({ userId })
     .sort({ year: -1, month: -1 })
@@ -465,7 +466,7 @@ async function buildEmployeeSelfSummary(userId) {
   return {
     attendanceMonthPct: computeAttendanceMonthPct(userSummaries),
     activeMinutesToday: todayRow?.activeMinutes ?? 0,
-    leaveAvailableTotal: Math.round(leaveAvailableTotal * 10) / 10,
+    leaveAvailableTotal,
     latestNetPay,
   };
 }

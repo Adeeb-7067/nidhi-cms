@@ -20,6 +20,7 @@ import { wfhRequestsTable } from "../../models/schema/hrm/wfh.js";
 import { runInTx } from "../../lib/db-tx.js";
 import {
   allocateOldestFirst,
+  currentAccrualPeriodKey,
   ensureUserLeaveAccrualForPeriod,
   getLeaveYearForDate,
   reconcileAutoSeededBalance,
@@ -196,16 +197,31 @@ export async function listLeaveBalances(userId, year) {
   const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
   const y = year != null ? getLeaveYearForDate(year, cm, startMonth) : getLeaveYearForDate(cy, cm, startMonth);
 
-  await ensureUserLeaveAccrualForPeriod(userId);
-  await reconcileUserLeaveBalances(userId, y);
-  const types = await listLeaveTypes();
+  const periodKey = currentAccrualPeriodKey(now, tz);
+  const user = await usersTable.findOne({ id: userId }).select({ lastLeaveAccrualPeriod: 1 }).lean();
+  const needsAccrual = !user?.lastLeaveAccrualPeriod || user.lastLeaveAccrualPeriod !== periodKey;
+  if (needsAccrual) {
+    await ensureUserLeaveAccrualForPeriod(userId);
+    await reconcileUserLeaveBalances(userId, y);
+  }
+
+  const types = await leaveTypesTable.find({ status: "active" }).sort({ fifoPriority: 1 }).lean();
+  const existingBalances = await leaveBalancesTable
+    .find({ userId, year: y, leaveTypeId: { $in: types.map((t) => t.id) } })
+    .lean();
+  const balByTypeId = new Map(existingBalances.map((b) => [b.leaveTypeId, b]));
+
   const result = [];
   for (const t of types) {
-    const bal = await ensureBalance(userId, t.id, y);
+    let bal = balByTypeId.get(t.id);
+    if (!bal) {
+      bal = await ensureBalance(userId, t.id, y);
+    }
+    const plain = typeof bal.toObject === "function" ? bal.toObject() : bal;
     result.push({
       leaveType: t,
-      ...bal.toObject(),
-      available: Math.max(0, bal.allocated + bal.carriedForward - bal.used - bal.pending),
+      ...plain,
+      available: Math.max(0, (plain.allocated ?? 0) + (plain.carriedForward ?? 0) - (plain.used ?? 0) - (plain.pending ?? 0)),
     });
   }
   return result;

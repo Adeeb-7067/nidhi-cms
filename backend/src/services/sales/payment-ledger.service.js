@@ -36,6 +36,7 @@ export async function applyPaymentInTx(
     paymentMethod,
     transactionId = null,
     note = null,
+    paymentDate = new Date(),
     recordedBy,
     receiptNumber,
     paymentId,
@@ -94,6 +95,7 @@ export async function applyPaymentInTx(
         paymentMethod,
         transactionId: optionalString(transactionId) ?? null,
         note: optionalString(note) ?? null,
+        paymentDate,
         recordedBy,
         receiptNumber,
       },
@@ -121,6 +123,7 @@ export async function applyInstallmentPaymentInTx(
     paymentMethod,
     transactionId = null,
     note = null,
+    paymentDate = new Date(),
     recordedBy,
     receiptNumber,
     paymentId,
@@ -144,6 +147,7 @@ export async function applyInstallmentPaymentInTx(
   const proposal = await loadProposalForInstallment(installment);
   const paymentInvoice = await createPaidInvoiceForInstallmentPayment(session, installment, amount, {
     proposal,
+    issueDate: paymentDate,
   });
 
   let masterInvoiceId = installment.invoiceId ?? null;
@@ -165,6 +169,7 @@ export async function applyInstallmentPaymentInTx(
         paymentMethod,
         transactionId: optionalString(transactionId) ?? null,
         note: optionalString(note) ?? null,
+        paymentDate,
         recordedBy,
         receiptNumber,
       },

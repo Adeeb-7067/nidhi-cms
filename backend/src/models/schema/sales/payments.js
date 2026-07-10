@@ -14,6 +14,7 @@ const paymentSchema = new Schema(
     paymentMethod: { type: String, enum: paymentMethods, required: true },
     transactionId: { type: String, trim: true, default: null },
     note: { type: String, trim: true, default: null },
+    paymentDate: { type: Date, default: Date.now, index: true },
     recordedBy: { type: Number, ref: "Users", required: true },
     receiptNumber: { type: String, unique: true, required: true },
   },

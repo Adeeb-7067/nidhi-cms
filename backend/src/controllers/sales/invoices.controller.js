@@ -35,6 +35,7 @@ import {
   assertBdeOwnsCustomerById,
   assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
+import { parseSalesDocumentDate } from "../../utils/sales-dates.js";
 import { ensureInvoiceForInstallment, resolveInstallmentInvoiceDueDate } from "../../services/sales/installment-billing.service.js";
 import { escapeRegex } from "../../utils/regex.js";
 
@@ -143,8 +144,8 @@ async function createInvoice(req, res) {
   const customer = await clientsTable.findOne({ id: Number(body.customerId) }).select({ id: 1 }).lean();
   if (!customer) notFound("Customer");
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
-  const dueDate = new Date(body.dueDate);
-  if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+  const dueDate = parseSalesDocumentDate(body.dueDate, "dueDate", { defaultNow: false });
+  const issueDate = parseSalesDocumentDate(body.issueDate, "issueDate");
 
   const lineItems = parseLineItems(body.lineItems);
   if (lineItems.length > 0) {
@@ -197,6 +198,7 @@ async function createInvoice(req, res) {
         adjustedTotal,
         paidAmount: 0,
         status: "unpaid",
+        issueDate,
         dueDate,
       }],
       { session }
@@ -289,9 +291,12 @@ async function updateInvoice(req, res) {
   if (body.proposalId !== undefined) updates.proposalId = body.proposalId ? Number(body.proposalId) : null;
 
   if (body.dueDate !== undefined) {
-    const d = new Date(body.dueDate);
-    if (isNaN(d.getTime())) badRequest("dueDate is invalid.", "dueDate");
+    const d = parseSalesDocumentDate(body.dueDate, "dueDate", { defaultNow: false });
+    if (!d) badRequest("dueDate is invalid.", "dueDate");
     updates.dueDate = d;
+  }
+  if (body.issueDate !== undefined && body.issueDate !== null && String(body.issueDate).trim() !== "") {
+    updates.issueDate = parseSalesDocumentDate(body.issueDate, "issueDate", { defaultNow: false });
   }
   if (body.status !== undefined) {
     badRequest("Use POST /sales/invoices/:id/cancel to cancel an invoice.", "status");

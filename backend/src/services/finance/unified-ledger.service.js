@@ -54,7 +54,7 @@ function normalizeSalesPayment(row, clientName, recorderName = null) {
   return {
     id: row.id,
     source: "sales",
-    date: row.createdAt,
+    date: row.paymentDate ?? row.createdAt,
     amount: row.amount,
     mode: row.paymentMethod,
     direction: "incoming",
@@ -97,7 +97,7 @@ function normalizeSalesInvoice(row, clientName, projectName) {
     number: row.number,
     clientId: row.customerId,
     projectId: row.projectId ?? null,
-    issueDate: row.createdAt,
+    issueDate: row.issueDate ?? row.createdAt,
     dueDate: row.dueDate,
     status: normalizeSalesInvoiceStatus(row.status),
     paidAmount: row.paidAmount ?? 0,

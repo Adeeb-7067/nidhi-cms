@@ -388,6 +388,7 @@ export interface SalesInvoice {
   paidAmount: number;
   status: InvoiceStatus;
   dueDate: string;
+  issueDate?: string | null;
   createdAt: string;
   cancelledAt?: string | null;
   cancelReason?: string | null;
@@ -412,6 +413,7 @@ export interface SalesPayment {
   recordedByName?: string | null;
   recordedByAvatarUrl?: string | null;
   receiptNumber: string;
+  paymentDate?: string | null;
   invoiceStatus: InvoiceStatus;
   createdAt: string;
 }
@@ -1376,7 +1378,17 @@ export function useCreateInstallment() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["sales-installments"] }),
+    onSuccess: (data, vars) => {
+      qc.invalidateQueries({ queryKey: ["sales-installments"] });
+      if (vars.invoiceId) {
+        qc.invalidateQueries({ queryKey: salesKeys.invoice(vars.invoiceId) });
+        qc.invalidateQueries({ queryKey: ["sales-invoices"] });
+      }
+      const customerId = vars.customerId ?? data?.customerId;
+      if (customerId) {
+        qc.invalidateQueries({ queryKey: salesKeys.customer(customerId) });
+      }
+    },
   });
 }
 
@@ -1436,12 +1448,14 @@ export function useReceiveInstallmentPayment() {
       installmentId,
       amount,
       paymentMethod,
+      paymentDate,
       transactionId,
       note,
     }: {
       installmentId: number;
       amount: number;
       paymentMethod: PaymentMethod;
+      paymentDate?: string;
       transactionId?: string;
       note?: string;
     }) =>
@@ -1451,7 +1465,7 @@ export function useReceiveInstallmentPayment() {
         invoiceCreated: boolean;
       }>(apiUrl(`/api/sales/installments/${installmentId}/receive-payment`), {
         method: "POST",
-        body: JSON.stringify({ amount, paymentMethod, transactionId, note }),
+        body: JSON.stringify({ amount, paymentMethod, paymentDate, transactionId, note }),
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.installment(vars.installmentId) });
@@ -1491,6 +1505,7 @@ export function useGetInvoice(id: number, enabled = true) {
 export type InvoiceFormBody = {
   customerId: number;
   dueDate: string;
+  issueDate?: string;
   title?: string | null;
   notes?: string | null;
   terms?: string | null;
@@ -1655,6 +1670,7 @@ export function useRecordPayment() {
       installmentId?: number;
       amount: number;
       paymentMethod: PaymentMethod;
+      paymentDate?: string;
       transactionId?: string;
       note?: string;
     }) =>

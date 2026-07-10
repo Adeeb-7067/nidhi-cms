@@ -54,7 +54,8 @@ export default function HrmLeavePage() {
     { enabled: leaveTab === "history" || leaveTab === "rejected" },
   );
   const balancesQuery = useHrmLeaveBalances(user?.id, new Date().getFullYear(), {
-    enabled: leaveTab === "balances" && !canAdminView,
+    enabled: !canAdminView && user?.id != null,
+    staleTime: 300_000,
   });
   const { data: requests, isLoading: requestsLoading } = requestsQuery;
   const { data: historyData, isLoading: historyLoading } = historyQuery;
@@ -109,7 +110,9 @@ export default function HrmLeavePage() {
     const pending = countByStatus(rows, "pending");
     const approved = countByStatus(rows, "approved");
     const rejected = countByStatus(rows, "rejected");
-    const available = balanceRows.reduce((n, b) => n + getLeaveBalanceAvailable(b), 0);
+    const available = balancesLoading
+      ? null
+      : balanceRows.reduce((n, b) => n + getLeaveBalanceAvailable(b), 0);
     const totalApprovedDays = rows
       .filter((r) => r.status === "approved")
       .reduce((sum, r) => sum + (r.days ?? 1), 0);
@@ -131,9 +134,9 @@ export default function HrmLeavePage() {
         icon: Wallet,
         accent: "blue" as const,
       },
-      { label: "Available days", value: available, hint: "Remaining balance", icon: Wallet, accent: "violet" as const },
+      { label: "Available days", value: available ?? "—", hint: "Remaining balance", icon: Wallet, accent: "violet" as const },
     ];
-  }, [canAdminView, allHistoryRows, requestRows, balanceRows, hrmSettings?.hrmPaidLeavesPerMonth]);
+  }, [canAdminView, allHistoryRows, requestRows, balanceRows, balancesLoading, hrmSettings?.hrmPaidLeavesPerMonth]);
 
   const leaveActionOpts = useMemo(
     () => ({
@@ -207,7 +210,7 @@ export default function HrmLeavePage() {
           }
         />
 
-        <HrmPageKpiRow items={kpiItems} loading={requestsLoading || balancesLoading} />
+        <HrmPageKpiRow items={kpiItems} loading={requestsLoading} />
 
         <LeaveCycleResetBanner
           leaveYearStartMonth={hrmSettings?.hrmLeaveYearStartMonth ?? 1}

@@ -32,6 +32,8 @@ import {
   DashboardFilterBar,
   DashboardSectionLabel,
   DashboardPipelineFlow,
+  filterMonthlyTrendRows,
+  dashboardTrendPeriodLabel,
 } from "@/components/dashboard/dashboard-page-kit";
 import {
   OverviewTile,
@@ -95,14 +97,16 @@ export default function AdminDashboard() {
   });
   const { data: health } = useHealthCheck();
 
-  if (isLoading) return <DashboardSkeleton />;
-  if (isError || !stats) {
+  if (isLoading && !stats) return <DashboardSkeleton />;
+  if (isError && !stats) {
     return (
       <div className="py-16 text-center text-sm text-muted-foreground">
         Unable to load dashboard data. Please refresh or try again later.
       </div>
     );
   }
+
+  if (!stats) return <DashboardSkeleton />;
 
   const dashboardData = stats as DashboardPayload;
 
@@ -122,12 +126,13 @@ export default function AdminDashboard() {
     { name: "Low", value: stats.bugSeverityBreakdown.low, color: "#22c55e" },
   ].filter((d) => d.value > 0);
 
-  const projectTrends = (dashboardData.trends?.projects ?? []).map((p) => ({
+  const trendPeriodLabel = dashboardTrendPeriodLabel(period);
+  const projectTrends = filterMonthlyTrendRows(dashboardData.trends?.projects ?? [], period).map((p) => ({
     ...p,
     month: formatTrendMonth(p.month),
   }));
 
-  const bugTrends = (dashboardData.trends?.bugs ?? []).map((b) => ({
+  const bugTrends = filterMonthlyTrendRows(dashboardData.trends?.bugs ?? [], period).map((b) => ({
     ...b,
     month: formatTrendMonth(b.month),
   }));
@@ -281,7 +286,7 @@ export default function AdminDashboard() {
         <ChartGridCell colSpan={5} className="min-h-[280px]">
           <ChartPanel
             title="Project growth"
-            description="New projects · last 6 months"
+            description={`New projects · ${trendPeriodLabel}`}
             icon={TrendingUp}
             accent="blue"
           >
@@ -290,7 +295,7 @@ export default function AdminDashboard() {
                 data={projectTrends}
                 stroke="hsl(var(--primary))"
                 gradientId="adminProjectGrad"
-                summaryLabel="New projects (6 mo)"
+                summaryLabel={`New projects (${trendPeriodLabel})`}
               />
             ) : (
               <ChartEmptyState message="Project trend data will appear as you add projects." />
@@ -301,7 +306,7 @@ export default function AdminDashboard() {
         <ChartGridCell colSpan={4} className="min-h-[280px]">
           <ChartPanel
             title="Bug reports"
-            description="New bugs · last 6 months"
+            description={`New bugs · ${trendPeriodLabel}`}
             icon={Bug}
             accent="amber"
           >
@@ -310,7 +315,7 @@ export default function AdminDashboard() {
                 data={bugTrends}
                 stroke="#f59e0b"
                 gradientId="adminBugGrad"
-                summaryLabel="New bugs (6 mo)"
+                summaryLabel={`New bugs (${trendPeriodLabel})`}
               />
             ) : (
               <ChartEmptyState message="Bug trend data will appear as issues are reported." icon={Bug} />

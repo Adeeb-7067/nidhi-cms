@@ -18,6 +18,8 @@ import {
   collectInstallmentIdsFromPayments,
   collectProposalIdsFromRecords,
 } from "../../utils/sales-project-labels.js";
+import { parseSalesDocumentDate } from "../../utils/sales-dates.js";
+import { paymentMethods } from "../../models/schema/sales/payments.js";
 import {
   assertBdeOwnsCustomerById,
   assertBdeInstallmentAccess,
@@ -114,21 +116,16 @@ async function listPayments(req, res) {
 
   const needsRepair = payments.filter((p) => p.installmentId && !p.paymentInvoiceId);
   if (needsRepair.length) {
-    for (const p of needsRepair) {
-      await runInTx((session) => repairPaymentInvoiceLinkInTx(session, p.id));
-    }
-    const repaired = await SalesPayments.find({ id: { $in: needsRepair.map((p) => p.id) } }).lean();
-    const extraInvoiceIds = repaired
-      .flatMap((p) => [p.invoiceId, p.paymentInvoiceId])
-      .filter((id) => id && !invoiceMap.has(id));
-    if (extraInvoiceIds.length) {
-      const extraInvoices = await SalesInvoices.find({ id: { $in: extraInvoiceIds } }).lean();
-      for (const inv of extraInvoices) invoiceMap.set(inv.id, inv);
-    }
-    for (const row of repaired) {
-      const idx = payments.findIndex((p) => p.id === row.id);
-      if (idx >= 0) payments[idx] = row;
-    }
+    const repairIds = needsRepair.map((p) => p.id);
+    void (async () => {
+      for (const id of repairIds) {
+        try {
+          await runInTx((session) => repairPaymentInvoiceLinkInTx(session, id));
+        } catch (err) {
+          console.error("[sales-payment] background repair failed for payment", id, err);
+        }
+      }
+    })();
   }
 
   const rows = payments.map((p) => {
@@ -173,6 +170,9 @@ async function recordPayment(req, res) {
   const body = req.body;
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
+  if (!paymentMethods.includes(body.paymentMethod)) {
+    badRequest(`paymentMethod must be one of: ${paymentMethods.join(", ")}.`, "paymentMethod");
+  }
 
   let invoiceId = body.invoiceId != null ? Number(body.invoiceId) : null;
   let installmentId = body.installmentId != null ? Number(body.installmentId) : null;
@@ -182,6 +182,7 @@ async function recordPayment(req, res) {
 
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) badRequest("amount must be a positive number.", "amount");
+  const paymentDate = parseSalesDocumentDate(body.paymentDate, "paymentDate");
 
   if (!installmentId && invoiceId) {
     const selected = await SalesInvoices.findOne({ id: invoiceId }).select({ installmentId: 1 }).lean();
@@ -216,6 +217,7 @@ async function recordPayment(req, res) {
         paymentMethod: body.paymentMethod,
         transactionId: body.transactionId,
         note: body.note,
+        paymentDate,
         recordedBy: req.user.id,
         receiptNumber,
         paymentId: id,
@@ -233,6 +235,7 @@ async function recordPayment(req, res) {
       paymentMethod: body.paymentMethod,
       transactionId: body.transactionId,
       note: body.note,
+      paymentDate,
       recordedBy: req.user.id,
       receiptNumber,
       paymentId: id,

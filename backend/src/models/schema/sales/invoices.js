@@ -32,6 +32,7 @@ const invoiceSchema = new Schema(
     adjustedTotal: { type: Number, default: null, min: 0 },
     paidAmount: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: invoiceStatuses, default: "unpaid", required: true, index: true },
+    issueDate: { type: Date, default: Date.now },
     dueDate: { type: Date, required: true },
     cancelledAt: { type: Date, default: null },
     cancelReason: { type: String, default: null, trim: true },

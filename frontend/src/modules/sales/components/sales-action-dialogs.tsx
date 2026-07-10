@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { addDays, format } from "date-fns";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -1275,6 +1275,7 @@ export function CreateInvoiceDialog({
   const [totalAdjustment, setTotalAdjustment] = useState(0);
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
+  const [issueDate, setIssueDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
@@ -1295,6 +1296,7 @@ export function CreateInvoiceDialog({
     setTotalAdjustment(0);
     setAdjustedTotal(null);
     setUseCustomTotal(false);
+    setIssueDate(format(new Date(), "yyyy-MM-dd"));
     setDueDate("");
     setProjectId("");
     setInstallmentId("");
@@ -1314,10 +1316,26 @@ export function CreateInvoiceDialog({
     if (proposal.projectId) setProjectId(String(proposal.projectId));
   }, [proposalId, proposalsData?.proposals]);
 
+  const customerInstallments = useMemo(() => {
+    const list = installmentsData?.installments ?? [];
+    if (!customerId) return list.filter((i) => !i.invoiceId);
+    const cid = Number(customerId);
+    return list.filter((i) => i.customerId === cid && !i.invoiceId);
+  }, [installmentsData?.installments, customerId]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customerId || !baseAmount || !dueDate) {
       toast.error("Customer, amount, and due date are required");
+      return;
+    }
+    const resolvedIssueDate = issueDate || format(new Date(), "yyyy-MM-dd");
+    if (resolvedIssueDate > dueDate) {
+      toast.error("Invoice date cannot be after due date");
+      return;
+    }
+    if (finalAmount <= 0) {
+      toast.error("Invoice amount must be greater than zero");
       return;
     }
     try {
@@ -1333,6 +1351,7 @@ export function CreateInvoiceDialog({
         calculatedAmount: payload.calculatedAmount,
         totalAdjustment: payload.totalAdjustment ?? 0,
         adjustedTotal: payload.adjustedTotal,
+        issueDate: resolvedIssueDate,
         dueDate,
         projectId: projectId ? Number(projectId) : undefined,
         installmentId: installmentId ? Number(installmentId) : undefined,
@@ -1365,13 +1384,16 @@ export function CreateInvoiceDialog({
             </Select>
           </SalesField>
           <div className="grid grid-cols-2 gap-3">
-            <SalesField label="Base amount (₹)">
-              <Input type="number" min={0} value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} placeholder="0" />
+            <SalesField label="Invoice date">
+              <Input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
             </SalesField>
             <SalesField label="Due date">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </SalesField>
           </div>
+          <SalesField label="Base amount (₹)">
+            <Input type="number" min={0} value={baseAmount} onChange={(e) => setBaseAmount(e.target.value)} placeholder="0" />
+          </SalesField>
           <TotalAmountAdjustFields
             calculatedTotal={calculatedAmount}
             totalAdjustment={totalAdjustment}
@@ -1400,7 +1422,7 @@ export function CreateInvoiceDialog({
                 <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">None</SelectItem>
-                  {(installmentsData?.installments ?? []).map((i) => (
+                  {(customerInstallments).map((i) => (
                     <SelectItem key={i.id} value={String(i.id)}>{i.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -1649,6 +1671,7 @@ export function ReceiveInstallmentPaymentDialog({
   const receive = useReceiveInstallmentPayment();
   const remaining = Math.max(0, installment.dueAmount - installment.paidAmount);
   const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
   const [note, setNote] = useState("");
@@ -1656,6 +1679,7 @@ export function ReceiveInstallmentPaymentDialog({
   useEffect(() => {
     if (!open) return;
     setAmount(remaining > 0 ? String(Math.round(remaining)) : "");
+    setPaymentDate(format(new Date(), "yyyy-MM-dd"));
     setTransactionId("");
     setNote("");
     setPaymentMethod("bank_transfer");
@@ -1677,6 +1701,7 @@ export function ReceiveInstallmentPaymentDialog({
         installmentId: installment.id,
         amount: amt,
         paymentMethod,
+        paymentDate,
         transactionId: transactionId.trim() || undefined,
         note: note.trim() || undefined,
       });
@@ -1708,6 +1733,9 @@ export function ReceiveInstallmentPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          <SalesField label="Payment date">
+            <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
+          </SalesField>
           <div className="grid grid-cols-2 gap-3">
             <SalesField label="Amount (₹)">
               <Input
@@ -1765,12 +1793,23 @@ export function RecordPaymentDialog({
   onSuccess?: (paymentId: number) => void;
 }) {
   const recordPayment = useRecordPayment();
-  const { data: invoicesData } = useListInvoices({ limit: 500 }, open);
-  const unpaid = (invoicesData?.invoices ?? []).filter(
-    (i) => i.status !== "paid" && i.status !== "cancelled" && (filterCustomerId == null || i.customerId === filterCustomerId),
+  const { data: invoicesData, isLoading: invoicesLoading } = useListInvoices(
+    { limit: filterCustomerId ? 100 : 200, customerId: filterCustomerId },
+    open,
+  );
+  const unpaid = useMemo(
+    () =>
+      (invoicesData?.invoices ?? []).filter(
+        (i) =>
+          i.status !== "paid" &&
+          i.status !== "cancelled" &&
+          (filterCustomerId == null || i.customerId === filterCustomerId),
+      ),
+    [invoicesData?.invoices, filterCustomerId],
   );
   const [invoiceId, setInvoiceId] = useState(defaultInvoiceId ? String(defaultInvoiceId) : "");
   const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("bank_transfer");
   const [transactionId, setTransactionId] = useState("");
   const [note, setNote] = useState("");
@@ -1779,6 +1818,7 @@ export function RecordPaymentDialog({
     if (!open) return;
     setInvoiceId(defaultInvoiceId ? String(defaultInvoiceId) : "");
     setAmount("");
+    setPaymentDate(format(new Date(), "yyyy-MM-dd"));
     setTransactionId("");
     setNote("");
   }, [open, defaultInvoiceId]);
@@ -1799,12 +1839,17 @@ export function RecordPaymentDialog({
       toast.error("Enter a valid amount");
       return;
     }
+    if (maxAmount != null && amt > maxAmount) {
+      toast.error(`Amount cannot exceed ₹${maxAmount.toLocaleString()}`);
+      return;
+    }
     try {
       const payment = await recordPayment.mutateAsync({
         invoiceId: Number(invoiceId),
         installmentId: defaultInstallmentId,
         amount: amt,
         paymentMethod,
+        paymentDate,
         transactionId: transactionId.trim() || undefined,
         note: note.trim() || undefined,
       });
@@ -1827,8 +1872,12 @@ export function RecordPaymentDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           <SalesField label="Invoice">
-            <Select value={invoiceId} onValueChange={setInvoiceId} disabled={!!defaultInvoiceId}>
-              <SelectTrigger><SelectValue placeholder="Select invoice" /></SelectTrigger>
+            <Select
+              value={invoiceId}
+              onValueChange={setInvoiceId}
+              disabled={!!defaultInvoiceId || invoicesLoading}
+            >
+              <SelectTrigger><SelectValue placeholder={invoicesLoading ? "Loading invoices…" : "Select invoice"} /></SelectTrigger>
               <SelectContent>
                 {unpaid.map((i) => (
                   <SelectItem key={i.id} value={String(i.id)}>
@@ -1839,18 +1888,8 @@ export function RecordPaymentDialog({
             </Select>
           </SalesField>
           <div className="grid grid-cols-2 gap-3">
-            <SalesField
-              label="Amount (₹)"
-              hint={maxAmount != null ? `Max: ₹${maxAmount.toLocaleString()}` : undefined}
-            >
-              <Input
-                type="number"
-                min={0}
-                max={maxAmount}
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="0"
-              />
+            <SalesField label="Payment date">
+              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
             </SalesField>
             <SalesField label="Payment method">
               <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}>
@@ -1863,6 +1902,19 @@ export function RecordPaymentDialog({
               </Select>
             </SalesField>
           </div>
+          <SalesField
+            label="Amount (₹)"
+            hint={maxAmount != null ? `Max: ₹${maxAmount.toLocaleString()}` : undefined}
+          >
+            <Input
+              type="number"
+              min={0}
+              max={maxAmount}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0"
+            />
+          </SalesField>
           <SalesField label="Transaction ID" hint="Optional — reference number, UTR, or cheque number.">
             <Input value={transactionId} onChange={(e) => setTransactionId(e.target.value)} placeholder="e.g. UTR123456789" />
           </SalesField>
@@ -1876,7 +1928,7 @@ export function RecordPaymentDialog({
           </SalesField>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={recordPayment.isPending}>
+            <Button type="submit" disabled={recordPayment.isPending || invoicesLoading || !invoiceId}>
               {recordPayment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Record payment
             </Button>

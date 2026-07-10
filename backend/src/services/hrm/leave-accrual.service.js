@@ -169,6 +169,39 @@ function parsePeriodKey(periodKey) {
   return { year: y, month: m };
 }
 
+/** Next calendar month key after `periodKey` (YYYY-MM). */
+export function nextAccrualPeriodKey(periodKey) {
+  const { year, month } = parsePeriodKey(periodKey);
+  if (month === 12) return `${year + 1}-01`;
+  return `${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+/** Previous calendar month key before `periodKey` (YYYY-MM). */
+export function previousAccrualPeriodKey(periodKey) {
+  const { year, month } = parsePeriodKey(periodKey);
+  if (month === 1) return `${year - 1}-12`;
+  return `${year}-${String(month - 1).padStart(2, "0")}`;
+}
+
+/**
+ * Accrual months to credit when catching up from `lastPeriod` (exclusive) through `throughPeriod` (inclusive).
+ * When `lastPeriod` is null, only `throughPeriod` is credited.
+ */
+export function listAccrualPeriodsAfter(lastPeriod, throughPeriod) {
+  if (!throughPeriod) return [];
+  if (!lastPeriod) return [throughPeriod];
+  if (lastPeriod >= throughPeriod) return [];
+
+  const periods = [];
+  let cursor = nextAccrualPeriodKey(lastPeriod);
+  while (cursor <= throughPeriod) {
+    periods.push(cursor);
+    if (cursor === throughPeriod) break;
+    cursor = nextAccrualPeriodKey(cursor);
+  }
+  return periods;
+}
+
 /** Calendar month key (YYYY-MM) in the company work-day timezone. */
 export function currentAccrualPeriodKey(now = new Date(), tz) {
   const { year, month } = localDateParts(now, tz);
@@ -209,8 +242,8 @@ export async function reconcileAutoSeededBalance(bal, leaveType) {
   let nextAllocated = allocated;
   let nextCarried = carriedForward;
 
-  // Legacy upfront annual grant (pre-accrual model).
-  if (max > 0 && allocated === max) {
+  // Legacy upfront annual grant (pre-accrual model) — never strip earned monthly EL accrual.
+  if (max > 0 && allocated === max && leaveType.code !== ACCRUAL_LEAVE_CODE) {
     nextAllocated = 0;
   }
 
@@ -383,6 +416,35 @@ export async function runLeaveCarryForward(targetLeaveYear) {
 // Leave cycle reset — forfeit unused EL accrual pool every N months (default 3)
 // ---------------------------------------------------------------------------
 
+async function resetUserAccrualLeaveBalance(userId, leaveYear, accrualType, session) {
+  const bal = await leaveBalancesTable
+    .findOne({ userId, leaveTypeId: accrualType.id, year: leaveYear })
+    .session(session ?? null);
+  if (!bal) return 0;
+
+  const available = computeAvailableBalance(bal);
+  const hasCounters =
+    (bal.allocated ?? 0) > 0 ||
+    (bal.carriedForward ?? 0) > 0 ||
+    (bal.used ?? 0) > 0 ||
+    (bal.pending ?? 0) > 0;
+  if (!hasCounters) return 0;
+
+  const sessOpts = session ? { session } : {};
+  const updated = await leaveBalancesTable.updateOne(
+    { id: bal.id, version: bal.version },
+    {
+      $set: { allocated: 0, carriedForward: 0, used: 0, pending: 0 },
+      $inc: { version: 1 },
+    },
+    sessOpts,
+  );
+  if (updated.modifiedCount !== 1) {
+    throw new Error(`Leave cycle reset conflict for user ${userId}`);
+  }
+  return available;
+}
+
 /**
  * Forfeit unused paid-leave balance and zero counters for the accrual leave type.
  * Runs on the first month of each leave cycle (every 3 months by default).
@@ -400,35 +462,15 @@ export async function runLeaveCycleReset(periodKey, leaveYear) {
     let employeeCount = 0;
 
     await runInTx(async (session) => {
-      const sessOpts = session ? { session } : {};
       for (const user of staff) {
-        const bal = await leaveBalancesTable
-          .findOne({ userId: user.id, leaveTypeId: accrualType.id, year: leaveYear })
-          .session(session ?? null);
-        if (!bal) continue;
-
-        const available = computeAvailableBalance(bal);
-        const hasCounters =
-          (bal.allocated ?? 0) > 0 ||
-          (bal.carriedForward ?? 0) > 0 ||
-          (bal.used ?? 0) > 0 ||
-          (bal.pending ?? 0) > 0;
-        if (!hasCounters) continue;
-
-        const updated = await leaveBalancesTable.updateOne(
-          { id: bal.id, version: bal.version },
-          {
-            $set: { allocated: 0, carriedForward: 0, used: 0, pending: 0 },
-            $inc: { version: 1 },
-          },
-          sessOpts,
+        const forfeited = await resetUserAccrualLeaveBalance(
+          user.id,
+          leaveYear,
+          accrualType,
+          session,
         );
-        if (updated.modifiedCount !== 1) {
-          throw new Error(`Leave cycle reset conflict for user ${user.id}`);
-        }
-
-        if (available > 0) {
-          forfeitTotal += available;
+        if (forfeited > 0) {
+          forfeitTotal += forfeited;
           employeeCount += 1;
         }
       }
@@ -459,63 +501,105 @@ export async function runLeaveCycleReset(periodKey, leaveYear) {
 
 /**
  * Credit this employee's monthly paid-leave accrual for `periodKey` if not already done.
- * Safe to call on balance reads and after admin saves leave quota.
+ * Catches up every missed month since `lastLeaveAccrualPeriod` so unused days
+ * accumulate within each cycle before the quarterly reset month.
  */
 export async function ensureUserLeaveAccrualForPeriod(userId, options = {}) {
   const { periodKey: explicitPeriod, force = false, now = new Date() } = options;
   const settings = await getOrCreateSettings();
   const tz = resolveWorkDayTimezone(settings.complianceTimezone);
   const periodKey = explicitPeriod ?? currentAccrualPeriodKey(now, tz);
-  const { year, month } = parsePeriodKey(periodKey);
   const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
-  const leaveYear = getLeaveYearForDate(year, month, startMonth);
+  const cycleMonths = resolveLeaveResetCycleMonths(settings);
 
-  const user = await usersTable.findOne({ id: userId }).lean();
+  let user = await usersTable.findOne({ id: userId }).lean();
   if (!user || user.status !== "active") return { skipped: "inactive", periodKey };
   if (!hrmEmployeeRoles.includes(user.role)) return { skipped: "not_hrm_employee", periodKey };
 
   const days = resolveAccrualDaysPerMonth(user, settings);
-  if (days <= 0) return { skipped: "zero_quota", periodKey };
-
-  if (!force && user.lastLeaveAccrualPeriod === periodKey) {
-    return { skipped: "already_credited", periodKey, leaveYear };
-  }
-
   const accrualType = await findAccrualLeaveType();
   if (!accrualType) return { skipped: "no_accrual_leave_type", periodKey };
+
+  const { year, month } = parsePeriodKey(periodKey);
+  const leaveYear = getLeaveYearForDate(year, month, startMonth);
+
+  if (days <= 0) {
+    if (isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
+      await runInTx(async (session) => {
+        await resetUserAccrualLeaveBalance(userId, leaveYear, accrualType, session);
+      });
+      await syncUserLeaveAvailable(userId, leaveYear);
+    }
+    return { skipped: "zero_quota", periodKey };
+  }
+
+  if (!force && user.lastLeaveAccrualPeriod === periodKey) {
+    return { skipped: "already_credited", periodKey };
+  }
 
   if (!force && !user.lastLeaveAccrualPeriod) {
     const existing = await leaveBalancesTable
       .findOne({ userId, leaveTypeId: accrualType.id, year: leaveYear })
       .lean();
-    if (existing && (existing.allocated ?? 0) > 0) {
+    const hasEarnedBalance =
+      existing &&
+      ((existing.allocated ?? 0) > 0 || (existing.used ?? 0) > 0 || (existing.pending ?? 0) > 0);
+    if (hasEarnedBalance) {
       await usersTable.updateOne({ id: userId }, { $set: { lastLeaveAccrualPeriod: periodKey } });
       await syncUserLeaveAvailable(userId, leaveYear);
-      return { skipped: "legacy_balance_assumed", periodKey, leaveYear };
+      return { skipped: "legacy_balance_synced", periodKey };
     }
   }
 
+  const periodsToCredit = force
+    ? [periodKey]
+    : listAccrualPeriodsAfter(user.lastLeaveAccrualPeriod, periodKey);
+  if (!periodsToCredit.length) {
+    return { skipped: "already_credited", periodKey };
+  }
+
+  let creditedTotal = 0;
+  let lastCreditedPeriod = user.lastLeaveAccrualPeriod;
+
   await runInTx(async (session) => {
     const sessOpts = session ? { session } : {};
-    const bal = await ensureBalanceRow(user.id, accrualType.id, leaveYear, session);
-    const updated = await leaveBalancesTable.updateOne(
-      { id: bal.id, version: bal.version },
-      { $inc: { allocated: days, version: 1 } },
-      sessOpts,
-    );
-    if (updated.modifiedCount !== 1) {
-      throw new Error(`Accrual conflict for user ${user.id}`);
+    for (const creditPeriod of periodsToCredit) {
+      const { year, month } = parsePeriodKey(creditPeriod);
+      const leaveYear = getLeaveYearForDate(year, month, startMonth);
+
+      if (creditPeriod === periodKey && isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
+        await resetUserAccrualLeaveBalance(userId, leaveYear, accrualType, session);
+      }
+
+      const bal = await ensureBalanceRow(userId, accrualType.id, leaveYear, session);
+      const updated = await leaveBalancesTable.updateOne(
+        { id: bal.id, version: bal.version },
+        { $inc: { allocated: days, version: 1 } },
+        sessOpts,
+      );
+      if (updated.modifiedCount !== 1) {
+        throw new Error(`Accrual conflict for user ${userId} period ${creditPeriod}`);
+      }
+      creditedTotal += days;
+      lastCreditedPeriod = creditPeriod;
     }
+
     await usersTable.updateOne(
-      { id: user.id },
-      { $set: { lastLeaveAccrualPeriod: periodKey } },
+      { id: userId },
+      { $set: { lastLeaveAccrualPeriod: lastCreditedPeriod } },
       sessOpts,
     );
   });
 
   await syncUserLeaveAvailable(userId, leaveYear);
 
-  return { credited: days, periodKey, leaveYear, leaveTypeId: accrualType.id };
+  return {
+    credited: creditedTotal,
+    periodKey: lastCreditedPeriod,
+    leaveYear,
+    leaveTypeId: accrualType.id,
+    periodsCredited: periodsToCredit.length,
+  };
 }
 
 export async function runMonthlyLeaveAccrual(periodKey) {
@@ -590,13 +674,7 @@ export async function runLeaveAccrualTick(now = new Date()) {
 
   const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
   const cycleMonths = resolveLeaveResetCycleMonths(settings);
-  let resetOutcome = null;
   let carryOutcome = null;
-
-  if (isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
-    const leaveYear = getLeaveYearForDate(year, month, startMonth);
-    resetOutcome = await runLeaveCycleReset(periodKey, leaveYear);
-  }
 
   // Year-end carry-forward for non-accrual leave types (CL/SL) when the leave year starts.
   if (month === startMonth) {
@@ -604,9 +682,15 @@ export async function runLeaveAccrualTick(now = new Date()) {
     carryOutcome = await runLeaveCarryForward(targetLeaveYear);
   }
 
+  // Quarterly reset for all staff (including zero-quota) before monthly accrual credits.
+  if (isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
+    const leaveYear = getLeaveYearForDate(year, month, startMonth);
+    await runLeaveCycleReset(periodKey, leaveYear);
+  }
+
   const accrualOutcome = await runMonthlyLeaveAccrual(periodKey);
 
-  const summary = { periodKey, timezone: tz, resetOutcome, carryOutcome, accrualOutcome };
+  const summary = { periodKey, timezone: tz, carryOutcome, accrualOutcome };
   logger.info(summary, "Leave accrual tick completed");
   return summary;
 }

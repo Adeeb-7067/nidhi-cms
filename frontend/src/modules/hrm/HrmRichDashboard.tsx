@@ -50,6 +50,7 @@ import {
   HrmChartEmptyState,
   type HrmTrendDays,
 } from "./components";
+import { HrmTrendRangeSelect } from "./rich-ui-kit";
 import { HrmAttendanceTrendChart } from "./dashboard-charts";
 import {
   HrmBirthdayList,
@@ -93,9 +94,10 @@ type Props = {
   data: HrmDashboardResponse;
   view: "admin" | "manager";
   trendDays: HrmTrendDays;
+  onTrendDaysChange?: (value: HrmTrendDays) => void;
 };
 
-export function HrmRichDashboard({ data, view, trendDays }: Props) {
+export function HrmRichDashboard({ data, view, trendDays, onTrendDaysChange }: Props) {
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [attendanceStatusFilter, setAttendanceStatusFilter] = useState("all");
@@ -332,8 +334,8 @@ export function HrmRichDashboard({ data, view, trendDays }: Props) {
           items={[
             {
               title: "Total employees",
-              value: (stats?.headcount ?? 0).toLocaleString(),
-              hint: "Active directory",
+              value: headcount.toLocaleString(),
+              hint: hasAttendanceFilters ? "Matching filters" : "Active directory",
               icon: Users,
               accent: "violet",
               href: "/hrm/employees",
@@ -545,6 +547,11 @@ export function HrmRichDashboard({ data, view, trendDays }: Props) {
             icon={TrendingUp}
             accent="blue"
             viewAllHref="/hrm/attendance"
+            headerExtra={
+              onTrendDaysChange ? (
+                <HrmTrendRangeSelect value={trendDays} onChange={onTrendDaysChange} className="w-[120px]" />
+              ) : null
+            }
           >
             {trendData.length > 0 ? (
               <HrmAttendanceTrendChart data={trendData} />

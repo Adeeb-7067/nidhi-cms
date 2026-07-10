@@ -139,10 +139,11 @@ function RecordInstallmentPaymentDialog({
   const record = useRecordPayment();
   const remaining = Math.max(0, installment.dueAmount - installment.paidAmount);
   const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [method, setMethod] = useState<PaymentMethod>("bank_transfer");
   const [txnId, setTxnId] = useState("");
 
-  const reset = () => { setAmount(""); setTxnId(""); setMethod("bank_transfer"); };
+  const reset = () => { setAmount(""); setPaymentDate(format(new Date(), "yyyy-MM-dd")); setTxnId(""); setMethod("bank_transfer"); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,6 +156,7 @@ function RecordInstallmentPaymentDialog({
         installmentId: installment.id,
         amount: amt,
         paymentMethod: method,
+        paymentDate,
         transactionId: txnId.trim() || undefined,
       });
       toast.success(`Payment of ${formatCurrency(amt)} recorded`);
@@ -176,6 +178,15 @@ function RecordInstallmentPaymentDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3 pt-1">
+          <div className="space-y-1">
+            <Label className="text-xs">Payment date</Label>
+            <Input
+              type="date"
+              className="h-8 text-xs"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label className="text-xs">Amount (₹) <span className="text-destructive">*</span></Label>

@@ -244,7 +244,11 @@ export function useHrmLeaveTypes() {
   });
 }
 
-export function useHrmLeaveBalances(userId?: number, year?: number, options?: { enabled?: boolean }) {
+export function useHrmLeaveBalances(
+  userId?: number,
+  year?: number,
+  options?: { enabled?: boolean; staleTime?: number },
+) {
   const params = new URLSearchParams();
   if (userId) params.set("userId", String(userId));
   if (year) params.set("year", String(year));
@@ -252,7 +256,7 @@ export function useHrmLeaveBalances(userId?: number, year?: number, options?: { 
   return useHrmQuery({
     queryKey: hrmLeaveBalancesQueryKey(userId, year),
     enabled: options?.enabled ?? true,
-    staleTime: QUERY_STALE.list,
+    staleTime: options?.staleTime ?? QUERY_STALE.list,
     queryFn: () =>
       customFetch<{ balances: HrmLeaveBalance[] }>(
         apiUrl(`/api/hrm/leave/balances${qs ? `?${qs}` : ""}`),

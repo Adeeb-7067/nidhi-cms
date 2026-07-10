@@ -1,6 +1,7 @@
 import {
   FinanceIncome,
   FinancePayments,
+  SalesPayments,
   SalesInvoices,
   SalesInstallments,
   SalesProposals,
@@ -45,7 +46,11 @@ export async function mirrorSalesPaymentToFinanceInTx(session, salesPayment) {
   }
 
   const projectId = resolveSalesProjectId({ invoice, installment, proposal });
-  const paidDate = salesPayment.createdAt ? new Date(salesPayment.createdAt) : new Date();
+  const paidDate = salesPayment.paymentDate
+    ? new Date(salesPayment.paymentDate)
+    : salesPayment.createdAt
+      ? new Date(salesPayment.createdAt)
+      : new Date();
   const paymentMode = salesPayment.paymentMethod;
 
   const [incomeId, paymentId, receiptNumber] = await Promise.all([

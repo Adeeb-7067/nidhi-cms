@@ -195,7 +195,7 @@ export function InvoiceDocument({
           </p>
           <div className="space-y-2.5">
             <DocRow label="Invoice No." value={invoice.number} mono />
-            <DocRow label="Issue Date" value={formatSalesDateTime(invoice.createdAt)} />
+            <DocRow label="Issue Date" value={formatSalesDateTime(invoice.issueDate ?? invoice.createdAt)} />
             <DocRow label="Due Date" value={format(new Date(invoice.dueDate), "dd MMM yyyy")} />
             {invoice.projectName && <DocRow label="Project" value={invoice.projectName} />}
             {invoice.installmentName && <DocRow label="Installment" value={invoice.installmentName} />}

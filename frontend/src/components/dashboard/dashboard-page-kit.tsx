@@ -57,6 +57,32 @@ const DEFAULT_PERIODS = [
   { value: "all", label: "All time" },
 ] as const;
 
+/** Filter YYYY-MM trend rows for admin dashboard period selector. */
+export function filterMonthlyTrendRows<T extends { month: string }>(
+  rows: T[],
+  period: string,
+): T[] {
+  if (!rows.length || period === "all") return rows;
+  const now = new Date();
+  let cutoff: Date;
+  if (period === "month") {
+    cutoff = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (period === "ytd") {
+    cutoff = new Date(now.getFullYear(), 0, 1);
+  } else {
+    cutoff = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+  }
+  const cutoffKey = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}`;
+  return rows.filter((row) => row.month >= cutoffKey);
+}
+
+export function dashboardTrendPeriodLabel(period: string): string {
+  if (period === "month") return "this month";
+  if (period === "ytd") return "year to date";
+  if (period === "all") return "all time";
+  return "last 6 months";
+}
+
 export function DashboardFilterBar({
   period,
   onPeriodChange,

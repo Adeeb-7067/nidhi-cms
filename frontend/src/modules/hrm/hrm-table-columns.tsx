@@ -7,7 +7,7 @@ import { HrmApprovalActions, HrmWorkflowBadge } from "@/modules/hrm/components";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
 import type { HrmHoliday, HrmLeaveBalance, HrmLeaveRequest, HrmWfhRequest, HrmExitRequest } from "@/modules/hrm/types";
-import { getLeaveBalanceAvailable } from "@/modules/hrm/employee-profile-types";
+import { getLeaveBalanceAvailable, getLeaveBalanceCarriedForward } from "@/modules/hrm/employee-profile-types";
 
 type LeaveColumnOptions = {
   showEmployee: boolean;
@@ -204,13 +204,21 @@ export function buildLeaveBalanceColumns(): Column<HrmLeaveBalance>[] {
       cell: (b) => <span className="font-medium">{b.leaveType?.name ?? b.leaveTypeId}</span>,
       exportValue: (b) => b.leaveType?.name ?? String(b.leaveTypeId),
     },
-    { id: "allocated", header: "Allocated", accessorKey: "allocated" },
+    {
+      id: "accrued",
+      header: "Accrued",
+      cell: (b) => {
+        const accrued = (b.allocated ?? 0) + getLeaveBalanceCarriedForward(b);
+        return <span className="tabular-nums">{accrued}</span>;
+      },
+      exportValue: (b) => String((b.allocated ?? 0) + getLeaveBalanceCarriedForward(b)),
+    },
     { id: "used", header: "Used", accessorKey: "used" },
     { id: "pending", header: "Pending", accessorKey: "pending" },
     {
       id: "available",
       header: "Available",
-      cell: (b) => <span className="font-medium">{getLeaveBalanceAvailable(b)}</span>,
+      cell: (b) => <span className="font-medium tabular-nums">{getLeaveBalanceAvailable(b)}</span>,
       exportValue: (b) => String(getLeaveBalanceAvailable(b)),
     },
   ];

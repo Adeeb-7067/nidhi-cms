@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -21,6 +21,7 @@ import { HrmGate } from "@/modules/hrm/HrmGate";
 import { HrmRichDashboard } from "@/modules/hrm/HrmRichDashboard";
 import { HrmAttendanceTrendChart } from "@/modules/hrm/dashboard-charts";
 import { HrmChartEmptyState, sliceTrendByDays, type HrmTrendDays } from "@/modules/hrm/components";
+import { HrmTrendRangeSelect } from "@/modules/hrm/rich-ui-kit";
 import { HrmDashboardSectionLabel } from "@/modules/hrm/hrm-dashboard-kit";
 import { HrmAttendanceGridPanel } from "@/modules/hrm/hrm-attendance-grid";
 import { deriveTodayAttendanceStats } from "@/modules/hrm/attendance-day-stats";
@@ -57,18 +58,15 @@ function DashboardLoading() {
 
 export default function HrmDashboardPage() {
   const { user } = useAuth();
-  const trendDays: HrmTrendDays = "30";
+  const [trendDays, setTrendDays] = useState<HrmTrendDays>("30");
   const { data, isLoading, isError, error } = useHrmDashboard(trendDays);
-  const todayKey = data?.todayKey ?? format(new Date(), "yyyy-MM-dd");
-  // Admin/manager views get today's attendance rows embedded in the dashboard payload
-  // (data.todayAttendance) — this dedicated fetch is only needed for the employee self-view,
-  // which doesn't carry row-level attendance in the dashboard response.
+  const todayKey = format(new Date(), "yyyy-MM-dd");
   const { data: attendanceData, isLoading: attendanceLoading } = useHrmAttendanceDaily(
     todayKey,
     todayKey,
     undefined,
     undefined,
-    { enabled: !!data && data.view === "employee" },
+    { enabled: !!user?.id },
   );
 
   const trendData = useMemo(() => {
@@ -97,7 +95,7 @@ export default function HrmDashboardPage() {
     [attendanceData?.summaries],
   );
 
-  if (isLoading) {
+  if (isLoading && !data) {
     return (
       <HrmGate module="dashboard">
         <DashboardLoading />
@@ -105,7 +103,7 @@ export default function HrmDashboardPage() {
     );
   }
 
-  if (isError || !data) {
+  if (isError && !data) {
     return (
       <HrmGate module="dashboard">
         <PortalPageShell>
@@ -113,6 +111,14 @@ export default function HrmDashboardPage() {
             {getApiErrorMessage(error, "Unable to load HRM dashboard. Please refresh or try again later.")}
           </div>
         </PortalPageShell>
+      </HrmGate>
+    );
+  }
+
+  if (!data) {
+    return (
+      <HrmGate module="dashboard">
+        <DashboardLoading />
       </HrmGate>
     );
   }
@@ -127,6 +133,7 @@ export default function HrmDashboardPage() {
             data={data}
             view={view}
             trendDays={trendDays}
+            onTrendDaysChange={setTrendDays}
           />
         </PortalPageShell>
       </HrmGate>
@@ -227,10 +234,13 @@ export default function HrmDashboardPage() {
           <ChartGridCell colSpan={8}>
             <ChartPanel
               title="My attendance trend"
-              description={`Present vs absent · last ${trendDays} days`}
+              description={`Present vs absent · last ${trendDays === "180" ? "6 months" : `${trendDays} days`}`}
               icon={TrendingUp}
               accent="blue"
               viewAllHref="/hrm/my-attendance"
+              headerExtra={
+                <HrmTrendRangeSelect value={trendDays} onChange={setTrendDays} className="w-[120px]" />
+              }
             >
               {trendData.length > 0 ? (
                 <HrmAttendanceTrendChart data={trendData} />

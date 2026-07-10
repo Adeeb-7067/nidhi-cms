@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { format } from "date-fns";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -187,7 +188,6 @@ export function InvoiceFormSheet({
   const updateInvoice = useUpdateInvoice();
 
   const { data: customersData } = useListCustomers({ limit: 200 }, open);
-  const { data: installmentsData } = useListInstallments({ limit: 200 }, open);
   const { data: productsData } = useListProducts({ status: "active" }, open);
   const { data: settings } = useSalesSettings(open);
   const projectParams = { limit: 200 };
@@ -201,6 +201,7 @@ export function InvoiceFormSheet({
   // Form state
   const [title, setTitle] = useState("");
   const [customerId, setCustomerId] = useState("");
+  const [issueDate, setIssueDate] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [projectId, setProjectId] = useState("");
   const [installmentId, setInstallmentId] = useState("");
@@ -211,12 +212,23 @@ export function InvoiceFormSheet({
   const [adjustedTotal, setAdjustedTotal] = useState<number | null>(null);
   const [useCustomTotal, setUseCustomTotal] = useState(false);
 
+  const installmentQueryCustomerId = customerId
+    ? Number(customerId)
+    : isEdit && invoice
+      ? invoice.customerId
+      : undefined;
+  const { data: installmentsData } = useListInstallments(
+    { limit: 200, customerId: installmentQueryCustomerId },
+    open && installmentQueryCustomerId != null,
+  );
+
   // Seed from existing invoice when editing
   useEffect(() => {
     if (!open) return;
     if (invoice) {
       setTitle(invoice.title ?? "");
       setCustomerId(String(invoice.customerId));
+      setIssueDate((invoice.issueDate ?? invoice.createdAt).slice(0, 10));
       setDueDate(invoice.dueDate.slice(0, 10));
       setProjectId(invoice.projectId ? String(invoice.projectId) : "");
       setInstallmentId(invoice.installmentId ? String(invoice.installmentId) : "");
@@ -237,6 +249,7 @@ export function InvoiceFormSheet({
     } else {
       setTitle("");
       setCustomerId(defaultCustomerId ? String(defaultCustomerId) : "");
+      setIssueDate(format(new Date(), "yyyy-MM-dd"));
       setDueDate("");
       setProjectId("");
       setInstallmentId("");
@@ -254,6 +267,11 @@ export function InvoiceFormSheet({
   const payload = totalAdjustPayload(calculatedAmount, totalAdjustment, useCustomTotal, adjustedTotal);
   const finalAmount = payload.amount;
 
+  const eligibleInstallments = useMemo(
+    () => (installmentsData?.installments ?? []).filter((inst) => !inst.invoiceId),
+    [installmentsData?.installments],
+  );
+
   const updateItem = (index: number, patch: Partial<ProposalLineItem>) => {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   };
@@ -264,6 +282,11 @@ export function InvoiceFormSheet({
     e.preventDefault();
     if (!isEdit && !customerId) { toast.error("Customer is required"); return; }
     if (!dueDate) { toast.error("Due date is required"); return; }
+    const resolvedIssueDate = issueDate || format(new Date(), "yyyy-MM-dd");
+    if (resolvedIssueDate > dueDate) {
+      toast.error("Invoice date cannot be after due date");
+      return;
+    }
     if (items.length === 0) { toast.error("Add at least one line item"); return; }
     if (items.some((it) => !it.name.trim())) { toast.error("All line items need a name"); return; }
     if (items.some((it) => it.unitPrice <= 0)) {
@@ -290,6 +313,7 @@ export function InvoiceFormSheet({
 
     const body = {
       title: title.trim() || null,
+      issueDate: resolvedIssueDate,
       dueDate,
       projectId: projectId ? Number(projectId) : null,
       installmentId: installmentId ? Number(installmentId) : null,
@@ -336,9 +360,9 @@ export function InvoiceFormSheet({
             <Input className="h-8 text-xs" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Website Design — Phase 1" />
           </div>
 
-          {/* Customer + Due date */}
+          {/* Customer + dates */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
+            <div className="space-y-1 col-span-2 sm:col-span-1">
               <Label className="text-xs">Customer <span className="text-destructive">*</span></Label>
               {isEdit ? (
                 <>
@@ -368,6 +392,10 @@ export function InvoiceFormSheet({
               )}
             </div>
             <div className="space-y-1">
+              <Label className="text-xs">Invoice date</Label>
+              <Input type="date" className="h-8 text-xs" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+            </div>
+            <div className="space-y-1">
               <Label className="text-xs">Due date <span className="text-destructive">*</span></Label>
               <Input type="date" className="h-8 text-xs" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
             </div>
@@ -393,7 +421,7 @@ export function InvoiceFormSheet({
                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none" className="text-xs">None</SelectItem>
-                  {(installmentsData?.installments ?? []).map((inst) => (
+                  {(eligibleInstallments).map((inst) => (
                     <SelectItem key={inst.id} value={String(inst.id)} className="text-xs">
                       {inst.name} — {formatCurrency(inst.dueAmount)}
                     </SelectItem>

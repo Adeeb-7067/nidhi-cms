@@ -502,12 +502,21 @@ async function provisionCustomerPortal(req, res) {
 async function getCustomerStatement(req, res) {
   const id = parseIdParam(req.params.id, "customer id");
   const client = await findClientOr404(id, req.user);
-  const [allInvoices, payments, installments] = await Promise.all([
-    SalesInvoices.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
-    SalesPayments.find({ customerId: id }).sort({ createdAt: 1 }).lean(),
+  const [allInvoices, paymentRows, installments] = await Promise.all([
+    SalesInvoices.find({ customerId: id }).lean(),
+    SalesPayments.find({ customerId: id }).lean(),
     SalesInstallments.find({ customerId: id }).lean(),
   ]);
-  const invoices = allInvoices.filter(isBillableInvoice);
+  const invoices = allInvoices
+    .filter(isBillableInvoice)
+    .sort(
+      (a, b) =>
+        new Date(a.issueDate ?? a.createdAt).getTime() - new Date(b.issueDate ?? b.createdAt).getTime(),
+    );
+  const payments = [...paymentRows].sort(
+    (a, b) =>
+      new Date(a.paymentDate ?? a.createdAt).getTime() - new Date(b.paymentDate ?? b.createdAt).getTime(),
+  );
   const financials = resolveCustomerFinancials(installments, invoices);
   res.json({
     customer: formatClientAsCustomer(client),

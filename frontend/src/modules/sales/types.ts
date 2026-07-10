@@ -253,6 +253,7 @@ export interface SalesInvoice {
   paidAmount: number;
   status: InvoiceStatus;
   dueDate: string;
+  issueDate?: string | null;
   createdAt: string;
   cancelledAt?: string | null;
   cancelReason?: string | null;

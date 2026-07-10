@@ -10,6 +10,9 @@ import {
   computeCarryForwardAmount,
   allocateOldestFirst,
   leaveProfileFieldsTouched,
+  listAccrualPeriodsAfter,
+  nextAccrualPeriodKey,
+  previousAccrualPeriodKey,
 } from "../../src/services/hrm/leave-accrual.service.js";
 
 describe("computeAvailableBalance", () => {
@@ -114,6 +117,31 @@ describe("resolveAccrualDaysPerMonth", () => {
       ),
       3,
     );
+  });
+});
+
+describe("listAccrualPeriodsAfter", () => {
+  test("returns only throughPeriod when no prior accrual", () => {
+    assert.deepEqual(listAccrualPeriodsAfter(null, "2026-07"), ["2026-07"]);
+  });
+
+  test("lists every missed month through the target period", () => {
+    assert.deepEqual(listAccrualPeriodsAfter("2026-04", "2026-07"), [
+      "2026-05",
+      "2026-06",
+      "2026-07",
+    ]);
+  });
+
+  test("returns empty when already credited through target", () => {
+    assert.deepEqual(listAccrualPeriodsAfter("2026-07", "2026-07"), []);
+  });
+});
+
+describe("nextAccrualPeriodKey", () => {
+  test("rolls year boundary", () => {
+    assert.equal(nextAccrualPeriodKey("2026-12"), "2027-01");
+    assert.equal(nextAccrualPeriodKey("2026-06"), "2026-07");
   });
 });
 

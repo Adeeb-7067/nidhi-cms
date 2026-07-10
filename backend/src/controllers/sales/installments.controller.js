@@ -21,7 +21,10 @@ import {
   assertBdeOwnsProposal,
   assertBdeInstallmentAccess,
 } from "../../utils/sales-bde-customer-scope.js";
+import { parseSalesDocumentDate } from "../../utils/sales-dates.js";
+import { paymentMethods } from "../../models/schema/sales/payments.js";
 import { applyInstallmentPaymentInTx } from "../../services/sales/payment-ledger.service.js";
+import { mirrorSalesPaymentToFinanceInTx } from "../../services/finance/sales-payment-sync.service.js";
 import { escapeRegex } from "../../utils/regex.js";
 
 function proposalFinalTotal(proposal) {
@@ -139,8 +142,7 @@ async function createInstallment(req, res) {
   if (!body.name) badRequest("name is required.", "name");
   if (body.dueAmount == null) badRequest("dueAmount is required.", "dueAmount");
   if (!body.dueDate) badRequest("dueDate is required.", "dueDate");
-  const dueDate = new Date(body.dueDate);
-  if (isNaN(dueDate.getTime())) badRequest("dueDate is invalid.", "dueDate");
+  const dueDate = parseSalesDocumentDate(body.dueDate, "dueDate", { defaultNow: false });
 
   // Resolve customerId from invoice when not explicitly provided
   let customerId = body.customerId ? Number(body.customerId) : null;
@@ -165,6 +167,9 @@ async function createInstallment(req, res) {
   const totalAdjustment = parseTotalAdjustment(body.totalAdjustment) ?? 0;
   const adjustedTotal = parseAdjustedTotal(body.adjustedTotal) ?? null;
   const dueAmount = resolveFinalTotal(calculatedAmount, totalAdjustment, adjustedTotal);
+  if (!Number.isFinite(dueAmount) || dueAmount <= 0) {
+    badRequest("dueAmount must be a positive number.", "dueAmount");
+  }
 
   if (invoice) {
     const existing = await SalesInstallments.find({ invoiceId }).select({ dueAmount: 1 }).lean();
@@ -248,8 +253,8 @@ async function updateInstallment(req, res) {
     }
   }
   if (body.dueDate !== undefined) {
-    const d = new Date(body.dueDate);
-    if (isNaN(d.getTime())) badRequest("dueDate is invalid.", "dueDate");
+    const d = parseSalesDocumentDate(body.dueDate, "dueDate", { defaultNow: false });
+    if (!d) badRequest("dueDate is invalid.", "dueDate");
     updates.dueDate = d;
   }
   if (body.paidAmount !== undefined) {
@@ -353,10 +358,14 @@ async function receiveInstallmentPayment(req, res) {
   const body = req.body ?? {};
   if (body.amount == null) badRequest("amount is required.", "amount");
   if (!body.paymentMethod) badRequest("paymentMethod is required.", "paymentMethod");
+  if (!paymentMethods.includes(body.paymentMethod)) {
+    badRequest(`paymentMethod must be one of: ${paymentMethods.join(", ")}.`, "paymentMethod");
+  }
   const amount = Number(body.amount);
   if (!Number.isFinite(amount) || amount <= 0) {
     badRequest("amount must be a positive number.", "amount");
   }
+  const paymentDate = parseSalesDocumentDate(body.paymentDate, "paymentDate");
 
   const installment = await SalesInstallments.findOne({ id: installmentId }).lean();
   if (!installment) notFound("Installment");
@@ -385,6 +394,7 @@ async function receiveInstallmentPayment(req, res) {
       paymentMethod: body.paymentMethod,
       transactionId: body.transactionId,
       note: body.note,
+      paymentDate,
       recordedBy: req.user.id,
       receiptNumber,
       paymentId,
@@ -396,6 +406,12 @@ async function receiveInstallmentPayment(req, res) {
   });
 
   const payment = await SalesPayments.findOne({ id: paymentId }).lean();
+  try {
+    await runInTx((session) => mirrorSalesPaymentToFinanceInTx(session, payment));
+  } catch (syncErr) {
+    console.error("[sales-payment] finance sync failed for installment payment", paymentId, syncErr);
+  }
+
   res.status(201).json({
     payment: { ...payment, invoiceStatus },
     invoice,
