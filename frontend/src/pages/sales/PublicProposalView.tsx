@@ -672,7 +672,7 @@ export default function PublicProposalView() {
             {canAct && actionState === "idle" && (
               <div
                 data-pdf-hide
-                className="rounded-2xl overflow-hidden shadow-sm px-8 py-6"
+                className="rounded-2xl overflow-hidden shadow-sm px-5 py-5 sm:px-8 sm:py-6"
                 style={{ background: "#fff", border: `1px solid ${border}` }}
               >
                 {isPastValidity && (

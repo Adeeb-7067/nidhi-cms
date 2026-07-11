@@ -1,4 +1,4 @@
-import { commentsTable, usersTable, notificationsTable, ticketsTable, getNextSequence } from "../models/schema/index.js";
+import { commentsTable, usersTable, notificationsTable, ticketsTable, getNextSequence, getNextSequenceRange } from "../models/schema/index.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
 import { broadcast, emitToUsers, notifyUser } from "../lib/realtime.js";
 import { parsePagination, badRequest, notFound, forbidden, parseIdParam } from "../utils/route-errors.js";
@@ -155,11 +155,15 @@ async function getComments(req, res) {
     if (threadType === "project") {
       await assertClientPermission(req, "discussions", "view");
     }
-  }
-  if (threadType === "ticket") {
+  } else if (threadType === "ticket") {
     await assertTicketAccess(req.user, threadIdNum);
+  } else {
+    // Thread types such as `bug`/`log`/`request`/`apk` are owned by their own
+    // modules with their own authorization; they must not be reachable through
+    // the generic comments endpoint. Default-deny anything not handled above.
+    forbidden();
   }
-  const { page, limit, skip } = parsePagination(q);
+  const { limit, skip } = parsePagination(q);
   const recent = q.recent === "true" || q.recent === true;
   const topLevelQuery = {
     threadType,
@@ -201,6 +205,7 @@ async function postComments(req, res) {
     validateStoredFileUrl(attachmentUrl, "attachmentUrl");
   }
   const threadIdNum = parseDiscussionThreadId(threadId, threadType);
+  let ticketForThread = null;
   if (isDirectDiscussionThread(threadType)) {
     if (!(await canAccessDirectConversation(req.user, threadIdNum))) forbidden();
   } else if (isProjectDiscussionThread(threadType)) {
@@ -209,10 +214,12 @@ async function postComments(req, res) {
     if (threadType === "project") {
       await assertClientPermission(req, "discussions", "create");
     }
-  }
-  let ticketForThread = null;
-  if (threadType === "ticket") {
+  } else if (threadType === "ticket") {
     ticketForThread = await assertTicketAccess(req.user, threadIdNum);
+  } else {
+    // Module-owned thread types (bug/log/request/apk) are not postable through
+    // the generic endpoint. Default-deny anything not handled above.
+    forbidden();
   }
   if (parentId != null) {
     const parent = await commentsTable.findOne({
@@ -225,7 +232,7 @@ async function postComments(req, res) {
   }
   let mentionIds = [];
   if (isCompanyTeamDiscussionThread(threadType)) {
-    mentionIds = await resolveCompanyTeamMentionIds(req.user.id, requestedMentionIds, text);
+    mentionIds = await resolveCompanyTeamMentionIds(req.user.id, requestedMentionIds, text, threadType);
   } else if (isProjectDiscussionThread(threadType)) {
     mentionIds = await resolveProjectMentionIds(
       threadIdNum,
@@ -322,14 +329,21 @@ async function postComments(req, res) {
           ? "Sent an attachment"
           : "New message";
     const mentionSet = new Set(mentionIds);
-    await Promise.all(Array.from(recipientIds).map(async (userId) => {
-      const notifId = await getNextSequence("notifications");
-      const notifProjectId =
-        isCompanyTeamDiscussionThread(threadType) || isDirectDiscussionThread(threadType)
-          ? null
-          : isProjectDiscussionThread(threadType)
-            ? threadIdNum
-            : ticketForThread?.projectId ?? null;
+    const recipients = Array.from(recipientIds);
+    const notifProjectId =
+      isCompanyTeamDiscussionThread(threadType) || isDirectDiscussionThread(threadType)
+        ? null
+        : isProjectDiscussionThread(threadType)
+          ? threadIdNum
+          : ticketForThread?.projectId ?? null;
+    const notifEntityType = threadType === "ticket" ? "ticket" : threadType;
+    // Reserve all notification ids in a single round-trip, then bulk-insert
+    // rather than issuing one findOneAndUpdate + insert per recipient.
+    const notifIds = recipients.length
+      ? await getNextSequenceRange("notifications", recipients.length)
+      : [];
+    const now = new Date();
+    const notifDocs = recipients.map((userId, index) => {
       const isMention = mentionSet.has(userId);
       const notifType = isMention ? "comment_mention" : "comment";
       const notifTitle = isMention
@@ -337,27 +351,32 @@ async function postComments(req, res) {
         : isDirectDiscussionThread(threadType)
           ? `${authorName} sent you a message`
           : `${authorName} commented`;
-      await notificationsTable.create({
-        id: notifId,
+      return {
+        id: notifIds[index],
         userId,
         type: notifType,
         title: notifTitle,
         body: notifBody,
-        entityType: threadType === "ticket" ? "ticket" : threadType,
+        entityType: notifEntityType,
         entityId: threadIdNum,
         projectId: notifProjectId,
         isRead: false,
-        createdAt: /* @__PURE__ */ new Date()
-      });
-      notifyUser(userId, "notification", {
-        type: notifType,
-        title: notifTitle,
-        body: notifBody,
-        entityType: threadType === "ticket" ? "ticket" : threadType,
-        entityId: threadIdNum,
-        projectId: notifProjectId
-      });
-    }));
+        createdAt: now,
+      };
+    });
+    if (notifDocs.length) {
+      await notificationsTable.insertMany(notifDocs, { ordered: false });
+      for (const doc of notifDocs) {
+        notifyUser(doc.userId, "notification", {
+          type: doc.type,
+          title: doc.title,
+          body: doc.body,
+          entityType: doc.entityType,
+          entityId: doc.entityId,
+          projectId: doc.projectId,
+        });
+      }
+    }
   } catch (err) {
     console.error("Failed to create comment notifications:", err);
   }
@@ -399,7 +418,7 @@ async function postComments(req, res) {
   res.status(201).json(formattedComment);
 }
 async function patchCommentsById(req, res) {
-  const { content } = req.body;
+  const { content, mentionedUserIds: requestedMentionIds } = req.body;
   const id = parseInt(req.params["id"]);
   const existing = await commentsTable.findOne({ id, authorId: req.user.id });
   if (!existing) notFound("Comment");
@@ -414,11 +433,34 @@ async function patchCommentsById(req, res) {
     }
   } else if (threadType === "ticket") {
     await assertTicketAccess(req.user, threadIdNum);
+  } else {
+    forbidden();
+  }
+
+  const text = typeof content === "string" ? content.trim() : "";
+  // A message must still carry either text or its original attachment.
+  if (!text && !existing.attachmentUrl) {
+    badRequest("Message text or an attachment is required.", "content");
+  }
+
+  // Re-resolve mentions from the edited text so newly added @mentions are
+  // stored (and stale ones dropped), mirroring create behavior.
+  let mentionIds = existing.mentionedUserIds ?? [];
+  if (isCompanyTeamDiscussionThread(threadType)) {
+    mentionIds = await resolveCompanyTeamMentionIds(req.user.id, requestedMentionIds, text, threadType);
+  } else if (isProjectDiscussionThread(threadType)) {
+    mentionIds = await resolveProjectMentionIds(
+      threadIdNum,
+      req.user.id,
+      requestedMentionIds,
+      text,
+      threadType,
+    );
   }
 
   const comment = await commentsTable.findOneAndUpdate(
     { id, authorId: req.user.id },
-    { $set: { content, isEdited: true } },
+    { $set: { content: text, isEdited: true, mentionedUserIds: mentionIds } },
     { new: true },
   );
   if (!comment) notFound("Comment");

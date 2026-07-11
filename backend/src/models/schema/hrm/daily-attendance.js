@@ -20,6 +20,8 @@ const dailyAttendanceSchema = new Schema({
   wfhRequestId: { type: Number },
   holidayId: { type: Number },
   globalWfh: { type: Boolean, default: false },
+  late: { type: Boolean, default: false },
+  lateMinutes: { type: Number, default: 0 },
   forgivenLate: { type: Boolean, default: false },
   corrected: { type: Boolean, default: false },
   correctionId: { type: Number },

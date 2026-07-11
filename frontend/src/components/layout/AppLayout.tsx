@@ -4,13 +4,25 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Sidebar, MobileNavSheet } from "./Sidebar";
 import { Navbar } from "./Navbar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
+import { EmployeeWarningBanner } from "@/components/warnings/EmployeeWarningBanner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { RouteChunkSkeleton } from "@/components/loading";
+
+/** Role dashboard roots where active employee warnings are shown at the top. */
+const EMPLOYEE_DASHBOARD_PATHS = new Set([
+  "/dev",
+  "/hrm",
+  "/finance",
+  "/sales/bde",
+  "/marketing",
+  "/ca",
+]);
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const showEmployeeWarnings = EMPLOYEE_DASHBOARD_PATHS.has(location);
 
   return (
     <div className="flex h-dvh w-full overflow-hidden bg-background">
@@ -38,6 +50,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                     className="space-y-6"
                   >
+                    {showEmployeeWarnings ? <EmployeeWarningBanner /> : null}
                     {children}
                   </motion.div>
                 </AnimatePresence>

@@ -86,13 +86,13 @@ export function ProposalDocument({
   const clientEmail = proposal.lead?.email ?? proposal.customer?.email ?? null;
   const clientPhone = proposal.lead?.phone ?? proposal.customer?.phone ?? null;
 
-  const padX = forPdf || compact ? "px-5" : "px-8";
-  const padYHead = forPdf || compact ? "py-4" : "py-7";
-  const padYSection = forPdf || compact ? "py-4" : "py-6";
+  const padX = forPdf || compact ? "px-5" : "px-4 sm:px-8";
+  const padYHead = forPdf || compact ? "py-4" : "py-5 sm:py-7";
+  const padYSection = forPdf || compact ? "py-4" : "py-5 sm:py-6";
   const padYSubject = forPdf || compact ? "py-2.5" : "py-4";
-  const logoH = forPdf || compact ? "h-10" : "h-14";
-  const logoBox = forPdf || compact ? "h-10 w-10 text-base" : "h-14 w-14 text-xl";
-  const titleSize = forPdf || compact ? "text-2xl" : "text-3xl";
+  const logoH = forPdf || compact ? "h-10" : "h-11 sm:h-14";
+  const logoBox = forPdf || compact ? "h-10 w-10 text-base" : "h-11 w-11 text-lg sm:h-14 sm:w-14 sm:text-xl";
+  const titleSize = forPdf || compact ? "text-2xl" : "text-xl sm:text-3xl";
   const isTight = forPdf || compact;
   const visibleItems = forPdf ? items : items.slice(0, isTight ? 6 : items.length);
   const hiddenItemCount = forPdf ? 0 : items.length - visibleItems.length;
@@ -104,8 +104,8 @@ export function ProposalDocument({
       className={`rounded-2xl shadow-sm bg-white ${forPdf || compact ? "overflow-visible" : "overflow-hidden"}`}
       style={{ border: `1px solid ${border}`, fontFamily: "system-ui, sans-serif" }}
     >
-      <div className={`flex items-start justify-between gap-6 ${padX} ${padYHead}`} style={{ borderBottom: `3px solid ${primary}` }}>
-        <div className="flex items-start gap-4 min-w-0">
+      <div className={`flex items-start justify-between gap-3 sm:gap-6 ${padX} ${padYHead}`} style={{ borderBottom: `3px solid ${primary}` }}>
+        <div className="flex items-start gap-3 sm:gap-4 min-w-0">
           {company?.logoUrl ? (
             <img src={company.logoUrl} alt="logo" className={`${logoH} object-contain flex-shrink-0`} />
           ) : (
@@ -154,7 +154,7 @@ export function ProposalDocument({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2" style={{ borderBottom: `1px solid ${border}` }}>
-        <div className={`${padX} ${padYSection}`} style={{ borderRight: `1px solid ${border}` }}>
+        <div className={`${padX} ${padYSection} border-b sm:border-b-0 sm:border-r`} style={{ borderColor: border }}>
           <p className="text-[10px] font-black uppercase tracking-widest mb-4" style={{ color: primary }}>Prepared For</p>
           <div className="space-y-2">
             <div className="flex items-center gap-2.5">

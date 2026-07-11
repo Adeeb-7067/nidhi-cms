@@ -7,6 +7,7 @@ import {
   resolveAttendanceStatus,
   applyCorrectionOverlay,
   dailyAttendanceToSummary,
+  computeLateInfo,
   MIN_ACTIVE_MINUTES_FOR_PRESENT,
 } from "../../src/services/hrm/attendance-engine.js";
 
@@ -242,6 +243,117 @@ describe("resolveAttendanceStatus — simplified rules", () => {
     });
     assert.equal(result.status, "present");
     assert.equal(result.globalWfh, true);
+  });
+});
+
+describe("computeLateInfo — grace-aware late detection", () => {
+  // Shift 09:30, 10-minute grace → allowed latest clock-in 09:40 (Asia/Kolkata).
+  const graceShift = { startTime: "09:30", graceMinutesIn: 10 };
+
+  test("clock-in exactly at the grace boundary (09:40) is NOT late", () => {
+    // 09:40 IST === 04:10 UTC.
+    const info = computeLateInfo({
+      firstSessionStart: new Date("2026-06-18T04:10:00.000Z"),
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+    });
+    assert.equal(info.late, false);
+    assert.equal(info.lateMinutes, 0);
+  });
+
+  test("clock-in one minute past grace (09:41) is late by 1 minute", () => {
+    // 09:41 IST === 04:11 UTC.
+    const info = computeLateInfo({
+      firstSessionStart: new Date("2026-06-18T04:11:00.000Z"),
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+    });
+    assert.equal(info.late, true);
+    assert.equal(info.lateMinutes, 1);
+  });
+
+  test("early clock-in (09:00) is not late", () => {
+    // 09:00 IST === 03:30 UTC.
+    const info = computeLateInfo({
+      firstSessionStart: new Date("2026-06-18T03:30:00.000Z"),
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+    });
+    assert.equal(info.late, false);
+  });
+
+  test("missing shift or clock-in is a safe no-op", () => {
+    assert.deepEqual(computeLateInfo({ firstSessionStart: new Date(), shift: null }), {
+      late: false,
+      lateMinutes: 0,
+    });
+    assert.deepEqual(
+      computeLateInfo({ firstSessionStart: null, shift: graceShift, timezone: "Asia/Kolkata" }),
+      { late: false, lateMinutes: 0 },
+    );
+  });
+
+  test("resolveAttendanceStatus flags a late present day", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: false,
+      activeMinutes: 400,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T04:11:00.000Z"), // 09:41 IST
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+    assert.equal(result.late, true);
+    assert.equal(result.lateMinutes, 1);
+  });
+
+  test("Global WFH mode still flags a late clock-in", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: null,
+      globalWfhMode: true,
+      activeMinutes: 400,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T04:11:00.000Z"), // 09:41 IST
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+    assert.equal(result.globalWfh, true);
+    assert.equal(result.late, true);
+    assert.equal(result.lateMinutes, 1);
+  });
+
+  test("WFH days never incur a late flag", () => {
+    const result = resolveAttendanceStatus({
+      date: "2026-06-18",
+      weekendDays,
+      holiday: null,
+      leave: null,
+      wfh: { id: 7 },
+      globalWfhMode: false,
+      activeMinutes: 400,
+      expectedMinutes: 480,
+      threshold: 0,
+      firstSessionStart: new Date("2026-06-18T06:00:00.000Z"), // 11:30 IST — very late
+      shift: graceShift,
+      timezone: "Asia/Kolkata",
+      missingClockOut: false,
+    });
+    assert.equal(result.status, "present");
+    assert.equal(result.late, false);
   });
 });
 

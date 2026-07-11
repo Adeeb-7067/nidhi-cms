@@ -118,9 +118,13 @@ export function hrmPayslipToViewModel(detail: HrmPayslipDetail): PayslipViewMode
     earnings.push({ label: "Gross Salary", amount: detail.gross, ytd: detail.gross });
   }
 
+  const latePenalty = detail.latePenalty ?? 0;
   const deductions: PayslipLine[] = [
     ...(detail.lopDeduction > 0
       ? [{ label: "LOP Deduction", amount: detail.lopDeduction, ytd: detail.lopDeduction }]
+      : []),
+    ...(latePenalty > 0
+      ? [{ label: "Late Arrival Penalty", amount: latePenalty, ytd: latePenalty }]
       : []),
   ];
 

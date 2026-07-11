@@ -77,10 +77,18 @@ export function buildLeavePayrollByDate(
  */
 export function aggregateAttendanceForPayroll(
   summaries,
-  { startDate, endDate, leavePayrollByDate },
+  { startDate, endDate, leavePayrollByDate, maxFreeLates = 0 },
 ) {
   let paidDays = 0;
   let lopDays = 0;
+
+  // Count chargeable late days: present days flagged late that HR has not
+  // excused (forgivenLate). The first `maxFreeLates` such days each period are
+  // free; only the overflow is charged.
+  const lateDays = summaries.filter(
+    (s) => s.status === "present" && s.late && !s.forgivenLate,
+  ).length;
+  const lateCount = Math.max(0, lateDays - Math.max(0, maxFreeLates));
 
   for (const s of summaries) {
     if (s.status === "on_leave") {
@@ -111,7 +119,7 @@ export function aggregateAttendanceForPayroll(
   return {
     paidDays: Math.round(paidDays * 100) / 100,
     lopDays: Math.round(lopDays * 100) / 100,
-    lateCount: 0,
+    lateCount,
   };
 }
 
@@ -123,6 +131,7 @@ export function computePayrollLineAmounts({
   paidDays = 0,
   lopDays = 0,
   lateCount = 0,
+  latePenaltyPerDay = 0,
   pfEmployee = 0,
   esiEmployee = 0,
   tds = 0,
@@ -131,8 +140,10 @@ export function computePayrollLineAmounts({
   const dailyRate = gross / daysInMonth;
   const earned = Math.round(dailyRate * paidDays * 100) / 100;
   const lopDeduction = Math.round(dailyRate * lopDays * 100) / 100;
+  const latePenalty =
+    Math.round(Math.max(0, lateCount) * Math.max(0, latePenaltyPerDay) * 100) / 100;
   const statutory = (pfEmployee ?? 0) + (esiEmployee ?? 0) + (tds ?? 0);
-  const deductions = Math.round((statutory + lopDeduction) * 100) / 100;
+  const deductions = Math.round((statutory + lopDeduction + latePenalty) * 100) / 100;
   const net = Math.max(0, Math.round((earned - deductions) * 100) / 100);
 
   return {
@@ -141,6 +152,7 @@ export function computePayrollLineAmounts({
     lateCount,
     gross: earned,
     lopDeduction,
+    latePenalty,
     pfEmployee: pfEmployee ?? 0,
     tds: tds ?? 0,
     deductions,

@@ -115,7 +115,7 @@ export const LEGACY_PAYROLL_LABELS = {
 export const LEGACY_SETTINGS_LABELS = {
   attendancePolicy: "Attendance policy",
   globalWfhMode: "Global WFH mode",
-  globalWfhHint: "Everyone works remotely — clock in to mark WFH; no office geofence or late penalties until disabled.",
+  globalWfhHint: "Everyone works remotely — clock in to mark WFH; no office geofence. Shift punctuality still applies (late penalties are enforced).",
   shortfallThreshold: "Grace period (minutes)",
   maxFreeLates: "Free late days / month",
   electronOnlyClock: "Electron-only clock",

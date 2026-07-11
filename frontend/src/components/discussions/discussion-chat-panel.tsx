@@ -107,9 +107,19 @@ export function DiscussionChatPanel({
     if (el) el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
+  const lastMessageId = messages.length ? messages[messages.length - 1]!.id : null;
+
+  // Pin to the newest message whenever the thread opens (loading finishes) or a
+  // new message arrives. Keying on `isLoading` + last message id (not just
+  // `messages.length`) ensures we still scroll when cached messages render right
+  // after the loading skeleton without a length change. The rAF pass re-pins
+  // after late layout (e.g. wrapped text / fonts) settles.
   useEffect(() => {
+    if (isLoading) return undefined;
     scrollToBottom("auto");
-  }, [project.id, messages.length, scrollToBottom]);
+    const raf = requestAnimationFrame(() => scrollToBottom("auto"));
+    return () => cancelAnimationFrame(raf);
+  }, [project.id, threadType, isLoading, messages.length, lastMessageId, scrollToBottom]);
 
   useEffect(() => {
     const el = scrollRef.current;

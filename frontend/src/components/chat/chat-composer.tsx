@@ -282,21 +282,31 @@ export function ChatComposer({
   };
 
   const applyMention = (candidate: MentionCandidate) => {
-    if (!mentionMenu || !textareaRef.current) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    // Recompute the active "@query" range from the LIVE textarea value + caret
+    // instead of trusting the stored menu range. In busy channels frequent
+    // re-renders (incoming socket messages) can leave `mentionMenu` pointing at
+    // a stale offset, which made click/Enter appear to do nothing. Reading the
+    // DOM value guarantees we replace the token the user is actually editing.
+    const liveText = el.value;
+    const caret = el.selectionStart ?? liveText.length;
+    const active = parseActiveMentionQuery(liveText, caret) ?? mentionMenu;
+    if (!active) return;
     const { text, cursor } = insertMentionAtCursor(
-      value,
-      mentionMenu.start,
-      mentionMenu.end,
+      liveText,
+      active.start,
+      active.end,
       candidate,
     );
     onChange(text);
     setMentionMenu(null);
     requestAnimationFrame(() => {
-      const el = textareaRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(cursor, cursor);
-      syncTextareaHeight(el);
+      const node = textareaRef.current;
+      if (!node) return;
+      node.focus();
+      node.setSelectionRange(cursor, cursor);
+      syncTextareaHeight(node);
     });
   };
 
@@ -404,23 +414,32 @@ export function ChatComposer({
   };
 
   const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentionMenu && filteredMentions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setMentionIndex((i) => (i + 1) % filteredMentions.length);
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setMentionIndex((i) => (i - 1 + filteredMentions.length) % filteredMentions.length);
-        return;
-      }
-      if (e.key === "Enter" || e.key === "Tab") {
-        e.preventDefault();
-        applyMention(filteredMentions[mentionIndex]);
-        return;
+    if (mentionMenu) {
+      if (filteredMentions.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setMentionIndex((i) => (i + 1) % filteredMentions.length);
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setMentionIndex((i) => (i - 1 + filteredMentions.length) % filteredMentions.length);
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          const index = mentionIndex < filteredMentions.length ? mentionIndex : 0;
+          applyMention(filteredMentions[index]);
+          return;
+        }
       }
       if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionMenu(null);
+        return;
+      }
+      // A mention query is open but Tab shouldn't move focus away mid-selection.
+      if (e.key === "Tab") {
         e.preventDefault();
         setMentionMenu(null);
         return;

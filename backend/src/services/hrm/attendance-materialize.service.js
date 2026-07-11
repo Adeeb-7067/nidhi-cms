@@ -65,20 +65,21 @@ export function computeUserDaySummary(user, date, ctx, lateForgiven) {
     expectedMinutes,
     threshold: ctx.shortfallThreshold,
     firstSessionStart,
-    shift,
+    // Use the effective shift (assignment → profile → company default) so late
+    // detection lines up with the expected-hours calculation above. Passing the
+    // raw `shift` would skip late detection for employees relying on the default.
+    shift: effectiveShift,
     timezone: ctx.timezone,
     missingClockOut,
   });
 
-  if (status === "onsite" && ctx.maxFreeLates > 0) {
-    const monthKey = `${user.id}:${date.slice(0, 7)}`;
-    const forgiven = lateForgiven.get(monthKey) ?? 0;
-    if (forgiven < ctx.maxFreeLates) {
-      status = "present";
-      refs.forgivenLate = true;
-      lateForgiven.set(monthKey, forgiven + 1);
-    }
-  }
+  // Late clock-ins keep the "present" status; the late flag + lateMinutes are
+  // recorded here and the free-lates allowance / ₹ penalty are applied later at
+  // the payroll aggregation layer, where the full pay period is in scope. This
+  // avoids double-counting or mis-forgiving lates during the nightly per-day
+  // materialize (which has no cross-day context). `lateForgiven` is retained for
+  // signature compatibility and admin excusal (forgivenLate) overrides.
+  void lateForgiven;
 
   let summary = {
     userId: user.id,
@@ -125,6 +126,8 @@ function summaryToPersistDoc(summary, source = "engine") {
     wfhRequestId: summary.wfhRequestId ?? null,
     holidayId: summary.holidayId ?? null,
     globalWfh: summary.globalWfh ?? false,
+    late: summary.late ?? false,
+    lateMinutes: summary.lateMinutes ?? 0,
     forgivenLate: summary.forgivenLate ?? false,
     corrected: summary.corrected ?? false,
     correctionId: summary.correctionId ?? null,

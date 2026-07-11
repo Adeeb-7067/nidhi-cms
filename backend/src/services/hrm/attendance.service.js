@@ -700,8 +700,10 @@ export async function excuseLateArrival(userId, dateInput, { note }, actorId) {
 
   const { summary, userMeta } = await resolveDaySummaryForAdmin(userId, date);
   const status = summary.status;
-  if (status !== "onsite") {
-    badRequest("Only late onsite days can be excused.");
+  // Late arrivals are recorded as present days flagged `late` (legacy rows may
+  // still carry the "onsite" status). Either form can be excused.
+  if (!summary.late && status !== "onsite") {
+    badRequest("Only late arrivals can be excused.");
   }
   if (summary.forgivenLate) {
     conflict("Late arrival is already excused for this date.");
@@ -726,6 +728,8 @@ export async function excuseLateArrival(userId, dateInput, { note }, actorId) {
       wfhRequestId: summary.wfhRequestId ?? null,
       holidayId: summary.holidayId ?? null,
       globalWfh: summary.globalWfh ?? false,
+      late: summary.late ?? false,
+      lateMinutes: summary.lateMinutes ?? 0,
       forgivenLate: true,
       corrected: summary.corrected ?? false,
       correctionId: summary.correctionId ?? null,

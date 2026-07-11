@@ -35,6 +35,8 @@ export async function getHrmPolicyContext() {
     weekendDays: settings.hrmWeekendDays?.length ? settings.hrmWeekendDays : [0, 6],
     shortfallThreshold: settings.hrmAttendanceShortfallThresholdMinutes ?? 0,
     defaultExpectedMinutes: Math.round((settings.requiredDailyWorkHours ?? 8) * 60),
+    maxFreeLates: settings.hrmMaxFreeLates ?? 0,
+    latePenaltyAmount: settings.hrmLatePenaltyAmount ?? 0,
   };
 }
 

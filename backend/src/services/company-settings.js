@@ -74,6 +74,7 @@ export function formatSettings(settings) {
     hrmPaidLeavesPerMonth: settings.hrmPaidLeavesPerMonth ?? 1,
     hrmLeaveResetCycleMonths: settings.hrmLeaveResetCycleMonths ?? 3,
     hrmMaxFreeLates: settings.hrmMaxFreeLates ?? 3,
+    hrmLatePenaltyAmount: settings.hrmLatePenaltyAmount ?? 100,
     hrmElectronOnlyClock: settings.hrmElectronOnlyClock ?? false,
     hrmLeaveCarryForwardStartYear: settings.hrmLeaveCarryForwardStartYear ?? 2026,
     hrmOnboardingChecklistTemplate: Array.isArray(settings.hrmOnboardingChecklistTemplate)

@@ -147,6 +147,51 @@ describe("aggregateAttendanceForPayroll", () => {
     assert.equal(result.paidDays, 8);
     assert.equal(result.lopDays, 0);
   });
+
+  test("counts chargeable late days after the free-lates allowance", () => {
+    const summaries = [
+      { date: "2026-06-01", status: "present", compliance: "met", late: true },
+      { date: "2026-06-02", status: "present", compliance: "met", late: true },
+      { date: "2026-06-03", status: "present", compliance: "met", late: true },
+      { date: "2026-06-04", status: "present", compliance: "met", late: true },
+      { date: "2026-06-05", status: "present", compliance: "met", late: false },
+    ];
+    const result = aggregateAttendanceForPayroll(summaries, {
+      ...period,
+      leavePayrollByDate: new Map(),
+      maxFreeLates: 2,
+    });
+    // 4 late days, first 2 free → 2 chargeable.
+    assert.equal(result.lateCount, 2);
+  });
+
+  test("excused (forgivenLate) days are never charged and do not consume free lates", () => {
+    const summaries = [
+      { date: "2026-06-01", status: "present", compliance: "met", late: true, forgivenLate: true },
+      { date: "2026-06-02", status: "present", compliance: "met", late: true },
+      { date: "2026-06-03", status: "present", compliance: "met", late: true },
+    ];
+    const result = aggregateAttendanceForPayroll(summaries, {
+      ...period,
+      leavePayrollByDate: new Map(),
+      maxFreeLates: 1,
+    });
+    // Excused day skipped; of the 2 remaining lates, 1 is free → 1 chargeable.
+    assert.equal(result.lateCount, 1);
+  });
+
+  test("no penalty when free lates cover all late days", () => {
+    const summaries = [
+      { date: "2026-06-01", status: "present", compliance: "met", late: true },
+      { date: "2026-06-02", status: "present", compliance: "met", late: true },
+    ];
+    const result = aggregateAttendanceForPayroll(summaries, {
+      ...period,
+      leavePayrollByDate: new Map(),
+      maxFreeLates: 3,
+    });
+    assert.equal(result.lateCount, 0);
+  });
 });
 
 describe("computePayrollLineAmounts", () => {
@@ -180,6 +225,33 @@ describe("computePayrollLineAmounts", () => {
     const line = computePayrollLineAmounts({ gross: 30000, paidDays: 1, lopDays: 1 });
     assert.equal(line.gross, 1000);
     assert.equal(line.lopDeduction, 1000);
+  });
+
+  test("adds late penalty (lateCount × per-day amount) to deductions", () => {
+    const line = computePayrollLineAmounts({
+      gross: 30000,
+      paidDays: 30,
+      lopDays: 0,
+      lateCount: 3,
+      latePenaltyPerDay: 100,
+    });
+    assert.equal(line.gross, 30000);
+    assert.equal(line.latePenalty, 300);
+    assert.equal(line.deductions, 300);
+    assert.equal(line.net, 29700);
+  });
+
+  test("no late penalty when penalty amount is zero", () => {
+    const line = computePayrollLineAmounts({
+      gross: 30000,
+      paidDays: 30,
+      lopDays: 0,
+      lateCount: 5,
+      latePenaltyPerDay: 0,
+    });
+    assert.equal(line.latePenalty, 0);
+    assert.equal(line.deductions, 0);
+    assert.equal(line.net, 30000);
   });
 });
 

@@ -78,7 +78,7 @@ export default function FinanceDashboard() {
 
       <FinanceFilterBar
         dateRange={dateRange}
-        onDateRangeChange={setDateRange}
+        onDateRangeChange={(v) => setDateRange(v as "current" | "previous")}
         onExport={() => toast.success("Export started")}
       />
 

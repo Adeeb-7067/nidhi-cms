@@ -2,7 +2,7 @@
 export { dailyAttendanceSources } from "../../constants/hrm-workflow.js";
 
 import { normalizeAttendanceStatus } from "../../constants/attendance-status.js";
-import { getDayOfWeek } from "./hrm-date-utils.js";
+import { getDayOfWeek, minutesInTimezone } from "./hrm-date-utils.js";
 
 export { normalizeAttendanceStatus };
 
@@ -41,6 +41,30 @@ export function isPartialLeaveDay(leave) {
   return part !== "full";
 }
 
+/** Parse a shift "HH:MM" start time into minutes since local midnight. */
+function shiftStartMinutes(startTime) {
+  if (!startTime || typeof startTime !== "string") return null;
+  const [h, m] = startTime.split(":").map(Number);
+  if (!Number.isFinite(h)) return null;
+  return h * 60 + (Number.isFinite(m) ? m : 0);
+}
+
+/**
+ * Decide whether a clock-in is late beyond the shift's grace window.
+ * Compares the first clock-in (in the employee's work timezone) against
+ * shift start + graceMinutesIn. Returns { late, lateMinutes }.
+ * Safe no-op (not late) when the shift, start time, or clock-in is missing.
+ */
+export function computeLateInfo({ firstSessionStart, shift, timezone }) {
+  if (!firstSessionStart || !shift) return { late: false, lateMinutes: 0 };
+  const startMin = shiftStartMinutes(shift.startTime);
+  if (startMin == null) return { late: false, lateMinutes: 0 };
+  const grace = Number.isFinite(shift.graceMinutesIn) ? shift.graceMinutesIn : 0;
+  const clockInMin = minutesInTimezone(firstSessionStart, timezone || "UTC");
+  const lateMinutes = clockInMin - (startMin + grace);
+  return lateMinutes > 0 ? { late: true, lateMinutes } : { late: false, lateMinutes: 0 };
+}
+
 /**
  * True if any session on the day was auto-closed (employee did not clock out manually).
  */
@@ -59,8 +83,10 @@ export function detectMissingClockOut(sessionsForDay = []) {
  * Core status resolver for one employee-day.
  * Half-day leave + clock time produces a single combined record (partialLeave flag).
  *
- * Global WFH (Satyakabir): working days stay unmarked until clock-in; then WFH with no late penalties.
- * Approved individual WFH (global off): pre-mark as WFH before clock-in.
+ * Global WFH (Satyakabir): working days stay unmarked until clock-in; then WFH.
+ * Shift punctuality still applies — a late clock-in is flagged even under global WFH.
+ * Approved individual WFH (global off): pre-mark as WFH before clock-in; individual
+ * WFH days are exempt from late penalties (no fixed office arrival).
  */
 export function resolveAttendanceStatus({
   date,
@@ -113,9 +139,20 @@ export function resolveAttendanceStatus({
     if (expectedMinutes > 0 && activeMinutes < expectedMinutes - threshold) {
       compliance = "short";
     }
+    // Late clock-in is judged against the shift start + grace regardless of
+    // Global WFH mode (companies running fully remote still enforce shift
+    // punctuality). Only per-day exceptions are exempt: an individually approved
+    // WFH day and partial-leave days have no fixed arrival, so they skip the
+    // penalty. globalWfhMode intentionally does NOT skip late detection.
+    const skipLate = !!wfh || partialLeave;
+    const { late, lateMinutes } = skipLate
+      ? { late: false, lateMinutes: 0 }
+      : computeLateInfo({ firstSessionStart, shift, timezone });
     return {
       status: "present",
       compliance,
+      late,
+      lateMinutes,
       partialLeave: partialLeave || undefined,
       leaveDayPart: partialLeave ? leave?.dayPart : undefined,
       leaveRequestId: partialLeave ? leave?.id : undefined,
@@ -184,6 +221,8 @@ export function dailyAttendanceToSummary(row, userMeta = {}) {
     wfhRequestId: row.wfhRequestId ?? null,
     holidayId: row.holidayId ?? null,
     globalWfh: row.globalWfh ?? false,
+    late: row.late ?? false,
+    lateMinutes: row.lateMinutes ?? 0,
     forgivenLate: row.forgivenLate ?? false,
     corrected: row.corrected ?? false,
     correctionId: row.correctionId ?? null,

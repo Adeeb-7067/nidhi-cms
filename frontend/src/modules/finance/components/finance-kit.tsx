@@ -70,7 +70,8 @@ export function BudgetConsumptionCard({ budget }: { budget: Budget }) {
 }
 
 export function FinanceInvoicePreview({ invoice }: { invoice: FinanceInvoice }) {
-  const { total } = calcInvoiceTotal(invoice.items, invoice.discount, invoice.gstEnabled);
+  const items = invoice.items ?? [];
+  const { total } = calcInvoiceTotal(items, invoice.discount, invoice.gstEnabled);
   const remaining = Math.max(0, total - invoice.paidAmount);
 
   return (
@@ -106,7 +107,7 @@ export function FinanceInvoicePreview({ invoice }: { invoice: FinanceInvoice }) 
               </tr>
             </thead>
             <tbody>
-              {invoice.items.map((item) => (
+              {items.map((item) => (
                 <tr key={item.id} className="border-t">
                   <td className="p-2">{item.description}</td>
                   <td className="p-2 text-right tabular-nums">{item.quantity}</td>

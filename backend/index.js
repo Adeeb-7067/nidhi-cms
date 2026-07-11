@@ -25,6 +25,32 @@ import { startProjectDocumentRenewalReminderJob } from "./src/services/project-d
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
+
+// A transient MongoDB blip (e.g. Atlas replica-set failover) can reject a query
+// inside a background job that has no local .catch, which Node turns into a
+// fatal unhandledRejection/uncaughtException and takes the whole API down.
+// Mongoose auto-reconnects, so treat operational Mongo/network errors as
+// recoverable and keep serving; fail fast only on genuine programming errors.
+const isOperationalDbError = (err) => {
+  const name = err && (err.name || err.constructor?.name);
+  return typeof name === "string" && (name.startsWith("Mongo") || name === "PoolClearedError");
+};
+process.on("unhandledRejection", (reason) => {
+  if (isOperationalDbError(reason)) {
+    logger.warn({ err: reason }, "Unhandled DB rejection — process kept alive; mongoose will reconnect");
+    return;
+  }
+  logger.error({ err: reason }, "Unhandled promise rejection");
+});
+process.on("uncaughtException", (err) => {
+  if (isOperationalDbError(err)) {
+    logger.warn({ err }, "Uncaught DB error — process kept alive; mongoose will reconnect");
+    return;
+  }
+  logger.error({ err }, "Uncaught exception — shutting down");
+  process.exit(1);
+});
+
 const port = getRequiredPort();
 const server = createServer(app);
 initRealtime(server);

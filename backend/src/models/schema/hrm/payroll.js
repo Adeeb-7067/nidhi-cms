@@ -54,6 +54,7 @@ const payrollLineSchema = new Schema({
   gross: { type: Number, default: 0 },
   deductions: { type: Number, default: 0 },
   lopDeduction: { type: Number, default: 0 },
+  latePenalty: { type: Number, default: 0 },
   net: { type: Number, default: 0 },
   pfEmployee: { type: Number, default: 0 },
   pfEmployer: { type: Number, default: 0 },

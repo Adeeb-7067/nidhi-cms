@@ -644,7 +644,7 @@ export async function generatePayrollRun(year, month, actorId) {
   const attendanceEndDate = endDate <= today ? endDate : today;
   const { summaries } = await getAttendanceDailySummaries({ startDate, endDate: attendanceEndDate });
 
-  const { weekendDays } = await getHrmPolicyContext();
+  const { weekendDays, maxFreeLates, latePenaltyAmount } = await getHrmPolicyContext();
   const holidays = await companyHolidaysTable
     .find({ date: { $gte: startDate, $lte: endDate } })
     .lean();
@@ -685,6 +685,7 @@ export async function generatePayrollRun(year, month, actorId) {
       startDate,
       endDate,
       leavePayrollByDate,
+      maxFreeLates,
     });
 
     const contract = resolveContractSalary({
@@ -697,6 +698,8 @@ export async function generatePayrollRun(year, month, actorId) {
       gross: contract.payrollBase,
 
       ...counts,
+
+      latePenaltyPerDay: latePenaltyAmount,
 
       pfEmployee: 0,
 
@@ -821,7 +824,7 @@ export async function finalizePayrollRun(runId, actorId) {
       sessOpts,
 
     );
-
+  
 
 
     let query = payrollRunsTable.findOneAndUpdate(
@@ -1090,9 +1093,10 @@ export async function updatePayrollLine(lineId, body) {
     body.paidDays !== undefined || body.lopDays !== undefined || body.lateCount !== undefined;
 
   if (attendanceFieldsTouched) {
-    const [lineUser, structureRow] = await Promise.all([
+    const [lineUser, structureRow, { latePenaltyAmount }] = await Promise.all([
       usersTable.findOne({ id: line.userId }, { salary: 1 }).lean(),
       salaryStructuresTable.findOne({ userId: line.userId }).lean(),
+      getHrmPolicyContext(),
     ]);
     const contract = resolveContractSalary({
       profileSalary: lineUser?.salary ?? {},
@@ -1103,6 +1107,7 @@ export async function updatePayrollLine(lineId, body) {
       paidDays: patch.paidDays ?? line.paidDays,
       lopDays: patch.lopDays ?? line.lopDays,
       lateCount: patch.lateCount ?? line.lateCount ?? 0,
+      latePenaltyPerDay: latePenaltyAmount,
       // Preserve whatever this line already carries — new lines are created with 0 (see
       // generatePayrollRun), but legacy lines may still have real statutory amounts that
       // an attendance-field edit must not silently wipe.
@@ -1209,6 +1214,7 @@ export async function getPayslipDetail(id, userId, { requirePublished = false } 
     gross: line.gross,
     deductions: line.deductions,
     lopDeduction: line.lopDeduction ?? 0,
+    latePenalty: line.latePenalty ?? 0,
     net: line.net,
     htmlContent: slip.htmlContent ?? null,
   };
@@ -1238,13 +1244,13 @@ export async function exportPayrollCsv(runId) {
 
   const lines = await getPayrollRunLines(runId);
 
-  const header = "period,employeeId,employeeName,paidDays,lopDays,lateCount,gross,deductions,lopDeduction,net\n";
+  const header = "period,employeeId,employeeName,paidDays,lopDays,lateCount,gross,deductions,lopDeduction,latePenalty,net\n";
 
   const period = run ? `${run.month}/${run.year}` : "";
 
   const rows = lines.map((l) =>
 
-    `${period},${l.employeeId ?? l.userId},${JSON.stringify(l.employeeName ?? "")},${l.paidDays},${l.lopDays},${l.lateCount},${l.gross},${l.deductions},${l.lopDeduction ?? 0},${l.net}`,
+    `${period},${l.employeeId ?? l.userId},${JSON.stringify(l.employeeName ?? "")},${l.paidDays},${l.lopDays},${l.lateCount},${l.gross},${l.deductions},${l.lopDeduction ?? 0},${l.latePenalty ?? 0},${l.net}`,
 
   ).join("\n");
 

@@ -54,6 +54,7 @@ type SettingsForm = Pick<
   | "hrmAttendanceShortfallThresholdMinutes"
   | "hrmGlobalWfhMode"
   | "hrmMaxFreeLates"
+  | "hrmLatePenaltyAmount"
   | "hrmPaidLeavesPerMonth"
   | "hrmLeaveResetCycleMonths"
   | "hrmElectronOnlyClock"
@@ -154,6 +155,7 @@ export default function HrmSettingsPage() {
       hrmAttendanceShortfallThresholdMinutes: 0,
       hrmGlobalWfhMode: false,
       hrmMaxFreeLates: 3,
+      hrmLatePenaltyAmount: 100,
       hrmPaidLeavesPerMonth: 1,
       hrmLeaveResetCycleMonths: 3,
       hrmElectronOnlyClock: false,
@@ -253,6 +255,12 @@ export default function HrmSettingsPage() {
         value: data.hrmMaxFreeLates ?? 3,
         icon: Shield,
         accent: "amber" as const,
+      },
+      {
+        label: "Late penalty",
+        value: `₹${data.hrmLatePenaltyAmount ?? 100}`,
+        icon: Shield,
+        accent: "rose" as const,
       },
       {
         label: "Global WFH",
@@ -366,6 +374,17 @@ export default function HrmSettingsPage() {
                           min={0}
                           className={fieldControlClass}
                           {...form.register("hrmMaxFreeLates", { valueAsNumber: true })}
+                        />
+                      </HrmField>
+                      <HrmField
+                        label="Late penalty (₹)"
+                        hint="Deducted from payroll per chargeable late day (after free lates). 0 disables it."
+                      >
+                        <Input
+                          type="number"
+                          min={0}
+                          className={fieldControlClass}
+                          {...form.register("hrmLatePenaltyAmount", { valueAsNumber: true })}
                         />
                       </HrmField>
                       <HrmField

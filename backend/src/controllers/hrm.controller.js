@@ -623,6 +623,7 @@ async function patchHrmSettings(req, res) {
     "hrmPaidLeavesPerMonth",
     "hrmLeaveResetCycleMonths",
     "hrmMaxFreeLates",
+    "hrmLatePenaltyAmount",
     "hrmElectronOnlyClock",
     "hrmLeaveCarryForwardStartYear",
   ];

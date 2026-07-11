@@ -27,6 +27,8 @@ const companySettingsSchema = new Schema({
   /** Unused paid-leave pool resets every N months (default 3). Accrued days carry forward within each cycle. */
   hrmLeaveResetCycleMonths: { type: Number, default: 3, min: 1, max: 12 },
   hrmMaxFreeLates: { type: Number, default: 3, min: 0 },
+  /** Flat penalty (₹) deducted from payroll per late clock-in beyond the shift grace period. 0 disables it. */
+  hrmLatePenaltyAmount: { type: Number, default: 100, min: 0 },
   hrmElectronOnlyClock: { type: Boolean, default: false },
   hrmLeaveCarryForwardStartYear: { type: Number, default: 2026 },
   /** Custom onboarding checklist titles (falls back to DEFAULT_ONBOARDING_TASKS when empty). */

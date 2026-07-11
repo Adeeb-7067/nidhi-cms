@@ -16,6 +16,7 @@ export type BudgetType = "annual" | "project";
 export type BudgetStatus = "on_track" | "warning" | "exceeded";
 export type LedgerType = "client" | "vendor" | "expense" | "bank";
 export type FinanceLedgerSource = "finance" | "sales";
+export type TaxPeriodType = "monthly" | "quarterly" | "annual";
 
 export interface FinanceAttachment {
   name: string;

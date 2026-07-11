@@ -640,7 +640,7 @@ export default function HrmPayrollPage() {
                   <HrmRefDetailRow label="Period" value={periodLabel} />
                   <HrmRefDetailRow
                     label="Attendance"
-                    value={`${r.paidDays} paid · ${r.lopDays} LOP`}
+                    value={`${r.paidDays} paid · ${r.lopDays} LOP${(r.lateCount ?? 0) > 0 ? ` · ${r.lateCount} late` : ""}`}
                   />
                   <div className="mt-3 space-y-1.5 border-t border-border/60 pt-3">
                     {r.totalSalary != null && r.totalSalary > 0 && (
@@ -669,6 +669,12 @@ export default function HrmPayrollPage() {
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>LOP deduction ({r.lopDays}d)</span>
                         <span className="tabular-nums text-destructive">−{inrMoney(r.lopDeduction!)}</span>
+                      </div>
+                    )}
+                    {(r.latePenalty ?? 0) > 0 && (
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Late penalty ({r.lateCount} late{r.lateCount === 1 ? "" : "s"})</span>
+                        <span className="tabular-nums text-destructive">−{inrMoney(r.latePenalty!)}</span>
                       </div>
                     )}
                     {r.deductions > 0 && (

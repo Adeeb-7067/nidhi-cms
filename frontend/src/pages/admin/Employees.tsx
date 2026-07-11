@@ -4,6 +4,7 @@ import {
   useListUsers,
   listUsers,
   useDeleteUser,
+  useUpdateUser,
   getListUsersQueryKey,
   useGetTeamAnalytics,
   getGetTeamAnalyticsQueryKey,
@@ -21,7 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
-import { Search, Plus, Mail, Clock, Trash2, Edit, BarChart3, Users as UsersIcon, Award, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Plus, Mail, Clock, Edit, BarChart3, Users as UsersIcon, Award, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { WarnEmployeeDialog } from "@/components/warnings/WarnEmployeeDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePresence } from "@/contexts/PresenceContext";
 import { useRefreshPresenceForUserIds } from "@/hooks/use-presence-refresh";
@@ -37,6 +39,7 @@ import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   PortalPageShell,
   PortalPageHero,
@@ -191,6 +194,7 @@ export default function AdminEmployees() {
   const [employeeFormTab, setEmployeeFormTab] = useState<EmployeeFormTab>("personal");
   const [editUser, setEditUser] = useState<User | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [warnEmployee, setWarnEmployee] = useState<{ id: number; name: string } | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const trimmedSearch = search.trim() || undefined;
@@ -286,6 +290,8 @@ export default function AdminEmployees() {
   const exportUsers = exportUsersData ?? data?.users ?? [];
   const saveTeamEmployee = useSaveTeamEmployee();
   const deleteUserMutation = useDeleteUser();
+  const updateUserMutation = useUpdateUser();
+  const [togglingUserId, setTogglingUserId] = useState<number | null>(null);
   const { data: hrmDepartmentsData } = useHrmDepartments();
   const { data: shiftTemplatesData } = useHrmShiftTemplates();
   const { data: roleTemplatesData } = useRoleTemplates();
@@ -645,6 +651,28 @@ export default function AdminEmployees() {
     }
   };
 
+  const canToggleUserStatus = (user: User) =>
+    viewer?.role === "super_admin" && user.role !== "super_admin" && user.id !== viewer?.id;
+
+  const handleToggleActive = async (user: User) => {
+    // Deactivating revokes access, so route it through the confirmation dialog.
+    if (user.status === "active") {
+      setDeleteId(user.id);
+      return;
+    }
+    // Reactivating is safe — apply immediately.
+    setTogglingUserId(user.id);
+    try {
+      await updateUserMutation.mutateAsync({ id: user.id, data: { status: "active" } });
+      toast.success(`${user.name} reactivated`);
+      queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+    } catch (error) {
+      toastApiError(error, "Failed to reactivate employee");
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
+
   const handleViewAs = async (employee: User, e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (!canViewAsEmployee(employee, viewer?.id)) return;
@@ -712,11 +740,38 @@ export default function AdminEmployees() {
       id: "status",
       header: "Status",
       accessorKey: "status",
-      cell: (user) => (
-        <Badge variant="outline" className={`${user.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
-          {user.status}
-        </Badge>
-      )
+      cell: (user) => {
+        if (!canToggleUserStatus(user)) {
+          return (
+            <Badge variant="outline" className={`${user.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''} text-[10px]`}>
+              {user.status}
+            </Badge>
+          );
+        }
+        const isActive = user.status === "active";
+        return (
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Switch
+              checked={isActive}
+              onCheckedChange={() => void handleToggleActive(user)}
+              disabled={
+                togglingUserId === user.id ||
+                deleteUserMutation.isPending ||
+                updateUserMutation.isPending
+              }
+              aria-label={isActive ? `Deactivate ${user.name}` : `Activate ${user.name}`}
+              title={isActive ? "Deactivate employee" : "Activate employee"}
+              className="data-[state=checked]:bg-green-500"
+            />
+            <span className={cn("text-[10px] font-medium capitalize", isActive ? "text-green-600" : "text-muted-foreground")}>
+              {isActive ? "Active" : user.status}
+            </span>
+          </div>
+        );
+      }
     },
     {
       id: "presence",
@@ -818,16 +873,15 @@ export default function AdminEmployees() {
               <Edit className="h-3 w-3" />
             </Button>
           )}
-          {user.role !== "super_admin" && user.id !== viewer?.id && (
+          {viewer?.role === "super_admin" && user.role !== "super_admin" && (
             <Button
               size="sm"
               variant="ghost"
-              className="h-7 w-7 p-0 text-red-500 hover:text-red-600 disabled:opacity-30 disabled:cursor-not-allowed"
-              title={user.status !== "active" ? "Already deactivated" : "Deactivate employee"}
-              disabled={user.status !== "active"}
-              onClick={(e) => { e.stopPropagation(); setDeleteId(user.id); }}
+              className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+              title="Issue warning"
+              onClick={(e) => { e.stopPropagation(); setWarnEmployee({ id: user.id, name: user.name }); }}
             >
-              <Trash2 className="h-3 w-3" />
+              <AlertTriangle className="h-3 w-3" />
             </Button>
           )}
         </div>
@@ -1008,6 +1062,11 @@ export default function AdminEmployees() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+        <WarnEmployeeDialog
+          open={!!warnEmployee}
+          onOpenChange={(open) => !open && setWarnEmployee(null)}
+          employee={warnEmployee}
+        />
         </div>
         }
       />

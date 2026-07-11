@@ -210,6 +210,7 @@ export type HrmSettings = {
   hrmPaidLeavesPerMonth: number;
   hrmLeaveResetCycleMonths: number;
   hrmMaxFreeLates: number;
+  hrmLatePenaltyAmount: number;
   hrmElectronOnlyClock: boolean;
   hrmLeaveCarryForwardStartYear: number;
   /** Default task titles applied to every new onboarding record. */
@@ -505,6 +506,7 @@ export type HrmPayrollLine = {
   gross: number;
   deductions: number;
   lopDeduction?: number;
+  latePenalty?: number;
   pfEmployee?: number;
   pfEmployer?: number;
   tds?: number;
@@ -590,6 +592,7 @@ export type HrmPayslipDetail = {
   gross: number;
   deductions: number;
   lopDeduction: number;
+  latePenalty?: number;
   net: number;
   htmlContent?: string | null;
   contractNet?: number;

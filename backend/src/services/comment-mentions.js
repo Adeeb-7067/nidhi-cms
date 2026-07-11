@@ -81,8 +81,8 @@ export async function resolveCompanyTeamMentionCandidates() {
     .map((u) => ({ id: u.id, name: String(u.name).trim() }));
 }
 
-export async function resolveCompanyTeamMentionIds(authorId, requestedIds, content) {
-  const allowed = await collectProjectCommentRecipientIds(0, null, COMPANY_TEAM_THREAD);
+export async function resolveCompanyTeamMentionIds(authorId, requestedIds, content, threadType = COMPANY_TEAM_THREAD) {
+  const allowed = await collectProjectCommentRecipientIds(0, null, threadType);
   const candidates = await resolveCompanyTeamMentionCandidates();
   const fromBody = extractMentionedUserIdsFromContent(content, candidates);
   const merged = sanitizeMentionedUserIds(

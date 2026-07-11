@@ -4,6 +4,7 @@ import { MessageContent } from "@/components/chat/message-content";
 import { VoiceMessagePlayer } from "@/components/chat/voice-message-player";
 import { isChatVoiceAttachment } from "@/lib/chat-file-upload";
 import type { MentionCandidate } from "@/lib/chat-mentions";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 import { cn } from "@/lib/utils";
 
 function isPdfAttachment(comment: Pick<Comment, "attachmentMimeType" | "attachmentName">) {
@@ -64,18 +65,19 @@ export function CommentBody({
   if (!hasText && !hasAttachment) return null;
 
   const voiceVariant = isSent ? "sent" : "received";
+  const attachmentHref = hasAttachment ? resolveFileUrl(comment.attachmentUrl!) : "";
 
   return (
     <div className={cn("space-y-1.5", className)}>
       {isImage && (
         <a
-          href={comment.attachmentUrl!}
+          href={attachmentHref}
           target="_blank"
           rel="noopener noreferrer"
           className="block max-w-[min(100%,280px)]"
         >
           <img
-            src={comment.attachmentUrl!}
+            src={attachmentHref}
             alt={comment.attachmentName ?? "Attached image"}
             className="rounded-lg border border-border/50 max-h-64 w-auto object-contain bg-muted/30"
             loading="lazy"
@@ -93,7 +95,7 @@ export function CommentBody({
           )}
         >
           <VoiceMessagePlayer
-            src={comment.attachmentUrl!}
+            src={attachmentHref}
             compact={compact}
             variant={voiceVariant}
           />
@@ -101,7 +103,7 @@ export function CommentBody({
       )}
       {isPdf && (
         <a
-          href={comment.attachmentUrl!}
+          href={attachmentHref}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex max-w-[min(100%,280px)] items-center gap-2 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm hover:bg-muted/50"
@@ -114,7 +116,7 @@ export function CommentBody({
       )}
       {isApk && (
         <a
-          href={comment.attachmentUrl!}
+          href={attachmentHref}
           target="_blank"
           rel="noopener noreferrer"
           download={comment.attachmentName ?? undefined}
