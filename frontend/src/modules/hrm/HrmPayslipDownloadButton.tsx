@@ -15,9 +15,12 @@ import { downloadPayslipPdfFromHtml } from "./payslip-download";
 
 export function HrmPayslipDownloadButton({
   payslipId,
+  detailUrl,
   className,
 }: {
   payslipId: number;
+  /** Override the detail endpoint (e.g. manual payslips use a different route). */
+  detailUrl?: string;
   className?: string;
 }) {
   const [loading, setLoading] = useState(false);
@@ -30,7 +33,9 @@ export function HrmPayslipDownloadButton({
     }
     setLoading(true);
     try {
-      const detail = await customFetch<HrmPayslipDetail>(apiUrl(`/api/hrm/payslips/${payslipId}`));
+      const detail = await customFetch<HrmPayslipDetail>(
+        apiUrl(detailUrl ?? `/api/hrm/payslips/${payslipId}`),
+      );
       const filename = payslipDownloadFilename(detail);
       const html = detail.htmlContent ?? buildPayslipPrintHtml(detail);
 

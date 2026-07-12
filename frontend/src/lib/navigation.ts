@@ -431,6 +431,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Calendar", href: "/hrm/calendar", icon: CalendarClock, roles: [...HRM_ADMIN_ROLES], group: "Time" },
         { title: "Payroll", href: "/hrm/payroll", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
         { title: "Salary slips", href: "/hrm/salary-slips", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
+        { title: "Manual payslips", href: "/hrm/manual-payslips", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
         { title: "Documents", href: "/hrm/documents", icon: FolderOpen, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Policies", href: "/hrm/policies", icon: FileText, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Assets", href: "/hrm/assets", icon: Laptop, roles: [...HRM_ADMIN_ROLES], group: "Extended" },

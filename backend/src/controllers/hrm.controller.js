@@ -21,6 +21,7 @@ import * as holidaysService from "../services/hrm/holidays.service.js";
 import * as calendarService from "../services/hrm/calendar.service.js";
 import * as attendanceService from "../services/hrm/attendance.service.js";
 import * as payrollService from "../services/hrm/payroll.service.js";
+import * as manualPayslipService from "../services/hrm/manual-payslip.service.js";
 import * as recruitmentService from "../services/hrm/recruitment.service.js";
 import * as onboardingService from "../services/hrm/onboarding.service.js";
 import * as documentsService from "../services/hrm/documents.service.js";
@@ -428,6 +429,30 @@ async function getPayslipById(req, res) {
       requirePublished: !canViewUnpublished,
     }),
   );
+}
+
+async function getManualPayslips(req, res) {
+  const year = req.query.year ? Number(req.query.year) : undefined;
+  const month = req.query.month ? Number(req.query.month) : undefined;
+  const userId = req.query.userId ? Number(req.query.userId) : undefined;
+  const allPeriods = req.query.allPeriods === "true" || req.query.allPeriods === "1";
+  res.json({
+    slips: await manualPayslipService.listManualPayslips({ year, month, userId, allPeriods }),
+  });
+}
+
+async function postManualPayslip(req, res) {
+  res.status(201).json(await manualPayslipService.upsertManualPayslip(req.body, req.user.id));
+}
+
+async function getManualPayslipById(req, res) {
+  const id = parseIdParam(req.params.id, "manual payslip id");
+  res.json(await manualPayslipService.getManualPayslipDetail(id));
+}
+
+async function deleteManualPayslipById(req, res) {
+  const id = parseIdParam(req.params.id, "manual payslip id");
+  res.json(await manualPayslipService.deleteManualPayslip(id, req.user.id));
 }
 
 async function getCandidates(_req, res) {
@@ -979,6 +1004,10 @@ export {
   getMyPayslips,
   getAdminPayslips,
   getPayslipById,
+  getManualPayslips,
+  postManualPayslip,
+  getManualPayslipById,
+  deleteManualPayslipById,
   getCandidates,
   postCandidate,
   patchCandidate,

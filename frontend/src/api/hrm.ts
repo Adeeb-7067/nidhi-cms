@@ -29,6 +29,8 @@ import type {
   HrmPayslip,
   HrmPayslipDetail,
   HrmAdminPayslipRow,
+  HrmManualPayslipRow,
+  HrmManualPayslipInput,
   HrmPayrollChecklist,
   HrmCandidate,
   HrmOnboardingRecord,
@@ -959,6 +961,58 @@ export function useHrmPayslip(id?: number) {
     queryFn: () => customFetch<HrmPayslipDetail>(apiUrl(`/api/hrm/payslips/${id}`)),
     enabled: id != null,
     meta: { errorMessage: "Could not load payslip" },
+  });
+}
+
+export function useManualPayslips(opts?: {
+  year?: number;
+  month?: number;
+  allPeriods?: boolean;
+}) {
+  const params = new URLSearchParams();
+  if (opts?.year) params.set("year", String(opts.year));
+  if (opts?.month) params.set("month", String(opts.month));
+  if (opts?.allPeriods) params.set("allPeriods", "true");
+  const qs = params.toString();
+  return useHrmQuery({
+    queryKey: ["hrm", "manual-payslips", opts?.year, opts?.month, opts?.allPeriods],
+    queryFn: () =>
+      customFetch<{ slips: HrmManualPayslipRow[] }>(
+        apiUrl(`/api/hrm/manual-payslips${qs ? `?${qs}` : ""}`),
+      ),
+    meta: { errorMessage: "Could not load manual payslips" },
+  });
+}
+
+export function useManualPayslip(id?: number) {
+  return useHrmQuery({
+    queryKey: ["hrm", "manual-payslips", "detail", id],
+    queryFn: () => customFetch<HrmPayslipDetail>(apiUrl(`/api/hrm/manual-payslips/${id}`)),
+    enabled: id != null,
+    meta: { errorMessage: "Could not load manual payslip" },
+  });
+}
+
+export function useUpsertManualPayslip() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (body: HrmManualPayslipInput) =>
+      customFetch<HrmPayslipDetail>(apiUrl("/api/hrm/manual-payslips"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "manual-payslips"] }),
+    meta: { errorMessage: "Could not save manual payslip", showErrorToast: false },
+  });
+}
+
+export function useDeleteManualPayslip() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/hrm/manual-payslips/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "manual-payslips"] }),
+    meta: { errorMessage: "Could not delete manual payslip" },
   });
 }
 

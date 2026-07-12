@@ -62,11 +62,14 @@ function fitPayslipIframe(frame: HTMLIFrameElement) {
 export function HrmPayslipHtmlFrame({
   htmlContent,
   payslipId,
+  downloadDetailUrl,
   showDownload = true,
   className,
 }: {
   htmlContent: string;
   payslipId: number;
+  /** Override the detail endpoint used by the download button. */
+  downloadDetailUrl?: string;
   showDownload?: boolean;
   className?: string;
 }) {
@@ -122,6 +125,7 @@ export function HrmPayslipHtmlFrame({
         <div className="flex justify-center">
           <HrmPayslipDownloadButton
             payslipId={payslipId}
+            detailUrl={downloadDetailUrl}
             className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
           />
         </div>

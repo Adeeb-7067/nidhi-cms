@@ -597,6 +597,30 @@ export type HrmPayslipDetail = {
   htmlContent?: string | null;
   contractNet?: number;
   earnedGross?: number;
+  manual?: boolean;
+  notes?: string;
+};
+
+export type HrmManualPayslipRow = {
+  id: number;
+  userId: number;
+  year: number;
+  month: number;
+  net: number;
+  notes?: string;
+  employeeName: string;
+  employeeId: string | null;
+  employeeAvatarUrl?: string | null;
+  designation?: string | null;
+  updatedAt?: string | null;
+};
+
+export type HrmManualPayslipInput = {
+  userId: number;
+  year: number;
+  month: number;
+  net: number;
+  notes?: string;
 };
 
 export type HrmPayrollChecklistBlocker = {

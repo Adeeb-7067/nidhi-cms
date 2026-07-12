@@ -7,6 +7,7 @@ export * from "./wfh.js";
 export * from "./attendance.js";
 export * from "./daily-attendance.js";
 export * from "./payroll.js";
+export * from "./manual-payslip.js";
 export * from "./audit.js";
 export * from "./recruitment.js";
 export * from "./documents.js";

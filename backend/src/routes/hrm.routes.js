@@ -95,6 +95,11 @@ router.get(
   asyncHandler(hrm.getPayslipById),
 );
 
+router.get("/hrm/manual-payslips", perm("hrm_payroll", "view"), asyncHandler(hrm.getManualPayslips));
+router.post("/hrm/manual-payslips", perm("hrm_payroll", "create"), asyncHandler(hrm.postManualPayslip));
+router.get("/hrm/manual-payslips/:id", perm("hrm_payroll", "view"), asyncHandler(hrm.getManualPayslipById));
+router.delete("/hrm/manual-payslips/:id", perm("hrm_payroll", "edit"), asyncHandler(hrm.deleteManualPayslipById));
+
 router.get("/hrm/recruitment/candidates", perm("hrm_recruitment", "view"), asyncHandler(hrm.getCandidates));
 router.post("/hrm/recruitment/candidates", perm("hrm_recruitment", "create"), asyncHandler(hrm.postCandidate));
 router.patch("/hrm/recruitment/candidates/:id", perm("hrm_recruitment", "edit"), asyncHandler(hrm.patchCandidate));

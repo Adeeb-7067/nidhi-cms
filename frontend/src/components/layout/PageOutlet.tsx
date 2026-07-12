@@ -147,6 +147,7 @@ const HrmMyLeave = React.lazy(() => import("@/pages/hrm/MyLeave"));
 const HrmMyWfh = React.lazy(() => import("@/pages/hrm/MyWfh"));
 const HrmMyPayslips = React.lazy(() => import("@/pages/hrm/MyPayslips"));
 const HrmSalarySlips = React.lazy(() => import("@/pages/hrm/SalarySlips"));
+const HrmManualPayslips = React.lazy(() => import("@/pages/hrm/ManualPayslips"));
 const HrmMyHolidays = React.lazy(() => import("@/pages/hrm/MyHolidays"));
 const HrmSettings = React.lazy(() => import("@/pages/hrm/Settings"));
 const HrmRecruitment = React.lazy(() => import("@/pages/hrm/Recruitment"));
@@ -793,6 +794,7 @@ export function PageOutlet() {
       <Route path="/hrm/attendance"><RoleGate><HrmAttendance /></RoleGate></Route>
       <Route path="/hrm/payroll"><RoleGate><HrmPayroll /></RoleGate></Route>
       <Route path="/hrm/salary-slips"><RoleGate><HrmSalarySlips /></RoleGate></Route>
+      <Route path="/hrm/manual-payslips"><RoleGate><HrmManualPayslips /></RoleGate></Route>
       <Route path="/hrm/my-attendance"><RoleGate><HrmMyAttendance /></RoleGate></Route>
       <Route path="/hrm/my-leave"><RoleGate><HrmMyLeave /></RoleGate></Route>
       <Route path="/hrm/my-wfh"><RoleGate><HrmMyWfh /></RoleGate></Route>

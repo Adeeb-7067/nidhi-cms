@@ -255,10 +255,6 @@ export function HrmPayslipDocument({
           </div>
         </div>
 
-        <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-center text-[10px] text-slate-500">
-          This is a system generated payslip and does not require any signature.
-        </div>
-
         {showDownload ? (
           <div className="mt-4 flex justify-center border-t border-slate-100 pt-4">
             <HrmPayslipDownloadButton payslipId={Number(data.payslipId)} />

@@ -820,16 +820,6 @@ const generatePaySlipHtml = (
       object-fit: contain;
       opacity: 0.92;
     }
-    .disclaimer {
-      margin-top: 16px;
-      border: 1px solid #e5e7eb;
-      border-radius: 8px;
-      padding: 10px 12px;
-      text-align: center;
-      color: #6b7280;
-      font-size: 10px;
-      background: #fafafa;
-    }
   </style>
 </head>
 <body>
@@ -1010,9 +1000,6 @@ const generatePaySlipHtml = (
       </div>
     </div>
 
-    <div class="disclaimer">
-      This is a system generated payslip and does not require any signature.
-    </div>
     </div>
   </div>
 </body>
