@@ -20,8 +20,22 @@ import { useListAlerts, useCancelAlert, type Alert, type AlertStatus } from "@/a
 
 function formatAudience(alert: Alert): string {
   if (alert.audienceType === "all") return "All users";
-  if (alert.audienceType === "user") return `User: ${alert.targetUserName ?? `#${alert.targetUserId}`}`;
-  return `Role: ${alert.targetRole}`;
+  if (alert.audienceType === "user") {
+    const names = alert.targetUserNames?.length
+      ? alert.targetUserNames
+      : alert.targetUserName
+        ? [alert.targetUserName]
+        : alert.targetUserId != null
+          ? [`#${alert.targetUserId}`]
+          : [];
+    return names.length > 0 ? `Users: ${names.join(", ")}` : "Users: —";
+  }
+  const roles = alert.targetRoles?.length
+    ? alert.targetRoles
+    : alert.targetRole
+      ? [alert.targetRole]
+      : [];
+  return roles.length > 0 ? `Roles: ${roles.join(", ")}` : "Roles: —";
 }
 
 function statusBadgeClass(status: AlertStatus): string {

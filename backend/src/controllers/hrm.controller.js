@@ -671,6 +671,15 @@ async function patchHrmSettings(req, res) {
   );
   invalidateSettingsCache();
 
+  // Weekend days are the single source of truth for working days — keep shift templates in sync.
+  if (
+    req.body.hrmWeekendDays !== undefined &&
+    JSON.stringify([...(settings.hrmWeekendDays ?? [])].sort()) !==
+      JSON.stringify([...(update.hrmWeekendDays ?? [])].sort())
+  ) {
+    await shiftsService.syncShiftTemplatesWorkingDays(update.hrmWeekendDays);
+  }
+
   if (
     req.body.hrmGlobalWfhMode !== undefined &&
     req.body.hrmGlobalWfhMode !== settings.hrmGlobalWfhMode

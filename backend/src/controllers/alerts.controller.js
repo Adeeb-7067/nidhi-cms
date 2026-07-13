@@ -60,25 +60,51 @@ async function validateAlertInput(body, { partial = false } = {}) {
     out.audienceType = audienceType;
     out.targetUserId = null;
     out.targetRole = null;
+    out.targetUserIds = [];
+    out.targetRoles = [];
 
     if (audienceType === "user") {
-      const targetUserId = Number.parseInt(String(body.targetUserId ?? ""), 10);
-      if (!Number.isFinite(targetUserId)) {
-        badRequest("Select a user to target.", "targetUserId");
+      const userIds = normalizeUserIds(body.targetUserIds, body.targetUserId);
+      if (userIds.length === 0) {
+        badRequest("Select at least one user to target.", "targetUserIds");
       }
-      const user = await usersTable.findOne({ id: targetUserId }, { id: 1 }).lean();
-      if (!user) badRequest("Selected user was not found.", "targetUserId");
-      out.targetUserId = targetUserId;
+      const found = await usersTable.find({ id: { $in: userIds } }, { id: 1 }).lean();
+      const foundIds = new Set(found.map((u) => u.id));
+      const missing = userIds.filter((id) => !foundIds.has(id));
+      if (missing.length > 0) {
+        badRequest(`Some selected users were not found: ${missing.join(", ")}.`, "targetUserIds");
+      }
+      out.targetUserIds = userIds;
     } else if (audienceType === "role") {
-      const targetRole = optionalString(body.targetRole);
-      if (!targetRole || !ASSIGNABLE_ROLE_VALUES.includes(targetRole)) {
-        badRequest("Select a valid role to target.", "targetRole");
+      const roles = normalizeRoles(body.targetRoles, body.targetRole);
+      if (roles.length === 0) {
+        badRequest("Select at least one role to target.", "targetRoles");
       }
-      out.targetRole = targetRole;
+      const invalid = roles.filter((r) => !ASSIGNABLE_ROLE_VALUES.includes(r));
+      if (invalid.length > 0) {
+        badRequest(`Some selected roles are invalid: ${invalid.join(", ")}.`, "targetRoles");
+      }
+      out.targetRoles = roles;
     }
   }
 
   return out;
+}
+
+/** Accept a targetUserIds array, falling back to a legacy single targetUserId. */
+function normalizeUserIds(rawList, legacySingle) {
+  const source = Array.isArray(rawList) && rawList.length > 0 ? rawList : [legacySingle];
+  const ids = source
+    .map((v) => Number.parseInt(String(v ?? ""), 10))
+    .filter((v) => Number.isFinite(v));
+  return [...new Set(ids)];
+}
+
+/** Accept a targetRoles array, falling back to a legacy single targetRole. */
+function normalizeRoles(rawList, legacySingle) {
+  const source = Array.isArray(rawList) && rawList.length > 0 ? rawList : [legacySingle];
+  const roles = source.map((v) => optionalString(v)).filter((v) => Boolean(v));
+  return [...new Set(roles)];
 }
 
 async function getAlerts(req, res) {

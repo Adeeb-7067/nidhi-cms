@@ -8,8 +8,12 @@ const alertSchema = new Schema({
   photoUrl: { type: String },
   scheduledAt: { type: Date, required: true, index: true },
   audienceType: { type: String, enum: alertAudienceTypes, required: true },
+  // Legacy single-target fields (kept for backward compatibility with pre-existing alerts).
   targetUserId: { type: Number, ref: "Users" },
   targetRole: { type: String },
+  // Multi-target: an alert can target one or more users, or one or more roles.
+  targetUserIds: { type: [Number], default: [] },
+  targetRoles: { type: [String], default: [] },
   status: { type: String, enum: alertStatuses, default: "scheduled", required: true, index: true },
   firedAt: { type: Date },
   createdBy: { type: Number, ref: "Users", required: true }

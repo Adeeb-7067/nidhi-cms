@@ -35,6 +35,7 @@ import hrmRoutes from "./hrm.routes.js";
 import salesRoutes from "./sales.routes.js";
 import financeRoutes from "./finance.routes.js";
 import projectDocumentsRoutes from "./project-documents.routes.js";
+import { requireDatabase } from "../middlewares/require-database.js";
 const router = Router();
 
 // Normalize ?token= query param to the Authorization header.
@@ -55,8 +56,9 @@ router.use((req, res, next) => {
   }
   asyncHandler(requireAuth)(req, res, next);
 });
+router.use(healthRoutes);
+router.use(requireDatabase);
 const featureRouters = [
-  healthRoutes,
   authRoutes,
   searchRoutes,
   usersRoutes,

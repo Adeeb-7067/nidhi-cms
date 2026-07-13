@@ -9,6 +9,9 @@ import { notFound } from "../../utils/route-errors.js";
 import { eachDateInRange } from "./hrm-date-utils.js";
 import { getOrCreateSettings, invalidateSettingsCache } from "../company-settings.js";
 
+export const DEFAULT_WEEKEND_DAYS = [0, 6];
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
 /** Canonical default shift: 9:30 AM – 6:00 PM with 30 min break → 8 h expected. */
 export const DEFAULT_OFFICE_SHIFT = {
   name: "Default Office",
@@ -16,9 +19,31 @@ export const DEFAULT_OFFICE_SHIFT = {
   endTime: "18:00",
   graceMinutesIn: 15,
   breakMinutes: 30,
-  workingDays: [1, 2, 3, 4, 5],
+  workingDays: [1, 2, 3, 4, 5, 6],
   isDefault: true,
 };
+
+// workingDays is derived from the global weekend setting (see resolveShiftTemplateForDate),
+// so it must not be clobbered when the default template is re-seeded.
+const { workingDays: _defaultShiftWorkingDays, ...DEFAULT_OFFICE_SHIFT_FIELDS } = DEFAULT_OFFICE_SHIFT;
+
+/** The global weekend setting is the single source of truth for weekly-offs. */
+export function resolveWeekendDays(settings) {
+  return settings?.hrmWeekendDays?.length ? settings.hrmWeekendDays : DEFAULT_WEEKEND_DAYS;
+}
+
+/** Working days = every weekday that is not a global weekly-off. */
+export function deriveWorkingDaysFromWeekend(weekendDays) {
+  const offs = weekendDays?.length ? weekendDays : DEFAULT_WEEKEND_DAYS;
+  return ALL_DAYS.filter((d) => !offs.includes(d));
+}
+
+/** Persist the derived working days onto every shift template (call when weekend setting changes). */
+export async function syncShiftTemplatesWorkingDays(weekendDays) {
+  const workingDays = deriveWorkingDaysFromWeekend(weekendDays);
+  await shiftTemplatesTable.updateMany({}, { $set: { workingDays } });
+  return workingDays;
+}
 
 function parseTimeToMinutes(timeStr) {
   const [h, m] = timeStr.split(":").map(Number);
@@ -47,11 +72,19 @@ export async function listShiftTemplates() {
 
 export async function createShiftTemplate(body) {
   const id = await getNextSequence("shift_templates");
-  return shiftTemplatesTable.create({ id, ...body });
+  const settings = await getOrCreateSettings();
+  const workingDays = deriveWorkingDaysFromWeekend(resolveWeekendDays(settings));
+  return shiftTemplatesTable.create({ id, ...body, workingDays });
 }
 
 export async function updateShiftTemplate(id, body) {
-  const tpl = await shiftTemplatesTable.findOneAndUpdate({ id }, { $set: body }, { new: true });
+  const settings = await getOrCreateSettings();
+  const workingDays = deriveWorkingDaysFromWeekend(resolveWeekendDays(settings));
+  const tpl = await shiftTemplatesTable.findOneAndUpdate(
+    { id },
+    { $set: { ...body, workingDays } },
+    { new: true },
+  );
   if (!tpl) notFound("Shift template");
   return tpl;
 }
@@ -112,12 +145,15 @@ export async function resolveShiftForUser(userId, dateStr) {
   }).sort({ effectiveFrom: -1 }).lean();
 
   if (!assignment) return null;
+  const weekendDays = resolveWeekendDays(await getOrCreateSettings());
   const template = await shiftTemplatesTable.findOne({ id: assignment.shiftTemplateId }).lean();
-  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr));
+  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr, weekendDays), weekendDays);
 }
 
 /** Effective shift for attendance/clock-out: assignment → profile shift → company default. */
 export async function resolveEffectiveShiftForUser(userId, dateStr, { settings = null } = {}) {
+  const resolvedSettings = settings ?? (await getOrCreateSettings());
+  const weekendDays = resolveWeekendDays(resolvedSettings);
   const date = new Date(`${dateStr}T12:00:00Z`);
   const assignment = await shiftAssignmentsTable.findOne({
     userId,
@@ -136,17 +172,16 @@ export async function resolveEffectiveShiftForUser(userId, dateStr, { settings =
     }
   }
   if (!template) {
-    const s = settings ?? (await getOrCreateSettings());
-    template = await getDefaultShiftTemplate(s);
+    template = await getDefaultShiftTemplate(resolvedSettings);
   }
-  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr));
+  return normalizeShiftTemplate(resolveShiftTemplateForDate(template, dateStr, weekendDays), weekendDays);
 }
 
-function resolveShiftTemplateForDate(template, dateStr) {
+function resolveShiftTemplateForDate(template, dateStr, weekendDays = DEFAULT_WEEKEND_DAYS) {
   if (!template) return null;
   const dow = new Date(`${dateStr}T12:00:00Z`).getUTCDay();
-  const workingDays = template.workingDays?.length ? template.workingDays : [1, 2, 3, 4, 5];
-  if (!workingDays.includes(dow)) return null;
+  // Working days are derived from the global weekend setting — the single source of truth.
+  if (weekendDays.includes(dow)) return null;
   return template;
 }
 
@@ -158,10 +193,11 @@ function assignmentCoversDate(assignment, dateStr) {
 }
 
 /** Batch-load shift templates for all user-days in a range (avoids N×M DB queries). */
-export async function buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId = null } = {}) {
+export async function buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId = null, weekendDays = null } = {}) {
   const shiftMap = new Map();
   if (!userIds.length) return shiftMap;
 
+  const resolvedWeekend = weekendDays ?? resolveWeekendDays(await getOrCreateSettings());
   const rangeStart = new Date(`${startDate}T12:00:00Z`);
   const rangeEnd = new Date(`${endDate}T12:00:00Z`);
 
@@ -210,7 +246,7 @@ export async function buildShiftMapForRange(userIds, startDate, endDate, { defau
         if (profileShiftId) template = templateById.get(profileShiftId) ?? null;
       }
       if (!template) template = defaultTemplate;
-      template = normalizeShiftTemplate(resolveShiftTemplateForDate(template, date));
+      template = normalizeShiftTemplate(resolveShiftTemplateForDate(template, date, resolvedWeekend), resolvedWeekend);
       if (template) shiftMap.set(`${userId}:${date}`, template);
     }
   }
@@ -227,7 +263,7 @@ export async function seedDefaultShift() {
   }
   tpl = await shiftTemplatesTable.findOneAndUpdate(
     { id: tpl.id },
-    { $set: DEFAULT_OFFICE_SHIFT },
+    { $set: DEFAULT_OFFICE_SHIFT_FIELDS },
     { new: true },
   );
   return tpl;
@@ -240,18 +276,22 @@ export async function getDefaultShiftTemplate(settings) {
   if (template?.name === DEFAULT_OFFICE_SHIFT.name) {
     template = await shiftTemplatesTable.findOneAndUpdate(
       { id },
-      { $set: DEFAULT_OFFICE_SHIFT },
+      { $set: DEFAULT_OFFICE_SHIFT_FIELDS },
       { new: true },
     );
   }
   return normalizeShiftTemplate(template);
 }
 
-function normalizeShiftTemplate(template) {
+function normalizeShiftTemplate(template, weekendDays = null) {
   if (!template) return null;
   return {
     ...template,
-    workingDays: template.workingDays?.length ? template.workingDays : [1, 2, 3, 4, 5],
+    workingDays: weekendDays
+      ? deriveWorkingDaysFromWeekend(weekendDays)
+      : template.workingDays?.length
+        ? template.workingDays
+        : [1, 2, 3, 4, 5],
   };
 }
 

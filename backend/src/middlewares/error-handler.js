@@ -11,8 +11,14 @@ const UPLOAD_MAX_MB = Math.round(UPLOAD_MAX_BYTES / (1024 * 1024));
 function duplicateKeyMessage(err) {
   return duplicateKeyToApiBody(err);
 }
-function isCastError(err) {
-  return typeof err === "object" && err !== null && err.name === "CastError";
+function isMongooseBufferingTimeout(err) {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    err.name === "MongooseError" &&
+    typeof err.message === "string" &&
+    err.message.includes("buffering timed out")
+  );
 }
 function normalizeLegacyStatus(err) {
   const legacy = err;
@@ -81,6 +87,14 @@ function errorHandler(err, req, res, _next) {
       error: message,
       code: "CONFLICT",
       ...field ? { field } : {}
+    });
+    return;
+  }
+  if (isMongooseBufferingTimeout(err)) {
+    req.log.warn({ err }, "Database query timed out while disconnected");
+    res.status(503).json({
+      error: "Database is temporarily unavailable. Please try again in a moment.",
+      code: "DATABASE_UNAVAILABLE",
     });
     return;
   }

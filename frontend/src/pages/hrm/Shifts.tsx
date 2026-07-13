@@ -180,7 +180,6 @@ export default function HrmShiftsPage() {
       endTime,
       graceMinutesIn: Number(graceMinutesIn) || 0,
       breakMinutes: Number(breakMinutes) || 0,
-      workingDays: [1, 2, 3, 4, 5],
     };
     try {
       if (editing) {

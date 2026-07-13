@@ -191,7 +191,7 @@ export async function buildAttendanceContext({
     loadApprovedCorrectionsMap(userIds, startDate, endDate),
     getDefaultShiftTemplate(settings),
     resolveDefaultShiftTemplateId(settings).then((defaultTemplateId) =>
-      buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId }),
+      buildShiftMapForRange(userIds, startDate, endDate, { defaultTemplateId, weekendDays }),
     ),
   ]);
 

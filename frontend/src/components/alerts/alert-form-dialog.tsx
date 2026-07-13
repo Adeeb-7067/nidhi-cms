@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Loader2 } from "lucide-react";
 import {
@@ -40,8 +40,8 @@ const EMPTY_FORM = {
   photoUrl: "" as string,
   scheduledAt: "",
   audienceType: "all" as AlertAudienceType,
-  targetUserId: null as number | null,
-  targetRole: null as string | null,
+  targetUserIds: [] as number[],
+  targetRoles: [] as string[],
 };
 
 type AlertFormDialogProps = {
@@ -66,13 +66,24 @@ export function AlertFormDialog({ open, onOpenChange, alert }: AlertFormDialogPr
         photoUrl: alert.photoUrl ?? "",
         scheduledAt: toDatetimeLocal(alert.scheduledAt),
         audienceType: alert.audienceType,
-        targetUserId: alert.targetUserId,
-        targetRole: alert.targetRole,
+        targetUserIds: alert.targetUserIds ?? (alert.targetUserId != null ? [alert.targetUserId] : []),
+        targetRoles: alert.targetRoles ?? (alert.targetRole ? [alert.targetRole] : []),
       });
     } else {
       setForm(EMPTY_FORM);
     }
   }, [open, alert]);
+
+  // Seed display names for users already attached to the alert being edited.
+  const initialUserLabels = useMemo(() => {
+    if (!alert?.targetUserIds?.length || !alert.targetUserNames?.length) return undefined;
+    const map: Record<number, string> = {};
+    alert.targetUserIds.forEach((id, i) => {
+      const name = alert.targetUserNames[i];
+      if (name) map[id] = name;
+    });
+    return map;
+  }, [alert]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,12 +104,12 @@ export function AlertFormDialog({ open, onOpenChange, alert }: AlertFormDialogPr
       toast.error("Scheduled date and time must be in the future.");
       return;
     }
-    if (form.audienceType === "user" && !form.targetUserId) {
-      toast.error("Select a user to target.");
+    if (form.audienceType === "user" && form.targetUserIds.length === 0) {
+      toast.error("Select at least one user to target.");
       return;
     }
-    if (form.audienceType === "role" && !form.targetRole) {
-      toast.error("Select a role to target.");
+    if (form.audienceType === "role" && form.targetRoles.length === 0) {
+      toast.error("Select at least one role to target.");
       return;
     }
 
@@ -108,8 +119,8 @@ export function AlertFormDialog({ open, onOpenChange, alert }: AlertFormDialogPr
       photoUrl: form.photoUrl || null,
       scheduledAt: scheduledAt.toISOString(),
       audienceType: form.audienceType,
-      targetUserId: form.audienceType === "user" ? form.targetUserId : null,
-      targetRole: form.audienceType === "role" ? form.targetRole : null,
+      targetUserIds: form.audienceType === "user" ? form.targetUserIds : [],
+      targetRoles: form.audienceType === "role" ? form.targetRoles : [],
     };
 
     try {
@@ -188,10 +199,11 @@ export function AlertFormDialog({ open, onOpenChange, alert }: AlertFormDialogPr
 
           <AlertAudienceField
             audienceType={form.audienceType}
-            targetUserId={form.targetUserId}
-            targetRole={form.targetRole}
-            onChange={({ audienceType, targetUserId, targetRole }) =>
-              setForm((f) => ({ ...f, audienceType, targetUserId, targetRole }))
+            targetUserIds={form.targetUserIds}
+            targetRoles={form.targetRoles}
+            initialUserLabels={initialUserLabels}
+            onChange={({ audienceType, targetUserIds, targetRoles }) =>
+              setForm((f) => ({ ...f, audienceType, targetUserIds, targetRoles }))
             }
           />
 

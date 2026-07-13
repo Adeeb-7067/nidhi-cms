@@ -8,25 +8,44 @@ async function formatAlertRows(rows) {
     return rows2;
   });
   await Promise.all([
-    users.preload(rows.flatMap((a) => [a.targetUserId, a.createdBy])),
+    users.preload(
+      rows.flatMap((a) => [a.targetUserId, a.createdBy, ...(a.targetUserIds ?? [])]),
+    ),
   ]);
-  return rows.map((a) => ({
+  return rows.map((a) => {
+    // Normalize to arrays, falling back to legacy single-target fields.
+    const targetUserIds = a.targetUserIds?.length
+      ? a.targetUserIds
+      : a.targetUserId != null
+        ? [a.targetUserId]
+        : [];
+    const targetRoles = a.targetRoles?.length
+      ? a.targetRoles
+      : a.targetRole
+        ? [a.targetRole]
+        : [];
+    const targetUserNames = targetUserIds.map((id) => users.get(id)?.name ?? `#${id}`);
+    return {
     id: a.id,
     title: a.title,
     description: a.description,
     photoUrl: a.photoUrl ?? null,
     scheduledAt: toIso(a.scheduledAt),
     audienceType: a.audienceType,
-    targetUserId: a.targetUserId ?? null,
-    targetUserName: a.targetUserId ? users.get(a.targetUserId)?.name ?? null : null,
-    targetRole: a.targetRole ?? null,
+    targetUserId: targetUserIds[0] ?? null,
+    targetUserName: targetUserIds[0] != null ? users.get(targetUserIds[0])?.name ?? null : null,
+    targetRole: targetRoles[0] ?? null,
+    targetUserIds,
+    targetRoles,
+    targetUserNames,
     status: a.status,
     firedAt: toIso(a.firedAt),
     createdBy: a.createdBy,
     createdByName: users.get(a.createdBy)?.name ?? null,
     createdAt: toIso(a.createdAt),
     updatedAt: toIso(a.updatedAt),
-  }));
+    };
+  });
 }
 
 async function formatAlertRow(row) {

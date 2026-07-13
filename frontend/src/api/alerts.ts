@@ -15,6 +15,9 @@ export interface Alert {
   targetUserId: number | null;
   targetUserName: string | null;
   targetRole: string | null;
+  targetUserIds: number[];
+  targetRoles: string[];
+  targetUserNames: string[];
   status: AlertStatus;
   firedAt: string | null;
   createdBy: number;
@@ -36,8 +39,8 @@ export interface AlertInput {
   photoUrl?: string | null;
   scheduledAt: string;
   audienceType: AlertAudienceType;
-  targetUserId?: number | null;
-  targetRole?: string | null;
+  targetUserIds?: number[];
+  targetRoles?: string[];
 }
 
 export const alertKeys = {

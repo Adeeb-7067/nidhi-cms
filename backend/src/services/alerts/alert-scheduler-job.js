@@ -7,11 +7,25 @@ let tickInFlight = false;
 
 async function resolveRecipientIds(alert) {
   if (alert.audienceType === "user") {
-    return alert.targetUserId ? [alert.targetUserId] : [];
+    // Support multi-target (targetUserIds) with fallback to the legacy single field.
+    const ids = alert.targetUserIds?.length
+      ? alert.targetUserIds
+      : alert.targetUserId
+        ? [alert.targetUserId]
+        : [];
+    if (ids.length === 0) return [];
+    const users = await usersTable.find({ id: { $in: ids }, status: "active" }, { id: 1 }).lean();
+    return users.map((u) => u.id);
   }
   if (alert.audienceType === "role") {
-    const users = await usersTable.find({ role: alert.targetRole, status: "active" }, { id: 1 }).lean();
-    return users.map((u) => u.id);
+    const roles = alert.targetRoles?.length
+      ? alert.targetRoles
+      : alert.targetRole
+        ? [alert.targetRole]
+        : [];
+    if (roles.length === 0) return [];
+    const users = await usersTable.find({ role: { $in: roles }, status: "active" }, { id: 1 }).lean();
+    return [...new Set(users.map((u) => u.id))];
   }
   const users = await usersTable.find({ status: "active" }, { id: 1 }).lean();
   return users.map((u) => u.id);

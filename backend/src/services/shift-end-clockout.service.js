@@ -12,6 +12,7 @@ import {
   buildShiftMapForRange,
   resolveEffectiveShiftForUser,
   resolveDefaultShiftTemplateId,
+  resolveWeekendDays,
 } from "./hrm/shifts.service.js";
 import { notifyShiftAutoClockOut } from "./work-session-notifications.js";
 import { broadcastWorkSessionSync } from "./work-session-sync.js";
@@ -86,6 +87,7 @@ export async function closeSessionsPastShiftEnd() {
   const defaultShiftId = await resolveDefaultShiftTemplateId(settings);
   const shiftMap = await buildShiftMapForRange(userIds, todayKey, todayKey, {
     defaultTemplateId: defaultShiftId,
+    weekendDays: resolveWeekendDays(settings),
   });
 
   let closed = 0;
