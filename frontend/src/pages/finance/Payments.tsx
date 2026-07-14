@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw } from "lucide-react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -24,9 +24,13 @@ import {
   FinanceSourceBadge,
   GstClassificationBadge,
   RecordOutgoingPaymentModal,
+  PaymentEditModal,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import type { FinancePayment } from "@/api/finance";
 import { PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import {
   PageHeroSkeleton,
@@ -35,7 +39,7 @@ import {
   PageTabsSkeleton,
   PageTableSkeleton,
 } from "@/components/loading";
-import { useListPayments, useListInvoices, useRemindInvoice, usePaymentsSummary, useSyncSalesPayments, type ListPaymentsParams } from "@/api/finance";
+import { useListPayments, useListInvoices, useRemindInvoice, usePaymentsSummary, useSyncSalesPayments, useDeletePayment, type ListPaymentsParams } from "@/api/finance";
 import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
 
@@ -44,6 +48,12 @@ export default function PaymentsPage() {
   const [directionTab, setDirectionTab] = useState<string>("all");
   const { page, setPage, resetPage, limit, apiLimit } = useTablePagination(20);
   const [outgoingModalOpen, setOutgoingModalOpen] = useState(false);
+  const [editPayment, setEditPayment] = useState<FinancePayment | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinancePayment | null>(null);
+  const { can } = usePermissions();
+  const canEdit = can("finance_payments", "edit");
+  const canDelete = can("finance_payments", "delete");
+  const deletePayment = useDeletePayment();
 
   const params: ListPaymentsParams = useMemo(
     () => ({
@@ -80,6 +90,20 @@ export default function PaymentsPage() {
       toastApiError(err, "Failed to send reminder");
     }
   };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deletePayment.mutateAsync(deleteTarget.id);
+      toast.success("Payment deleted");
+      setDeleteTarget(null);
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete payment");
+    }
+  };
+
+  const showActions = canEdit || canDelete;
 
   if (isLoading) {
     return (
@@ -221,10 +245,13 @@ export default function PaymentsPage() {
                 <TableHead className="text-xs">GST</TableHead>
                 <TableHead className="text-xs text-right">GST amt</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
+                {showActions && <TableHead className="text-xs text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments.map((p) => (
+              {payments.map((p) => {
+                const isFinance = !p.source || p.source === "finance";
+                return (
                 <TableRow key={`${p.source ?? "finance"}-${p.id}`} className="hover:bg-muted/30">
                   <TableCell className="text-xs">
                     <Link href={`/finance/payments/${p.source ?? "finance"}/${p.id}`} className="hover:text-primary">
@@ -250,8 +277,29 @@ export default function PaymentsPage() {
                   <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
                     {p.direction === "incoming" ? "+" : "−"}{formatCurrency(p.amount)}
                   </TableCell>
+                  {showActions && (
+                    <TableCell className="text-right">
+                      {isFinance ? (
+                        <div className="flex justify-end gap-1">
+                          {canEdit && p.direction === "outgoing" && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditPayment(p)} title="Edit">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(p)} title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground">Sales</span>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
           <div className="border-t px-4 py-3">
@@ -261,6 +309,24 @@ export default function PaymentsPage() {
       )}
 
       <RecordOutgoingPaymentModal open={outgoingModalOpen} onOpenChange={setOutgoingModalOpen} onSuccess={() => refetch()} />
+      <PaymentEditModal
+        open={editPayment != null}
+        onOpenChange={(open) => { if (!open) setEditPayment(null); }}
+        payment={editPayment}
+        onSuccess={() => { refetch(); setEditPayment(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete payment?"
+        description={
+          deleteTarget?.direction === "incoming"
+            ? "This receipt will be removed and any linked invoice balance restored."
+            : "This disbursement will be permanently removed."
+        }
+        loading={deletePayment.isPending}
+        onConfirm={handleDelete}
+      />
     </PortalPageShell>
   );
 }

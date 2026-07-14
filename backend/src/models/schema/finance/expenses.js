@@ -36,7 +36,7 @@ const expenseSchema = new Schema(
     paymentMode: { type: String, enum: financePaymentModes, required: true },
     projectId: { type: Number, ref: "Projects", default: null, index: true },
     employeeId: { type: Number, ref: "Users", default: null, index: true },
-    vendorId: { type: Number, ref: "Clients", default: null, index: true },
+    vendorId: { type: Number, ref: "Vendors", default: null, index: true },
     notes: { type: String, default: null, trim: true },
     status: { type: String, enum: expenseStatuses, default: "pending", required: true, index: true },
     gstEnabled: { type: Boolean, default: false, required: true },

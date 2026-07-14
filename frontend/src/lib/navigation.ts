@@ -514,6 +514,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Income", href: "/finance/income", icon: TrendingUp, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
         { title: "Payments", href: "/finance/payments", icon: Wallet, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
         { title: "Vendors", href: "/finance/vendors", icon: Building2, roles: [...FINANCE_ACCESS_ROLES], group: "Transactions" },
+        { title: "Vendor analytics", href: "/finance/vendors/analytics", icon: BarChart3, roles: [...FINANCE_ACCESS_ROLES], group: "Reports" },
         { title: "Invoices", href: "/finance/invoices", icon: Receipt, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
         { title: "Payroll", href: "/finance/payroll", icon: Users, roles: [...FINANCE_ACCESS_ROLES], group: "Billing" },
         { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },

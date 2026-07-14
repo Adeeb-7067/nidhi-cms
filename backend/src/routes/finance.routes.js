@@ -36,6 +36,8 @@ router.delete("/finance/expenses/:id", ...p("finance_expenses", "delete"), wrap(
 // ── Income ───────────────────────────────────────────────────────────────
 router.get("/finance/income", ...p("finance_income"), wrap(incomeCtrl.listIncome));
 router.post("/finance/income", ...p("finance_income", "create"), wrap(incomeCtrl.recordIncome));
+router.patch("/finance/income/:id", ...p("finance_income", "edit"), wrap(incomeCtrl.updateIncome));
+router.delete("/finance/income/:id", ...p("finance_income", "delete"), wrap(incomeCtrl.deleteIncome));
 
 // ── Invoices ─────────────────────────────────────────────────────────────
 router.get("/finance/invoices", ...p("finance_invoices"), wrap(invoicesCtrl.listInvoices));
@@ -44,6 +46,7 @@ router.get("/finance/invoices/summary", ...p("finance_invoices"), wrap(invoicesC
 router.post("/finance/invoices", ...p("finance_invoices", "create"), wrap(invoicesCtrl.createInvoice));
 router.get("/finance/invoices/:id", ...p("finance_invoices"), wrap(invoicesCtrl.getInvoiceById));
 router.patch("/finance/invoices/:id", ...p("finance_invoices", "edit"), wrap(invoicesCtrl.updateInvoice));
+router.delete("/finance/invoices/:id", ...p("finance_invoices", "delete"), wrap(invoicesCtrl.deleteInvoice));
 router.post("/finance/invoices/:id/cancel", ...p("finance_invoices", "edit"), wrap(invoicesCtrl.cancelInvoice));
 router.post("/finance/invoices/:id/credit-note", ...p("finance_invoices", "edit"), wrap(invoicesCtrl.addCreditNote));
 router.post("/finance/invoices/:id/remind", ...p("finance_invoices", "edit"), wrap(invoicesCtrl.remindInvoice));
@@ -53,6 +56,8 @@ router.get("/finance/payments", ...p("finance_payments"), wrap(paymentsCtrl.list
 router.get("/finance/payments/summary", ...p("finance_payments"), wrap(paymentsCtrl.getPaymentsSummary));
 router.post("/finance/payments", ...p("finance_payments", "create"), wrap(paymentsCtrl.recordPayment));
 router.get("/finance/payments/:id", ...p("finance_payments"), wrap(paymentsCtrl.getPaymentById));
+router.patch("/finance/payments/:id", ...p("finance_payments", "edit"), wrap(paymentsCtrl.updatePayment));
+router.delete("/finance/payments/:id", ...p("finance_payments", "delete"), wrap(paymentsCtrl.deletePayment));
 
 // ── Budgets ──────────────────────────────────────────────────────────────
 router.get("/finance/budgets", ...p("finance_budgets"), wrap(budgetsCtrl.listBudgets));
@@ -68,21 +73,30 @@ router.get("/finance/ledgers/vendors/:id", ...p("finance_ledgers"), wrap(ledgers
 router.get("/finance/ledgers/expense-categories", ...p("finance_ledgers"), wrap(ledgersCtrl.getExpenseCategoryLedgers));
 router.get("/finance/ledgers/bank-accounts", ...p("finance_ledgers"), wrap(ledgersCtrl.getBankLedgers));
 router.post("/finance/ledgers/bank-accounts", ...p("finance_ledgers", "create"), wrap(ledgersCtrl.createBankAccount));
+router.patch("/finance/ledgers/bank-accounts/:id", ...p("finance_ledgers", "edit"), wrap(ledgersCtrl.updateBankAccount));
+router.delete("/finance/ledgers/bank-accounts/:id", ...p("finance_ledgers", "delete"), wrap(ledgersCtrl.deleteBankAccount));
 router.get("/finance/ledgers/bank-accounts/:id", ...p("finance_ledgers"), wrap(ledgersCtrl.getBankLedgers));
 
 // ── Tax ──────────────────────────────────────────────────────────────────
 router.get("/finance/tax/summary", ...p("finance_tax"), wrap(taxCtrl.getTaxSummary));
+router.get("/finance/tax/deposits", ...p("finance_tax"), wrap(taxCtrl.listTaxDeposits));
 router.post("/finance/tax/deposits", ...p("finance_tax", "create"), wrap(taxCtrl.createTaxDeposit));
+router.patch("/finance/tax/deposits/:id", ...p("finance_tax", "edit"), wrap(taxCtrl.updateTaxDeposit));
+router.delete("/finance/tax/deposits/:id", ...p("finance_tax", "delete"), wrap(taxCtrl.deleteTaxDeposit));
 
 // ── Reports ──────────────────────────────────────────────────────────────
 router.get("/finance/reports/pnl", ...p("finance_reports"), wrap(reportsCtrl.getPnl));
 router.get("/finance/reports/profitability", ...p("finance_reports"), wrap(reportsCtrl.getProfitability));
+// Shown on the Expenses page → gated by finance_expenses so page viewers can load it.
+router.get("/finance/reports/department-payroll", ...p("finance_expenses"), wrap(reportsCtrl.getDepartmentPayroll));
 
 // ── Vendors ──────────────────────────────────────────────────────────────
 router.get("/finance/vendors", ...p("finance_vendors"), wrap(vendorsCtrl.listVendors));
+router.get("/finance/vendors/analytics", ...p("finance_vendors"), wrap(vendorsCtrl.getVendorAnalytics));
 router.get("/finance/vendors/:id", ...p("finance_vendors"), wrap(vendorsCtrl.getVendorById));
 router.post("/finance/vendors", ...p("finance_vendors", "create"), wrap(vendorsCtrl.createVendor));
 router.patch("/finance/vendors/:id", ...p("finance_vendors", "edit"), wrap(vendorsCtrl.updateVendor));
+router.delete("/finance/vendors/:id", ...p("finance_vendors", "delete"), wrap(vendorsCtrl.deleteVendor));
 
 // ── Notifications ────────────────────────────────────────────────────────
 router.get("/finance/notifications", ...p("finance_notifications"), wrap(notificationsCtrl.getFinanceNotifications));

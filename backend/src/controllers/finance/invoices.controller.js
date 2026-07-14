@@ -1,4 +1,4 @@
-import { FinanceInvoices, Projects, clientsTable, getNextSequence } from "../../models/schema/index.js";
+import { FinanceInvoices, FinancePayments, Projects, clientsTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { sweepOverdueInvoices } from "./dashboard.controller.js";
@@ -155,6 +155,24 @@ async function cancelInvoice(req, res) {
   res.json(updated);
 }
 
+async function deleteInvoice(req, res) {
+  const id = parseIdParam(req.params.id, "invoice id");
+  const invoice = await FinanceInvoices.findOne({ id }).lean();
+  if (!invoice) notFound("Invoice");
+  if ((invoice.paidAmount ?? 0) > 0) {
+    badRequest("Invoices with recorded payments cannot be deleted — cancel it instead.", "paidAmount");
+  }
+  if ((invoice.creditNotes?.length ?? 0) > 0) {
+    badRequest("Invoices with credit notes cannot be deleted — cancel it instead.", "creditNotes");
+  }
+  const linkedPayment = await FinancePayments.findOne({ invoiceId: id }).select({ id: 1 }).lean();
+  if (linkedPayment) {
+    badRequest("This invoice has linked payments and cannot be deleted — cancel it instead.", "invoiceId");
+  }
+  await FinanceInvoices.deleteOne({ id });
+  res.json({ success: true });
+}
+
 async function addCreditNote(req, res) {
   const id = parseIdParam(req.params.id, "invoice id");
   const invoice = await FinanceInvoices.findOne({ id }).lean();
@@ -189,6 +207,7 @@ export {
   getInvoiceById,
   createInvoice,
   updateInvoice,
+  deleteInvoice,
   cancelInvoice,
   addCreditNote,
   remindInvoice,

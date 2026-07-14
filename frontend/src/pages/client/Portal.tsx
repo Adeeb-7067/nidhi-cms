@@ -65,6 +65,7 @@ import {
   commentThreadQueryParams,
   flattenCommentThread,
 } from "@/lib/comment-thread-query";
+import { useThreadCommentRealtime } from "@/hooks/use-thread-comment-realtime";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ClientRecentActivityPanel } from "@/components/client/ClientRecentActivityPanel";
 import { useRealtime } from "@/contexts/RealtimeContext";
@@ -136,25 +137,12 @@ export default function ClientPortal() {
     ? commentThreadQueryParams("project", projectId)
     : null;
 
-  useEffect(() => {
-    if (socket && project?.id) {
-      const handleNewComment = (data: {
-        threadType?: string;
-        threadId?: number;
-        comment?: import("@/api").Comment;
-      }) => {
-        if (data.threadType === "project" && data.threadId === project.id && data.comment) {
-          appendCommentToListCache(queryClient, "project", project.id, data.comment);
-        }
-      };
-
-      socket.on("comment", handleNewComment);
-      return () => {
-        socket.off("comment", handleNewComment);
-      };
-    }
-    return undefined;
-  }, [socket, project?.id, queryClient]);
+  useThreadCommentRealtime({
+    socket,
+    threadType: "project",
+    threadId: projectId,
+    enabled: projectId != null,
+  });
 
   const { data: releases, isLoading: isLoadingReleases } = useGetApkReleases(projectId ?? 0, {
     query: {

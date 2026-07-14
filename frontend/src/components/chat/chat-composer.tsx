@@ -62,6 +62,9 @@ type ChatComposerProps = {
   incomingFile?: File | null;
   onIncomingFileHandled?: () => void;
   size?: "default" | "compact";
+  /** Quoted message shown above the input when composing a reply. */
+  replyingTo?: { authorName: string; preview: string } | null;
+  onCancelReply?: () => void;
 };
 
 const MAX_TEXTAREA_HEIGHT = 120;
@@ -139,6 +142,8 @@ export function ChatComposer({
   incomingFile = null,
   onIncomingFileHandled,
   size = "default",
+  replyingTo = null,
+  onCancelReply,
 }: ChatComposerProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -243,6 +248,11 @@ export function ChatComposer({
     attachFile(incomingFile);
     onIncomingFileHandled?.();
   }, [incomingFile, attachFile, onIncomingFileHandled]);
+
+  // Focus the input as soon as the user chooses to reply to a message.
+  useEffect(() => {
+    if (replyingTo) textareaRef.current?.focus();
+  }, [replyingTo]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     if (!enableDragDrop || isRecording) return;
@@ -497,6 +507,26 @@ export function ChatComposer({
         className="hidden"
         onChange={handleFileSelect}
       />
+
+      {replyingTo ? (
+        <div className="mb-2 flex items-stretch gap-2 rounded-lg border border-border/60 bg-muted/40 px-2.5 py-1.5">
+          <div className="w-1 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              Replying to {replyingTo.authorName}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">{replyingTo.preview}</p>
+          </div>
+          <button
+            type="button"
+            className="flex h-6 w-6 shrink-0 items-center justify-center self-center rounded-full text-muted-foreground hover:bg-background/80 hover:text-foreground"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : null}
 
       {pendingAttachment ? (
         <div className="mb-2">

@@ -1,7 +1,12 @@
-import { clientsTable } from "../../models/schema/index.js";
-import { badRequest, notFound, parseIdParam, parsePagination } from "../../utils/route-errors.js";
+import { vendorsTable, FinancePayments } from "../../models/schema/index.js";
+import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { recordIncomingPayment, recordOutgoingPayment } from "../../services/finance/payment-ledger.service.js";
+import {
+  recordIncomingPayment,
+  recordOutgoingPayment,
+  reverseIncomingPaymentPair,
+} from "../../services/finance/payment-ledger.service.js";
+import { financePaymentModes } from "../../models/schema/finance/expenses.js";
 import {
   listUnifiedPayments,
   getUnifiedPayment,
@@ -61,7 +66,7 @@ async function recordPayment(req, res) {
     let partyName = body.partyName;
     let vendorId = body.vendorId ? Number(body.vendorId) : null;
     if (vendorId && !partyName) {
-      const vendor = await clientsTable.findOne({ id: vendorId }).session(session).select({ companyName: 1 }).lean();
+      const vendor = await vendorsTable.findOne({ id: vendorId }).session(session).select({ companyName: 1 }).lean();
       if (!vendor) notFound("Vendor");
       partyName = vendor.companyName;
     }
@@ -83,4 +88,81 @@ async function recordPayment(req, res) {
   res.status(201).json(result);
 }
 
-export { listPayments, getPaymentsSummary, getPaymentById, recordPayment };
+/**
+ * Edits an outgoing finance payment. Bank/vendor ledgers are computed live from
+ * payment rows, so amount/date/mode/reference/payee can all change safely.
+ * Incoming payments are receipts tied to income + invoices and are locked here.
+ */
+async function updatePayment(req, res) {
+  const id = parseIdParam(req.params.id, "payment id");
+  const payment = await FinancePayments.findOne({ id }).lean();
+  if (!payment) notFound("Payment");
+  if (payment.salesPaymentId) {
+    badRequest("This payment is synced from a sales receipt — edit it in Sales.", "salesPaymentId");
+  }
+  if (payment.direction === "incoming") {
+    badRequest("Incoming receipts can't be edited — delete and re-record if it was wrong.", "direction");
+  }
+
+  const body = req.body ?? {};
+  const updates = {};
+  if (body.date !== undefined) {
+    const d = new Date(body.date);
+    if (Number.isNaN(d.getTime())) badRequest("date is invalid.", "date");
+    updates.date = d;
+  }
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
+    updates.amount = amount;
+  }
+  if (body.mode !== undefined) {
+    if (!financePaymentModes.includes(body.mode)) {
+      badRequest(`mode must be one of: ${financePaymentModes.join(", ")}.`, "mode");
+    }
+    updates.mode = body.mode;
+  }
+  if (body.reference !== undefined) {
+    updates.reference = optionalString(body.reference) ?? payment.reference;
+  }
+  if (body.partyName !== undefined && !payment.vendorId) {
+    const name = optionalString(body.partyName);
+    if (!name) badRequest("partyName cannot be empty.", "partyName");
+    updates.partyName = name;
+  }
+
+  const updated = await FinancePayments.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
+  res.json(updated);
+}
+
+/**
+ * Deletes a finance payment. Outgoing disbursements are removed directly (ledgers
+ * recompute). Incoming receipts reverse the paired income + invoice balance in a
+ * transaction. Sales-synced payments are managed in Sales and are blocked.
+ */
+async function deletePayment(req, res) {
+  const id = parseIdParam(req.params.id, "payment id");
+  const payment = await FinancePayments.findOne({ id }).lean();
+  if (!payment) notFound("Payment");
+  if (payment.salesPaymentId) {
+    badRequest("This payment is synced from a sales receipt — delete it in Sales.", "salesPaymentId");
+  }
+
+  if (payment.direction === "incoming") {
+    await runInTx(async (session) => {
+      await reverseIncomingPaymentPair(session, { paymentId: id, incomeId: payment.incomeId ?? null });
+    });
+  } else {
+    await FinancePayments.deleteOne({ id });
+  }
+  res.json({ success: true });
+}
+
+export {
+  listPayments,
+  getPaymentsSummary,
+  getPaymentById,
+  recordPayment,
+  updatePayment,
+  deletePayment,
+};

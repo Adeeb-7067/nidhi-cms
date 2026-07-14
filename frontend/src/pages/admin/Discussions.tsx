@@ -5,6 +5,8 @@ import {
   useListComments,
   listComments,
   useCreateComment,
+  useDeleteComment,
+  useUpdateComment,
   useListNotifications,
   useMarkNotificationRead,
   useDiscussionPreviews,
@@ -31,7 +33,7 @@ import { NewConversationPicker } from "@/components/discussions/new-conversation
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   buildDiscussionChannels,
   buildDirectChannelFromContact,
@@ -68,11 +70,33 @@ import {
   commentThreadSignature,
   createOptimisticComment,
   createOptimisticCommentId,
+  isOptimisticCommentId,
   flattenCommentThread,
+  getLatestThreadComment,
   removeCommentFromListCache,
   replaceOptimisticCommentInCache,
 } from "@/lib/comment-thread-query";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   buildChannelActivityFromNotifications,
@@ -89,6 +113,8 @@ import {
 import type { DirectConversationPeer, DirectConversation } from "@/api/direct-conversations";
 import {
   applyProjectCommentToCaches,
+  applyCommentDeletedToCaches,
+  applyCommentUpdatedToCaches,
   channelActivityPatchFromComment,
   discussionCommentPreview,
 } from "@/lib/discussion-realtime";
@@ -123,6 +149,33 @@ function upsertChannelActivity(
   };
 }
 
+/**
+ * Recompute a channel's chat-list preview from the *actual* latest message in
+ * the thread cache. Call after an edit/delete so the sidebar never shows the
+ * wrong snippet (e.g. "deleted" when an older message was removed). Preserves
+ * the existing unread count. The thread cache must already be updated.
+ */
+function syncChannelPreviewFromThread(
+  queryClient: QueryClient,
+  setChannelActivity: React.Dispatch<React.SetStateAction<Record<string, ChannelActivity>>>,
+  threadType: ProjectDiscussionThreadType,
+  threadId: number,
+): void {
+  const latest = getLatestThreadComment(queryClient, threadType, threadId);
+  if (!latest) return;
+  const channelKey = discussionChannelKey(threadType, threadId);
+  setChannelActivity((prev) =>
+    upsertChannelActivity(prev, channelKey, {
+      lastMessageAt: latest.createdAt ?? prev[channelKey]?.lastMessageAt,
+      lastPreview: latest.isDeleted
+        ? "This message was deleted"
+        : discussionCommentPreview(latest),
+      lastAuthorName: latest.authorName,
+      lastAuthorId: latest.authorId,
+    }),
+  );
+}
+
 export default function DiscussionsPage() {
   const { user } = useAuth();
   const { socket } = useRealtime();
@@ -137,6 +190,10 @@ export default function DiscussionsPage() {
   const [channelFilter, setChannelFilter] = useState<DiscussionChannelFilter>("all");
   const [adminSection, setAdminSection] = useState<DiscussionAdminSection>("team");
   const [showNewConversationPicker, setShowNewConversationPicker] = useState(false);
+  const [pendingDeleteMessage, setPendingDeleteMessage] = useState<Comment | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Comment | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const isAdminView = user?.role === "super_admin";
   const isClientView = user?.role === "client";
 
@@ -440,8 +497,80 @@ export default function DiscussionsPage() {
     };
 
     socket.on("comment", handleNewComment);
+
+    const handleCommentDeleted = (data: {
+      threadType?: string;
+      threadId?: number;
+      commentId?: number;
+      comment?: Comment;
+    }) => {
+      const threadType = data.threadType;
+      if (
+        (threadType !== "project" &&
+          threadType !== "project_internal" &&
+          threadType !== "company_team" &&
+          threadType !== "company_team_unofficial" &&
+          threadType !== "direct") ||
+        data.threadId == null ||
+        data.commentId == null
+      ) {
+        return;
+      }
+
+      applyCommentDeletedToCaches(
+        queryClient,
+        threadType,
+        data.threadId,
+        data.commentId,
+      );
+
+      // Refresh the sidebar preview from the real latest message (which may be a
+      // different, non-deleted message than the one just removed).
+      syncChannelPreviewFromThread(
+        queryClient,
+        setChannelActivity,
+        threadType as ProjectDiscussionThreadType,
+        data.threadId,
+      );
+    };
+
+    socket.on("comment:deleted", handleCommentDeleted);
+
+    const handleCommentUpdated = (data: {
+      threadType?: string;
+      threadId?: number;
+      commentId?: number;
+      comment?: Comment;
+    }) => {
+      const threadType = data.threadType;
+      if (
+        (threadType !== "project" &&
+          threadType !== "project_internal" &&
+          threadType !== "company_team" &&
+          threadType !== "company_team_unofficial" &&
+          threadType !== "direct") ||
+        data.threadId == null ||
+        !data.comment
+      ) {
+        return;
+      }
+
+      applyCommentUpdatedToCaches(queryClient, threadType, data.threadId, data.comment);
+
+      // Only the latest message drives the sidebar preview; recompute from cache.
+      syncChannelPreviewFromThread(
+        queryClient,
+        setChannelActivity,
+        threadType as ProjectDiscussionThreadType,
+        data.threadId,
+      );
+    };
+
+    socket.on("comment:updated", handleCommentUpdated);
     return () => {
       socket.off("comment", handleNewComment);
+      socket.off("comment:deleted", handleCommentDeleted);
+      socket.off("comment:updated", handleCommentUpdated);
     };
   }, [socket, queryClient, onDiscussionsPage]);
 
@@ -604,6 +733,7 @@ export default function DiscussionsPage() {
     lastReadSavedSigRef.current = "";
     markReadInFlightRef.current = false;
     setCommentText("");
+    setReplyTarget(null);
   }, [selectedChannelKey]);
 
   const commentsQueryParams =
@@ -637,6 +767,45 @@ export default function DiscussionsPage() {
   );
 
   const createCommentMutation = useCreateComment();
+  const deleteCommentMutation = useDeleteComment();
+  const updateCommentMutation = useUpdateComment();
+
+  const canDeleteMessage = useCallback(
+    (comment: Comment) => {
+      if (!user) return false;
+      return comment.authorId === user.id || user.role === "super_admin";
+    },
+    [user],
+  );
+
+  // Only the author may edit their own words (even admins can't rewrite others').
+  const canEditMessage = useCallback(
+    (comment: Comment) => Boolean(user) && comment.authorId === user!.id,
+    [user],
+  );
+
+  const handleStartEdit = useCallback((comment: Comment) => {
+    setEditingMessage(comment);
+    setEditDraft(comment.content ?? "");
+  }, []);
+
+  const handleReplyMessage = useCallback((comment: Comment) => {
+    setReplyTarget(comment);
+  }, []);
+
+  const replyingTo = useMemo(
+    () =>
+      replyTarget
+        ? {
+            authorName:
+              replyTarget.authorId === user?.id ? "yourself" : replyTarget.authorName,
+            preview: replyTarget.isDeleted
+              ? "This message was deleted"
+              : discussionCommentPreview(replyTarget),
+          }
+        : null,
+    [replyTarget, user?.id],
+  );
 
   const handlePostComment = async (payload: {
     content?: string;
@@ -647,6 +816,11 @@ export default function DiscussionsPage() {
   }) => {
     if (!hasActiveChannel || selectedThreadId == null || !user) return;
     if (!payload.content?.trim() && !payload.attachmentUrl) return;
+
+    // Snapshot the reply target now; it may be cleared before the request settles.
+    const parentId =
+      replyTarget && !isOptimisticCommentId(replyTarget.id) ? replyTarget.id : undefined;
+    setReplyTarget(null);
 
     const tempId = createOptimisticCommentId();
     const optimistic = createOptimisticComment({
@@ -661,6 +835,7 @@ export default function DiscussionsPage() {
       attachmentUrl: payload.attachmentUrl,
       attachmentName: payload.attachmentName,
       attachmentMimeType: payload.attachmentMimeType,
+      parentId,
     });
 
     applyProjectCommentToCaches(
@@ -692,6 +867,7 @@ export default function DiscussionsPage() {
           attachmentUrl: payload.attachmentUrl,
           attachmentName: payload.attachmentName,
           attachmentMimeType: payload.attachmentMimeType,
+          ...(parentId != null ? { parentId } : {}),
           ...(payload.mentionedUserIds?.length
             ? { mentionedUserIds: payload.mentionedUserIds }
             : {}),
@@ -744,6 +920,91 @@ export default function DiscussionsPage() {
     () => flattenCommentThread(commentsData?.comments ?? []),
     [threadSig, commentsData?.comments],
   );
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!pendingDeleteMessage || !hasActiveChannel || selectedThreadId == null) return;
+    const comment = pendingDeleteMessage;
+    setPendingDeleteMessage(null);
+
+    try {
+      await deleteCommentMutation.mutateAsync({ id: comment.id });
+      applyCommentDeletedToCaches(
+        queryClient,
+        selectedThreadType,
+        selectedThreadId,
+        comment.id,
+      );
+      syncChannelPreviewFromThread(
+        queryClient,
+        setChannelActivity,
+        selectedThreadType,
+        selectedThreadId,
+      );
+      toast.success("Message deleted");
+    } catch (error) {
+      toastApiError(error, "Could not delete message");
+    }
+  }, [
+    pendingDeleteMessage,
+    hasActiveChannel,
+    selectedThreadId,
+    selectedThreadType,
+    deleteCommentMutation,
+    queryClient,
+  ]);
+
+  const handleConfirmEdit = useCallback(async () => {
+    if (!editingMessage || selectedThreadId == null) return;
+    const text = editDraft.trim();
+    if (!text) {
+      toast.error("Message can't be empty.");
+      return;
+    }
+    if (text === (editingMessage.content ?? "").trim()) {
+      setEditingMessage(null);
+      return;
+    }
+
+    const target = editingMessage;
+    try {
+      const updated = await updateCommentMutation.mutateAsync({
+        id: target.id,
+        data: { content: text },
+      });
+      applyCommentUpdatedToCaches(queryClient, selectedThreadType, selectedThreadId, updated);
+      syncChannelPreviewFromThread(
+        queryClient,
+        setChannelActivity,
+        selectedThreadType,
+        selectedThreadId,
+      );
+
+      const latest = getLatestThreadComment(
+        queryClient,
+        selectedThreadType,
+        selectedThreadId,
+      );
+      if (selectedThreadType === "direct" && latest?.id === updated.id) {
+        patchDirectConversationFromComment(queryClient, selectedThreadId, {
+          lastMessageAt: updated.updatedAt ?? updated.createdAt ?? new Date().toISOString(),
+          lastPreview: discussionCommentPreview(updated),
+          lastAuthorName: updated.authorName,
+          lastAuthorId: updated.authorId,
+        });
+      }
+      setEditingMessage(null);
+      toast.success("Message updated");
+    } catch (error) {
+      toastApiError(error, "Could not update message");
+    }
+  }, [
+    editingMessage,
+    editDraft,
+    selectedThreadId,
+    selectedThreadType,
+    updateCommentMutation,
+    queryClient,
+  ]);
 
   useEffect(() => {
     if (!hasActiveChannel || !user?.id || isLoadingComments || !threadSig) return;
@@ -1266,6 +1527,13 @@ export default function DiscussionsPage() {
             isSubmitting={createCommentMutation.isPending}
             currentUserId={user?.id}
             peerUser={selectedChannel?.peerUser}
+            canDeleteMessage={canDeleteMessage}
+            onDeleteMessage={setPendingDeleteMessage}
+            canEditMessage={canEditMessage}
+            onEditMessage={handleStartEdit}
+            onReplyMessage={handleReplyMessage}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyTarget(null)}
             showBackButton
             onBack={handleBackToList}
           />
@@ -1292,6 +1560,80 @@ export default function DiscussionsPage() {
         )}
       </div>
       </div>
+
+      <AlertDialog
+        open={pendingDeleteMessage != null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteMessage(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete message?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This message will be removed for everyone in this chat. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteCommentMutation.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmDelete();
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog
+        open={editingMessage != null}
+        onOpenChange={(open) => {
+          if (!open) setEditingMessage(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit message</DialogTitle>
+            <DialogDescription>
+              Update your message. Everyone in this chat will see the change.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={editDraft}
+            onChange={(e) => setEditDraft(e.target.value)}
+            rows={4}
+            autoFocus
+            placeholder="Message"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                e.preventDefault();
+                void handleConfirmEdit();
+              }
+            }}
+          />
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setEditingMessage(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              disabled={updateCommentMutation.isPending || !editDraft.trim()}
+              onClick={() => void handleConfirmEdit()}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PortalPageShell>
   );
 }

@@ -16,6 +16,7 @@ router.get(
 router.get("/comments", requireAuth, asyncHandler(commentsController.getComments));
 router.post("/comments", requireAuth, asyncHandler(commentsController.postComments));
 router.patch("/comments/:id", requireAuth, asyncHandler(commentsController.patchCommentsById));
+router.delete("/comments/:id", requireAuth, asyncHandler(commentsController.deleteCommentsById));
 var stdin_default = router;
 export {
   stdin_default as default

@@ -4,6 +4,7 @@ import {
   FinanceExpenses,
   FinanceBankAccounts,
   clientsTable,
+  vendorsTable,
 } from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { EXPENSE_CATEGORY_LABELS } from "../../constants/finance-labels.js";
@@ -20,7 +21,7 @@ function buildEntriesWithBalance(rawEntries, openingBalance = 0) {
 
 /** Accounts-receivable view: one ledger account per client that has invoiced/received activity. */
 export async function computeClientLedgers(clientId = null) {
-  const clientFilter = clientId ? { id: clientId } : { isVendor: { $ne: true } };
+  const clientFilter = clientId ? { id: clientId } : {};
   const clients = await clientsTable.find(clientFilter).select({ id: 1, companyName: 1 }).lean();
   const clientIds = clients.map((c) => c.id);
   if (!clientIds.length) return [];
@@ -79,8 +80,8 @@ export async function computeClientLedgers(clientId = null) {
 
 /** Accounts-payable view: one ledger account per vendor with billed/paid activity. */
 export async function computeVendorLedgers(vendorId = null) {
-  const vendorFilter = vendorId ? { id: vendorId } : { isVendor: true };
-  const vendors = await clientsTable.find(vendorFilter).select({ id: 1, companyName: 1 }).lean();
+  const vendorFilter = vendorId ? { id: vendorId } : {};
+  const vendors = await vendorsTable.find(vendorFilter).select({ id: 1, companyName: 1 }).lean();
   const vendorIds = vendors.map((v) => v.id);
   if (!vendorIds.length) return [];
 

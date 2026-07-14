@@ -1,4 +1,4 @@
-import { clientsTable, getNextSequence } from "../../models/schema/index.js";
+import { vendorsTable, FinanceExpenses, FinancePayments, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString, conflict } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import {
@@ -6,25 +6,21 @@ import {
   resolveVendorFields,
   toFinanceVendorDto,
 } from "../../utils/vendor-fields.js";
+import { computeVendorAnalytics } from "../../services/finance/vendor-analytics.service.js";
 
 async function assertVendorEmailAvailable(email, excludeId = null) {
   const normalized = email.trim().toLowerCase();
   const filter = { email: normalized };
   if (excludeId != null) filter.id = { $ne: excludeId };
-  const existing = await clientsTable.findOne(filter).select({ id: 1, isVendor: 1 }).lean();
+  const existing = await vendorsTable.findOne(filter).select({ id: 1 }).lean();
   if (existing) {
-    conflict(
-      existing.isVendor
-        ? "A vendor with this email already exists."
-        : "This email belongs to an existing client record.",
-      "email",
-    );
+    conflict("A vendor with this email already exists.", "email");
   }
 }
 
 async function listVendors(req, res) {
   const { search } = req.query;
-  const filter = { isVendor: true };
+  const filter = {};
   if (search) {
     const q = escapeRegex(String(search).trim());
     if (q) {
@@ -38,7 +34,7 @@ async function listVendors(req, res) {
       ];
     }
   }
-  const vendors = await clientsTable
+  const vendors = await vendorsTable
     .find(filter)
     .select({
       id: 1,
@@ -60,9 +56,18 @@ async function listVendors(req, res) {
   res.json({ vendors: vendors.map(toFinanceVendorDto) });
 }
 
+async function getVendorAnalytics(req, res) {
+  const period = req.query.period === "previous" ? "previous" : "current";
+  const months = req.query.months
+    ? Math.min(24, Math.max(1, Number(req.query.months) || 6))
+    : 6;
+  const data = await computeVendorAnalytics(period, months);
+  res.json({ ...data, period });
+}
+
 async function getVendorById(req, res) {
   const id = parseIdParam(req.params.id, "vendor id");
-  const vendor = await clientsTable.findOne({ id, isVendor: true }).lean();
+  const vendor = await vendorsTable.findOne({ id }).lean();
   if (!vendor) notFound("Vendor");
   res.json(toFinanceVendorDto(vendor));
 }
@@ -75,8 +80,8 @@ async function createVendor(req, res) {
   const fields = normalizeVendorFields(body.fields);
   const email = body.email.trim().toLowerCase();
   await assertVendorEmailAvailable(email);
-  const id = await getNextSequence("clients");
-  const vendor = await clientsTable.create({
+  const id = await getNextSequence("vendors");
+  const vendor = await vendorsTable.create({
     id,
     companyName: body.name.trim(),
     contactPerson: body.contactPerson?.trim() || body.name.trim(),
@@ -85,7 +90,6 @@ async function createVendor(req, res) {
     address: body.address?.trim() || null,
     website: body.website?.trim() || null,
     gstNumber: body.gstin?.trim() || null,
-    isVendor: true,
     vendorFields: fields,
     vendorNotes: optionalString(body.notes) ?? null,
     vendorCategory: null,
@@ -98,7 +102,7 @@ async function createVendor(req, res) {
 async function updateVendor(req, res) {
   const id = parseIdParam(req.params.id, "vendor id");
   const body = req.body ?? {};
-  const vendor = await clientsTable.findOne({ id, isVendor: true });
+  const vendor = await vendorsTable.findOne({ id });
   if (!vendor) notFound("Vendor");
 
   const updates = {};
@@ -130,4 +134,31 @@ async function updateVendor(req, res) {
   res.json(toFinanceVendorDto(vendor.toObject()));
 }
 
-export { listVendors, getVendorById, createVendor, updateVendor, resolveVendorFields };
+async function deleteVendor(req, res) {
+  const id = parseIdParam(req.params.id, "vendor id");
+  const vendor = await vendorsTable.findOne({ id }).select({ id: 1 }).lean();
+  if (!vendor) notFound("Vendor");
+
+  const [linkedExpense, linkedPayment] = await Promise.all([
+    FinanceExpenses.findOne({ vendorId: id }).select({ id: 1 }).lean(),
+    FinancePayments.findOne({ vendorId: id }).select({ id: 1 }).lean(),
+  ]);
+  if (linkedExpense || linkedPayment) {
+    conflict(
+      "This vendor is used by existing expenses or payments and cannot be deleted.",
+      "vendorId",
+    );
+  }
+  await vendorsTable.deleteOne({ id });
+  res.json({ success: true });
+}
+
+export {
+  listVendors,
+  getVendorAnalytics,
+  getVendorById,
+  createVendor,
+  updateVendor,
+  deleteVendor,
+  resolveVendorFields,
+};

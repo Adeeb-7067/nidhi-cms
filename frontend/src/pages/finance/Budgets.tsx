@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { PiggyBank, AlertTriangle, Plus } from "lucide-react";
+import { PiggyBank, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
@@ -23,9 +23,12 @@ import {
   BudgetConsumptionCard,
   FinanceBarChart,
   BudgetFormModal,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { FinanceBudgetsSkeleton } from "@/components/loading";
-import { useListBudgets } from "@/api/finance";
+import { useListBudgets, useDeleteBudget, type Budget } from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { toastApiError } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -33,8 +36,29 @@ export default function BudgetsPage() {
   const [search, setSearch] = useState("");
   const [typeTab, setTypeTab] = useState<string>("all");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editBudget, setEditBudget] = useState<Budget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Budget | null>(null);
+  const { can } = usePermissions();
+  const canEdit = can("finance_budgets", "edit");
+  const canDelete = can("finance_budgets", "delete");
+  const deleteBudget = useDeleteBudget();
   const { data, isLoading, isError, refetch } = useListBudgets();
   const budgets = data?.budgets ?? [];
+
+  const openCreate = () => { setEditBudget(null); setDrawerOpen(true); };
+  const openEdit = (budget: Budget) => { setEditBudget(budget); setDrawerOpen(true); };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteBudget.mutateAsync(deleteTarget.id);
+      toast.success(`Budget "${deleteTarget.name}" deleted`);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete budget");
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -74,7 +98,7 @@ export default function BudgetsPage() {
         description="Annual and project budgets with variance tracking."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Budgets" }]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+          <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" />
             Add budget
           </Button>
@@ -133,6 +157,7 @@ export default function BudgetsPage() {
                 <TableHead className="text-xs text-right">Allocated</TableHead>
                 <TableHead className="text-xs text-right">Spent</TableHead>
                 <TableHead className="text-xs text-right">Variance</TableHead>
+                {(canEdit || canDelete) && <TableHead className="text-xs text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -154,6 +179,22 @@ export default function BudgetsPage() {
                     <TableCell className={cn("text-xs text-right tabular-nums font-medium", variance < 0 ? "text-red-700" : "text-emerald-700")}>
                       {variance < 0 ? "−" : "+"}{formatCurrency(Math.abs(variance))}
                     </TableCell>
+                    {(canEdit || canDelete) && (
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {canEdit && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(b)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(b)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -162,7 +203,20 @@ export default function BudgetsPage() {
         </div>
       )}
 
-      <BudgetFormModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
+      <BudgetFormModal
+        open={drawerOpen}
+        onOpenChange={(open) => { setDrawerOpen(open); if (!open) setEditBudget(null); }}
+        budget={editBudget}
+        onSuccess={() => { refetch(); setEditBudget(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete budget?"
+        description={deleteTarget ? `"${deleteTarget.name}" will be permanently removed. This does not affect recorded expenses.` : undefined}
+        loading={deleteBudget.isPending}
+        onConfirm={handleDelete}
+      />
     </PortalPageShell>
   );
 }

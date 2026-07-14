@@ -13,7 +13,10 @@ const commentSchema = new Schema({
   attachmentMimeType: { type: String },
   parentId: { type: Number, ref: "Comments" },
   mentionedUserIds: { type: [Number], default: [] },
-  isEdited: { type: Boolean, default: false, required: true }
+  isEdited: { type: Boolean, default: false, required: true },
+  isDeleted: { type: Boolean, default: false, required: true, index: true },
+  deletedAt: { type: Date },
+  deletedBy: { type: Number, ref: "Users" }
 }, { timestamps: true });
 const Comments = mongoose.models.Comments || mongoose.model("Comments", commentSchema);
 const commentsTable = Comments;

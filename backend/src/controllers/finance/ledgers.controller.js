@@ -1,5 +1,5 @@
-import { FinanceBankAccounts, getNextSequence } from "../../models/schema/index.js";
-import { badRequest, parseIdParam } from "../../utils/route-errors.js";
+import { FinanceBankAccounts, FinancePayments, getNextSequence } from "../../models/schema/index.js";
+import { badRequest, conflict, notFound, optionalString, parseIdParam } from "../../utils/route-errors.js";
 import {
   computeClientLedgers,
   computeVendorLedgers,
@@ -46,4 +46,44 @@ async function createBankAccount(req, res) {
   res.status(201).json(account.toObject());
 }
 
-export { getClientLedgers, getVendorLedgers, getExpenseCategoryLedgers, getBankLedgers, createBankAccount };
+async function updateBankAccount(req, res) {
+  const id = parseIdParam(req.params.id, "bank account id");
+  const account = await FinanceBankAccounts.findOne({ id }).lean();
+  if (!account) notFound("Bank account");
+  const body = req.body ?? {};
+  const updates = {};
+  if (body.name !== undefined) {
+    const name = optionalString(body.name);
+    if (!name) badRequest("name cannot be empty.", "name");
+    updates.name = name;
+  }
+  if (body.bankName !== undefined) updates.bankName = optionalString(body.bankName) ?? null;
+  if (body.accountNumberMasked !== undefined) updates.accountNumberMasked = optionalString(body.accountNumberMasked) ?? null;
+  if (body.ifsc !== undefined) updates.ifsc = optionalString(body.ifsc) ?? null;
+  if (body.openingBalance !== undefined) updates.openingBalance = Math.round(Number(body.openingBalance) || 0);
+
+  const updated = await FinanceBankAccounts.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
+  res.json(updated);
+}
+
+async function deleteBankAccount(req, res) {
+  const id = parseIdParam(req.params.id, "bank account id");
+  const account = await FinanceBankAccounts.findOne({ id }).select({ id: 1 }).lean();
+  if (!account) notFound("Bank account");
+  const linkedPayment = await FinancePayments.findOne({ bankAccountId: id }).select({ id: 1 }).lean();
+  if (linkedPayment) {
+    conflict("This bank account has linked payments and cannot be deleted.", "bankAccountId");
+  }
+  await FinanceBankAccounts.deleteOne({ id });
+  res.json({ success: true });
+}
+
+export {
+  getClientLedgers,
+  getVendorLedgers,
+  getExpenseCategoryLedgers,
+  getBankLedgers,
+  createBankAccount,
+  updateBankAccount,
+  deleteBankAccount,
+};

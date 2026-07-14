@@ -45,7 +45,7 @@ export function CommentBody({
 }: {
   comment: Pick<
     Comment,
-    "content" | "attachmentUrl" | "attachmentName" | "attachmentMimeType"
+    "content" | "attachmentUrl" | "attachmentName" | "attachmentMimeType" | "isDeleted"
   >;
   className?: string;
   bubbleClassName?: string;
@@ -55,6 +55,22 @@ export function CommentBody({
   compact?: boolean;
   isSent?: boolean;
 }) {
+  if (comment.isDeleted) {
+    return (
+      <div className={cn("space-y-1.5", className)}>
+        <div
+          className={cn(
+            bubbleBase,
+            "border-border/40 bg-muted/30 italic text-muted-foreground",
+            bubbleClassName,
+          )}
+        >
+          This message was deleted
+        </div>
+      </div>
+    );
+  }
+
   const hasText = Boolean(comment.content?.trim());
   const hasAttachment = Boolean(comment.attachmentUrl);
   const isPdf = hasAttachment && isPdfAttachment(comment);

@@ -1,8 +1,8 @@
 import { commentsTable, usersTable, notificationsTable, ticketsTable, getNextSequence, getNextSequenceRange } from "../models/schema/index.js";
-import { validateStoredFileUrl } from "../lib/file-storage.js";
+import { validateStoredFileUrl, deleteStoredFile } from "../lib/file-storage.js";
 import { broadcast, emitToUsers, notifyUser } from "../lib/realtime.js";
 import { parsePagination, badRequest, notFound, forbidden, parseIdParam } from "../utils/route-errors.js";
-import { toIso } from "../utils/mongo-list.js";
+import { mapCommentRow } from "../mappers/comment-format.js";
 import {
   assertTicketAccess,
   getTicketParticipantIds,
@@ -63,29 +63,6 @@ function parseDiscussionThreadId(rawThreadId, threadType) {
     return id;
   }
   return parseIdParam(rawThreadId, "threadId");
-}
-
-function mapCommentRow(c, authorMap, repliesByParent) {
-  const author = authorMap.get(c.authorId);
-  return {
-    id: c.id,
-    authorId: c.authorId,
-    authorName: author?.name ?? "Unknown",
-    authorAvatarUrl: author?.avatarUrl ?? null,
-    authorRole: author?.role ?? "developer",
-    threadType: c.threadType,
-    threadId: c.threadId,
-    content: c.content,
-    attachmentUrl: c.attachmentUrl ?? null,
-    attachmentName: c.attachmentName ?? null,
-    attachmentMimeType: c.attachmentMimeType ?? null,
-    parentId: c.parentId,
-    mentionedUserIds: c.mentionedUserIds ?? [],
-    isEdited: c.isEdited,
-    replies: (repliesByParent.get(c.id) ?? []).map((r) => mapCommentRow(r, authorMap, repliesByParent)),
-    createdAt: toIso(c.createdAt) ?? new Date().toISOString(),
-    updatedAt: toIso(c.updatedAt) ?? new Date().toISOString(),
-  };
 }
 
 async function formatComment(c) {
@@ -229,6 +206,7 @@ async function postComments(req, res) {
       $or: [{ parentId: null }, { parentId: { $exists: false } }],
     });
     if (!parent) badRequest("Parent comment not found in this thread.", "parentId");
+    if (parent.isDeleted) badRequest("Cannot reply to a deleted message.", "parentId");
   }
   let mentionIds = [];
   if (isCompanyTeamDiscussionThread(threadType)) {
@@ -417,11 +395,36 @@ async function postComments(req, res) {
 
   res.status(201).json(formattedComment);
 }
+// Recipients for edit/delete broadcasts: thread participants plus anyone who has
+// posted in the thread (still a participant), minus the actor. Shared by patch
+// and delete so the two stay in sync.
+async function resolveThreadBroadcastRecipients(threadType, threadIdNum, excludeUserId) {
+  const recipientIds = new Set();
+  let participantIds = null;
+  if (isDirectDiscussionThread(threadType)) {
+    participantIds = await getDirectConversationParticipantIds(threadIdNum);
+    participantIds.forEach((uid) => recipientIds.add(uid));
+  } else if (isProjectDiscussionThread(threadType)) {
+    participantIds = await getDiscussionParticipantIds(threadIdNum, threadType);
+    participantIds.forEach((uid) => recipientIds.add(uid));
+  }
+  const threadComments = await commentsTable
+    .find({ threadType, threadId: threadIdNum })
+    .select("authorId")
+    .lean();
+  for (const c of threadComments) {
+    if (!participantIds || participantIds.has(c.authorId)) recipientIds.add(c.authorId);
+  }
+  recipientIds.delete(excludeUserId);
+  return Array.from(recipientIds);
+}
+
 async function patchCommentsById(req, res) {
   const { content, mentionedUserIds: requestedMentionIds } = req.body;
-  const id = parseInt(req.params["id"]);
+  const id = parseIdParam(req.params["id"], "id");
   const existing = await commentsTable.findOne({ id, authorId: req.user.id });
   if (!existing) notFound("Comment");
+  if (existing.isDeleted) badRequest("Cannot edit a deleted message.");
 
   const { threadType, threadId: threadIdNum } = existing;
   if (isDirectDiscussionThread(threadType)) {
@@ -464,12 +467,116 @@ async function patchCommentsById(req, res) {
     { new: true },
   );
   if (!comment) notFound("Comment");
-  res.json(await formatComment(comment));
+
+  const formattedComment = await formatComment(comment);
+
+  // Broadcast so anyone viewing the thread reconciles the edited text live.
+  try {
+    const recipients = await resolveThreadBroadcastRecipients(
+      threadType,
+      threadIdNum,
+      req.user.id,
+    );
+    if (recipients.length) {
+      emitToUsers(recipients, "comment:updated", {
+        threadType,
+        threadId: threadIdNum,
+        commentId: comment.id,
+        comment: formattedComment,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to broadcast comment update:", err);
+  }
+
+  res.json(formattedComment);
+}
+
+async function deleteCommentsById(req, res) {
+  const id = parseIdParam(req.params["id"], "id");
+  const existing = await commentsTable.findOne({ id });
+  if (!existing) notFound("Comment");
+
+  const { threadType, threadId: threadIdNum } = existing;
+  // Verify the caller can access the thread at all (same gate as read/post).
+  if (isDirectDiscussionThread(threadType)) {
+    if (!(await canAccessDirectConversation(req.user, threadIdNum))) forbidden();
+  } else if (isProjectDiscussionThread(threadType)) {
+    if (!(await canAccessDiscussionThread(req.user, threadType, threadIdNum))) forbidden();
+    if (threadType === "project") {
+      await assertClientPermission(req, "discussions", "view");
+    }
+  } else if (threadType === "ticket") {
+    await assertTicketAccess(req.user, threadIdNum);
+  } else {
+    forbidden();
+  }
+
+  // Only the original author or a super admin may delete a message.
+  const isAuthor = existing.authorId === req.user.id;
+  const isSuperAdmin = req.user.role === "super_admin";
+  if (!isAuthor && !isSuperAdmin) forbidden();
+
+  // Already deleted — return the current (blanked) representation idempotently.
+  if (existing.isDeleted) {
+    res.json(await formatComment(existing));
+    return;
+  }
+
+  const attachmentUrl = existing.attachmentUrl ?? null;
+
+  const comment = await commentsTable.findOneAndUpdate(
+    { id },
+    {
+      $set: {
+        isDeleted: true,
+        deletedAt: new Date(),
+        deletedBy: req.user.id,
+        content: "",
+        attachmentUrl: null,
+        attachmentName: null,
+        attachmentMimeType: null,
+        mentionedUserIds: [],
+      },
+    },
+    { new: true },
+  );
+  if (!comment) notFound("Comment");
+
+  if (attachmentUrl) {
+    deleteStoredFile(attachmentUrl).catch((err) => {
+      console.error("Failed to delete comment attachment:", err);
+    });
+  }
+
+  const formattedComment = await formatComment(comment);
+
+  // Let everyone viewing the thread reconcile their cache in place.
+  try {
+    const recipients = await resolveThreadBroadcastRecipients(
+      threadType,
+      threadIdNum,
+      req.user.id,
+    );
+    if (recipients.length) {
+      emitToUsers(recipients, "comment:deleted", {
+        threadType,
+        threadId: threadIdNum,
+        commentId: comment.id,
+        comment: formattedComment,
+      });
+    }
+  } catch (err) {
+    console.error("Failed to broadcast comment deletion:", err);
+  }
+
+  res.json(formattedComment);
 }
 export {
   getComments,
   getCompanyTeamMentionCandidates,
   getProjectCommentPreviews,
   patchCommentsById,
+  deleteCommentsById,
   postComments
 };

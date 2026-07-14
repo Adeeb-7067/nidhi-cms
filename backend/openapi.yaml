@@ -1716,6 +1716,23 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Comment"
+    delete:
+      operationId: deleteComment
+      tags: [comments]
+      summary: Delete a comment (author or super admin) — soft delete
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Deleted (blanked) comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
 
   # ── DIRECT CONVERSATIONS ─────────────────────────────────────────────────
   /direct-conversations:
@@ -3581,6 +3598,8 @@ components:
           items:
             type: integer
         isEdited:
+          type: boolean
+        isDeleted:
           type: boolean
         replies:
           type: array

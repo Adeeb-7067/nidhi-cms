@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { BookOpen, Plus, ArrowRight } from "lucide-react";
+import { BookOpen, Plus, ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import {
@@ -21,9 +21,20 @@ import {
   FinanceFilterBar,
   FinanceErrorState,
   BankAccountFormModal,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { FinanceSectionSkeleton } from "@/components/loading";
-import { useClientLedgers, useVendorLedgers, useExpenseCategoryLedgers, useBankLedgers } from "@/api/finance";
+import {
+  useClientLedgers,
+  useVendorLedgers,
+  useExpenseCategoryLedgers,
+  useBankLedgers,
+  useDeleteBankAccount,
+  type FinanceBankAccount,
+  type LedgerAccount,
+} from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
 
 const LEDGER_TABS: { value: LedgerType; label: string }[] = [
@@ -33,10 +44,27 @@ const LEDGER_TABS: { value: LedgerType; label: string }[] = [
   { value: "bank", label: "Bank & cash" },
 ];
 
+function ledgerToBankAccount(account: LedgerAccount): FinanceBankAccount {
+  return {
+    id: Number(account.id),
+    name: account.name,
+    bankName: null,
+    accountNumberMasked: null,
+    ifsc: null,
+    openingBalance: account.openingBalance,
+  };
+}
+
 export default function LedgersPage() {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<LedgerType>("client");
   const [bankModalOpen, setBankModalOpen] = useState(false);
+  const [editAccount, setEditAccount] = useState<FinanceBankAccount | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<LedgerAccount | null>(null);
+  const { can } = usePermissions();
+  const canEditBank = can("finance_ledgers", "edit");
+  const canDeleteBank = can("finance_ledgers", "delete");
+  const deleteBankAccount = useDeleteBankAccount();
 
   const clientLedgers = useClientLedgers(null, activeTab === "client");
   const vendorLedgers = useVendorLedgers(null, activeTab === "vendor");
@@ -46,6 +74,24 @@ export default function LedgersPage() {
   const activeQuery = { client: clientLedgers, vendor: vendorLedgers, expense: expenseLedgers, bank: bankLedgers }[activeTab];
   const accounts = activeQuery.data?.accounts ?? [];
   const filteredAccounts = accounts.filter((a) => !search || a.name.toLowerCase().includes(search.toLowerCase()));
+
+  const openCreateBank = () => { setEditAccount(null); setBankModalOpen(true); };
+  const openEditBank = (account: LedgerAccount) => {
+    setEditAccount(ledgerToBankAccount(account));
+    setBankModalOpen(true);
+  };
+
+  const handleDeleteBank = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteBankAccount.mutateAsync(Number(deleteTarget.id));
+      toast.success(`Bank account "${deleteTarget.name}" deleted`);
+      setDeleteTarget(null);
+      bankLedgers.refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete bank account");
+    }
+  };
 
   if (activeQuery.isLoading) {
     return <FinanceSectionSkeleton />;
@@ -66,7 +112,7 @@ export default function LedgersPage() {
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Ledgers" }]}
         actions={
           activeTab === "bank" ? (
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setBankModalOpen(true)}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={openCreateBank}>
               <Plus className="h-3.5 w-3.5" />
               Add bank account
             </Button>
@@ -99,9 +145,25 @@ export default function LedgersPage() {
                       <BookOpen className="h-4 w-4 text-primary" />
                       {account.name}
                     </CardTitle>
-                    <div className="flex gap-4 text-xs">
-                      <span><span className="text-muted-foreground">Opening:</span> <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong></span>
-                      <span><span className="text-muted-foreground">Closing:</span> <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong></span>
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-4 text-xs">
+                        <span><span className="text-muted-foreground">Opening:</span> <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong></span>
+                        <span><span className="text-muted-foreground">Closing:</span> <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong></span>
+                      </div>
+                      {activeTab === "bank" && (canEditBank || canDeleteBank) && (
+                        <div className="flex gap-1">
+                          {canEditBank && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditBank(account)} title="Edit">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canDeleteBank && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(account)} title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -151,7 +213,20 @@ export default function LedgersPage() {
         </TabsContent>
       </Tabs>
 
-      <BankAccountFormModal open={bankModalOpen} onOpenChange={setBankModalOpen} onSuccess={() => bankLedgers.refetch()} />
+      <BankAccountFormModal
+        open={bankModalOpen}
+        onOpenChange={(open) => { setBankModalOpen(open); if (!open) setEditAccount(null); }}
+        account={editAccount}
+        onSuccess={() => { bankLedgers.refetch(); setEditAccount(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete bank account?"
+        description={deleteTarget ? `"${deleteTarget.name}" will be removed. Accounts with linked payments can't be deleted.` : undefined}
+        loading={deleteBankAccount.isPending}
+        onConfirm={handleDeleteBank}
+      />
     </PortalPageShell>
   );
 }

@@ -1557,6 +1557,7 @@ export interface Comment {
   parentId?: number | null;
   mentionedUserIds?: number[];
   isEdited: boolean;
+  isDeleted?: boolean;
   replies?: Comment[];
   createdAt: string;
   updatedAt: string;

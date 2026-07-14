@@ -179,6 +179,83 @@ export async function computeDepartmentProfitability() {
   return rows.map((r) => ({ department: r._id, revenue: 0, cost: r.cost }));
 }
 
+/**
+ * Department-wise salary spend for a specific payroll period.
+ * Defaults to "paid" runs only (money actually disbursed); pass status "all"
+ * to include finalized-but-unpaid runs. Cost-to-company = net + employer PF.
+ */
+export async function computeDepartmentPayroll({ year, month, status = "paid" } = {}) {
+  const statuses = status === "all" ? ["finalized", "paid"] : ["paid"];
+  const runMatch = { status: { $in: statuses } };
+  if (year) runMatch.year = year;
+  if (month) runMatch.month = month;
+
+  // Surface the actual run status for the requested period so the UI can hint
+  // "not paid yet" even when there are no matching (paid) lines.
+  let runStatus = null;
+  if (year && month) {
+    const run = await PayrollRuns.findOne({ year, month }).select({ status: 1 }).lean();
+    runStatus = run?.status ?? null;
+  }
+
+  const rows = await PayrollLines.aggregate([
+    {
+      $lookup: {
+        from: "payrollruns",
+        let: { runId: "$payrollRunId" },
+        pipeline: [{ $match: { $expr: { $eq: ["$id", "$$runId"] }, ...runMatch } }],
+        as: "run",
+      },
+    },
+    { $unwind: "$run" },
+    {
+      $lookup: {
+        from: "users",
+        let: { uid: "$userId" },
+        pipeline: [{ $match: { $expr: { $eq: ["$id", "$$uid"] } } }],
+        as: "user",
+      },
+    },
+    { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "departments",
+        let: { deptId: "$user.departmentId" },
+        pipeline: [{ $match: { $expr: { $eq: ["$id", "$$deptId"] } } }],
+        as: "dept",
+      },
+    },
+    { $unwind: { path: "$dept", preserveNullAndEmptyArrays: true } },
+    {
+      $group: {
+        _id: { $ifNull: ["$dept.name", "Unassigned"] },
+        employees: { $sum: 1 },
+        net: { $sum: "$net" },
+        cost: { $sum: { $add: ["$net", "$pfEmployer"] } },
+      },
+    },
+    { $sort: { cost: -1 } },
+  ]);
+
+  const departments = rows.map((r) => ({
+    department: r._id,
+    employees: r.employees,
+    net: r.net,
+    cost: r.cost,
+  }));
+  const totals = departments.reduce(
+    (acc, d) => ({ employees: acc.employees + d.employees, net: acc.net + d.net, cost: acc.cost + d.cost }),
+    { employees: 0, net: 0, cost: 0 },
+  );
+
+  return {
+    period: year && month ? { year, month } : null,
+    runStatus,
+    departments,
+    totals,
+  };
+}
+
 export async function computeRevenueTrend(monthsBack = 6) {
   const months = lastNMonths(monthsBack);
   const start = new Date(months[0].year, months[0].month - 1, 1);

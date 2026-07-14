@@ -43,6 +43,13 @@ type DiscussionChatPanelProps = {
   onBack?: () => void;
   className?: string;
   peerUser?: DiscussionPeerUser;
+  canDeleteMessage?: (comment: Comment) => boolean;
+  onDeleteMessage?: (comment: Comment) => void;
+  canEditMessage?: (comment: Comment) => boolean;
+  onEditMessage?: (comment: Comment) => void;
+  onReplyMessage?: (comment: Comment) => void;
+  replyingTo?: { authorName: string; preview: string } | null;
+  onCancelReply?: () => void;
 };
 
 export function DiscussionChatPanel({
@@ -59,6 +66,13 @@ export function DiscussionChatPanel({
   onBack,
   className,
   peerUser,
+  canDeleteMessage,
+  onDeleteMessage,
+  canEditMessage,
+  onEditMessage,
+  onReplyMessage,
+  replyingTo = null,
+  onCancelReply,
 }: DiscussionChatPanelProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -303,6 +317,11 @@ export function DiscussionChatPanel({
                 currentUserId={currentUserId}
                 mentionCandidates={mentionCandidates}
                 onImageLoad={() => scrollToBottom("auto")}
+                canDeleteMessage={canDeleteMessage}
+                onDeleteMessage={onDeleteMessage}
+                canEditMessage={canEditMessage}
+                onEditMessage={onEditMessage}
+                onReplyMessage={onReplyMessage}
               />
             </div>
           ) : (
@@ -345,6 +364,8 @@ export function DiscussionChatPanel({
             enableApk
             incomingFile={incomingFile}
             onIncomingFileHandled={clearIncomingFile}
+            replyingTo={replyingTo}
+            onCancelReply={onCancelReply}
           />
         </div>
       </footer>

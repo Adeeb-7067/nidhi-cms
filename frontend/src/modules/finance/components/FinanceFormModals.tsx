@@ -39,22 +39,34 @@ import { useListProjects, useListClients } from "@/api/generated/api";
 import { useHrmEmployees } from "@/api/hrm";
 import {
   useCreateExpense,
+  useUpdateExpense,
   useRecordIncome,
+  useUpdateIncome,
   useRecordPayment,
+  useUpdatePayment,
   useCreateInvoice,
+  useUpdateInvoice,
   useAddCreditNote,
   useCreateBudget,
   useUpdateBudget,
   useCreateVendor,
   useUpdateVendor,
   useCreateBankAccount,
+  useUpdateBankAccount,
+  useCreateTaxDeposit,
+  useUpdateTaxDeposit,
   useListVendors,
+  type Expense,
+  type Income,
+  type FinancePayment,
   type FinanceInvoice,
   type FinanceVendor,
+  type FinanceBankAccount,
   type Budget,
   type ExpenseCategory,
   type FinancePaymentMode,
   type BudgetType,
+  type TaxDeposit,
 } from "@/api/finance";
 import { vendorToFormDefaults } from "@/modules/finance/vendor-utils";
 import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, calcInvoiceTotal, formatCurrency } from "../constants";
@@ -97,46 +109,61 @@ const expenseSchema = z.object({
 });
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
 
-export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBaseProps) {
+export function ExpenseFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  expense,
+}: ModalBaseProps & { expense?: Expense | null }) {
+  const isEdit = expense != null;
   const createExpense = useCreateExpense();
+  const updateExpense = useUpdateExpense();
+  const isPending = createExpense.isPending || updateExpense.isPending;
   const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
   const { data: employeesData } = useHrmEmployees({ limit: 200, status: "active" }, { enabled: open });
   const { data: vendorsData, refetch: refetchVendors } = useListVendors(undefined, open);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
 
+  const blankDefaults: ExpenseFormValues = {
+    date: new Date().toISOString().slice(0, 10),
+    category: "software",
+    amount: "",
+    paymentMode: "bank_transfer",
+    projectId: "",
+    employeeId: "",
+    vendorId: "",
+    notes: "",
+  };
+
   const form = useForm<ExpenseFormValues>({
     resolver: zodResolver(expenseSchema),
-    defaultValues: {
-      date: new Date().toISOString().slice(0, 10),
-      category: "software",
-      amount: "",
-      paymentMode: "bank_transfer",
-      projectId: "",
-      employeeId: "",
-      vendorId: "",
-      notes: "",
-    },
+    defaultValues: blankDefaults,
   });
 
   useEffect(() => {
     if (!open) return;
-    form.reset({
-      date: new Date().toISOString().slice(0, 10),
-      category: "software",
-      amount: "",
-      paymentMode: "bank_transfer",
-      projectId: "",
-      employeeId: "",
-      vendorId: "",
-      notes: "",
-    });
-    setAttachments([]);
-  }, [open, form]);
+    form.reset(
+      expense
+        ? {
+            date: expense.date.slice(0, 10),
+            category: expense.category,
+            amount: String(expense.amount),
+            paymentMode: expense.paymentMode,
+            projectId: expense.projectId ? String(expense.projectId) : "",
+            employeeId: expense.employeeId ? String(expense.employeeId) : "",
+            vendorId: expense.vendorId ? String(expense.vendorId) : "",
+            notes: expense.notes ?? "",
+          }
+        : blankDefaults,
+    );
+    setAttachments(expense?.attachments?.map((a) => ({ name: a.name, url: a.url })) ?? []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, expense, form]);
 
   const onSubmit = async (values: ExpenseFormValues) => {
     try {
-      await createExpense.mutateAsync({
+      const payload = {
         date: values.date,
         category: values.category as ExpenseCategory,
         amount: Number(values.amount),
@@ -146,12 +173,18 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
         vendorId: optionalSelectId(values.vendorId),
         notes: values.notes || undefined,
         attachments,
-      });
-      toast.success(`Expense of ${formatCurrency(Number(values.amount))} submitted for approval`);
+      };
+      if (isEdit && expense) {
+        await updateExpense.mutateAsync({ id: expense.id, ...payload });
+        toast.success("Expense updated");
+      } else {
+        await createExpense.mutateAsync(payload);
+        toast.success(`Expense of ${formatCurrency(Number(values.amount))} submitted for approval`);
+      }
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, "Failed to create expense");
+      toastApiError(err, isEdit ? "Failed to update expense" : "Failed to create expense");
     }
   };
 
@@ -160,8 +193,10 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
-          <DialogTitle>Add expense</DialogTitle>
-          <DialogDescription>Record a new expense — pending approval by default.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit expense" : "Add expense"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update this pending expense." : "Record a new expense — pending approval by default."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
@@ -274,10 +309,10 @@ export function ExpenseFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               </div>
             </DialogBody>
             <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={createExpense.isPending}>Cancel</Button>
-              <Button type="submit" disabled={createExpense.isPending}>
-                {createExpense.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Submit expense
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Submit expense"}
               </Button>
             </DialogFooter>
           </form>
@@ -457,23 +492,33 @@ const invoiceSchema = z.object({
 });
 type InvoiceFormValues = z.infer<typeof invoiceSchema>;
 
-export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBaseProps) {
+export function InvoiceFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  invoice,
+}: ModalBaseProps & { invoice?: FinanceInvoice | null }) {
+  const isEdit = invoice != null;
   const createInvoice = useCreateInvoice();
+  const updateInvoice = useUpdateInvoice();
+  const isPending = createInvoice.isPending || updateInvoice.isPending;
   const { data: clientsData } = useListClients({ limit: 200 }, { query: { enabled: open } });
   const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
 
+  const blankDefaults: InvoiceFormValues = {
+    clientId: "",
+    projectId: "",
+    issueDate: new Date().toISOString().slice(0, 10),
+    dueDate: "",
+    discount: "0",
+    gstEnabled: true,
+    notes: "",
+    items: [{ description: "", quantity: "1", rate: "", taxPercent: "18" }],
+  };
+
   const form = useForm<InvoiceFormValues>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues: {
-      clientId: "",
-      projectId: "",
-      issueDate: new Date().toISOString().slice(0, 10),
-      dueDate: "",
-      discount: "0",
-      gstEnabled: true,
-      notes: "",
-      items: [{ description: "", quantity: "1", rate: "", taxPercent: "18" }],
-    },
+    defaultValues: blankDefaults,
   });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "items" });
   const watchedItems = form.watch("items");
@@ -482,17 +527,27 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
 
   useEffect(() => {
     if (!open) return;
-    form.reset({
-      clientId: "",
-      projectId: "",
-      issueDate: new Date().toISOString().slice(0, 10),
-      dueDate: "",
-      discount: "0",
-      gstEnabled: true,
-      notes: "",
-      items: [{ description: "", quantity: "1", rate: "", taxPercent: "18" }],
-    });
-  }, [open, form]);
+    form.reset(
+      invoice
+        ? {
+            clientId: String(invoice.clientId),
+            projectId: invoice.projectId ? String(invoice.projectId) : "",
+            issueDate: invoice.issueDate.slice(0, 10),
+            dueDate: invoice.dueDate.slice(0, 10),
+            discount: String(invoice.discount ?? 0),
+            gstEnabled: invoice.gstEnabled !== false,
+            notes: invoice.notes ?? "",
+            items: (invoice.items ?? []).map((i) => ({
+              description: i.description,
+              quantity: String(i.quantity),
+              rate: String(i.rate),
+              taxPercent: String(i.taxPercent ?? 0),
+            })),
+          }
+        : blankDefaults,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, invoice, form]);
 
   const totals = calcInvoiceTotal(
     watchedItems.map((i) => ({ quantity: Number(i.quantity) || 0, rate: Number(i.rate) || 0, taxPercent: Number(i.taxPercent) || 0 })),
@@ -505,27 +560,41 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
       toast.error("Invoice total must be greater than ₹0");
       return;
     }
+    const items = values.items.map((i) => ({
+      description: i.description,
+      quantity: Number(i.quantity),
+      rate: Number(i.rate),
+      taxPercent: Number(i.taxPercent) || 0,
+    }));
     try {
-      await createInvoice.mutateAsync({
-        clientId: Number(values.clientId),
-        projectId: optionalSelectId(values.projectId),
-        issueDate: values.issueDate,
-        dueDate: values.dueDate,
-        discount: Number(values.discount) || 0,
-        gstEnabled: values.gstEnabled,
-        notes: values.notes || undefined,
-        items: values.items.map((i) => ({
-          description: i.description,
-          quantity: Number(i.quantity),
-          rate: Number(i.rate),
-          taxPercent: Number(i.taxPercent) || 0,
-        })),
-      });
-      toast.success("Invoice created");
+      if (isEdit && invoice) {
+        await updateInvoice.mutateAsync({
+          id: invoice.id,
+          projectId: optionalSelectId(values.projectId),
+          dueDate: values.dueDate,
+          discount: Number(values.discount) || 0,
+          gstEnabled: values.gstEnabled,
+          notes: values.notes || undefined,
+          items,
+        });
+        toast.success("Invoice updated");
+      } else {
+        await createInvoice.mutateAsync({
+          clientId: Number(values.clientId),
+          projectId: optionalSelectId(values.projectId),
+          issueDate: values.issueDate,
+          dueDate: values.dueDate,
+          discount: Number(values.discount) || 0,
+          gstEnabled: values.gstEnabled,
+          notes: values.notes || undefined,
+          items,
+        });
+        toast.success("Invoice created");
+      }
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, "Failed to create invoice");
+      toastApiError(err, isEdit ? "Failed to update invoice" : "Failed to create invoice");
     }
   };
 
@@ -533,8 +602,10 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
-          <DialogTitle>Create invoice</DialogTitle>
-          <DialogDescription>Generate a new client invoice with line items.</DialogDescription>
+          <DialogTitle>{isEdit ? "Edit invoice" : "Create invoice"}</DialogTitle>
+          <DialogDescription>
+            {isEdit ? "Update line items and details for this unpaid invoice." : "Generate a new client invoice with line items."}
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
@@ -543,7 +614,7 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
                 <FormField control={form.control} name="clientId" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Client</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={isEdit}>
                       <FormControl><SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger></FormControl>
                       <SelectContent>
                         {(clientsData?.clients ?? []).map((c) => (
@@ -572,7 +643,7 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="issueDate" render={({ field }) => (
-                  <FormItem><FormLabel>Issue date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Issue date</FormLabel><FormControl><Input type="date" disabled={isEdit} {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="dueDate" render={({ field }) => (
                   <FormItem><FormLabel>Due date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
@@ -642,10 +713,10 @@ export function InvoiceFormModal({ open, onOpenChange, onSuccess }: ModalBasePro
               </div>
             </DialogBody>
             <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={createInvoice.isPending}>Cancel</Button>
-              <Button type="submit" disabled={createInvoice.isPending}>
-                {createInvoice.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Create invoice
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Create invoice"}
               </Button>
             </DialogFooter>
           </form>
@@ -1075,31 +1146,56 @@ const bankAccountSchema = z.object({
 });
 type BankAccountFormValues = z.infer<typeof bankAccountSchema>;
 
-export function BankAccountFormModal({ open, onOpenChange, onSuccess }: ModalBaseProps) {
+export function BankAccountFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  account,
+}: ModalBaseProps & { account?: FinanceBankAccount | null }) {
+  const isEdit = account != null;
   const createBankAccount = useCreateBankAccount();
+  const updateBankAccount = useUpdateBankAccount();
+  const isPending = createBankAccount.isPending || updateBankAccount.isPending;
   const form = useForm<BankAccountFormValues>({
     resolver: zodResolver(bankAccountSchema),
     defaultValues: { name: "", bankName: "", accountNumberMasked: "", ifsc: "", openingBalance: "0" },
   });
 
   useEffect(() => {
-    if (open) form.reset({ name: "", bankName: "", accountNumberMasked: "", ifsc: "", openingBalance: "0" });
-  }, [open, form]);
+    if (!open) return;
+    form.reset(
+      account
+        ? {
+            name: account.name,
+            bankName: account.bankName ?? "",
+            accountNumberMasked: account.accountNumberMasked ?? "",
+            ifsc: account.ifsc ?? "",
+            openingBalance: String(account.openingBalance ?? 0),
+          }
+        : { name: "", bankName: "", accountNumberMasked: "", ifsc: "", openingBalance: "0" },
+    );
+  }, [open, account, form]);
 
   const onSubmit = async (values: BankAccountFormValues) => {
     try {
-      await createBankAccount.mutateAsync({
+      const payload = {
         name: values.name.trim(),
         bankName: values.bankName?.trim() || undefined,
         accountNumberMasked: values.accountNumberMasked?.trim() || undefined,
         ifsc: values.ifsc?.trim() || undefined,
         openingBalance: Number(values.openingBalance) || 0,
-      });
-      toast.success(`Bank account "${values.name}" added`);
+      };
+      if (isEdit && account) {
+        await updateBankAccount.mutateAsync({ id: account.id, ...payload });
+        toast.success(`Bank account "${values.name}" updated`);
+      } else {
+        await createBankAccount.mutateAsync(payload);
+        toast.success(`Bank account "${values.name}" added`);
+      }
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      toastApiError(err, "Failed to add bank account");
+      toastApiError(err, isEdit ? "Failed to update bank account" : "Failed to add bank account");
     }
   };
 
@@ -1107,7 +1203,7 @@ export function BankAccountFormModal({ open, onOpenChange, onSuccess }: ModalBas
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm bg-card border-border p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
-          <DialogTitle>Add bank account</DialogTitle>
+          <DialogTitle>{isEdit ? "Edit bank account" : "Add bank account"}</DialogTitle>
           <DialogDescription>Track cash position for a company bank account.</DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -1132,10 +1228,10 @@ export function BankAccountFormModal({ open, onOpenChange, onSuccess }: ModalBas
               )} />
             </DialogBody>
             <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={createBankAccount.isPending}>Cancel</Button>
-              <Button type="submit" disabled={createBankAccount.isPending}>
-                {createBankAccount.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Add account
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Add account"}
               </Button>
             </DialogFooter>
           </form>
@@ -1257,6 +1353,352 @@ export function RecordOutgoingPaymentModal({ open, onOpenChange, onSuccess }: Mo
               <Button type="submit" disabled={recordPayment.isPending}>
                 {recordPayment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Record payment
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Income edit ─────────────────────────────────────────────────────────
+
+const incomeEditSchema = z.object({
+  date: z.string().min(1, "Date is required"),
+  paymentMode: z.string(),
+  projectId: z.string().optional(),
+});
+type IncomeEditFormValues = z.infer<typeof incomeEditSchema>;
+
+export function IncomeEditModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  income,
+}: ModalBaseProps & { income: Income | null }) {
+  const updateIncome = useUpdateIncome();
+  const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
+
+  const form = useForm<IncomeEditFormValues>({
+    resolver: zodResolver(incomeEditSchema),
+    defaultValues: { date: "", paymentMode: "neft", projectId: "" },
+  });
+
+  useEffect(() => {
+    if (!open || !income) return;
+    form.reset({
+      date: income.date.slice(0, 10),
+      paymentMode: income.paymentMode,
+      projectId: income.projectId ? String(income.projectId) : "",
+    });
+  }, [open, income, form]);
+
+  const onSubmit = async (values: IncomeEditFormValues) => {
+    if (!income) return;
+    try {
+      await updateIncome.mutateAsync({
+        id: income.id,
+        date: values.date,
+        paymentMode: values.paymentMode as FinancePaymentMode,
+        projectId: optionalSelectId(values.projectId),
+      });
+      toast.success("Income updated");
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, "Failed to update income");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>Edit income receipt</DialogTitle>
+          <DialogDescription>
+            Amount and client are locked to keep the invoice balance in sync — adjust the date, mode, or project.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem><FormLabel>Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="paymentMode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment mode</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {(Object.keys(PAYMENT_MODE_LABELS) as FinancePaymentMode[]).map((k) => (
+                        <SelectItem key={k} value={k}>{PAYMENT_MODE_LABELS[k]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="projectId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Project</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Optional" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None</SelectItem>
+                      {(projectsData?.projects ?? []).map((p) => (
+                        <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updateIncome.isPending}>Cancel</Button>
+              <Button type="submit" disabled={updateIncome.isPending}>
+                {updateIncome.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Outgoing payment edit ───────────────────────────────────────────────
+
+const paymentEditSchema = z.object({
+  date: z.string().min(1, "Date is required"),
+  amount: positiveAmountString,
+  mode: z.string(),
+  reference: z.string().optional(),
+  partyName: z.string().optional(),
+});
+type PaymentEditFormValues = z.infer<typeof paymentEditSchema>;
+
+export function PaymentEditModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  payment,
+}: ModalBaseProps & { payment: FinancePayment | null }) {
+  const updatePayment = useUpdatePayment();
+  const hasVendor = Boolean(payment?.vendorId);
+
+  const form = useForm<PaymentEditFormValues>({
+    resolver: zodResolver(paymentEditSchema),
+    defaultValues: { date: "", amount: "", mode: "bank_transfer", reference: "", partyName: "" },
+  });
+
+  useEffect(() => {
+    if (!open || !payment) return;
+    form.reset({
+      date: payment.date.slice(0, 10),
+      amount: String(payment.amount),
+      mode: payment.mode,
+      reference: payment.reference ?? "",
+      partyName: payment.partyName ?? "",
+    });
+  }, [open, payment, form]);
+
+  const onSubmit = async (values: PaymentEditFormValues) => {
+    if (!payment) return;
+    try {
+      await updatePayment.mutateAsync({
+        id: payment.id,
+        date: values.date,
+        amount: Number(values.amount),
+        mode: values.mode as FinancePaymentMode,
+        reference: values.reference?.trim() || undefined,
+        partyName: hasVendor ? undefined : values.partyName?.trim() || undefined,
+      });
+      toast.success("Payment updated");
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, "Failed to update payment");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>Edit outgoing payment</DialogTitle>
+          <DialogDescription>Update this disbursement — ledgers recompute automatically.</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              {!hasVendor && (
+                <FormField control={form.control} name="partyName" render={({ field }) => (
+                  <FormItem><FormLabel>Payee name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              )}
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem><FormLabel>Date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="amount" render={({ field }) => (
+                <FormItem><FormLabel>Amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="mode" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Payment mode</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {(Object.keys(PAYMENT_MODE_LABELS) as FinancePaymentMode[]).map((k) => (
+                          <SelectItem key={k} value={k}>{PAYMENT_MODE_LABELS[k]}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="reference" render={({ field }) => (
+                  <FormItem><FormLabel>Reference</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={updatePayment.isPending}>Cancel</Button>
+              <Button type="submit" disabled={updatePayment.isPending}>
+                {updatePayment.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Tax deposit ─────────────────────────────────────────────────────────
+
+const taxDepositSchema = z.object({
+  type: z.enum(["gst", "tds"]),
+  period: z.string().min(1, "Period is required"),
+  amount: positiveAmountString,
+  challanNumber: z.string().optional(),
+  depositedAt: z.string().min(1, "Deposit date is required"),
+});
+type TaxDepositFormValues = z.infer<typeof taxDepositSchema>;
+
+export function TaxDepositFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  deposit,
+}: ModalBaseProps & { deposit?: TaxDeposit | null }) {
+  const isEdit = deposit != null;
+  const createDeposit = useCreateTaxDeposit();
+  const updateDeposit = useUpdateTaxDeposit();
+  const isPending = createDeposit.isPending || updateDeposit.isPending;
+
+  const blankDefaults: TaxDepositFormValues = {
+    type: "gst",
+    period: "",
+    amount: "",
+    challanNumber: "",
+    depositedAt: new Date().toISOString().slice(0, 10),
+  };
+
+  const form = useForm<TaxDepositFormValues>({
+    resolver: zodResolver(taxDepositSchema),
+    defaultValues: blankDefaults,
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      deposit
+        ? {
+            type: deposit.type,
+            period: deposit.period,
+            amount: String(deposit.amount),
+            challanNumber: deposit.challanNumber ?? "",
+            depositedAt: deposit.depositedAt.slice(0, 10),
+          }
+        : blankDefaults,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deposit, form]);
+
+  const onSubmit = async (values: TaxDepositFormValues) => {
+    try {
+      const payload = {
+        type: values.type,
+        period: values.period.trim(),
+        amount: Number(values.amount),
+        challanNumber: values.challanNumber?.trim() || undefined,
+        depositedAt: values.depositedAt,
+      };
+      if (isEdit && deposit) {
+        await updateDeposit.mutateAsync({ id: deposit.id, ...payload });
+        toast.success("Tax deposit updated");
+      } else {
+        await createDeposit.mutateAsync(payload);
+        toast.success("Tax deposit recorded");
+      }
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, isEdit ? "Failed to update tax deposit" : "Failed to record tax deposit");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>{isEdit ? "Edit tax deposit" : "Record tax deposit"}</DialogTitle>
+          <DialogDescription>Log a GST or TDS challan deposit against a tax period.</DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="type" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Type</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="gst">GST</SelectItem>
+                        <SelectItem value="tds">TDS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="period" render={({ field }) => (
+                  <FormItem><FormLabel>Period</FormLabel><FormControl><Input placeholder="2026-06 or 2026-Q1" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="amount" render={({ field }) => (
+                <FormItem><FormLabel>Amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="challanNumber" render={({ field }) => (
+                  <FormItem><FormLabel>Challan no.</FormLabel><FormControl><Input placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="depositedAt" render={({ field }) => (
+                  <FormItem><FormLabel>Deposit date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Record deposit"}
               </Button>
             </DialogFooter>
           </form>

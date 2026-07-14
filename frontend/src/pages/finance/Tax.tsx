@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Percent, Download, FileSpreadsheet } from "lucide-react";
+import { Percent, Download, FileSpreadsheet, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
@@ -18,21 +18,57 @@ import {
   FinanceFilterBar,
   FinanceErrorState,
   FinanceDualLineChart,
+  TaxDepositFormModal,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useTaxSummary, type TaxPeriodType } from "@/api/finance";
+import {
+  useTaxSummary,
+  useListTaxDeposits,
+  useDeleteTaxDeposit,
+  type TaxPeriodType,
+  type TaxDeposit,
+} from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 export default function TaxPage() {
   const [periodTab, setPeriodTab] = useState<TaxPeriodType>("monthly");
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [editDeposit, setEditDeposit] = useState<TaxDeposit | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TaxDeposit | null>(null);
+  const { can } = usePermissions();
+  const canCreate = can("finance_tax", "create");
+  const canEdit = can("finance_tax", "edit");
+  const canDelete = can("finance_tax", "delete");
+  const deleteTaxDeposit = useDeleteTaxDeposit();
   const { data, isLoading, isError, refetch } = useTaxSummary(periodTab);
+  const { data: depositsData, refetch: refetchDeposits } = useListTaxDeposits({ limit: 50 });
 
   const summaries = data?.summaries ?? [];
+  const deposits = depositsData?.deposits ?? [];
   const gstChartData = [...summaries]
     .filter((t) => t.periodType === "monthly")
     .reverse()
     .map((t) => ({ month: t.period.split(" ")[0], collected: t.gstCollected, paid: t.gstPaid }));
   const latest = summaries[0];
+
+  const openCreateDeposit = () => { setEditDeposit(null); setDepositModalOpen(true); };
+
+  const handleDeleteDeposit = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteTaxDeposit.mutateAsync(deleteTarget.id);
+      toast.success("Tax deposit deleted");
+      setDeleteTarget(null);
+      refetchDeposits();
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete tax deposit");
+    }
+  };
 
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={4} showCharts />;
@@ -53,6 +89,12 @@ export default function TaxPage() {
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Tax" }]}
         actions={
           <>
+            {canCreate && (
+              <Button size="sm" className="h-8 gap-1.5" onClick={openCreateDeposit}>
+                <Plus className="h-3.5 w-3.5" />
+                Record deposit
+              </Button>
+            )}
             <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("Excel export started")}>
               <FileSpreadsheet className="h-3.5 w-3.5" />
               Export Excel
@@ -136,6 +178,73 @@ export default function TaxPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tax deposits</p>
+        <div className="rounded-xl border bg-card overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="text-xs">Type</TableHead>
+                <TableHead className="text-xs">Period</TableHead>
+                <TableHead className="text-xs">Challan</TableHead>
+                <TableHead className="text-xs">Deposited</TableHead>
+                <TableHead className="text-xs text-right">Amount</TableHead>
+                {(canEdit || canDelete) && <TableHead className="text-xs text-right">Actions</TableHead>}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {deposits.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell className="text-xs uppercase font-medium">{d.type}</TableCell>
+                  <TableCell className="text-xs font-mono">{d.period}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{d.challanNumber ?? "—"}</TableCell>
+                  <TableCell className="text-xs">{format(new Date(d.depositedAt), "MMM d, yyyy")}</TableCell>
+                  <TableCell className="text-xs text-right tabular-nums font-medium">{formatCurrency(d.amount)}</TableCell>
+                  {(canEdit || canDelete) && (
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        {canEdit && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditDeposit(d); setDepositModalOpen(true); }} title="Edit">
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(d)} title="Delete">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  )}
+                </TableRow>
+              ))}
+              {deposits.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={(canEdit || canDelete) ? 6 : 5} className="text-center text-xs text-muted-foreground py-6">
+                    No tax deposits recorded yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <TaxDepositFormModal
+        open={depositModalOpen}
+        onOpenChange={(open) => { setDepositModalOpen(open); if (!open) setEditDeposit(null); }}
+        deposit={editDeposit}
+        onSuccess={() => { refetchDeposits(); refetch(); setEditDeposit(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete tax deposit?"
+        description={deleteTarget ? `${deleteTarget.type.toUpperCase()} deposit for ${deleteTarget.period} will be removed.` : undefined}
+        loading={deleteTaxDeposit.isPending}
+        onConfirm={handleDeleteDeposit}
+      />
     </PortalPageShell>
   );
 }

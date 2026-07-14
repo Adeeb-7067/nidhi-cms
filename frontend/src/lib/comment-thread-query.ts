@@ -120,6 +120,7 @@ export function createOptimisticComment(options: {
   attachmentUrl?: string | null;
   attachmentName?: string | null;
   attachmentMimeType?: string | null;
+  parentId?: number | null;
 }): Comment {
   const now = new Date().toISOString();
   return {
@@ -134,8 +135,9 @@ export function createOptimisticComment(options: {
     attachmentUrl: options.attachmentUrl ?? null,
     attachmentName: options.attachmentName ?? null,
     attachmentMimeType: options.attachmentMimeType ?? null,
-    parentId: null,
+    parentId: options.parentId ?? null,
     isEdited: false,
+    isDeleted: false,
     replies: [],
     createdAt: now,
     updatedAt: now,
@@ -157,12 +159,113 @@ export function replaceOptimisticCommentInCache(
     let comments = removeCommentFromThread(old.comments, tempId);
     if (!commentExistsInThread(comments, comment.id)) {
       const normalized = { ...comment, replies: comment.replies ?? [] };
-      const merged = [...comments, normalized];
-      comments =
-        merged.length > COMMENT_THREAD_LIMIT
-          ? merged.slice(-COMMENT_THREAD_LIMIT)
-          : merged;
+      if (normalized.parentId != null && commentExistsInThread(comments, normalized.parentId)) {
+        comments = appendReplyToThread(comments, normalized.parentId, normalized);
+      } else {
+        const merged = [...comments, normalized];
+        comments =
+          merged.length > COMMENT_THREAD_LIMIT
+            ? merged.slice(-COMMENT_THREAD_LIMIT)
+            : merged;
+      }
     }
+    return { ...old, comments };
+  });
+}
+
+function markDeletedInThread(comments: Comment[], commentId: number): Comment[] {
+  let changed = false;
+  const out = comments.map((c) => {
+    if (c.id === commentId) {
+      changed = true;
+      return {
+        ...c,
+        isDeleted: true,
+        content: "",
+        attachmentUrl: null,
+        attachmentName: null,
+        attachmentMimeType: null,
+        mentionedUserIds: [],
+      };
+    }
+    if (c.replies?.length) {
+      const replies = markDeletedInThread(c.replies, commentId);
+      if (replies !== c.replies) {
+        changed = true;
+        return { ...c, replies };
+      }
+    }
+    return c;
+  });
+  return changed ? out : comments;
+}
+
+function updateInThread(comments: Comment[], updated: Comment): Comment[] {
+  let changed = false;
+  const out = comments.map((c) => {
+    if (c.id === updated.id) {
+      changed = true;
+      // Preserve the existing reply subtree; only the message fields change.
+      return { ...c, ...updated, replies: c.replies ?? updated.replies ?? [] };
+    }
+    if (c.replies?.length) {
+      const replies = updateInThread(c.replies, updated);
+      if (replies !== c.replies) {
+        changed = true;
+        return { ...c, replies };
+      }
+    }
+    return c;
+  });
+  return changed ? out : comments;
+}
+
+/** Merge an edited comment into the thread cache in place (keeps replies + order). */
+export function updateCommentInListCache(
+  queryClient: QueryClient,
+  threadType: string,
+  threadId: number,
+  updated: Comment,
+) {
+  const params = commentThreadQueryParams(threadType, threadId);
+  queryClient.setQueryData<CommentListResult>(getListCommentsQueryKey(params), (old) => {
+    if (!old?.comments?.length) return old;
+    const comments = updateInThread(old.comments, updated);
+    if (comments === old.comments) return old;
+    return { ...old, comments };
+  });
+}
+
+/**
+ * Latest message (chronological, incl. replies) currently in the thread cache.
+ * Used to keep the chat-list preview aligned with what actually shows last.
+ */
+export function getLatestThreadComment(
+  queryClient: QueryClient,
+  threadType: string,
+  threadId: number,
+): Comment | undefined {
+  const params = commentThreadQueryParams(threadType, threadId);
+  const cached = queryClient.getQueryData<CommentListResult>(
+    getListCommentsQueryKey(params),
+  );
+  if (!cached?.comments?.length) return undefined;
+  const flat = flattenCommentThread(cached.comments);
+  return flat[flat.length - 1];
+}
+
+/** Flag a message as deleted in the thread cache, blanking its body/attachments. */
+export function markCommentDeletedInListCache(
+  queryClient: QueryClient,
+  threadType: string,
+  threadId: number,
+  commentId: number,
+) {
+  const params = commentThreadQueryParams(threadType, threadId);
+  queryClient.setQueryData<CommentListResult>(getListCommentsQueryKey(params), (old) => {
+    if (!old?.comments?.length) return old;
+    const comments = markDeletedInThread(old.comments, commentId);
+    if (comments === old.comments) return old;
     return { ...old, comments };
   });
 }

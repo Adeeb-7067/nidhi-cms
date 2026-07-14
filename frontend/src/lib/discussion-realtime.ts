@@ -3,7 +3,9 @@ import type { Comment } from "@/api";
 import { getListNotificationsQueryKey } from "@/api";
 import {
   appendCommentToListCache,
+  markCommentDeletedInListCache,
   patchDiscussionPreviewFromComment,
+  updateCommentInListCache,
 } from "@/lib/comment-thread-query";
 import type { ChannelActivity } from "@/lib/discussions-read-state";
 import { discussionCommentPreview } from "@/lib/discussion-comment-preview";
@@ -34,6 +36,26 @@ export function applyProjectCommentToCaches(
   if (threadType !== "direct") {
     patchDiscussionPreviewFromComment(queryClient, projectId, comment, threadType);
   }
+}
+
+/** Merge a soft-deleted comment into the thread cache (socket + cross-page sync). */
+export function applyCommentDeletedToCaches(
+  queryClient: QueryClient,
+  threadType: string,
+  threadId: number,
+  commentId: number,
+): void {
+  markCommentDeletedInListCache(queryClient, threadType, threadId, commentId);
+}
+
+/** Merge an edited comment into the thread cache (socket + cross-page sync). */
+export function applyCommentUpdatedToCaches(
+  queryClient: QueryClient,
+  threadType: string,
+  threadId: number,
+  comment: Comment,
+): void {
+  updateCommentInListCache(queryClient, threadType, threadId, comment);
 }
 
 export function channelActivityPatchFromComment(

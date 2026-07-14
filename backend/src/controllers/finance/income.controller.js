@@ -1,8 +1,9 @@
-import { FinanceIncome, Projects, clientsTable, SalesPayments, SalesInvoices } from "../../models/schema/index.js";
-import { badRequest, notFound, parsePagination } from "../../utils/route-errors.js";
+import { FinanceIncome, FinancePayments, Projects, clientsTable, SalesPayments, SalesInvoices } from "../../models/schema/index.js";
+import { badRequest, notFound, parseIdParam, parsePagination } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
-import { recordIncomingPayment } from "../../services/finance/payment-ledger.service.js";
+import { recordIncomingPayment, reverseIncomingPaymentPair } from "../../services/finance/payment-ledger.service.js";
 import { resolvePaymentGstFields } from "../../utils/sales-totals.js";
+import { financePaymentModes } from "../../models/schema/finance/expenses.js";
 
 async function enrichIncomeGst(items) {
   const needsLookup = items.filter((i) => i.gstEnabled == null && i.salesPaymentId);
@@ -98,4 +99,67 @@ async function recordIncome(req, res) {
   res.status(201).json({ income: result.income, payment: result.payment, invoiceStatus: result.invoiceStatus });
 }
 
-export { listIncome, recordIncome };
+/**
+ * Edits a manually recorded income receipt. Amount/client/invoice are locked
+ * (changing them would desync the paired payment + invoice balance); only the
+ * date, payment mode, and project can change — and the date/mode are mirrored to
+ * the paired incoming payment so the two ledger views stay consistent.
+ */
+async function updateIncome(req, res) {
+  const id = parseIdParam(req.params.id, "income id");
+  const income = await FinanceIncome.findOne({ id }).lean();
+  if (!income) notFound("Income");
+  if (income.salesPaymentId) {
+    badRequest("This income is synced from a sales receipt — edit it in Sales.", "salesPaymentId");
+  }
+
+  const body = req.body ?? {};
+  const incomeUpdates = {};
+  const paymentUpdates = {};
+  if (body.date !== undefined) {
+    const d = new Date(body.date);
+    if (Number.isNaN(d.getTime())) badRequest("date is invalid.", "date");
+    incomeUpdates.date = d;
+    paymentUpdates.date = d;
+  }
+  if (body.paymentMode !== undefined) {
+    if (!financePaymentModes.includes(body.paymentMode)) {
+      badRequest(`paymentMode must be one of: ${financePaymentModes.join(", ")}.`, "paymentMode");
+    }
+    incomeUpdates.paymentMode = body.paymentMode;
+    paymentUpdates.mode = body.paymentMode;
+  }
+  if (body.projectId !== undefined) incomeUpdates.projectId = body.projectId ? Number(body.projectId) : null;
+
+  await runInTx(async (session) => {
+    await FinanceIncome.updateOne({ id }, { $set: incomeUpdates }, { session });
+    if (Object.keys(paymentUpdates).length) {
+      await FinancePayments.updateOne({ incomeId: id }, { $set: paymentUpdates }, { session });
+    }
+  });
+
+  const updated = await FinanceIncome.findOne({ id }).lean();
+  const [withGst] = await enrichIncomeGst([updated]);
+  const [enriched] = await enrichIncome([withGst]);
+  res.json(enriched);
+}
+
+/**
+ * Voids a manually recorded income receipt: reverses the linked invoice balance
+ * and removes the paired incoming payment in one transaction. Sales-synced
+ * income is managed in Sales and is blocked here.
+ */
+async function deleteIncome(req, res) {
+  const id = parseIdParam(req.params.id, "income id");
+  const income = await FinanceIncome.findOne({ id }).lean();
+  if (!income) notFound("Income");
+  if (income.salesPaymentId) {
+    badRequest("This income is synced from a sales receipt — delete it in Sales.", "salesPaymentId");
+  }
+  await runInTx(async (session) => {
+    await reverseIncomingPaymentPair(session, { incomeId: id });
+  });
+  res.json({ success: true });
+}
+
+export { listIncome, recordIncome, updateIncome, deleteIncome };

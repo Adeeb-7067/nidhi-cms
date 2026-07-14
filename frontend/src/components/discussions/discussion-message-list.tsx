@@ -6,8 +6,18 @@ import {
   formatMessageTime,
   shouldShowDateDivider,
 } from "@/lib/discussion-chat-format";
+import { isOptimisticCommentId } from "@/lib/comment-thread-query";
+import { discussionCommentPreview } from "@/lib/discussion-comment-preview";
 import type { MentionCandidate } from "@/lib/chat-mentions";
 import { cn } from "@/lib/utils";
+import { CornerUpLeft, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { useMemo } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const STACK_GAP_MS = 2 * 60 * 1000;
 
@@ -24,6 +34,11 @@ type DiscussionMessageListProps = {
   currentUserId?: number;
   mentionCandidates?: MentionCandidate[];
   onImageLoad?: () => void;
+  canDeleteMessage?: (comment: Comment) => boolean;
+  onDeleteMessage?: (comment: Comment) => void;
+  canEditMessage?: (comment: Comment) => boolean;
+  onEditMessage?: (comment: Comment) => void;
+  onReplyMessage?: (comment: Comment) => void;
 };
 
 export function DiscussionMessageList({
@@ -31,7 +46,18 @@ export function DiscussionMessageList({
   currentUserId,
   mentionCandidates,
   onImageLoad,
+  canDeleteMessage,
+  onDeleteMessage,
+  canEditMessage,
+  onEditMessage,
+  onReplyMessage,
 }: DiscussionMessageListProps) {
+  const messagesById = useMemo(() => {
+    const map = new Map<number, Comment>();
+    for (const m of messages) map.set(m.id, m);
+    return map;
+  }, [messages]);
+
   return (
     <div className="space-y-1 pb-2">
       {messages.map((comment, index) => {
@@ -41,6 +67,26 @@ export function DiscussionMessageList({
         const showDate = shouldShowDateDivider(comment.createdAt, prev?.createdAt);
         const showAvatar = !isMe && !stacked;
         const showTailName = !isMe && !stacked;
+        const canDelete =
+          !comment.isDeleted &&
+          !isOptimisticCommentId(comment.id) &&
+          Boolean(onDeleteMessage) &&
+          (canDeleteMessage ? canDeleteMessage(comment) : false);
+        const canEdit =
+          !comment.isDeleted &&
+          !isOptimisticCommentId(comment.id) &&
+          Boolean(comment.content?.trim()) &&
+          Boolean(onEditMessage) &&
+          (canEditMessage ? canEditMessage(comment) : false);
+        const canReply =
+          !comment.isDeleted &&
+          !isOptimisticCommentId(comment.id) &&
+          // Only top-level messages can be replied to (data model is one level deep).
+          comment.parentId == null &&
+          Boolean(onReplyMessage);
+        const hasMenu = canReply || canEdit || canDelete;
+        const parent =
+          comment.parentId != null ? messagesById.get(comment.parentId) : undefined;
 
         return (
           <div key={comment.id}>
@@ -54,7 +100,7 @@ export function DiscussionMessageList({
             <div className={cn("flex", isMe ? "justify-end" : "justify-start", stacked ? "mt-0.5" : "mt-2.5")}>
               <div
                 className={cn(
-                  "flex max-w-[min(100%,28rem)] gap-2 sm:max-w-[min(100%,32rem)]",
+                  "group flex max-w-[min(100%,28rem)] gap-2 sm:max-w-[min(100%,32rem)]",
                   isMe ? "flex-row-reverse" : "flex-row",
                 )}
               >
@@ -77,6 +123,27 @@ export function DiscussionMessageList({
                     </span>
                   )}
                   <div className="flex max-w-full flex-col gap-0.5">
+                    {parent && !comment.isDeleted ? (
+                      <div
+                        className={cn(
+                          "flex items-stretch gap-1.5 rounded-md border-l-2 px-2 py-1",
+                          isMe
+                            ? "border-emerald-500/70 bg-emerald-500/10"
+                            : "border-primary/50 bg-muted/60",
+                        )}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-[10px] font-semibold text-foreground/70">
+                            {parent.authorId === currentUserId ? "You" : parent.authorName}
+                          </p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            {parent.isDeleted
+                              ? "This message was deleted"
+                              : discussionCommentPreview(parent)}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
                     <CommentBody
                       comment={comment}
                       isSent={isMe}
@@ -99,10 +166,46 @@ export function DiscussionMessageList({
                         isMe ? "text-right" : "text-left",
                       )}
                     >
+                      {comment.isEdited && !comment.isDeleted ? "edited · " : ""}
                       {formatMessageTime(comment.createdAt)}
                     </span>
                   </div>
                 </div>
+                {hasMenu ? (
+                  <div className="flex shrink-0 items-center self-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground opacity-100 transition hover:bg-muted focus:opacity-100 focus:outline-none data-[state=open]:opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                        aria-label="Message actions"
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align={isMe ? "end" : "start"}>
+                        {canReply ? (
+                          <DropdownMenuItem onSelect={() => onReplyMessage?.(comment)}>
+                            <CornerUpLeft className="mr-2 h-4 w-4" />
+                            Reply
+                          </DropdownMenuItem>
+                        ) : null}
+                        {canEdit ? (
+                          <DropdownMenuItem onSelect={() => onEditMessage?.(comment)}>
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit message
+                          </DropdownMenuItem>
+                        ) : null}
+                        {canDelete ? (
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => onDeleteMessage?.(comment)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete message
+                          </DropdownMenuItem>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>

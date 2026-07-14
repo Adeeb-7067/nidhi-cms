@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingUp } from "lucide-react";
+import { Plus, TrendingUp, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
@@ -31,10 +31,21 @@ import {
   FinanceDualLineChart,
   FinanceAreaTrendChart,
   RecordPaymentModal,
+  IncomeEditModal,
   GstClassificationBadge,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useListIncome, useFinanceRevenueTrend, useFinancePnl, type ListIncomeParams } from "@/api/finance";
+import {
+  useListIncome,
+  useDeleteIncome,
+  useFinanceRevenueTrend,
+  useFinancePnl,
+  type ListIncomeParams,
+  type Income,
+} from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { toastApiError } from "@/lib/api-error";
 import { useListClients } from "@/api/generated/api";
 import { toast } from "sonner";
 
@@ -46,6 +57,12 @@ export default function IncomePage() {
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editIncome, setEditIncome] = useState<Income | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Income | null>(null);
+  const { can } = usePermissions();
+  const canEdit = can("finance_income", "edit");
+  const canDelete = can("finance_income", "delete");
+  const deleteIncome = useDeleteIncome();
 
   const { data: clientsData } = useListClients({ limit: 200 });
   const { data: revenueTrendData } = useFinanceRevenueTrend(6);
@@ -73,6 +90,20 @@ export default function IncomePage() {
 
   const incomeVsExpenseTrend = (pnlData?.monthly ?? []).map((m) => ({ month: m.month, income: m.income, expense: m.expenses }));
   const revenueTrend = revenueTrendData?.trend ?? [];
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteIncome.mutateAsync(deleteTarget.id);
+      toast.success(`Income ${deleteTarget.reference} removed`);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete income");
+    }
+  };
+
+  const showActions = canEdit || canDelete;
 
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={3} showCharts />;
@@ -161,10 +192,13 @@ export default function IncomePage() {
                 <TableHead className="text-xs text-right">GST amt</TableHead>
                 <TableHead className="text-xs text-right">Amount</TableHead>
                 <TableHead className="text-xs">Mode</TableHead>
+                {showActions && <TableHead className="text-xs text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {income.map((i) => (
+              {income.map((i) => {
+                const synced = Boolean(i.salesPaymentId);
+                return (
                 <TableRow key={i.id} className="hover:bg-muted/30">
                   <TableCell className="text-xs">{format(new Date(i.date), "MMM d, yyyy")}</TableCell>
                   <TableCell className="text-xs font-mono">{i.reference}</TableCell>
@@ -177,8 +211,29 @@ export default function IncomePage() {
                   </TableCell>
                   <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</TableCell>
                   <TableCell className="text-xs">{PAYMENT_MODE_LABELS[i.paymentMode]}</TableCell>
+                  {showActions && (
+                    <TableCell className="text-right">
+                      {synced ? (
+                        <span className="text-[10px] text-muted-foreground">Sales</span>
+                      ) : (
+                        <div className="flex justify-end gap-1">
+                          {canEdit && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditIncome(i)} title="Edit">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(i)} title="Delete">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
           <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
@@ -192,6 +247,20 @@ export default function IncomePage() {
       )}
 
       <RecordPaymentModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
+      <IncomeEditModal
+        open={editIncome != null}
+        onOpenChange={(open) => { if (!open) setEditIncome(null); }}
+        income={editIncome}
+        onSuccess={() => { refetch(); setEditIncome(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete income receipt?"
+        description={deleteTarget ? `${deleteTarget.reference} will be removed and any linked invoice balance restored.` : undefined}
+        loading={deleteIncome.isPending}
+        onConfirm={handleDelete}
+      />
     </PortalPageShell>
   );
 }

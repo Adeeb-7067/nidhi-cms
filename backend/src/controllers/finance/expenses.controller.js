@@ -1,4 +1,4 @@
-import { FinanceExpenses, Projects, clientsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
+import { FinanceExpenses, FinancePayments, Projects, vendorsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import { expenseCategories } from "../../models/schema/finance/expenses.js";
@@ -8,7 +8,7 @@ async function assertExpenseVendorId(vendorId) {
   if (vendorId == null || vendorId === "") return null;
   const id = Number(vendorId);
   if (!Number.isFinite(id)) badRequest("vendorId must be a valid number.", "vendorId");
-  const vendor = await clientsTable.findOne({ id, isVendor: true }).select({ id: 1 }).lean();
+  const vendor = await vendorsTable.findOne({ id }).select({ id: 1 }).lean();
   if (!vendor) badRequest("Select a valid vendor.", "vendorId");
   return id;
 }
@@ -27,7 +27,7 @@ async function enrichExpenses(items) {
     projectIds.length ? Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean() : [],
     employeeIds.length ? usersTable.find({ id: { $in: employeeIds } }).select({ id: 1, name: 1 }).lean() : [],
     vendorIds.length
-      ? clientsTable.find({ id: { $in: vendorIds }, isVendor: true }).select({
+      ? vendorsTable.find({ id: { $in: vendorIds } }).select({
           id: 1,
           companyName: 1,
           vendorCategory: 1,
@@ -66,8 +66,8 @@ async function listExpenses(req, res) {
     const q = escapeRegex(String(search).trim());
     if (q) {
       const re = { $regex: q, $options: "i" };
-      const vendorMatches = await clientsTable
-        .find({ isVendor: true, companyName: re })
+      const vendorMatches = await vendorsTable
+        .find({ companyName: re })
         .select({ id: 1 })
         .lean();
       const vendorIdsFromSearch = vendorMatches.map((v) => v.id);
@@ -191,6 +191,10 @@ async function deleteExpense(req, res) {
   if (!expense) notFound("Expense");
   if (expense.status === "approved") {
     badRequest("Approved expenses cannot be deleted — reject instead if this was recorded in error.", "status");
+  }
+  const linkedPayment = await FinancePayments.findOne({ expenseId: id }).select({ id: 1 }).lean();
+  if (linkedPayment) {
+    badRequest("This expense has a linked payment. Delete the payment first.", "expenseId");
   }
   await FinanceExpenses.deleteOne({ id });
   res.json({ success: true });

@@ -110,6 +110,7 @@ const FinanceBudgets = React.lazy(() => import("@/pages/finance/Budgets"));
 const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
 const FinanceVendors = React.lazy(() => import("@/pages/finance/Vendors"));
+const FinanceVendorAnalytics = React.lazy(() => import("@/pages/finance/VendorAnalytics"));
 const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
 const FinanceNotifications = React.lazy(() => import("@/pages/finance/Notifications"));
@@ -649,6 +650,11 @@ export function PageOutlet() {
       <Route path="/finance/payments">
         <RoleGate>
           <FinancePayments />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/vendors/analytics">
+        <RoleGate>
+          <FinanceVendorAnalytics />
         </RoleGate>
       </Route>
       <Route path="/finance/vendors">

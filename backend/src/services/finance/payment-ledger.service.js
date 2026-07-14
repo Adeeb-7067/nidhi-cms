@@ -110,6 +110,49 @@ export async function recordIncomingPayment(
 }
 
 /**
+ * Reverses an incoming payment / income pair inside a transaction. Restores the
+ * linked invoice's paidAmount + status (so an accidental receipt can be removed
+ * without leaving the invoice marked paid), then removes both ledger rows. Used
+ * by both "delete income" and "delete incoming payment" so the two stay in sync.
+ */
+export async function reverseIncomingPaymentPair(session, { incomeId = null, paymentId = null }) {
+  let income = null;
+  if (incomeId != null) {
+    income = await FinanceIncome.findOne({ id: incomeId }).session(session).lean();
+  }
+  let payment = null;
+  if (paymentId != null) {
+    payment = await FinancePayments.findOne({ id: paymentId }).session(session).lean();
+  } else if (income) {
+    payment = await FinancePayments.findOne({ incomeId: income.id }).session(session).lean();
+  }
+  if (!income && payment?.incomeId != null) {
+    income = await FinanceIncome.findOne({ id: payment.incomeId }).session(session).lean();
+  }
+
+  const invoiceId = income?.invoiceId ?? payment?.invoiceId ?? null;
+  const amount = income?.amount ?? payment?.amount ?? 0;
+
+  if (invoiceId != null && amount > 0) {
+    const invoice = await FinanceInvoices.findOne({ id: invoiceId }).session(session).lean();
+    if (invoice) {
+      const newPaid = Math.max(0, (invoice.paidAmount ?? 0) - amount);
+      const status = deriveInvoiceStatus(invoice, newPaid);
+      await FinanceInvoices.updateOne(
+        { id: invoiceId },
+        { $set: { paidAmount: newPaid, status } },
+        { session },
+      );
+    }
+  }
+
+  if (income) await FinanceIncome.deleteOne({ id: income.id }, { session });
+  if (payment) await FinancePayments.deleteOne({ id: payment.id }, { session });
+
+  return { removedIncomeId: income?.id ?? null, removedPaymentId: payment?.id ?? null };
+}
+
+/**
  * Records an outgoing disbursement (vendor payment, payroll payout, etc.).
  * Optionally links an expenseId for traceability — does not mutate the
  * expense's approval status (approval and disbursement are decoupled).

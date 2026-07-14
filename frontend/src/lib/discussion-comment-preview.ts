@@ -30,7 +30,9 @@ export function discussionCommentPreview(comment: {
   attachmentUrl?: string | null;
   attachmentMimeType?: string | null;
   attachmentName?: string | null;
+  isDeleted?: boolean;
 }): string {
+  if (comment.isDeleted) return "This message was deleted";
   const text = comment.content?.trim();
   if (text) return text.length > 60 ? `${text.slice(0, 57)}...` : text;
   if (comment.attachmentUrl) {

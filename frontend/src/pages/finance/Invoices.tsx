@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, Receipt, FileDown } from "lucide-react";
+import { Plus, Receipt, FileDown, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -24,9 +24,19 @@ import {
   FinanceErrorState,
   InvoiceFormModal,
   GstClassificationBadge,
+  FinanceConfirmDialog,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useListInvoices, useInvoiceAging, useInvoicesSummary, type ListInvoicesParams } from "@/api/finance";
+import {
+  useListInvoices,
+  useInvoiceAging,
+  useInvoicesSummary,
+  useDeleteInvoice,
+  type ListInvoicesParams,
+  type FinanceInvoice,
+} from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
+import { toastApiError } from "@/lib/api-error";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 import { FinanceSourceBadge } from "@/modules/finance/components";
@@ -39,6 +49,12 @@ export default function FinanceInvoicesPage() {
   const [statusTab, setStatusTab] = useState<string>("all");
   const { page, setPage, resetPage, limit, apiLimit } = useTablePagination(20);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editInvoice, setEditInvoice] = useState<FinanceInvoice | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FinanceInvoice | null>(null);
+  const { can } = usePermissions();
+  const canEdit = can("finance_invoices", "edit");
+  const canDelete = can("finance_invoices", "delete");
+  const deleteInvoice = useDeleteInvoice();
 
   const params: ListInvoicesParams = useMemo(
     () => ({
@@ -61,6 +77,21 @@ export default function FinanceInvoicesPage() {
   const gstCount = summaryData?.gstCount ?? 0;
   const nonGstCount = summaryData?.nonGstCount ?? 0;
   const gstTaxTotal = summaryData?.gstTaxTotal ?? 0;
+
+  const openCreate = () => { setEditInvoice(null); setDrawerOpen(true); };
+  const openEdit = (inv: FinanceInvoice) => { setEditInvoice(inv); setDrawerOpen(true); };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteInvoice.mutateAsync(deleteTarget.id);
+      toast.success(`Invoice ${deleteTarget.number} deleted`);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete invoice");
+    }
+  };
 
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={3} />;
@@ -85,7 +116,7 @@ export default function FinanceInvoicesPage() {
               <FileDown className="h-3.5 w-3.5" />
               Export all
             </Button>
-            <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
               <Plus className="h-3.5 w-3.5" />
               Create invoice
             </Button>
@@ -129,7 +160,7 @@ export default function FinanceInvoicesPage() {
       </div>
 
       {invoices.length === 0 ? (
-        <FinanceEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="Create invoice" onAction={() => setDrawerOpen(true)} />
+        <FinanceEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="Create invoice" onAction={openCreate} />
       ) : (
         <div className="rounded-xl border bg-card overflow-x-auto">
           <Table>
@@ -168,9 +199,25 @@ export default function FinanceInvoicesPage() {
                     <TableCell className="text-xs text-right tabular-nums text-emerald-700 dark:text-emerald-400">{formatCurrency(inv.paidAmount)}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                        <Link href={href}>View</Link>
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                          <Link href={href}>View</Link>
+                        </Button>
+                        {(!inv.source || inv.source === "finance") && (
+                          <>
+                            {canEdit && inv.status !== "cancelled" && inv.paidAmount === 0 && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(inv)} title="Edit">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {canDelete && inv.paidAmount === 0 && (
+                              <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(inv)} title="Delete">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -183,7 +230,20 @@ export default function FinanceInvoicesPage() {
         </div>
       )}
 
-      <InvoiceFormModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
+      <InvoiceFormModal
+        open={drawerOpen}
+        onOpenChange={(open) => { setDrawerOpen(open); if (!open) setEditInvoice(null); }}
+        invoice={editInvoice}
+        onSuccess={() => { refetch(); setEditInvoice(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete invoice?"
+        description={deleteTarget ? `${deleteTarget.number} will be permanently removed. Paid invoices must be cancelled instead.` : undefined}
+        loading={deleteInvoice.isPending}
+        onConfirm={handleDelete}
+      />
     </PortalPageShell>
   );
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingDown, Check, X } from "lucide-react";
+import { Plus, TrendingDown, Check, X, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -28,14 +28,19 @@ import {
   FinanceEmptyState,
   FinanceErrorState,
   ExpenseFormModal,
+  FinanceConfirmDialog,
+  PayrollByDepartmentCard,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import {
   useListExpenses,
   useApproveExpense,
   useRejectExpense,
+  useDeleteExpense,
   type ListExpensesParams,
+  type Expense,
 } from "@/api/finance";
+import { usePermissions } from "@/modules/permissions/usePermission";
 import { useListProjects } from "@/api/generated/api";
 import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
@@ -49,6 +54,12 @@ export default function ExpensesPage() {
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [editExpense, setEditExpense] = useState<Expense | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const { can } = usePermissions();
+  const canEdit = can("finance_expenses", "edit");
+  const canDelete = can("finance_expenses", "delete");
+  const deleteExpense = useDeleteExpense();
 
   const { data: projectsData } = useListProjects({ limit: 200 });
 
@@ -88,6 +99,21 @@ export default function ExpensesPage() {
     }
   };
 
+  const openCreate = () => { setEditExpense(null); setDrawerOpen(true); };
+  const openEdit = (expense: Expense) => { setEditExpense(expense); setDrawerOpen(true); };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteExpense.mutateAsync(deleteTarget.id);
+      toast.success(`Expense ${deleteTarget.reference} deleted`);
+      setDeleteTarget(null);
+      refetch();
+    } catch (err) {
+      toastApiError(err, "Failed to delete expense");
+    }
+  };
+
   if (isLoading) {
     return <FinanceListPageSkeleton kpiCount={3} />;
   }
@@ -106,7 +132,7 @@ export default function ExpensesPage() {
         description="Track, approve, and analyse company spending."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Expenses" }]}
         actions={
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => setDrawerOpen(true)}>
+          <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
             <Plus className="h-3.5 w-3.5" />
             Add expense
           </Button>
@@ -120,6 +146,8 @@ export default function ExpensesPage() {
           { title: "Pending approvals", value: pendingCount, icon: TrendingDown, accent: "violet", alert: pendingCount > 0, delay: 2 },
         ]}
       />
+
+      <PayrollByDepartmentCard />
 
       <FinanceFilterBar
         search={search}
@@ -158,7 +186,7 @@ export default function ExpensesPage() {
       </Tabs>
 
       {expenses.length === 0 ? (
-        <FinanceEmptyState icon={TrendingDown} title="No expenses found" description="Adjust filters or add a new expense." actionLabel="Add expense" onAction={() => setDrawerOpen(true)} />
+        <FinanceEmptyState icon={TrendingDown} title="No expenses found" description="Adjust filters or add a new expense." actionLabel="Add expense" onAction={openCreate} />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
@@ -194,18 +222,29 @@ export default function ExpensesPage() {
                   <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(e.amount)}</TableCell>
                   <TableCell className="text-xs">{PAYMENT_MODE_LABELS[e.paymentMode]}</TableCell>
                   <TableCell className="text-right">
-                    {e.status === "pending" ? (
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" onClick={() => handleApproval(e.id, "approve")}>
-                          <Check className="h-3.5 w-3.5" />
+                    <div className="flex justify-end gap-1">
+                      {e.status === "pending" && (
+                        <>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" onClick={() => handleApproval(e.id, "approve")} title="Approve">
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => handleApproval(e.id, "reject")} title="Reject">
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                          {canEdit && (
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(e)} title="Edit">
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </>
+                      )}
+                      {canDelete && e.status !== "approved" && (
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(e)} title="Delete">
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => handleApproval(e.id, "reject")}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground">—</span>
-                    )}
+                      )}
+                      {e.status === "approved" && <span className="text-[10px] text-muted-foreground">—</span>}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -221,7 +260,20 @@ export default function ExpensesPage() {
         </div>
       )}
 
-      <ExpenseFormModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
+      <ExpenseFormModal
+        open={drawerOpen}
+        onOpenChange={(open) => { setDrawerOpen(open); if (!open) setEditExpense(null); }}
+        expense={editExpense}
+        onSuccess={() => { refetch(); setEditExpense(null); }}
+      />
+      <FinanceConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete expense?"
+        description={deleteTarget ? `${deleteTarget.reference} will be permanently removed.` : undefined}
+        loading={deleteExpense.isPending}
+        onConfirm={handleDelete}
+      />
     </PortalPageShell>
   );
 }

@@ -94,6 +94,7 @@ import { ProjectTicketsPanel } from "@/components/project/ProjectTicketsPanel";
 import { ProjectClientTeamPanel } from "@/components/project/ProjectClientTeamPanel";
 import { getDiscussionsHref } from "@/lib/discussions-navigation";
 import { commentThreadQueryParams } from "@/lib/comment-thread-query";
+import { useThreadCommentRealtime } from "@/hooks/use-thread-comment-realtime";
 
 const milestoneSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -135,23 +136,14 @@ export default function AdminProjectDetail() {
   const { socket } = useRealtime();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
-    if (socket && projectId) {
-      const handleNewComment = (data: any) => {
-        if (data.threadType === "project" && data.threadId === projectId) {
-          queryClient.invalidateQueries({ queryKey: getListCommentsQueryKey({ threadType: "project", threadId: projectId }) });
-        }
-      };
-
-      socket.on("comment", handleNewComment);
-      return () => {
-        socket.off("comment", handleNewComment);
-      };
-    }
-    return undefined;
-  }, [socket, projectId, queryClient]);
-
   const validProjectId = !!projectId && !Number.isNaN(projectId);
+
+  useThreadCommentRealtime({
+    socket,
+    threadType: "project",
+    threadId: validProjectId ? projectId : null,
+    enabled: validProjectId,
+  });
 
   const { data: _projectRaw, isLoading } = useGetProject(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectQueryKey(projectId) },

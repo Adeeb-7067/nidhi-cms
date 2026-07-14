@@ -20,7 +20,7 @@ const paymentSchema = new Schema(
     partyType: { type: String, enum: partyTypes, default: "other", required: true },
     partyName: { type: String, required: true, trim: true },
     clientId: { type: Number, ref: "Clients", default: null, index: true },
-    vendorId: { type: Number, ref: "Clients", default: null, index: true },
+    vendorId: { type: Number, ref: "Vendors", default: null, index: true },
     employeeId: { type: Number, ref: "Users", default: null, index: true },
     invoiceId: { type: Number, ref: "FinanceInvoices", default: null, index: true },
     incomeId: { type: Number, ref: "FinanceIncome", default: null, index: true },
