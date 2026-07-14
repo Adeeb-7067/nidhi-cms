@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useClientTeam } from "@/contexts/ClientTeamContext";
 import { useListProjects, useGetApkReleases, getGetApkReleasesQueryKey } from "@/api";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -18,11 +18,26 @@ import {
   formatApkReleaseSubtitle,
 } from "@/lib/apk-audience";
 import { cn } from "@/lib/utils";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function ClientApk() {
   const team = useClientTeam();
-  const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 1 });
-  const projectId = projectsData?.projects[0]?.id;
+  const { data: projectsData, isLoading: isProjectsLoading } = useListProjects({ limit: 100 });
+  const projects = projectsData?.projects ?? [];
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!projects.length) {
+      setSelectedProjectId(null);
+      return;
+    }
+    if (selectedProjectId == null || !projects.some((p) => p.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]!.id);
+    }
+  }, [projects, selectedProjectId]);
+
+  const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
+  const projectId = project?.id;
 
   if (team.isClientUser && !team.isAdmin && !team.can("documents")) {
     return (
@@ -35,10 +50,10 @@ export default function ClientApk() {
     );
   }
 
-  const { data: apks, isLoading: isApksLoading } = useGetApkReleases(projectId!, {
+  const { data: apks, isLoading: isApksLoading } = useGetApkReleases(projectId ?? 0, {
     query: { 
-      queryKey: getGetApkReleasesQueryKey(projectId!), 
-      enabled: !!projectId 
+      queryKey: getGetApkReleasesQueryKey(projectId ?? 0), 
+      enabled: projectId != null 
     }
   });
 
@@ -58,6 +73,25 @@ export default function ClientApk() {
       <PortalPageHero
         title="Releases & Downloads"
         subtitle="Access your app builds"
+        actions={
+          projects.length > 1 ? (
+            <Select
+              value={String(project.id)}
+              onValueChange={(v) => setSelectedProjectId(parseInt(v, 10))}
+            >
+              <SelectTrigger className="w-full sm:w-[240px] bg-background/80">
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
       />
 
       {clientApks.length === 0 ? (

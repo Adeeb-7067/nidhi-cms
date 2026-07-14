@@ -581,7 +581,7 @@ async function getProjectsByIdBugs(req, res) {
   res.json({ bugs, total: bugs.length, page: 1, limit: bugs.length });
 }
 async function getProjectsByIdApkReleases(req, res) {
-  await assertClientPermission(req, "documents", "view");
+  await assertClientPermission(req, "overview", "view");
   const { apkReleasesTable } = await import("../models/schema/index.js");
   const { buildApkReleaseListFilter, formatApkReleaseRow } = await import("../services/apk-access.js");
   const { IdLookupCache } = await import("../lib/lookup-cache.js");

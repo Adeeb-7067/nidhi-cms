@@ -116,3 +116,5 @@ server.listen(port, () => {
     "Server listening with Realtime enabled"
   );
 });
+// Trigger restart after clearing port
+  

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useClientTeam } from "@/contexts/ClientTeamContext";
 import { useListProjects, useGetProjectAnalytics, getGetProjectAnalyticsQueryKey } from "@/api";
 import { ClientProjectTeamCard } from "@/components/presence/ClientProjectTeamCard";
@@ -16,6 +16,13 @@ import {
   ChartGridCell,
   ChartEmptyState,
 } from "@/components/dashboard/admin-dashboard-charts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { BarChart3, Clock, TrendingUp, Users, PieChart as PieChartIcon, Activity } from "lucide-react";
 import {
   BarChart,
@@ -44,9 +51,23 @@ const chartTooltip = {
 
 export default function ClientAnalytics() {
   const team = useClientTeam();
-  const { data: projectsData } = useListProjects({ limit: 1 });
-  const projectId = projectsData?.projects[0]?.id;
-  const projectName = projectsData?.projects[0]?.name;
+  const { data: projectsData } = useListProjects({ limit: 100 });
+  const projects = projectsData?.projects ?? [];
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!projects.length) {
+      setSelectedProjectId(null);
+      return;
+    }
+    if (selectedProjectId == null || !projects.some((p) => p.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0]!.id);
+    }
+  }, [projects, selectedProjectId]);
+
+  const project = projects.find((p) => p.id === selectedProjectId) ?? projects[0];
+  const projectId = project?.id;
+  const projectName = project?.name;
 
   if (team.isClientUser && !team.isAdmin && !team.can("reports")) {
     return (
@@ -88,6 +109,25 @@ export default function ClientAnalytics() {
         title="Project analytics"
         description={projectName ? `${projectName} — progress, effort, and team breakdown` : "Deep dive into project metrics"}
         breadcrumbs={[{ label: "Client", href: "/client" }, { label: "Analytics" }]}
+        actions={
+          projects.length > 1 ? (
+            <Select
+              value={String(project.id)}
+              onValueChange={(v) => setSelectedProjectId(parseInt(v, 10))}
+            >
+              <SelectTrigger className="w-[200px] bg-background">
+                <SelectValue placeholder="Select project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={String(p.id)}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : undefined
+        }
       />
 
       <div className="space-y-2">
