@@ -1,10 +1,20 @@
 import {
   FinanceIncome,
   FinanceExpenses,
+  FinancePayments,
   PayrollRuns,
   PayrollLines,
 } from "../../models/schema/index.js";
-import { computeUnifiedOutstanding } from "./unified-ledger.service.js";
+import { computeUnifiedOutstanding, computeUnifiedInvoiceAging } from "./unified-ledger.service.js";
+import { outstandingExpenseAmount, recognizedExpenseAmountExpr } from "./expense-cash.service.js";
+
+function recognizedSumPipeline(match) {
+  return [
+    { $match: match },
+    { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+    { $group: { _id: null, total: { $sum: "$_recognized" } } },
+  ];
+}
 
 /**
  * Read-only wrapper over HRM payroll — finance never stores its own payroll
@@ -75,14 +85,8 @@ export async function computeDashboardKpis(period = "current") {
       { $match: { date: { $gte: prev.start, $lt: prev.end } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]),
-    FinanceExpenses.aggregate([
-      { $match: { date: { $gte: start, $lt: end }, status: "approved" } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]),
-    FinanceExpenses.aggregate([
-      { $match: { date: { $gte: prev.start, $lt: prev.end }, status: "approved" } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]),
+    FinanceExpenses.aggregate(recognizedSumPipeline({ date: { $gte: start, $lt: end }, status: "approved" })),
+    FinanceExpenses.aggregate(recognizedSumPipeline({ date: { $gte: prev.start, $lt: prev.end }, status: "approved" })),
     getPayrollCostForPeriod(year, month),
     getPayrollCostForPeriod(prev.year, prev.month),
     computeUnifiedOutstanding(),
@@ -99,12 +103,15 @@ export async function computeDashboardKpis(period = "current") {
 
   const pctChange = (curr, prev) => (prev > 0 ? Math.round(((curr - prev) / prev) * 1000) / 10 : 0);
 
+  const apOutstanding = await computeApOutstandingTotal();
+
   return {
     totalIncome,
     totalExpenses,
     netProfit,
     pendingInvoices,
     overdueAmount,
+    outstandingPayables: apOutstanding,
     trends: {
       totalIncome: pctChange(totalIncome, prevIncome),
       totalExpenses: pctChange(totalExpenses, prevExpenses),
@@ -115,10 +122,17 @@ export async function computeDashboardKpis(period = "current") {
   };
 }
 
-export async function computeExpenseCategoryBreakdown() {
+export async function computeExpenseCategoryBreakdown(period = null) {
+  const match = { status: "approved" };
+  if (period === "current" || period === "previous") {
+    const { current, previous } = resolvePeriodBounds(period);
+    const bounds = period === "previous" ? previous : current;
+    match.date = { $gte: bounds.start, $lt: bounds.end };
+  }
   const rows = await FinanceExpenses.aggregate([
-    { $match: { status: "approved" } },
-    { $group: { _id: "$category", count: { $sum: 1 }, value: { $sum: "$amount" } } },
+    { $match: match },
+    { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+    { $group: { _id: "$category", count: { $sum: 1 }, value: { $sum: "$_recognized" } } },
     { $sort: { value: -1 } },
   ]);
   return rows.map((r) => ({ name: r._id, count: r.count, value: r.value }));
@@ -134,7 +148,8 @@ export async function computeMonthlyRevenueVsExpense(monthsBack = 6) {
     ]),
     FinanceExpenses.aggregate([
       { $match: { date: { $gte: start }, status: "approved" } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expense: { $sum: "$amount" } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expense: { $sum: "$_recognized" } } },
     ]),
   ]);
 
@@ -161,4 +176,75 @@ export async function computeMonthlyRevenueVsExpense(monthsBack = 6) {
   }
 
   return [...byMonth.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
+/** True cash movement by payment date (incoming vs outgoing completed). */
+export async function computeCashFlowByMonth(monthsBack = 6) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1);
+  const rows = await FinancePayments.aggregate([
+    { $match: { date: { $gte: start }, status: "completed" } },
+    {
+      $group: {
+        _id: {
+          month: { $dateToString: { format: "%Y-%m", date: "$date" } },
+          direction: "$direction",
+        },
+        total: { $sum: "$amount" },
+      },
+    },
+  ]);
+
+  const byMonth = new Map();
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1 - i), 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    byMonth.set(key, { month: key, inflow: 0, outflow: 0 });
+  }
+  for (const r of rows) {
+    const entry = byMonth.get(r._id.month);
+    if (!entry) continue;
+    if (r._id.direction === "incoming") entry.inflow += r.total;
+    else if (r._id.direction === "outgoing") entry.outflow += r.total;
+  }
+  return [...byMonth.values()];
+}
+
+/** Vendor / bill dues aging from remaining Due on approved expenses. */
+export async function computeApAging() {
+  const expenses = await FinanceExpenses.find({ status: "approved" })
+    .select({ date: 1, amount: 1, paidAmount: 1, paymentStatus: 1, status: 1 })
+    .lean();
+  const labels = ["0-30", "31-60", "61-90", "90+"];
+  const buckets = Object.fromEntries(labels.map((b) => [b, { bucket: b, count: 0, amount: 0 }]));
+  const now = Date.now();
+  for (const e of expenses) {
+    const due = outstandingExpenseAmount(e);
+    if (!(due > 0)) continue;
+    const days = Math.max(0, Math.floor((now - new Date(e.date).getTime()) / 86_400_000));
+    const key = days <= 30 ? "0-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+    buckets[key].count += 1;
+    buckets[key].amount += due;
+  }
+  return labels.map((b) => ({
+    bucket: buckets[b].bucket,
+    count: buckets[b].count,
+    amount: Math.round(buckets[b].amount),
+  }));
+}
+
+export async function computeApOutstandingTotal() {
+  const expenses = await FinanceExpenses.find({ status: "approved" })
+    .select({ amount: 1, paidAmount: 1, paymentStatus: 1, status: 1 })
+    .lean();
+  return Math.round(expenses.reduce((s, e) => s + outstandingExpenseAmount(e), 0));
+}
+
+export async function computeDashboardExtras() {
+  const [cashFlowTrend, apAging, arAging] = await Promise.all([
+    computeCashFlowByMonth(6),
+    computeApAging(),
+    computeUnifiedInvoiceAging(),
+  ]);
+  return { cashFlowTrend, apAging, arAging };
 }

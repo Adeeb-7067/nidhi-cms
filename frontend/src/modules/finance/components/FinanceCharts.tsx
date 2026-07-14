@@ -24,6 +24,7 @@ export function FinanceDualLineChart({
   line2Color = "#ef4444",
   xKey = "month",
   currency = true,
+  height = 220,
 }: {
   data: Record<string, string | number>[];
   line1Key: string;
@@ -34,11 +35,12 @@ export function FinanceDualLineChart({
   line2Color?: string;
   xKey?: string;
   currency?: boolean;
+  height?: number;
 }) {
   const fmt = (v: number) => (currency ? formatCompactCurrency(v) : v.toLocaleString());
 
   return (
-    <div className="h-[220px] w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -78,17 +80,19 @@ export function FinanceBarChart({
   nameKey = "name",
   color = "#3b82f6",
   currency = true,
+  height = 220,
 }: {
   data: Record<string, string | number>[];
   dataKey: string;
   nameKey?: string;
   color?: string;
   currency?: boolean;
+  height?: number;
 }) {
   const fmt = (v: number) => (currency ? formatCompactCurrency(v) : v.toLocaleString());
 
   return (
-    <div className="h-[220px] w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />

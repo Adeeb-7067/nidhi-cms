@@ -1,20 +1,26 @@
 import { cn } from "@/lib/utils";
-import type { ExpenseCategory, ExpenseStatus, FinanceInvoiceStatus, IncomeStatus, BudgetStatus, PayrollStatus } from "../types";
+import type { ExpenseCategory, ExpenseStatus, FinanceInvoiceStatus, IncomeStatus, BudgetStatus, LoanStatus, SubscriptionStatus, PayrollStatus } from "../types";
 import {
   EXPENSE_CATEGORY_LABELS,
   EXPENSE_STATUS_LABELS,
+  EXPENSE_PAYMENT_STATUS_LABELS,
   FINANCE_INVOICE_STATUS_LABELS,
   INCOME_STATUS_LABELS,
   BUDGET_STATUS_LABELS,
+  LOAN_STATUS_LABELS,
+  SUBSCRIPTION_STATUS_LABELS,
   PAYROLL_STATUS_LABELS,
 } from "../constants";
 
 type BadgeVariant =
   | "expense"
   | "expenseCategory"
+  | "expensePayment"
   | "income"
   | "invoice"
   | "budget"
+  | "loan"
+  | "subscription"
   | "payroll"
   | "payment";
 
@@ -44,6 +50,16 @@ const budgetStyles: Record<BudgetStatus, string> = {
   exceeded: "bg-red-500/10 text-red-600 border-red-500/25",
 };
 
+const loanStyles: Record<LoanStatus, string> = {
+  active: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  closed: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+};
+
+const subscriptionStyles: Record<SubscriptionStatus, string> = {
+  active: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  cancelled: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+};
+
 const payrollStyles: Record<PayrollStatus, string> = {
   draft: "bg-slate-500/10 text-slate-700 border-slate-500/25",
   reviewed: "bg-blue-500/10 text-blue-700 border-blue-500/25",
@@ -55,6 +71,12 @@ const paymentStyles: Record<string, string> = {
   completed: "bg-green-500/10 text-green-700 border-green-500/25",
   pending: "bg-amber-500/10 text-amber-700 border-amber-500/25",
   failed: "bg-red-500/10 text-red-600 border-red-500/25",
+};
+
+const paymentSettlementStyles: Record<string, string> = {
+  paid: "bg-green-500/10 text-green-700 border-green-500/25",
+  unpaid: "bg-amber-500/10 text-amber-700 border-amber-500/25",
+  partially_paid: "bg-violet-500/10 text-violet-700 border-violet-500/25",
 };
 
 export function FinanceStatusBadge({
@@ -76,6 +98,9 @@ export function FinanceStatusBadge({
   } else if (variant === "expenseCategory") {
     label = EXPENSE_CATEGORY_LABELS[value as ExpenseCategory] ?? value;
     style = "bg-slate-500/10 text-slate-700 border-slate-500/25";
+  } else if (variant === "expensePayment") {
+    label = EXPENSE_PAYMENT_STATUS_LABELS[value as keyof typeof EXPENSE_PAYMENT_STATUS_LABELS] ?? value;
+    style = paymentSettlementStyles[value] ?? style;
   } else if (variant === "income") {
     const v = value as IncomeStatus;
     label = INCOME_STATUS_LABELS[v] ?? value;
@@ -88,6 +113,14 @@ export function FinanceStatusBadge({
     const v = value as BudgetStatus;
     label = BUDGET_STATUS_LABELS[v] ?? value;
     style = budgetStyles[v] ?? style;
+  } else if (variant === "loan") {
+    const v = value as LoanStatus;
+    label = LOAN_STATUS_LABELS[v] ?? value;
+    style = loanStyles[v] ?? style;
+  } else if (variant === "subscription") {
+    const v = value as SubscriptionStatus;
+    label = SUBSCRIPTION_STATUS_LABELS[v] ?? value;
+    style = subscriptionStyles[v] ?? style;
   } else if (variant === "payroll") {
     const v = value as PayrollStatus;
     label = PAYROLL_STATUS_LABELS[v] ?? value;

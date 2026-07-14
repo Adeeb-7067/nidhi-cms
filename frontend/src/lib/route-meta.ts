@@ -155,6 +155,26 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Annual and project budgets with variance tracking.",
     hideHeader: true,
   },
+  "/finance/loans": {
+    title: "Loans",
+    description: "Track loans taken and EMI repayments linked from expenses.",
+    hideHeader: true,
+  },
+  "/finance/loans/:id": {
+    title: "Loan detail",
+    description: "Loan balances, interest paid, and installment history.",
+    hideHeader: true,
+  },
+  "/finance/subscriptions": {
+    title: "Subscriptions",
+    description: "Company software seats — Cursor, Claude, and more.",
+    hideHeader: true,
+  },
+  "/finance/subscriptions/:id": {
+    title: "Subscription detail",
+    description: "Seats assigned to employees and billing history.",
+    hideHeader: true,
+  },
   "/finance/ledgers": {
     title: "Ledgers",
     description: "Client, vendor, expense, and bank account ledgers.",

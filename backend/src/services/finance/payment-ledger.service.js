@@ -8,6 +8,11 @@ import {
 } from "../../models/schema/index.js";
 import { badRequest, notFound } from "../../utils/route-errors.js";
 import { calcInvoiceTotal, deriveInvoiceStatus, deriveIncomeStatus } from "../../utils/finance-totals.js";
+import {
+  deriveExpensePaymentStatus,
+  isLegacyFullyPaidExpense,
+  outstandingExpenseAmount,
+} from "./expense-cash.service.js";
 
 export async function nextFinanceNumber(prefix, counterKey) {
   const year = new Date().getFullYear();
@@ -153,9 +158,84 @@ export async function reverseIncomingPaymentPair(session, { incomeId = null, pay
 }
 
 /**
+ * Apply cash against an approved bill. Skips legacy fully-paid rows (no settlement fields).
+ */
+export async function applyCashToExpense(session, expenseId, amount) {
+  if (!(amount > 0)) return null;
+  const pay = Math.round(Number(amount) * 100) / 100;
+  if (!(pay > 0)) return null;
+
+  // Atomic guard: only apply if remaining coverage is enough (prevents concurrent overpay).
+  const updated = await FinanceExpenses.findOneAndUpdate(
+    {
+      id: expenseId,
+      status: "approved",
+      paymentStatus: { $in: ["unpaid", "partially_paid", "paid"] },
+      $expr: {
+        $lte: [{ $add: [{ $ifNull: ["$paidAmount", 0] }, pay] }, { $ifNull: ["$amount", 0] }],
+      },
+    },
+    [
+      {
+        $set: {
+          paidAmount: { $round: [{ $add: [{ $ifNull: ["$paidAmount", 0] }, pay] }, 2] },
+        },
+      },
+      {
+        $set: {
+          paymentStatus: {
+            $switch: {
+              branches: [
+                { case: { $lte: ["$paidAmount", 0] }, then: "unpaid" },
+                { case: { $gte: ["$paidAmount", "$amount"] }, then: "paid" },
+              ],
+              default: "partially_paid",
+            },
+          },
+        },
+      },
+    ],
+    session ? { new: true, session } : { new: true },
+  ).lean();
+
+  if (!updated) {
+    let q = FinanceExpenses.findOne({ id: expenseId });
+    if (session) q = q.session(session);
+    const expense = await q.lean();
+    if (!expense) notFound("Expense");
+    if (expense.status !== "approved") {
+      badRequest("Only approved expenses can receive payments.", "expenseId");
+    }
+    if (isLegacyFullyPaidExpense(expense)) {
+      badRequest("This expense is already fully settled (legacy). Create a new bill for additional payables.", "expenseId");
+    }
+    const remaining = outstandingExpenseAmount(expense);
+    badRequest(`Payment exceeds remaining due of ${remaining}.`, "amount");
+  }
+  return updated;
+}
+
+/** Reverse cash when an outgoing payment linked to an expense is deleted. */
+export async function reverseCashFromExpense(session, expenseId, amount) {
+  if (!(amount > 0)) return null;
+  let q = FinanceExpenses.findOne({ id: expenseId });
+  if (session) q = q.session(session);
+  const expense = await q.lean();
+  if (!expense) return null;
+  if (isLegacyFullyPaidExpense(expense)) return expense;
+  if (expense.paymentStatus == null && expense.paidAmount == null) return expense;
+  const newPaid = Math.max(0, (Number(expense.paidAmount) || 0) - amount);
+  const paymentStatus = deriveExpensePaymentStatus(expense.amount, newPaid);
+  return FinanceExpenses.findOneAndUpdate(
+    { id: expenseId },
+    { $set: { paidAmount: newPaid, paymentStatus } },
+    session ? { new: true, session } : { new: true },
+  ).lean();
+}
+
+/**
  * Records an outgoing disbursement (vendor payment, payroll payout, etc.).
- * Optionally links an expenseId for traceability — does not mutate the
- * expense's approval status (approval and disbursement are decoupled).
+ * When expenseId is set, updates that bill's paidAmount (cash settlement).
  */
 export async function recordOutgoingPayment(
   session,
@@ -166,8 +246,21 @@ export async function recordOutgoingPayment(
 
   let expense = null;
   if (expenseId) {
-    expense = await FinanceExpenses.findOne({ id: expenseId }).session(session).lean();
+    let eq = FinanceExpenses.findOne({ id: expenseId });
+    if (session) eq = eq.session(session);
+    expense = await eq.lean();
     if (!expense) notFound("Expense");
+    if (expense.status !== "approved") {
+      badRequest("Link payments only to approved expenses.", "expenseId");
+    }
+    if (!isLegacyFullyPaidExpense(expense)) {
+      const remaining = outstandingExpenseAmount(expense);
+      if (amount > remaining + 0.0001) {
+        badRequest(`Payment exceeds remaining due of ${remaining}.`, "amount");
+      }
+    } else {
+      badRequest("This expense is already fully settled (legacy).", "expenseId");
+    }
   }
 
   const [paymentId, receiptNumber] = await Promise.all([
@@ -195,8 +288,12 @@ export async function recordOutgoingPayment(
         recordedBy,
       },
     ],
-    { session },
+    session ? { session } : undefined,
   );
+
+  if (expenseId) {
+    expense = await applyCashToExpense(session, expenseId, amount);
+  }
 
   return { payment, expense };
 }

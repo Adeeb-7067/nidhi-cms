@@ -117,4 +117,3 @@ server.listen(port, () => {
   );
 });
 // Trigger restart after clearing port
-  

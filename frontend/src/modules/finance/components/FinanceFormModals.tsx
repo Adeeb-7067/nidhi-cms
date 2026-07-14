@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Loader2, Plus, Trash2 } from "lucide-react";
@@ -49,6 +49,10 @@ import {
   useAddCreditNote,
   useCreateBudget,
   useUpdateBudget,
+  useCreateLoan,
+  useUpdateLoan,
+  useListLoans,
+  useRecordLoanInstallment,
   useCreateVendor,
   useUpdateVendor,
   useCreateBankAccount,
@@ -63,9 +67,11 @@ import {
   type FinanceVendor,
   type FinanceBankAccount,
   type Budget,
+  type Loan,
   type ExpenseCategory,
   type FinancePaymentMode,
   type BudgetType,
+  type LoanStatus,
   type TaxDeposit,
 } from "@/api/finance";
 import { vendorToFormDefaults } from "@/modules/finance/vendor-utils";
@@ -105,6 +111,7 @@ const expenseSchema = z.object({
   projectId: z.string().optional(),
   employeeId: z.string().optional(),
   vendorId: z.string().optional(),
+  loanId: z.string().optional(),
   notes: z.string().optional(),
 });
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
@@ -122,6 +129,7 @@ export function ExpenseFormModal({
   const { data: projectsData } = useListProjects({ limit: 200 }, { query: { enabled: open } });
   const { data: employeesData } = useHrmEmployees({ limit: 200, status: "active" }, { enabled: open });
   const { data: vendorsData, refetch: refetchVendors } = useListVendors(undefined, open);
+  const { data: loansData } = useListLoans({ status: "active" }, open);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
 
@@ -133,6 +141,7 @@ export function ExpenseFormModal({
     projectId: "",
     employeeId: "",
     vendorId: "",
+    loanId: "",
     notes: "",
   };
 
@@ -140,6 +149,32 @@ export function ExpenseFormModal({
     resolver: zodResolver(expenseSchema),
     defaultValues: blankDefaults,
   });
+
+  const watchedLoanId = form.watch("loanId");
+  const activeLoans = loansData?.loans ?? [];
+  // Keep a closed loan visible when editing an expense already linked to it.
+  const loanOptions = useMemo(() => {
+    const list = [...activeLoans];
+    if (expense?.loanId && expense.loanName && !list.some((l) => l.id === expense.loanId)) {
+      list.unshift({
+        id: expense.loanId,
+        reference: expense.loanReference ?? "",
+        name: expense.loanName,
+        lender: "",
+        principal: 0,
+        interestRate: null,
+        startDate: "",
+        endDate: null,
+        tenureMonths: null,
+        emiAmount: null,
+        status: "closed" as LoanStatus,
+        notes: null,
+        paidAmount: 0,
+        remainingAmount: 0,
+      });
+    }
+    return list;
+  }, [activeLoans, expense]);
 
   useEffect(() => {
     if (!open) return;
@@ -153,6 +188,7 @@ export function ExpenseFormModal({
             projectId: expense.projectId ? String(expense.projectId) : "",
             employeeId: expense.employeeId ? String(expense.employeeId) : "",
             vendorId: expense.vendorId ? String(expense.vendorId) : "",
+            loanId: expense.loanId ? String(expense.loanId) : "",
             notes: expense.notes ?? "",
           }
         : blankDefaults,
@@ -163,14 +199,16 @@ export function ExpenseFormModal({
 
   const onSubmit = async (values: ExpenseFormValues) => {
     try {
+      const loanId = optionalSelectId(values.loanId);
       const payload = {
         date: values.date,
-        category: values.category as ExpenseCategory,
+        category: (loanId ? "loan" : values.category) as ExpenseCategory,
         amount: Number(values.amount),
         paymentMode: values.paymentMode as FinancePaymentMode,
         projectId: optionalSelectId(values.projectId),
         employeeId: optionalSelectId(values.employeeId),
         vendorId: optionalSelectId(values.vendorId),
+        loanId,
         notes: values.notes || undefined,
         attachments,
       };
@@ -207,11 +245,50 @@ export function ExpenseFormModal({
               <FormField control={form.control} name="category" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Category</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={watchedLoanId ? "loan" : field.value}
+                    disabled={Boolean(watchedLoanId)}
+                  >
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
                       {EXPENSE_FORM_CATEGORIES.map((k) => (
                         <SelectItem key={k} value={k}>{EXPENSE_CATEGORY_LABELS[k]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="loanId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Loan paid (optional)</FormLabel>
+                  <Select
+                    onValueChange={(v) => {
+                      const next = v === "none" ? "" : v;
+                      field.onChange(next);
+                      if (next) {
+                        form.setValue("category", "loan");
+                        const loan = loanOptions.find((l) => String(l.id) === next);
+                        if (loan?.emiAmount && !form.getValues("amount")) {
+                          form.setValue("amount", String(loan.emiAmount));
+                        }
+                      }
+                    }}
+                    value={field.value || "none"}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Mark as EMI / loan repayment" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">Not a loan payment</SelectItem>
+                      {loanOptions.map((l) => (
+                        <SelectItem key={l.id} value={String(l.id)}>
+                          {l.name}{l.reference ? ` (${l.reference})` : ""}
+                          {l.remainingAmount > 0 ? ` · left ${formatCurrency(l.remainingAmount)}` : ""}
+                        </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -927,6 +1004,407 @@ export function BudgetFormModal({
               <Button type="submit" disabled={isPending}>
                 {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isEdit ? "Save changes" : "Create budget"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Loan ─────────────────────────────────────────────────────────────────
+
+const loanSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  lender: z.string().min(1, "Lender is required"),
+  principal: positiveAmountString,
+  interestRate: z.string().optional(),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
+  status: z.string().optional(),
+  notes: z.string().optional(),
+});
+type LoanFormValues = z.infer<typeof loanSchema>;
+
+function parseYmd(ymd: string): { y: number; m: number; d: number } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd ?? "").trim());
+  if (!match) return null;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  if (!y || m < 1 || m > 12 || d < 1 || d > 31) return null;
+  return { y, m, d };
+}
+
+/** Calendar months from start → end (min 1 when end is after start). */
+function calcTenureMonths(startDate: string, endDate: string): number | null {
+  const start = parseYmd(startDate);
+  const end = parseYmd(endDate);
+  if (!start || !end) return null;
+
+  const startOrdinal = start.y * 372 + start.m * 31 + start.d;
+  const endOrdinal = end.y * 372 + end.m * 31 + end.d;
+  if (endOrdinal <= startOrdinal) return null;
+
+  let months = (end.y - start.y) * 12 + (end.m - start.m);
+  if (end.d < start.d) months -= 1;
+  return months >= 1 ? months : 1;
+}
+
+/** Standard reducing-balance EMI; interestRate is annual %. */
+function calcEmiAmount(principal: number, annualRatePercent: number, tenureMonths: number): number | null {
+  if (!(principal > 0) || !(tenureMonths >= 1)) return null;
+  if (!(annualRatePercent > 0)) return Math.round(principal / tenureMonths);
+  const r = annualRatePercent / 12 / 100;
+  const factor = Math.pow(1 + r, tenureMonths);
+  if (!Number.isFinite(factor) || factor === 1) return Math.round(principal / tenureMonths);
+  return Math.round((principal * r * factor) / (factor - 1));
+}
+
+export function LoanFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  loan,
+}: ModalBaseProps & { loan?: Loan | null }) {
+  const isEdit = loan != null;
+  const createLoan = useCreateLoan();
+  const updateLoan = useUpdateLoan();
+  const isPending = createLoan.isPending || updateLoan.isPending;
+
+  const form = useForm<LoanFormValues>({
+    resolver: zodResolver(loanSchema),
+    defaultValues: {
+      name: "",
+      lender: "",
+      principal: "",
+      interestRate: "",
+      startDate: new Date().toISOString().slice(0, 10),
+      endDate: "",
+      status: "active",
+      notes: "",
+    },
+  });
+
+  const principal = useWatch({ control: form.control, name: "principal" });
+  const interestRate = useWatch({ control: form.control, name: "interestRate" });
+  const startDate = useWatch({ control: form.control, name: "startDate" });
+  const endDate = useWatch({ control: form.control, name: "endDate" });
+
+  const tenureMonths = useMemo(
+    () => calcTenureMonths(String(startDate ?? ""), String(endDate ?? "")),
+    [startDate, endDate],
+  );
+
+  const emiAmount = useMemo(() => {
+    if (tenureMonths == null) return null;
+    const p = Number(principal);
+    if (!(p > 0)) return null;
+    const rateRaw = String(interestRate ?? "").trim();
+    const rate = rateRaw === "" ? 0 : Number(rateRaw);
+    if (Number.isNaN(rate) || rate < 0) return null;
+    return calcEmiAmount(p, rate, tenureMonths);
+  }, [principal, interestRate, tenureMonths]);
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      loan
+        ? {
+            name: loan.name,
+            lender: loan.lender,
+            principal: String(loan.principal),
+            interestRate: loan.interestRate != null ? String(loan.interestRate) : "",
+            startDate: loan.startDate.slice(0, 10),
+            endDate: loan.endDate ? loan.endDate.slice(0, 10) : "",
+            status: loan.status,
+            notes: loan.notes ?? "",
+          }
+        : {
+            name: "",
+            lender: "",
+            principal: "",
+            interestRate: "",
+            startDate: new Date().toISOString().slice(0, 10),
+            endDate: "",
+            status: "active",
+            notes: "",
+          },
+    );
+    // Only re-seed when the dialog opens or the edited loan changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, loan?.id]);
+
+  const onSubmit = async (values: LoanFormValues) => {
+    try {
+      const tenure = calcTenureMonths(values.startDate, values.endDate);
+      const p = Number(values.principal);
+      const rate = values.interestRate?.trim() ? Number(values.interestRate) : 0;
+      const emi =
+        tenure != null && p > 0 && !Number.isNaN(rate) && rate >= 0
+          ? calcEmiAmount(p, rate, tenure)
+          : null;
+
+      if (tenure == null) {
+        toast.error("End date must be after start date so tenure can be calculated.");
+        return;
+      }
+      if (emi == null) {
+        toast.error("Enter a valid loan amount to calculate EMI.");
+        return;
+      }
+
+      const payload = {
+        name: values.name.trim(),
+        lender: values.lender.trim(),
+        principal: p,
+        interestRate: values.interestRate?.trim() ? Number(values.interestRate) : null,
+        startDate: values.startDate,
+        endDate: values.endDate.trim(),
+        tenureMonths: tenure,
+        emiAmount: emi,
+        notes: values.notes?.trim() || undefined,
+      };
+      if (isEdit && loan) {
+        await updateLoan.mutateAsync({
+          id: loan.id,
+          ...payload,
+          status: (values.status as LoanStatus) || loan.status,
+        });
+        toast.success(`Loan "${values.name}" updated`);
+      } else {
+        await createLoan.mutateAsync(payload);
+        toast.success(`Loan "${values.name}" created`);
+      }
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, isEdit ? "Failed to update loan" : "Failed to create loan");
+    }
+  };
+
+  if (!open) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>{isEdit ? "Edit loan" : "Add loan"}</DialogTitle>
+          <DialogDescription>
+            Enter loan amount, interest rate, start and end date — tenure and EMI calculate automatically.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              <FormField control={form.control} name="name" render={({ field }) => (
+                <FormItem><FormLabel>Loan name</FormLabel><FormControl><Input placeholder="e.g. HDFC Working Capital" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="lender" render={({ field }) => (
+                <FormItem><FormLabel>Lender</FormLabel><FormControl><Input placeholder="Bank or institution" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="principal" render={({ field }) => (
+                  <FormItem><FormLabel>Loan amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="interestRate" render={({ field }) => (
+                  <FormItem><FormLabel>Interest rate (% p.a.)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="e.g. 10.5" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="startDate" render={({ field }) => (
+                  <FormItem><FormLabel>Start date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="endDate" render={({ field }) => (
+                  <FormItem><FormLabel>End date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Tenure (months)</Label>
+                  <Input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    className="bg-muted/40 tabular-nums"
+                    value={tenureMonths != null ? String(tenureMonths) : ""}
+                    placeholder="Fill amount + dates"
+                  />
+                  <p className="text-[10px] text-muted-foreground">Auto from start → end</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>EMI amount (₹)</Label>
+                  <Input
+                    type="text"
+                    readOnly
+                    tabIndex={-1}
+                    className="bg-muted/40 tabular-nums"
+                    value={emiAmount != null ? emiAmount.toLocaleString("en-IN") : ""}
+                    placeholder="Auto-calculated"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {tenureMonths != null && emiAmount != null
+                      ? `${tenureMonths} mo · reducing balance`
+                      : "Needs amount, rate, and dates"}
+                  </p>
+                </div>
+              </div>
+              {isEdit && (
+                <FormField control={form.control} name="status" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "active"}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="closed">Closed</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              )}
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Create loan"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Loan installment ─────────────────────────────────────────────────────
+
+const installmentSchema = z.object({
+  date: z.string().min(1, "Date is required"),
+  amount: positiveAmountString,
+  paymentMode: z.string().min(1),
+  notes: z.string().optional(),
+  approve: z.boolean().optional(),
+});
+type InstallmentFormValues = z.infer<typeof installmentSchema>;
+
+export function PayLoanInstallmentModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  loan,
+}: ModalBaseProps & { loan: Loan | null }) {
+  const recordInstallment = useRecordLoanInstallment();
+  const isPending = recordInstallment.isPending;
+
+  const form = useForm<InstallmentFormValues>({
+    resolver: zodResolver(installmentSchema),
+    defaultValues: {
+      date: new Date().toISOString().slice(0, 10),
+      amount: "",
+      paymentMode: "bank_transfer",
+      notes: "",
+      approve: true,
+    },
+  });
+
+  useEffect(() => {
+    if (!open || !loan) return;
+    form.reset({
+      date: new Date().toISOString().slice(0, 10),
+      amount: loan.emiAmount != null ? String(loan.emiAmount) : "",
+      paymentMode: "bank_transfer",
+      notes: "",
+      approve: true,
+    });
+  }, [open, loan, form]);
+
+  const onSubmit = async (values: InstallmentFormValues) => {
+    if (!loan) return;
+    try {
+      const result = await recordInstallment.mutateAsync({
+        id: loan.id,
+        date: values.date,
+        amount: Number(values.amount),
+        paymentMode: values.paymentMode as FinancePaymentMode,
+        notes: values.notes?.trim() || undefined,
+        approve: values.approve !== false,
+      });
+      toast.success(
+        values.approve !== false
+          ? `Installment of ${formatCurrency(Number(values.amount))} recorded as expense ${result.expense.reference}`
+          : `Installment submitted as pending expense ${result.expense.reference}`,
+      );
+      onOpenChange(false);
+      onSuccess?.(result);
+    } catch (err) {
+      toastApiError(err, "Failed to record installment");
+    }
+  };
+
+  if (!open || !loan) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>Pay installment</DialogTitle>
+          <DialogDescription>
+            Records a loan EMI as a finance expense for {loan.reference}
+            {loan.remainingPrincipal != null
+              ? ` · remaining ${formatCurrency(loan.remainingPrincipal)}`
+              : ""}.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              <FormField control={form.control} name="date" render={({ field }) => (
+                <FormItem><FormLabel>Payment date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="amount" render={({ field }) => (
+                <FormItem><FormLabel>Amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="paymentMode" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Payment mode</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {(Object.keys(PAYMENT_MODE_LABELS) as FinancePaymentMode[]).map((k) => (
+                        <SelectItem key={k} value={k}>{PAYMENT_MODE_LABELS[k]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={2} placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="approve" render={({ field }) => (
+                <FormItem className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                  <div>
+                    <FormLabel className="text-sm">Mark as paid now</FormLabel>
+                    <p className="text-[10px] text-muted-foreground">Creates an approved expense and updates loan balances</p>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value !== false} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )} />
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Record payment
               </Button>
             </DialogFooter>
           </form>

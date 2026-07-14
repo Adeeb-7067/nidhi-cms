@@ -8,6 +8,7 @@ import {
 } from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { EXPENSE_CATEGORY_LABELS } from "../../constants/finance-labels.js";
+import { recognizedExpenseAmount } from "./expense-cash.service.js";
 
 function buildEntriesWithBalance(rawEntries, openingBalance = 0) {
   const sorted = [...rawEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -136,10 +137,10 @@ export async function computeExpenseCategoryLedgers() {
     const rawEntries = rows.map((e) => ({
       date: e.date,
       description: e.notes || e.reference,
-      debit: e.amount,
+      debit: recognizedExpenseAmount(e),
       credit: 0,
       reference: e.reference,
-    }));
+    })).filter((e) => e.debit > 0);
     const { entries, closingBalance } = buildEntriesWithBalance(rawEntries, 0);
     return {
       id: category,

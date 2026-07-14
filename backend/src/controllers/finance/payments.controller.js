@@ -5,6 +5,7 @@ import {
   recordIncomingPayment,
   recordOutgoingPayment,
   reverseIncomingPaymentPair,
+  reverseCashFromExpense,
 } from "../../services/finance/payment-ledger.service.js";
 import { financePaymentModes } from "../../models/schema/finance/expenses.js";
 import {
@@ -112,6 +113,12 @@ async function updatePayment(req, res) {
     updates.date = d;
   }
   if (body.amount !== undefined) {
+    if (payment.expenseId) {
+      badRequest(
+        "This payment is tied to an expense bill. Delete and re-record (or use Pay remaining) to change the amount so bill settlement stays correct.",
+        "amount",
+      );
+    }
     const amount = Number(body.amount);
     if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
     updates.amount = amount;
@@ -153,7 +160,12 @@ async function deletePayment(req, res) {
       await reverseIncomingPaymentPair(session, { paymentId: id, incomeId: payment.incomeId ?? null });
     });
   } else {
-    await FinancePayments.deleteOne({ id });
+    await runInTx(async (session) => {
+      if (payment.expenseId) {
+        await reverseCashFromExpense(session, payment.expenseId, payment.amount);
+      }
+      await FinancePayments.deleteOne({ id }, { session });
+    });
   }
   res.json({ success: true });
 }

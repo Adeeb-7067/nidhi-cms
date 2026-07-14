@@ -8,9 +8,12 @@ const expenseCategories = [
   "marketing",
   "utilities",
   "professional",
+  "loan",
   "misc",
 ];
 const expenseStatuses = ["pending", "approved", "rejected"];
+/** Cash settlement of an approved bill — independent of approval status. */
+const expensePaymentStatuses = ["unpaid", "partially_paid", "paid"];
 const financePaymentModes = ["bank_transfer", "upi", "cash", "cheque", "card", "neft"];
 
 const attachmentSchema = new Schema(
@@ -37,8 +40,18 @@ const expenseSchema = new Schema(
     projectId: { type: Number, ref: "Projects", default: null, index: true },
     employeeId: { type: Number, ref: "Users", default: null, index: true },
     vendorId: { type: Number, ref: "Vendors", default: null, index: true },
+    /** When set, this expense counts as a repayment toward that loan (on approve). */
+    loanId: { type: Number, ref: "FinanceLoans", default: null, index: true },
+    /** When set, this expense is a payment for a software subscription. */
+    subscriptionId: { type: Number, ref: "FinanceSubscriptions", default: null, index: true },
     notes: { type: String, default: null, trim: true },
     status: { type: String, enum: expenseStatuses, default: "pending", required: true, index: true },
+    /**
+     * Cash settled against this bill. Only set after approval (or auto-approve paths).
+     * Omit on legacy docs so aggregations treat them as fully paid.
+     */
+    paidAmount: { type: Number, min: 0 },
+    paymentStatus: { type: String, enum: expensePaymentStatuses, index: true },
     gstEnabled: { type: Boolean, default: false, required: true },
     gstAmount: { type: Number, default: 0, min: 0 },
     attachments: { type: [attachmentSchema], default: [] },
@@ -55,4 +68,10 @@ expenseSchema.index({ createdAt: -1 });
 const FinanceExpenses =
   mongoose.models.FinanceExpenses || mongoose.model("FinanceExpenses", expenseSchema);
 
-export { FinanceExpenses, expenseCategories, expenseStatuses, financePaymentModes };
+export {
+  FinanceExpenses,
+  expenseCategories,
+  expenseStatuses,
+  expensePaymentStatuses,
+  financePaymentModes,
+};

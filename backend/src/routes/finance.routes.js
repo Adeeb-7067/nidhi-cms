@@ -1,13 +1,15 @@
 import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { requireAuth } from "../middlewares/auth.js";
-import { requirePermission } from "../middlewares/permission.js";
+import { requirePermission, requireAnyPermission } from "../middlewares/permission.js";
 import * as dashboardCtrl from "../controllers/finance/dashboard.controller.js";
 import * as expensesCtrl from "../controllers/finance/expenses.controller.js";
 import * as incomeCtrl from "../controllers/finance/income.controller.js";
 import * as invoicesCtrl from "../controllers/finance/invoices.controller.js";
 import * as paymentsCtrl from "../controllers/finance/payments.controller.js";
 import * as budgetsCtrl from "../controllers/finance/budgets.controller.js";
+import * as loansCtrl from "../controllers/finance/loans.controller.js";
+import * as subscriptionsCtrl from "../controllers/finance/subscriptions.controller.js";
 import * as ledgersCtrl from "../controllers/finance/ledgers.controller.js";
 import * as taxCtrl from "../controllers/finance/tax.controller.js";
 import * as reportsCtrl from "../controllers/finance/reports.controller.js";
@@ -18,6 +20,7 @@ import * as syncCtrl from "../controllers/finance/sync.controller.js";
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
 const p = (module, action = "view") => [requireAuth, requirePermission(module, action)];
+const anyP = (...checks) => [requireAuth, requireAnyPermission(...checks)];
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 router.get("/finance/dashboard", ...p("finance_dashboard"), wrap(dashboardCtrl.getDashboard));
@@ -31,6 +34,11 @@ router.get("/finance/expenses/:id", ...p("finance_expenses"), wrap(expensesCtrl.
 router.patch("/finance/expenses/:id", ...p("finance_expenses", "edit"), wrap(expensesCtrl.updateExpense));
 router.post("/finance/expenses/:id/approve", ...p("finance_expenses", "edit"), wrap(expensesCtrl.approveExpense));
 router.post("/finance/expenses/:id/reject", ...p("finance_expenses", "edit"), wrap(expensesCtrl.rejectExpense));
+router.post(
+  "/finance/expenses/:id/payments",
+  ...anyP(["finance_expenses", "edit"], ["finance_payments", "create"]),
+  wrap(expensesCtrl.payExpenseRemaining),
+);
 router.delete("/finance/expenses/:id", ...p("finance_expenses", "delete"), wrap(expensesCtrl.deleteExpense));
 
 // ── Income ───────────────────────────────────────────────────────────────
@@ -64,6 +72,49 @@ router.get("/finance/budgets", ...p("finance_budgets"), wrap(budgetsCtrl.listBud
 router.post("/finance/budgets", ...p("finance_budgets", "create"), wrap(budgetsCtrl.createBudget));
 router.patch("/finance/budgets/:id", ...p("finance_budgets", "edit"), wrap(budgetsCtrl.updateBudget));
 router.delete("/finance/budgets/:id", ...p("finance_budgets", "delete"), wrap(budgetsCtrl.deleteBudget));
+
+// ── Loans ────────────────────────────────────────────────────────────────
+// List is also readable from Expenses so repayments can pick an active loan.
+router.get(
+  "/finance/loans",
+  ...anyP(["finance_loans", "view"], ["finance_expenses", "view"]),
+  wrap(loansCtrl.listLoans),
+);
+router.post("/finance/loans", ...p("finance_loans", "create"), wrap(loansCtrl.createLoan));
+router.get("/finance/loans/:id", ...p("finance_loans"), wrap(loansCtrl.getLoanById));
+router.post(
+  "/finance/loans/:id/installments",
+  ...anyP(["finance_loans", "create"], ["finance_expenses", "create"]),
+  wrap(loansCtrl.recordInstallment),
+);
+router.patch("/finance/loans/:id", ...p("finance_loans", "edit"), wrap(loansCtrl.updateLoan));
+router.delete("/finance/loans/:id", ...p("finance_loans", "delete"), wrap(loansCtrl.deleteLoan));
+
+// ── Software subscriptions ───────────────────────────────────────────────
+router.get(
+  "/finance/subscriptions",
+  ...anyP(["finance_subscriptions", "view"], ["finance_expenses", "view"]),
+  wrap(subscriptionsCtrl.listSubscriptions),
+);
+router.post("/finance/subscriptions", ...p("finance_subscriptions", "create"), wrap(subscriptionsCtrl.createSubscription));
+router.get("/finance/subscriptions/:id", ...p("finance_subscriptions"), wrap(subscriptionsCtrl.getSubscriptionById));
+router.patch("/finance/subscriptions/:id", ...p("finance_subscriptions", "edit"), wrap(subscriptionsCtrl.updateSubscription));
+router.delete("/finance/subscriptions/:id", ...p("finance_subscriptions", "delete"), wrap(subscriptionsCtrl.deleteSubscription));
+router.post(
+  "/finance/subscriptions/:id/assign",
+  ...p("finance_subscriptions", "edit"),
+  wrap(subscriptionsCtrl.assignSeat),
+);
+router.post(
+  "/finance/subscriptions/:id/assignments/:assignmentId/revoke",
+  ...p("finance_subscriptions", "edit"),
+  wrap(subscriptionsCtrl.revokeSeat),
+);
+router.post(
+  "/finance/subscriptions/:id/payments",
+  ...anyP(["finance_subscriptions", "create"], ["finance_expenses", "create"]),
+  wrap(subscriptionsCtrl.recordPayment),
+);
 
 // ── Ledgers ──────────────────────────────────────────────────────────────
 router.get("/finance/ledgers/clients", ...p("finance_ledgers"), wrap(ledgersCtrl.getClientLedgers));

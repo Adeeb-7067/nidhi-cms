@@ -58,6 +58,8 @@ export const cmsModuleGroups = [
       "finance_invoices",
       "finance_payments",
       "finance_budgets",
+      "finance_loans",
+      "finance_subscriptions",
       "finance_ledgers",
       "finance_tax",
       "finance_reports",

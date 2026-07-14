@@ -7,6 +7,7 @@ import {
   PayrollLines,
 } from "../../models/schema/index.js";
 import { getPayrollCostForPeriod } from "./finance-kpis.service.js";
+import { recognizedExpenseAmountExpr } from "./expense-cash.service.js";
 
 async function payrollCostByMonth(months) {
   const costs = await Promise.all(
@@ -34,7 +35,8 @@ export async function computeMonthlyPnl(monthsBack = 6) {
     ]),
     FinanceExpenses.aggregate([
       { $match: { date: { $gte: start }, status: "approved" } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expenses: { $sum: "$amount" } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expenses: { $sum: "$_recognized" } } },
     ]),
     payrollCostByMonth(months),
   ]);
@@ -62,7 +64,8 @@ export async function computeYearlyPnl(yearsBack = 4) {
     ]),
     FinanceExpenses.aggregate([
       { $match: { date: { $gte: start }, status: "approved" } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expenses: { $sum: "$amount" } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$date" } }, expenses: { $sum: "$_recognized" } } },
     ]),
     PayrollLines.aggregate([
       {
@@ -123,7 +126,8 @@ export async function computeProjectProfitability() {
     ]),
     FinanceExpenses.aggregate([
       { $match: { projectId: { $ne: null }, status: "approved" } },
-      { $group: { _id: "$projectId", cost: { $sum: "$amount" } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: "$projectId", cost: { $sum: "$_recognized" } } },
     ]),
   ]);
   const projectIds = [...new Set([...incomeRows.map((r) => r._id), ...expenseRows.map((r) => r._id)])];

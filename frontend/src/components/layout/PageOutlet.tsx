@@ -107,6 +107,10 @@ const FinanceInvoices = React.lazy(() => import("@/pages/finance/Invoices"));
 const FinanceInvoiceDetail = React.lazy(() => import("@/pages/finance/InvoiceDetail"));
 const FinancePayroll = React.lazy(() => import("@/pages/finance/Payroll"));
 const FinanceBudgets = React.lazy(() => import("@/pages/finance/Budgets"));
+const FinanceLoans = React.lazy(() => import("@/pages/finance/Loans"));
+const FinanceLoanDetail = React.lazy(() => import("@/pages/finance/LoanDetail"));
+const FinanceSubscriptions = React.lazy(() => import("@/pages/finance/Subscriptions"));
+const FinanceSubscriptionDetail = React.lazy(() => import("@/pages/finance/SubscriptionDetail"));
 const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
 const FinanceVendors = React.lazy(() => import("@/pages/finance/Vendors"));
@@ -635,6 +639,26 @@ export function PageOutlet() {
       <Route path="/finance/budgets">
         <RoleGate>
           <FinanceBudgets />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/loans/:id">
+        <RoleGate>
+          <FinanceLoanDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/loans">
+        <RoleGate>
+          <FinanceLoans />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/subscriptions/:id">
+        <RoleGate>
+          <FinanceSubscriptionDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/subscriptions">
+        <RoleGate>
+          <FinanceSubscriptions />
         </RoleGate>
       </Route>
       <Route path="/finance/ledgers">

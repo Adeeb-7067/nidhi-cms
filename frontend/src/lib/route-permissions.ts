@@ -75,6 +75,8 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/finance/payments/", "finance_payments"],
   ["/finance/payroll", "finance_dashboard"],
   ["/finance/budgets", "finance_budgets"],
+  ["/finance/loans", "finance_loans"],
+  ["/finance/subscriptions", "finance_subscriptions"],
   ["/finance/ledgers", "finance_ledgers"],
   ["/finance/tax", "finance_tax"],
   ["/finance/reports", "finance_reports"],

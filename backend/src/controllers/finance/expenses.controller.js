@@ -1,8 +1,17 @@
-import { FinanceExpenses, FinancePayments, Projects, vendorsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
+import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, Projects, vendorsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
-import { expenseCategories } from "../../models/schema/finance/expenses.js";
+import { expenseCategories, financePaymentModes } from "../../models/schema/finance/expenses.js";
 import { resolveVendorFields } from "../../utils/vendor-fields.js";
+import { assertLoanId, maybeAutoCloseLoan } from "./loans.controller.js";
+import { assertSubscriptionId } from "./subscriptions.controller.js";
+import { runInTx } from "../../lib/db-tx.js";
+import { recordOutgoingPayment } from "../../services/finance/payment-ledger.service.js";
+import {
+  isLegacyFullyPaidExpense,
+  outstandingExpenseAmount,
+  withExpenseSettlementView,
+} from "../../services/finance/expense-cash.service.js";
 
 async function assertExpenseVendorId(vendorId) {
   if (vendorId == null || vendorId === "") return null;
@@ -19,11 +28,28 @@ async function nextExpenseReference() {
   return `EXP-${year}-${String(seq).padStart(4, "0")}`;
 }
 
+async function resolvePayeeForExpense(expense, session) {
+  if (expense.vendorId) {
+    let q = vendorsTable.findOne({ id: expense.vendorId }).select({ companyName: 1 });
+    if (session) q = q.session(session);
+    const vendor = await q.lean();
+    if (vendor?.companyName) {
+      return { partyName: vendor.companyName, vendorId: expense.vendorId };
+    }
+  }
+  return {
+    partyName: optionalString(expense.notes)?.slice(0, 120) || expense.reference,
+    vendorId: expense.vendorId ?? null,
+  };
+}
+
 async function enrichExpenses(items) {
   const projectIds = [...new Set(items.map((e) => e.projectId).filter(Boolean))];
   const employeeIds = [...new Set(items.map((e) => e.employeeId).filter(Boolean))];
   const vendorIds = [...new Set(items.map((e) => e.vendorId).filter(Boolean))];
-  const [projects, employees, vendors] = await Promise.all([
+  const loanIds = [...new Set(items.map((e) => e.loanId).filter(Boolean))];
+  const subscriptionIds = [...new Set(items.map((e) => e.subscriptionId).filter(Boolean))];
+  const [projects, employees, vendors, loans, subscriptions] = await Promise.all([
     projectIds.length ? Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean() : [],
     employeeIds.length ? usersTable.find({ id: { $in: employeeIds } }).select({ id: 1, name: 1 }).lean() : [],
     vendorIds.length
@@ -35,14 +61,24 @@ async function enrichExpenses(items) {
           vendorNotes: 1,
         }).lean()
       : [],
+    loanIds.length
+      ? FinanceLoans.find({ id: { $in: loanIds } }).select({ id: 1, name: 1, reference: 1 }).lean()
+      : [],
+    subscriptionIds.length
+      ? FinanceSubscriptions.find({ id: { $in: subscriptionIds } }).select({ id: 1, name: 1, reference: 1 }).lean()
+      : [],
   ]);
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
   const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
   const vendorMap = new Map(vendors.map((v) => [v.id, v]));
+  const loanMap = new Map(loans.map((l) => [l.id, l]));
+  const subscriptionMap = new Map(subscriptions.map((s) => [s.id, s]));
   return items.map((e) => {
     const vendor = e.vendorId ? vendorMap.get(e.vendorId) : null;
     const vendorFields = vendor ? resolveVendorFields(vendor) : [];
-    return {
+    const loan = e.loanId ? loanMap.get(e.loanId) : null;
+    const subscription = e.subscriptionId ? subscriptionMap.get(e.subscriptionId) : null;
+    return withExpenseSettlementView({
       ...e,
       projectName: e.projectId ? projectMap.get(e.projectId) ?? null : null,
       employeeName: e.employeeId ? employeeMap.get(e.employeeId) ?? null : null,
@@ -51,17 +87,44 @@ async function enrichExpenses(items) {
       vendorSummary: vendorFields.length
         ? vendorFields.map((f) => `${f.label}: ${f.value}`).join(" · ")
         : vendor?.vendorNotes ?? null,
-    };
+      loanName: loan?.name ?? null,
+      loanReference: loan?.reference ?? null,
+      subscriptionName: subscription?.name ?? null,
+      subscriptionReference: subscription?.reference ?? null,
+    });
   });
 }
 
 async function listExpenses(req, res) {
-  const { status, category, projectId, search } = req.query;
+  const { status, category, projectId, loanId, paymentStatus, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
   const filter = {};
   if (status) filter.status = status;
   if (category) filter.category = category;
   if (projectId) filter.projectId = Number(projectId);
+  if (loanId) filter.loanId = Number(loanId);
+  if (paymentStatus) {
+    if (paymentStatus === "paid") {
+      // Include legacy approved bills (no settlement fields = treated as fully paid in UI).
+      filter.$and = [
+        ...(filter.$and ?? []),
+        {
+          $or: [
+            { paymentStatus: "paid" },
+            {
+              status: "approved",
+              $and: [
+                { $or: [{ paymentStatus: null }, { paymentStatus: { $exists: false } }] },
+                { $or: [{ paidAmount: null }, { paidAmount: { $exists: false } }] },
+              ],
+            },
+          ],
+        },
+      ];
+    } else {
+      filter.paymentStatus = paymentStatus;
+    }
+  }
   if (search) {
     const q = escapeRegex(String(search).trim());
     if (q) {
@@ -91,7 +154,41 @@ async function getExpenseById(req, res) {
   const expense = await FinanceExpenses.findOne({ id }).lean();
   if (!expense) notFound("Expense");
   const [enriched] = await enrichExpenses([expense]);
-  res.json(enriched);
+
+  const paymentRows = await FinancePayments.find({ expenseId: id })
+    .sort({ date: -1, id: -1 })
+    .select({
+      id: 1,
+      date: 1,
+      amount: 1,
+      mode: 1,
+      reference: 1,
+      receiptNumber: 1,
+      status: 1,
+      partyName: 1,
+      vendorId: 1,
+      recordedBy: 1,
+      createdAt: 1,
+    })
+    .lean();
+
+  const recorderIds = [...new Set(paymentRows.map((p) => p.recordedBy).filter(Boolean))];
+  const recorders = recorderIds.length
+    ? await usersTable.find({ id: { $in: recorderIds } }).select({ id: 1, name: 1 }).lean()
+    : [];
+  const recorderMap = new Map(recorders.map((u) => [u.id, u.name]));
+
+  const payments = paymentRows.map((p) => ({
+    ...p,
+    recordedByName: p.recordedBy ? recorderMap.get(p.recordedBy) ?? null : null,
+  }));
+
+  res.json({
+    ...enriched,
+    payments,
+    paymentCount: payments.length,
+    paymentsTotal: payments.reduce((s, p) => s + (Number(p.amount) || 0), 0),
+  });
 }
 
 async function createExpense(req, res) {
@@ -108,6 +205,13 @@ async function createExpense(req, res) {
   if (!body.paymentMode) badRequest("paymentMode is required.", "paymentMode");
 
   const vendorId = await assertExpenseVendorId(body.vendorId);
+  const loan = await assertLoanId(body.loanId);
+  const loanId = loan?.id ?? null;
+  if (loanId && loan.status === "closed") {
+    badRequest("Cannot link a repayment to a closed loan.", "loanId");
+  }
+  const subscription = await assertSubscriptionId(body.subscriptionId);
+  const subscriptionId = subscription?.id ?? null;
 
   const [id, reference] = await Promise.all([getNextSequence("finance_expenses"), nextExpenseReference()]);
 
@@ -121,6 +225,8 @@ async function createExpense(req, res) {
     projectId: body.projectId ? Number(body.projectId) : null,
     employeeId: body.employeeId ? Number(body.employeeId) : null,
     vendorId,
+    loanId,
+    subscriptionId,
     notes: optionalString(body.notes) ?? null,
     status: "pending",
     gstEnabled: Boolean(body.gstEnabled),
@@ -144,6 +250,9 @@ async function updateExpense(req, res) {
   if (body.date !== undefined) updates.date = new Date(body.date);
   if (body.category !== undefined) {
     if (body.category === "salary") badRequest("Salary cost cannot be entered as an expense.", "category");
+    if (!expenseCategories.includes(body.category)) {
+      badRequest(`category must be one of: ${expenseCategories.join(", ")}.`, "category");
+    }
     updates.category = body.category;
   }
   if (body.amount !== undefined) updates.amount = Number(body.amount);
@@ -151,6 +260,17 @@ async function updateExpense(req, res) {
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   if (body.employeeId !== undefined) updates.employeeId = body.employeeId ? Number(body.employeeId) : null;
   if (body.vendorId !== undefined) updates.vendorId = await assertExpenseVendorId(body.vendorId);
+  if (body.loanId !== undefined) {
+    const loan = await assertLoanId(body.loanId);
+    updates.loanId = loan?.id ?? null;
+    if (updates.loanId && loan.status === "closed") {
+      badRequest("Cannot link a repayment to a closed loan.", "loanId");
+    }
+  }
+  if (body.subscriptionId !== undefined) {
+    const subscription = await assertSubscriptionId(body.subscriptionId);
+    updates.subscriptionId = subscription?.id ?? null;
+  }
   if (body.notes !== undefined) updates.notes = optionalString(body.notes) ?? null;
   if (body.attachments !== undefined) updates.attachments = body.attachments;
 
@@ -159,17 +279,76 @@ async function updateExpense(req, res) {
   res.json(enriched);
 }
 
+/**
+ * Approve a bill and optionally record cash paid now.
+ * Body: { paidAmount?: number, paymentMode?: string, paymentDate?: string, paymentReference?: string }
+ * Default paidAmount = full bill (one-step approve & pay in full).
+ */
 async function approveExpense(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
   const expense = await FinanceExpenses.findOne({ id }).lean();
   if (!expense) notFound("Expense");
   if (expense.status !== "pending") badRequest("Only pending expenses can be approved.", "status");
-  const updated = await FinanceExpenses.findOneAndUpdate(
-    { id },
-    { $set: { status: "approved", approvedBy: req.user.id, approvedAt: new Date() } },
-    { new: true },
-  ).lean();
-  res.json(updated);
+
+  const body = req.body ?? {};
+  const paidNowRaw =
+    body.paidAmount !== undefined && body.paidAmount !== null && body.paidAmount !== ""
+      ? Number(body.paidAmount)
+      : Number(expense.amount);
+  if (!Number.isFinite(paidNowRaw) || paidNowRaw < 0) {
+    badRequest("paidAmount must be a number ≥ 0.", "paidAmount");
+  }
+  const paidNow = Math.round(paidNowRaw * 100) / 100;
+  if (paidNow > expense.amount + 0.0001) {
+    badRequest("paidAmount cannot exceed the bill amount.", "paidAmount");
+  }
+
+  const paymentMode = body.paymentMode || expense.paymentMode;
+  if (paidNow > 0 && !financePaymentModes.includes(paymentMode)) {
+    badRequest(`paymentMode must be one of: ${financePaymentModes.join(", ")}.`, "paymentMode");
+  }
+
+  let updated;
+
+  await runInTx(async (session) => {
+    // Start unsettled; optimistic lock on pending so concurrent approve cannot double-pay.
+    updated = await FinanceExpenses.findOneAndUpdate(
+      { id, status: "pending" },
+      {
+        $set: {
+          status: "approved",
+          approvedBy: req.user.id,
+          approvedAt: new Date(),
+          paidAmount: 0,
+          paymentStatus: "unpaid",
+        },
+      },
+      session ? { new: true, session } : { new: true },
+    ).lean();
+    if (!updated) {
+      badRequest("Only pending expenses can be approved (it may have just been approved).", "status");
+    }
+
+    if (paidNow > 0) {
+      const payee = await resolvePayeeForExpense(updated, session);
+      const result = await recordOutgoingPayment(session, {
+        partyName: payee.partyName,
+        vendorId: payee.vendorId,
+        expenseId: id,
+        amount: paidNow,
+        mode: paymentMode,
+        date: body.paymentDate || expense.date,
+        reference: optionalString(body.paymentReference),
+        recordedBy: req.user.id,
+      });
+      updated = result.expense ?? updated;
+    }
+  });
+
+  if (updated?.loanId) await maybeAutoCloseLoan(updated.loanId);
+  const fresh = await FinanceExpenses.findOne({ id }).lean();
+  const [enriched] = await enrichExpenses([fresh]);
+  res.json(enriched);
 }
 
 async function rejectExpense(req, res) {
@@ -182,7 +361,57 @@ async function rejectExpense(req, res) {
     { $set: { status: "rejected", approvedBy: req.user.id, approvedAt: new Date() } },
     { new: true },
   ).lean();
-  res.json(updated);
+  const [enriched] = await enrichExpenses([updated]);
+  res.json(enriched);
+}
+
+/**
+ * Pay more toward an approved partially paid / unpaid bill.
+ * Body: { amount, paymentMode?, date?, reference? }
+ */
+async function payExpenseRemaining(req, res) {
+  const id = parseIdParam(req.params.id, "expense id");
+  const expense = await FinanceExpenses.findOne({ id }).lean();
+  if (!expense) notFound("Expense");
+  if (expense.status !== "approved") badRequest("Only approved expenses can be paid.", "status");
+  if (isLegacyFullyPaidExpense(expense)) {
+    badRequest("This expense is already fully settled.", "status");
+  }
+  const remaining = outstandingExpenseAmount(expense);
+  if (!(remaining > 0)) badRequest("This expense has nothing remaining to pay.", "amount");
+
+  const body = req.body ?? {};
+  const amount = Math.round(Number(body.amount) * 100) / 100;
+  if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
+  if (amount > remaining + 0.0001) {
+    badRequest(`Payment exceeds remaining due of ${remaining}.`, "amount");
+  }
+
+  const mode = body.paymentMode || expense.paymentMode;
+  if (!financePaymentModes.includes(mode)) {
+    badRequest(`paymentMode must be one of: ${financePaymentModes.join(", ")}.`, "paymentMode");
+  }
+
+  let payment;
+  await runInTx(async (session) => {
+    const payee = await resolvePayeeForExpense(expense, session);
+    const result = await recordOutgoingPayment(session, {
+      partyName: payee.partyName,
+      vendorId: payee.vendorId,
+      expenseId: id,
+      amount,
+      mode,
+      date: body.date,
+      reference: optionalString(body.reference),
+      recordedBy: req.user.id,
+    });
+    payment = result.payment;
+  });
+
+  if (expense.loanId) await maybeAutoCloseLoan(expense.loanId);
+  const fresh = await FinanceExpenses.findOne({ id }).lean();
+  const [enriched] = await enrichExpenses([fresh]);
+  res.status(201).json({ expense: enriched, payment });
 }
 
 async function deleteExpense(req, res) {
@@ -207,5 +436,6 @@ export {
   updateExpense,
   approveExpense,
   rejectExpense,
+  payExpenseRemaining,
   deleteExpense,
 };

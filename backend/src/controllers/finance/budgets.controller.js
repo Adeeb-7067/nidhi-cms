@@ -3,6 +3,7 @@ import { badRequest, notFound, parseIdParam } from "../../utils/route-errors.js"
 import { budgetTypes, budgetStatuses } from "../../models/schema/finance/budgets.js";
 import { deriveBudgetStatus } from "../../utils/finance-totals.js";
 import { getPayrollCostForPeriod } from "../../services/finance/finance-kpis.service.js";
+import { recognizedExpenseAmountExpr } from "../../services/finance/expense-cash.service.js";
 
 /** "2026-27" -> [Apr 1 2026, Apr 1 2027) — Indian fiscal year. */
 function parseFiscalYear(fy) {
@@ -11,15 +12,20 @@ function parseFiscalYear(fy) {
   return { start: new Date(y, 3, 1), end: new Date(y + 1, 3, 1) };
 }
 
+async function sumRecognized(match) {
+  const rows = await FinanceExpenses.aggregate([
+    { $match: match },
+    { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+    { $group: { _id: null, total: { $sum: "$_recognized" } } },
+  ]);
+  return rows[0]?.total ?? 0;
+}
+
 async function computeSpentForBudget(budget) {
   const { start, end } = parseFiscalYear(budget.fiscalYear);
   if (budget.type === "project") {
     if (!budget.projectId) return 0;
-    const rows = await FinanceExpenses.aggregate([
-      { $match: { projectId: budget.projectId, status: "approved", date: { $gte: start, $lt: end } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    return rows[0]?.total ?? 0;
+    return sumRecognized({ projectId: budget.projectId, status: "approved", date: { $gte: start, $lt: end } });
   }
 
   // Annual/company or annual/department budgets: sum approved expenses whose
@@ -32,18 +38,11 @@ async function computeSpentForBudget(budget) {
       .lean();
     const dept = await departmentsTable.findOne({ name: budget.department }).select({ id: 1 }).lean();
     const employeeIds = dept ? deptUsers.filter((u) => u.departmentId === dept.id).map((u) => u.id) : [];
-    const rows = await FinanceExpenses.aggregate([
-      { $match: { employeeId: { $in: employeeIds }, status: "approved", date: { $gte: start, $lt: end } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]);
-    return rows[0]?.total ?? 0;
+    return sumRecognized({ employeeId: { $in: employeeIds }, status: "approved", date: { $gte: start, $lt: end } });
   }
 
-  const [expenseRows, payrollTotal] = await Promise.all([
-    FinanceExpenses.aggregate([
-      { $match: { status: "approved", date: { $gte: start, $lt: end } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
-    ]),
+  const [expenseTotal, payrollTotal] = await Promise.all([
+    sumRecognized({ status: "approved", date: { $gte: start, $lt: end } }),
     (async () => {
       let total = 0;
       for (let d = new Date(start); d < end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
@@ -53,7 +52,7 @@ async function computeSpentForBudget(budget) {
       return total;
     })(),
   ]);
-  return (expenseRows[0]?.total ?? 0) + payrollTotal;
+  return expenseTotal + payrollTotal;
 }
 
 async function listBudgets(req, res) {

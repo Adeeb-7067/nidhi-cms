@@ -121,7 +121,7 @@ export default function FinanceVendorAnalytics() {
             {
               title: "Outstanding payables",
               value: formatCompactCurrency(kpis.outstandingPayables),
-              hint: "Approved cost not yet paid",
+              hint: "Bill amount still unpaid",
               icon: Wallet,
               accent: kpis.outstandingPayables > 0 ? "red" : "green",
               alert: kpis.outstandingPayables > 0,

@@ -8,5 +8,6 @@ export const EXPENSE_CATEGORY_LABELS = {
   marketing: "Marketing & Ads",
   utilities: "Utilities & Internet",
   professional: "Professional Services",
+  loan: "Loan EMI / Repayment",
   misc: "Miscellaneous",
 };

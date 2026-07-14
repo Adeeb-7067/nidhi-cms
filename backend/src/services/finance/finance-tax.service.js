@@ -1,6 +1,7 @@
 import { FinanceInvoices, FinanceExpenses, FinanceIncome, PayrollRuns, PayrollLines, FinanceTaxDeposits, SalesInvoices } from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { calcSalesInvoiceBreakdown } from "../../utils/sales-totals.js";
+import { recognizedExpenseGstExpr } from "./expense-cash.service.js";
 
 function monthRange(year, month) {
   return { start: new Date(year, month - 1, 1), end: new Date(year, month, 1) };
@@ -50,7 +51,8 @@ async function gstCollectedInRange(start, end) {
 async function gstPaidInRange(start, end) {
   const rows = await FinanceExpenses.aggregate([
     { $match: { date: { $gte: start, $lt: end }, status: "approved", gstEnabled: true } },
-    { $group: { _id: null, total: { $sum: "$gstAmount" } } },
+    { $addFields: { _gstPaid: recognizedExpenseGstExpr() } },
+    { $group: { _id: null, total: { $sum: "$_gstPaid" } } },
   ]);
   return rows[0]?.total ?? 0;
 }

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingDown, Check, X, Pencil, Trash2 } from "lucide-react";
+import { Plus, TrendingDown, Check, X, Pencil, Trash2, Wallet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -19,8 +19,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
-import type { ExpenseCategory, ExpenseStatus } from "@/modules/finance/types";
+import {
+  formatCurrency,
+  EXPENSE_CATEGORY_LABELS,
+  EXPENSE_PAYMENT_STATUS_LABELS,
+} from "@/modules/finance/constants";
+import type { ExpenseCategory, ExpensePaymentStatus, ExpenseStatus } from "@/modules/finance/types";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -30,11 +34,13 @@ import {
   ExpenseFormModal,
   FinanceConfirmDialog,
   PayrollByDepartmentCard,
+  ApproveExpenseModal,
+  PayExpenseRemainingModal,
+  ExpenseBillDetailSheet,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import {
   useListExpenses,
-  useApproveExpense,
   useRejectExpense,
   useDeleteExpense,
   type ListExpensesParams,
@@ -46,16 +52,35 @@ import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
 
 const STATUS_TABS: (ExpenseStatus | "all")[] = ["all", "pending", "approved", "rejected"];
+const SETTLEMENT_OPTIONS: (ExpensePaymentStatus | "all")[] = ["all", "unpaid", "partially_paid", "paid"];
+
+function recognizedOf(e: Expense) {
+  if (e.status !== "approved") return 0;
+  if (e.recognizedAmount != null) return e.recognizedAmount;
+  if (e.paymentStatus == null && e.paidAmount == null) return e.amount;
+  return e.paidAmount ?? 0;
+}
+
+function remainingOf(e: Expense) {
+  if (e.status !== "approved") return 0;
+  if (e.remainingDue != null) return e.remainingDue;
+  if (e.paymentStatus == null && e.paidAmount == null) return 0;
+  return Math.max(0, e.amount - (e.paidAmount ?? 0));
+}
 
 export default function ExpensesPage() {
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
+  const [settlementFilter, setSettlementFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editExpense, setEditExpense] = useState<Expense | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
+  const [approveTarget, setApproveTarget] = useState<Expense | null>(null);
+  const [payTarget, setPayTarget] = useState<Expense | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(null);
   const { can } = usePermissions();
   const canEdit = can("finance_expenses", "edit");
   const canDelete = can("finance_expenses", "delete");
@@ -69,13 +94,14 @@ export default function ExpensesPage() {
       limit: 20,
       search: search || undefined,
       status: statusTab === "all" ? undefined : (statusTab as ExpenseStatus),
+      paymentStatus:
+        settlementFilter === "all" ? undefined : (settlementFilter as ExpensePaymentStatus),
       category: categoryFilter === "all" ? undefined : (categoryFilter as ExpenseCategory),
       projectId: projectFilter === "all" ? undefined : Number(projectFilter),
     }),
-    [page, search, statusTab, categoryFilter, projectFilter],
+    [page, search, statusTab, settlementFilter, categoryFilter, projectFilter],
   );
   const { data, isLoading, isError, refetch } = useListExpenses(params);
-  const approveExpense = useApproveExpense();
   const rejectExpense = useRejectExpense();
 
   const expenses = data?.expenses ?? [];
@@ -83,24 +109,36 @@ export default function ExpensesPage() {
 
   const now = new Date();
   const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const monthlyTotal = expenses
+  const monthlyPaid = expenses
     .filter((e) => e.date.startsWith(currentMonthKey) && e.status === "approved")
-    .reduce((s, e) => s + e.amount, 0);
-  const pageApprovedTotal = expenses.filter((e) => e.status === "approved").reduce((s, e) => s + e.amount, 0);
+    .reduce((s, e) => s + recognizedOf(e), 0);
+  const pageDueTotal = expenses.reduce((s, e) => s + remainingOf(e), 0);
   const pendingCount = expenses.filter((e) => e.status === "pending").length;
+  const openBillsCount = expenses.filter((e) => e.status === "approved" && remainingOf(e) > 0).length;
 
-  const handleApproval = async (id: number, action: "approve" | "reject") => {
+  const refreshAll = () => {
+    refetch();
+  };
+
+  const handleReject = async (expense: Expense) => {
     try {
-      if (action === "approve") await approveExpense.mutateAsync(id);
-      else await rejectExpense.mutateAsync(id);
-      toast.success(`Expense #${id} ${action === "approve" ? "approved" : "rejected"}`);
+      await rejectExpense.mutateAsync(expense.id);
+      toast.success(`Expense ${expense.reference} rejected`);
+      refreshAll();
     } catch (err) {
-      toastApiError(err, `Failed to ${action} expense`);
+      toastApiError(err, "Failed to reject expense");
     }
   };
 
-  const openCreate = () => { setEditExpense(null); setDrawerOpen(true); };
-  const openEdit = (expense: Expense) => { setEditExpense(expense); setDrawerOpen(true); };
+  const openCreate = () => {
+    setEditExpense(null);
+    setDrawerOpen(true);
+  };
+  const openEdit = (expense: Expense) => {
+    setDetailId(null);
+    setEditExpense(expense);
+    setDrawerOpen(true);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -108,14 +146,14 @@ export default function ExpensesPage() {
       await deleteExpense.mutateAsync(deleteTarget.id);
       toast.success(`Expense ${deleteTarget.reference} deleted`);
       setDeleteTarget(null);
-      refetch();
+      refreshAll();
     } catch (err) {
       toastApiError(err, "Failed to delete expense");
     }
   };
 
   if (isLoading) {
-    return <FinanceListPageSkeleton kpiCount={3} />;
+    return <FinanceListPageSkeleton kpiCount={4} />;
   }
   if (isError) {
     return (
@@ -129,7 +167,7 @@ export default function ExpensesPage() {
     <PortalPageShell>
       <FinancePageHeader
         title="Expenses"
-        description="Track, approve, and analyse company spending."
+        description="Bills, cash paid, and dues — open any row for full payment history. P&L uses Paid only."
         breadcrumbs={[{ label: "Finance", href: "/finance" }, { label: "Expenses" }]}
         actions={
           <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
@@ -141,9 +179,31 @@ export default function ExpensesPage() {
 
       <PortalKpiGrid
         items={[
-          { title: "This month (approved)", value: formatCurrency(monthlyTotal), icon: TrendingDown, accent: "red", delay: 0 },
-          { title: "Approved on this page", value: formatCurrency(pageApprovedTotal), icon: TrendingDown, accent: "amber", delay: 1 },
-          { title: "Pending approvals", value: pendingCount, icon: TrendingDown, accent: "violet", alert: pendingCount > 0, delay: 2 },
+          { title: "Paid (this page · month)", value: formatCurrency(monthlyPaid), icon: TrendingDown, accent: "red", delay: 0 },
+          {
+            title: "Vendor dues (this page)",
+            value: formatCurrency(pageDueTotal),
+            icon: Wallet,
+            accent: "amber",
+            alert: pageDueTotal > 0,
+            delay: 1,
+          },
+          {
+            title: "Bills awaiting payment",
+            value: openBillsCount,
+            icon: Wallet,
+            accent: "violet",
+            alert: openBillsCount > 0,
+            delay: 2,
+          },
+          {
+            title: "Pending approvals",
+            value: pendingCount,
+            icon: TrendingDown,
+            accent: "violet",
+            alert: pendingCount > 0,
+            delay: 3,
+          },
         ]}
       />
 
@@ -151,31 +211,81 @@ export default function ExpensesPage() {
 
       <FinanceFilterBar
         search={search}
-        onSearchChange={(v) => { setSearch(v); setPage(1); }}
+        onSearchChange={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
         searchPlaceholder="Search reference, vendor, notes…"
         onExport={() => toast.success("Expenses export started")}
       >
-        <Select value={categoryFilter} onValueChange={(v) => { setCategoryFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-full sm:w-[180px] h-9"><SelectValue placeholder="Category" /></SelectTrigger>
+        <Select
+          value={settlementFilter}
+          onValueChange={(v) => {
+            setSettlementFilter(v);
+            setPage(1);
+            if (v !== "all" && statusTab !== "approved" && statusTab !== "all") {
+              setStatusTab("approved");
+            }
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-[180px] h-9">
+            <SelectValue placeholder="Settlement" />
+          </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {(Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[]).map((k) => (
-              <SelectItem key={k} value={k}>{EXPENSE_CATEGORY_LABELS[k]}</SelectItem>
+            {SETTLEMENT_OPTIONS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s === "all" ? "All settlements" : EXPENSE_PAYMENT_STATUS_LABELS[s]}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        <Select value={projectFilter} onValueChange={(v) => { setProjectFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-full sm:w-[200px] h-9"><SelectValue placeholder="Project" /></SelectTrigger>
+        <Select
+          value={categoryFilter}
+          onValueChange={(v) => {
+            setCategoryFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-[180px] h-9">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {(Object.keys(EXPENSE_CATEGORY_LABELS) as ExpenseCategory[]).map((k) => (
+              <SelectItem key={k} value={k}>
+                {EXPENSE_CATEGORY_LABELS[k]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={projectFilter}
+          onValueChange={(v) => {
+            setProjectFilter(v);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full sm:w-[200px] h-9">
+            <SelectValue placeholder="Project" />
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All projects</SelectItem>
             {(projectsData?.projects ?? []).map((p) => (
-              <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
+              <SelectItem key={p.id} value={String(p.id)}>
+                {p.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </FinanceFilterBar>
 
-      <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); setPage(1); }}>
+      <Tabs
+        value={statusTab}
+        onValueChange={(v) => {
+          setStatusTab(v);
+          setPage(1);
+        }}
+      >
         <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
           {STATUS_TABS.map((s) => (
             <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
@@ -186,7 +296,13 @@ export default function ExpensesPage() {
       </Tabs>
 
       {expenses.length === 0 ? (
-        <FinanceEmptyState icon={TrendingDown} title="No expenses found" description="Adjust filters or add a new expense." actionLabel="Add expense" onAction={openCreate} />
+        <FinanceEmptyState
+          icon={TrendingDown}
+          title="No expenses found"
+          description="Adjust filters or add a new expense."
+          actionLabel="Add expense"
+          onAction={openCreate}
+        />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
@@ -194,83 +310,211 @@ export default function ExpensesPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Date</TableHead>
                 <TableHead className="text-xs">Reference</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
                 <TableHead className="text-xs">Vendor</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Mode</TableHead>
+                <TableHead className="text-xs">Settlement</TableHead>
+                <TableHead className="text-xs text-right">Bill</TableHead>
+                <TableHead className="text-xs text-right">Paid</TableHead>
+                <TableHead className="text-xs text-right">Due</TableHead>
                 <TableHead className="text-xs text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {expenses.map((e) => (
-                <TableRow key={e.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs font-mono">{e.reference}</TableCell>
-                  <TableCell><FinanceStatusBadge variant="expenseCategory" value={e.category} /></TableCell>
-                  <TableCell className="text-xs max-w-[180px]">
-                    <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
-                    {e.vendorSummary ? (
-                      <div className="text-[10px] text-muted-foreground truncate" title={e.vendorSummary}>
-                        {e.vendorSummary}
+              {expenses.map((e) => {
+                const due = remainingOf(e);
+                return (
+                  <TableRow
+                    key={e.id}
+                    className="hover:bg-muted/30 cursor-pointer"
+                    onClick={() => setDetailId(e.id)}
+                  >
+                    <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
+                    <TableCell className="text-xs font-mono">{e.reference}</TableCell>
+                    <TableCell className="text-xs max-w-[160px]">
+                      <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
+                      <div className="text-[10px] text-muted-foreground truncate">
+                        {EXPENSE_CATEGORY_LABELS[e.category]}
                       </div>
-                    ) : null}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{e.projectName ?? "—"}</TableCell>
-                  <TableCell><FinanceStatusBadge variant="expense" value={e.status} /></TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(e.amount)}</TableCell>
-                  <TableCell className="text-xs">{PAYMENT_MODE_LABELS[e.paymentMode]}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {e.status === "pending" && (
-                        <>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-green-600" onClick={() => handleApproval(e.id, "approve")} title="Approve">
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-amber-600" onClick={() => handleApproval(e.id, "reject")} title="Reject">
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                          {canEdit && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(e)} title="Edit">
+                    </TableCell>
+                    <TableCell onClick={(ev) => ev.stopPropagation()}>
+                      <FinanceStatusBadge variant="expense" value={e.status} />
+                    </TableCell>
+                    <TableCell onClick={(ev) => ev.stopPropagation()}>
+                      {e.status === "approved" && e.paymentStatus ? (
+                        <FinanceStatusBadge variant="expensePayment" value={e.paymentStatus} />
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-right font-medium tabular-nums">
+                      {formatCurrency(e.amount)}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
+                      {e.status === "approved" ? formatCurrency(recognizedOf(e)) : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-right tabular-nums">
+                      {e.status === "approved" && due > 0 ? (
+                        <span className="text-amber-700 font-medium">{formatCurrency(due)}</span>
+                      ) : e.status === "approved" ? (
+                        formatCurrency(0)
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(ev) => ev.stopPropagation()}>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => setDetailId(e.id)}
+                          title="View bill"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                        {e.status === "pending" && canEdit && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-green-600"
+                              onClick={() => setApproveTarget(e)}
+                              title="Approve"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-amber-600"
+                              onClick={() => handleReject(e)}
+                              title="Reject"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0"
+                              onClick={() => openEdit(e)}
+                              title="Edit"
+                            >
                               <Pencil className="h-3.5 w-3.5" />
                             </Button>
-                          )}
-                        </>
-                      )}
-                      {canDelete && e.status !== "approved" && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(e)} title="Delete">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {e.status === "approved" && <span className="text-[10px] text-muted-foreground">—</span>}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                          </>
+                        )}
+                        {e.status === "approved" && due > 0 && canEdit && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-primary"
+                            onClick={() => setPayTarget(e)}
+                            title="Pay remaining"
+                          >
+                            <Wallet className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDelete && e.status !== "approved" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive"
+                            onClick={() => setDeleteTarget(e)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
           <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
-            <span>{total} total</span>
+            <span>{total} total · click a row for full bill detail</span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={expenses.length < 20} onClick={() => setPage((p) => p + 1)}>Next</Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={expenses.length < 20}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Next
+              </Button>
             </div>
           </div>
         </div>
       )}
 
+      <ExpenseBillDetailSheet
+        expenseId={detailId}
+        open={detailId != null}
+        onOpenChange={(open) => {
+          if (!open) setDetailId(null);
+        }}
+        canEdit={canEdit}
+        onApprove={(e) => {
+          setDetailId(null);
+          setApproveTarget(e);
+        }}
+        onReject={(e) => handleReject(e)}
+        onEdit={openEdit}
+        onPayRemaining={(e) => {
+          setDetailId(null);
+          setPayTarget(e);
+        }}
+      />
+
       <ExpenseFormModal
         open={drawerOpen}
-        onOpenChange={(open) => { setDrawerOpen(open); if (!open) setEditExpense(null); }}
+        onOpenChange={(open) => {
+          setDrawerOpen(open);
+          if (!open) setEditExpense(null);
+        }}
         expense={editExpense}
-        onSuccess={() => { refetch(); setEditExpense(null); }}
+        onSuccess={() => {
+          refreshAll();
+          setEditExpense(null);
+        }}
       />
+
+      <ApproveExpenseModal
+        open={!!approveTarget}
+        onOpenChange={(open) => {
+          if (!open) setApproveTarget(null);
+        }}
+        expense={approveTarget}
+        onSuccess={refreshAll}
+      />
+
+      <PayExpenseRemainingModal
+        open={!!payTarget}
+        onOpenChange={(open) => {
+          if (!open) setPayTarget(null);
+        }}
+        expense={payTarget}
+        onSuccess={refreshAll}
+      />
+
       <FinanceConfirmDialog
-        open={deleteTarget != null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
         title="Delete expense?"
-        description={deleteTarget ? `${deleteTarget.reference} will be permanently removed.` : undefined}
+        description={deleteTarget ? `Delete ${deleteTarget.reference}? This cannot be undone.` : undefined}
         loading={deleteExpense.isPending}
         onConfirm={handleDelete}
       />

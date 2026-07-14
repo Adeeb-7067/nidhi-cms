@@ -949,7 +949,7 @@ export async function revertPayrollRun(runId, actorId) {
     action: "payroll_reverted",
     entityType: "payroll_run",
     entityId: runId,
-    severity: "high",
+    severity: "critical",
     metadata: { year: run.year, month: run.month },
   });
 

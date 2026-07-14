@@ -520,7 +520,12 @@ export default function LeadDetail() {
           <p className="text-sm font-medium flex-1" style={{ color: "#065F46" }}>
             This lead has been <strong>converted</strong> to a customer.
           </p>
-          <Button size="sm" variant="outline" className="h-7 text-xs flex-shrink-0" asChild>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs flex-shrink-0 border-emerald-800/40 bg-white text-emerald-900 hover:bg-emerald-50 hover:text-emerald-950"
+            asChild
+          >
             <Link href={`/sales/customers/${lead.customerId}`}>View customer</Link>
           </Button>
         </div>

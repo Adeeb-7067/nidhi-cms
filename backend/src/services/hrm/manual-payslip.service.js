@@ -206,7 +206,7 @@ export async function deleteManualPayslip(id, actorId) {
     action: "manual_payslip_deleted",
     entityType: "manual_payslip",
     entityId: id,
-    severity: "high",
+    severity: "critical",
     metadata: { userId: row.userId, year: row.year, month: row.month },
   });
   return { message: "Manual payslip deleted" };

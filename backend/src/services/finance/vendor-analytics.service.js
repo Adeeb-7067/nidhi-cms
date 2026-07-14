@@ -1,14 +1,15 @@
 import {
   FinanceExpenses,
-  FinancePayments,
   vendorsTable,
 } from "../../models/schema/index.js";
+import {
+  outstandingExpenseAmount,
+  recognizedExpenseAmountExpr,
+} from "./expense-cash.service.js";
 
 /**
- * Vendor spend analytics — everything here is derived from finance data only,
- * since vendors are payees on approved expenses and outgoing payments. "Spend"
- * is recognised cost (approved expenses linked to a vendor); outstanding
- * payables settle that cost against completed outgoing payments.
+ * Vendor spend analytics — spend is cash recognised (paid against approved bills).
+ * Outstanding payables = bill amount − paidAmount on approved vendor expenses.
  */
 
 function monthBounds(date = new Date()) {
@@ -42,52 +43,43 @@ export async function computeVendorAnalytics(period = "current", monthsBack = 6)
     topVendorsAgg,
     categoryAgg,
     monthlyExpenseRows,
-    expenseTotalsByVendor,
-    paymentTotalsByVendor,
+    approvedVendorExpenses,
   ] = await Promise.all([
     FinanceExpenses.aggregate([
       { $match: { ...vendorMatch, date: { $gte: current.start, $lt: current.end } } },
-      { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: null, total: { $sum: "$_recognized" }, count: { $sum: 1 } } },
     ]),
     FinanceExpenses.aggregate([
       { $match: { ...vendorMatch, date: { $gte: previous.start, $lt: previous.end } } },
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: null, total: { $sum: "$_recognized" } } },
     ]),
     vendorsTable.countDocuments({}),
     FinanceExpenses.aggregate([
       { $match: vendorMatch },
-      { $group: { _id: "$vendorId", spend: { $sum: "$amount" }, count: { $sum: 1 } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: "$vendorId", spend: { $sum: "$_recognized" }, count: { $sum: 1 } } },
       { $sort: { spend: -1 } },
       { $limit: 8 },
     ]),
     FinanceExpenses.aggregate([
       { $match: vendorMatch },
-      { $group: { _id: "$category", value: { $sum: "$amount" }, count: { $sum: 1 } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
+      { $group: { _id: "$category", value: { $sum: "$_recognized" }, count: { $sum: 1 } } },
       { $sort: { value: -1 } },
     ]),
     FinanceExpenses.aggregate([
       { $match: { ...vendorMatch, date: { $gte: trendStart } } },
+      { $addFields: { _recognized: recognizedExpenseAmountExpr() } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m", date: "$date" } },
-          spend: { $sum: "$amount" },
+          spend: { $sum: "$_recognized" },
         },
       },
     ]),
-    FinanceExpenses.aggregate([
-      { $match: vendorMatch },
-      { $group: { _id: "$vendorId", total: { $sum: "$amount" } } },
-    ]),
-    FinancePayments.aggregate([
-      {
-        $match: {
-          direction: "outgoing",
-          status: "completed",
-          vendorId: { $ne: null },
-        },
-      },
-      { $group: { _id: "$vendorId", total: { $sum: "$amount" } } },
-    ]),
+    FinanceExpenses.find(vendorMatch).select({ vendorId: 1, amount: 1, paidAmount: 1, paymentStatus: 1, status: 1 }).lean(),
   ]);
 
   // Resolve vendor names for the top-spend list (single round-trip).
@@ -107,13 +99,12 @@ export async function computeVendorAnalytics(period = "current", monthsBack = 6)
     count: r.count,
   }));
 
-  // Outstanding payables = recognised cost not yet settled by outgoing payments.
-  const paidByVendor = new Map(paymentTotalsByVendor.map((r) => [r._id, r.total]));
+  // Outstanding = remaining due on approved vendor bills (cash not yet paid).
   let outstandingPayables = 0;
   const activeVendorIds = new Set();
-  for (const r of expenseTotalsByVendor) {
-    activeVendorIds.add(r._id);
-    const owed = r.total - (paidByVendor.get(r._id) ?? 0);
+  for (const e of approvedVendorExpenses) {
+    if (e.vendorId) activeVendorIds.add(e.vendorId);
+    const owed = outstandingExpenseAmount(e);
     if (owed > 0) outstandingPayables += owed;
   }
 

@@ -5,6 +5,9 @@ import type {
   IncomeStatus,
   PaymentMode,
   BudgetStatus,
+  LoanStatus,
+  SubscriptionStatus,
+  SubscriptionBillingCycle,
   PayrollStatus,
 } from "./types";
 
@@ -27,6 +30,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   marketing: "Marketing & Ads",
   utilities: "Utilities & Internet",
   professional: "Professional Services",
+  loan: "Loan EMI / Repayment",
   misc: "Miscellaneous",
 };
 
@@ -34,6 +38,12 @@ export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
   pending: "Pending Approval",
   approved: "Approved",
   rejected: "Rejected",
+};
+
+export const EXPENSE_PAYMENT_STATUS_LABELS: Record<"unpaid" | "partially_paid" | "paid", string> = {
+  unpaid: "Unpaid",
+  partially_paid: "Partially paid",
+  paid: "Paid",
 };
 
 export const INCOME_STATUS_LABELS: Record<IncomeStatus, string> = {
@@ -63,6 +73,21 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
   on_track: "On Track",
   warning: "Near Limit",
   exceeded: "Exceeded",
+};
+
+export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
+  active: "Active",
+  closed: "Closed",
+};
+
+export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
+  active: "Active",
+  cancelled: "Cancelled",
+};
+
+export const SUBSCRIPTION_BILLING_LABELS: Record<SubscriptionBillingCycle, string> = {
+  monthly: "Monthly",
+  yearly: "Yearly",
 };
 
 export const PAYROLL_STATUS_LABELS: Record<PayrollStatus, string> = {

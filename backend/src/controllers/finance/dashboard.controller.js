@@ -3,6 +3,7 @@ import {
   computeDashboardKpis,
   computeExpenseCategoryBreakdown,
   computeMonthlyRevenueVsExpense,
+  computeDashboardExtras,
 } from "../../services/finance/finance-kpis.service.js";
 import { computeRevenueTrend } from "../../services/finance/finance-reports.service.js";
 
@@ -16,12 +17,21 @@ async function sweepOverdueInvoices() {
 async function getDashboard(req, res) {
   await sweepOverdueInvoices();
   const period = req.query.period === "previous" ? "previous" : "current";
-  const [kpis, expenseBreakdown, monthlyTrend] = await Promise.all([
+  const [kpis, expenseBreakdown, monthlyTrend, extras] = await Promise.all([
     computeDashboardKpis(period),
-    computeExpenseCategoryBreakdown(),
+    computeExpenseCategoryBreakdown(period),
     computeMonthlyRevenueVsExpense(),
+    computeDashboardExtras(),
   ]);
-  res.json({ kpis, expenseBreakdown, monthlyTrend, period });
+  res.json({
+    kpis,
+    expenseBreakdown,
+    monthlyTrend,
+    cashFlowTrend: extras.cashFlowTrend,
+    apAging: extras.apAging,
+    arAging: extras.arAging,
+    period,
+  });
 }
 
 async function getRevenueTrend(req, res) {

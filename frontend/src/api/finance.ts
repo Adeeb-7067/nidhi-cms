@@ -5,8 +5,9 @@ import { apiUrl } from "@/lib/api-base";
 // ─── Types ────────────────────────────────────────────────────────────────
 
 export type ExpenseCategory =
-  | "software" | "hardware" | "travel" | "office" | "marketing" | "utilities" | "professional" | "misc";
+  | "software" | "hardware" | "travel" | "office" | "marketing" | "utilities" | "professional" | "loan" | "misc";
 export type ExpenseStatus = "pending" | "approved" | "rejected";
+export type ExpensePaymentStatus = "unpaid" | "partially_paid" | "paid";
 export type FinancePaymentMode = "bank_transfer" | "upi" | "cash" | "cheque" | "card" | "neft";
 export type IncomeStatus = "received" | "pending" | "partial";
 export type FinanceInvoiceStatus = "unpaid" | "partially_paid" | "paid" | "overdue" | "cancelled";
@@ -14,6 +15,9 @@ export type PaymentDirection = "incoming" | "outgoing";
 export type FinancePaymentStatus = "completed" | "pending" | "failed";
 export type BudgetType = "annual" | "project";
 export type BudgetStatus = "on_track" | "warning" | "exceeded";
+export type LoanStatus = "active" | "closed";
+export type SubscriptionStatus = "active" | "cancelled";
+export type SubscriptionBillingCycle = "monthly" | "yearly";
 export type LedgerType = "client" | "vendor" | "expense" | "bank";
 export type FinanceLedgerSource = "finance" | "sales";
 export type TaxPeriodType = "monthly" | "quarterly" | "annual";
@@ -33,6 +37,11 @@ export interface Expense {
   date: string;
   category: ExpenseCategory;
   amount: number;
+  /** Cash settled against the bill — this is what hits P&L / budgets. */
+  paidAmount?: number;
+  paymentStatus?: ExpensePaymentStatus | null;
+  remainingDue?: number;
+  recognizedAmount?: number;
   paymentMode: FinancePaymentMode;
   projectId: number | null;
   projectName?: string | null;
@@ -42,6 +51,12 @@ export interface Expense {
   vendorName?: string | null;
   vendorFields?: FinanceVendorField[];
   vendorSummary?: string | null;
+  loanId: number | null;
+  loanName?: string | null;
+  loanReference?: string | null;
+  subscriptionId: number | null;
+  subscriptionName?: string | null;
+  subscriptionReference?: string | null;
   notes: string | null;
   status: ExpenseStatus;
   gstEnabled: boolean;
@@ -152,6 +167,85 @@ export interface Budget {
   department: string | null;
 }
 
+export interface LoanPayment {
+  id: number;
+  reference: string;
+  date: string;
+  amount: number;
+  status: ExpenseStatus;
+  notes: string | null;
+  paymentMode: FinancePaymentMode;
+  principalPortion: number | null;
+  interestPortion: number | null;
+  outstandingAfter: number | null;
+}
+
+export interface Loan {
+  id: number;
+  reference: string;
+  name: string;
+  lender: string;
+  principal: number;
+  interestRate: number | null;
+  startDate: string;
+  endDate: string | null;
+  tenureMonths: number | null;
+  emiAmount: number | null;
+  status: LoanStatus;
+  notes: string | null;
+  /** Principal repaid (from approved installments). */
+  paidAmount: number;
+  remainingAmount: number;
+  totalCashPaid?: number;
+  totalPrincipalPaid?: number;
+  totalInterestPaid?: number;
+  remainingPrincipal?: number;
+  estimatedTotalInterest?: number | null;
+  estimatedTotalPayable?: number | null;
+  installmentsPaid?: number;
+  installmentsPending?: number;
+  createdAt?: string;
+  payments?: LoanPayment[];
+}
+
+export interface SubscriptionAssignment {
+  id: number;
+  employeeId: number;
+  employeeName?: string | null;
+  seatEmail: string | null;
+  assignedAt: string;
+  revokedAt: string | null;
+  notes: string | null;
+  isActive: boolean;
+}
+
+export interface SoftwareSubscription {
+  id: number;
+  reference: string;
+  name: string;
+  vendorName: string | null;
+  plan: string | null;
+  billingCycle: SubscriptionBillingCycle;
+  seatsPurchased: number;
+  costAmount: number;
+  renewalDate: string | null;
+  status: SubscriptionStatus;
+  notes: string | null;
+  seatsUsed: number;
+  seatsAvailable: number;
+  assignments: SubscriptionAssignment[];
+  createdAt?: string;
+  expenses?: {
+    id: number;
+    reference: string;
+    date: string;
+    amount: number;
+    status: ExpenseStatus;
+    notes: string | null;
+    paymentMode: FinancePaymentMode;
+  }[];
+}
+
 export interface LedgerEntry {
   id: number;
   date: string;
@@ -218,6 +312,8 @@ export interface FinanceDashboardKpis {
   netProfit: number;
   pendingInvoices: number;
   overdueAmount: number;
+  /** Vendor bills still unpaid (cash not yet paid). */
+  outstandingPayables?: number;
   trends: {
     totalIncome: number;
     totalExpenses: number;
@@ -225,6 +321,22 @@ export interface FinanceDashboardKpis {
     pendingInvoices: number;
     overdueAmount: number;
   };
+}
+
+export interface FinanceDashboardAgingBucket {
+  bucket: string;
+  count: number;
+  amount: number;
+}
+
+export interface FinanceDashboardResult {
+  kpis: FinanceDashboardKpis;
+  expenseBreakdown: { name: string; count: number; value: number }[];
+  monthlyTrend: { month: string; revenue: number; expense: number }[];
+  cashFlowTrend?: { month: string; inflow: number; outflow: number }[];
+  apAging?: FinanceDashboardAgingBucket[];
+  arAging?: FinanceDashboardAgingBucket[];
+  period: string;
 }
 
 export interface VendorAnalyticsKpis {
@@ -274,6 +386,10 @@ export const financeKeys = {
   payments: (params?: object) => ["finance-payments", params] as const,
   payment: (id: number) => ["finance-payment", id] as const,
   budgets: (params?: object) => ["finance-budgets", params] as const,
+  loans: (params?: object) => ["finance-loans", params] as const,
+  loan: (id: number) => ["finance-loan", id] as const,
+  subscriptions: (params?: object) => ["finance-subscriptions", params] as const,
+  subscription: (id: number) => ["finance-subscription", id] as const,
   clientLedgers: (id?: number | null) => ["finance-client-ledgers", id] as const,
   vendorLedgers: (id?: number | null) => ["finance-vendor-ledgers", id] as const,
   expenseCategoryLedgers: () => ["finance-expense-category-ledgers"] as const,
@@ -301,7 +417,7 @@ function toQueryString(params?: object) {
 // ─── Dashboard ────────────────────────────────────────────────────────────
 
 export function useFinanceDashboard(period: "current" | "previous" = "current", enabled = true) {
-  return useQuery<{ kpis: FinanceDashboardKpis; expenseBreakdown: { name: string; count: number; value: number }[]; monthlyTrend: { month: string; revenue: number; expense: number }[]; period: string }>({
+  return useQuery<FinanceDashboardResult>({
     queryKey: financeKeys.dashboard(period),
     queryFn: () => customFetch(apiUrl(`/api/finance/dashboard?period=${period}`)),
     enabled,
@@ -324,6 +440,8 @@ export interface ListExpensesParams {
   status?: ExpenseStatus;
   category?: ExpenseCategory;
   projectId?: number;
+  loanId?: number;
+  paymentStatus?: ExpensePaymentStatus;
   search?: string;
   page?: number;
   limit?: number;
@@ -338,15 +456,58 @@ export function useListExpenses(params?: ListExpensesParams, enabled = true) {
   });
 }
 
+export interface ExpensePaymentHistoryItem {
+  id: number;
+  date: string;
+  amount: number;
+  mode: FinancePaymentMode;
+  reference: string;
+  receiptNumber: string;
+  status: FinancePaymentStatus;
+  partyName: string;
+  vendorId: number | null;
+  recordedBy: number | null;
+  recordedByName?: string | null;
+  createdAt?: string;
+}
+
+export type ExpenseDetail = Expense & {
+  payments: ExpensePaymentHistoryItem[];
+  paymentCount: number;
+  paymentsTotal: number;
+};
+
+export function useGetExpense(id: number, enabled = true) {
+  return useQuery<ExpenseDetail>({
+    queryKey: financeKeys.expense(id),
+    queryFn: () => customFetch(apiUrl(`/api/finance/expenses/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 10_000,
+  });
+}
+
+function invalidateExpenseLinkedFinance(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+  qc.invalidateQueries({ queryKey: ["finance-expense"] });
+  qc.invalidateQueries({ queryKey: ["finance-loans"] });
+  qc.invalidateQueries({ queryKey: ["finance-subscriptions"] });
+  qc.invalidateQueries({ queryKey: ["finance-payments"] });
+  qc.invalidateQueries({ queryKey: ["finance-payments-summary"] });
+  qc.invalidateQueries({ queryKey: ["finance-budgets"] });
+  qc.invalidateQueries({ queryKey: ["finance-pnl"] });
+  qc.invalidateQueries({ queryKey: ["finance-vendor-analytics"] });
+  qc.invalidateQueries({ queryKey: ["finance-tax-summary"] });
+  qc.invalidateQueries({ queryKey: ["finance-expense-category-ledgers"] });
+  qc.invalidateQueries({ queryKey: ["finance-vendor-ledgers"] });
+  qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+}
+
 export function useCreateExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: Partial<Expense>) =>
       customFetch<Expense>(apiUrl("/api/finance/expenses"), { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
-    },
+    onSuccess: () => invalidateExpenseLinkedFinance(qc),
   });
 }
 
@@ -355,20 +516,51 @@ export function useUpdateExpense() {
   return useMutation({
     mutationFn: ({ id, ...body }: Partial<Expense> & { id: number }) =>
       customFetch<Expense>(apiUrl(`/api/finance/expenses/${id}`), { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
-    },
+    onSuccess: () => invalidateExpenseLinkedFinance(qc),
   });
 }
 
 export function useApproveExpense() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => customFetch<Expense>(apiUrl(`/api/finance/expenses/${id}/approve`), { method: "POST" }),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      paidAmount?: number;
+      paymentMode?: FinancePaymentMode;
+      paymentDate?: string;
+      paymentReference?: string;
+    }) =>
+      customFetch<Expense>(apiUrl(`/api/finance/expenses/${id}/approve`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => invalidateExpenseLinkedFinance(qc),
+  });
+}
+
+export function usePayExpenseRemaining() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      amount: number;
+      paymentMode?: FinancePaymentMode;
+      date?: string;
+      reference?: string;
+    }) =>
+      customFetch<{ expense: Expense; payment: unknown }>(apiUrl(`/api/finance/expenses/${id}/payments`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      invalidateExpenseLinkedFinance(qc);
+      qc.invalidateQueries({ queryKey: ["finance-payments"] });
     },
   });
 }
@@ -377,7 +569,7 @@ export function useRejectExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => customFetch<Expense>(apiUrl(`/api/finance/expenses/${id}/reject`), { method: "POST" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-expenses"] }),
+    onSuccess: () => invalidateExpenseLinkedFinance(qc),
   });
 }
 
@@ -385,7 +577,7 @@ export function useDeleteExpense() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => customFetch(apiUrl(`/api/finance/expenses/${id}`), { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-expenses"] }),
+    onSuccess: () => invalidateExpenseLinkedFinance(qc),
   });
 }
 
@@ -428,7 +620,7 @@ export function useRecordIncome() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["finance-income"] });
       qc.invalidateQueries({ queryKey: ["finance-payments"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
       if (vars.invoiceId) {
         qc.invalidateQueries({ queryKey: financeKeys.invoice(vars.invoiceId) });
         qc.invalidateQueries({ queryKey: ["finance-invoices"] });
@@ -463,7 +655,7 @@ export function useDeleteIncome() {
       qc.invalidateQueries({ queryKey: ["finance-income"] });
       qc.invalidateQueries({ queryKey: ["finance-payments"] });
       qc.invalidateQueries({ queryKey: ["finance-invoices"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
     },
   });
 }
@@ -539,7 +731,7 @@ export function useCreateInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-invoices"] });
       qc.invalidateQueries({ queryKey: financeKeys.invoiceAging() });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
     },
   });
 }
@@ -573,7 +765,7 @@ export function useDeleteInvoice() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-invoices"] });
       qc.invalidateQueries({ queryKey: financeKeys.invoiceAging() });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
     },
   });
 }
@@ -668,7 +860,7 @@ export function useSyncSalesPayments() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["finance-payments"] });
       qc.invalidateQueries({ queryKey: ["finance-payments-summary"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
       qc.invalidateQueries({ queryKey: ["finance-income"] });
     },
   });
@@ -699,11 +891,9 @@ export function useDeletePayment() {
   return useMutation({
     mutationFn: (id: number) => customFetch(apiUrl(`/api/finance/payments/${id}`), { method: "DELETE" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["finance-payments"] });
-      qc.invalidateQueries({ queryKey: ["finance-payments-summary"] });
+      invalidateExpenseLinkedFinance(qc);
       qc.invalidateQueries({ queryKey: ["finance-income"] });
       qc.invalidateQueries({ queryKey: ["finance-invoices"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
     },
   });
 }
@@ -734,7 +924,7 @@ export function useRecordPayment() {
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["finance-payments"] });
-      qc.invalidateQueries({ queryKey: financeKeys.dashboard() });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
       if (vars.invoiceId) {
         qc.invalidateQueries({ queryKey: financeKeys.invoice(vars.invoiceId) });
         qc.invalidateQueries({ queryKey: ["finance-invoices"] });
@@ -792,6 +982,232 @@ export function useDeleteBudget() {
   return useMutation({
     mutationFn: (id: number) => customFetch(apiUrl(`/api/finance/budgets/${id}`), { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-budgets"] }),
+  });
+}
+
+// ─── Loans ────────────────────────────────────────────────────────────────
+
+export interface ListLoansParams {
+  status?: LoanStatus;
+  search?: string;
+}
+
+export function useListLoans(params?: ListLoansParams, enabled = true) {
+  return useQuery<{ loans: Loan[] }>({
+    queryKey: financeKeys.loans(params),
+    queryFn: () => customFetch(apiUrl(`/api/finance/loans${toQueryString(params)}`)),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useGetLoan(id: number, enabled = true) {
+  return useQuery<Loan>({
+    queryKey: financeKeys.loan(id),
+    queryFn: () => customFetch(apiUrl(`/api/finance/loans/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
+  });
+}
+
+export interface CreateLoanPayload {
+  name: string;
+  lender: string;
+  principal: number;
+  interestRate?: number | null;
+  startDate: string;
+  endDate?: string | null;
+  tenureMonths?: number | null;
+  emiAmount?: number | null;
+  notes?: string;
+}
+
+export function useCreateLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateLoanPayload) =>
+      customFetch<Loan>(apiUrl("/api/finance/loans"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-loans"] }),
+  });
+}
+
+export function useUpdateLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<CreateLoanPayload> & { id: number; status?: LoanStatus }) =>
+      customFetch<Loan>(apiUrl(`/api/finance/loans/${id}`), { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-loans"] });
+      qc.invalidateQueries({ queryKey: financeKeys.loan(vars.id) });
+    },
+  });
+}
+
+export function useDeleteLoan() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => customFetch(apiUrl(`/api/finance/loans/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-loans"] }),
+  });
+}
+
+export interface RecordLoanInstallmentPayload {
+  amount?: number;
+  paymentMode?: FinancePaymentMode;
+  date?: string;
+  notes?: string;
+  /** When true, expense is approved immediately and updates loan balances. */
+  approve?: boolean;
+}
+
+export function useRecordLoanInstallment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: RecordLoanInstallmentPayload & { id: number }) =>
+      customFetch<{ expense: Expense; loan: Loan }>(apiUrl(`/api/finance/loans/${id}/installments`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-loans"] });
+      qc.invalidateQueries({ queryKey: financeKeys.loan(vars.id) });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    },
+  });
+}
+
+// ─── Software subscriptions ───────────────────────────────────────────────
+
+export interface ListSubscriptionsParams {
+  status?: SubscriptionStatus;
+  search?: string;
+}
+
+export function useListSubscriptions(params?: ListSubscriptionsParams, enabled = true) {
+  return useQuery<{ subscriptions: SoftwareSubscription[] }>({
+    queryKey: financeKeys.subscriptions(params),
+    queryFn: () => customFetch(apiUrl(`/api/finance/subscriptions${toQueryString(params)}`)),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useGetSubscription(id: number, enabled = true) {
+  return useQuery<SoftwareSubscription>({
+    queryKey: financeKeys.subscription(id),
+    queryFn: () => customFetch(apiUrl(`/api/finance/subscriptions/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
+  });
+}
+
+export interface CreateSubscriptionPayload {
+  name: string;
+  vendorName?: string;
+  plan?: string;
+  billingCycle?: SubscriptionBillingCycle;
+  seatsPurchased: number;
+  costAmount: number;
+  renewalDate?: string | null;
+  notes?: string;
+}
+
+export function useCreateSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateSubscriptionPayload) =>
+      customFetch<SoftwareSubscription>(apiUrl("/api/finance/subscriptions"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-subscriptions"] }),
+  });
+}
+
+export function useUpdateSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: Partial<CreateSubscriptionPayload> & { id: number; status?: SubscriptionStatus }) =>
+      customFetch<SoftwareSubscription>(apiUrl(`/api/finance/subscriptions/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-subscriptions"] });
+      qc.invalidateQueries({ queryKey: financeKeys.subscription(vars.id) });
+    },
+  });
+}
+
+export function useDeleteSubscription() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/finance/subscriptions/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-subscriptions"] }),
+  });
+}
+
+export function useAssignSubscriptionSeat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: { id: number; employeeId: number; seatEmail?: string; notes?: string }) =>
+      customFetch<SoftwareSubscription>(apiUrl(`/api/finance/subscriptions/${id}/assign`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-subscriptions"] });
+      qc.invalidateQueries({ queryKey: financeKeys.subscription(vars.id) });
+    },
+  });
+}
+
+export function useRevokeSubscriptionSeat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, assignmentId }: { id: number; assignmentId: number }) =>
+      customFetch<SoftwareSubscription>(
+        apiUrl(`/api/finance/subscriptions/${id}/assignments/${assignmentId}/revoke`),
+        { method: "POST" },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-subscriptions"] });
+      qc.invalidateQueries({ queryKey: financeKeys.subscription(vars.id) });
+    },
+  });
+}
+
+export interface RecordSubscriptionPaymentPayload {
+  amount?: number;
+  paymentMode?: FinancePaymentMode;
+  date?: string;
+  notes?: string;
+  approve?: boolean;
+  renewalDate?: string;
+}
+
+export function useRecordSubscriptionPayment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: RecordSubscriptionPaymentPayload & { id: number }) =>
+      customFetch<{ expense: Expense; subscription: SoftwareSubscription }>(
+        apiUrl(`/api/finance/subscriptions/${id}/payments`),
+        { method: "POST", body: JSON.stringify(body) },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-subscriptions"] });
+      qc.invalidateQueries({ queryKey: financeKeys.subscription(vars.id) });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    },
   });
 }
 

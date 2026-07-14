@@ -72,6 +72,8 @@ const FINANCE_FULL_ACCESS = new Set([
   "finance_expenses",
   "finance_invoices",
   "finance_budgets",
+  "finance_loans",
+  "finance_subscriptions",
   "finance_notifications",
 ]);
 
