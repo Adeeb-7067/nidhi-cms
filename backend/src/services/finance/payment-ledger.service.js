@@ -3,6 +3,7 @@ import {
   FinanceInvoices,
   FinancePayments,
   FinanceExpenses,
+  FinanceCheques,
   clientsTable,
   getNextSequence,
 } from "../../models/schema/index.js";
@@ -170,7 +171,7 @@ export async function applyCashToExpense(session, expenseId, amount) {
     {
       id: expenseId,
       status: "approved",
-      paymentStatus: { $in: ["unpaid", "partially_paid", "paid"] },
+      paymentStatus: { $in: ["unpaid", "partially_paid"] },
       $expr: {
         $lte: [{ $add: [{ $ifNull: ["$paidAmount", 0] }, pay] }, { $ifNull: ["$amount", 0] }],
       },
@@ -239,7 +240,21 @@ export async function reverseCashFromExpense(session, expenseId, amount) {
  */
 export async function recordOutgoingPayment(
   session,
-  { partyName, vendorId = null, employeeId = null, expenseId = null, bankAccountId = null, amount, mode, date, reference, recordedBy },
+  {
+    partyName,
+    vendorId = null,
+    employeeId = null,
+    clientId = null,
+    expenseId = null,
+    bankAccountId = null,
+    amount,
+    mode,
+    date,
+    reference,
+    recordedBy,
+    /** Set by cheque clear flow — normally issued-cheque bills must clear via Cheques. */
+    allowIssuedChequeExpense = false,
+  },
 ) {
   if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
   if (!partyName?.trim()) badRequest("partyName is required.", "partyName");
@@ -252,6 +267,17 @@ export async function recordOutgoingPayment(
     if (!expense) notFound("Expense");
     if (expense.status !== "approved") {
       badRequest("Link payments only to approved expenses.", "expenseId");
+    }
+    if (expense.chequeId && !allowIssuedChequeExpense) {
+      let cq = FinanceCheques.findOne({ id: expense.chequeId }).select({ id: 1, status: 1, reference: 1 });
+      if (session) cq = cq.session(session);
+      const cheque = await cq.lean();
+      if (cheque?.status === "issued") {
+        badRequest(
+          `This bill is tied to issued cheque ${cheque.reference || `#${cheque.id}`}. Mark it cleared under Finance → Cheques.`,
+          "chequeId",
+        );
+      }
     }
     if (!isLegacyFullyPaidExpense(expense)) {
       const remaining = outstandingExpenseAmount(expense);
@@ -268,6 +294,14 @@ export async function recordOutgoingPayment(
     nextFinanceNumber("FIN-REC", "fin_rec_num"),
   ]);
 
+  const partyType = vendorId
+    ? "vendor"
+    : employeeId
+      ? "employee"
+      : clientId
+        ? "client"
+        : "other";
+
   const [payment] = await FinancePayments.create(
     [
       {
@@ -279,10 +313,11 @@ export async function recordOutgoingPayment(
         reference: reference?.trim() || receiptNumber,
         receiptNumber,
         status: "completed",
-        partyType: vendorId ? "vendor" : employeeId ? "employee" : "other",
+        partyType,
         partyName: partyName.trim(),
         vendorId,
         employeeId,
+        clientId,
         expenseId,
         bankAccountId,
         recordedBy,

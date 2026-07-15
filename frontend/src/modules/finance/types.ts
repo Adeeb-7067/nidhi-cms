@@ -15,6 +15,9 @@ export type {
   LedgerType,
   PaymentDirection,
   TaxPeriodType as TaxPeriod,
+  ChequePayeeType,
+  ChequePurpose,
+  ChequeStatus,
 } from "@/api/finance";
 
 /** HRM payroll run status — finance only reads this, never writes it. */

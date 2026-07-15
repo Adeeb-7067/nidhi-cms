@@ -64,6 +64,10 @@ const subscriptionSchema = z.object({
   billingCycle: z.string(),
   seatsPurchased: z.string().min(1).refine((v) => Number(v) >= 1, "At least 1 seat"),
   costAmount: positiveAmountString,
+  purchaseEmail: z
+    .string()
+    .optional()
+    .refine((v) => !v?.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()), "Enter a valid email"),
   renewalDate: z.string().optional(),
   status: z.string().optional(),
   notes: z.string().optional(),
@@ -90,6 +94,7 @@ export function SubscriptionFormModal({
       billingCycle: "monthly",
       seatsPurchased: "1",
       costAmount: "",
+      purchaseEmail: "",
       renewalDate: "",
       status: "active",
       notes: "",
@@ -107,6 +112,7 @@ export function SubscriptionFormModal({
             billingCycle: subscription.billingCycle,
             seatsPurchased: String(subscription.seatsPurchased),
             costAmount: String(subscription.costAmount),
+            purchaseEmail: subscription.purchaseEmail ?? "",
             renewalDate: subscription.renewalDate ? subscription.renewalDate.slice(0, 10) : "",
             status: subscription.status,
             notes: subscription.notes ?? "",
@@ -118,6 +124,7 @@ export function SubscriptionFormModal({
             billingCycle: "monthly",
             seatsPurchased: "1",
             costAmount: "",
+            purchaseEmail: "",
             renewalDate: "",
             status: "active",
             notes: "",
@@ -134,6 +141,7 @@ export function SubscriptionFormModal({
         billingCycle: values.billingCycle as SubscriptionBillingCycle,
         seatsPurchased: Number(values.seatsPurchased),
         costAmount: Number(values.costAmount),
+        purchaseEmail: values.purchaseEmail?.trim() || null,
         renewalDate: values.renewalDate?.trim() || null,
         notes: values.notes?.trim() || undefined,
       };
@@ -207,6 +215,15 @@ export function SubscriptionFormModal({
                   <FormItem><FormLabel>Next renewal</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
               </div>
+              <FormField control={form.control} name="purchaseEmail" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Purchase email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="e.g. billing@company.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
               {isEdit && (
                 <FormField control={form.control} name="status" render={({ field }) => (
                   <FormItem>

@@ -5,6 +5,7 @@ export * from "./payments.js";
 export * from "./budgets.js";
 export * from "./loans.js";
 export * from "./subscriptions.js";
+export * from "./cheques.js";
 export * from "./bank-accounts.js";
 export * from "./tax-deposits.js";
 export * from "./vendors.js";

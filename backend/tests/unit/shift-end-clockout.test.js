@@ -174,14 +174,15 @@ describe("isPausedSessionResumableToday", () => {
     assert.equal(isPausedSessionResumableToday(session, now, TZ), true);
   });
 
-  test("overnight shift_ended session resumes on the morning end day", () => {
+  test("overnight shift that started yesterday does not resume next morning", () => {
+    // Resuming would immediately hit day_ended policy (startedAt is previous work day).
     const session = {
       startedAt: new Date("2026-07-03T16:30:00.000Z"),
       endedAt: new Date("2026-07-04T00:30:00.000Z"),
       stopReason: "shift_ended",
     };
     const now = new Date("2026-07-04T02:00:00.000Z");
-    assert.equal(isPausedSessionResumableToday(session, now, TZ), true);
+    assert.equal(isPausedSessionResumableToday(session, now, TZ), false);
   });
 
   test("yesterday session does not resume today", () => {
@@ -194,13 +195,23 @@ describe("isPausedSessionResumableToday", () => {
     assert.equal(isPausedSessionResumableToday(session, now, TZ), false);
   });
 
-  test("day_ended overnight session resumes on the morning it ended", () => {
+  test("day_ended previous-day session does not resume (avoids resume→close loop)", () => {
     const session = {
-      startedAt: new Date("2026-07-03T16:30:00.000Z"),
-      endedAt: new Date("2026-07-03T18:30:00.000Z"),
+      startedAt: new Date("2026-07-03T04:30:00.000Z"), // 10:00 IST Jul 3
+      endedAt: new Date("2026-07-03T18:30:00.000Z"), // midnight IST → Jul 4
       stopReason: "day_ended",
     };
-    const now = new Date("2026-07-04T02:00:00.000Z");
+    const now = new Date("2026-07-04T02:00:00.000Z"); // morning Jul 4
+    assert.equal(isPausedSessionResumableToday(session, now, TZ), false);
+  });
+
+  test("same-day manual clock_out still resumes", () => {
+    const session = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      endedAt: new Date("2026-07-03T08:00:00.000Z"),
+      stopReason: "clock_out",
+    };
+    const now = new Date("2026-07-03T09:00:00.000Z");
     assert.equal(isPausedSessionResumableToday(session, now, TZ), true);
   });
 });

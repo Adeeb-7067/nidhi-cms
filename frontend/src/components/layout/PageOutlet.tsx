@@ -109,6 +109,8 @@ const FinancePayroll = React.lazy(() => import("@/pages/finance/Payroll"));
 const FinanceBudgets = React.lazy(() => import("@/pages/finance/Budgets"));
 const FinanceLoans = React.lazy(() => import("@/pages/finance/Loans"));
 const FinanceLoanDetail = React.lazy(() => import("@/pages/finance/LoanDetail"));
+const FinanceCheques = React.lazy(() => import("@/pages/finance/Cheques"));
+const FinanceChequeDetail = React.lazy(() => import("@/pages/finance/ChequeDetail"));
 const FinanceSubscriptions = React.lazy(() => import("@/pages/finance/Subscriptions"));
 const FinanceSubscriptionDetail = React.lazy(() => import("@/pages/finance/SubscriptionDetail"));
 const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
@@ -649,6 +651,16 @@ export function PageOutlet() {
       <Route path="/finance/loans">
         <RoleGate>
           <FinanceLoans />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/cheques/:id">
+        <RoleGate>
+          <FinanceChequeDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/cheques">
+        <RoleGate>
+          <FinanceCheques />
         </RoleGate>
       </Route>
       <Route path="/finance/subscriptions/:id">

@@ -1,4 +1,4 @@
-import { vendorsTable, FinancePayments } from "../../models/schema/index.js";
+import { vendorsTable, FinancePayments, FinanceCheques } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { runInTx } from "../../lib/db-tx.js";
 import {
@@ -8,6 +8,7 @@ import {
   reverseCashFromExpense,
 } from "../../services/finance/payment-ledger.service.js";
 import { financePaymentModes } from "../../models/schema/finance/expenses.js";
+import { outstandingExpenseAmount } from "../../services/finance/expense-cash.service.js";
 import {
   listUnifiedPayments,
   getUnifiedPayment,
@@ -75,6 +76,7 @@ async function recordPayment(req, res) {
       partyName,
       vendorId,
       employeeId: body.employeeId ? Number(body.employeeId) : null,
+      clientId: body.clientId ? Number(body.clientId) : null,
       expenseId: body.expenseId ? Number(body.expenseId) : null,
       bankAccountId: body.bankAccountId ? Number(body.bankAccountId) : null,
       amount,
@@ -162,7 +164,15 @@ async function deletePayment(req, res) {
   } else {
     await runInTx(async (session) => {
       if (payment.expenseId) {
-        await reverseCashFromExpense(session, payment.expenseId, payment.amount);
+        const expenseAfter = await reverseCashFromExpense(session, payment.expenseId, payment.amount);
+        // Deleting a clearance payment should reopen the linked issued-workflow cheque.
+        if (expenseAfter?.chequeId && outstandingExpenseAmount(expenseAfter) > 0) {
+          await FinanceCheques.updateOne(
+            { id: expenseAfter.chequeId, status: "cleared" },
+            { $set: { status: "issued", clearedAt: null, clearedBy: null } },
+            session ? { session } : undefined,
+          );
+        }
       }
       await FinancePayments.deleteOne({ id }, { session });
     });

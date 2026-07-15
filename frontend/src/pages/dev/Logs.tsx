@@ -6,10 +6,13 @@ import {
   useListProjects,
   useGetDailyLogSummary,
   getGetDailyLogSummaryQueryKey,
+  useGetLogComplianceCalendar,
+  getGetLogComplianceCalendarQueryKey,
   type DailyLog,
 } from "@/api";
 import { AdminTeamLogsPanel } from "@/components/logs/AdminTeamLogsPanel";
 import { DailyLogDetailDialog } from "@/components/logs/DailyLogDetailDialog";
+import { LogComplianceCalendarPanel } from "@/components/logs/LogComplianceCalendar";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +49,6 @@ import { toastApiError } from "@/lib/api-error";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 import {
@@ -54,6 +56,14 @@ import {
   formatDailyLogWorkDate,
 } from "@/lib/daily-log-format";
 import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
+import { cn } from "@/lib/utils";
+
+function localIsoDate(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 const logSchema = z.object({
   projectId: z.string().min(1, "Project is required"),
@@ -92,14 +102,14 @@ export default function DevLogs() {
 }
 
 function DeveloperLogsView() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<DailyLog | null>(null);
   const [viewingLog, setViewingLog] = useState<DailyLog | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
-  const currentDate = new Date();
-  const todayIso = currentDate.toISOString().split("T")[0];
-  const [month, setMonth] = useState(currentDate.getMonth() + 1);
-  const [year, setYear] = useState(currentDate.getFullYear());
+  const todayIso = localIsoDate();
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1);
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const queryClient = useQueryClient();
 
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination(20);
@@ -123,6 +133,20 @@ function DeveloperLogsView() {
   const { data: dailySummary, refetch: refetchDailySummary } = useGetDailyLogSummary(
     { date: todayIso },
     { query: { queryKey: getGetDailyLogSummaryQueryKey({ date: todayIso }) } },
+  );
+  const developerId = user?.id;
+  const { data: complianceCalendar, isLoading: complianceLoading } = useGetLogComplianceCalendar(
+    { month, year, developerId: developerId ?? 0 },
+    {
+      query: {
+        enabled: Boolean(developerId),
+        queryKey: getGetLogComplianceCalendarQueryKey({
+          month,
+          year,
+          developerId: developerId ?? 0,
+        }),
+      },
+    },
   );
   const { data: projectsData } = useListProjects({ limit: 50 });
   const createLog = useCreateLog();
@@ -184,7 +208,7 @@ function DeveloperLogsView() {
     resolver: zodResolver(logSchema),
     defaultValues: {
       projectId: "",
-      logDate: new Date().toISOString().split('T')[0],
+      logDate: localIsoDate(),
       taskTitle: "",
       workCategories: [],
       hoursSpent: 1,
@@ -241,11 +265,7 @@ function DeveloperLogsView() {
         values.logDate === todayIso ||
         (isEditMode && editingLog && String(editingLog.logDate).slice(0, 10) === todayIso);
 
-      if (
-        affectsToday &&
-        dailySummary?.complianceEnabled &&
-        dailySummary.requiredHours != null
-      ) {
+      if (affectsToday && dailySummary?.requiredHours != null) {
         void refetchDailySummary();
         const priorHours =
           isEditMode && editingLog && String(editingLog.logDate).slice(0, 10) === todayIso
@@ -268,6 +288,13 @@ function DeveloperLogsView() {
       refetchStats();
       void refetchDailySummary();
       void queryClient.invalidateQueries({ queryKey: getGetDailyLogSummaryQueryKey() });
+      void queryClient.invalidateQueries({
+        queryKey: getGetLogComplianceCalendarQueryKey({
+          month,
+          year,
+          developerId: developerId ?? 0,
+        }),
+      });
     } catch (error: unknown) {
       toastApiError(error, isEditMode ? "Failed to update log entry." : "Action failed. Please try again.");
     }
@@ -558,44 +585,103 @@ function DeveloperLogsView() {
         }
       />
 
-      {dailySummary?.complianceEnabled && dailySummary.requiredHours != null && (
+      {dailySummary && (
         <Card className="border-primary/20 bg-primary/[0.03]">
           <CardContent className="p-4 space-y-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold">Today&apos;s hours ({todayIso})</p>
+                <p className="text-sm font-semibold">Today&apos;s hours timeline</p>
                 <p className="text-xs text-muted-foreground">
-                  Required: {dailySummary.requiredHours}h · Logged: {dailySummary.loggedHours}h
+                  {dailySummary.requiredHours != null
+                    ? `Required ${dailySummary.requiredHours}h · Logged ${dailySummary.loggedHours.toFixed(1)}h · Remaining ${dailySummary.remainingHours.toFixed(1)}h`
+                    : `Logged ${dailySummary.loggedHours.toFixed(1)}h today (${todayIso})`}
                 </p>
               </div>
-              <Badge
-                variant={dailySummary.isComplete ? "default" : "destructive"}
-                className="w-fit"
-              >
-                {dailySummary.isComplete
-                  ? "Complete"
-                  : `${dailySummary.remainingHours.toFixed(1)}h remaining`}
-              </Badge>
-            </div>
-            <Progress
-              value={Math.min(
-                100,
-                (dailySummary.loggedHours / dailySummary.requiredHours) * 100,
+              {dailySummary.requiredHours != null && (
+                <Badge
+                  variant={dailySummary.isComplete ? "default" : "destructive"}
+                  className="w-fit"
+                >
+                  {dailySummary.isComplete
+                    ? "Complete"
+                    : `${dailySummary.remainingHours.toFixed(1)}h remaining`}
+                </Badge>
               )}
-              className="h-2"
-            />
-            {!dailySummary.isComplete && (
-              <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle>Daily hours incomplete</AlertTitle>
-                <AlertDescription className="text-xs">
-                  Log {dailySummary.remainingHours.toFixed(1)} more hour(s) today. If you miss the
-                  target, you will receive an in-app notification and email reminder.
-                </AlertDescription>
-              </Alert>
+            </div>
+            {dailySummary.requiredHours != null && dailySummary.requiredHours > 0 ? (
+              <>
+                <div
+                  className="flex h-3 w-full overflow-hidden rounded-full bg-muted"
+                  role="img"
+                  aria-label={`${dailySummary.loggedHours.toFixed(1)} hours logged, ${dailySummary.remainingHours.toFixed(1)} hours remaining`}
+                >
+                  <div
+                    className={cn(
+                      "h-full transition-all",
+                      dailySummary.isComplete ? "bg-emerald-500" : "bg-primary",
+                    )}
+                    style={{
+                      width: `${Math.min(
+                        100,
+                        (dailySummary.loggedHours / dailySummary.requiredHours) * 100,
+                      )}%`,
+                    }}
+                  />
+                  {!dailySummary.isComplete && (
+                    <div
+                      className="h-full bg-muted-foreground/25"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          (dailySummary.remainingHours / dailySummary.requiredHours) * 100,
+                        )}%`,
+                      }}
+                    />
+                  )}
+                </div>
+                <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={cn("h-2 w-2 rounded-full", dailySummary.isComplete ? "bg-emerald-500" : "bg-primary")} />
+                    Logged {dailySummary.loggedHours.toFixed(1)}h
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-muted-foreground/40" />
+                    Remaining {dailySummary.remainingHours.toFixed(1)}h
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{
+                    width: `${Math.min(100, (dailySummary.loggedHours / 8) * 100)}%`,
+                  }}
+                />
+              </div>
             )}
+            {dailySummary.complianceEnabled &&
+              dailySummary.requiredHours != null &&
+              !dailySummary.isComplete && (
+                <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Daily hours incomplete</AlertTitle>
+                  <AlertDescription className="text-xs">
+                    Log {dailySummary.remainingHours.toFixed(1)} more hour(s) today. If you miss the
+                    target, you will receive an in-app notification and email reminder.
+                  </AlertDescription>
+                </Alert>
+              )}
           </CardContent>
         </Card>
+      )}
+
+      {developerId != null && (
+        <LogComplianceCalendarPanel
+          data={complianceCalendar}
+          isLoading={complianceLoading}
+          title="Hours timeline"
+        />
       )}
 
       <DevKpiGrid

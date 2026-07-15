@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { Link } from "wouter";
 import { Plus, TrendingDown, Check, X, Pencil, Trash2, Wallet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
@@ -69,7 +70,10 @@ function remainingOf(e: Expense) {
 }
 
 export default function ExpensesPage() {
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("search") ?? "";
+  });
   const [statusTab, setStatusTab] = useState<string>("all");
   const [settlementFilter, setSettlementFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -329,7 +333,18 @@ export default function ExpensesPage() {
                     onClick={() => setDetailId(e.id)}
                   >
                     <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-xs font-mono">{e.reference}</TableCell>
+                    <TableCell className="text-xs font-mono">
+                      <div>{e.reference}</div>
+                      {e.chequeId ? (
+                        <Link
+                          href={`/finance/cheques/${e.chequeId}`}
+                          className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-primary hover:underline"
+                          onClick={(ev) => ev.stopPropagation()}
+                        >
+                          Cheque {e.chequeNumber ?? e.chequeReference ?? `#${e.chequeId}`}
+                        </Link>
+                      ) : null}
+                    </TableCell>
                     <TableCell className="text-xs max-w-[160px]">
                       <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
                       <div className="text-[10px] text-muted-foreground truncate">
@@ -403,7 +418,7 @@ export default function ExpensesPage() {
                             </Button>
                           </>
                         )}
-                        {e.status === "approved" && due > 0 && canEdit && (
+                        {e.status === "approved" && due > 0 && canEdit && e.chequeStatus !== "issued" && (
                           <Button
                             variant="ghost"
                             size="sm"

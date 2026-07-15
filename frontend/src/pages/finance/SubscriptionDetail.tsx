@@ -116,6 +116,7 @@ export default function SubscriptionDetailPage() {
         {sub.renewalDate && (
           <span>· Renews {format(new Date(sub.renewalDate), "MMM d, yyyy")}</span>
         )}
+        {sub.purchaseEmail && <span>· Bought with {sub.purchaseEmail}</span>}
       </div>
 
       <PortalKpiGrid

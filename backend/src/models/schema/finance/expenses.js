@@ -9,6 +9,7 @@ const expenseCategories = [
   "utilities",
   "professional",
   "loan",
+  "security_deposit",
   "misc",
 ];
 const expenseStatuses = ["pending", "approved", "rejected"];
@@ -44,6 +45,10 @@ const expenseSchema = new Schema(
     loanId: { type: Number, ref: "FinanceLoans", default: null, index: true },
     /** When set, this expense is a payment for a software subscription. */
     subscriptionId: { type: Number, ref: "FinanceSubscriptions", default: null, index: true },
+    /** When set, this expense was created from an issued bank cheque. */
+    chequeId: { type: Number, ref: "FinanceCheques", default: null, index: true },
+    /** Optional client payee (e.g. security deposit / client refund cheque). */
+    clientId: { type: Number, ref: "Clients", default: null, index: true },
     notes: { type: String, default: null, trim: true },
     status: { type: String, enum: expenseStatuses, default: "pending", required: true, index: true },
     /**

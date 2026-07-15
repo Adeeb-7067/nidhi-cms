@@ -215,9 +215,7 @@ export async function buildComplianceCalendar(developerId, month, year) {
 export async function buildDailyLogSummary(userId, logDate) {
   const policy = await getWorkPolicy();
   const loggedHours = await sumLoggedHoursForDate(userId, logDate);
-  const requiredHours = policy.dailyLogComplianceEnabled
-    ? policy.requiredDailyWorkHours
-    : null;
+  const requiredHours = policy.requiredDailyWorkHours ?? null;
   const remainingHours =
     requiredHours == null ? 0 : Math.max(0, Math.round((requiredHours - loggedHours) * 100) / 100);
   const isComplete =

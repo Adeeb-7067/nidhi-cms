@@ -9,5 +9,6 @@ export const EXPENSE_CATEGORY_LABELS = {
   utilities: "Utilities & Internet",
   professional: "Professional Services",
   loan: "Loan EMI / Repayment",
+  security_deposit: "Security Deposit",
   misc: "Miscellaneous",
 };

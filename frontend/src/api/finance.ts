@@ -5,7 +5,7 @@ import { apiUrl } from "@/lib/api-base";
 // ─── Types ────────────────────────────────────────────────────────────────
 
 export type ExpenseCategory =
-  | "software" | "hardware" | "travel" | "office" | "marketing" | "utilities" | "professional" | "loan" | "misc";
+  | "software" | "hardware" | "travel" | "office" | "marketing" | "utilities" | "professional" | "loan" | "misc" | "security_deposit";
 export type ExpenseStatus = "pending" | "approved" | "rejected";
 export type ExpensePaymentStatus = "unpaid" | "partially_paid" | "paid";
 export type FinancePaymentMode = "bank_transfer" | "upi" | "cash" | "cheque" | "card" | "neft";
@@ -21,6 +21,9 @@ export type SubscriptionBillingCycle = "monthly" | "yearly";
 export type LedgerType = "client" | "vendor" | "expense" | "bank";
 export type FinanceLedgerSource = "finance" | "sales";
 export type TaxPeriodType = "monthly" | "quarterly" | "annual";
+export type ChequePayeeType = "vendor" | "client" | "employee";
+export type ChequePurpose = "normal" | "security_deposit";
+export type ChequeStatus = "issued" | "cleared" | "cancelled" | "bounced";
 
 export interface FinanceAttachment {
   name: string;
@@ -57,6 +60,11 @@ export interface Expense {
   subscriptionId: number | null;
   subscriptionName?: string | null;
   subscriptionReference?: string | null;
+  chequeId?: number | null;
+  chequeReference?: string | null;
+  chequeNumber?: string | null;
+  chequeStatus?: ChequeStatus | null;
+  clientId?: number | null;
   notes: string | null;
   status: ExpenseStatus;
   gstEnabled: boolean;
@@ -65,6 +73,33 @@ export interface Expense {
   approvedBy: number | null;
   approvedAt: string | null;
   createdAt: string;
+}
+
+export interface FinanceCheque {
+  id: number;
+  reference: string;
+  payeeType: ChequePayeeType;
+  vendorId: number | null;
+  clientId: number | null;
+  employeeId: number | null;
+  payeeName: string;
+  purpose: ChequePurpose;
+  amount: number;
+  chequeNumber: string;
+  issueDate: string;
+  clearanceDate: string;
+  bankName: string | null;
+  attachments: FinanceAttachment[];
+  status: ChequeStatus;
+  expenseId: number;
+  expenseReference?: string | null;
+  expensePaymentStatus?: ExpensePaymentStatus | null;
+  expenseStatus?: ExpenseStatus | null;
+  clearedAt?: string | null;
+  clearedBy?: number | null;
+  notes: string | null;
+  createdBy?: number | null;
+  createdAt?: string;
 }
 
 export interface Income {
@@ -228,6 +263,7 @@ export interface SoftwareSubscription {
   billingCycle: SubscriptionBillingCycle;
   seatsPurchased: number;
   costAmount: number;
+  purchaseEmail: string | null;
   renewalDate: string | null;
   status: SubscriptionStatus;
   notes: string | null;
@@ -388,6 +424,8 @@ export const financeKeys = {
   budgets: (params?: object) => ["finance-budgets", params] as const,
   loans: (params?: object) => ["finance-loans", params] as const,
   loan: (id: number) => ["finance-loan", id] as const,
+  cheques: (params?: object) => ["finance-cheques", params] as const,
+  cheque: (id: number) => ["finance-cheque", id] as const,
   subscriptions: (params?: object) => ["finance-subscriptions", params] as const,
   subscription: (id: number) => ["finance-subscription", id] as const,
   clientLedgers: (id?: number | null) => ["finance-client-ledgers", id] as const,
@@ -1077,6 +1115,112 @@ export function useRecordLoanInstallment() {
   });
 }
 
+// ─── Cheques ──────────────────────────────────────────────────────────────
+
+export interface ListChequesParams {
+  status?: ChequeStatus;
+  payeeType?: ChequePayeeType;
+  purpose?: ChequePurpose;
+  search?: string;
+}
+
+export function useListCheques(params?: ListChequesParams, enabled = true) {
+  return useQuery<{ cheques: FinanceCheque[] }>({
+    queryKey: financeKeys.cheques(params),
+    queryFn: () => customFetch(apiUrl(`/api/finance/cheques${toQueryString(params)}`)),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useGetCheque(id: number, enabled = true) {
+  return useQuery<FinanceCheque>({
+    queryKey: financeKeys.cheque(id),
+    queryFn: () => customFetch(apiUrl(`/api/finance/cheques/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
+  });
+}
+
+export interface CreateChequePayload {
+  payeeType: ChequePayeeType;
+  vendorId?: number | null;
+  clientId?: number | null;
+  employeeId?: number | null;
+  purpose: ChequePurpose;
+  amount: number;
+  chequeNumber: string;
+  issueDate: string;
+  clearanceDate: string;
+  bankName?: string;
+  notes?: string;
+  attachments?: FinanceAttachment[];
+}
+
+export function useCreateCheque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateChequePayload) =>
+      customFetch<FinanceCheque>(apiUrl("/api/finance/cheques"), { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["finance-cheques"] });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+      qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+    },
+  });
+}
+
+export function useUpdateCheque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: Partial<CreateChequePayload> & { id: number }) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}`), { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-cheques"] });
+      qc.invalidateQueries({ queryKey: financeKeys.cheque(vars.id) });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+    },
+  });
+}
+
+function invalidateChequeMutations(qc: ReturnType<typeof useQueryClient>, id: number) {
+  qc.invalidateQueries({ queryKey: ["finance-cheques"] });
+  qc.invalidateQueries({ queryKey: financeKeys.cheque(id) });
+  qc.invalidateQueries({ queryKey: ["finance-expenses"] });
+  qc.invalidateQueries({ queryKey: ["finance-payments"] });
+  qc.invalidateQueries({ queryKey: ["finance-dashboard"] });
+}
+
+export function useClearCheque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, date }: { id: number; date?: string }) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/clear`), {
+        method: "POST",
+        body: JSON.stringify(date ? { date } : {}),
+      }),
+    onSuccess: (_data, vars) => invalidateChequeMutations(qc, vars.id),
+  });
+}
+
+export function useCancelCheque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/cancel`), { method: "POST", body: "{}" }),
+    onSuccess: (_data, id) => invalidateChequeMutations(qc, id),
+  });
+}
+
+export function useBounceCheque() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/bounce`), { method: "POST", body: "{}" }),
+    onSuccess: (_data, id) => invalidateChequeMutations(qc, id),
+  });
+}
+
 // ─── Software subscriptions ───────────────────────────────────────────────
 
 export interface ListSubscriptionsParams {
@@ -1109,6 +1253,7 @@ export interface CreateSubscriptionPayload {
   billingCycle?: SubscriptionBillingCycle;
   seatsPurchased: number;
   costAmount: number;
+  purchaseEmail?: string | null;
   renewalDate?: string | null;
   notes?: string;
 }

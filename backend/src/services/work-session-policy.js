@@ -45,18 +45,14 @@ export function defaultDailyRangeStart(tz, days = 6) {
 
 /**
  * True when a paused session can resume on clock-in today.
- * Covers same-day sessions and overnight shifts auto-clocked out after midnight.
+ * Only same work-day sessions (started today) may resume. Sessions that started on a
+ * previous work day — including overnight `day_ended` closes — must start a new session;
+ * otherwise resume → day_ended policy closes them again in a tight loop and the timer
+ * appears to reset to zero.
  */
 export function isPausedSessionResumableToday(session, now = new Date(), tz) {
   if (!session?.startedAt) return false;
-  const todayKey = workDayKey(now, tz);
-  const startDay = workDayKey(session.startedAt, tz);
-  if (startDay === todayKey) return true;
-  // Overnight shift or midnight auto-close: session started yesterday but ended today.
-  if (session.endedAt && workDayKey(session.endedAt, tz) === todayKey) {
-    return true;
-  }
-  return false;
+  return workDayKey(session.startedAt, tz) === workDayKey(now, tz);
 }
 
 /**

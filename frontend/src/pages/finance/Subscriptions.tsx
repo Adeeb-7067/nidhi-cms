@@ -57,7 +57,8 @@ export default function SubscriptionsPage() {
         !q ||
         s.name.toLowerCase().includes(q) ||
         s.reference.toLowerCase().includes(q) ||
-        (s.vendorName ?? "").toLowerCase().includes(q);
+        (s.vendorName ?? "").toLowerCase().includes(q) ||
+        (s.purchaseEmail ?? "").toLowerCase().includes(q);
       const matchesStatus = statusTab === "all" || s.status === statusTab;
       return matchesSearch && matchesStatus;
     });
@@ -157,6 +158,8 @@ export default function SubscriptionsPage() {
                 <TableHead className="text-xs">Billing</TableHead>
                 <TableHead className="text-xs">Seats</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
+                <TableHead className="text-xs">Bought on</TableHead>
+                <TableHead className="text-xs">Purchase email</TableHead>
                 <TableHead className="text-xs">Renewal</TableHead>
                 <TableHead className="text-xs text-right">Cost / cycle</TableHead>
                 <TableHead className="text-xs text-right">Actions</TableHead>
@@ -185,6 +188,12 @@ export default function SubscriptionsPage() {
                   </TableCell>
                   <TableCell>
                     <FinanceStatusBadge variant="subscription" value={s.status} />
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {s.createdAt ? format(new Date(s.createdAt), "MMM d, yyyy") : "—"}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground max-w-[180px] truncate" title={s.purchaseEmail ?? undefined}>
+                    {s.purchaseEmail || "—"}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {s.renewalDate ? format(new Date(s.renewalDate), "MMM d, yyyy") : "—"}

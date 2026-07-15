@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ExpenseCategory, ExpenseStatus, FinanceInvoiceStatus, IncomeStatus, BudgetStatus, LoanStatus, SubscriptionStatus, PayrollStatus } from "../types";
+import type { ExpenseCategory, ExpenseStatus, FinanceInvoiceStatus, IncomeStatus, BudgetStatus, LoanStatus, SubscriptionStatus, PayrollStatus, ChequeStatus } from "../types";
 import {
   EXPENSE_CATEGORY_LABELS,
   EXPENSE_STATUS_LABELS,
@@ -10,6 +10,7 @@ import {
   LOAN_STATUS_LABELS,
   SUBSCRIPTION_STATUS_LABELS,
   PAYROLL_STATUS_LABELS,
+  CHEQUE_STATUS_LABELS,
 } from "../constants";
 
 type BadgeVariant =
@@ -22,7 +23,8 @@ type BadgeVariant =
   | "loan"
   | "subscription"
   | "payroll"
-  | "payment";
+  | "payment"
+  | "cheque";
 
 const expenseStyles: Record<ExpenseStatus, string> = {
   pending: "bg-amber-500/10 text-amber-700 border-amber-500/25",
@@ -79,6 +81,13 @@ const paymentSettlementStyles: Record<string, string> = {
   partially_paid: "bg-violet-500/10 text-violet-700 border-violet-500/25",
 };
 
+const chequeStyles: Record<ChequeStatus, string> = {
+  issued: "bg-blue-500/10 text-blue-700 border-blue-500/25",
+  cleared: "bg-green-500/10 text-green-700 border-green-500/25",
+  cancelled: "bg-slate-500/10 text-slate-700 border-slate-500/25",
+  bounced: "bg-red-500/10 text-red-600 border-red-500/25",
+};
+
 export function FinanceStatusBadge({
   variant,
   value,
@@ -128,6 +137,10 @@ export function FinanceStatusBadge({
   } else if (variant === "payment") {
     style = paymentStyles[value] ?? style;
     label = value.charAt(0).toUpperCase() + value.slice(1);
+  } else if (variant === "cheque") {
+    const v = value as ChequeStatus;
+    label = CHEQUE_STATUS_LABELS[v] ?? value;
+    style = chequeStyles[v] ?? style;
   }
 
   return (

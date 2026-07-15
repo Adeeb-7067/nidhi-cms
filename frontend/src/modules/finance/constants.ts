@@ -9,6 +9,9 @@ import type {
   SubscriptionStatus,
   SubscriptionBillingCycle,
   PayrollStatus,
+  ChequeStatus,
+  ChequePurpose,
+  ChequePayeeType,
 } from "./types";
 
 export const FINANCE_ACCESS_ROLES = ["super_admin", "finance"] as const;
@@ -32,6 +35,7 @@ export const EXPENSE_CATEGORY_LABELS: Record<ExpenseCategory, string> = {
   professional: "Professional Services",
   loan: "Loan EMI / Repayment",
   misc: "Miscellaneous",
+  security_deposit: "Security Deposit",
 };
 
 export const EXPENSE_STATUS_LABELS: Record<ExpenseStatus, string> = {
@@ -67,6 +71,24 @@ export const PAYMENT_MODE_LABELS: Record<PaymentMode, string> = {
   cheque: "Cheque",
   card: "Card",
   neft: "NEFT/RTGS",
+};
+
+export const CHEQUE_STATUS_LABELS: Record<ChequeStatus, string> = {
+  issued: "Issued",
+  cleared: "Cleared",
+  cancelled: "Cancelled",
+  bounced: "Bounced",
+};
+
+export const CHEQUE_PURPOSE_LABELS: Record<ChequePurpose, string> = {
+  normal: "Normal payout",
+  security_deposit: "Security deposit",
+};
+
+export const CHEQUE_PAYEE_TYPE_LABELS: Record<ChequePayeeType, string> = {
+  vendor: "Vendor",
+  client: "Client",
+  employee: "Employee",
 };
 
 export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {

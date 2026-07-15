@@ -10,6 +10,7 @@ import * as paymentsCtrl from "../controllers/finance/payments.controller.js";
 import * as budgetsCtrl from "../controllers/finance/budgets.controller.js";
 import * as loansCtrl from "../controllers/finance/loans.controller.js";
 import * as subscriptionsCtrl from "../controllers/finance/subscriptions.controller.js";
+import * as chequesCtrl from "../controllers/finance/cheques.controller.js";
 import * as ledgersCtrl from "../controllers/finance/ledgers.controller.js";
 import * as taxCtrl from "../controllers/finance/tax.controller.js";
 import * as reportsCtrl from "../controllers/finance/reports.controller.js";
@@ -115,6 +116,15 @@ router.post(
   ...anyP(["finance_subscriptions", "create"], ["finance_expenses", "create"]),
   wrap(subscriptionsCtrl.recordPayment),
 );
+
+// ── Cheques ──────────────────────────────────────────────────────────────
+router.get("/finance/cheques", ...p("finance_cheques"), wrap(chequesCtrl.listCheques));
+router.post("/finance/cheques", ...p("finance_cheques", "create"), wrap(chequesCtrl.createCheque));
+router.get("/finance/cheques/:id", ...p("finance_cheques"), wrap(chequesCtrl.getChequeById));
+router.patch("/finance/cheques/:id", ...p("finance_cheques", "edit"), wrap(chequesCtrl.updateCheque));
+router.post("/finance/cheques/:id/clear", ...p("finance_cheques", "edit"), wrap(chequesCtrl.clearCheque));
+router.post("/finance/cheques/:id/cancel", ...p("finance_cheques", "edit"), wrap(chequesCtrl.cancelCheque));
+router.post("/finance/cheques/:id/bounce", ...p("finance_cheques", "edit"), wrap(chequesCtrl.bounceCheque));
 
 // ── Ledgers ──────────────────────────────────────────────────────────────
 router.get("/finance/ledgers/clients", ...p("finance_ledgers"), wrap(ledgersCtrl.getClientLedgers));

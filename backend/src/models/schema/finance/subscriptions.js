@@ -26,6 +26,8 @@ const subscriptionSchema = new Schema(
     seatsPurchased: { type: Number, required: true, min: 1 },
     /** Cost per billing cycle (total bill for this subscription). */
     costAmount: { type: Number, required: true, min: 0 },
+    /** Account / login email used to buy this subscription. */
+    purchaseEmail: { type: String, default: null, trim: true, lowercase: true },
     renewalDate: { type: Date, default: null },
     status: { type: String, enum: subscriptionStatuses, default: "active", required: true, index: true },
     notes: { type: String, default: null, trim: true },

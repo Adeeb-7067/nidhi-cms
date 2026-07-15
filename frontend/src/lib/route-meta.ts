@@ -185,6 +185,16 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Incoming and outgoing payments, receipts, and due reminders.",
     hideHeader: true,
   },
+  "/finance/cheques": {
+    title: "Cheques",
+    description: "Issue bank cheques and clear them to settle linked expenses.",
+    hideHeader: true,
+  },
+  "/finance/cheques/:id": {
+    title: "Cheque detail",
+    description: "Cheque status, clearance, and linked expense.",
+    hideHeader: true,
+  },
   "/finance/tax": {
     title: "Tax",
     description: "GST dashboard, TDS summaries, and compliance reports.",

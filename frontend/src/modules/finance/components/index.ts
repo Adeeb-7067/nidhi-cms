@@ -31,6 +31,7 @@ export {
   IncomeEditModal,
   PaymentEditModal,
 } from "./FinanceFormModals";
+export { ChequeFormModal } from "./ChequeFormModal";
 export {
   SubscriptionFormModal,
   AssignSeatModal,

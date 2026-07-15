@@ -73,6 +73,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/finance/invoices", "finance_invoices"],
   ["/finance/payments", "finance_payments"],
   ["/finance/payments/", "finance_payments"],
+  ["/finance/cheques", "finance_cheques"],
   ["/finance/payroll", "finance_dashboard"],
   ["/finance/budgets", "finance_budgets"],
   ["/finance/loans", "finance_loans"],

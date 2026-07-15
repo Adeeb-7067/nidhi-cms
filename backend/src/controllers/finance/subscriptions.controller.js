@@ -67,7 +67,7 @@ async function listSubscriptions(req, res) {
     const q = escapeRegex(String(search).trim());
     if (q) {
       const re = { $regex: q, $options: "i" };
-      filter.$or = [{ name: re }, { vendorName: re }, { reference: re }, { plan: re }];
+      filter.$or = [{ name: re }, { vendorName: re }, { reference: re }, { plan: re }, { purchaseEmail: re }];
     }
   }
   const rows = await FinanceSubscriptions.find(filter).sort({ createdAt: -1 }).lean();
@@ -119,6 +119,7 @@ async function createSubscription(req, res) {
     billingCycle,
     seatsPurchased,
     costAmount,
+    purchaseEmail: optionalString(body.purchaseEmail)?.toLowerCase() ?? null,
     renewalDate: body.renewalDate ? new Date(body.renewalDate) : null,
     status: "active",
     notes: optionalString(body.notes) ?? null,
@@ -166,6 +167,9 @@ async function updateSubscription(req, res) {
   }
   if (body.renewalDate !== undefined) {
     updates.renewalDate = body.renewalDate ? new Date(body.renewalDate) : null;
+  }
+  if (body.purchaseEmail !== undefined) {
+    updates.purchaseEmail = optionalString(body.purchaseEmail)?.toLowerCase() ?? null;
   }
   if (body.status !== undefined) {
     if (!subscriptionStatuses.includes(body.status)) {

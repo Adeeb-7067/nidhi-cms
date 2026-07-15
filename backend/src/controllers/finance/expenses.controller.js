@@ -1,4 +1,4 @@
-import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, Projects, vendorsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
+import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, FinanceCheques, Projects, vendorsTable, clientsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import { expenseCategories, financePaymentModes } from "../../models/schema/finance/expenses.js";
@@ -28,18 +28,65 @@ async function nextExpenseReference() {
   return `EXP-${year}-${String(seq).padStart(4, "0")}`;
 }
 
+/** Block cash settlement outside Cheques when an issued cheque owns this bill. */
+async function assertNotOpenChequeExpense(expense, session) {
+  if (!expense?.chequeId) return;
+  let q = FinanceCheques.findOne({ id: expense.chequeId }).select({ id: 1, status: 1, reference: 1 });
+  if (session) q = q.session(session);
+  const cheque = await q.lean();
+  if (cheque?.status === "issued") {
+    badRequest(
+      `This bill is tied to issued cheque ${cheque.reference || `#${cheque.id}`}. Mark it cleared under Finance → Cheques.`,
+      "chequeId",
+    );
+  }
+}
+
 async function resolvePayeeForExpense(expense, session) {
   if (expense.vendorId) {
     let q = vendorsTable.findOne({ id: expense.vendorId }).select({ companyName: 1 });
     if (session) q = q.session(session);
     const vendor = await q.lean();
     if (vendor?.companyName) {
-      return { partyName: vendor.companyName, vendorId: expense.vendorId };
+      return {
+        partyName: vendor.companyName,
+        vendorId: expense.vendorId,
+        employeeId: null,
+        clientId: null,
+      };
+    }
+  }
+  if (expense.employeeId) {
+    let q = usersTable.findOne({ id: expense.employeeId }).select({ name: 1 });
+    if (session) q = q.session(session);
+    const employee = await q.lean();
+    if (employee?.name) {
+      return {
+        partyName: employee.name,
+        vendorId: null,
+        employeeId: expense.employeeId,
+        clientId: null,
+      };
+    }
+  }
+  if (expense.clientId) {
+    let q = clientsTable.findOne({ id: expense.clientId }).select({ companyName: 1 });
+    if (session) q = q.session(session);
+    const client = await q.lean();
+    if (client?.companyName) {
+      return {
+        partyName: client.companyName,
+        vendorId: null,
+        employeeId: null,
+        clientId: expense.clientId,
+      };
     }
   }
   return {
     partyName: optionalString(expense.notes)?.slice(0, 120) || expense.reference,
     vendorId: expense.vendorId ?? null,
+    employeeId: expense.employeeId ?? null,
+    clientId: expense.clientId ?? null,
   };
 }
 
@@ -49,7 +96,8 @@ async function enrichExpenses(items) {
   const vendorIds = [...new Set(items.map((e) => e.vendorId).filter(Boolean))];
   const loanIds = [...new Set(items.map((e) => e.loanId).filter(Boolean))];
   const subscriptionIds = [...new Set(items.map((e) => e.subscriptionId).filter(Boolean))];
-  const [projects, employees, vendors, loans, subscriptions] = await Promise.all([
+  const chequeIds = [...new Set(items.map((e) => e.chequeId).filter(Boolean))];
+  const [projects, employees, vendors, loans, subscriptions, cheques] = await Promise.all([
     projectIds.length ? Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean() : [],
     employeeIds.length ? usersTable.find({ id: { $in: employeeIds } }).select({ id: 1, name: 1 }).lean() : [],
     vendorIds.length
@@ -67,17 +115,22 @@ async function enrichExpenses(items) {
     subscriptionIds.length
       ? FinanceSubscriptions.find({ id: { $in: subscriptionIds } }).select({ id: 1, name: 1, reference: 1 }).lean()
       : [],
+    chequeIds.length
+      ? FinanceCheques.find({ id: { $in: chequeIds } }).select({ id: 1, reference: 1, chequeNumber: 1, status: 1 }).lean()
+      : [],
   ]);
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
   const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
   const vendorMap = new Map(vendors.map((v) => [v.id, v]));
   const loanMap = new Map(loans.map((l) => [l.id, l]));
   const subscriptionMap = new Map(subscriptions.map((s) => [s.id, s]));
+  const chequeMap = new Map(cheques.map((c) => [c.id, c]));
   return items.map((e) => {
     const vendor = e.vendorId ? vendorMap.get(e.vendorId) : null;
     const vendorFields = vendor ? resolveVendorFields(vendor) : [];
     const loan = e.loanId ? loanMap.get(e.loanId) : null;
     const subscription = e.subscriptionId ? subscriptionMap.get(e.subscriptionId) : null;
+    const cheque = e.chequeId ? chequeMap.get(e.chequeId) : null;
     return withExpenseSettlementView({
       ...e,
       projectName: e.projectId ? projectMap.get(e.projectId) ?? null : null,
@@ -91,6 +144,9 @@ async function enrichExpenses(items) {
       loanReference: loan?.reference ?? null,
       subscriptionName: subscription?.name ?? null,
       subscriptionReference: subscription?.reference ?? null,
+      chequeReference: cheque?.reference ?? null,
+      chequeNumber: cheque?.chequeNumber ?? null,
+      chequeStatus: cheque?.status ?? null,
     });
   });
 }
@@ -330,10 +386,13 @@ async function approveExpense(req, res) {
     }
 
     if (paidNow > 0) {
+      await assertNotOpenChequeExpense(updated, session);
       const payee = await resolvePayeeForExpense(updated, session);
       const result = await recordOutgoingPayment(session, {
         partyName: payee.partyName,
         vendorId: payee.vendorId,
+        employeeId: payee.employeeId,
+        clientId: payee.clientId,
         expenseId: id,
         amount: paidNow,
         mode: paymentMode,
@@ -394,10 +453,13 @@ async function payExpenseRemaining(req, res) {
 
   let payment;
   await runInTx(async (session) => {
+    await assertNotOpenChequeExpense(expense, session);
     const payee = await resolvePayeeForExpense(expense, session);
     const result = await recordOutgoingPayment(session, {
       partyName: payee.partyName,
       vendorId: payee.vendorId,
+      employeeId: payee.employeeId,
+      clientId: payee.clientId,
       expenseId: id,
       amount,
       mode,

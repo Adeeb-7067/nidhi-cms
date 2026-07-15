@@ -18,7 +18,8 @@ import { broadcastWorkSessionSync } from "./work-session-sync.js";
 const RESUMABLE_STOP_REASONS = [
   "clock_out",
   "shift_ended",
-  "day_ended",
+  // day_ended sessions started yesterday — resuming them is immediately killed by
+  // sessionPolicyStopReason (startedAt is previous work day) and creates a resume loop.
   "app_quit",
   "logout",
   "system_sleep",
@@ -282,6 +283,11 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
       if (!session) continue;
       const delivered = await deliverClockInSession(session);
       if (delivered.session) return { session: delivered.session, resumed: true };
+      // Resume died under policy (should be rare after same-day-only filter).
+      // Do not keep retrying a previous-day session — fall through to a fresh start.
+      if (delivered.stopReason === "day_ended" || delivered.stopReason === "session_expired") {
+        break;
+      }
     }
 
     const racedActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();

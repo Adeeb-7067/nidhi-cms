@@ -163,6 +163,26 @@ export function ExpenseBillDetailSheet({
                     </div>
                   </div>
                 ) : null}
+                {data.chequeId ? (
+                  <div className="col-span-2">
+                    <div className="text-[11px] text-muted-foreground">Cheque</div>
+                    <div>
+                      <a
+                        href={`/finance/cheques/${data.chequeId}`}
+                        className="text-primary hover:underline"
+                      >
+                        {data.chequeNumber
+                          ? `#${data.chequeNumber}`
+                          : data.chequeReference ?? `Cheque #${data.chequeId}`}
+                      </a>
+                      {data.chequeStatus ? (
+                        <span className="ml-2">
+                          <FinanceStatusBadge variant="cheque" value={data.chequeStatus} />
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
                 {data.notes ? (
                   <div className="col-span-2">
                     <div className="text-[11px] text-muted-foreground">Notes</div>
@@ -189,10 +209,18 @@ export function ExpenseBillDetailSheet({
                       </Button>
                     </>
                   ) : null}
-                  {data.status === "approved" && due > 0 ? (
+                  {data.status === "approved" && due > 0 && data.chequeStatus !== "issued" ? (
                     <Button size="sm" className="gap-1.5" onClick={() => onPayRemaining?.(data)}>
                       <Wallet className="h-3.5 w-3.5" />
                       Pay remaining ({formatCurrency(due)})
+                    </Button>
+                  ) : null}
+                  {data.status === "approved" && due > 0 && data.chequeStatus === "issued" && data.chequeId ? (
+                    <Button size="sm" variant="outline" className="gap-1.5" asChild>
+                      <a href={`/finance/cheques/${data.chequeId}`}>
+                        <Wallet className="h-3.5 w-3.5" />
+                        Clear via Cheques
+                      </a>
                     </Button>
                   ) : null}
                 </div>
