@@ -20,6 +20,9 @@ function isMongooseBufferingTimeout(err) {
     err.message.includes("buffering timed out")
   );
 }
+function isCastError(err) {
+  return typeof err === "object" && err !== null && err.name === "CastError";
+}
 function normalizeLegacyStatus(err) {
   const legacy = err;
   if (typeof legacy.statusCode === "number") return legacy.statusCode;

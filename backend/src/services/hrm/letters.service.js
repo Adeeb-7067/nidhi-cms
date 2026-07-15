@@ -231,7 +231,7 @@ export async function sendExperienceLetter(actor, id) {
   let pdfPath = await getExperienceLetterPdfPath(id);
   let attachmentPath = pdfPath;
   if (pdfPath && typeof pdfPath === "object" && pdfPath.remoteUrl) {
-    badRequest("PDF is stored remotely — download and send manually, or re-generate the letter.");
+    attachmentPath = pdfPath.remoteUrl;
   }
 
   const letterLabel =
