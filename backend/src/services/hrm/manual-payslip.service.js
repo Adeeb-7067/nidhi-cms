@@ -16,6 +16,7 @@ const USER_FIELDS = {
   designation: 1,
   joiningDate: 1,
   avatarUrl: 1,
+  salary: 1,
 };
 
 function daysInMonth(year, month) {
@@ -51,18 +52,27 @@ function parseNet(raw) {
  * salary is intentionally emptied so the earnings table collapses to a single
  * "Salary (earned)" line equal to the entered net amount.
  */
-function buildManualPayslipHtml({ user, settings, year, month, net }) {
+function buildManualPayslipHtml({ user, settings, year, month, net, paidDate }) {
   const run = { year, month, status: "paid" };
+  const baseSalary = Number(user.salary?.netSalary) || 0;
+  let gross = net;
+  let deduction = 0;
+  if (baseSalary > net) {
+    gross = baseSalary;
+    deduction = baseSalary - net;
+  }
   const line = {
-    gross: net,
+    gross,
     net,
     paidDays: daysInMonth(year, month),
     lopDays: 0,
     lateCount: 0,
     lopDeduction: 0,
+    manualDeduction: deduction,
+    paidOn: paidDate,
   };
   return generatePayslipHtmlFromCms({
-    user: { ...user, salary: {} },
+    user,
     run,
     line,
     structure: {},
@@ -78,6 +88,13 @@ async function loadEmployee(userId) {
 }
 
 function toDetail(row, user, settings) {
+  const baseSalary = Number(user?.salary?.netSalary) || 0;
+  let gross = row.net;
+  let deductions = 0;
+  if (baseSalary > row.net) {
+    gross = baseSalary;
+    deductions = baseSalary - row.net;
+  }
   return {
     id: row.id,
     month: row.month,
@@ -87,21 +104,22 @@ function toDetail(row, user, settings) {
     employeeName: user?.name ?? "Employee",
     employeeId: user?.employeeId ?? null,
     department: user?.department ?? null,
-    basic: 0,
+    basic: user?.salary?.basicSalary ?? 0,
     hra: 0,
-    allowances: 0,
-    contractNet: row.net,
-    earnedGross: row.net,
+    allowances: user?.salary?.allowances ?? 0,
+    contractNet: baseSalary > 0 ? baseSalary : row.net,
+    earnedGross: gross,
     paidDays: daysInMonth(row.year, row.month),
     lopDays: 0,
     lateCount: 0,
-    gross: row.net,
-    deductions: 0,
+    gross: gross,
+    deductions: deductions,
     lopDeduction: 0,
     latePenalty: 0,
     net: row.net,
     manual: true,
     notes: row.notes ?? "",
+    paidDate: row.paidDate ? new Date(row.paidDate).toISOString().slice(0, 10) : null,
     htmlContent: row.htmlContent ?? null,
   };
 }
@@ -114,14 +132,23 @@ export async function upsertManualPayslip(body, actorId) {
   const net = parseNet(body.net);
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
 
+  let paidDate = null;
+  if (body.paidDate) {
+    const d = new Date(body.paidDate);
+    if (!Number.isNaN(d.getTime())) {
+      paidDate = d;
+    }
+  }
+
   const [user, settings] = await Promise.all([loadEmployee(userId), getOrCreateSettings()]);
-  const htmlContent = buildManualPayslipHtml({ user, settings, year, month, net });
+  const htmlContent = buildManualPayslipHtml({ user, settings, year, month, net, paidDate });
 
   const existing = await manualPayslipsTable.findOne({ userId, year, month });
   let row;
   if (existing) {
     existing.net = net;
     existing.notes = notes;
+    existing.paidDate = paidDate;
     existing.htmlContent = htmlContent;
     existing.updatedBy = actorId;
     row = await existing.save();
@@ -134,6 +161,7 @@ export async function upsertManualPayslip(body, actorId) {
       month,
       net,
       notes,
+      paidDate,
       htmlContent,
       createdBy: actorId,
       updatedBy: actorId,
@@ -178,6 +206,7 @@ export async function listManualPayslips({ year, month, userId, allPeriods = fal
       month: r.month,
       net: r.net,
       notes: r.notes ?? "",
+      paidDate: r.paidDate ? new Date(r.paidDate).toISOString().slice(0, 10) : null,
       employeeName: u?.name ?? "Employee",
       employeeId: u?.employeeId ?? null,
       employeeAvatarUrl: u?.avatarUrl ?? null,

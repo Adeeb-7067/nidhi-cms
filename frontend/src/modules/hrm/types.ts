@@ -608,6 +608,7 @@ export type HrmManualPayslipRow = {
   month: number;
   net: number;
   notes?: string;
+  paidDate?: string | null;
   employeeName: string;
   employeeId: string | null;
   employeeAvatarUrl?: string | null;
@@ -621,6 +622,7 @@ export type HrmManualPayslipInput = {
   month: number;
   net: number;
   notes?: string;
+  paidDate?: string | null;
 };
 
 export type HrmPayrollChecklistBlocker = {

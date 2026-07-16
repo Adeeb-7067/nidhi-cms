@@ -130,6 +130,7 @@ function buildDeductionRows(payRollData) {
   const lateDed = Number(payRollData?.lateDeductionAmount ?? 0);
   const absentDed = Number(payRollData?.absentDeductionAmount ?? 0);
   const unpaidLeaveDed = Number(payRollData?.unpaidLeaveDeductionAmount ?? 0);
+  const manualDed = Number(payRollData?.manualDeductionAmount ?? 0);
   const attendanceDed = halfDed + lateDed + absentDed;
 
   const rows = [];
@@ -139,6 +140,9 @@ function buildDeductionRows(payRollData) {
   }
   if (unpaidLeaveDed > 0) {
     rows.push({ label: "LOP Deduction", amount: unpaidLeaveDed });
+  }
+  if (manualDed > 0) {
+    rows.push({ label: "Deduction", amount: manualDed });
   }
 
   return rows.filter((row) => row.amount > 0);
@@ -1029,12 +1033,13 @@ function buildCmsPayrollPayload({ user, run, line, structure, leaveSummary }) {
     salaryBaseUsed: basicSalary,
     paySlipTime: monthDate,
     createdAt: monthDate,
-    paidOn: run.status === "paid" ? new Date() : null,
+    paidOn: line.paidOn ?? (run.status === "paid" ? new Date() : null),
     status: run.status === "paid" ? "PAID" : "UNPAID",
     lateDeductionAmount: 0,
     halfDayDeductionAmount: 0,
     absentDeductionAmount: 0,
     unpaidLeaveDeductionAmount: line.lopDeduction ?? 0,
+    manualDeductionAmount: line.manualDeduction ?? 0,
     overtimeAmount: 0,
     totalFullDay: line.paidDays ?? 0,
     totalWfh: 0,

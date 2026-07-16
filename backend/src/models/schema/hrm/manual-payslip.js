@@ -13,6 +13,7 @@ const manualPayslipSchema = new Schema({
   // The single net amount the admin entered for this month.
   net: { type: Number, required: true, min: 0 },
   notes: { type: String, default: "" },
+  paidDate: { type: Date, default: null },
   // Pre-rendered payslip HTML (same template as automated payslips) so the
   // existing preview/PDF UI renders it unchanged.
   htmlContent: { type: String },

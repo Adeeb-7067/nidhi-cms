@@ -68,6 +68,7 @@ export default function HrmManualPayslipsPage() {
   const [month, setMonth] = useState(String(nowPeriod.month));
   const [year, setYear] = useState(String(nowPeriod.year));
   const [net, setNet] = useState("");
+  const [paidDate, setPaidDate] = useState("");
 
   const { data, isLoading, isFetching, refetch } = useManualPayslips({ allPeriods: true });
   const { data: employeesData } = useHrmEmployees({ limit: 500 });
@@ -93,6 +94,7 @@ export default function HrmManualPayslipsPage() {
     setMonth(String(nowPeriod.month));
     setYear(String(nowPeriod.year));
     setNet("");
+    setPaidDate("");
   };
 
   const handleSubmit = () => {
@@ -107,7 +109,7 @@ export default function HrmManualPayslipsPage() {
       return;
     }
     upsert.mutate(
-      { userId, year: Number(year), month: Number(month), net: netAmount },
+      { userId, year: Number(year), month: Number(month), net: netAmount, paidDate: paidDate || undefined },
       {
         onSuccess: () => {
           toast.success("Manual payslip saved");
@@ -329,6 +331,14 @@ export default function HrmManualPayslipsPage() {
                   placeholder="e.g. 45000"
                   value={net}
                   onChange={(e) => setNet(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Paid date</label>
+                <Input
+                  type="date"
+                  value={paidDate}
+                  onChange={(e) => setPaidDate(e.target.value)}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   If a payslip already exists for this employee and month, it will be replaced.
