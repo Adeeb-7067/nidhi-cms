@@ -1,4 +1,4 @@
-import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, FinanceCheques, Projects, vendorsTable, clientsTable, usersTable, getNextSequence } from "../../models/schema/index.js";
+import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, FinanceCheques, Projects, vendorsTable, clientsTable, usersTable, getNextSequence, companySettingsTable } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import { expenseCategories, financePaymentModes } from "../../models/schema/finance/expenses.js";
@@ -12,6 +12,7 @@ import {
   outstandingExpenseAmount,
   withExpenseSettlementView,
 } from "../../services/finance/expense-cash.service.js";
+import { deleteStoredFile } from "../../lib/file-storage.js";
 
 async function assertExpenseVendorId(vendorId) {
   if (vendorId == null || vendorId === "") return null;
@@ -20,6 +21,24 @@ async function assertExpenseVendorId(vendorId) {
   const vendor = await vendorsTable.findOne({ id }).select({ id: 1 }).lean();
   if (!vendor) badRequest("Select a valid vendor.", "vendorId");
   return id;
+}
+
+async function assertAfterLockDate(dateToCheck) {
+  if (!dateToCheck) return;
+  const settings = await companySettingsTable.findOne().select({ fiscalLockDate: 1 }).lean();
+  if (settings?.fiscalLockDate) {
+    const checkTime = startOfDayDate(dateToCheck).getTime();
+    const lockTime = startOfDayDate(settings.fiscalLockDate).getTime();
+    if (checkTime <= lockTime) {
+      badRequest("Transaction date cannot be on or before the closed fiscal lock date.", "date");
+    }
+  }
+}
+
+function startOfDayDate(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
 }
 
 async function nextExpenseReference() {
@@ -154,7 +173,7 @@ async function enrichExpenses(items) {
 async function listExpenses(req, res) {
   const { status, category, projectId, loanId, paymentStatus, search } = req.query;
   const { page, limit, skip } = parsePagination(req.query);
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
   if (status) filter.status = status;
   if (category) filter.category = category;
   if (projectId) filter.projectId = Number(projectId);
@@ -207,7 +226,7 @@ async function listExpenses(req, res) {
 
 async function getExpenseById(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
-  const expense = await FinanceExpenses.findOne({ id }).lean();
+  const expense = await FinanceExpenses.findOne({ id, isDeleted: { $ne: true } }).lean();
   if (!expense) notFound("Expense");
   const [enriched] = await enrichExpenses([expense]);
 
@@ -256,6 +275,7 @@ async function createExpense(req, res) {
   if (body.category === "salary") {
     badRequest("Salary cost is pulled automatically from HRM payroll and cannot be entered as an expense.", "category");
   }
+  await assertAfterLockDate(body.date);
   const amount = Number(body.amount);
   if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
   if (!body.paymentMode) badRequest("paymentMode is required.", "paymentMode");
@@ -296,12 +316,16 @@ async function createExpense(req, res) {
 
 async function updateExpense(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
-  const expense = await FinanceExpenses.findOne({ id }).lean();
+  const expense = await FinanceExpenses.findOne({ id, isDeleted: { $ne: true } }).lean();
   if (!expense) notFound("Expense");
   if (expense.status !== "pending") {
     badRequest("Only pending expenses can be edited. Reverse the approval first.", "status");
   }
   const body = req.body ?? {};
+  await assertAfterLockDate(expense.date);
+  if (body.date !== undefined) {
+    await assertAfterLockDate(body.date);
+  }
   const updates = {};
   if (body.date !== undefined) updates.date = new Date(body.date);
   if (body.category !== undefined) {
@@ -342,11 +366,15 @@ async function updateExpense(req, res) {
  */
 async function approveExpense(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
-  const expense = await FinanceExpenses.findOne({ id }).lean();
+  const expense = await FinanceExpenses.findOne({ id, isDeleted: { $ne: true } }).lean();
   if (!expense) notFound("Expense");
   if (expense.status !== "pending") badRequest("Only pending expenses can be approved.", "status");
 
   const body = req.body ?? {};
+  await assertAfterLockDate(expense.date);
+  if (body.paymentDate) {
+    await assertAfterLockDate(body.paymentDate);
+  }
   const paidNowRaw =
     body.paidAmount !== undefined && body.paidAmount !== null && body.paidAmount !== ""
       ? Number(body.paidAmount)
@@ -430,7 +458,7 @@ async function rejectExpense(req, res) {
  */
 async function payExpenseRemaining(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
-  const expense = await FinanceExpenses.findOne({ id }).lean();
+  const expense = await FinanceExpenses.findOne({ id, isDeleted: { $ne: true } }).lean();
   if (!expense) notFound("Expense");
   if (expense.status !== "approved") badRequest("Only approved expenses can be paid.", "status");
   if (isLegacyFullyPaidExpense(expense)) {
@@ -440,6 +468,10 @@ async function payExpenseRemaining(req, res) {
   if (!(remaining > 0)) badRequest("This expense has nothing remaining to pay.", "amount");
 
   const body = req.body ?? {};
+  await assertAfterLockDate(expense.date);
+  if (body.date) {
+    await assertAfterLockDate(body.date);
+  }
   const amount = Math.round(Number(body.amount) * 100) / 100;
   if (!(amount > 0)) badRequest("amount must be a positive number.", "amount");
   if (amount > remaining + 0.0001) {
@@ -478,8 +510,9 @@ async function payExpenseRemaining(req, res) {
 
 async function deleteExpense(req, res) {
   const id = parseIdParam(req.params.id, "expense id");
-  const expense = await FinanceExpenses.findOne({ id }).lean();
+  const expense = await FinanceExpenses.findOne({ id, isDeleted: { $ne: true } }).lean();
   if (!expense) notFound("Expense");
+  await assertAfterLockDate(expense.date);
   if (expense.status === "approved") {
     badRequest("Approved expenses cannot be deleted — reject instead if this was recorded in error.", "status");
   }
@@ -487,7 +520,23 @@ async function deleteExpense(req, res) {
   if (linkedPayment) {
     badRequest("This expense has a linked payment. Delete the payment first.", "expenseId");
   }
-  await FinanceExpenses.deleteOne({ id });
+  const linkedCheque = await FinanceCheques.findOne({ expenseId: id }).select({ id: 1, reference: 1 }).lean();
+  if (linkedCheque) {
+    badRequest(`This expense is linked to cheque ${linkedCheque.reference || `#${linkedCheque.id}`}. Delete the cheque first.`, "status");
+  }
+
+  // Delete cloud assets
+  if (expense.attachments && expense.attachments.length > 0) {
+    for (const attachment of expense.attachments) {
+      try {
+        await deleteStoredFile(attachment.url);
+      } catch (err) {
+        console.error(`Failed to delete storage file: ${attachment.url}`, err);
+      }
+    }
+  }
+
+  await FinanceExpenses.updateOne({ id }, { $set: { isDeleted: true, deletedAt: new Date() } });
   res.json({ success: true });
 }
 

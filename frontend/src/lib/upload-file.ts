@@ -9,6 +9,7 @@ const CATEGORY_MAX_MB: Record<string, number> = {
   reports: 50,
   misc: 50,
   hrm: 10,
+  marketing: 100,
 };
 
 /** Categories that upload directly to object storage (bypassing nginx/Node for the file bytes) when available. */
@@ -56,6 +57,8 @@ export type FileUploadResponse = {
   publicUrl?: string;
   originalName?: string;
   mimetype?: string;
+  key?: string;
+  size?: number;
 };
 
 function maxMbForCategory(category: UploadCategory | string): number {

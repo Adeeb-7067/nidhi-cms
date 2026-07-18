@@ -14,7 +14,9 @@ export function getProjectsListHref(role: UserRole | string | undefined): string
 export function getProjectDetailHref(
   projectId: number | string,
   role?: UserRole | string | null,
+  type?: string | null,
 ): string {
+  if (type === "digital") return `/marketing/projects/${projectId}`;
   if (role === "super_admin") return `/admin/projects/${projectId}`;
   if (role === "bde") return `/admin/projects/${projectId}`;
   if (role && isDevPortalRole(role)) return `/dev/projects/${projectId}`;

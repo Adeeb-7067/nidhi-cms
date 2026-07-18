@@ -10,6 +10,7 @@ export type {
   BudgetType,
   BudgetStatus,
   LoanStatus,
+  LoanSource,
   SubscriptionStatus,
   SubscriptionBillingCycle,
   LedgerType,

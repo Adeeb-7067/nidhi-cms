@@ -150,6 +150,13 @@ export default function AdminProjectDetail() {
   });
   const project = _projectRaw as unknown as Project | undefined;
 
+  // Digital projects use the Digital portal hub, not the engineering project detail.
+  useEffect(() => {
+    if (project?.type === "digital") {
+      setLocation(`/marketing/projects/${projectId}`);
+    }
+  }, [project?.type, projectId, setLocation]);
+
   const { data: _membersRaw } = useGetProjectMembers(projectId, {
     query: { enabled: validProjectId, queryKey: getGetProjectMembersQueryKey(projectId) }
   });

@@ -5,7 +5,7 @@ import { toastApiError } from "@/lib/api-error";
 import { format } from "date-fns";
 import {
   ArrowLeft, Activity, Bell, Briefcase, Building2, Calendar,
-  CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock,
+  CheckCircle2, ChevronDown, ChevronRight, ChevronUp,
   Download, FileText, FileImage, FolderOpen, Mail, MapPin,
   MessageSquare, Pencil, Phone, Plus, Radio, RefreshCw, Send,
   StickyNote, Tag, Trash2, TrendingUp, User, UserCheck, X,
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { cn } from "@/lib/utils";
 import {
   useGetLead,
   useListProposals,
@@ -41,41 +42,25 @@ import {
   formatCurrency,
   formatLeadContactChannelLabel,
   formatLeadSourceLabel,
+  LEAD_NO_FOLLOW_UP_STATUSES,
 } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { FileUploader } from "@/components/ui/file-uploader";
 
-/* ─── Design tokens ────────────────────────────────────────────────────────── */
-const P = {
-  blue:       "#1A56DB",
-  blueLight:  "#EFF6FF",
-  blueBorder: "#BFDBFE",
-  orange:     "#E8630A",
-  green:      "#057A55",
-  red:        "#C81E1E",
-  dark:       "#111928",
-  muted:      "#6B7280",
-  subtle:     "#9CA3AF",
-  border:     "#E5E7EB",
-};
-
 /* ─── Stat card ────────────────────────────────────────────────────────────── */
-function StatCard({ icon, label, value, sub, color = P.blue }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; color?: string;
+function StatCard({ icon, label, value, sub, accentClass = "text-primary" }: {
+  icon: React.ReactNode; label: string; value: string; sub?: string; accentClass?: string;
 }) {
   return (
-    <div className="rounded-xl p-4 space-y-1.5" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
+    <div className="rounded-xl border border-border bg-card p-4 space-y-1.5">
       <div className="flex items-center gap-2">
-        <span
-          className="h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: `${color}15`, color }}
-        >
+        <span className={cn("h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-current/10", accentClass)}>
           {icon}
         </span>
-        <span className="text-xs" style={{ color: P.muted }}>{label}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
       </div>
-      <p className="text-lg font-black tabular-nums" style={{ color: P.dark }}>{value}</p>
-      {sub && <p className="text-[10px] line-clamp-1" style={{ color: P.subtle }}>{sub}</p>}
+      <p className="text-lg font-black tabular-nums text-foreground">{value}</p>
+      {sub && <p className="text-[10px] line-clamp-1 text-muted-foreground/70">{sub}</p>}
     </div>
   );
 }
@@ -85,17 +70,47 @@ function ContactRow({ icon: Icon, label, children }: {
   icon: React.ElementType; label: string; children: React.ReactNode;
 }) {
   return (
-    <div className="flex gap-3 py-2.5" style={{ borderBottom: `1px solid ${P.border}` }}>
-      <span
-        className="h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg"
-        style={{ background: P.blueLight }}
-      >
-        <Icon className="h-3.5 w-3.5" style={{ color: P.blue }} />
+    <div className="flex gap-3 py-2.5 border-b border-border last:border-0">
+      <span className="h-8 w-8 flex-shrink-0 flex items-center justify-center rounded-lg bg-primary/10">
+        <Icon className="h-3.5 w-3.5 text-primary" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: P.blue }}>{label}</p>
-        <div className="mt-0.5 text-sm" style={{ color: P.dark }}>{children}</div>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-primary">{label}</p>
+        <div className="mt-0.5 text-sm text-foreground">{children}</div>
       </div>
+    </div>
+  );
+}
+
+/* ─── Section card shell ───────────────────────────────────────────────────── */
+function SectionCard({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("rounded-2xl border border-border bg-card", className)}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-5 py-4 border-b border-border sm:px-6">
+      {icon}
+      <h3 className="text-sm font-bold text-foreground">{title}</h3>
+      {children}
     </div>
   );
 }
@@ -141,8 +156,8 @@ function isImageUrl(url: string) {
 }
 
 function DocIcon({ url }: { url: string }) {
-  if (isImageUrl(url)) return <FileImage className="h-4 w-4" style={{ color: P.blue }} />;
-  return <FileText className="h-4 w-4" style={{ color: P.orange }} />;
+  if (isImageUrl(url)) return <FileImage className="h-4 w-4 text-primary" />;
+  return <FileText className="h-4 w-4 text-orange-600 dark:text-orange-400" />;
 }
 
 function PlanningDocRow({
@@ -158,18 +173,24 @@ function PlanningDocRow({
   const isImg = isImageUrl(doc.url);
   return (
     <div
-      className="flex items-center gap-2.5 rounded-xl px-3 py-2.5"
-      style={{ background: isImg ? "#EFF6FF" : "#FFF7ED", border: `1px solid ${isImg ? "#BFDBFE" : "#FED7AA"}` }}
+      className={cn(
+        "flex items-center gap-2.5 rounded-xl px-3 py-2.5 border",
+        isImg
+          ? "bg-primary/10 border-primary/20"
+          : "bg-orange-500/10 border-orange-500/20",
+      )}
     >
       <div
-        className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-        style={{ background: isImg ? "#DBEAFE" : "#FFEDD5" }}
+        className={cn(
+          "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0",
+          isImg ? "bg-primary/15" : "bg-orange-500/15",
+        )}
       >
         <DocIcon url={doc.url} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-semibold truncate" style={{ color: P.dark }}>{doc.name}</p>
-        <p className="text-[10px] mt-0.5" style={{ color: P.muted }}>
+        <p className="text-xs font-semibold truncate text-foreground">{doc.name}</p>
+        <p className="text-[10px] mt-0.5 text-muted-foreground">
           {isImg ? "Image" : "PDF"} · {new Date(doc.uploadedAt).toLocaleDateString()}
         </p>
       </div>
@@ -177,8 +198,7 @@ function PlanningDocRow({
         href={url}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-colors"
-        style={{ color: P.blue }}
+        className="flex items-center gap-1 text-[10px] font-medium px-2 py-1 rounded-lg transition-colors text-primary hover:underline"
         onClick={(e) => e.stopPropagation()}
       >
         <Download className="h-3 w-3" />View
@@ -186,7 +206,7 @@ function PlanningDocRow({
       <button
         disabled={removing}
         onClick={onRemove}
-        className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-40"
+        className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40"
       >
         <Trash2 className="h-3.5 w-3.5" />
       </button>
@@ -259,28 +279,24 @@ function ProjectPlanningDocs({ leadId, docs, leadStatus }: {
   };
 
   return (
-    <div className="rounded-2xl h-full" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-        <FolderOpen className="h-4 w-4" style={{ color: P.orange }} />
-        <h3 className="text-sm font-bold" style={{ color: P.dark }}>Project Planning Docs</h3>
+    <SectionCard className="h-full">
+      <SectionHeader
+        icon={<FolderOpen className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
+        title="Project Planning Docs"
+      >
         {docs.length > 0 && (
-          <span
-            className="ml-1 flex items-center justify-center h-4 min-w-4 rounded-full px-1 text-[9px] font-bold"
-            style={{ background: P.orange, color: "#fff" }}
-          >
+          <span className="ml-1 flex items-center justify-center h-4 min-w-4 rounded-full px-1 text-[9px] font-bold bg-orange-600 text-white dark:bg-orange-500">
             {docs.length}
           </span>
         )}
         {docs.length > 0 && (
-          <span className="ml-auto flex items-center gap-1 text-[10px] font-semibold" style={{ color: P.green }}>
+          <span className="ml-auto flex items-center gap-1 text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">
             <CheckCircle2 className="h-3.5 w-3.5" />{docs.length} file{docs.length !== 1 ? "s" : ""}
           </span>
         )}
-      </div>
+      </SectionHeader>
 
       <div className="p-5 space-y-3">
-        {/* Existing docs list */}
         {docs.length > 0 && (
           <div className="space-y-2">
             {docs.map((doc) => (
@@ -294,15 +310,14 @@ function ProjectPlanningDocs({ leadId, docs, leadStatus }: {
           </div>
         )}
 
-        {/* Pending confirmation */}
         {pendingUpload ? (
-          <div className="rounded-xl p-3 space-y-2.5" style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: P.green }}>
+          <div className="rounded-xl p-3 space-y-2.5 border border-emerald-500/20 bg-emerald-500/10">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
               File uploaded — give it a name
             </p>
             <div className="flex items-center gap-2">
               <input
-                className="flex-1 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 placeholder="Document name…"
                 value={pendingName}
                 onChange={(e) => setPendingName(e.target.value)}
@@ -327,14 +342,12 @@ function ProjectPlanningDocs({ leadId, docs, leadStatus }: {
           </div>
         ) : (
           <>
-            {/* Upload hint */}
             {docs.length === 0 && (
-              <p className="text-xs leading-relaxed" style={{ color: P.muted }}>
+              <p className="text-xs leading-relaxed text-muted-foreground">
                 Upload the project planning PDF or images to auto-advance the pipeline to{" "}
-                <span className="font-medium" style={{ color: P.dark }}>Proposal Sent</span>.
+                <span className="font-medium text-foreground">Proposal Sent</span>.
               </p>
             )}
-            {/* Upload zone */}
             <FileUploader
               key={uploaderKey}
               accept={ACCEPTED_TYPES}
@@ -347,7 +360,7 @@ function ProjectPlanningDocs({ leadId, docs, leadStatus }: {
           </>
         )}
       </div>
-    </div>
+    </SectionCard>
   );
 }
 
@@ -432,6 +445,8 @@ export default function LeadDetail() {
 
   const isLost      = lead.status === "lost";
   const isConverted = lead.status === "converted";
+  const isClosedElsewhere = lead.status === "closed_elsewhere";
+  const pauseFollowUps = LEAD_NO_FOLLOW_UP_STATUSES.includes(lead.status);
   const descText    = lead.description?.trim() ?? "";
   const needsDescExpand  = descText.length > 300 || descText.split("\n").length > 5;
   const needsNotesExpand = descText.length > 300 || descText.split("\n").length > 5;
@@ -441,12 +456,12 @@ export default function LeadDetail() {
 
       {/* ── Breadcrumb + header actions ── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <nav className="flex flex-wrap items-center gap-1 text-xs" style={{ color: P.muted }}>
+        <nav className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
           <Link href="/sales" className="transition-colors hover:text-foreground">Sales</Link>
           <ChevronRight className="h-3 w-3" />
           <Link href="/sales/leads" className="transition-colors hover:text-foreground">Leads</Link>
           <ChevronRight className="h-3 w-3" />
-          <span className="font-medium truncate max-w-[200px]" style={{ color: P.dark }}>{lead.name}</span>
+          <span className="font-medium truncate max-w-[200px] text-foreground">{lead.name}</span>
         </nav>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
@@ -455,36 +470,29 @@ export default function LeadDetail() {
           <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => setEditOpen(true)}>
             <Pencil className="h-3.5 w-3.5" />Edit
           </Button>
-          <Button size="sm" className="h-8 gap-1.5" onClick={() => setProposalOpen(true)}>
-            <FileText className="h-3.5 w-3.5" />Generate proposal
-          </Button>
+          {!pauseFollowUps && (
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => setProposalOpen(true)}>
+              <FileText className="h-3.5 w-3.5" />Generate proposal
+            </Button>
+          )}
         </div>
       </div>
 
       {/* ── Hero banner ── */}
-      <div className="rounded-2xl overflow-hidden" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-        <div
-          className="px-6 py-5"
-          style={{ background: `linear-gradient(135deg, ${P.blueLight} 0%, #fff 60%)`, borderBottom: `1px solid ${P.border}` }}
-        >
+      <SectionCard className="overflow-hidden">
+        <div className="relative px-6 py-5 border-b border-border bg-gradient-to-br from-primary/15 via-primary/5 to-transparent">
           <div className="flex items-start gap-4">
-            <div
-              className="h-14 w-14 rounded-2xl flex items-center justify-center font-black text-2xl flex-shrink-0"
-              style={{ background: P.blue, color: "#fff" }}
-            >
+            <div className="h-14 w-14 rounded-2xl flex items-center justify-center font-black text-2xl flex-shrink-0 bg-primary text-primary-foreground">
               {lead.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h1 className="text-xl font-black" style={{ color: P.dark }}>{lead.name}</h1>
-                <span
-                  className="text-[10px] font-mono px-2 py-0.5 rounded-md"
-                  style={{ background: P.blueLight, color: P.blue, border: `1px solid ${P.blueBorder}` }}
-                >
+                <h1 className="text-xl font-black text-foreground">{lead.name}</h1>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-primary/10 text-primary border border-primary/20">
                   #{lead.id}
                 </span>
               </div>
-              <p className="text-sm mb-2.5" style={{ color: P.muted }}>
+              <p className="text-sm mb-2.5 text-muted-foreground">
                 {[lead.position?.trim(), lead.company?.trim()].filter(Boolean).join(" · ") || "No company on file"}
               </p>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -493,8 +501,7 @@ export default function LeadDetail() {
                 {lead.tags?.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{ background: "#F3F4F6", color: P.muted, border: `1px solid ${P.border}` }}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground border border-border"
                   >
                     <Tag className="h-2.5 w-2.5" />{tag}
                   </span>
@@ -503,27 +510,40 @@ export default function LeadDetail() {
             </div>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
       {/* ── Alert banners ── */}
       {isLost && (
-        <div className="rounded-xl px-4 py-3.5 flex gap-3" style={{ background: "#FEF2F2", border: `1px solid #FECACA` }}>
-          <span className="h-2 w-2 rounded-full mt-1.5 flex-shrink-0" style={{ background: P.red }} />
-          <p className="text-sm font-medium" style={{ color: "#991B1B" }}>
+        <div className="rounded-xl px-4 py-3.5 flex gap-3 border border-destructive/20 bg-destructive/10">
+          <span className="h-2 w-2 rounded-full mt-1.5 flex-shrink-0 bg-destructive" />
+          <p className="text-sm font-medium text-destructive">
             This lead is marked as <strong>Lost</strong>.
           </p>
         </div>
       )}
+      {isClosedElsewhere && (
+        <div className="rounded-xl px-4 py-3.5 flex gap-3 border border-slate-500/25 bg-slate-500/10">
+          <span className="h-2 w-2 rounded-full mt-1.5 flex-shrink-0 bg-slate-500" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-slate-800 dark:text-slate-200">
+              Client <strong>closed a deal elsewhere</strong>.
+            </p>
+            <p className="text-xs mt-0.5 text-slate-600 dark:text-slate-400">
+              Follow-ups and reminders are paused. You can reopen outreach later by changing the status.
+            </p>
+          </div>
+        </div>
+      )}
       {isConverted && lead.customerId && (
-        <div className="rounded-xl px-4 py-3.5 flex items-center gap-3" style={{ background: "#ECFDF5", border: "1px solid #BBF7D0" }}>
-          <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: P.green }} />
-          <p className="text-sm font-medium flex-1" style={{ color: "#065F46" }}>
+        <div className="rounded-xl px-4 py-3.5 flex items-center gap-3 border border-emerald-500/20 bg-emerald-500/10">
+          <span className="h-2 w-2 rounded-full flex-shrink-0 bg-emerald-500" />
+          <p className="text-sm font-medium flex-1 text-emerald-800 dark:text-emerald-200">
             This lead has been <strong>converted</strong> to a customer.
           </p>
           <Button
             size="sm"
             variant="outline"
-            className="h-7 text-xs flex-shrink-0 border-emerald-800/40 bg-white text-emerald-900 hover:bg-emerald-50 hover:text-emerald-950"
+            className="h-7 text-xs flex-shrink-0 border-emerald-700/40 text-emerald-900 hover:bg-emerald-500/10 dark:text-emerald-200 dark:border-emerald-500/40"
             asChild
           >
             <Link href={`/sales/customers/${lead.customerId}`}>View customer</Link>
@@ -537,26 +557,26 @@ export default function LeadDetail() {
           icon={<TrendingUp className="h-3.5 w-3.5" />}
           label="Expected value"
           value={formatCurrency(lead.expectedValue)}
-          color={P.blue}
+          accentClass="text-primary"
         />
         <StatCard
           icon={<Radio className="h-3.5 w-3.5" />}
           label="Source"
           value={formatLeadSourceLabel(lead.source)}
-          color="#7C3AED"
+          accentClass="text-violet-600 dark:text-violet-400"
         />
         <StatCard
           icon={<MessageSquare className="h-3.5 w-3.5" />}
           label="Contact channel"
           value={formatLeadContactChannelLabel(lead.contactChannel)}
-          color={P.green}
+          accentClass="text-emerald-600 dark:text-emerald-400"
         />
         <StatCard
           icon={<Bell className="h-3.5 w-3.5" />}
           label="Next reminder"
           value={lead.reminder?.date ? format(new Date(lead.reminder.date), "MMM d, yyyy") : "Not set"}
           sub={lead.reminder?.note}
-          color={P.orange}
+          accentClass="text-orange-600 dark:text-orange-400"
         />
       </div>
 
@@ -599,30 +619,30 @@ export default function LeadDetail() {
             <div className="lg:col-span-2 space-y-4">
 
               {/* Contact & Profile */}
-              <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-                <div className="flex items-center gap-2 px-6 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <User className="h-4 w-4" style={{ color: P.blue }} />
-                  <h3 className="text-sm font-bold" style={{ color: P.dark }}>Contact & Profile</h3>
-                </div>
+              <SectionCard>
+                <SectionHeader
+                  icon={<User className="h-4 w-4 text-primary" />}
+                  title="Contact & Profile"
+                />
                 <div className="px-6 py-4">
-                  <div className="[&>*:last-child]:border-0 space-y-0">
+                  <div className="space-y-0">
                     <ContactRow icon={Mail} label="Email">
                       {lead.email ? (
-                        <a href={`mailto:${lead.email}`} className="transition-colors hover:underline" style={{ color: P.blue }}>
+                        <a href={`mailto:${lead.email}`} className="transition-colors hover:underline text-primary">
                           {lead.email}
                         </a>
                       ) : (
-                        <span style={{ color: P.subtle }}>Not on file</span>
+                        <span className="text-muted-foreground">Not on file</span>
                       )}
                     </ContactRow>
                     <ContactRow icon={Phone} label="Phone">
-                      {lead.phone?.trim() ? lead.phone : <span style={{ color: P.subtle }}>Not on file</span>}
+                      {lead.phone?.trim() ? lead.phone : <span className="text-muted-foreground">Not on file</span>}
                     </ContactRow>
                     <ContactRow icon={Building2} label="Company">
-                      {lead.company?.trim() ? lead.company : <span style={{ color: P.subtle }}>Not on file</span>}
+                      {lead.company?.trim() ? lead.company : <span className="text-muted-foreground">Not on file</span>}
                     </ContactRow>
                     <ContactRow icon={Briefcase} label="Position">
-                      {lead.position?.trim() ? lead.position : <span style={{ color: P.subtle }}>Not on file</span>}
+                      {lead.position?.trim() ? lead.position : <span className="text-muted-foreground">Not on file</span>}
                     </ContactRow>
                     {lead.address?.trim() ? (
                       <ContactRow icon={MapPin} label="Address">
@@ -634,37 +654,33 @@ export default function LeadDetail() {
                     </ContactRow>
                   </div>
                 </div>
-              </div>
+              </SectionCard>
 
               {/* Description — clamped to 5 lines, expandable */}
-              <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-                <div className="flex items-center gap-2 px-6 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <StickyNote className="h-4 w-4" style={{ color: P.blue }} />
-                  <h3 className="text-sm font-bold" style={{ color: P.dark }}>Description & Notes</h3>
+              <SectionCard>
+                <SectionHeader
+                  icon={<StickyNote className="h-4 w-4 text-primary" />}
+                  title="Description & Notes"
+                >
                   <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={() => setEditOpen(true)}>
                     {descText ? "Edit" : "Add"}
                   </Button>
-                </div>
+                </SectionHeader>
                 <div className="px-6 py-5">
                   {descText ? (
                     <>
                       <p
-                        className="text-sm leading-relaxed whitespace-pre-wrap"
-                        style={{
-                          color: P.dark,
-                          display: "-webkit-box",
-                          WebkitBoxOrient: "vertical",
-                          WebkitLineClamp: descExpanded ? "unset" : 5,
-                          overflow: "hidden",
-                        } as React.CSSProperties}
+                        className={cn(
+                          "text-sm leading-relaxed whitespace-pre-wrap text-foreground",
+                          !descExpanded && "line-clamp-5",
+                        )}
                       >
                         {descText}
                       </p>
                       {needsDescExpand && (
                         <button
                           type="button"
-                          className="mt-2 flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
-                          style={{ color: P.blue }}
+                          className="mt-2 flex items-center gap-1 text-xs font-medium text-primary transition-opacity hover:opacity-70"
                           onClick={() => setDescExpanded((v) => !v)}
                         >
                           {descExpanded
@@ -673,72 +689,66 @@ export default function LeadDetail() {
                           }
                         </button>
                       )}
-                      <p className="text-[10px] mt-3" style={{ color: P.subtle }}>
+                      <p className="text-[10px] mt-3 text-muted-foreground">
                         Last updated {format(new Date(lead.updatedAt), "dd MMM yyyy, h:mm a")}
                       </p>
                     </>
                   ) : (
-                    <p className="text-sm" style={{ color: P.subtle }}>
+                    <p className="text-sm text-muted-foreground">
                       No description yet. Use Edit lead to add requirements, context, or follow-up notes.
                     </p>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             </div>
 
             {/* Right: Assignment + Reminder + Recent Activity */}
             <div className="space-y-4">
 
               {/* Assignment */}
-              <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-                <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <User className="h-4 w-4" style={{ color: P.blue }} />
-                  <h3 className="text-sm font-bold" style={{ color: P.dark }}>Assignment</h3>
-                </div>
+              <SectionCard>
+                <SectionHeader
+                  icon={<User className="h-4 w-4 text-primary" />}
+                  title="Assignment"
+                />
                 <div className="p-5 space-y-3">
                   <div className="flex items-center gap-3">
-                    <div
-                      className="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
-                      style={{ background: P.blueLight, color: P.blue }}
-                    >
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 bg-primary/10 text-primary">
                       {lead.assignedToUser ? lead.assignedToUser.name.charAt(0).toUpperCase() : "?"}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: P.blue }}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 text-primary">
                         Assigned to
                       </p>
                       {lead.assignedToUser ? (
-                        <p className="text-sm font-semibold" style={{ color: P.dark }}>{lead.assignedToUser.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{lead.assignedToUser.name}</p>
                       ) : (
-                        <p className="text-sm" style={{ color: P.subtle }}>Unassigned</p>
+                        <p className="text-sm text-muted-foreground">Unassigned</p>
                       )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div
-                      className="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0"
-                      style={{ background: P.blueLight, color: P.blue }}
-                    >
+                    <div className="h-10 w-10 rounded-xl flex items-center justify-center font-bold text-sm flex-shrink-0 bg-primary/10 text-primary">
                       {lead.createdByUser ? lead.createdByUser.name.charAt(0).toUpperCase() : "?"}
                     </div>
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5" style={{ color: P.blue }}>
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-0.5 text-primary">
                         Created by
                       </p>
                       {lead.createdByUser ? (
-                        <p className="text-sm font-semibold" style={{ color: P.dark }}>{lead.createdByUser.name}</p>
+                        <p className="text-sm font-semibold text-foreground">{lead.createdByUser.name}</p>
                       ) : (
-                        <p className="text-sm" style={{ color: P.subtle }}>Unknown</p>
+                        <p className="text-sm text-muted-foreground">Unknown</p>
                       )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-xl p-3 text-center" style={{ background: "#F9FAFB", border: `1px solid ${P.border}` }}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: P.muted }}>Status</p>
+                    <div className="rounded-xl p-3 text-center bg-muted/40 border border-border">
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5 text-muted-foreground">Status</p>
                       <SalesStatusBadge variant="lead" value={lead.status} />
                     </div>
-                    <div className="rounded-xl p-3 text-center" style={{ background: "#F9FAFB", border: `1px solid ${P.border}` }}>
-                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5" style={{ color: P.muted }}>Priority</p>
+                    <div className="rounded-xl p-3 text-center bg-muted/40 border border-border">
+                      <p className="text-[10px] font-bold uppercase tracking-widest mb-1.5 text-muted-foreground">Priority</p>
                       <SalesStatusBadge variant="priority" value={lead.priority} />
                     </div>
                   </div>
@@ -748,26 +758,37 @@ export default function LeadDetail() {
                     </Button>
                   ) : null}
                 </div>
-              </div>
+              </SectionCard>
 
               {/* Reminder */}
               <button
                 type="button"
-                className="w-full text-left rounded-2xl transition-colors hover:bg-muted/30"
-                style={{ background: "#fff", border: `1px solid ${P.border}` }}
-                onClick={() => setReminderOpen(true)}
+                className={cn(
+                  "w-full text-left rounded-2xl border border-border bg-card transition-colors",
+                  pauseFollowUps ? "opacity-70 cursor-default" : "hover:bg-muted/30",
+                )}
+                onClick={() => {
+                  if (!pauseFollowUps) setReminderOpen(true);
+                }}
+                disabled={pauseFollowUps}
               >
-                <div className="flex items-center gap-2 px-5 py-3" style={{ borderBottom: `1px solid ${P.border}` }}>
+                <div className="flex items-center gap-2 px-5 py-3 border-b border-border">
                   <Bell className="h-4 w-4 text-muted-foreground" />
-                  <h3 className="text-sm font-semibold" style={{ color: P.dark }}>Reminder</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Reminder</h3>
                   <span className="ml-auto text-xs text-muted-foreground">
-                    {lead.reminder ? "Edit" : "Set"}
+                    {pauseFollowUps ? "Paused" : lead.reminder ? "Edit" : "Set"}
                   </span>
                 </div>
                 <div className="px-5 py-3">
-                  {lead.reminder ? (
+                  {pauseFollowUps ? (
+                    <p className="text-sm text-muted-foreground">
+                      {isClosedElsewhere
+                        ? "Reminders paused while the client’s deal is closed elsewhere."
+                        : "Reminders are paused for this lead status."}
+                    </p>
+                  ) : lead.reminder ? (
                     <div className="text-sm">
-                      <p className="font-medium" style={{ color: P.dark }}>
+                      <p className="font-medium text-foreground">
                         {format(new Date(lead.reminder.date), "dd MMM yyyy · h:mm a")}
                       </p>
                       {lead.reminder.note ? (
@@ -781,11 +802,11 @@ export default function LeadDetail() {
               </button>
 
               {/* Recent Activity */}
-              <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-                <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                  <Activity className="h-4 w-4" style={{ color: P.blue }} />
-                  <h3 className="text-sm font-bold" style={{ color: P.dark }}>Recent activity</h3>
-                </div>
+              <SectionCard>
+                <SectionHeader
+                  icon={<Activity className="h-4 w-4 text-primary" />}
+                  title="Recent activity"
+                />
                 <div className="p-5">
                   {activities.length > 0 ? (
                     <>
@@ -801,139 +822,148 @@ export default function LeadDetail() {
                       )}
                     </>
                   ) : (
-                    <p className="text-xs" style={{ color: P.subtle }}>No activity recorded yet.</p>
+                    <p className="text-xs text-muted-foreground">No activity recorded yet.</p>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             </div>
           </div>
         </TabsContent>
 
         {/* ── Activity tab ── */}
         <TabsContent value="activity" className="mt-0">
-          <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-            <div className="flex items-center gap-2 px-6 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-              <Activity className="h-4 w-4" style={{ color: P.blue }} />
-              <h3 className="text-sm font-bold" style={{ color: P.dark }}>Activity</h3>
+          <SectionCard>
+            <SectionHeader
+              icon={<Activity className="h-4 w-4 text-primary" />}
+              title="Activity"
+            >
               {rawActivities.length > 0 && (
-                <span
-                  className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: P.blueLight, color: P.blue }}
-                >
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
                   {rawActivities.length}
                 </span>
               )}
-            </div>
+            </SectionHeader>
             <div className="p-6">
               {activities.length > 0 ? (
                 <ActivityTimeline activities={activities} />
               ) : (
                 <div className="flex flex-col items-center py-10 gap-3">
-                  <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: P.blueLight }}>
-                    <Activity className="h-4 w-4" style={{ color: P.blue }} />
+                  <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-primary/10">
+                    <Activity className="h-4 w-4 text-primary" />
                   </div>
-                  <p className="text-sm font-medium" style={{ color: P.dark }}>No activity yet</p>
-                  <p className="text-xs text-center" style={{ color: P.subtle }}>
+                  <p className="text-sm font-medium text-foreground">No activity yet</p>
+                  <p className="text-xs text-center text-muted-foreground">
                     Status changes, follow-ups, and assignments will appear here.
                   </p>
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setFollowUpOpen(true)}>
-                    Add follow-up
-                  </Button>
+                  {!pauseFollowUps && (
+                    <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setFollowUpOpen(true)}>
+                      Add follow-up
+                    </Button>
+                  )}
                 </div>
               )}
             </div>
-          </div>
+          </SectionCard>
         </TabsContent>
 
         {/* ── Proposals tab ── */}
         <TabsContent value="proposals" className="mt-0 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold" style={{ color: P.dark }}>
+              <p className="text-sm font-semibold text-foreground">
                 {proposals.length > 0
                   ? `${proposals.length} proposal${proposals.length === 1 ? "" : "s"}`
                   : "No proposals yet"}
               </p>
-              {proposals.some((p) => p.status === "seen") && (
-                <p className="text-[11px] mt-0.5" style={{ color: P.orange }}>
+              {isClosedElsewhere && (
+                <p className="text-[11px] mt-0.5 text-muted-foreground">
+                  Outreach paused — reopen the lead status before creating or sending proposals.
+                </p>
+              )}
+              {!isClosedElsewhere && proposals.some((p) => p.status === "seen") && (
+                <p className="text-[11px] mt-0.5 text-orange-600 dark:text-orange-400">
                   A proposal has been viewed by the client — you can send another or resend.
                 </p>
               )}
             </div>
-            <Button
-              size="sm" className="h-8 gap-1.5 text-xs"
-              onClick={() => setProposalOpen(true)}
-            >
-              <Plus className="size-3.5" />New proposal
-            </Button>
+            {!pauseFollowUps && (
+              <Button
+                size="sm" className="h-8 gap-1.5 text-xs"
+                onClick={() => setProposalOpen(true)}
+              >
+                <Plus className="size-3.5" />New proposal
+              </Button>
+            )}
           </div>
 
           {proposals.length === 0 ? (
-            <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
+            <SectionCard>
               <div className="flex flex-col items-center py-12 gap-3">
-                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ background: P.blueLight }}>
-                  <FileText className="h-4 w-4" style={{ color: P.blue }} />
+                <div className="h-10 w-10 rounded-xl flex items-center justify-center bg-primary/10">
+                  <FileText className="h-4 w-4 text-primary" />
                 </div>
-                <p className="text-sm font-medium" style={{ color: P.dark }}>No proposals yet</p>
-                <p className="text-xs" style={{ color: P.subtle }}>Create a proposal to start quoting this lead.</p>
-                <Button
-                  size="sm" className="h-8 text-xs mt-1"
-                  onClick={() => setProposalOpen(true)}
-                >
-                  Create proposal
-                </Button>
+                <p className="text-sm font-medium text-foreground">No proposals yet</p>
+                <p className="text-xs text-muted-foreground">
+                  {pauseFollowUps
+                    ? "Proposals are paused for this lead status."
+                    : "Create a proposal to start quoting this lead."}
+                </p>
+                {!pauseFollowUps && (
+                  <Button
+                    size="sm" className="h-8 text-xs mt-1"
+                    onClick={() => setProposalOpen(true)}
+                  >
+                    Create proposal
+                  </Button>
+                )}
               </div>
-            </div>
+            </SectionCard>
           ) : (
             proposals.map((p) => {
-              const canSend   = ["draft", "revised", "counter_offer"].includes(p.status);
-              const canResend = ["sent", "seen"].includes(p.status);
+              const canSend   = !pauseFollowUps && ["draft", "revised", "counter_offer"].includes(p.status);
+              const canResend = !pauseFollowUps && ["sent", "seen"].includes(p.status);
               const isSending = sendingProposalId === p.id;
               const isCurrent = lead.proposalId === p.id;
 
               return (
                 <div
                   key={p.id}
-                  className="rounded-2xl p-4"
-                  style={{
-                    background: isCurrent ? P.blueLight : "#fff",
-                    border:     `1px solid ${isCurrent ? P.blueBorder : P.border}`,
-                  }}
+                  className={cn(
+                    "rounded-2xl p-4 border",
+                    isCurrent
+                      ? "bg-primary/10 border-primary/20"
+                      : "bg-card border-border",
+                  )}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link
                           href={`/sales/proposals/${p.id}`}
-                          className="text-sm font-semibold hover:text-primary hover:underline transition-colors"
-                          style={{ color: P.dark }}
+                          className="text-sm font-semibold text-foreground hover:text-primary hover:underline transition-colors"
                         >
                           {p.title}
                         </Link>
                         {isCurrent && (
-                          <span
-                            className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                            style={{ background: P.blue, color: "#fff" }}
-                          >
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-primary-foreground">
                             Current
                           </span>
                         )}
                       </div>
                       <Link
                         href={`/sales/proposals/${p.id}`}
-                        className="text-xs mt-0.5 block hover:text-primary hover:underline transition-colors"
-                        style={{ color: P.muted }}
+                        className="text-xs mt-0.5 block text-muted-foreground hover:text-primary hover:underline transition-colors"
                       >
                         {p.number}
                       </Link>
-                      <p className="text-[10px] mt-1" style={{ color: P.subtle }}>
+                      <p className="text-[10px] mt-1 text-muted-foreground/80">
                         Created {formatSalesDateTime(p.createdAt)}
                         {p.sentAt ? ` · Sent ${format(new Date(p.sentAt), "MMM d, yyyy")}` : ""}
                       </p>
                     </div>
                     <SalesStatusBadge variant="proposal" value={p.status} />
                   </div>
-                  <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: `1px solid ${P.border}` }}>
+                  <div className="flex items-center gap-2 mt-3 pt-3 border-t border-border">
                     {canSend && (
                       <Button
                         size="sm" className="h-7 text-xs gap-1.5"
@@ -966,34 +996,30 @@ export default function LeadDetail() {
           <div className="grid gap-4 lg:grid-cols-2">
 
             {/* Notes — clamped */}
-            <div className="rounded-2xl" style={{ background: "#fff", border: `1px solid ${P.border}` }}>
-              <div className="flex items-center gap-2 px-5 py-4" style={{ borderBottom: `1px solid ${P.border}` }}>
-                <StickyNote className="h-4 w-4" style={{ color: P.blue }} />
-                <h3 className="text-sm font-bold" style={{ color: P.dark }}>Notes</h3>
+            <SectionCard>
+              <SectionHeader
+                icon={<StickyNote className="h-4 w-4 text-primary" />}
+                title="Notes"
+              >
                 <Button variant="ghost" size="sm" className="ml-auto h-7 text-xs" onClick={() => setEditOpen(true)}>
                   {descText ? "Edit" : "Add"}
                 </Button>
-              </div>
+              </SectionHeader>
               <div className="p-5">
                 {descText ? (
                   <>
                     <p
-                      className="text-sm leading-relaxed whitespace-pre-wrap"
-                      style={{
-                        color: P.dark,
-                        display: "-webkit-box",
-                        WebkitBoxOrient: "vertical",
-                        WebkitLineClamp: notesExpanded ? "unset" : 8,
-                        overflow: "hidden",
-                      } as React.CSSProperties}
+                      className={cn(
+                        "text-sm leading-relaxed whitespace-pre-wrap text-foreground",
+                        !notesExpanded && "line-clamp-8",
+                      )}
                     >
                       {descText}
                     </p>
                     {needsNotesExpand && (
                       <button
                         type="button"
-                        className="mt-2 flex items-center gap-1 text-xs font-medium transition-opacity hover:opacity-70"
-                        style={{ color: P.blue }}
+                        className="mt-2 flex items-center gap-1 text-xs font-medium text-primary transition-opacity hover:opacity-70"
                         onClick={() => setNotesExpanded((v) => !v)}
                       >
                         {notesExpanded
@@ -1002,17 +1028,17 @@ export default function LeadDetail() {
                         }
                       </button>
                     )}
-                    <p className="text-[10px] mt-3" style={{ color: P.subtle }}>
+                    <p className="text-[10px] mt-3 text-muted-foreground">
                       Last updated {format(new Date(lead.updatedAt), "dd MMM yyyy, h:mm a")}
                     </p>
                   </>
                 ) : (
-                  <p className="text-sm" style={{ color: P.subtle }}>
+                  <p className="text-sm text-muted-foreground">
                     No notes yet. Add a description when editing the lead.
                   </p>
                 )}
               </div>
-            </div>
+            </SectionCard>
 
             {/* Project Planning Docs */}
             <ProjectPlanningDocs
@@ -1025,31 +1051,37 @@ export default function LeadDetail() {
       </Tabs>
 
       {/* ── Floating action bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 px-4 py-3 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 px-4 py-3 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.4)]">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
             <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setFollowUpOpen(true)}>
-            <Plus className="h-3.5 w-3.5 mr-1.5" />Follow-up
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setReminderOpen(true)}>
-            <Bell className="h-3.5 w-3.5 mr-1.5" />
-            {lead.reminder ? "Reminder" : "Set reminder"}
-          </Button>
+          {!pauseFollowUps && (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setFollowUpOpen(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />Follow-up
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setReminderOpen(true)}>
+                <Bell className="h-3.5 w-3.5 mr-1.5" />
+                {lead.reminder ? "Reminder" : "Set reminder"}
+              </Button>
+            </>
+          )}
           {(lead.status === "proposal_sent" || lead.status === "interested" || lead.status === "project_planning") && (
             <Button variant="outline" size="sm" onClick={approveLead} disabled={updateLead.isPending}>
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Approve
             </Button>
           )}
-          {lead.status !== "converted" && (
+          {lead.status !== "converted" && lead.status !== "closed_elsewhere" && (
             <Button variant="outline" size="sm" onClick={() => setConvertOpen(true)}>
               <UserCheck className="h-3.5 w-3.5 mr-1.5" />Convert
             </Button>
           )}
-          <Button size="sm" onClick={() => setProposalOpen(true)}>
-            <FileText className="h-3.5 w-3.5 mr-1.5" />Generate proposal
-          </Button>
+          {!pauseFollowUps && (
+            <Button size="sm" onClick={() => setProposalOpen(true)}>
+              <FileText className="h-3.5 w-3.5 mr-1.5" />Generate proposal
+            </Button>
+          )}
         </div>
       </div>
 

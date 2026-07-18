@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "wouter";
 import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
@@ -115,7 +116,11 @@ export default function FinanceVendorsPage() {
             <TableBody>
               {vendors.map((vendor) => (
                 <TableRow key={vendor.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium whitespace-nowrap">{vendor.name}</TableCell>
+                  <TableCell className="text-xs font-medium whitespace-nowrap">
+                    <Link href={`/finance/vendors/${vendor.id}`} className="hover:text-primary hover:underline">
+                      {vendor.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     <div>{vendor.email}</div>
                     {vendor.phone ? <div className="text-[10px]">{vendor.phone}</div> : null}

@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -72,10 +73,11 @@ import {
   type FinancePaymentMode,
   type BudgetType,
   type LoanStatus,
+  type LoanSource,
   type TaxDeposit,
 } from "@/api/finance";
 import { vendorToFormDefaults } from "@/modules/finance/vendor-utils";
-import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, calcInvoiceTotal, formatCurrency } from "../constants";
+import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, LOAN_SOURCE_LABELS, calcInvoiceTotal, formatCurrency } from "../constants";
 
 type ModalBaseProps = {
   open: boolean;
@@ -161,6 +163,7 @@ export function ExpenseFormModal({
         reference: expense.loanReference ?? "",
         name: expense.loanName,
         lender: "",
+        source: "bank",
         principal: 0,
         interestRate: null,
         startDate: "",
@@ -1018,6 +1021,7 @@ export function BudgetFormModal({
 const loanSchema = z.object({
   name: z.string().min(1, "Name is required"),
   lender: z.string().min(1, "Lender is required"),
+  source: z.enum(["bank", "market"]),
   principal: positiveAmountString,
   interestRate: z.string().optional(),
   startDate: z.string().min(1, "Start date is required"),
@@ -1078,6 +1082,7 @@ export function LoanFormModal({
     defaultValues: {
       name: "",
       lender: "",
+      source: "bank",
       principal: "",
       interestRate: "",
       startDate: new Date().toISOString().slice(0, 10),
@@ -1114,6 +1119,7 @@ export function LoanFormModal({
         ? {
             name: loan.name,
             lender: loan.lender,
+            source: (loan.source as LoanSource) || "bank",
             principal: String(loan.principal),
             interestRate: loan.interestRate != null ? String(loan.interestRate) : "",
             startDate: loan.startDate.slice(0, 10),
@@ -1124,6 +1130,7 @@ export function LoanFormModal({
         : {
             name: "",
             lender: "",
+            source: "bank",
             principal: "",
             interestRate: "",
             startDate: new Date().toISOString().slice(0, 10),
@@ -1158,6 +1165,7 @@ export function LoanFormModal({
       const payload = {
         name: values.name.trim(),
         lender: values.lender.trim(),
+        source: values.source as LoanSource,
         principal: p,
         interestRate: values.interestRate?.trim() ? Number(values.interestRate) : null,
         startDate: values.startDate,
@@ -1203,6 +1211,20 @@ export function LoanFormModal({
               )} />
               <FormField control={form.control} name="lender" render={({ field }) => (
                 <FormItem><FormLabel>Lender</FormLabel><FormControl><Input placeholder="Bank or institution" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="source" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Loan source</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Bank or market" /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {(Object.keys(LOAN_SOURCE_LABELS) as LoanSource[]).map((key) => (
+                        <SelectItem key={key} value={key}>{LOAN_SOURCE_LABELS[key]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
               )} />
               <div className="grid grid-cols-2 gap-3">
                 <FormField control={form.control} name="principal" render={({ field }) => (
@@ -1285,14 +1307,54 @@ export function LoanFormModal({
 
 // ─── Loan installment ─────────────────────────────────────────────────────
 
+const LOAN_ALLOCATION_OPTIONS = [
+  {
+    value: "both" as const,
+    label: "Interest + principal",
+    hint: "Standard EMI — interest due first, rest reduces principal",
+  },
+  {
+    value: "interest" as const,
+    label: "Interest only",
+    hint: "Pays accrued interest; principal balance stays the same",
+  },
+  {
+    value: "principal" as const,
+    label: "Principal only",
+    hint: "Reduces outstanding principal; no interest portion",
+  },
+];
+
 const installmentSchema = z.object({
   date: z.string().min(1, "Date is required"),
   amount: positiveAmountString,
   paymentMode: z.string().min(1),
   notes: z.string().optional(),
   approve: z.boolean().optional(),
+  loanAllocation: z.enum(["both", "interest", "principal"]),
 });
 type InstallmentFormValues = z.infer<typeof installmentSchema>;
+
+function suggestedInstallmentAmount(
+  loan: Loan,
+  allocation: "both" | "interest" | "principal",
+): string {
+  const remaining = loan.remainingPrincipal ?? loan.remainingAmount ?? loan.principal ?? 0;
+  const rate = loan.interestRate ?? 0;
+  const monthlyInterest = Math.round(remaining * (rate / 12 / 100));
+
+  if (allocation === "interest") {
+    return monthlyInterest > 0 ? String(monthlyInterest) : "";
+  }
+  if (allocation === "principal") {
+    if (loan.emiAmount != null && monthlyInterest > 0) {
+      const principalPart = Math.max(0, loan.emiAmount - monthlyInterest);
+      return principalPart > 0 ? String(principalPart) : String(remaining);
+    }
+    return remaining > 0 ? String(remaining) : "";
+  }
+  return loan.emiAmount != null ? String(loan.emiAmount) : "";
+}
 
 export function PayLoanInstallmentModal({
   open,
@@ -1311,17 +1373,22 @@ export function PayLoanInstallmentModal({
       paymentMode: "bank_transfer",
       notes: "",
       approve: true,
+      loanAllocation: "both",
     },
   });
+
+  const loanAllocation = useWatch({ control: form.control, name: "loanAllocation" });
+  const amountWatch = useWatch({ control: form.control, name: "amount" });
 
   useEffect(() => {
     if (!open || !loan) return;
     form.reset({
       date: new Date().toISOString().slice(0, 10),
-      amount: loan.emiAmount != null ? String(loan.emiAmount) : "",
+      amount: suggestedInstallmentAmount(loan, "both"),
       paymentMode: "bank_transfer",
       notes: "",
       approve: true,
+      loanAllocation: "both",
     });
   }, [open, loan, form]);
 
@@ -1335,6 +1402,7 @@ export function PayLoanInstallmentModal({
         paymentMode: values.paymentMode as FinancePaymentMode,
         notes: values.notes?.trim() || undefined,
         approve: values.approve !== false,
+        loanAllocation: values.loanAllocation,
       });
       toast.success(
         values.approve !== false
@@ -1349,6 +1417,29 @@ export function PayLoanInstallmentModal({
   };
 
   if (!open || !loan) return null;
+
+  const remainingPrincipal = loan.remainingPrincipal ?? loan.remainingAmount ?? loan.principal ?? 0;
+  const interestRate = loan.interestRate ?? 0;
+  const monthlyRate = interestRate / 12 / 100;
+  const amountVal = Number(amountWatch);
+  const hasAmount = !Number.isNaN(amountVal) && amountVal > 0;
+
+  let estInterest = 0;
+  let estPrincipal = 0;
+  if (hasAmount) {
+    if (loanAllocation === "interest") {
+      estInterest = amountVal;
+      estPrincipal = 0;
+    } else if (loanAllocation === "principal") {
+      estPrincipal = Math.min(amountVal, remainingPrincipal);
+      estInterest = amountVal - estPrincipal;
+    } else {
+      estInterest = Math.min(amountVal, Math.round(remainingPrincipal * monthlyRate));
+      estPrincipal = Math.max(0, amountVal - estInterest);
+      if (estPrincipal > remainingPrincipal) estPrincipal = remainingPrincipal;
+      estInterest = amountVal - estPrincipal;
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1365,12 +1456,84 @@ export function PayLoanInstallmentModal({
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
             <DialogBody className="px-6 py-4 space-y-4">
+              <FormField
+                control={form.control}
+                name="loanAllocation"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Apply payment to</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={(v) => {
+                          const next = v as InstallmentFormValues["loanAllocation"];
+                          field.onChange(next);
+                          form.setValue("amount", suggestedInstallmentAmount(loan, next), {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        className="grid gap-2"
+                      >
+                        {LOAN_ALLOCATION_OPTIONS.map((opt) => (
+                          <Label
+                            key={opt.value}
+                            htmlFor={`loan-alloc-${opt.value}`}
+                            className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                              field.value === opt.value
+                                ? "border-primary bg-primary/5"
+                                : "border-border hover:bg-muted/40"
+                            }`}
+                          >
+                            <RadioGroupItem
+                              value={opt.value}
+                              id={`loan-alloc-${opt.value}`}
+                              className="mt-0.5"
+                            />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-medium leading-none">{opt.label}</span>
+                              <span className="block text-[11px] text-muted-foreground mt-1 leading-snug">
+                                {opt.hint}
+                              </span>
+                            </span>
+                          </Label>
+                        ))}
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <FormField control={form.control} name="date" render={({ field }) => (
                 <FormItem><FormLabel>Payment date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="amount" render={({ field }) => (
                 <FormItem><FormLabel>Amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
               )} />
+
+              {hasAmount && (
+                <div className="rounded-md border bg-muted/40 p-2.5 text-[11px] space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-medium">Interest portion:</span>
+                    <span className="font-semibold text-amber-600 dark:text-amber-400">{formatCurrency(estInterest)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground font-medium">Principal reduction:</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{formatCurrency(estPrincipal)}</span>
+                  </div>
+                  <div className="text-[10px] text-muted-foreground border-t border-border/40 pt-1 mt-1 font-medium">
+                    {loanAllocation === "interest"
+                      ? "Interest only — principal balance will not decrease."
+                      : loanAllocation === "principal"
+                        ? estInterest > 0
+                          ? "Principal first — any amount above remaining principal counts as interest."
+                          : "Principal only — this payment reduces the outstanding balance."
+                        : estPrincipal === 0
+                          ? "Covers interest due only. Principal will not decrease."
+                          : "Standard EMI split — interest due first, remainder to principal."}
+                  </div>
+                </div>
+              )}
               <FormField control={form.control} name="paymentMode" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Payment mode</FormLabel>

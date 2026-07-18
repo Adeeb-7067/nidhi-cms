@@ -246,6 +246,7 @@ export type ProjectType = typeof ProjectType[keyof typeof ProjectType];
 export const ProjectType = {
   development: 'development',
   maintenance: 'maintenance',
+  digital: 'digital',
 } as const;
 
 export interface Project {
@@ -662,6 +663,7 @@ export type ProjectInputType = typeof ProjectInputType[keyof typeof ProjectInput
 export const ProjectInputType = {
   development: 'development',
   maintenance: 'maintenance',
+  digital: 'digital',
 } as const;
 
 export interface ProjectInput {
@@ -714,6 +716,7 @@ export type ProjectUpdateType = typeof ProjectUpdateType[keyof typeof ProjectUpd
 export const ProjectUpdateType = {
   development: 'development',
   maintenance: 'maintenance',
+  digital: 'digital',
 } as const;
 
 export interface ProjectUpdate {
@@ -2278,6 +2281,7 @@ export type ListProjectsType = typeof ListProjectsType[keyof typeof ListProjects
 export const ListProjectsType = {
   development: 'development',
   maintenance: 'maintenance',
+  digital: 'digital',
 } as const;
 
 export type ListProjectsPriority = typeof ListProjectsPriority[keyof typeof ListProjectsPriority];

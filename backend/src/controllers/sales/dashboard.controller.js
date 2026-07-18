@@ -174,7 +174,7 @@ async function getDashboard(req, res) {
 async function getPipeline(req, res) {
   const stages = [
     "new", "contacted", "follow_up", "interested", "project_planning",
-    "proposal_sent", "approved", "converted", "lost",
+    "proposal_sent", "approved", "converted", "lost", "closed_elsewhere",
   ];
   const matchStage = req.user.role === "bde"
     ? { $match: { $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] } }

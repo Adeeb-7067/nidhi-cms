@@ -342,6 +342,49 @@ export function PortalListPageSkeleton({
   );
 }
 
+/** Digital / marketing list pages */
+export function MarketingListPageSkeleton({
+  kpiCount = 4,
+  tableRows = 8,
+  showTabs = true,
+}: {
+  kpiCount?: number;
+  tableRows?: number;
+  showTabs?: boolean;
+}) {
+  return (
+    <PortalListPageSkeleton
+      kpiCount={kpiCount}
+      kpiColumns={4}
+      tableRows={tableRows}
+      tableColumns={7}
+      showFilter
+      showTabs={showTabs}
+      tabCount={5}
+    />
+  );
+}
+
+/** Approvals kanban loading chrome */
+export function MarketingKanbanSkeleton() {
+  return (
+    <PortalSkeletonShell>
+      <PageHeroSkeleton />
+      <PageKpiSkeleton count={4} columns={4} />
+      <PageFilterBarSkeleton />
+      <div className="flex gap-3 overflow-hidden pb-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="min-w-[220px] flex-1 space-y-2">
+            <Skeleton className="h-6 w-28 rounded-md" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+            <Skeleton className="h-24 w-full rounded-xl" />
+          </div>
+        ))}
+      </div>
+    </PortalSkeletonShell>
+  );
+}
+
 /** Project hub / detail pages */
 export function ProjectDetailPageSkeleton() {
   return (

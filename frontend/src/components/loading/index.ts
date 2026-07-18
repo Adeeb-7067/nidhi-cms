@@ -18,6 +18,8 @@ export {
   RouteChunkSkeleton,
   PortalDashboardSkeleton,
   PortalListPageSkeleton,
+  MarketingListPageSkeleton,
+  MarketingKanbanSkeleton,
   ProjectDetailPageSkeleton,
   TaskDetailPageSkeleton,
   ProfilePageSkeleton,

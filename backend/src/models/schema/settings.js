@@ -33,6 +33,7 @@ const companySettingsSchema = new Schema({
   hrmLeaveCarryForwardStartYear: { type: Number, default: 2026 },
   /** Custom onboarding checklist titles (falls back to DEFAULT_ONBOARDING_TASKS when empty). */
   hrmOnboardingChecklistTemplate: { type: [String], default: [] },
+  fiscalLockDate: { type: Date, default: null },
 }, { timestamps: { createdAt: false, updatedAt: true } });
 const CompanySettings = mongoose.models.CompanySettings || mongoose.model("CompanySettings", companySettingsSchema);
 const companySettingsTable = CompanySettings;

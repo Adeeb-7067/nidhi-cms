@@ -12,7 +12,7 @@ const projectSchema = new Schema({
   pmId: { type: Number, ref: "Users" },
   description: { type: String },
   status: { type: String, enum: projectStatuses, default: "scoping", required: true, index: true },
-  type: { type: String, enum: ["development", "maintenance"], default: "development", required: true, index: true },
+  type: { type: String, enum: ["development", "maintenance", "digital"], default: "development", required: true, index: true },
   priority: { type: String, enum: projectPriorities, default: "medium", required: true },
   startDate: { type: Date, required: true },
   deadline: { type: Date, required: true },

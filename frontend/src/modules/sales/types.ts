@@ -7,7 +7,8 @@ export type LeadStatus =
   | "proposal_sent"
   | "approved"
   | "converted"
-  | "lost";
+  | "lost"
+  | "closed_elsewhere";
 
 export type LeadPriority = "low" | "medium" | "high" | "urgent";
 

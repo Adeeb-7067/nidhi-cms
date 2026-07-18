@@ -129,7 +129,7 @@ const projectSchema = z
     logoUrl: z.string().optional(),
     clientId: z.string().min(1, "Company is required"),
     priority: z.enum(["low", "medium", "high", "critical"]),
-    type: z.enum(["development", "maintenance"]),
+    type: z.enum(["development", "maintenance", "digital"]),
     status: z
       .enum([
         "scoping",
@@ -328,7 +328,11 @@ export default function AdminProjects() {
         if (descriptionResources.length && created?.id) {
           await syncProjectDescriptionResources(created.id, descriptionResources, new Map());
         }
-        toast.success("Project created");
+        toast.success(
+          values.type === "digital"
+            ? "Digital project created — it will appear under Digital → Projects"
+            : "Project created",
+        );
         setIsDialogOpen(false);
       }
       form.reset();
@@ -386,7 +390,14 @@ export default function AdminProjects() {
                 {project.name.charAt(0)}
               </AvatarFallback>
             </Avatar>
-            <Link href={`/admin/projects/${project.id}`} className="font-semibold hover:underline text-xs">
+            <Link
+              href={
+                project.type === "digital"
+                  ? `/marketing/projects/${project.id}`
+                  : `/admin/projects/${project.id}`
+              }
+              className="font-semibold hover:underline text-xs"
+            >
               {project.name}
             </Link>
             {(project.priority === "high" || project.priority === "critical") && (
@@ -593,15 +604,15 @@ export default function AdminProjects() {
       header: "Actions",
       hideInDetail: true,
       cell: (project) => (
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditProject(project); }}>
-            <Edit className="h-3 w-3" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}>
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
-      )
+          <div className="flex justify-end gap-1">
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditProject(project); }}>
+              <Edit className="h-3 w-3" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}>
+              <Trash2 className="h-3 w-3" />
+            </Button>
+          </div>
+        ),
     }
   ];
 
@@ -676,7 +687,7 @@ export default function AdminProjects() {
     <PortalPageShell>
       <PortalPageHero
         title="All projects"
-        subtitle="All development and maintenance portfolios"
+        subtitle="Development, maintenance, and digital portfolios"
         actions={
           <Dialog
             open={isDialogOpen || !!editProject}
@@ -773,6 +784,9 @@ export default function AdminProjects() {
                                 </SelectItem>
                                 <SelectItem value="maintenance">
                                   Maintenance
+                                </SelectItem>
+                                <SelectItem value="digital">
+                                  Digital
                                 </SelectItem>
                               </SelectContent>
                             </Select>
@@ -1153,18 +1167,24 @@ export default function AdminProjects() {
         onValueChange={(v) => setActiveTab(v as any)}
         className="w-full"
       >
-        <TabsList className="grid grid-cols-2 w-full max-w-[360px] h-9 bg-muted/50 p-1 border border-border/40">
+        <TabsList className="grid grid-cols-3 w-full max-w-[480px] h-9 bg-muted/50 p-1 border border-border/40">
           <TabsTrigger
             value="development"
             className="text-xs font-semibold transition-all"
           >
-            🔨 Development
+            Development
           </TabsTrigger>
           <TabsTrigger
             value="maintenance"
             className="text-xs font-semibold transition-all"
           >
-            🛠️ Maintenance
+            Maintenance
+          </TabsTrigger>
+          <TabsTrigger
+            value="digital"
+            className="text-xs font-semibold transition-all"
+          >
+            Digital
           </TabsTrigger>
         </TabsList>
       </Tabs>

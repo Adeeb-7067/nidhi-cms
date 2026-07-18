@@ -14,6 +14,7 @@ import {
   legacyModuleMap,
   normalizePermissionModule,
   salesModules,
+  marketingModules,
 } from "../constants/permissions.js";
 import { userRoles } from "../constants/user-roles.js";
 import { evictUserFromAuthCache } from "../middlewares/auth.js";
@@ -168,6 +169,8 @@ const DEFAULT_TEMPLATES = [
       { module: "hrm_my_holidays", action: "view" },
       { module: "hrm_my_payslips", action: "view" },
       { module: "hrm_holidays", action: "view" },
+      { module: "dev_logs", action: "view" },
+      { module: "dev_logs", action: "create" },
       { module: "admin_discussions", action: "view" },
       { module: "admin_tickets", action: "view" },
     ],
@@ -252,6 +255,29 @@ export async function migrateSalesPermissionModules() {
   }
 }
 
+/** Expand legacy umbrella `marketing` grants into Digital marketing_* modules. */
+export async function migrateMarketingPermissionModules() {
+  const rows = await hrmPermissionsTable.find({ module: "marketing" }).lean();
+  for (const row of rows) {
+    for (const mod of marketingModules) {
+      const exists = await hrmPermissionsTable.findOne({
+        roleTemplateId: row.roleTemplateId,
+        module: mod,
+        action: row.action,
+      }).lean();
+      if (exists) continue;
+      const id = await getNextSequence("hrm_permissions");
+      await hrmPermissionsTable.create({
+        id,
+        roleTemplateId: row.roleTemplateId,
+        module: mod,
+        action: row.action,
+      });
+    }
+    await hrmPermissionsTable.deleteOne({ id: row.id });
+  }
+}
+
 function expandLegacySalesPermissionSet(set) {
   const actions = new Set();
   for (const key of set) {
@@ -264,9 +290,24 @@ function expandLegacySalesPermissionSet(set) {
   }
 }
 
+function expandLegacyMarketingPermissionSet(set) {
+  const actions = new Set();
+  for (const key of set) {
+    if (key.startsWith("marketing:") && !key.includes("_")) {
+      actions.add(key.slice("marketing:".length));
+    }
+  }
+  for (const action of actions) {
+    for (const mod of marketingModules) {
+      set.add(`${mod}:${action}`);
+    }
+  }
+}
+
 export async function ensureDefaultRoleTemplates() {
   await migrateLegacyPermissionModules();
   await migrateSalesPermissionModules();
+  await migrateMarketingPermissionModules();
 
   for (const tpl of DEFAULT_TEMPLATES) {
     let existing = await hrmRoleTemplatesTable.findOne({ code: tpl.code }).lean();
@@ -318,6 +359,7 @@ export async function backfillSystemTemplatePermissions() {
       rows.map((r) => `${normalizePermissionModule(r.module)}:${r.action}`),
     );
 
+    let changed = false;
     for (const g of grants) {
       const key = `${normalizePermissionModule(g.module)}:${g.action}`;
       if (have.has(key)) continue;
@@ -329,21 +371,22 @@ export async function backfillSystemTemplatePermissions() {
         action: g.action,
       });
       have.add(key);
+      changed = true;
     }
 
     if (tpl.grants !== "all" && existing.isSystem) {
       const expected = new Set(
         grants.map((g) => `${normalizePermissionModule(g.module)}:${g.action}`),
       );
-      let pruned = false;
       for (const row of rows) {
         const key = `${normalizePermissionModule(row.module)}:${row.action}`;
         if (expected.has(key)) continue;
         await hrmPermissionsTable.deleteOne({ id: row.id });
-        pruned = true;
+        changed = true;
       }
-      if (pruned) evictPermissionCache(null);
     }
+
+    if (changed) evictPermissionCache(null);
   }
 }
 
@@ -523,6 +566,7 @@ async function loadUserPermissionEntry(userId) {
   const rows = await hrmPermissionsTable.find({ roleTemplateId: templateId }).lean();
   const set = new Set(rows.map((r) => permissionEntryKey(r.module, r.action)));
   expandLegacySalesPermissionSet(set);
+  expandLegacyMarketingPermissionSet(set);
   const entry = {
     set,
     templateId,

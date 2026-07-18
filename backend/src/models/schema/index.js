@@ -27,3 +27,4 @@ export * from "./job-runs.js";
 export * from "./hrm/index.js";
 export * from "./sales/index.js";
 export * from "./finance/index.js";
+export * from "./marketing/index.js";

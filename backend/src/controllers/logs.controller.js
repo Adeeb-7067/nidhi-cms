@@ -131,7 +131,7 @@ async function getLogsDailySummary(req, res) {
 }
 async function postLogs(req, res) {
   if (req.user.role === "super_admin" || req.user.role === "client") {
-    forbidden("Only developers and testers can submit daily logs.");
+    forbidden("Only staff members can submit daily logs.");
   }
   const { projectId, logDate, workCategories, taskTitle, taskDescription, hoursSpent, completionPct, blockers, nextDayPlan } = req.body;
   if (

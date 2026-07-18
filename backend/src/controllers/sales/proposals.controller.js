@@ -10,6 +10,7 @@ import {
   companySettingsTable,
   usersTable,
   getNextSequence,
+  leadNoFollowUpStatuses,
 } from "../../models/schema/index.js";
 import { SalesPreferences } from "../../models/schema/sales/preferences.js";
 import { mergeDocumentBranding, publicProposalDocumentBranding } from "../../utils/sales-document-branding-defaults.js";
@@ -47,7 +48,7 @@ const CLIENT_RESPONDABLE_STATUSES = ["sent", "seen", "revised", "counter_offer",
 async function markLeadApprovedFromProposal(leadId, actorId, proposalNumber) {
   if (!leadId) return;
   const result = await SalesLeads.updateOne(
-    { id: leadId, status: { $nin: ["converted", "lost", "approved"] } },
+    { id: leadId, status: { $nin: [...leadNoFollowUpStatuses, "approved"] } },
     { $set: { status: "approved" } }
   );
   if (result.modifiedCount > 0) {
@@ -240,6 +241,14 @@ async function createProposal(req, res) {
     if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
       notFound("Lead");
     }
+    if (leadNoFollowUpStatuses.includes(lead.status)) {
+      badRequest(
+        lead.status === "closed_elsewhere"
+          ? "This lead closed a deal elsewhere — reopen outreach before creating a proposal."
+          : "Cannot create a proposal for this lead status.",
+        "status"
+      );
+    }
   }
   if (body.customerId) {
     await assertBdeOwnsCustomerById(clientsTable, req.user, body.customerId);
@@ -274,7 +283,7 @@ async function createProposal(req, res) {
   });
   if (proposal.leadId) {
     await SalesLeads.updateOne(
-      { id: proposal.leadId, status: { $nin: ["converted", "lost"] } },
+      { id: proposal.leadId, status: { $nin: leadNoFollowUpStatuses } },
       { $set: { proposalId: id, status: "proposal_sent" } }
     );
     const actId = await getNextSequence("sales_lead_activity");
@@ -365,6 +374,17 @@ async function sendProposal(req, res) {
   const pre = await SalesProposals.findOne({ id }).lean();
   if (!pre) notFound("Proposal");
   await assertProposalAccess(pre, req.user);
+  if (pre.leadId) {
+    const lead = await SalesLeads.findOne({ id: pre.leadId }).select({ status: 1 }).lean();
+    if (lead && leadNoFollowUpStatuses.includes(lead.status)) {
+      badRequest(
+        lead.status === "closed_elsewhere"
+          ? "This lead closed a deal elsewhere — reopen outreach before sending a proposal."
+          : "Cannot send a proposal for this lead status.",
+        "status"
+      );
+    }
+  }
   if (!pre.viewToken) {
     await SalesProposals.updateOne({ id }, { $set: { viewToken: crypto.randomBytes(32).toString("hex") } });
   }

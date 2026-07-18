@@ -92,21 +92,26 @@ function getStyle(variant: MarketingBadgeVariant, status: string): string {
 export function MarketingStatusBadge({
   variant,
   status,
+  value,
   className,
 }: {
   variant: MarketingBadgeVariant;
-  status: string;
+  /** Preferred prop name */
+  status?: string;
+  /** Alias used by some pages */
+  value?: string;
   className?: string;
 }) {
+  const resolved = status ?? value ?? "";
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
-        getStyle(variant, status),
+        getStyle(variant, resolved),
         className,
       )}
     >
-      {getLabel(variant, status)}
+      {getLabel(variant, resolved)}
     </span>
   );
 }

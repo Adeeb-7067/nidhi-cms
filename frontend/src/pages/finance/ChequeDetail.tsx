@@ -8,10 +8,21 @@ import {
   Pencil,
   XCircle,
   Ban,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogBody,
+} from "@/components/ui/dialog";
 import {
   formatCurrency,
   CHEQUE_PURPOSE_LABELS,
@@ -30,6 +41,7 @@ import {
   useClearCheque,
   useCancelCheque,
   useBounceCheque,
+  useRePresentCheque,
 } from "@/api/finance";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { toastApiError } from "@/lib/api-error";
@@ -40,13 +52,19 @@ export default function ChequeDetailPage() {
   const chequeId = Number(params?.id);
   const { data: cheque, isLoading, isError, refetch } = useGetCheque(chequeId);
   const [editOpen, setEditOpen] = useState(false);
-  const [confirm, setConfirm] = useState<"clear" | "cancel" | "bounce" | null>(null);
+  const [confirm, setConfirm] = useState<"clear" | "cancel" | "bounce" | "re-present" | null>(null);
+  const [actionNotes, setActionNotes] = useState("");
   const { can } = usePermissions();
   const canEdit = can("finance_cheques", "edit");
   const clearCheque = useClearCheque();
   const cancelCheque = useCancelCheque();
   const bounceCheque = useBounceCheque();
-  const actionPending = clearCheque.isPending || cancelCheque.isPending || bounceCheque.isPending;
+  const rePresentCheque = useRePresentCheque();
+  const actionPending =
+    clearCheque.isPending ||
+    cancelCheque.isPending ||
+    bounceCheque.isPending ||
+    rePresentCheque.isPending;
 
   const runAction = async () => {
     if (!cheque || !confirm) return;
@@ -55,11 +73,16 @@ export default function ChequeDetailPage() {
         await clearCheque.mutateAsync({ id: cheque.id });
         toast.success("Cheque cleared — expense settled");
       } else if (confirm === "cancel") {
-        await cancelCheque.mutateAsync(cheque.id);
+        await cancelCheque.mutateAsync({ id: cheque.id, notes: actionNotes.trim() || undefined });
         toast.success("Cheque cancelled");
-      } else {
-        await bounceCheque.mutateAsync(cheque.id);
+        setActionNotes("");
+      } else if (confirm === "bounce") {
+        await bounceCheque.mutateAsync({ id: cheque.id, notes: actionNotes.trim() || undefined });
         toast.success("Cheque marked bounced");
+        setActionNotes("");
+      } else if (confirm === "re-present") {
+        await rePresentCheque.mutateAsync(cheque.id);
+        toast.success("Cheque re-presented successfully");
       }
       setConfirm(null);
       refetch();
@@ -118,6 +141,12 @@ export default function ChequeDetailPage() {
                   Mark cleared
                 </Button>
               </>
+            )}
+            {canEdit && cheque.status === "bounced" && (
+              <Button size="sm" className="h-8 gap-1.5" onClick={() => setConfirm("re-present")}>
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Re-present cheque
+              </Button>
             )}
           </>
         }
@@ -244,6 +273,36 @@ export default function ChequeDetailPage() {
             )}
           </CardContent>
         </Card>
+        {cheque.bounceHistory && cheque.bounceHistory.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-amber-700 flex items-center gap-1.5">
+                <Ban className="h-4 w-4" />
+                Bounce history ({cheque.bounceHistory.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-2">
+              <div className="relative border-l border-border/80 pl-4 space-y-4 ml-2">
+                {cheque.bounceHistory.map((b, i) => (
+                  <div key={i} className="relative">
+                    <span className="absolute -left-[21px] top-1.5 flex h-2 w-2 rounded-full bg-amber-500 ring-4 ring-background" />
+                    <div className="text-xs font-semibold">
+                      Bounced on {format(new Date(b.bouncedAt), "MMM d, yyyy 'at' hh:mm a")}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">
+                      By {b.bouncedByName || `User #${b.bouncedBy}`}
+                    </div>
+                    {b.notes && (
+                      <div className="text-xs bg-muted/40 border rounded px-2.5 py-1.5 mt-1.5 text-muted-foreground italic max-w-sm">
+                        "{b.notes}"
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <ChequeFormModal
@@ -254,28 +313,86 @@ export default function ChequeDetailPage() {
       />
 
       <FinanceConfirmDialog
-        open={confirm != null}
+        open={confirm != null && confirm !== "bounce" && confirm !== "cancel"}
         onOpenChange={(o) => !o && setConfirm(null)}
         title={
           confirm === "clear"
             ? "Mark cheque cleared?"
-            : confirm === "cancel"
-              ? "Cancel this cheque?"
-              : "Mark cheque bounced?"
+            : "Re-present this cheque?"
         }
         description={
           confirm === "clear"
             ? `Records an outgoing cheque payment of ${formatCurrency(cheque.amount)} and settles the linked expense.`
-            : confirm === "cancel"
-              ? "The linked unpaid expense will be rejected. No cash movement."
-              : "Expense stays unpaid so you can re-issue a new cheque later if needed."
+            : "This transitions the cheque status back to 'Issued' so it can be cleared or bounced again."
         }
         confirmLabel={
-          confirm === "clear" ? "Clear & settle" : confirm === "cancel" ? "Cancel cheque" : "Mark bounced"
+          confirm === "clear" ? "Clear & settle" : "Re-present"
         }
         loading={actionPending}
         onConfirm={runAction}
       />
+
+      <Dialog open={confirm === "bounce"} onOpenChange={(o) => { if (!o) { setConfirm(null); setActionNotes(""); } }}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Mark cheque bounced?</DialogTitle>
+            <DialogDescription>
+              The associated expense will remain unpaid so you can re-issue or re-present it later.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4 py-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Bounce notes / reason</label>
+              <Textarea
+                placeholder="e.g. Insufficient funds, signature mismatch (optional)"
+                value={actionNotes}
+                onChange={(e) => setActionNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirm(null); setActionNotes(""); }} disabled={actionPending}>
+              Cancel
+            </Button>
+            <Button onClick={runAction} disabled={actionPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              {actionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark bounced
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirm === "cancel"} onOpenChange={(o) => { if (!o) { setConfirm(null); setActionNotes(""); } }}>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Cancel this cheque?</DialogTitle>
+            <DialogDescription>
+              The linked unpaid expense will be rejected. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogBody className="space-y-4 py-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Cancellation reason (optional)</label>
+              <Textarea
+                placeholder="e.g. Wrong amount entered, payee details changed (optional)"
+                value={actionNotes}
+                onChange={(e) => setActionNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirm(null); setActionNotes(""); }} disabled={actionPending}>
+              Cancel
+            </Button>
+            <Button onClick={runAction} disabled={actionPending} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+              {actionPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Cancel cheque
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </PortalPageShell>
   );
 }

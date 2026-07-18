@@ -21,7 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
+import { formatCurrency, PAYMENT_MODE_LABELS, LOAN_SOURCE_LABELS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceEmptyState,
@@ -75,7 +75,7 @@ export default function LoanDetailPage() {
     <PortalPageShell>
       <FinancePageHeader
         title={loan.name}
-        description={`${loan.reference} · ${loan.lender}`}
+        description={`${loan.reference} · ${loan.lender} · ${LOAN_SOURCE_LABELS[loan.source ?? "bank"] ?? "Bank"}`}
         breadcrumbs={[
           { label: "Finance", href: "/finance" },
           { label: "Loans", href: "/finance/loans" },
@@ -101,6 +101,7 @@ export default function LoanDetailPage() {
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <FinanceStatusBadge variant="loan" value={loan.status} />
+        <span>{LOAN_SOURCE_LABELS[loan.source ?? "bank"] ?? "Bank"} loan</span>
         <span>
           {format(new Date(loan.startDate), "MMM d, yyyy")}
           {loan.endDate ? ` → ${format(new Date(loan.endDate), "MMM d, yyyy")}` : ""}
@@ -250,10 +251,32 @@ export default function LoanDetailPage() {
                           {formatCurrency(p.amount)}
                         </TableCell>
                         <TableCell className="text-xs text-right tabular-nums text-emerald-700">
-                          {p.principalPortion != null ? formatCurrency(p.principalPortion) : "—"}
+                          {p.principalPortion != null ? (
+                            p.loanAllocation === "interest" ||
+                            (p.principalPortion === 0 && p.interestPortion != null && p.interestPortion > 0) ? (
+                              <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-medium">
+                                Interest only
+                              </span>
+                            ) : (
+                              formatCurrency(p.principalPortion)
+                            )
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-xs text-right tabular-nums text-amber-700">
-                          {p.interestPortion != null ? formatCurrency(p.interestPortion) : "—"}
+                          {p.interestPortion != null ? (
+                            p.loanAllocation === "principal" ||
+                            (p.interestPortion === 0 && p.principalPortion != null && p.principalPortion > 0) ? (
+                              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-medium">
+                                Principal only
+                              </span>
+                            ) : (
+                              formatCurrency(p.interestPortion)
+                            )
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell
                           className={cn(

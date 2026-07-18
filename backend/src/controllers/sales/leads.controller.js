@@ -7,6 +7,7 @@ import {
   usersTable,
   getNextSequence,
   leadStatuses,
+  leadNoFollowUpStatuses,
   leadPriorities,
 } from "../../models/schema/index.js";
 import { createClientCompanyRecord, deleteClientCompany } from "../../services/client-company-provision.js";
@@ -144,7 +145,12 @@ async function updateLead(req, res) {
   if (body.position !== undefined) updates.position = optionalString(body.position) ?? null;
   if (body.source !== undefined) updates.source = optionalString(body.source) ?? null;
   if (body.contactChannel !== undefined) updates.contactChannel = optionalString(body.contactChannel) ?? null;
-  if (body.status !== undefined) updates.status = body.status;
+  if (body.status !== undefined) {
+    if (!leadStatuses.includes(body.status)) {
+      badRequest(`Invalid status "${body.status}".`, "status");
+    }
+    updates.status = body.status;
+  }
   if (body.priority !== undefined) updates.priority = body.priority;
   if (body.assignedTo !== undefined) {
     if (req.user.role === "bde") {
@@ -207,6 +213,15 @@ async function updateLead(req, res) {
     return res.json(lead);
   }
 
+  // Pausing outreach: clear reminder and cancel open follow-ups
+  if (
+    updates.status &&
+    updates.status !== existing.status &&
+    leadNoFollowUpStatuses.includes(updates.status)
+  ) {
+    updates.reminder = null;
+  }
+
   const lead = await SalesLeads.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   if (!lead) notFound("Lead");
   if (updates.status && updates.status !== existing.status) {
@@ -214,6 +229,12 @@ async function updateLead(req, res) {
       `Status changed from "${existing.status}" to "${updates.status}"`,
       { from: existing.status, to: updates.status }
     );
+    if (leadNoFollowUpStatuses.includes(updates.status)) {
+      await SalesFollowUps.updateMany(
+        { leadId: id, status: { $in: ["scheduled", "overdue"] } },
+        { $set: { status: "cancelled" } }
+      );
+    }
   }
   if (updates.assignedTo !== undefined && updates.assignedTo !== existing.assignedTo) {
     const assignedUser = updates.assignedTo
@@ -240,7 +261,11 @@ async function bulkUpdateLeads(req, res) {
   const { ids, status, assignedTo } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) badRequest("ids array is required.", "ids");
   const update = {};
-  if (status) update.status = status;
+  if (status) {
+    if (!leadStatuses.includes(status)) badRequest(`Invalid status "${status}".`, "status");
+    update.status = status;
+    if (leadNoFollowUpStatuses.includes(status)) update.reminder = null;
+  }
   if (assignedTo !== undefined) {
     if (req.user.role === "bde") {
       const nextAssignee = assignedTo ? Number(assignedTo) : null;
@@ -258,6 +283,16 @@ async function bulkUpdateLeads(req, res) {
     ? { id: { $in: ids }, $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }] }
     : { id: { $in: ids } };
   const result = await SalesLeads.updateMany(filter, { $set: update });
+  if (status && leadNoFollowUpStatuses.includes(status)) {
+    const affected = await SalesLeads.find(filter).select({ id: 1 }).lean();
+    const affectedIds = affected.map((l) => l.id);
+    if (affectedIds.length) {
+      await SalesFollowUps.updateMany(
+        { leadId: { $in: affectedIds }, status: { $in: ["scheduled", "overdue"] } },
+        { $set: { status: "cancelled" } }
+      );
+    }
+  }
   // Carry reassignment over to any already-converted customer records so the
   // new executive isn't left unable to see the resulting customer.
   if (update.assignedTo !== undefined) {
@@ -284,6 +319,12 @@ async function convertLead(req, res) {
     notFound("Lead");
   }
   if (lead.status === "converted") badRequest("This lead has already been converted.", "status");
+  if (lead.status === "closed_elsewhere") {
+    badRequest(
+      "This lead closed a deal elsewhere — change the status to reopen outreach before converting.",
+      "status"
+    );
+  }
   // Guard against partial-failure retries: if a customer already exists for this lead
   // (created by a prior attempt that failed at the final updateOne), block re-conversion.
   const existingCustomer = await clientsTable.findOne({ leadId: id }).lean();
@@ -369,6 +410,14 @@ async function setReminder(req, res) {
   if (!lead) notFound("Lead");
   if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
     notFound("Lead");
+  }
+  if (leadNoFollowUpStatuses.includes(lead.status)) {
+    badRequest(
+      lead.status === "closed_elsewhere"
+        ? "This lead closed a deal elsewhere — pause reminders until you reopen outreach."
+        : "Reminders are not allowed for this lead status.",
+      "status"
+    );
   }
 
   const { date, note } = req.body;
@@ -463,7 +512,11 @@ async function importLeads(req, res) {
 
 async function getDueReminders(req, res) {
   const now = new Date();
-  const filter = { reminder: { $ne: null }, "reminder.date": { $lte: now } };
+  const filter = {
+    reminder: { $ne: null },
+    "reminder.date": { $lte: now },
+    status: { $nin: leadNoFollowUpStatuses },
+  };
   if (req.user.role === "bde") {
     filter.$or = [{ assignedTo: req.user.id }, { createdBy: req.user.id }];
   }

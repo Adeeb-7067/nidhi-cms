@@ -77,14 +77,16 @@ export function MarketingBarChart({
   dataKey,
   nameKey = "name",
   color = "#8b5cf6",
+  height = 220,
 }: {
   data: Record<string, string | number>[];
   dataKey: string;
   nameKey?: string;
   color?: string;
+  height?: number;
 }) {
   return (
-    <div className="h-[220px] w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -93,12 +95,17 @@ export function MarketingBarChart({
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
             tickLine={false}
             axisLine={false}
+            interval={0}
+            angle={data.length > 5 ? -20 : 0}
+            textAnchor={data.length > 5 ? "end" : "middle"}
+            height={data.length > 5 ? 48 : 28}
           />
           <YAxis
             tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
             tickLine={false}
             axisLine={false}
             width={32}
+            allowDecimals={false}
           />
           <Tooltip
             contentStyle={{

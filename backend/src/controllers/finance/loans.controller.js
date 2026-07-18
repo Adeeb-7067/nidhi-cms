@@ -1,7 +1,7 @@
 import { FinanceLoans, FinanceExpenses, getNextSequence } from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
-import { loanStatuses } from "../../models/schema/finance/loans.js";
+import { loanStatuses, loanSources } from "../../models/schema/finance/loans.js";
 import { financePaymentModes } from "../../models/schema/finance/expenses.js";
 import { recognizedExpenseAmount } from "../../services/finance/expense-cash.service.js";
 import { runInTx } from "../../lib/db-tx.js";
@@ -19,9 +19,16 @@ async function nextExpenseReference() {
   return `EXP-${year}-${String(seq).padStart(4, "0")}`;
 }
 
+const LOAN_ALLOCATIONS = new Set(["both", "interest", "principal"]);
+
 /**
  * Allocate each approved installment into interest vs principal (reducing balance).
  * Payments must be chronological (oldest first).
+ *
+ * loanAllocation on the expense:
+ * - both (default): interest due first, remainder to principal (standard EMI)
+ * - interest: entire payment is interest; principal unchanged
+ * - principal: apply to principal first; any excess beyond outstanding → interest
  */
 function allocateInstallments(loan, paymentsAsc) {
   const monthlyRate = (Number(loan.interestRate) || 0) / 12 / 100;
@@ -31,6 +38,7 @@ function allocateInstallments(loan, paymentsAsc) {
   let totalCashPaid = 0;
 
   const allocated = paymentsAsc.map((p) => {
+    const allocation = LOAN_ALLOCATIONS.has(p.loanAllocation) ? p.loanAllocation : "both";
     const base = {
       id: p.id,
       reference: p.reference,
@@ -39,6 +47,7 @@ function allocateInstallments(loan, paymentsAsc) {
       status: p.status,
       notes: p.notes ?? null,
       paymentMode: p.paymentMode,
+      loanAllocation: allocation,
       principalPortion: null,
       interestPortion: null,
       outstandingAfter: null,
@@ -58,15 +67,23 @@ function allocateInstallments(loan, paymentsAsc) {
       };
     }
 
-    const interestPortion = Math.min(amount, Math.round(outstanding * monthlyRate));
-    let principalPortion = amount - interestPortion;
-    if (principalPortion > outstanding) {
-      principalPortion = outstanding;
-    }
-    if (principalPortion < 0) principalPortion = 0;
+    let principalPortion = 0;
+    let interestActual = 0;
 
-    // If payment didn't cover full interest due, rest still counts as interest.
-    const interestActual = amount - principalPortion;
+    if (allocation === "interest") {
+      interestActual = amount;
+      principalPortion = 0;
+    } else if (allocation === "principal") {
+      principalPortion = Math.min(amount, outstanding);
+      interestActual = amount - principalPortion;
+    } else {
+      // both — interest due first, remainder to principal
+      const interestDue = Math.min(amount, Math.round(outstanding * monthlyRate));
+      principalPortion = amount - interestDue;
+      if (principalPortion > outstanding) principalPortion = outstanding;
+      if (principalPortion < 0) principalPortion = 0;
+      interestActual = amount - principalPortion;
+    }
 
     outstanding = Math.max(0, outstanding - principalPortion);
     totalInterestPaid += interestActual;
@@ -110,7 +127,18 @@ function allocateInstallments(loan, paymentsAsc) {
 async function loadLoanPayments(loanId) {
   return FinanceExpenses.find({ loanId })
     .sort({ date: 1, id: 1 })
-    .select({ id: 1, reference: 1, date: 1, amount: 1, status: 1, notes: 1, paymentMode: 1, paidAmount: 1, paymentStatus: 1 })
+    .select({
+      id: 1,
+      reference: 1,
+      date: 1,
+      amount: 1,
+      status: 1,
+      notes: 1,
+      paymentMode: 1,
+      paidAmount: 1,
+      paymentStatus: 1,
+      loanAllocation: 1,
+    })
     .lean();
 }
 
@@ -175,9 +203,10 @@ async function maybeAutoCloseLoan(loanId) {
 }
 
 async function listLoans(req, res) {
-  const { status, search } = req.query;
+  const { status, source, search } = req.query;
   const filter = {};
   if (status && loanStatuses.includes(String(status))) filter.status = status;
+  if (source && loanSources.includes(String(source))) filter.source = source;
   if (search) {
     const q = escapeRegex(String(search).trim());
     if (q) {
@@ -208,6 +237,10 @@ async function createLoan(req, res) {
   if (!body.name?.trim()) badRequest("name is required.", "name");
   if (!body.lender?.trim()) badRequest("lender is required.", "lender");
   if (!body.startDate) badRequest("startDate is required.", "startDate");
+  const source = body.source || "bank";
+  if (!loanSources.includes(source)) {
+    badRequest(`source must be one of: ${loanSources.join(", ")}.`, "source");
+  }
   const principal = Number(body.principal);
   if (!(principal > 0)) badRequest("principal must be a positive number.", "principal");
 
@@ -235,6 +268,7 @@ async function createLoan(req, res) {
     reference,
     name: body.name.trim(),
     lender: body.lender.trim(),
+    source,
     principal,
     interestRate,
     startDate: new Date(body.startDate),
@@ -263,6 +297,12 @@ async function updateLoan(req, res) {
   if (body.lender !== undefined) {
     if (!body.lender?.trim()) badRequest("lender is required.", "lender");
     updates.lender = body.lender.trim();
+  }
+  if (body.source !== undefined) {
+    if (!loanSources.includes(body.source)) {
+      badRequest(`source must be one of: ${loanSources.join(", ")}.`, "source");
+    }
+    updates.source = body.source;
   }
   if (body.principal !== undefined) {
     const principal = Number(body.principal);
@@ -343,14 +383,26 @@ async function recordInstallment(req, res) {
   if (Number.isNaN(date.getTime())) badRequest("date is invalid.", "date");
 
   const autoApprove = body.approve === true || body.approve === "true";
+  const loanAllocationRaw = optionalString(body.loanAllocation) ?? optionalString(body.allocation) ?? "both";
+  const loanAllocation = LOAN_ALLOCATIONS.has(loanAllocationRaw) ? loanAllocationRaw : null;
+  if (!loanAllocation) {
+    badRequest('loanAllocation must be one of: both, interest, principal.', "loanAllocation");
+  }
+
   const [expenseId, reference] = await Promise.all([
     getNextSequence("finance_expenses"),
     nextExpenseReference(),
   ]);
 
+  const allocationLabel =
+    loanAllocation === "interest"
+      ? "interest only"
+      : loanAllocation === "principal"
+        ? "principal only"
+        : "interest + principal";
   const notes =
     optionalString(body.notes) ??
-    `Installment for ${loan.reference} · ${loan.name}`;
+    `Installment for ${loan.reference} · ${loan.name} (${allocationLabel})`;
 
   let expenseDoc;
   await runInTx(async (session) => {
@@ -367,6 +419,7 @@ async function recordInstallment(req, res) {
           employeeId: null,
           vendorId: null,
           loanId: id,
+          loanAllocation,
           notes,
           status: autoApprove ? "approved" : "pending",
           ...(autoApprove

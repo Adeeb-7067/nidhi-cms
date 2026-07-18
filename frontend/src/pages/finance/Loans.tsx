@@ -14,8 +14,8 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency } from "@/modules/finance/constants";
-import type { LoanStatus } from "@/modules/finance/types";
+import { formatCurrency, LOAN_SOURCE_LABELS } from "@/modules/finance/constants";
+import type { LoanStatus, LoanSource } from "@/modules/finance/types";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -148,6 +148,7 @@ export default function LoansPage() {
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Loan</TableHead>
                 <TableHead className="text-xs">Lender</TableHead>
+                <TableHead className="text-xs">Source</TableHead>
                 <TableHead className="text-xs">Start</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Repaid</TableHead>
@@ -170,6 +171,9 @@ export default function LoansPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{l.lender}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {LOAN_SOURCE_LABELS[(l.source as LoanSource) || "bank"] ?? "Bank"}
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {format(new Date(l.startDate), "MMM d, yyyy")}
                     </TableCell>

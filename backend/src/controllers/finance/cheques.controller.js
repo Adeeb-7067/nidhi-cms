@@ -5,7 +5,26 @@ import {
   clientsTable,
   usersTable,
   getNextSequence,
+  companySettingsTable,
 } from "../../models/schema/index.js";
+
+async function assertAfterLockDate(dateToCheck) {
+  if (!dateToCheck) return;
+  const settings = await companySettingsTable.findOne().select({ fiscalLockDate: 1 }).lean();
+  if (settings?.fiscalLockDate) {
+    const checkTime = startOfDayDate(dateToCheck).getTime();
+    const lockTime = startOfDayDate(settings.fiscalLockDate).getTime();
+    if (checkTime <= lockTime) {
+      badRequest("Transaction date cannot be on or before the closed fiscal lock date.", "date");
+    }
+  }
+}
+
+function startOfDayDate(d) {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
 import { badRequest, notFound, parseIdParam, optionalString } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import {
@@ -98,14 +117,36 @@ function formatCheque(row) {
   };
 }
 
+async function attachBounceHistoryUsers(cheques) {
+  const userIds = [
+    ...new Set(
+      cheques.flatMap((c) => c.bounceHistory?.map((h) => h.bouncedBy) ?? []).filter(Boolean)
+    ),
+  ];
+  if (!userIds.length) return cheques;
+
+  const users = await usersTable.find({ id: { $in: userIds } }).select({ id: 1, name: 1 }).lean();
+  const userMap = new Map(users.map((u) => [u.id, u.name]));
+
+  return cheques.map((c) => {
+    if (!c.bounceHistory) return c;
+    const bounceHistoryEnriched = c.bounceHistory.map((h) => ({
+      ...h,
+      bouncedByName: userMap.get(h.bouncedBy) || `User #${h.bouncedBy}`,
+    }));
+    return { ...c, bounceHistory: bounceHistoryEnriched };
+  });
+}
+
 async function attachExpenseRefs(cheques) {
-  const expenseIds = [...new Set(cheques.map((c) => c.expenseId).filter(Boolean))];
-  if (!expenseIds.length) return cheques.map(formatCheque);
+  const chequesWithUsers = await attachBounceHistoryUsers(cheques);
+  const expenseIds = [...new Set(chequesWithUsers.map((c) => c.expenseId).filter(Boolean))];
+  if (!expenseIds.length) return chequesWithUsers.map(formatCheque);
   const expenses = await FinanceExpenses.find({ id: { $in: expenseIds } })
     .select({ id: 1, reference: 1, paymentStatus: 1, status: 1 })
     .lean();
   const map = new Map(expenses.map((e) => [e.id, e]));
-  return cheques.map((c) => {
+  return chequesWithUsers.map((c) => {
     const exp = map.get(c.expenseId);
     return formatCheque({
       ...c,
@@ -144,6 +185,9 @@ async function getChequeById(req, res) {
 async function createCheque(req, res) {
   const body = req.body ?? {};
   const payee = await resolvePayee(body);
+
+  await assertAfterLockDate(body.issueDate);
+  await assertAfterLockDate(body.clearanceDate);
 
   const purpose = body.purpose || "normal";
   if (!chequePurposes.includes(purpose)) {
@@ -246,6 +290,11 @@ async function updateCheque(req, res) {
   }
 
   const body = req.body ?? {};
+  await assertAfterLockDate(cheque.issueDate);
+  await assertAfterLockDate(cheque.clearanceDate);
+  if (body.issueDate !== undefined) await assertAfterLockDate(body.issueDate);
+  if (body.clearanceDate !== undefined) await assertAfterLockDate(body.clearanceDate);
+
   const updates = {};
 
   if (body.clearanceDate !== undefined) {
@@ -314,6 +363,11 @@ async function clearCheque(req, res) {
   const clearDate = req.body?.date ? new Date(req.body.date) : new Date();
   if (Number.isNaN(clearDate.getTime())) badRequest("date is invalid.", "date");
 
+  const cheque = await FinanceCheques.findOne({ id }).lean();
+  if (!cheque) notFound("Cheque");
+  await assertAfterLockDate(cheque.issueDate);
+  await assertAfterLockDate(clearDate);
+
   await runInTx(async (session) => {
     let cq = FinanceCheques.findOne({ id, status: "issued" });
     if (session) cq = cq.session(session);
@@ -361,6 +415,9 @@ async function clearCheque(req, res) {
 
 async function cancelCheque(req, res) {
   const id = parseIdParam(req.params.id, "cheque id");
+  const cheque = await FinanceCheques.findOne({ id }).lean();
+  if (!cheque) notFound("Cheque");
+  await assertAfterLockDate(cheque.issueDate);
 
   await runInTx(async (session) => {
     let cq = FinanceCheques.findOne({ id, status: "issued" });
@@ -379,19 +436,25 @@ async function cancelCheque(req, res) {
       badRequest("Cannot cancel a cheque that already has payments.", "status");
     }
 
+    const cancelReason = optionalString(req.body?.notes) ?? null;
+    const chequeNotes = cancelReason
+      ? (cheque.notes ? `${cheque.notes}\n[Cancelled: ${cancelReason}]` : `[Cancelled: ${cancelReason}]`)
+      : cheque.notes;
+
     const opts = session ? { session } : undefined;
     const result = await FinanceCheques.updateOne(
       { id, status: "issued" },
-      { $set: { status: "cancelled" } },
+      { $set: { status: "cancelled", notes: chequeNotes } },
       opts,
     );
     if (!result.matchedCount) {
       badRequest("Cheque status changed during cancel — try again.", "status");
     }
     if (expense) {
+      const expenseNotes = `${expense.notes ?? ""} · Cheque cancelled${cancelReason ? ` (Reason: ${cancelReason})` : ""}`.trim();
       await FinanceExpenses.updateOne(
         { id: expense.id },
-        { $set: { status: "rejected", notes: `${expense.notes ?? ""} · Cheque cancelled`.trim() } },
+        { $set: { status: "rejected", notes: expenseNotes } },
         opts,
       );
     }
@@ -405,10 +468,10 @@ async function cancelCheque(req, res) {
 async function bounceCheque(req, res) {
   const id = parseIdParam(req.params.id, "cheque id");
 
-  const cheque = await FinanceCheques.findOne({ id, status: "issued" }).lean();
-  if (!cheque) {
-    const exists = await FinanceCheques.findOne({ id }).select({ id: 1 }).lean();
-    if (!exists) notFound("Cheque");
+  const cheque = await FinanceCheques.findOne({ id }).lean();
+  if (!cheque) notFound("Cheque");
+  await assertAfterLockDate(cheque.issueDate);
+  if (cheque.status !== "issued") {
     badRequest("Only issued cheques can be marked bounced.", "status");
   }
 
@@ -417,15 +480,61 @@ async function bounceCheque(req, res) {
     badRequest("Cannot bounce a cheque that already has payments.", "status");
   }
 
+  const notes = optionalString(req.body?.notes) ?? null;
+  const bounceEntry = {
+    bouncedAt: new Date(),
+    bouncedBy: req.user.id,
+    notes,
+  };
+
   const updated = await FinanceCheques.findOneAndUpdate(
     { id, status: "issued" },
-    { $set: { status: "bounced" } },
+    {
+      $set: { status: "bounced" },
+      $push: { bounceHistory: bounceEntry }
+    },
     { new: true },
   ).lean();
   if (!updated) badRequest("Cheque status changed during bounce — try again.", "status");
 
   const [enriched] = await attachExpenseRefs([updated]);
   res.json(enriched);
+}
+
+async function rePresentCheque(req, res) {
+  const id = parseIdParam(req.params.id, "cheque id");
+
+  const cheque = await FinanceCheques.findOne({ id, status: "bounced" }).lean();
+  if (!cheque) {
+    const exists = await FinanceCheques.findOne({ id }).select({ id: 1 }).lean();
+    if (!exists) notFound("Cheque");
+    badRequest("Only bounced cheques can be re-presented.", "status");
+  }
+
+  const updated = await FinanceCheques.findOneAndUpdate(
+    { id, status: "bounced" },
+    { $set: { status: "issued" } },
+    { new: true },
+  ).lean();
+  if (!updated) badRequest("Cheque status changed during re-present — try again.", "status");
+
+  const [enriched] = await attachExpenseRefs([updated]);
+  res.json(enriched);
+}
+
+async function getClearanceForecast(req, res) {
+  const upcomingClearing = await FinanceCheques.aggregate([
+    { $match: { status: "issued" } },
+    {
+      $group: {
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$clearanceDate" } },
+        totalAmount: { $sum: "$amount" },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]);
+  res.json(upcomingClearing);
 }
 
 export {
@@ -436,4 +545,6 @@ export {
   clearCheque,
   cancelCheque,
   bounceCheque,
+  rePresentCheque,
+  getClearanceForecast,
 };

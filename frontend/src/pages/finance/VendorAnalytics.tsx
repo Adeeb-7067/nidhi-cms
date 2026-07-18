@@ -194,7 +194,7 @@ export default function FinanceVendorAnalytics() {
                   {topVendors.map((v) => (
                     <TableRow key={v.vendorId}>
                       <TableCell className="text-xs font-medium truncate max-w-[220px]">
-                        <Link href={`/finance/ledgers/vendors/${v.vendorId}`} className="hover:text-primary">
+                        <Link href={`/finance/vendors/${v.vendorId}`} className="hover:text-primary">
                           {v.name}
                         </Link>
                       </TableCell>

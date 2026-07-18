@@ -10,6 +10,10 @@ import {
   dailyLogsTable,
   getNextSequence
 } from "../models/schema/index.js";
+import {
+  ensureDigitalAccountForProject,
+  softDeleteDigitalAccountForProject,
+} from "../services/marketing/helpers.js";
 import { formatProject, formatProjectList } from "../mappers/project-format.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
 import { attachPresenceToUser } from "../services/presence.js";
@@ -44,11 +48,23 @@ async function getProjects(req, res) {
   if (type) {
     if (type === "maintenance") {
       query.$or = [{ type: "maintenance" }, { status: "maintenance" }];
+    } else if (type === "digital") {
+      query.type = "digital";
     } else {
-      query.$or = [
-        { type: "development" },
-        { $and: [{ type: { $exists: false } }, { status: { $ne: "maintenance" } }] },
-        { $and: [{ type: { $exists: true } }, { type: "development" }] }
+      // development — include legacy rows with no type; exclude digital + maintenance
+      query.$and = [
+        {
+          $or: [
+            { type: "development" },
+            {
+              $and: [
+                { $or: [{ type: { $exists: false } }, { type: null }] },
+                { status: { $ne: "maintenance" } },
+              ],
+            },
+          ],
+        },
+        { type: { $ne: "digital" } },
       ];
     }
   }
@@ -72,7 +88,18 @@ async function getProjects(req, res) {
       res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
       return;
     }
-    query.$or = [{ companyId: clientRow.id }, { clientId: clientRow.id }];
+    // AND company scope with any existing type/$or filters (do not overwrite).
+    const companyScope = {
+      $or: [{ companyId: clientRow.id }, { clientId: clientRow.id }],
+    };
+    if (query.$or || query.$and) {
+      const existing = { ...query };
+      const keys = Object.keys(existing);
+      for (const k of keys) delete query[k];
+      query.$and = [existing, companyScope];
+    } else {
+      Object.assign(query, companyScope);
+    }
   }
   const { items, total, page, limit } = await paginateModel(projectsTable, query, pagination);
   const includeTeam = req.user.role === "super_admin";
@@ -136,6 +163,16 @@ async function postProjects(req, res) {
       completionPct: 0
     });
   }
+  if ((optionalString(body.type) ?? "development") === "digital") {
+    try {
+      await ensureDigitalAccountForProject(
+        project.toObject ? project.toObject() : project,
+        req.user.id,
+      );
+    } catch (err) {
+      console.warn("[projects] ensureDigitalAccountForProject:", err?.message ?? err);
+    }
+  }
   res.status(201).json(await formatProject(project));
 }
 async function getProjectsById(req, res) {
@@ -184,6 +221,22 @@ async function patchProjectsById(req, res) {
     { new: true }
   );
   if (!project) notFound("Project");
+  if (project.type === "digital") {
+    try {
+      await ensureDigitalAccountForProject(
+        project.toObject ? project.toObject() : project,
+        req.user.id,
+      );
+    } catch (err) {
+      console.warn("[projects] ensureDigitalAccountForProject:", err?.message ?? err);
+    }
+  } else if (type !== undefined && type !== "digital") {
+    try {
+      await softDeleteDigitalAccountForProject(id);
+    } catch (err) {
+      console.warn("[projects] softDeleteDigitalAccountForProject:", err?.message ?? err);
+    }
+  }
   res.json(await formatProject(project));
 }
 async function deleteProjectsById(req, res) {
@@ -195,6 +248,11 @@ async function deleteProjectsById(req, res) {
   await projectMembersTable.deleteMany({ projectId: id });
   await apkSchedulesTable.deleteMany({ projectId: id });
   await milestonesTable.deleteMany({ projectId: id });
+  try {
+    await softDeleteDigitalAccountForProject(id);
+  } catch (err) {
+    console.warn("[projects] softDeleteDigitalAccountForProject:", err?.message ?? err);
+  }
   res.json({ message: "Project deleted" });
 }
 async function getProjectsByIdMembers(req, res) {

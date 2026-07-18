@@ -116,6 +116,7 @@ const FinanceSubscriptionDetail = React.lazy(() => import("@/pages/finance/Subsc
 const FinanceLedgers = React.lazy(() => import("@/pages/finance/Ledgers"));
 const FinancePayments = React.lazy(() => import("@/pages/finance/Payments"));
 const FinanceVendors = React.lazy(() => import("@/pages/finance/Vendors"));
+const FinanceVendorDetail = React.lazy(() => import("@/pages/finance/VendorDetail"));
 const FinanceVendorAnalytics = React.lazy(() => import("@/pages/finance/VendorAnalytics"));
 const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
@@ -124,8 +125,8 @@ const FinancePaymentDetail = React.lazy(() => import("@/pages/finance/PaymentDet
 
 const MarketingDashboard = React.lazy(() => import("@/pages/marketing/Dashboard"));
 const MarketingTasks = React.lazy(() => import("@/pages/marketing/Tasks"));
-const MarketingClients = React.lazy(() => import("@/pages/marketing/Clients"));
-const MarketingClientDetail = React.lazy(() => import("@/pages/marketing/ClientDetail"));
+const MarketingProjects = React.lazy(() => import("@/pages/marketing/Projects"));
+const MarketingProjectDetail = React.lazy(() => import("@/pages/marketing/ProjectDetail"));
 const MarketingCalendar = React.lazy(() => import("@/pages/marketing/Calendar"));
 const MarketingGraphics = React.lazy(() => import("@/pages/marketing/Graphics"));
 const MarketingVideos = React.lazy(() => import("@/pages/marketing/Videos"));
@@ -137,6 +138,7 @@ const MarketingContent = React.lazy(() => import("@/pages/marketing/Content"));
 const MarketingApprovals = React.lazy(() => import("@/pages/marketing/Approvals"));
 const MarketingPerformance = React.lazy(() => import("@/pages/marketing/Performance"));
 const MarketingReports = React.lazy(() => import("@/pages/marketing/Reports"));
+const MarketingMedia = React.lazy(() => import("@/pages/marketing/Media"));
 
 const HrmDashboard = React.lazy(() => import("@/pages/hrm/Dashboard"));
 const HrmDepartments = React.lazy(() => import("@/pages/hrm/Departments"));
@@ -446,9 +448,9 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
 
-      <Route path="/marketing/clients/:id">
+      <Route path="/marketing/projects/:id">
         <RoleGate>
-          <MarketingClientDetail />
+          <MarketingProjectDetail />
         </RoleGate>
       </Route>
       <Route path="/marketing/tasks">
@@ -456,9 +458,14 @@ export function PageOutlet() {
           <MarketingTasks />
         </RoleGate>
       </Route>
-      <Route path="/marketing/clients">
+      <Route path="/marketing/projects">
         <RoleGate>
-          <MarketingClients />
+          <MarketingProjects />
+        </RoleGate>
+      </Route>
+      <Route path="/marketing/media">
+        <RoleGate>
+          <MarketingMedia />
         </RoleGate>
       </Route>
       <Route path="/marketing/calendar">
@@ -691,6 +698,11 @@ export function PageOutlet() {
       <Route path="/finance/vendors/analytics">
         <RoleGate>
           <FinanceVendorAnalytics />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/vendors/:id">
+        <RoleGate>
+          <FinanceVendorDetail />
         </RoleGate>
       </Route>
       <Route path="/finance/vendors">

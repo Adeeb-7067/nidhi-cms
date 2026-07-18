@@ -1,11 +1,20 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem, CommandSeparator } from "cmdk";
+import { CommandInput } from "cmdk";
+import {
+  Command,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+  CommandSeparator,
+} from "@/components/ui/command";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useGlobalSearch, getGlobalSearchQueryKey } from "@/api";
 import { Briefcase, Building, Bug, Loader2, Search } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { getProjectDetailHref } from "@/lib/project-routes";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -15,6 +24,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const [, setLocation] = useLocation();
   const { user } = useAuth();
 
@@ -34,6 +44,29 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       },
     }
   );
+
+  useEffect(() => {
+    if (data) {
+      const firstProject = data.projects?.[0];
+      const firstClient = data.clients?.[0];
+      const firstEmployee = data.employees?.[0];
+      const firstBug = data.bugs?.[0];
+
+      if (firstProject) {
+        setSelectedId(`project-${firstProject.id}-${firstProject.name}`);
+      } else if (firstClient) {
+        setSelectedId(`client-${firstClient.id}-${firstClient.companyName}`);
+      } else if (firstEmployee) {
+        setSelectedId(`emp-${firstEmployee.id}-${firstEmployee.name}`);
+      } else if (firstBug) {
+        setSelectedId(`bug-${firstBug.id}-${firstBug.title}`);
+      } else {
+        setSelectedId(undefined);
+      }
+    } else {
+      setSelectedId(undefined);
+    }
+  }, [data]);
 
   const navigate = useCallback(
     (path: string) => {
@@ -58,7 +91,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setQuery(""); }}>
       <DialogContent className="p-0 gap-0 max-w-xl bg-card border-border shadow-2xl overflow-hidden translate-y-0 top-[20vh]">
-        <Command className="bg-transparent" shouldFilter={false}>
+        <Command
+          className="bg-transparent"
+          shouldFilter={false}
+          value={selectedId}
+          onValueChange={setSelectedId}
+        >
           <div className="flex items-center border-b border-border px-3">
             <Search className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
             <CommandInput
@@ -96,7 +134,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                         value={`project-${p.id}-${p.name}`}
                         onSelect={() => {
                           if (user?.role === "client") navigate("/client");
-                          else navigate(`/admin/projects/${p.id}`);
+                          else navigate(getProjectDetailHref(p.id, user?.role, p.type));
                         }}
                         className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm cursor-pointer aria-selected:bg-muted"
                       >
@@ -181,7 +219,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                         <CommandItem
                           key={`bug-${b.id}`}
                           value={`bug-${b.id}-${b.title}`}
-                          onSelect={() => navigate("/dev/bugs")}
+                          onSelect={() => navigate(`/dev/bugs?bug=${b.id}`)}
                           className="flex items-center gap-2.5 rounded-md px-2 py-2 text-sm cursor-pointer aria-selected:bg-muted"
                         >
                           <div

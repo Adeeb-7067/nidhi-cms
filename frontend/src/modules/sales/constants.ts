@@ -22,6 +22,7 @@ export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
   approved: "Approved",
   converted: "Converted",
   lost: "Lost",
+  closed_elsewhere: "Closed Elsewhere",
 };
 
 export const LEAD_STATUS_ORDER: LeadStatus[] = [
@@ -34,6 +35,14 @@ export const LEAD_STATUS_ORDER: LeadStatus[] = [
   "approved",
   "converted",
   "lost",
+  "closed_elsewhere",
+];
+
+/** Terminal / paused statuses — no active follow-ups */
+export const LEAD_NO_FOLLOW_UP_STATUSES: LeadStatus[] = [
+  "converted",
+  "lost",
+  "closed_elsewhere",
 ];
 
 export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {

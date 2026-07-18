@@ -18,7 +18,7 @@ if (!uri) {
 await mongoose.connect(uri);
 
 const admin = await usersTable.findOne({ role: "super_admin", status: "active" }).lean();
-const lead = await SalesLeads.findOne({ status: { $nin: ["converted", "lost"] } }).lean();
+const lead = await SalesLeads.findOne({ status: { $nin: ["converted", "lost", "closed_elsewhere"] } }).lean();
 if (!admin || !lead) {
   console.error("Need active super_admin and open lead");
   process.exit(1);

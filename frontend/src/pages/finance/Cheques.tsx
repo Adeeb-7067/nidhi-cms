@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, isWithinInterval, startOfDay, endOfDay, addDays, startOfMonth, endOfMonth } from "date-fns";
 import { Link } from "wouter";
-import { Banknote, Plus, Eye, CheckCircle2, AlertTriangle, Shield } from "lucide-react";
+import { Banknote, Plus, Eye, CheckCircle2, AlertTriangle, Shield, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -28,8 +28,10 @@ import {
   ChequeFormModal,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useListCheques, type FinanceCheque } from "@/api/finance";
+import { useListCheques, useChequeClearanceForecast, type FinanceCheque } from "@/api/finance";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function ChequesPage() {
   const [search, setSearch] = useState("");
@@ -38,8 +40,10 @@ export default function ChequesPage() {
   const [editCheque, setEditCheque] = useState<FinanceCheque | null>(null);
   const { can } = usePermissions();
   const canCreate = can("finance_cheques", "create");
+  const canEdit = can("finance_cheques", "edit");
   const { data, isLoading, isError, refetch } = useListCheques();
   const cheques = data?.cheques ?? [];
+  const { data: forecastData } = useChequeClearanceForecast();
 
   const openCreate = () => {
     setEditCheque(null);
@@ -128,6 +132,62 @@ export default function ChequesPage() {
         ]}
       />
 
+      {forecastData && forecastData.length > 0 && (
+        <Card className="mb-6 bg-card border-border">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Banknote className="h-4 w-4 text-amber-500" />
+              Cash Flow Runway: Upcoming Cheque Clearances (Working Capital Projection)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-2 h-[220px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={forecastData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <XAxis
+                  dataKey="_id"
+                  tickFormatter={(str) => {
+                    try {
+                      return format(new Date(str), "MMM d");
+                    } catch {
+                      return str;
+                    }
+                  }}
+                  stroke="#888888"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="#888888"
+                  fontSize={11}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(val) => `₹${val.toLocaleString("en-IN")}`}
+                />
+                <Tooltip
+                  cursor={{ fill: "rgba(255, 255, 255, 0.05)" }}
+                  contentStyle={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))", borderRadius: "8px" }}
+                  labelStyle={{ fontSize: "11px", fontWeight: "bold" }}
+                  itemStyle={{ fontSize: "12px", color: "hsl(var(--primary))" }}
+                  labelFormatter={(label) => {
+                    try {
+                      return `Clearance Date: ${format(new Date(label), "MMM d, yyyy")}`;
+                    } catch {
+                      return label;
+                    }
+                  }}
+                  formatter={(value: any, name, props) => [
+                    `₹${Number(value).toLocaleString("en-IN")}`,
+                    `Total Outflow (${props.payload.count} cheque${props.payload.count > 1 ? "s" : ""})` as any
+                  ]}
+                />
+                <Bar dataKey="totalAmount" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} maxBarSize={45} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
       <FinanceFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -209,11 +269,27 @@ export default function ChequesPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
-                      <Link href={`/finance/cheques/${c.id}`}>
-                        <Eye className="h-3.5 w-3.5" />
-                      </Link>
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
+                        <Link href={`/finance/cheques/${c.id}`}>
+                          <Eye className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                      {canEdit && c.status === "issued" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          title="Edit"
+                          onClick={() => {
+                            setEditCheque(c);
+                            setDrawerOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

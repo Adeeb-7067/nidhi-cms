@@ -6,6 +6,7 @@ import type {
   PaymentMode,
   BudgetStatus,
   LoanStatus,
+  LoanSource,
   SubscriptionStatus,
   SubscriptionBillingCycle,
   PayrollStatus,
@@ -100,6 +101,11 @@ export const BUDGET_STATUS_LABELS: Record<BudgetStatus, string> = {
 export const LOAN_STATUS_LABELS: Record<LoanStatus, string> = {
   active: "Active",
   closed: "Closed",
+};
+
+export const LOAN_SOURCE_LABELS: Record<LoanSource, string> = {
+  bank: "Bank",
+  market: "Market",
 };
 
 export const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {

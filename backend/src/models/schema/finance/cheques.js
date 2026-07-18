@@ -38,6 +38,19 @@ const chequeSchema = new Schema(
     clearedAt: { type: Date, default: null },
     clearedBy: { type: Number, ref: "Users", default: null },
     notes: { type: String, default: null, trim: true },
+    bounceHistory: {
+      type: [
+        new Schema(
+          {
+            bouncedAt: { type: Date, default: Date.now },
+            bouncedBy: { type: Number, ref: "Users", required: true },
+            notes: { type: String, default: null, trim: true },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
     reminderStartedAt: { type: Date, default: null },
     lastReminderAt: { type: Date, default: null },
     createdBy: { type: Number, ref: "Users", required: true },

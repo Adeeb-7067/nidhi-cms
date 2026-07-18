@@ -43,6 +43,15 @@ const expenseSchema = new Schema(
     vendorId: { type: Number, ref: "Vendors", default: null, index: true },
     /** When set, this expense counts as a repayment toward that loan (on approve). */
     loanId: { type: Number, ref: "FinanceLoans", default: null, index: true },
+    /**
+     * How an installment payment splits against the loan (reducing-balance bookkeeping).
+     * Default "both" = interest first, then principal (standard EMI).
+     */
+    loanAllocation: {
+      type: String,
+      enum: ["both", "interest", "principal"],
+      default: "both",
+    },
     /** When set, this expense is a payment for a software subscription. */
     subscriptionId: { type: Number, ref: "FinanceSubscriptions", default: null, index: true },
     /** When set, this expense was created from an issued bank cheque. */
@@ -63,6 +72,8 @@ const expenseSchema = new Schema(
     approvedBy: { type: Number, ref: "Users", default: null },
     approvedAt: { type: Date, default: null },
     createdBy: { type: Number, ref: "Users", required: true },
+    isDeleted: { type: Boolean, default: false, required: true, index: true },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

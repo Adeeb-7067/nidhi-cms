@@ -24,3 +24,11 @@ export {
   getClientCampaigns,
   getClientDeliverableUsage,
 } from "./dashboard";
+export {
+  mockMediaItems,
+  getMediaItemById,
+  getMediaChildren,
+  getMediaPath,
+  getClientMediaFolderId,
+  formatMediaSize,
+} from "./media";

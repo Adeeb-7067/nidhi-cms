@@ -740,7 +740,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [development, maintenance]
+            enum: [development, maintenance, digital]
         - name: priority
           in: query
           schema:
@@ -2642,7 +2642,7 @@ components:
           enum: [low, medium, high, critical]
         type:
           type: string
-          enum: [development, maintenance]
+          enum: [development, maintenance, digital]
         startDate:
           type: string
         deadline:
@@ -2698,7 +2698,7 @@ components:
           enum: [low, medium, high, critical]
         type:
           type: string
-          enum: [development, maintenance]
+          enum: [development, maintenance, digital]
         startDate:
           type: string
         deadline:
@@ -2742,7 +2742,7 @@ components:
           enum: [low, medium, high, critical]
         type:
           type: string
-          enum: [development, maintenance]
+          enum: [development, maintenance, digital]
         startDate:
           type: string
         deadline:

@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Video, Check, X } from "lucide-react";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { Video, Check, X, Loader2, Plus, Clapperboard, Download, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
   Table,
   TableBody,
@@ -10,15 +11,49 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { mockVideoRequests } from "@/modules/marketing/mock-data";
-import { VIDEO_EXPORT_LABELS } from "@/modules/marketing/constants";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  useMarketingVideos,
+  useCreateMarketingVideo,
+  useUpdateMarketingVideo,
+  useDeleteMarketingVideo,
+  type MarketingVideoDto,
+} from "@/api/marketing";
+import { VIDEO_EXPORT_LABELS, VIDEO_RENDER_STATUS_LABELS } from "@/modules/marketing/constants";
 import {
   MarketingPageHeader,
   MarketingFilterBar,
   MarketingEmptyState,
   MarketingStatusBadge,
+  MarketingRowActions,
+  MarketingConfirmDialog,
+  DigitalProjectSelect,
+  MarketingAssigneeSelect,
+  MarketingChipTabs,
+  parseAssigneeId,
 } from "@/modules/marketing/components";
+import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { MarketingListPageSkeleton } from "@/components/loading";
 import { cn } from "@/lib/utils";
+import type { VideoExportTarget, VideoRenderStatus } from "@/modules/marketing/types";
+import { toast } from "sonner";
+import { toastApiError } from "@/lib/api-error";
+import { usePermissions } from "@/modules/permissions/usePermission";
 
 function BoolIcon({ value }: { value: boolean }) {
   return value ? (
@@ -28,18 +63,149 @@ function BoolIcon({ value }: { value: boolean }) {
   );
 }
 
+const emptyForm = {
+  accountId: "",
+  title: "",
+  renderStatus: "raw_uploaded" as VideoRenderStatus,
+  hasVoiceover: "false",
+  hasSubtitles: "false",
+  hasThumbnail: "false",
+  exportTarget: "reel" as VideoExportTarget,
+  dueDate: "",
+  assigneeId: "",
+};
+
 export default function MarketingVideos() {
+  const { can } = usePermissions();
+  const canCreate = can("marketing_content", "create");
+  const canEdit = can("marketing_content", "edit");
+  const canDelete = can("marketing_content", "delete");
+  const showActions = canEdit || canDelete;
+
   const [search, setSearch] = useState("");
+  const [projectFilter, setProjectFilter] = useAccountProjectFilter();
+  const [statusTab, setStatusTab] = useState("all");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<MarketingVideoDto | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MarketingVideoDto | null>(null);
+  const [form, setForm] = useState(emptyForm);
+
+  const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
+  const { data, isLoading, isError } = useMarketingVideos(
+    accountFilterId ? { accountId: accountFilterId } : undefined,
+  );
+  const createVideo = useCreateMarketingVideo();
+  const updateVideo = useUpdateMarketingVideo();
+  const deleteVideo = useDeleteMarketingVideo();
+  const videos = data?.videos ?? [];
+  const saving = createVideo.isPending || updateVideo.isPending;
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return mockVideoRequests.filter(
-      (v) =>
+    return videos.filter((v) => {
+      const matchesSearch =
         !q ||
         v.title.toLowerCase().includes(q) ||
-        v.clientName.toLowerCase().includes(q),
-    );
-  }, [search]);
+        v.clientName.toLowerCase().includes(q);
+      const matchesStatus = statusTab === "all" || v.renderStatus === statusTab;
+      return matchesSearch && matchesStatus;
+    });
+  }, [videos, search, statusTab]);
+
+  const statusChipItems = useMemo(
+    () => [
+      { value: "all", label: "All", count: videos.length },
+      ...(Object.keys(VIDEO_RENDER_STATUS_LABELS) as VideoRenderStatus[]).map((status) => ({
+        value: status,
+        label: VIDEO_RENDER_STATUS_LABELS[status],
+        count: videos.filter((v) => v.renderStatus === status).length,
+      })),
+    ],
+    [videos],
+  );
+
+  const kpis = useMemo(
+    () => ({
+      total: videos.length,
+      editing: videos.filter((v) => v.renderStatus === "editing").length,
+      ready: videos.filter((v) => v.renderStatus === "ready").length,
+      exported: videos.filter((v) => v.renderStatus === "exported").length,
+    }),
+    [videos],
+  );
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ ...emptyForm, accountId: projectFilter || "" });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (v: MarketingVideoDto) => {
+    setEditing(v);
+    setForm({
+      accountId: String(v.accountId),
+      title: v.title,
+      renderStatus: v.renderStatus as VideoRenderStatus,
+      hasVoiceover: String(v.hasVoiceover),
+      hasSubtitles: String(v.hasSubtitles),
+      hasThumbnail: String(v.hasThumbnail),
+      exportTarget: v.exportTarget as VideoExportTarget,
+      dueDate: v.dueDate?.slice(0, 10) ?? "",
+      assigneeId: v.assigneeId != null ? String(v.assigneeId) : "",
+    });
+    setDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    const payload = {
+      title: form.title.trim(),
+      renderStatus: form.renderStatus,
+      hasVoiceover: form.hasVoiceover === "true",
+      hasSubtitles: form.hasSubtitles === "true",
+      hasThumbnail: form.hasThumbnail === "true",
+      exportTarget: form.exportTarget,
+      dueDate: form.dueDate || null,
+      assigneeId: parseAssigneeId(form.assigneeId),
+    };
+    try {
+      if (editing) {
+        await updateVideo.mutateAsync({
+          id: editing.id,
+          accountId: editing.accountId,
+          data: payload,
+        });
+        toast.success("Video updated");
+      } else {
+        if (!form.accountId) {
+          toast.error("Digital project is required");
+          return;
+        }
+        await createVideo.mutateAsync({
+          accountId: Number(form.accountId),
+          ...payload,
+        });
+        toast.success("Video created");
+      }
+      setDialogOpen(false);
+    } catch (err) {
+      toastApiError(err, editing ? "Failed to update video" : "Failed to create video");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteVideo.mutateAsync({ id: deleteTarget.id, accountId: deleteTarget.accountId });
+      toast.success("Video deleted");
+      setDeleteTarget(null);
+    } catch (err) {
+      toastApiError(err, "Failed to delete video");
+    }
+  };
 
   return (
     <PortalPageShell>
@@ -47,19 +213,53 @@ export default function MarketingVideos() {
         title="Video & reel queue"
         description="Raw files, voiceover, subtitles, thumbnails, and export targets"
         breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Videos" }]}
+        actions={
+          canCreate ? (
+            <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+              <Plus className="h-3.5 w-3.5" />
+              New video
+            </Button>
+          ) : undefined
+        }
       />
 
-      <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search videos, clients…" />
+      <PortalKpiGrid
+        loading={isLoading}
+        columns={4}
+        count={4}
+        items={[
+          { title: "Total videos", value: kpis.total, icon: Video, accent: "blue", delay: 0 },
+          { title: "Editing", value: kpis.editing, icon: Clapperboard, accent: "amber", delay: 1 },
+          { title: "Ready", value: kpis.ready, icon: Sparkles, accent: "violet", delay: 2 },
+          { title: "Exported", value: kpis.exported, icon: Download, accent: "green", delay: 3 },
+        ]}
+      />
 
-      {filtered.length === 0 ? (
-        <MarketingEmptyState icon={Video} title="No video requests" description="The queue is empty for current filters." />
+      <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search videos, projects…">
+        <DigitalProjectSelect allowAll value={projectFilter} onValueChange={setProjectFilter} className="h-8 w-[220px] text-xs" />
+      </MarketingFilterBar>
+
+      <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
+
+      {isLoading ? (
+        <MarketingListPageSkeleton kpiCount={4} showTabs />
+      ) : isError ? (
+        <MarketingEmptyState icon={Video} title="Could not load videos" description="Check your connection and try again." />
+      ) : filtered.length === 0 ? (
+        <MarketingEmptyState
+          icon={Video}
+          title="No video requests"
+          description="The queue is empty for current filters."
+          actionLabel={canCreate ? "New video" : undefined}
+          onAction={canCreate ? openCreate : undefined}
+        />
       ) : (
         <div className="rounded-xl border bg-card overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/30">
                 <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Client</TableHead>
+                <TableHead className="text-xs">Project</TableHead>
                 <TableHead className="text-xs">Render status</TableHead>
                 <TableHead className="text-xs text-center">VO</TableHead>
                 <TableHead className="text-xs text-center">Subs</TableHead>
@@ -67,6 +267,7 @@ export default function MarketingVideos() {
                 <TableHead className="text-xs">Export</TableHead>
                 <TableHead className="text-xs">Assignee</TableHead>
                 <TableHead className="text-xs">Due</TableHead>
+                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -74,19 +275,160 @@ export default function MarketingVideos() {
                 <TableRow key={v.id}>
                   <TableCell className="text-xs font-medium max-w-[180px] truncate">{v.title}</TableCell>
                   <TableCell className="text-xs">{v.clientName}</TableCell>
-                  <TableCell><MarketingStatusBadge variant="videoRender" status={v.renderStatus} /></TableCell>
+                  <TableCell>
+                    <MarketingStatusBadge
+                      variant="videoRender"
+                      status={v.renderStatus as VideoRenderStatus}
+                    />
+                  </TableCell>
                   <TableCell className={cn("text-center")}><BoolIcon value={v.hasVoiceover} /></TableCell>
                   <TableCell className="text-center"><BoolIcon value={v.hasSubtitles} /></TableCell>
                   <TableCell className="text-center"><BoolIcon value={v.hasThumbnail} /></TableCell>
-                  <TableCell className="text-xs">{VIDEO_EXPORT_LABELS[v.exportTarget]}</TableCell>
+                  <TableCell className="text-xs">
+                    {VIDEO_EXPORT_LABELS[v.exportTarget as VideoExportTarget] ?? v.exportTarget}
+                  </TableCell>
                   <TableCell className="text-xs">{v.assignee}</TableCell>
-                  <TableCell className="text-xs">{format(new Date(v.dueDate), "MMM d")}</TableCell>
+                  <TableCell className="text-xs">
+                    {v.dueDate ? format(new Date(v.dueDate), "MMM d") : "—"}
+                  </TableCell>
+                  {showActions && (
+                    <TableCell className="text-right">
+                      <MarketingRowActions
+                        canEdit={canEdit}
+                        canDelete={canDelete}
+                        onEdit={() => openEdit(v)}
+                        onDelete={() => setDeleteTarget(v)}
+                      />
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
       )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit video" : "New video request"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {!editing && (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Digital project</Label>
+                <DigitalProjectSelect
+                  value={form.accountId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, accountId: v }))}
+                  className="h-8 w-full text-xs"
+                />
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Title</Label>
+              <Input
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                className="h-8 text-xs"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Render status</Label>
+                <Select
+                  value={form.renderStatus}
+                  onValueChange={(v) => setForm((f) => ({ ...f, renderStatus: v as VideoRenderStatus }))}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(VIDEO_RENDER_STATUS_LABELS).map(([k, label]) => (
+                      <SelectItem key={k} value={k}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Export target</Label>
+                <Select
+                  value={form.exportTarget}
+                  onValueChange={(v) => setForm((f) => ({ ...f, exportTarget: v as VideoExportTarget }))}
+                >
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(VIDEO_EXPORT_LABELS).map(([k, label]) => (
+                      <SelectItem key={k} value={k}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Voiceover</Label>
+                <Select value={form.hasVoiceover} onValueChange={(v) => setForm((f) => ({ ...f, hasVoiceover: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Subtitles</Label>
+                <Select value={form.hasSubtitles} onValueChange={(v) => setForm((f) => ({ ...f, hasSubtitles: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Thumbnail</Label>
+                <Select value={form.hasThumbnail} onValueChange={(v) => setForm((f) => ({ ...f, hasThumbnail: v }))}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">Yes</SelectItem>
+                    <SelectItem value="false">No</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Assignee</Label>
+              <MarketingAssigneeSelect
+                value={form.assigneeId}
+                onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Due date</Label>
+              <Input
+                type="date"
+                value={form.dueDate}
+                onChange={(e) => setForm((f) => ({ ...f, dueDate: e.target.value }))}
+                className="h-8 text-xs"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" disabled={saving} onClick={() => void handleSave()}>
+              {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+              {editing ? "Save" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <MarketingConfirmDialog
+        open={deleteTarget != null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Delete video?"
+        description={deleteTarget ? `"${deleteTarget.title}" will be removed.` : undefined}
+        loading={deleteVideo.isPending}
+        onConfirm={() => void handleDelete()}
+      />
     </PortalPageShell>
   );
 }

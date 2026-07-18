@@ -16,6 +16,7 @@ export type FinancePaymentStatus = "completed" | "pending" | "failed";
 export type BudgetType = "annual" | "project";
 export type BudgetStatus = "on_track" | "warning" | "exceeded";
 export type LoanStatus = "active" | "closed";
+export type LoanSource = "bank" | "market";
 export type SubscriptionStatus = "active" | "cancelled";
 export type SubscriptionBillingCycle = "monthly" | "yearly";
 export type LedgerType = "client" | "vendor" | "expense" | "bank";
@@ -98,8 +99,16 @@ export interface FinanceCheque {
   clearedAt?: string | null;
   clearedBy?: number | null;
   notes: string | null;
+  bounceHistory?: ChequeBounceEvent[];
   createdBy?: number | null;
   createdAt?: string;
+}
+
+export interface ChequeBounceEvent {
+  bouncedAt: string;
+  bouncedBy: number;
+  bouncedByName?: string;
+  notes: string | null;
 }
 
 export interface Income {
@@ -210,6 +219,8 @@ export interface LoanPayment {
   status: ExpenseStatus;
   notes: string | null;
   paymentMode: FinancePaymentMode;
+  /** How this installment was allocated against the loan. */
+  loanAllocation?: "both" | "interest" | "principal";
   principalPortion: number | null;
   interestPortion: number | null;
   outstandingAfter: number | null;
@@ -220,6 +231,8 @@ export interface Loan {
   reference: string;
   name: string;
   lender: string;
+  /** Bank loan vs market (informal / private) loan. */
+  source: LoanSource;
   principal: number;
   interestRate: number | null;
   startDate: string;
@@ -438,6 +451,7 @@ export const financeKeys = {
   profitability: () => ["finance-profitability"] as const,
   departmentPayroll: (year?: number, month?: number) => ["finance-department-payroll", year, month] as const,
   vendors: (params?: object) => ["finance-vendors", params] as const,
+  vendor: (id: number) => ["finance-vendor", id] as const,
   vendorAnalytics: (period?: string) => ["finance-vendor-analytics", period] as const,
   notifications: (params?: object) => ["finance-notifications", params] as const,
 };
@@ -1027,6 +1041,7 @@ export function useDeleteBudget() {
 
 export interface ListLoansParams {
   status?: LoanStatus;
+  source?: LoanSource;
   search?: string;
 }
 
@@ -1051,6 +1066,7 @@ export function useGetLoan(id: number, enabled = true) {
 export interface CreateLoanPayload {
   name: string;
   lender: string;
+  source: LoanSource;
   principal: number;
   interestRate?: number | null;
   startDate: string;
@@ -1096,6 +1112,8 @@ export interface RecordLoanInstallmentPayload {
   notes?: string;
   /** When true, expense is approved immediately and updates loan balances. */
   approve?: boolean;
+  /** How to allocate the payment: both (EMI), interest only, or principal only. */
+  loanAllocation?: "both" | "interest" | "principal";
 }
 
 export function useRecordLoanInstallment() {
@@ -1122,6 +1140,19 @@ export interface ListChequesParams {
   payeeType?: ChequePayeeType;
   purpose?: ChequePurpose;
   search?: string;
+}
+
+export interface ChequeClearanceForecast {
+  _id: string; // date string
+  totalAmount: number;
+  count: number;
+}
+
+export function useChequeClearanceForecast() {
+  return useQuery<ChequeClearanceForecast[], Error>({
+    queryKey: ["cheque-clearance-forecast"],
+    queryFn: () => customFetch<ChequeClearanceForecast[]>(apiUrl("/api/finance/cheques/forecast/clearance")),
+  });
 }
 
 export function useListCheques(params?: ListChequesParams, enabled = true) {
@@ -1205,18 +1236,33 @@ export function useClearCheque() {
 
 export function useCancelCheque() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) =>
-      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/cancel`), { method: "POST", body: "{}" }),
-    onSuccess: (_data, id) => invalidateChequeMutations(qc, id),
+  return useMutation<FinanceCheque, Error, { id: number; notes?: string }>({
+    mutationFn: ({ id, notes }) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/cancel`), {
+        method: "POST",
+        body: JSON.stringify({ notes }),
+      }),
+    onSuccess: (_data, vars) => invalidateChequeMutations(qc, vars.id),
   });
 }
 
 export function useBounceCheque() {
   const qc = useQueryClient();
-  return useMutation({
+  return useMutation<FinanceCheque, Error, { id: number; notes?: string }>({
+    mutationFn: ({ id, notes }) =>
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/bounce`), {
+        method: "POST",
+        body: JSON.stringify({ notes }),
+      }),
+    onSuccess: (_data, vars) => invalidateChequeMutations(qc, vars.id),
+  });
+}
+
+export function useRePresentCheque() {
+  const qc = useQueryClient();
+  return useMutation<FinanceCheque, Error, number>({
     mutationFn: (id: number) =>
-      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/bounce`), { method: "POST", body: "{}" }),
+      customFetch<FinanceCheque>(apiUrl(`/api/finance/cheques/${id}/re-present`), { method: "POST", body: "{}" }),
     onSuccess: (_data, id) => invalidateChequeMutations(qc, id),
   });
 }
@@ -1560,7 +1606,15 @@ export function useListVendors(params?: { search?: string }, enabled = true) {
     queryKey: financeKeys.vendors(params),
     queryFn: () => customFetch(apiUrl(`/api/finance/vendors${toQueryString(params)}`)),
     enabled,
-    staleTime: 30_000,
+  });
+}
+
+export function useGetVendor(id: number, enabled = true) {
+  return useQuery<FinanceVendor>({
+    queryKey: financeKeys.vendor(id),
+    queryFn: () => customFetch(apiUrl(`/api/finance/vendors/${id}`)),
+    enabled: enabled && !!id,
+    staleTime: 15_000,
   });
 }
 
@@ -1602,7 +1656,10 @@ export function useUpdateVendor() {
   return useMutation({
     mutationFn: ({ id, ...body }: CreateVendorPayload & { id: number }) =>
       customFetch<FinanceVendor>(apiUrl(`/api/finance/vendors/${id}`), { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-vendors"] }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-vendors"] });
+      qc.invalidateQueries({ queryKey: financeKeys.vendor(vars.id) });
+    },
   });
 }
 
@@ -1610,7 +1667,11 @@ export function useDeleteVendor() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => customFetch(apiUrl(`/api/finance/vendors/${id}`), { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-vendors"] }),
+    onSuccess: (_data, id) => {
+      qc.invalidateQueries({ queryKey: ["finance-vendors"] });
+      qc.invalidateQueries({ queryKey: financeKeys.vendor(id) });
+      qc.invalidateQueries({ queryKey: ["finance-vendor-ledgers"] });
+    },
   });
 }
 

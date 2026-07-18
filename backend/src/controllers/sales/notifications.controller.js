@@ -6,6 +6,7 @@ import {
   SalesProposals,
   notificationsTable,
   getNextSequence,
+  leadNoFollowUpStatuses,
 } from "../../models/schema/index.js";
 import { parsePagination, badRequest, notFound, parseIdParam } from "../../utils/route-errors.js";
 import {
@@ -91,7 +92,7 @@ async function syncSalesAlerts(userId, role) {
       SalesPayments.find(paymentFilter).sort({ createdAt: -1 }).limit(20).lean(),
       SalesLeads.find({
         assignedTo: userId,
-        status: { $nin: ["converted", "lost"] },
+        status: { $nin: leadNoFollowUpStatuses },
         updatedAt: { $gte: weekAgo },
       })
         .sort({ updatedAt: -1 })
@@ -104,7 +105,19 @@ async function syncSalesAlerts(userId, role) {
     ]);
 
   if (overdueAlerts) {
+    const overdueLeadIds = [...new Set(overdueFollowUps.map((fu) => fu.leadId).filter(Boolean))];
+    const pausedLeads = overdueLeadIds.length
+      ? await SalesLeads.find({
+          id: { $in: overdueLeadIds },
+          status: { $in: leadNoFollowUpStatuses },
+        })
+          .select({ id: 1 })
+          .lean()
+      : [];
+    const pausedLeadIds = new Set(pausedLeads.map((l) => l.id));
+
     for (const fu of overdueFollowUps) {
+      if (pausedLeadIds.has(fu.leadId)) continue;
       await upsertSalesAlert(userId, {
         type: `${SALES_TYPE_PREFIX}follow_up_reminder`,
         title: "Overdue follow-up",

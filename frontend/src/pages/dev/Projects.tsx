@@ -134,7 +134,7 @@ function ProjectCard({
           <div className="min-w-0 flex-1">
             <CardTitle className="text-sm font-semibold leading-snug">
               <Link
-                href={getProjectDetailHref(project.id, role)}
+                href={getProjectDetailHref(project.id, role, project.type)}
                 className="line-clamp-2 hover:text-primary transition-colors"
               >
                 {project.name}
@@ -211,7 +211,7 @@ function ProjectCard({
 
         <div className="flex items-center gap-2 border-t border-border/40 pt-3">
           <Button size="sm" className="h-8 flex-1 text-xs" asChild>
-            <Link href={getProjectDetailHref(project.id, role)}>
+            <Link href={getProjectDetailHref(project.id, role, project.type)}>
               Open
               <ArrowRight className="ml-1 h-3.5 w-3.5" />
             </Link>

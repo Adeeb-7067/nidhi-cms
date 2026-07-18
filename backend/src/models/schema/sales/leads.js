@@ -1,6 +1,20 @@
 import mongoose, { Schema } from "mongoose";
 
-const leadStatuses = ["new", "contacted", "follow_up", "interested", "project_planning", "proposal_sent", "approved", "converted", "lost"];
+const leadStatuses = [
+  "new",
+  "contacted",
+  "follow_up",
+  "interested",
+  "project_planning",
+  "proposal_sent",
+  "approved",
+  "converted",
+  "lost",
+  /** Client closed a deal elsewhere — stop follow-ups, keep for future outreach */
+  "closed_elsewhere",
+];
+/** Statuses where active outreach / follow-ups should stop */
+const leadNoFollowUpStatuses = ["converted", "lost", "closed_elsewhere"];
 const leadPriorities = ["low", "medium", "high", "urgent"];
 
 const reminderSchema = new Schema(
@@ -51,4 +65,4 @@ leadSchema.index({ createdBy: 1, createdAt: -1 });
 
 const SalesLeads = mongoose.models.SalesLeads || mongoose.model("SalesLeads", leadSchema);
 
-export { SalesLeads, leadStatuses, leadPriorities };
+export { SalesLeads, leadStatuses, leadNoFollowUpStatuses, leadPriorities };

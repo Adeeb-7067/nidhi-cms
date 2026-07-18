@@ -23,6 +23,7 @@ import { startAttendanceMaterializeJob } from "./src/services/hrm/attendance-mat
 import { startEmployeeExitJob } from "./src/services/hrm/employee-exit-job.js";
 import { startProjectDocumentRenewalReminderJob } from "./src/services/project-documents/renewal-reminder-job.js";
 import { startChequeClearanceReminderJob } from "./src/services/finance/cheque-clearance-reminder-job.js";
+import { startStorageCleanupJob } from "./src/services/finance/storage-cleanup-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -67,6 +68,7 @@ const runAttendanceMaterializeTick = startAttendanceMaterializeJob();
 const runEmployeeExitTick = startEmployeeExitJob();
 const runProjectDocumentRenewalTick = startProjectDocumentRenewalReminderJob();
 const runChequeClearanceTick = startChequeClearanceReminderJob();
+const runStorageCleanupTick = startStorageCleanupJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
@@ -81,8 +83,9 @@ const bootstrapBackgroundJobs = () => {
   void runAlertSchedulerTick();
   void runProjectDocumentRenewalTick();
   void runChequeClearanceTick();
+  runStorageCleanupTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup)",
   );
 };
 void whenDatabaseReady()

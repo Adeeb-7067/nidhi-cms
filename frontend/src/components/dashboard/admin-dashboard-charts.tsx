@@ -64,13 +64,15 @@ export function ChartGridCell({
   className,
 }: {
   children: React.ReactNode;
-  colSpan?: 3 | 4 | 5 | 8 | 12;
+  colSpan?: 3 | 4 | 5 | 6 | 7 | 8 | 12;
   className?: string;
 }) {
   const colClass = {
     3: "lg:col-span-3",
     4: "lg:col-span-4",
     5: "lg:col-span-5",
+    6: "lg:col-span-6",
+    7: "lg:col-span-7",
     8: "lg:col-span-8",
     12: "lg:col-span-12",
   }[colSpan];

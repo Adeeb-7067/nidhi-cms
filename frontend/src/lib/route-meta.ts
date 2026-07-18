@@ -185,6 +185,21 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Incoming and outgoing payments, receipts, and due reminders.",
     hideHeader: true,
   },
+  "/finance/vendors": {
+    title: "Vendors",
+    description: "Service providers you pay — cloud, hosting, domains, and SaaS.",
+    hideHeader: true,
+  },
+  "/finance/vendors/analytics": {
+    title: "Vendor analytics",
+    description: "Spend by vendor, concentration, and period comparisons.",
+    hideHeader: true,
+  },
+  "/finance/vendors/:id": {
+    title: "Vendor detail",
+    description: "Contact info, service details, and vendor ledger activity.",
+    hideHeader: true,
+  },
   "/finance/cheques": {
     title: "Cheques",
     description: "Issue bank cheques and clear them to settle linked expenses.",
@@ -220,9 +235,14 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     description: "Daily task management with status, priority, and deadlines.",
     hideHeader: true,
   },
-  "/marketing/clients": {
-    title: "Marketing clients",
-    description: "Assigned client accounts, packages, and budgets.",
+  "/marketing/projects": {
+    title: "Digital projects",
+    description: "Projects with type Digital from Manage.",
+    hideHeader: true,
+  },
+  "/marketing/media": {
+    title: "Digital media",
+    description: "PC-style vault for client images, documents, and files.",
     hideHeader: true,
   },
   "/marketing/calendar": {

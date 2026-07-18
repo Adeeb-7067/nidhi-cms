@@ -395,6 +395,11 @@ export function LeadFormModal({
                           ))}
                         </SelectContent>
                       </Select>
+                      {field.value === "closed_elsewhere" ? (
+                        <FormDescription className="text-[11px]">
+                          Pause follow-ups — client closed a deal elsewhere. You can approach them again later.
+                        </FormDescription>
+                      ) : null}
                       <FormMessage />
                     </FormItem>
                   )}

@@ -52,6 +52,7 @@ import {
   CalendarDays,
   IdCard,
   Laptop,
+  HardDrive,
   LogOut,
   Megaphone,
   CheckSquare,
@@ -227,6 +228,7 @@ export function getNavSections(role: UserRole): NavSection[] {
       items: [
         { title: "My Dashboard", href: "/sales/bde", icon: LayoutDashboard, roles: ["bde"], group: "Overview" },
         { title: "My Projects", href: "/sales/bde/projects", icon: FolderKanban, roles: ["bde"], group: "Overview" },
+        { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["bde"], group: "Overview" },
         { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde"), group: "Overview" },
         { title: "Lead management", href: "/sales/leads", icon: Target, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
         { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
@@ -255,7 +257,8 @@ export function getNavSections(role: UserRole): NavSection[] {
       items: [
         { title: "Dashboard", href: "/marketing", icon: LayoutDashboard, roles: [...MARKETING_ACCESS_ROLES], group: "Overview" },
         { title: "Tasks", href: "/marketing/tasks", icon: CheckSquare, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
-        { title: "Clients", href: "/marketing/clients", icon: Building2, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
+        { title: "Projects", href: "/marketing/projects", icon: Briefcase, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
+        { title: "Media", href: "/marketing/media", icon: HardDrive, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
         { title: "Calendar", href: "/marketing/calendar", icon: CalendarDays, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Graphics", href: "/marketing/graphics", icon: Image, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Videos", href: "/marketing/videos", icon: Video, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },

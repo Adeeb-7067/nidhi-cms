@@ -47,7 +47,18 @@ export const cmsModuleGroups = [
   },
   {
     label: "Digital",
-    modules: ["marketing"],
+    modules: [
+      "marketing_dashboard",
+      "marketing_clients",
+      "marketing_tasks",
+      "marketing_media",
+      "marketing_calendar",
+      "marketing_content",
+      "marketing_approvals",
+      "marketing_ads",
+      "marketing_analytics",
+      "marketing_reports",
+    ],
   },
   {
     label: "Finance",
@@ -130,6 +141,8 @@ export const salesModules = cmsModuleGroups.find((g) => g.label === "Sales & CRM
 
 export const financeModules = cmsModuleGroups.find((g) => g.label === "Finance")?.modules ?? [];
 
+export const marketingModules = cmsModuleGroups.find((g) => g.label === "Digital")?.modules ?? [];
+
 export const cmsModules = cmsModuleGroups.flatMap((g) => g.modules);
 
 export const cmsActions = ["view", "create", "edit", "delete", "approve", "finalize", "export"];
@@ -161,6 +174,8 @@ export const legacyModuleMap = {
   my_wfh: "hrm_my_wfh",
   my_payslips: "hrm_my_payslips",
   my_holidays: "hrm_my_holidays",
+  /** Legacy umbrella Digital permission → dashboard entry point. */
+  marketing: "marketing_dashboard",
 };
 
 export function normalizePermissionModule(module) {

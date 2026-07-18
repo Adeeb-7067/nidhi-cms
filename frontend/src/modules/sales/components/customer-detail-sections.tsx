@@ -281,6 +281,12 @@ const PROJECT_PRIORITY_OPTIONS = [
   { value: "critical", label: "Critical" },
 ];
 
+const PROJECT_TYPE_OPTIONS = [
+  { value: "development", label: "Development" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "digital", label: "Digital" },
+] as const;
+
 function ProjectQuickDialog({
   open,
   onOpenChange,
@@ -302,6 +308,7 @@ function ProjectQuickDialog({
     "scoping" | "in_progress" | "on_hold" | "uat" | "completed" | "maintenance"
   >("scoping");
   const [priority, setPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [projectType, setProjectType] = useState<"development" | "maintenance" | "digital">("development");
   const [deadline, setDeadline] = useState("");
 
   useEffect(() => {
@@ -309,6 +316,9 @@ function ProjectQuickDialog({
     setName(project?.name ?? "");
     setStatus((project?.status as typeof status) ?? "scoping");
     setPriority("medium");
+    setProjectType(
+      ((project as { type?: string } | null)?.type as typeof projectType) ?? "development",
+    );
     setDeadline(project?.deadline ? project.deadline.slice(0, 10) : "");
   }, [open, project]);
 
@@ -324,7 +334,7 @@ function ProjectQuickDialog({
       if (isEdit && project) {
         await updateProject.mutateAsync({
           id: project.id,
-          data: { name: name.trim(), status, deadline },
+          data: { name: name.trim(), status, deadline, type: projectType },
         });
         toast.success("Project updated");
       } else {
@@ -335,6 +345,7 @@ function ProjectQuickDialog({
             companyId: clientId,
             priority,
             status,
+            type: projectType,
             startDate: new Date().toISOString().slice(0, 10),
             deadline,
           },
@@ -367,11 +378,47 @@ function ProjectQuickDialog({
           {!isEdit ? (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={projectType} onValueChange={(v) => setProjectType(v as typeof projectType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TYPE_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
                 <Label>Priority</Label>
                 <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {PROJECT_PRIORITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5 col-span-2">
+                <Label>Status</Label>
+                <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_STATUS_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Category</Label>
+                <Select value={projectType} onValueChange={(v) => setProjectType(v as typeof projectType)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_TYPE_OPTIONS.map((o) => (
                       <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -388,18 +435,6 @@ function ProjectQuickDialog({
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={status} onValueChange={(v) => setStatus(v as typeof status)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {PROJECT_STATUS_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
           )}
           <div className="space-y-1.5">

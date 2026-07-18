@@ -34,6 +34,7 @@ import permissionsRoutes from "./permissions.routes.js";
 import hrmRoutes from "./hrm.routes.js";
 import salesRoutes from "./sales.routes.js";
 import financeRoutes from "./finance.routes.js";
+import marketingRoutes from "./marketing.routes.js";
 import projectDocumentsRoutes from "./project-documents.routes.js";
 import { requireDatabase } from "../middlewares/require-database.js";
 const router = Router();
@@ -90,6 +91,7 @@ const featureRouters = [
   hrmRoutes,
   salesRoutes,
   financeRoutes,
+  marketingRoutes,
   projectDocumentsRoutes,
 ];
 for (const featureRouter of featureRouters) {

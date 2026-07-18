@@ -21,15 +21,16 @@ type BadgeVariant =
   | "partialPayment";
 
 const leadStyles: Record<LeadStatus, string> = {
-  new: "bg-blue-500/10 text-blue-700 border-blue-500/25",
-  contacted: "bg-amber-500/10 text-amber-700 border-amber-500/25",
-  follow_up: "bg-orange-500/10 text-orange-700 border-orange-500/25",
-  interested: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
-  project_planning: "bg-orange-600/10 text-orange-800 border-orange-600/25",
-  proposal_sent: "bg-violet-500/10 text-violet-700 border-violet-500/25",
-  approved: "bg-teal-500/10 text-teal-700 border-teal-500/25",
-  converted: "bg-cyan-500/10 text-cyan-700 border-cyan-500/25",
-  lost: "bg-red-500/10 text-red-600 border-red-500/25",
+  new: "bg-blue-500/10 text-blue-700 border-blue-500/25 dark:text-blue-300",
+  contacted: "bg-amber-500/10 text-amber-700 border-amber-500/25 dark:text-amber-300",
+  follow_up: "bg-orange-500/10 text-orange-700 border-orange-500/25 dark:text-orange-300",
+  interested: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 dark:text-emerald-300",
+  project_planning: "bg-orange-600/10 text-orange-800 border-orange-600/25 dark:text-orange-300",
+  proposal_sent: "bg-violet-500/10 text-violet-700 border-violet-500/25 dark:text-violet-300",
+  approved: "bg-teal-500/10 text-teal-700 border-teal-500/25 dark:text-teal-300",
+  converted: "bg-cyan-500/10 text-cyan-700 border-cyan-500/25 dark:text-cyan-300",
+  lost: "bg-red-500/10 text-red-600 border-red-500/25 dark:text-red-400",
+  closed_elsewhere: "bg-slate-500/10 text-slate-700 border-slate-500/25 dark:text-slate-300",
 };
 
 const proposalStyles: Record<ProposalStatus, string> = {

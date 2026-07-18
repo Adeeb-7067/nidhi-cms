@@ -98,7 +98,9 @@ function MetricTile({
   );
 }
 
-const PIPELINE_STEPS = LEAD_STATUS_ORDER.filter((s) => s !== "lost");
+const PIPELINE_STEPS = LEAD_STATUS_ORDER.filter(
+  (s) => s !== "lost" && s !== "closed_elsewhere",
+);
 
 export function LeadDetailHero({
   lead,
@@ -153,12 +155,9 @@ export function LeadDetailHero({
 }
 
 export function LeadPipelineStrip({ status }: { status: LeadStatus }) {
-  if (status === "lost") {
-    return (
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-        This lead is marked as <span className="font-semibold">Lost</span>.
-      </div>
-    );
+  // Terminal / paused statuses use page-level banners instead of the stage strip
+  if (status === "lost" || status === "closed_elsewhere") {
+    return null;
   }
 
   const currentIndex = PIPELINE_STEPS.indexOf(status);

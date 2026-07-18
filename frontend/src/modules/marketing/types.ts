@@ -286,3 +286,18 @@ export interface MarketingDashboardKpis {
   clientCount: number;
   performanceScore: number;
 }
+
+export type MediaItemKind = "folder" | "image" | "document" | "video" | "other";
+
+export interface MediaItem {
+  id: string;
+  name: string;
+  kind: MediaItemKind;
+  /** Parent folder id; null = root (This PC) */
+  parentId: string | null;
+  /** Linked marketing client when this folder represents a client vault */
+  clientId?: string;
+  sizeBytes?: number;
+  modifiedAt: string;
+  extension?: string;
+}

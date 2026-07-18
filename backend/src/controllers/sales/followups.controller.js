@@ -4,6 +4,7 @@ import {
   SalesLeadActivity,
   usersTable,
   getNextSequence,
+  leadNoFollowUpStatuses,
 } from "../../models/schema/index.js";
 import { paginateModel } from "../../utils/mongo-list.js";
 import {
@@ -81,6 +82,14 @@ async function createFollowUp(req, res) {
   if (isNaN(scheduledAt.getTime())) badRequest("scheduledAt is invalid.", "scheduledAt");
   const lead = await SalesLeads.findOne({ id: Number(body.leadId) }).lean();
   if (!lead) notFound("Lead");
+  if (leadNoFollowUpStatuses.includes(lead.status)) {
+    badRequest(
+      lead.status === "closed_elsewhere"
+        ? "This lead closed a deal elsewhere — stop follow-ups for now; reopen outreach later if needed."
+        : "Follow-ups are not allowed for this lead status.",
+      "status"
+    );
+  }
   const id = await getNextSequence("sales_followups");
   const followUp = await SalesFollowUps.create({
     id,
@@ -133,6 +142,18 @@ async function updateFollowUp(req, res) {
   // BDE cannot reassign a follow-up to another executive
   if (body.executiveId !== undefined && req.user.role !== "bde") {
     updates.executiveId = body.executiveId ? Number(body.executiveId) : null;
+  }
+  // Don't reopen outreach on paused leads via follow-up status edits
+  if (updates.status && ["scheduled", "overdue"].includes(updates.status)) {
+    const lead = await SalesLeads.findOne({ id: followUp.leadId }).select({ status: 1 }).lean();
+    if (lead && leadNoFollowUpStatuses.includes(lead.status)) {
+      badRequest(
+        lead.status === "closed_elsewhere"
+          ? "This lead closed a deal elsewhere — reopen outreach before scheduling follow-ups."
+          : "Follow-ups are not allowed for this lead status.",
+        "status"
+      );
+    }
   }
   const updated = await SalesFollowUps.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   res.json(updated);

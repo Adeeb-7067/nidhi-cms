@@ -120,11 +120,13 @@ router.post(
 // ── Cheques ──────────────────────────────────────────────────────────────
 router.get("/finance/cheques", ...p("finance_cheques"), wrap(chequesCtrl.listCheques));
 router.post("/finance/cheques", ...p("finance_cheques", "create"), wrap(chequesCtrl.createCheque));
+router.get("/finance/cheques/forecast/clearance", ...p("finance_cheques"), wrap(chequesCtrl.getClearanceForecast));
 router.get("/finance/cheques/:id", ...p("finance_cheques"), wrap(chequesCtrl.getChequeById));
 router.patch("/finance/cheques/:id", ...p("finance_cheques", "edit"), wrap(chequesCtrl.updateCheque));
 router.post("/finance/cheques/:id/clear", ...p("finance_cheques", "edit"), wrap(chequesCtrl.clearCheque));
 router.post("/finance/cheques/:id/cancel", ...p("finance_cheques", "edit"), wrap(chequesCtrl.cancelCheque));
 router.post("/finance/cheques/:id/bounce", ...p("finance_cheques", "edit"), wrap(chequesCtrl.bounceCheque));
+router.post("/finance/cheques/:id/re-present", ...p("finance_cheques", "edit"), wrap(chequesCtrl.rePresentCheque));
 
 // ── Ledgers ──────────────────────────────────────────────────────────────
 router.get("/finance/ledgers/clients", ...p("finance_ledgers"), wrap(ledgersCtrl.getClientLedgers));

@@ -81,7 +81,7 @@ const logSchema = z.object({
 
 type LogFormValues = z.infer<typeof logSchema>;
 
-const WORK_CATEGORIES = [
+const DEV_WORK_CATEGORIES = [
   { id: "development", label: "Development" },
   { id: "design", label: "Design" },
   { id: "testing", label: "Testing" },
@@ -92,6 +92,22 @@ const WORK_CATEGORIES = [
   { id: "meeting", label: "Meeting" },
   { id: "research", label: "Research" },
 ];
+
+const BDE_WORK_CATEGORIES = [
+  { id: "lead_generation", label: "Lead generation" },
+  { id: "follow_up", label: "Follow-up" },
+  { id: "proposal", label: "Proposal" },
+  { id: "client_meeting", label: "Client meeting" },
+  { id: "negotiation", label: "Negotiation" },
+  { id: "demo", label: "Product demo" },
+  { id: "documentation", label: "Documentation" },
+  { id: "meeting", label: "Internal meeting" },
+  { id: "research", label: "Research" },
+];
+
+function workCategoriesForRole(role: string | undefined) {
+  return role === "bde" ? BDE_WORK_CATEGORIES : DEV_WORK_CATEGORIES;
+}
 
 export default function DevLogs() {
   const { user } = useAuth();
@@ -153,6 +169,7 @@ function DeveloperLogsView() {
   const updateLog = useUpdateLog();
   const isEditMode = editingLog != null;
   const isSaving = createLog.isPending || updateLog.isPending;
+  const workCategories = useMemo(() => workCategoriesForRole(user?.role), [user?.role]);
 
   const canEditLogEntry = (log: DailyLog) =>
     String(log.logDate).slice(0, 10) === todayIso;
@@ -197,11 +214,11 @@ function DeveloperLogsView() {
       return;
     }
     const userObj = JSON.parse(localStorage.getItem("cms_user") || sessionStorage.getItem("cms_user") || "{}");
-    const devName = userObj?.name || "Enterprise Developer";
+    const staffName = userObj?.name || (user?.role === "bde" ? "BDE" : "Enterprise Developer");
     const monthStr = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-    PDFService.generateDeveloperLogsPDF(devName, monthStr, allMonthLogs);
-    toast.success("Exporting developer timesheet...");
+    PDFService.generateDeveloperLogsPDF(staffName, monthStr, allMonthLogs);
+    toast.success("Exporting timesheet...");
   };
 
   const form = useForm<LogFormValues>({
@@ -451,7 +468,7 @@ function DeveloperLogsView() {
                       <FormItem>
                         <FormLabel>Categories</FormLabel>
                         <div className="grid grid-cols-3 gap-2">
-                          {WORK_CATEGORIES.map((category) => (
+                          {workCategories.map((category) => (
                             <FormField
                               key={category.id}
                               control={form.control}

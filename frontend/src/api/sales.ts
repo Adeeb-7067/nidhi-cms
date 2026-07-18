@@ -6,7 +6,8 @@ import { apiUrl } from "@/lib/api-base";
 
 export type LeadStatus =
   | "new" | "contacted" | "follow_up" | "interested"
-  | "project_planning" | "proposal_sent" | "approved" | "converted" | "lost";
+  | "project_planning" | "proposal_sent" | "approved" | "converted" | "lost"
+  | "closed_elsewhere";
 export type LeadPriority = "low" | "medium" | "high" | "urgent";
 export type ProposalStatus =
   | "draft" | "sent" | "seen" | "approved"
