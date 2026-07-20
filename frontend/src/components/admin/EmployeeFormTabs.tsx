@@ -25,19 +25,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
 import type { User } from "@/api";
 import {
   computeTeamEmployeeNetSalary,
   formatTeamEmployeeNetSalaryField,
   type TeamEmployeeFormValues,
+  type EmployeeFormTab,
 } from "@/modules/admin/employee-form-shared";
 import {
   EMPLOYEE_BLOOD_GROUPS,
@@ -53,6 +47,7 @@ import {
   FormFieldHint,
   FormRow,
   FormSection,
+  NativeSelect,
   employeeFormInputClass,
   employeeFormSelectTriggerClass,
 } from "./employee-form-ui";
@@ -62,8 +57,6 @@ type Manager = { id: number; name: string; designation?: string | null };
 type RoleTemplate = { id: number; name: string };
 type CmsRoleOption = { value: string; label: string };
 type ShiftTemplate = { id: number; name: string };
-
-export type EmployeeFormTab = "personal" | "address" | "work" | "compensation" | "documents";
 
 export const EMPLOYEE_FORM_TAB_ORDER: EmployeeFormTab[] = [
   "personal",
@@ -82,14 +75,6 @@ export const EMPLOYEE_FORM_TAB_META: Record<
   work: { label: "Work & HRM", shortLabel: "Work", step: 3, icon: Briefcase },
   compensation: { label: "Compensation", shortLabel: "Pay", step: 4, icon: IndianRupee },
   documents: { label: "Documents", shortLabel: "Docs", step: 5, icon: FileText },
-};
-
-export const EMPLOYEE_FORM_TAB_FIELDS: Record<EmployeeFormTab, (keyof TeamEmployeeFormValues)[]> = {
-  personal: ["name", "email", "password"],
-  address: [],
-  work: ["role", "designation"],
-  compensation: ["salaryBasic", "salaryAllowances", "salaryDeductions", "aadharNumber", "panNumber"],
-  documents: [],
 };
 
 function AddressBlock({
@@ -342,7 +327,7 @@ export function EmployeeFormTabs({
               <FormItem>
                 <FormLabel>{L.email}</FormLabel>
                 <FormControl>
-                  <Input className={employeeFormInputClass} placeholder="john@company.com" type="email" {...field} />
+                  <Input className={employeeFormInputClass} placeholder="john@company.com" type="email" autoComplete="email" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -422,24 +407,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.bloodGroup}</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
-                    value={field.value ? field.value : "__none__"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select blood group" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">Not set</SelectItem>
-                      {EMPLOYEE_BLOOD_GROUPS.filter(Boolean).map((bg) => (
-                        <SelectItem key={bg} value={bg}>
-                          {bg}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder="Select blood group"
+                      options={[
+                        { value: "", label: "Not set" },
+                        ...EMPLOYEE_BLOOD_GROUPS.filter(Boolean).map((bg) => ({ value: bg, label: bg })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -452,24 +430,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.gender}</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
-                    value={field.value ? field.value : "__none__"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select gender" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">Not set</SelectItem>
-                      {EMPLOYEE_GENDERS.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {g}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder="Select gender"
+                      options={[
+                        { value: "", label: "Not set" },
+                        ...EMPLOYEE_GENDERS.map((g) => ({ value: g, label: g })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -480,24 +451,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.maritalStatus}</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
-                    value={field.value ? field.value : "__none__"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="__none__">Not set</SelectItem>
-                      {EMPLOYEE_MARITAL_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? ""}
+                      placeholder="Select status"
+                      options={[
+                        { value: "", label: "Not set" },
+                        ...EMPLOYEE_MARITAL_STATUSES.map((s) => ({ value: s, label: s })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -653,20 +617,17 @@ export function EmployeeFormTabs({
                       />
                     </FormControl>
                   ) : (
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger className={employeeFormSelectTriggerClass}>
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {cmsRoleOptions.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value ?? "developer"}
+                        onChange={(e) => {
+                          field.onChange(e.target.value);
+                          form.setValue("roleTemplateId", null, { shouldDirty: true });
+                        }}
+                        options={cmsRoleOptions.map((r) => ({ value: r.value, label: r.label }))}
+                      />
+                    </FormControl>
                   )}
                   <FormMessage />
                 </FormItem>
@@ -678,25 +639,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Permission template</FormLabel>
-                  <Select
-                    key={`role-template-${field.value ?? "default"}-${roleTemplateOptions.map((t) => t.id).join(",")}`}
-                    onValueChange={(v) => field.onChange(v === "default" ? null : Number(v))}
-                    value={field.value != null ? String(field.value) : "default"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Default for role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="default">Default for role</SelectItem>
-                      {roleTemplateOptions.map((t) => (
-                        <SelectItem key={t.id} value={String(t.id)}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value != null ? String(field.value) : ""}
+                      onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      options={[
+                        { value: "", label: "Default for role" },
+                        ...roleTemplateOptions.map((t) => ({ value: String(t.id), label: t.name })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -709,17 +662,16 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem className="max-w-xs">
                   <FormLabel>Account status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? "active"}
+                      options={[
+                        { value: "active", label: "Active" },
+                        { value: "inactive", label: "Inactive" },
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -737,20 +689,13 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.employmentType}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? "FULL-TIME"}>
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {EMPLOYEE_TYPES.map((t) => (
-                        <SelectItem key={t} value={t}>
-                          {t.replace("-", " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? "FULL-TIME"}
+                      options={EMPLOYEE_TYPES.map((t) => ({ value: t, label: t.replace("-", " ") }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -761,20 +706,13 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>HR status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? "Active"}>
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {HR_EMPLOYMENT_STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? "Active"}
+                      options={HR_EMPLOYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -800,20 +738,13 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.position}</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? "EMPLOYEE"}>
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {EMPLOYEE_POSITIONS.map((p) => (
-                        <SelectItem key={p} value={p}>
-                          {p.replace(/_/g, " ")}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value ?? "EMPLOYEE"}
+                      options={EMPLOYEE_POSITIONS.map((p) => ({ value: p, label: p.replace(/_/g, " ") }))}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -871,24 +802,17 @@ export function EmployeeFormTabs({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{L.department}</FormLabel>
-                <Select
-                  onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
-                  value={field.value != null ? String(field.value) : "none"}
-                >
-                  <FormControl>
-                    <SelectTrigger className={employeeFormSelectTriggerClass}>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {hrmDepartments.map((d) => (
-                      <SelectItem key={d.id} value={String(d.id)}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <NativeSelect
+                    {...field}
+                    value={field.value != null ? String(field.value) : ""}
+                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                    options={[
+                      { value: "", label: "Unassigned" },
+                      ...hrmDepartments.map((d) => ({ value: String(d.id), label: d.name })),
+                    ]}
+                  />
+                </FormControl>
                 {hrmDepartments.length === 0 ? (
                   <FormDescription className="text-amber-700">
                     Add departments under HRM → Departments first.
@@ -905,25 +829,20 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.reportingManager}</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
-                    value={field.value != null ? String(field.value) : "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select manager" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {managerOptions.map((m) => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.name}
-                          {m.designation ? ` · ${m.designation}` : ""}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value != null ? String(field.value) : ""}
+                      onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      options={[
+                        { value: "", label: "None" },
+                        ...managerOptions.map((m) => ({
+                          value: String(m.id),
+                          label: m.designation ? `${m.name} · ${m.designation}` : m.name,
+                        })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -934,24 +853,17 @@ export function EmployeeFormTabs({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{L.teamLeader}</FormLabel>
-                  <Select
-                    onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
-                    value={field.value != null ? String(field.value) : "none"}
-                  >
-                    <FormControl>
-                      <SelectTrigger className={employeeFormSelectTriggerClass}>
-                        <SelectValue placeholder="Select team leader" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      {managerOptions.map((m) => (
-                        <SelectItem key={m.id} value={String(m.id)}>
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <NativeSelect
+                      {...field}
+                      value={field.value != null ? String(field.value) : ""}
+                      onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                      options={[
+                        { value: "", label: "None" },
+                        ...managerOptions.map((m) => ({ value: String(m.id), label: m.name })),
+                      ]}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -963,24 +875,17 @@ export function EmployeeFormTabs({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>{L.shiftTemplate}</FormLabel>
-                <Select
-                  onValueChange={(v) => field.onChange(v === "none" ? null : Number(v))}
-                  value={field.value != null ? String(field.value) : "none"}
-                >
-                  <FormControl>
-                    <SelectTrigger className={employeeFormSelectTriggerClass}>
-                      <SelectValue placeholder="Company default" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="none">Company default</SelectItem>
-                    {shiftTemplates.map((s) => (
-                      <SelectItem key={s.id} value={String(s.id)}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <NativeSelect
+                    {...field}
+                    value={field.value != null ? String(field.value) : ""}
+                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                    options={[
+                      { value: "", label: "Company default" },
+                      ...shiftTemplates.map((s) => ({ value: String(s.id), label: s.name })),
+                    ]}
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

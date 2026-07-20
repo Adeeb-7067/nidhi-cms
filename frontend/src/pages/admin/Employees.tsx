@@ -81,7 +81,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -105,15 +105,15 @@ import {
   enrichEmployeeFormFromHrmDocuments,
   storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
+  EMPLOYEE_FORM_TAB_FIELDS,
   type TeamEmployeeFormValues,
+  type EmployeeFormTab,
 } from "@/modules/admin/employee-form-shared";
 import {
   EmployeeFormTabs,
-  EMPLOYEE_FORM_TAB_FIELDS,
   EMPLOYEE_FORM_TAB_META,
   nextEmployeeFormTab,
   prevEmployeeFormTab,
-  type EmployeeFormTab,
 } from "@/components/admin/EmployeeFormTabs";
 import { getStaffProfileHref } from "@/lib/employee-routes";
 
@@ -638,6 +638,20 @@ export default function AdminEmployees() {
     }
   };
 
+  const onInvalid = (errors: FieldErrors<EmployeeFormValues>) => {
+    const firstKey = Object.keys(errors)[0] as keyof EmployeeFormValues;
+    if (firstKey) {
+      for (const [tab, fields] of Object.entries(EMPLOYEE_FORM_TAB_FIELDS)) {
+        if (fields.includes(firstKey)) {
+          setEmployeeFormTab(tab as EmployeeFormTab);
+          break;
+        }
+      }
+      const msg = errors[firstKey]?.message as string;
+      toast.error(msg || `Validation issue on field: ${firstKey}`);
+    }
+  };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
@@ -942,7 +956,7 @@ export default function AdminEmployees() {
               </p>
             </DialogHeader>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+              <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex flex-col flex-1 min-h-0">
                 <div className="flex-1 overflow-y-auto px-6 py-4 dialog-scroll">
                   {editUser && !editProfileReady ? (
                     <div className="space-y-4 py-8">

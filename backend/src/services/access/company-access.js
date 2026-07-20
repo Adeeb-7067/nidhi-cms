@@ -4,6 +4,8 @@ import {
 } from "../../models/schema/index.js";
 import { isDevPortalStaffRole, isDeveloperRole } from "../../constants/user-roles.js";
 import { findClientCompanyForUser } from "../client-team.js";
+import { getScopedDigitalUserAccess } from "../marketing/helpers.js";
+
 function projectCompanyId(project) {
   return project.companyId ?? project.clientId;
 }
@@ -21,6 +23,11 @@ async function getCompanyAccess(req, companyId) {
   const role = req.user.role;
   if (role === "super_admin") {
     return { allowed: true, canManage: true, isClient: false };
+  }
+  if (role === "digital") {
+    const access = await getScopedDigitalUserAccess(req.user);
+    const allowed = access.companyIds.includes(Number(companyId));
+    return { allowed, canManage: allowed, isClient: false };
   }
   if (role === "client") {
     const company = await getClientCompanyForUser(req.user.id);
@@ -57,6 +64,16 @@ async function getProjectAccess(req, projectId) {
   const role = req.user.role;
   if (role === "super_admin") {
     return { allowed: true, canManage: true, isClient: false, companyId };
+  }
+  if (role === "digital") {
+    const access = await getScopedDigitalUserAccess(req.user);
+    const allowed = access.projectIds.includes(Number(projectId));
+    return {
+      allowed,
+      canManage: allowed,
+      isClient: false,
+      companyId
+    };
   }
   if (role === "client") {
     const company = await getClientCompanyForUser(req.user.id);

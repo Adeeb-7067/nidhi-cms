@@ -129,6 +129,18 @@ export interface MarketingDashboardDto {
     clientName: string;
     overdue: boolean;
   }[];
+  digitalTeam?: {
+    id: number;
+    name: string;
+    email: string;
+    designation: string;
+    avatarUrl?: string | null;
+    status: string;
+    openTasksCount: number;
+    doneTasksCount: number;
+    lastLoginAt?: string | null;
+    lastSeenAt?: string | null;
+  }[];
   activity: {
     id: string;
     message: string;

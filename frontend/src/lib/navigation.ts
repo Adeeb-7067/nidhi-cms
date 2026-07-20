@@ -76,6 +76,7 @@ import {
   HRM_EMPLOYEE_ROLES,
   MONITORABLE_STAFF_ROLES,
   INTERNAL_STAFF_ROLES,
+  ALL_AUTHENTICATED_ROLES,
   SALES_STAFF_ROLES,
   isDevPortalRole,
   isDeveloperRole,
@@ -130,6 +131,7 @@ export function getHomeHref(role: UserRole): string {
   if (role === "hr") return "/hrm";
   if (role === "bde") return "/sales/bde";
   if (role === "finance") return "/finance";
+  if (role === "digital") return "/marketing";
   if (role === "client") return "/client";
   return "/dev";
 }
@@ -268,6 +270,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
         { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
+        { title: "Digital team", href: "/marketing/team", icon: UsersRound, roles: ["super_admin", "hr"], group: "Team" },
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: [...MARKETING_ACCESS_ROLES], group: "Team" },
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: [...MARKETING_ACCESS_ROLES], group: "Reports" },
       ],
@@ -300,7 +303,7 @@ export function getNavSections(role: UserRole): NavSection[] {
           title: "Daily logs",
           href: "/dev/logs",
           icon: Clock,
-          roles: ["super_admin", ...DEV_PORTAL_STAFF_ROLES],
+          roles: ["super_admin", "digital", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES],
           group: "Work",
         },
         {
@@ -546,45 +549,38 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "Account",
       railLabel: "Account",
       icon: UserCircle,
-      roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
+      roles: [...ALL_AUTHENTICATED_ROLES],
       items: [
         {
           title: "Profile",
           href: "/profile",
           icon: UserCircle,
-          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: [...ALL_AUTHENTICATED_ROLES],
         },
         {
           title: "Notifications",
           href: "/notifications",
           icon: Bell,
-          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: [...ALL_AUTHENTICATED_ROLES],
           badgeKey: "notifications",
         },
         {
           title: "Settings",
           href: "/settings",
           icon: Settings,
-          roles: ["super_admin", "hr", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: [...ALL_AUTHENTICATED_ROLES],
         },
       ],
     },
   ];
 
-  const isClientOnlySection = (section: NavSection) =>
-    section.roles.length > 0 && section.roles.every((r) => r === "client");
-
-  if (role === "client") {
-    return all
-      .filter((s) => s.roles.includes("client"))
-      .map((s) => ({
-        ...s,
-        items: s.items.filter((i) => i.roles.includes("client")),
-      }))
-      .filter((s) => s.items.length > 0);
-  }
-
-  return all.filter((s) => !isClientOnlySection(s));
+  return all
+    .filter((s) => s.roles.includes(role))
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((i) => i.roles.includes(role)),
+    }))
+    .filter((s) => s.items.length > 0);
 }
 
 export function isNavActive(pathname: string, href: string): boolean {

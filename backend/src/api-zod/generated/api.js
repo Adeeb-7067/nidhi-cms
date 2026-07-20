@@ -1094,7 +1094,7 @@ export const GetProjectMilestonesResponseItem = zod.object({
   "title": zod.string(),
   "plannedDate": zod.string(),
   "actualDate": zod.string().nullish(),
-  "status": zod.enum(['pending', 'completed', 'delayed']),
+  "status": zod.enum(['pending', 'ongoing', 'completed', 'delayed']),
   "assigneeId": zod.number().nullish(),
   "assigneeName": zod.string().nullish(),
   "assigneeAvatarUrl": zod.string().nullish(),
@@ -1114,7 +1114,7 @@ export const CreateMilestoneParams = zod.object({
 export const CreateMilestoneBody = zod.object({
   "title": zod.string(),
   "plannedDate": zod.string(),
-  "status": zod.enum(['pending', 'completed', 'delayed']).optional(),
+  "status": zod.enum(['pending', 'ongoing', 'completed', 'delayed']).optional(),
   "assigneeId": zod.number().optional().describe('Project team member user id (must be on the project roster)')
 })
 
@@ -1130,7 +1130,7 @@ export const UpdateMilestoneParams = zod.object({
 export const UpdateMilestoneBody = zod.object({
   "title": zod.string().optional(),
   "plannedDate": zod.string().optional(),
-  "status": zod.enum(['pending', 'completed', 'delayed']).optional(),
+  "status": zod.enum(['pending', 'ongoing', 'completed', 'delayed']).optional(),
   "assigneeId": zod.number().nullish().describe('Project team member user id, or null to unassign')
 })
 
@@ -1140,7 +1140,7 @@ export const UpdateMilestoneResponse = zod.object({
   "title": zod.string(),
   "plannedDate": zod.string(),
   "actualDate": zod.string().nullish(),
-  "status": zod.enum(['pending', 'completed', 'delayed']),
+  "status": zod.enum(['pending', 'ongoing', 'completed', 'delayed']),
   "assigneeId": zod.number().nullish(),
   "assigneeName": zod.string().nullish(),
   "assigneeAvatarUrl": zod.string().nullish(),

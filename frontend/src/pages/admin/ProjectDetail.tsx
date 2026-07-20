@@ -100,7 +100,7 @@ const milestoneSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
   targetDate: z.string().min(1, "Target date is required"),
-  status: z.enum(["pending", "completed", "delayed"]),
+  status: z.enum(["pending", "ongoing", "completed", "delayed"]),
   assigneeId: z.string().optional(),
 });
 
@@ -943,6 +943,7 @@ export default function AdminProjectDetail() {
                               </FormControl>
                               <SelectContent>
                                 <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="ongoing">Ongoing</SelectItem>
                                 <SelectItem value="completed">Completed</SelectItem>
                                 <SelectItem value="delayed">Delayed</SelectItem>
                               </SelectContent>
@@ -1085,6 +1086,7 @@ export default function AdminProjectDetail() {
                         <TableCell className="py-2.5">
                           <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
                             m.status === 'completed' ? 'text-green-500 border-green-500/20 bg-green-500/10' :
+                            m.status === 'ongoing' ? 'text-amber-500 border-amber-500/20 bg-amber-500/10' :
                             m.status === 'delayed' ? 'text-rose-500 border-rose-500/20 bg-rose-500/10' :
                             'text-blue-500 border-blue-500/20 bg-blue-500/10'
                           }`}>

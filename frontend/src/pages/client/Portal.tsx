@@ -709,6 +709,7 @@ export default function ClientPortal() {
                       <div key={milestone.id} className="relative flex items-start gap-4 pl-1 py-0.5">
                         <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 border-card shadow shrink-0 z-10 mt-0.5 ${
                           milestone.status === 'completed' ? 'bg-green-500 text-white' : 
+                          milestone.status === 'ongoing' ? 'bg-amber-500 text-white' :
                           milestone.status === 'delayed' ? 'bg-red-500 text-white' : 'bg-primary text-primary-foreground'
                         }`}>
                           {milestone.status === 'completed' ? <CheckCircle className="h-3 w-3" /> : <span className="text-[9px] font-bold">{i+1}</span>}
@@ -718,8 +719,11 @@ export default function ClientPortal() {
                             <h4 className="font-bold text-[11px] truncate">{milestone.title}</h4>
                             <Badge variant={
                               milestone.status === 'completed' ? 'outline' : 
+                              milestone.status === 'ongoing' ? 'secondary' :
                               milestone.status === 'delayed' ? 'destructive' : 'secondary'
-                            } className="text-[8px] h-3.5 px-1 shrink-0">
+                            } className={`text-[8px] h-3.5 px-1 shrink-0 ${
+                              milestone.status === 'ongoing' ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30' : ''
+                            }`}>
                               {milestone.status.toUpperCase()}
                             </Badge>
                           </div>

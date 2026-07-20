@@ -31,6 +31,7 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -80,7 +81,12 @@ function formatCampaign(doc, companyName) {
 
 export async function listCampaigns(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.network) query.network = String(req.query.network);
   if (req.query.status) query.status = String(req.query.status);
@@ -212,7 +218,12 @@ export async function deleteCampaign(req, res) {
 // ── Social ───────────────────────────────────────────────────────────────
 
 export async function listSocialMetrics(req, res) {
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
 
   const items = await marketingSocialMetricsTable
@@ -304,9 +315,12 @@ export async function upsertSocialMetric(req, res) {
 // ── SEO ──────────────────────────────────────────────────────────────────
 
 export async function getSeoPanel(req, res) {
-  const accountFilter = req.query.accountId
-    ? { accountId: Number(req.query.accountId), isDeleted: false }
-    : { isDeleted: false };
+  const access = await getScopedDigitalUserAccess(req.user);
+  const accountFilter = { isDeleted: false };
+  if (access.isScoped) {
+    accountFilter.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
+  if (req.query.accountId) accountFilter.accountId = Number(req.query.accountId);
 
   const [keywords, audits] = await Promise.all([
     marketingSeoKeywordsTable.find(accountFilter).sort({ currentRank: 1 }).limit(100).lean(),
@@ -523,7 +537,12 @@ export async function getTeamPerformance(req, res) {
 
 export async function listReports(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.period && MARKETING_REPORT_PERIODS.includes(req.query.period)) {
     query.period = req.query.period;
   }

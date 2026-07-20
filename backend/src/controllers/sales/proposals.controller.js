@@ -109,14 +109,24 @@ async function appendLog(proposalId, event, req, extra = {}) {
 
 async function nextProposalNumber() {
   const year = new Date().getFullYear();
-  const prefs = await SalesPreferences.findOneAndUpdate(
-    { id: 1 },
-    { $inc: { proposalNextNumber: 1 } },
-    { upsert: true, new: false, setDefaultsOnInsert: true },
-  ).lean();
-  const prefix = prefs?.proposalPrefix ?? "PROP";
-  const seq = prefs?.proposalNextNumber ?? 1;
-  return `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
+  const currentPrefs = await SalesPreferences.findOne({ id: 1 }).lean();
+  const prefix = currentPrefs?.proposalPrefix ?? "PROP";
+  let candidateNumber;
+  let taken = true;
+  while (taken) {
+    const updated = await SalesPreferences.findOneAndUpdate(
+      { id: 1 },
+      { $inc: { proposalNextNumber: 1 } },
+      { upsert: true, new: true, setDefaultsOnInsert: true },
+    ).lean();
+    const seq = (updated?.proposalNextNumber ?? 2) - 1;
+    candidateNumber = `${prefix}-${year}-${String(seq).padStart(4, "0")}`;
+    const existing = await SalesProposals.findOne({ number: candidateNumber }).select({ id: 1 }).lean();
+    if (!existing) {
+      taken = false;
+    }
+  }
+  return candidateNumber;
 }
 
 function parseProposalStatus(raw, fallback = "draft") {

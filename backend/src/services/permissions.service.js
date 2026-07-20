@@ -99,6 +99,10 @@ const FINANCE_GRANTS = FINANCE_MODULES.flatMap((module) => {
   return grants;
 });
 
+const MARKETING_GRANTS = marketingModules.flatMap((module) =>
+  ["view", "create", "edit", "delete", "approve", "export"].map((action) => ({ module, action })),
+);
+
 const DEFAULT_TEMPLATES = [
   { code: "super_admin", name: "Super Admin", cmsRole: "super_admin", isSystem: true, grants: "all" },
   {
@@ -191,6 +195,51 @@ const DEFAULT_TEMPLATES = [
       { module: "hrm_my_holidays", action: "view" },
       { module: "hrm_my_payslips", action: "view" },
       { module: "hrm_holidays", action: "view" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_tickets", action: "view" },
+    ],
+  },
+  {
+    code: "digital",
+    name: "Digital Specialist",
+    cmsRole: "digital",
+    isSystem: true,
+    grants: [
+      ...MARKETING_GRANTS,
+      { module: "dev_logs", action: "view" },
+      { module: "dev_logs", action: "create" },
+      { module: "dev_logs", action: "edit" },
+      { module: "dev_screenshots", action: "view" },
+      { module: "hrm_my_attendance", action: "view" },
+      { module: "hrm_my_leave", action: "view" },
+      { module: "hrm_my_leave", action: "create" },
+      { module: "hrm_my_wfh", action: "view" },
+      { module: "hrm_my_wfh", action: "create" },
+      { module: "hrm_my_holidays", action: "view" },
+      { module: "hrm_my_payslips", action: "view" },
+      { module: "hrm_holidays", action: "view" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_discussions", action: "create" },
+      { module: "admin_tickets", action: "view" },
+      { module: "admin_tickets", action: "create" },
+    ],
+  },
+  {
+    code: "developer",
+    name: "Developer",
+    cmsRole: "developer",
+    isSystem: true,
+    grants: [
+      { module: "hrm_dashboard", action: "view" },
+      { module: "hrm_my_attendance", action: "view" },
+      { module: "hrm_my_leave", action: "view" },
+      { module: "hrm_my_leave", action: "create" },
+      { module: "hrm_my_wfh", action: "view" },
+      { module: "hrm_my_wfh", action: "create" },
+      { module: "hrm_my_holidays", action: "view" },
+      { module: "hrm_my_payslips", action: "view" },
+      { module: "hrm_holidays", action: "view" },
+      ...DEV_PORTAL_VIEW,
       { module: "admin_discussions", action: "view" },
       { module: "admin_tickets", action: "view" },
     ],
@@ -480,7 +529,7 @@ let _templatesReadyPromise = null;
 
 function ensureTemplatesReady() {
   if (!_templatesReadyPromise) {
-    _templatesReadyPromise = ensureDefaultRoleTemplates().catch((err) => {
+    _templatesReadyPromise = backfillSystemTemplatePermissions().catch((err) => {
       _templatesReadyPromise = null;
       throw err;
     });

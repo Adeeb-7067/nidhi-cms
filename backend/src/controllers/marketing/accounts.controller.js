@@ -26,6 +26,7 @@ import {
   loadProject,
   loadWorkspaceLabelsByAccountIds,
   recordMarketingActivity,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 import {
   MARKETING_PACKAGES,
@@ -60,14 +61,21 @@ export async function listAccounts(req, res) {
   }
 
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
+
   // Only workspaces linked to type=digital projects (never development/maintenance).
   const digitalProjectIds = (
     await projectsTable.find({ type: "digital" }).select({ id: 1 }).lean()
   ).map((p) => p.id);
+
   const query = {
     isDeleted: false,
     projectId: { $in: digitalProjectIds.length ? digitalProjectIds : [-1] },
   };
+
+  if (access.isScoped) {
+    query.id = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.status) query.status = String(req.query.status);
   if (req.query.package) query.package = String(req.query.package);
   if (req.query.projectId) {

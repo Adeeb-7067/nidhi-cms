@@ -40,12 +40,22 @@ function dayKey(date) {
   return new Date(date).toISOString().slice(0, 10);
 }
 
+import { getScopedDigitalUserAccess } from "../../services/marketing/helpers.js";
+
 export async function getDashboard(req, res) {
   const now = new Date();
   const todayStart = startOfDay(now);
   const weekAgo = daysAgo(7);
   const fourteenAgo = daysAgo(13);
   const monthAgo = daysAgo(30);
+
+  const access = await getScopedDigitalUserAccess(req.user);
+  const accountFilter = access.isScoped
+    ? { accountId: { $in: access.accountIds.length ? access.accountIds : [-1] } }
+    : {};
+  const projectFilter = access.isScoped
+    ? { id: { $in: access.projectIds.length ? access.projectIds : [-1] } }
+    : {};
 
   const [
     digitalProjectCount,
@@ -68,50 +78,66 @@ export async function getDashboard(req, res) {
     posts,
     recentTasks,
   ] = await Promise.all([
-    projectsTable.countDocuments({ type: "digital" }),
+    projectsTable.countDocuments({ type: "digital", ...projectFilter }),
     marketingTasksTable.countDocuments({
       isDeleted: false,
       status: { $in: ["not_started", "in_progress", "waiting_client_approval", "revision"] },
+      ...accountFilter,
     }),
     marketingTasksTable.countDocuments({
       isDeleted: false,
       status: { $nin: ["completed", "cancelled"] },
       deadline: { $ne: null, $lt: todayStart },
+      ...accountFilter,
     }),
     marketingTasksTable.countDocuments({
       isDeleted: false,
       status: "completed",
       updatedAt: { $gte: weekAgo },
+      ...accountFilter,
     }),
     marketingApprovalsTable.countDocuments({
       isDeleted: false,
       stage: { $in: ["internal_review", "client_review", "revision"] },
+      ...accountFilter,
     }),
     marketingPostsTable.countDocuments({
       isDeleted: false,
       scheduleStatus: "scheduled",
+      ...accountFilter,
     }),
     marketingPostsTable.countDocuments({
       isDeleted: false,
       scheduleStatus: "published",
       updatedAt: { $gte: monthAgo },
+      ...accountFilter,
     }),
-    marketingCampaignsTable.countDocuments({ isDeleted: false, status: "active" }),
+    marketingCampaignsTable.countDocuments({
+      isDeleted: false,
+      status: "active",
+      ...accountFilter,
+    }),
     marketingMediaItemsTable.countDocuments({
       isDeleted: false,
       kind: { $ne: "folder" },
+      ...accountFilter,
     }),
-    marketingGraphicsTable.countDocuments({ isDeleted: false }),
+    marketingGraphicsTable.countDocuments({ isDeleted: false, ...accountFilter }),
     marketingVideosTable.countDocuments({
       isDeleted: false,
       renderStatus: { $in: ["editing", "voiceover_pending", "rendering"] },
+      ...accountFilter,
     }),
     marketingContentTable.countDocuments({
       isDeleted: false,
       status: { $in: ["internal_review", "client_review", "revision"] },
+      ...accountFilter,
     }),
     marketingAccountsTable
-      .find({ isDeleted: false })
+      .find({
+        isDeleted: false,
+        ...(access.isScoped ? { id: { $in: access.accountIds.length ? access.accountIds : [-1] } } : {}),
+      })
       .select({
         id: 1,
         companyId: 1,
@@ -124,17 +150,33 @@ export async function getDashboard(req, res) {
       })
       .lean(),
     marketingCampaignsTable
-      .find({ isDeleted: false })
+      .find({ isDeleted: false, ...accountFilter })
       .select({ network: 1, status: 1, budgetInr: 1, reach: 1, impressions: 1, leads: 1 })
       .lean(),
-    marketingActivityTable.find({}).sort({ createdAt: -1 }).limit(16).lean(),
+    marketingActivityTable
+      .find(
+        access.isScoped
+          ? {
+              $or: [
+                { accountId: { $in: access.accountIds.length ? access.accountIds : [-1] } },
+                { actorId: access.userId },
+              ],
+            }
+          : {},
+      )
+      .sort({ createdAt: -1 })
+      .limit(16)
+      .lean(),
     marketingTasksTable
-      .find({ isDeleted: false })
+      .find({ isDeleted: false, ...accountFilter })
       .select({ status: 1, category: 1, priority: 1, createdAt: 1, updatedAt: 1, deadline: 1 })
       .lean(),
-    marketingApprovalsTable.find({ isDeleted: false }).select({ stage: 1, type: 1 }).lean(),
+    marketingApprovalsTable
+      .find({ isDeleted: false, ...accountFilter })
+      .select({ stage: 1, type: 1 })
+      .lean(),
     marketingPostsTable
-      .find({ isDeleted: false })
+      .find({ isDeleted: false, ...accountFilter })
       .select({ platform: 1, scheduleStatus: 1, createdAt: 1 })
       .lean(),
     marketingTasksTable
@@ -142,6 +184,7 @@ export async function getDashboard(req, res) {
         isDeleted: false,
         status: { $nin: ["completed", "cancelled"] },
         deadline: { $ne: null },
+        ...accountFilter,
       })
       .sort({ deadline: 1 })
       .limit(8)
@@ -282,6 +325,43 @@ export async function getDashboard(req, res) {
     : [];
   const actorName = new Map(actors.map((u) => [u.id, u.name]));
 
+  // Digital team (users with role === 'digital')
+  const digitalMembers = await usersTable
+    .find(
+      { role: "digital", isDeleted: { $ne: true } },
+      { id: 1, name: 1, email: 1, designation: 1, avatarUrl: 1, lastLoginAt: 1, lastSeenAt: 1, status: 1 },
+    )
+    .lean();
+
+  const digitalTeam = await Promise.all(
+    digitalMembers.map(async (u) => {
+      const [openTasksCount, doneTasksCount] = await Promise.all([
+        marketingTasksTable.countDocuments({
+          assigneeId: u.id,
+          isDeleted: false,
+          status: { $nin: ["completed", "cancelled"] },
+        }),
+        marketingTasksTable.countDocuments({
+          assigneeId: u.id,
+          isDeleted: false,
+          status: "completed",
+        }),
+      ]);
+      return {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        designation: u.designation || "Digital Specialist",
+        avatarUrl: u.avatarUrl || null,
+        status: u.status || "active",
+        openTasksCount,
+        doneTasksCount,
+        lastLoginAt: toIso(u.lastLoginAt),
+        lastSeenAt: toIso(u.lastSeenAt),
+      };
+    }),
+  );
+
   res.json({
     kpis: {
       todaysTasks: openTasks,
@@ -321,6 +401,7 @@ export async function getDashboard(req, res) {
     activityTrend,
     topAccounts,
     upcomingDeadlines,
+    digitalTeam,
     activity: activity.map((a) => ({
       id: String(a.id),
       message: a.message,

@@ -1,7 +1,7 @@
 import mongoose, { Schema } from "mongoose";
 const projectStatuses = ["scoping", "in_progress", "on_hold", "uat", "completed", "maintenance"];
 const projectPriorities = ["low", "medium", "high", "critical"];
-const milestoneStatuses = ["pending", "completed", "delayed"];
+const milestoneStatuses = ["pending", "ongoing", "completed", "delayed"];
 const apkAudiences = ["team_only", "client_visible", "all_visible"];
 const projectSchema = new Schema({
   id: { type: Number, unique: true, required: true },

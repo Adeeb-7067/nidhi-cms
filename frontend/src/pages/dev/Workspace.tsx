@@ -93,6 +93,8 @@ function milestoneStatusClass(status: string) {
   switch (status) {
     case "completed":
       return "border-green-500/40 text-green-600 dark:text-green-400";
+    case "ongoing":
+      return "border-amber-500/40 text-amber-600 dark:text-amber-400";
     case "delayed":
       return "border-rose-500/40 text-rose-600 dark:text-rose-400";
     default:

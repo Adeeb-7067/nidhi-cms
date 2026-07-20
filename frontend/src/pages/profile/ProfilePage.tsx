@@ -66,6 +66,7 @@ const ROLE_STYLES: Record<string, string> = {
   hr: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/25",
   manager: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25",
   bde: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25",
+  digital: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/25",
 };
 
 function formatProfileDate(value: string | null | undefined) {

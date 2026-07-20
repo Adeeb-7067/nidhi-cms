@@ -19,6 +19,7 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   ensureAccountMediaVault,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 
 function formatMedia(doc) {
@@ -38,18 +39,26 @@ function formatMedia(doc) {
   };
 }
 
-async function requireAccount(accountId) {
+async function requireAccount(accountId, user) {
   const account = await marketingAccountsTable
     .findOne({ id: accountId, isDeleted: false })
     .lean();
   if (!account) notFound("Digital account");
+
+  if (user) {
+    const access = await getScopedDigitalUserAccess(user);
+    if (access.isScoped && !access.accountIds.includes(Number(accountId))) {
+      forbidden("You do not have access to this digital project's media vault.");
+    }
+  }
+
   return account;
 }
 
 export async function listMedia(req, res) {
   const accountId = Number(req.query.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
-  await requireAccount(accountId);
+  await requireAccount(accountId, req.user);
 
   const parentRaw = req.query.parentId;
   const parentId =

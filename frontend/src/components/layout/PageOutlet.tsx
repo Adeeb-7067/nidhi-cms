@@ -137,6 +137,7 @@ const MarketingSeo = React.lazy(() => import("@/pages/marketing/Seo"));
 const MarketingContent = React.lazy(() => import("@/pages/marketing/Content"));
 const MarketingApprovals = React.lazy(() => import("@/pages/marketing/Approvals"));
 const MarketingPerformance = React.lazy(() => import("@/pages/marketing/Performance"));
+const MarketingTeam = React.lazy(() => import("@/pages/marketing/Team"));
 const MarketingReports = React.lazy(() => import("@/pages/marketing/Reports"));
 const MarketingMedia = React.lazy(() => import("@/pages/marketing/Media"));
 
@@ -516,6 +517,11 @@ export function PageOutlet() {
       <Route path="/marketing/performance">
         <RoleGate>
           <MarketingPerformance />
+        </RoleGate>
+      </Route>
+      <Route path="/marketing/team">
+        <RoleGate>
+          <MarketingTeam />
         </RoleGate>
       </Route>
       <Route path="/marketing/reports">

@@ -21,6 +21,7 @@ import {
   Gauge,
   Layers,
   Share2,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -96,8 +97,13 @@ function DashboardSkeleton() {
   );
 }
 
+import { useAuth } from "@/contexts/AuthContext";
+import { ClockInButton } from "@/components/ClockInButton";
+
 export default function MarketingDashboard() {
+  const { user } = useAuth();
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
+  const isAdmin = user?.role === "super_admin" || user?.role === "hr";
 
   const kpis = data?.kpis;
   const openTasks = kpis?.openTasks ?? kpis?.todaysTasks ?? 0;
@@ -143,8 +149,266 @@ export default function MarketingDashboard() {
 
   const topAccounts = data?.topAccounts ?? [];
   const upcomingDeadlines = data?.upcomingDeadlines ?? [];
+  const digitalTeam = data?.digitalTeam ?? [];
   const activity = data?.activity ?? [];
   const maxScore = Math.max(100, ...topAccounts.map((a) => a.performanceScore), 1);
+
+  if (!isAdmin) {
+    return (
+      <PortalPageShell>
+        <MarketingPageHeader
+          title={`Welcome back, ${user?.name?.split(" ")[0] || "Digital Specialist"} 👋`}
+          description="Your personal digital workspace — assigned tasks, daily work logs, and active deadlines"
+          breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "My Workspace" }]}
+          actions={
+            <div className="flex flex-wrap items-center gap-2">
+              <ClockInButton />
+              <Button size="sm" variant="outline" className="h-9 gap-1.5" asChild>
+                <Link href="/dev/logs">
+                  <Clock className="h-3.5 w-3.5 text-blue-500" /> Daily Work Logs
+                </Link>
+              </Button>
+              <Button size="sm" className="h-9 gap-1.5 bg-primary font-medium shadow-sm" asChild>
+                <Link href="/marketing/tasks">
+                  <CheckSquare className="h-3.5 w-3.5" /> My Tasks
+                </Link>
+              </Button>
+            </div>
+          }
+        />
+
+        {isLoading && !data ? (
+          <DashboardSkeleton />
+        ) : isError && !data ? (
+          <MarketingEmptyState
+            title="Couldn't load your workspace"
+            description="Check that the server is running and try refreshing."
+            actionLabel="Retry"
+            onAction={() => void refetch()}
+          />
+        ) : (
+          <div className="space-y-6">
+            {/* Employee Operational KPIs */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                My Work Overview
+              </p>
+              <PortalKpiGrid
+                columns={4}
+                count={8}
+                items={[
+                  {
+                    title: "My Open Tasks",
+                    value: openTasks,
+                    hint: "Assigned active tasks",
+                    icon: CheckSquare,
+                    accent: "blue",
+                    href: "/marketing/tasks",
+                    delay: 0,
+                  },
+                  {
+                    title: "Overdue Tasks",
+                    value: kpis?.overdueTasks ?? 0,
+                    hint: "Requires attention",
+                    icon: AlertTriangle,
+                    accent: "amber",
+                    alert: (kpis?.overdueTasks ?? 0) > 0,
+                    href: "/marketing/tasks",
+                    delay: 1,
+                  },
+                  {
+                    title: "Done This Week",
+                    value: kpis?.completedThisWeek ?? 0,
+                    hint: "My completed tasks",
+                    icon: Target,
+                    accent: "green",
+                    href: "/marketing/tasks",
+                    delay: 2,
+                  },
+                  {
+                    title: "Pending Approvals",
+                    value: kpis?.pendingApprovals ?? 0,
+                    hint: "Deliverables in review",
+                    icon: Clock,
+                    accent: "amber",
+                    href: "/marketing/approvals",
+                    delay: 3,
+                  },
+                  {
+                    title: "Graphics Queue",
+                    value: kpis?.graphicsCount ?? 0,
+                    hint: "Assigned design requests",
+                    icon: Palette,
+                    accent: "violet",
+                    href: "/marketing/graphics",
+                    delay: 4,
+                  },
+                  {
+                    title: "Videos in Editing",
+                    value: kpis?.videosInFlight ?? 0,
+                    hint: "Reels / video renders",
+                    icon: Film,
+                    accent: "amber",
+                    href: "/marketing/videos",
+                    delay: 5,
+                  },
+                  {
+                    title: "Scheduled Posts",
+                    value: kpis?.postsScheduled ?? 0,
+                    hint: "Content calendar",
+                    icon: Calendar,
+                    accent: "blue",
+                    href: "/marketing/calendar",
+                    delay: 6,
+                  },
+                  {
+                    title: "Assigned Projects",
+                    value: kpis?.clientCount ?? 0,
+                    hint: "Active client workspaces",
+                    icon: Building2,
+                    accent: "violet",
+                    href: "/marketing/projects",
+                    delay: 7,
+                  },
+                ]}
+              />
+            </div>
+
+            {/* Employee Work Center */}
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+              {/* Upcoming Deadlines & Tasks */}
+              <div className="lg:col-span-8">
+                <ChartPanel
+                  title="My Upcoming Deadlines & Priority Tasks"
+                  description="Tasks assigned to you requiring attention"
+                  icon={Calendar}
+                  accent="amber"
+                  viewAllHref="/marketing/tasks"
+                  badge={upcomingDeadlines.filter((t) => t.overdue).length || undefined}
+                  className="min-h-[340px]"
+                >
+                  {upcomingDeadlines.length === 0 ? (
+                    <div className="flex h-[220px] flex-col items-center justify-center text-center p-4">
+                      <CheckSquare className="h-10 w-10 text-emerald-500/30 mb-2" />
+                      <p className="text-sm font-medium">All caught up!</p>
+                      <p className="text-xs text-muted-foreground max-w-xs mt-1">
+                        You have no upcoming task deadlines assigned at the moment.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-auto rounded-lg border border-border/50">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/30">
+                            <TableHead className="text-[11px]">Task Title</TableHead>
+                            <TableHead className="text-[11px]">Project / Client</TableHead>
+                            <TableHead className="text-[11px]">Priority</TableHead>
+                            <TableHead className="text-[11px] text-right">Deadline</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {upcomingDeadlines.map((t) => (
+                            <TableRow key={t.id} className="hover:bg-muted/40 transition-colors">
+                              <TableCell className="py-2.5 text-xs">
+                                <div className="font-semibold leading-snug text-foreground">{t.title}</div>
+                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                  {labelOf(TASK_CATEGORY_LABELS, t.category as TaskCategory)}
+                                  {" · "}
+                                  <span className="font-medium text-foreground/80">
+                                    {labelOf(TASK_STATUS_LABELS, t.status as TaskStatus)}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="max-w-[140px] truncate py-2.5 text-xs text-muted-foreground">
+                                {t.clientName}
+                              </TableCell>
+                              <TableCell className="py-2.5">
+                                <MarketingStatusBadge
+                                  variant="priority"
+                                  value={t.priority as TaskPriority}
+                                />
+                              </TableCell>
+                              <TableCell
+                                className={cn(
+                                  "whitespace-nowrap py-2.5 text-right text-xs tabular-nums font-medium",
+                                  t.overdue
+                                    ? "text-red-600 dark:text-red-400 font-semibold"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {t.deadline
+                                  ? format(new Date(t.deadline), "MMM d, yyyy")
+                                  : "No deadline"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </ChartPanel>
+              </div>
+
+              {/* Task Breakdown & Activity Stream */}
+              <div className="space-y-4 lg:col-span-4">
+                <ChartPanel
+                  title="My Tasks by Category"
+                  description="Capacity & workload distribution"
+                  icon={Layers}
+                  accent="amber"
+                  viewAllHref="/marketing/tasks"
+                  className="min-h-[220px]"
+                >
+                  {labeled.tasksByCategory.length ? (
+                    <MarketingBarChart
+                      data={labeled.tasksByCategory}
+                      dataKey="value"
+                      color="#f59e0b"
+                    />
+                  ) : (
+                    <NoDataPlaceholder label="No task category breakdown yet" />
+                  )}
+                </ChartPanel>
+
+                <ChartPanel
+                  title="My Work Log & Activity"
+                  description="Recent task updates and log entries"
+                  icon={Activity}
+                  accent="emerald"
+                  className="min-h-[240px]"
+                >
+                  <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
+                    {activity.length === 0 ? (
+                      <p className="text-xs text-muted-foreground p-2 text-center">
+                        Your recent activity will appear here as you log tasks and update deliverables.
+                      </p>
+                    ) : (
+                      activity.map((a) => (
+                        <div
+                          key={a.id}
+                          className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-card p-2.5 text-xs shadow-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium leading-snug">{a.message}</p>
+                            <p className="mt-1 text-[10px] text-muted-foreground">
+                              {a.timestamp
+                                ? format(new Date(a.timestamp), "MMM d, h:mm a")
+                                : ""}
+                              {a.type ? ` · ${a.type}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </ChartPanel>
+              </div>
+            </div>
+          </div>
+        )}
+      </PortalPageShell>
+    );
+  }
 
   return (
     <PortalPageShell>
@@ -505,6 +769,61 @@ export default function MarketingDashboard() {
                 </ChartPanel>
               </ChartGridCell>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Digital Team & Operations
+            </p>
+            <ChartPanel
+              title="Digital Team Members"
+              description={`Specialists assigned to Digital marketing operations (${digitalTeam.length})`}
+              icon={Users}
+              accent="blue"
+              viewAllHref="/marketing/performance"
+              className="min-h-[160px]"
+            >
+              {digitalTeam.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3">
+                  No users currently assigned the Digital Specialist role.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {digitalTeam.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 p-3 hover:bg-muted/40 transition-colors"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-teal-500/10 text-teal-600 font-semibold text-sm dark:bg-teal-500/20 dark:text-teal-400">
+                        {member.name
+                          .split(" ")
+                          .map((n) => n[0])
+                          .join("")
+                          .toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="truncate text-xs font-semibold text-foreground">{member.name}</p>
+                          <span className="shrink-0 inline-flex items-center rounded-full bg-teal-500/10 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-400">
+                            Digital
+                          </span>
+                        </div>
+                        <p className="truncate text-[11px] text-muted-foreground">{member.designation}</p>
+                        <div className="mt-1 flex items-center gap-2 text-[10px] font-medium text-muted-foreground">
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold">
+                            {member.openTasksCount} active tasks
+                          </span>
+                          <span>·</span>
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {member.doneTasksCount} done
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ChartPanel>
           </div>
 
           <div className="space-y-2">

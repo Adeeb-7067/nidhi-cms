@@ -89,8 +89,8 @@ const emptyForm: CreateProjectForm = {
 export default function MarketingProjects() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  // POST /projects is role-gated (super_admin | bde), not marketing_clients create
-  const canCreate = user?.role === "super_admin" || user?.role === "bde";
+  // POST /projects is role-gated (super_admin | bde | digital)
+  const canCreate = user?.role === "super_admin" || user?.role === "bde" || user?.role === "digital";
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");

@@ -2871,7 +2871,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, completed, delayed]
+          enum: [pending, ongoing, completed, delayed]
         assigneeId:
           type: ["integer", "null"]
         assigneeName:
@@ -2893,7 +2893,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, completed, delayed]
+          enum: [pending, ongoing, completed, delayed]
         assigneeId:
           type: integer
           description: Project team member user id (must be on the project roster)
@@ -2908,7 +2908,7 @@ components:
           type: string
         status:
           type: string
-          enum: [pending, completed, delayed]
+          enum: [pending, ongoing, completed, delayed]
         assigneeId:
           type: ["integer", "null"]
           description: Project team member user id, or null to unassign

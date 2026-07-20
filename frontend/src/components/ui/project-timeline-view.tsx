@@ -10,7 +10,7 @@ interface Milestone {
   description?: string | null;
   plannedDate?: string;
   targetDate?: string;
-  status: "pending" | "completed" | "delayed";
+  status: "pending" | "ongoing" | "completed" | "delayed";
   assigneeName?: string | null;
   assigneeAvatarUrl?: string | null;
   assigneeRole?: string | null;
@@ -89,6 +89,7 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
         </div>
         <div className="flex gap-3 items-center text-[10px] font-medium text-muted-foreground">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block"></span> Completed</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block"></span> Ongoing</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block"></span> Pending</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500 inline-block"></span> Delayed</span>
         </div>
@@ -148,6 +149,9 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
             if (milestone.status === 'completed') {
               dotColor = "bg-green-500 shadow-green-500/40";
               icon = <CheckCircle2 className="h-3 w-3 text-white" />;
+            } else if (milestone.status === 'ongoing') {
+              dotColor = "bg-amber-500 shadow-amber-500/40";
+              icon = <Hourglass className="h-3 w-3 text-white" />;
             } else if (milestone.status === 'delayed') {
               dotColor = "bg-rose-500 shadow-rose-500/40";
               icon = <AlertCircle className="h-3 w-3 text-white" />;
@@ -175,6 +179,7 @@ export function ProjectTimelineView({ startDate, deadline, milestones = [] }: Pr
                           variant="outline" 
                           className={`text-[8px] h-3.5 px-1 leading-none ${
                             milestone.status === 'completed' ? 'text-green-500 border-green-500/20' :
+                            milestone.status === 'ongoing' ? 'text-amber-500 border-amber-500/20' :
                             milestone.status === 'delayed' ? 'text-rose-500 border-rose-500/20' : 'text-blue-500 border-blue-500/20'
                           }`}
                         >

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -28,13 +28,14 @@ import {
   enrichEmployeeFormFromHrmDocuments,
   storedRoleTemplateId,
   teamEmployeeEditHydrateKey,
+  EMPLOYEE_FORM_TAB_FIELDS,
   type TeamEmployeeFormValues,
+  type EmployeeFormTab,
 } from "@/modules/admin/employee-form-shared";
 import {
   EmployeeFormTabs,
   nextEmployeeFormTab,
   prevEmployeeFormTab,
-  type EmployeeFormTab,
 } from "@/components/admin/EmployeeFormTabs";
 
 const BDE_ROLE = "bde";
@@ -215,7 +216,7 @@ export function BdeTeamFormDialog({
   };
 
   const onSubmit = async (values: TeamEmployeeFormValues) => {
-    const payload = { ...values, role: BDE_ROLE };
+    const payload = { ...values, role: values.role || BDE_ROLE };
     try {
       if (editUser) {
         const baseline = editBaselineRef.current;
@@ -228,22 +229,36 @@ export function BdeTeamFormDialog({
           values: payload,
           departmentNameById,
           password: payload.password?.trim() || undefined,
-          baseline: { ...baseline, role: BDE_ROLE },
+          baseline,
         });
-        toast.success(payload.password?.trim() ? "BDE member and password updated" : "BDE member updated");
+        toast.success(payload.password?.trim() ? "Team member and password updated" : "Team member updated");
       } else {
         const result = await saveTeamEmployee.mutateAsync({
           values: payload,
           departmentNameById,
           password: payload.password?.trim() || undefined,
         });
-        toast.success(`BDE member created — ID: ${result.employeeId ?? "assigned"}`);
+        toast.success(`Team member created — ID: ${result.employeeId ?? "assigned"}`);
       }
       onOpenChange(false);
       queryClient.invalidateQueries({ queryKey: ["sales-team"] });
       onSaved?.();
     } catch {
-      // toast from mutation
+      // Error handled by useSaveTeamEmployee toast
+    }
+  };
+
+  const onInvalid = (errors: FieldErrors<TeamEmployeeFormValues>) => {
+    const firstKey = Object.keys(errors)[0] as keyof TeamEmployeeFormValues;
+    if (firstKey) {
+      for (const [tab, fields] of Object.entries(EMPLOYEE_FORM_TAB_FIELDS)) {
+        if (fields.includes(firstKey)) {
+          setEmployeeFormTab(tab as EmployeeFormTab);
+          break;
+        }
+      }
+      const msg = errors[firstKey]?.message as string;
+      toast.error(msg || `Validation issue on field: ${firstKey}`);
     }
   };
 
@@ -259,7 +274,7 @@ export function BdeTeamFormDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto px-6 py-4">
               {!editProfileReady ? (
                 <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
@@ -279,7 +294,6 @@ export function BdeTeamFormDialog({
                   hrmDepartments={hrmDepartments}
                   managerOptions={managerOptions}
                   shiftTemplates={shiftTemplates}
-                  lockRole={BDE_ROLE}
                   onSyncDisplayName={syncDisplayNameFromParts}
                   employeeDocuments={editUserDocumentsData?.documents}
                   employeeDocumentsLoading={editDocumentsFetching}

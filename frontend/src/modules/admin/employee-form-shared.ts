@@ -132,6 +132,16 @@ export const teamEmployeeSchema = z
 
 export type TeamEmployeeFormValues = z.infer<typeof teamEmployeeSchema>;
 
+export type EmployeeFormTab = "personal" | "address" | "work" | "compensation" | "documents";
+
+export const EMPLOYEE_FORM_TAB_FIELDS: Record<EmployeeFormTab, (keyof TeamEmployeeFormValues)[]> = {
+  personal: ["name", "email", "password"],
+  address: [],
+  work: ["role", "designation"],
+  compensation: ["salaryBasic", "salaryAllowances", "salaryDeductions", "aadharNumber", "panNumber"],
+  documents: [],
+};
+
 function parseSalaryFieldNumber(value: string | undefined): number {
   const trimmed = value?.trim() ?? "";
   if (!trimmed) return 0;

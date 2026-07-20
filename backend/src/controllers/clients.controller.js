@@ -1,4 +1,5 @@
 import { clientsTable, usersTable } from "../models/schema/index.js";
+import { getScopedDigitalUserAccess } from "../services/marketing/helpers.js";
 import { formatCompanyRecord, formatCompanyRecordsBatch } from "../mappers/company-format.js";
 import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
@@ -89,6 +90,15 @@ async function getClients(req, res) {
   const query = {};
   if (status) query.status = status;
   if (search?.trim()) query.companyName = { $regex: search.trim(), $options: "i" };
+
+  if (req.user.role === "digital") {
+    const access = await getScopedDigitalUserAccess(req.user);
+    if (!access.companyIds.length) {
+      res.json({ clients: [], total: 0, page, limit });
+      return;
+    }
+    query.id = { $in: access.companyIds };
+  }
   const { items, total, page: pageNum, limit: limitNum } = await paginateModel(
     clientsTable,
     query,

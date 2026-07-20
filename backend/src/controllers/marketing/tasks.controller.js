@@ -20,10 +20,11 @@ import {
 } from "../../utils/route-errors.js";
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
-import { recordMarketingActivity } from "../../services/marketing/helpers.js";
 import {
+  recordMarketingActivity,
   resolveScopedAccountId,
   assertDocAccount,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 
 function formatTask(doc, displayName, assigneeName) {
@@ -63,7 +64,12 @@ async function resolveTaskDisplayName(accountId, companyId) {
 
 export async function listTasks(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.status) query.status = String(req.query.status);
   if (req.query.category) query.category = String(req.query.category);

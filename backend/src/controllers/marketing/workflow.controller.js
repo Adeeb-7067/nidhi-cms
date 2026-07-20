@@ -27,6 +27,7 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 
 /** Allowed approval stage transitions (server-side workflow invariant). */
@@ -60,7 +61,12 @@ function formatPost(doc, companyName, assigneeName) {
 
 export async function listPosts(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.scheduleStatus) query.scheduleStatus = String(req.query.scheduleStatus);
 
@@ -221,7 +227,12 @@ export async function deletePost(req, res) {
 
 export async function listApprovals(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.stage) query.stage = String(req.query.stage);
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
 

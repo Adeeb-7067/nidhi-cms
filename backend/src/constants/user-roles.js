@@ -1,17 +1,17 @@
 /** Canonical user role lists — keep in sync with Mongoose schema and OpenAPI. */
-const userRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "client", "freelancer", "bde", "finance"];
+const userRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "client", "freelancer", "bde", "finance", "digital"];
 
 /** Same delivery permissions as developer — only the display label differs. */
 const developerStaffRoles = ["developer", "freelancer"];
  
 /** Employee ID + dev-portal login (employee ID, not email). */
-const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer", "bde", "finance"];
+const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital"];
 
 /** Payroll / leave / attendance HRM records — company employees only (not freelancers). */
-const hrmEmployeeRoles = ["hr", "manager", "developer", "tester", "qa", "bde", "finance"];
+const hrmEmployeeRoles = ["hr", "manager", "developer", "tester", "qa", "bde", "finance", "digital"];
 
 /** Shown on admin Team page and staff user listings. */
-const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde", "finance"];
+const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital"];
 
 /** Super admin view-as: any active account on Admin → Team (clients use Admin → Clients). */
 const impersonatableStaffRoles = [...adminStaffRoles];
@@ -20,7 +20,7 @@ const impersonatableStaffRoles = [...adminStaffRoles];
 const devPortalStaffRoles = ["manager", "developer", "tester", "qa", "freelancer"];
 
 /** Screenshot / work-session monitoring (Electron + attendance). */
-const monitorableStaffRoles = ["manager", "developer", "tester", "qa", "freelancer"];
+const monitorableStaffRoles = ["manager", "developer", "tester", "qa", "freelancer", "digital"];
 
 /** Clock in/out for attendance tracking — every staff role except super_admin (view only) and client (external). */
 const clockableStaffRoles = ["hr", ...staffEmployeeRoles];

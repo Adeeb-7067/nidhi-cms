@@ -65,7 +65,7 @@ export type WorkspaceDashboard = {
     id: number;
     title: string;
     plannedDate: string;
-    status: "pending" | "completed" | "delayed";
+    status: "pending" | "ongoing" | "completed" | "delayed";
     projectId: number;
     projectName: string;
   }[];

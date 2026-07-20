@@ -201,6 +201,7 @@ export const defaultTemplateByRole = {
   freelancer: "employee",
   bde: "bde",
   finance: "finance",
+  digital: "digital",
   client: null,
 };
 
@@ -215,4 +216,5 @@ export const builtInAssignableCmsRoles = [
   { value: "freelancer", label: "Freelancer" },
   { value: "bde", label: "BDE" },
   { value: "finance", label: "Finance" },
+  { value: "digital", label: "Digital Specialist" },
 ];

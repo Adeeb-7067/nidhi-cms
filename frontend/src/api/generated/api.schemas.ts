@@ -52,6 +52,8 @@ export const UserRole = {
   client: 'client',
   freelancer: 'freelancer',
   bde: 'bde',
+  finance: 'finance',
+  digital: 'digital',
 } as const;
 
 export type UserStatus = typeof UserStatus[keyof typeof UserStatus];
@@ -148,6 +150,8 @@ export const UserInputRole = {
   client: 'client',
   freelancer: 'freelancer',
   bde: 'bde',
+  finance: 'finance',
+  digital: 'digital',
 } as const;
 
 export interface UserInput {
@@ -177,6 +181,8 @@ export const UserUpdateRole = {
   client: 'client',
   freelancer: 'freelancer',
   bde: 'bde',
+  finance: 'finance',
+  digital: 'digital',
 } as const;
 
 export type UserUpdateStatus = typeof UserUpdateStatus[keyof typeof UserUpdateStatus];
@@ -824,6 +830,7 @@ export type MilestoneStatus = typeof MilestoneStatus[keyof typeof MilestoneStatu
 
 export const MilestoneStatus = {
   pending: 'pending',
+  ongoing: 'ongoing',
   completed: 'completed',
   delayed: 'delayed',
 } as const;
@@ -852,6 +859,7 @@ export type MilestoneInputStatus = typeof MilestoneInputStatus[keyof typeof Mile
 
 export const MilestoneInputStatus = {
   pending: 'pending',
+  ongoing: 'ongoing',
   completed: 'completed',
   delayed: 'delayed',
 } as const;
@@ -869,6 +877,7 @@ export type MilestoneUpdateStatus = typeof MilestoneUpdateStatus[keyof typeof Mi
 
 export const MilestoneUpdateStatus = {
   pending: 'pending',
+  ongoing: 'ongoing',
   completed: 'completed',
   delayed: 'delayed',
 } as const;

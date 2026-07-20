@@ -27,6 +27,7 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
+  getScopedDigitalUserAccess,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -86,7 +87,12 @@ async function enrichWithNames(items) {
 
 export async function listGraphics(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.status) query.status = String(req.query.status);
 
@@ -195,7 +201,12 @@ export async function updateGraphic(req, res) {
 
 export async function listVideos(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.renderStatus) query.renderStatus = String(req.query.renderStatus);
 
@@ -292,7 +303,12 @@ export async function updateVideo(req, res) {
 
 export async function listContent(req, res) {
   const pagination = parsePagination(req.query);
+  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
+
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
+  }
   if (req.query.accountId) query.accountId = Number(req.query.accountId);
   if (req.query.type) query.type = String(req.query.type);
   if (req.query.status) query.status = String(req.query.status);

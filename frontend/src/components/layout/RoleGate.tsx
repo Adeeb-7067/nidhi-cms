@@ -71,6 +71,20 @@ export function RoleGate({
     }
   }
 
+  if (user.role === "digital") {
+    if (pathOnly.startsWith("/admin/") && pathOnly !== "/admin/tickets") {
+      return <Redirect to="/marketing" replace />;
+    }
+    if (
+      pathOnly.startsWith("/sales") ||
+      pathOnly.startsWith("/finance") ||
+      pathOnly.startsWith("/ca") ||
+      (pathOnly.startsWith("/dev/") && pathOnly !== "/dev/logs" && pathOnly !== "/dev/my-screenshots")
+    ) {
+      return <Redirect to="/marketing" replace />;
+    }
+  }
+
   if (permModule) {
     if (isLoading) {
       return (
@@ -81,6 +95,13 @@ export function RoleGate({
       );
     }
     if (can(permModule, action)) return <>{children}</>;
+    if (
+      permModule.startsWith("dev_") &&
+      action === "view" &&
+      isDevPortalRole(user.role)
+    ) {
+      return <>{children}</>;
+    }
     if (
       permModule === "admin_projects" &&
       action === "view" &&

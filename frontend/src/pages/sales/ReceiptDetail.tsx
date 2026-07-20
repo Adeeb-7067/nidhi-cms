@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { useGetReceipt } from "@/api/sales";
+import { useGetReceipt } from "@/api/sales"; 
 import { toReceiptPreview } from "@/modules/sales/adapters";
 import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
 import { formatPaymentMethod } from "@/modules/sales/utils";

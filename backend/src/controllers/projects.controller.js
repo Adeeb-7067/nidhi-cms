@@ -13,6 +13,7 @@ import {
 import {
   ensureDigitalAccountForProject,
   softDeleteDigitalAccountForProject,
+  getScopedDigitalUserAccess,
 } from "../services/marketing/helpers.js";
 import { formatProject, formatProjectList } from "../mappers/project-format.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
@@ -70,7 +71,14 @@ async function getProjects(req, res) {
   }
   if (clientId) query.clientId = parseInt(clientId);
   if (search) query.name = { $regex: search, $options: "i" };
-  if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
+  if (req.user.role === "digital") {
+    const access = await getScopedDigitalUserAccess(req.user);
+    if (!access.projectIds.length) {
+      res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+      return;
+    }
+    query.id = { $in: access.projectIds };
+  } else if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
     const memberRows = await projectMembersTable.find({ userId: req.user.id });
     const projectIds = memberRows.map((m) => m.projectId);
     if (!projectIds.length) {

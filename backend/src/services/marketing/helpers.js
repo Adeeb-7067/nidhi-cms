@@ -3,7 +3,9 @@ import {
   marketingActivityTable,
   marketingMediaItemsTable,
   marketingAccountsTable,
+  marketingTasksTable,
   projectsTable,
+  projectMembersTable,
   clientsTable,
   usersTable,
 } from "../../models/schema/index.js";
@@ -344,4 +346,78 @@ export function inferMediaKind(filename, mimetype) {
     return { kind: "document", extension: ext || null };
   }
   return { kind: "file", extension: ext || null };
+}
+
+/**
+ * For a non-admin digital user (user.role === 'digital'):
+ * Find all accountIds, projectIds, and companyIds assigned to this user.
+ * Returns { isScoped: boolean, accountIds: number[], projectIds: number[], companyIds: number[] }
+ */
+export async function getScopedDigitalUserAccess(user) {
+  const isDigital = user?.role === "digital";
+  const isAdmin = ["super_admin", "hr"].includes(user?.role);
+  if (!isDigital || isAdmin) {
+    return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
+  }
+
+  const userId = Number(user.id);
+
+  // 1. Projects where user is PM or explicit team member
+  const pmProjects = await projectsTable
+    .find({ pmId: userId, isDeleted: { $ne: true } }, { id: 1, companyId: 1, clientId: 1 })
+    .lean();
+  const memberRows = await projectMembersTable.find({ userId }).select({ projectId: 1 }).lean();
+  const memberProjectIds = memberRows.map((r) => r.projectId);
+  const memberProjects = memberProjectIds.length
+    ? await projectsTable
+        .find({ id: { $in: memberProjectIds }, isDeleted: { $ne: true } }, { id: 1, companyId: 1, clientId: 1 })
+        .lean()
+    : [];
+
+  // 2. Marketing accounts where user is account manager or creator
+  const managedAccounts = await marketingAccountsTable
+    .find({ isDeleted: false, $or: [{ accountManagerId: userId }, { createdBy: userId }] })
+    .select({ id: 1, projectId: 1, companyId: 1 })
+    .lean();
+
+  // 3. Marketing tasks where user is assignee or creator
+  const userTasks = await marketingTasksTable
+    .find({ isDeleted: false, $or: [{ assigneeId: userId }, { createdBy: userId }] })
+    .select({ accountId: 1, companyId: 1 })
+    .lean();
+
+  const projectIds = [
+    ...new Set([
+      ...pmProjects.map((p) => p.id),
+      ...memberProjects.map((p) => p.id),
+      ...managedAccounts.map((a) => a.projectId).filter(Boolean),
+    ]),
+  ];
+
+  // Accounts linked to projects or managed directly or tasks
+  const projectAccounts = projectIds.length
+    ? await marketingAccountsTable
+        .find({ isDeleted: false, projectId: { $in: projectIds } }, { id: 1, companyId: 1 })
+        .lean()
+    : [];
+
+  const accountIds = [
+    ...new Set([
+      ...managedAccounts.map((a) => a.id),
+      ...projectAccounts.map((a) => a.id),
+      ...userTasks.map((t) => t.accountId).filter(Boolean),
+    ]),
+  ];
+
+  const companyIds = [
+    ...new Set([
+      ...pmProjects.map((p) => p.companyId || p.clientId),
+      ...memberProjects.map((p) => p.companyId || p.clientId),
+      ...managedAccounts.map((a) => a.companyId),
+      ...projectAccounts.map((a) => a.companyId),
+      ...userTasks.map((t) => t.companyId),
+    ]),
+  ].filter(Boolean);
+
+  return { isScoped: true, accountIds, projectIds, companyIds, userId };
 }
