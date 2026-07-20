@@ -351,6 +351,35 @@ async function updateProposal(req, res) {
   if (body.clientNote !== undefined) updates.clientNote = optionalString(body.clientNote) ?? "";
   if (body.terms !== undefined) updates.terms = optionalString(body.terms) ?? "";
   if (body.internalNotes !== undefined) updates.internalNotes = optionalString(body.internalNotes) ?? "";
+  if (body.leadId !== undefined || body.customerId !== undefined) {
+    const newLeadId = body.leadId ? Number(body.leadId) : null;
+    const newCustomerId = body.customerId ? Number(body.customerId) : null;
+
+    if (newLeadId) {
+      const lead = await SalesLeads.findOne({ id: newLeadId }).lean();
+      if (!lead) badRequest("leadId references a non-existent lead.", "leadId");
+      if (req.user.role === "bde" && lead.assignedTo !== req.user.id && lead.createdBy !== req.user.id) {
+        notFound("Lead");
+      }
+      if (leadNoFollowUpStatuses.includes(lead.status)) {
+        badRequest(
+          lead.status === "closed_elsewhere"
+            ? "This lead closed a deal elsewhere — reopen outreach before attaching a proposal."
+            : "Cannot attach a proposal for this lead status.",
+          "status"
+        );
+      }
+      updates.leadId = newLeadId;
+      updates.customerId = null;
+    } else if (newCustomerId) {
+      await assertBdeOwnsCustomerById(clientsTable, req.user, newCustomerId);
+      const client = await clientsTable.findOne({ id: newCustomerId }).lean();
+      if (!client) notFound("Customer");
+      updates.customerId = newCustomerId;
+      updates.leadId = null;
+    }
+  }
+
   if (body.assignedTo !== undefined) {
     if (req.user.role === "bde") {
       const nextAssignee = body.assignedTo ? Number(body.assignedTo) : null;
@@ -364,6 +393,23 @@ async function updateProposal(req, res) {
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   if (body.status !== undefined) updates.status = parseProposalStatus(body.status);
   const updated = await SalesProposals.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
+
+  if (updates.leadId && updates.leadId !== proposal.leadId) {
+    await SalesLeads.updateOne(
+      { id: updates.leadId, status: { $nin: leadNoFollowUpStatuses } },
+      { $set: { proposalId: id, status: "proposal_sent" } }
+    );
+    const actId = await getNextSequence("sales_lead_activity");
+    await SalesLeadActivity.create({
+      id: actId,
+      leadId: updates.leadId,
+      type: "proposal_created",
+      description: `Proposal ${proposal.number} attached`,
+      actorId: req.user.id,
+      meta: { proposalId: id, number: proposal.number },
+    });
+  }
+
   res.json(updated);
 }
 

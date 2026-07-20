@@ -954,6 +954,8 @@ export function useUpdateProposal() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: salesKeys.proposal(vars.id) });
       qc.invalidateQueries({ queryKey: ["sales-proposals"] });
+      qc.invalidateQueries({ queryKey: ["sales-leads"] });
+      qc.invalidateQueries({ queryKey: ["sales-customers"] });
     },
   });
 }

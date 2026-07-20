@@ -170,7 +170,9 @@ async function postProjects(req, res) {
         req.user.id,
       );
     } catch (err) {
-      console.warn("[projects] ensureDigitalAccountForProject:", err?.message ?? err);
+      console.error("[projects] ensureDigitalAccountForProject failed:", err?.message ?? err);
+      // Surface as 500 so create isn't "success" without a Media vault
+      throw err;
     }
   }
   res.status(201).json(await formatProject(project));

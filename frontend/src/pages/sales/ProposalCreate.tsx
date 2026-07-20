@@ -288,11 +288,13 @@ export default function ProposalCreate() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) { toast.error("Title is required"); return; }
-    if (!clientId && !isEditing) { toast.error("Select a lead or customer"); return; }
+    if (!clientId) { toast.error("Select a lead or customer"); return; }
     const validItems = items.filter((i) => i.name.trim() || i.description.trim());
     if (validItems.length === 0) { toast.error("Add at least one line item with a description"); return; }
     const payload = {
       title: title.trim(),
+      leadId: clientType === "lead" ? (clientId ? Number(clientId) : null) : null,
+      customerId: clientType === "customer" ? (clientId ? Number(clientId) : null) : null,
       items: validItems.map((i, idx) => ({
         itemId: String(idx + 1),
         name: i.name.trim(),

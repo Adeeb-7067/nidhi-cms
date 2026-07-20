@@ -50,6 +50,7 @@ import {
 import { formatMediaSize } from "@/modules/marketing/mock-data/media";
 import { MarketingConfirmDialog } from "@/modules/marketing/components/MarketingConfirmDialog";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { resolveFileUrl } from "@/lib/resolve-file-url";
 
 type ViewMode = "icons" | "list";
 
@@ -100,6 +101,61 @@ function largeKindIcon(kind: MediaItemKind) {
   }
 }
 
+function MediaThumb({
+  item,
+  size = "lg",
+}: {
+  item: MarketingMediaDto;
+  size?: "sm" | "lg";
+}) {
+  const [failed, setFailed] = useState(false);
+  const src = item.url ? resolveFileUrl(item.url) : "";
+  const isImage = item.kind === "image" && Boolean(src) && !failed;
+  const isVideo = item.kind === "video" && Boolean(src) && !failed;
+
+  if (item.kind === "folder") {
+    return size === "lg" ? largeKindIcon("folder") : kindIcon("folder");
+  }
+
+  if (isImage) {
+    return (
+      <div
+        className={cn(
+          "overflow-hidden rounded-md bg-muted ring-1 ring-border",
+          size === "lg" ? "h-14 w-14" : "h-8 w-8",
+        )}
+      >
+        <img
+          src={src}
+          alt={item.name}
+          loading="lazy"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
+  }
+
+  if (isVideo && size === "lg") {
+    return (
+      <div className="relative h-14 w-14 overflow-hidden rounded-md bg-muted ring-1 ring-border">
+        <video
+          src={src}
+          muted
+          preload="metadata"
+          className="h-full w-full object-cover"
+          onError={() => setFailed(true)}
+        />
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/25">
+          <FileVideo className="h-5 w-5 text-white drop-shadow" />
+        </div>
+      </div>
+    );
+  }
+
+  return size === "lg" ? largeKindIcon(item.kind) : kindIcon(item.kind);
+}
+
 export function MediaDesktopExplorer({
   accountId,
   className,
@@ -137,6 +193,7 @@ export function MediaDesktopExplorer({
   const [moveOpen, setMoveOpen] = useState(false);
   const [moveTargetParentId, setMoveTargetParentId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [previewItem, setPreviewItem] = useState<MarketingMediaDto | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -223,8 +280,13 @@ export function MediaDesktopExplorer({
       navigate(item.id);
       return;
     }
-    if (item.url && /^https?:\/\//i.test(item.url.trim())) {
-      window.open(item.url, "_blank", "noopener,noreferrer");
+    const href = item.url ? resolveFileUrl(item.url) : "";
+    if (item.kind === "image" && href) {
+      setPreviewItem(item);
+      return;
+    }
+    if (href) {
+      window.open(href, "_blank", "noopener,noreferrer");
       return;
     }
     toast.message(item.name, {
@@ -241,7 +303,7 @@ export function MediaDesktopExplorer({
           accountId,
           parentId: currentId,
           name: file.name,
-          url: uploaded.url,
+          url: uploaded.publicUrl ?? uploaded.url,
           storageKey: uploaded.key,
           mimetype: uploaded.mimetype ?? file.type,
           sizeBytes: uploaded.size ?? file.size,
@@ -552,7 +614,7 @@ export function MediaDesktopExplorer({
                     selectedId === item.id ? "border-primary/30 bg-primary/10" : "hover:border-border hover:bg-muted/50",
                   )}
                 >
-                  {largeKindIcon(item.kind)}
+                  <MediaThumb item={item} size="lg" />
                   <span className="line-clamp-2 w-full text-[11px] leading-tight">{item.name}</span>
                 </button>
               ))}
@@ -582,7 +644,7 @@ export function MediaDesktopExplorer({
                   )}
                 >
                   <span className="flex min-w-0 items-center gap-2">
-                    {kindIcon(item.kind, "h-4 w-4")}
+                    <MediaThumb item={item} size="sm" />
                     <span className="truncate font-medium">{item.name}</span>
                   </span>
                   <span className="text-right text-muted-foreground">
@@ -686,6 +748,35 @@ export function MediaDesktopExplorer({
         loading={deleteMedia.isPending}
         onConfirm={() => void handleDelete()}
       />
+
+      <Dialog open={previewItem != null} onOpenChange={(open) => { if (!open) setPreviewItem(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="truncate text-sm">{previewItem?.name ?? "Preview"}</DialogTitle>
+          </DialogHeader>
+          {previewItem?.url ? (
+            <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-lg bg-muted/40">
+              <img
+                src={resolveFileUrl(previewItem.url)}
+                alt={previewItem.name}
+                className="max-h-[70vh] w-auto max-w-full object-contain"
+              />
+            </div>
+          ) : null}
+          <DialogFooter>
+            {previewItem?.url ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(resolveFileUrl(previewItem.url!), "_blank", "noopener,noreferrer")}
+              >
+                Open original
+              </Button>
+            ) : null}
+            <Button size="sm" onClick={() => setPreviewItem(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

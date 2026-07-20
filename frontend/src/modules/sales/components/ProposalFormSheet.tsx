@@ -196,6 +196,22 @@ export function ProposalFormSheet({
 
   const catalogProducts = (productsData?.products ?? []).filter((p) => p.status === "active");
 
+  const leadsList = useMemo(() => {
+    const fetched = leadsData?.leads ?? [];
+    if (editData?.lead && editData.lead.id && !fetched.some((l) => l.id === editData.lead?.id)) {
+      return [editData.lead, ...fetched];
+    }
+    return fetched;
+  }, [leadsData?.leads, editData?.lead]);
+
+  const customersList = useMemo(() => {
+    const fetched = customersData?.customers ?? [];
+    if (editData?.customer && editData.customer.id && !fetched.some((c) => c.id === editData.customer?.id)) {
+      return [editData.customer, ...fetched];
+    }
+    return fetched;
+  }, [customersData?.customers, editData?.customer]);
+
   // Form state
   const [title, setTitle] = useState("");
   const [clientType, setClientType] = useState<"lead" | "customer">(defaultCustomerId ? "customer" : "lead");
@@ -293,12 +309,14 @@ export function ProposalFormSheet({
 
   const handleSubmit = async (mode: "draft" | "send") => {
     if (!title.trim()) { toast.error("Title is required"); return; }
-    if (!clientId && !isEdit) { toast.error("Select a lead or customer"); return; }
+    if (!clientId) { toast.error("Select a lead or customer"); return; }
     const validItems = items.filter((i) => i.name.trim() || i.description.trim());
     if (validItems.length === 0) { toast.error("Add at least one line item"); return; }
 
     const payload = {
       title: title.trim(),
+      leadId: clientType === "lead" ? (clientId ? Number(clientId) : null) : null,
+      customerId: clientType === "customer" ? (clientId ? Number(clientId) : null) : null,
       items: validItems.map((i, idx) => ({
         itemId: String(idx + 1),
         name: i.name.trim(),
@@ -378,37 +396,35 @@ export function ProposalFormSheet({
             </div>
 
             {/* Client */}
-            {!isEdit && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Client type</Label>
-                  <Select value={clientType} onValueChange={(v) => { setClientType(v as "lead" | "customer"); setClientId(""); }}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="lead" className="text-xs">Lead</SelectItem>
-                      <SelectItem value="customer" className="text-xs">Customer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">{clientType === "lead" ? "Lead" : "Customer"} <span className="text-destructive">*</span></Label>
-                  <Select value={clientId} onValueChange={setClientId}>
-                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
-                    <SelectContent>
-                      {clientType === "lead"
-                        ? (leadsData?.leads ?? []).map((l) => (
-                            <SelectItem key={l.id} value={String(l.id)} className="text-xs">
-                              {l.company ? `${l.company} — ${l.name}` : l.name}
-                            </SelectItem>
-                          ))
-                        : (customersData?.customers ?? []).map((c) => (
-                            <SelectItem key={c.id} value={String(c.id)} className="text-xs">{c.companyName}</SelectItem>
-                          ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Client type</Label>
+                <Select value={clientType} onValueChange={(v) => { setClientType(v as "lead" | "customer"); setClientId(""); }}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lead" className="text-xs">Lead</SelectItem>
+                    <SelectItem value="customer" className="text-xs">Customer</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+              <div className="space-y-1">
+                <Label className="text-xs">{clientType === "lead" ? "Lead" : "Customer"} <span className="text-destructive">*</span></Label>
+                <Select value={clientId} onValueChange={setClientId}>
+                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectContent>
+                    {clientType === "lead"
+                      ? leadsList.map((l) => (
+                          <SelectItem key={l.id} value={String(l.id)} className="text-xs">
+                            {l.company ? `${l.company} — ${l.name}` : l.name}
+                          </SelectItem>
+                        ))
+                      : customersList.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)} className="text-xs">{c.companyName}</SelectItem>
+                        ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             {/* Valid until + Status + Assigned to */}
             <div className="grid grid-cols-2 gap-3">

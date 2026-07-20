@@ -2,6 +2,7 @@ import {
   getNextSequence,
   marketingAccountsTable,
   marketingMediaItemsTable,
+  projectsTable,
 } from "../../models/schema/index.js";
 import { MARKETING_MEDIA_KINDS } from "../../constants/marketing.js";
 import {
@@ -17,6 +18,7 @@ import {
   recordMarketingActivity,
   resolveScopedAccountId,
   assertDocAccount,
+  ensureAccountMediaVault,
 } from "../../services/marketing/helpers.js";
 
 function formatMedia(doc) {
@@ -79,7 +81,21 @@ export async function listMedia(req, res) {
 export async function listMediaTree(req, res) {
   const accountId = Number(req.query.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
-  await requireAccount(accountId);
+  const account = await requireAccount(accountId);
+
+  let projectName = "This PC";
+  if (account.projectId != null) {
+    const project = await projectsTable
+      .findOne({ id: account.projectId })
+      .select({ name: 1 })
+      .lean();
+    if (project?.name) projectName = String(project.name).trim() || projectName;
+  }
+
+  // Always sync vault root name to the Digital project + ensure default folders.
+  await ensureAccountMediaVault(accountId, account.companyId, req.user?.id ?? account.createdBy, {
+    rootName: projectName,
+  });
 
   const items = await marketingMediaItemsTable
     .find({ accountId, isDeleted: false })

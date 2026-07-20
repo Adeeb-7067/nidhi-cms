@@ -230,7 +230,7 @@ export async function createAccount(req, res) {
     createdBy: req.user.id,
   });
 
-  await bootstrapAccountMediaVault(id, companyId, req.user.id);
+  await bootstrapAccountMediaVault(id, companyId, req.user.id, project.name || "This PC");
   await recordMarketingActivity({
     accountId: id,
     companyId,

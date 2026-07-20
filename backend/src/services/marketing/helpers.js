@@ -61,24 +61,69 @@ export function assertDocAccount(doc, accountId, { required = true } = {}) {
 }
 
 /** Create root + standard subfolders for a new digital account vault. */
-export async function bootstrapAccountMediaVault(accountId, companyId, userId) {
-  const rootId = await getNextSequence("marketing_media");
-  await marketingMediaItemsTable.create({
-    id: rootId,
-    accountId,
-    companyId,
+export async function bootstrapAccountMediaVault(accountId, companyId, userId, rootName = "This PC") {
+  return ensureAccountMediaVault(accountId, companyId, userId, { rootName });
+}
+
+/**
+ * Idempotent: ensure root folder + default subfolders exist for a digital account.
+ * Root folder is named after the Digital project so it shows in Media folder tree.
+ */
+export async function ensureAccountMediaVault(
+  accountId,
+  companyId,
+  userId,
+  { rootName = "This PC" } = {},
+) {
+  const aid = Number(accountId);
+  const cid = Number(companyId);
+  if (!Number.isFinite(aid) || !Number.isFinite(cid)) return null;
+
+  const desiredName = (rootName && String(rootName).trim()) || "This PC";
+
+  let root = await marketingMediaItemsTable.findOne({
+    accountId: aid,
     parentId: null,
-    name: "This PC",
     kind: "folder",
-    createdBy: userId,
+    isDeleted: false,
   });
 
+  if (!root) {
+    const rootId = await getNextSequence("marketing_media");
+    root = await marketingMediaItemsTable.create({
+      id: rootId,
+      accountId: aid,
+      companyId: cid,
+      parentId: null,
+      name: desiredName,
+      kind: "folder",
+      createdBy: userId,
+    });
+  } else if (desiredName && root.name !== desiredName) {
+    // Rename legacy "This PC" (or stale name) to the Digital project name
+    root.name = desiredName;
+    await root.save();
+  }
+
+  const rootId = root.id;
+  const existingSubs = await marketingMediaItemsTable
+    .find({
+      accountId: aid,
+      parentId: rootId,
+      kind: "folder",
+      isDeleted: false,
+    })
+    .select({ name: 1 })
+    .lean();
+  const have = new Set(existingSubs.map((f) => f.name));
+
   for (const name of DEFAULT_MEDIA_SUBFOLDERS) {
+    if (have.has(name)) continue;
     const id = await getNextSequence("marketing_media");
     await marketingMediaItemsTable.create({
       id,
-      accountId,
-      companyId,
+      accountId: aid,
+      companyId: cid,
       parentId: rootId,
       name,
       kind: "folder",
@@ -91,7 +136,8 @@ export async function bootstrapAccountMediaVault(accountId, companyId, userId) {
 
 /**
  * One marketing account per digital project — powers Tasks/Media/Calendar scoping.
- * Idempotent: returns existing active account when already linked.
+ * Idempotent: returns existing active account when already linked, and always
+ * ensures the Media vault folders exist for that workspace.
  */
 export async function ensureDigitalAccountForProject(project, userId) {
   if (!project || project.type !== "digital") return null;
@@ -99,10 +145,17 @@ export async function ensureDigitalAccountForProject(project, userId) {
   const companyId = Number(project.companyId ?? project.clientId);
   if (!Number.isFinite(projectId) || !Number.isFinite(companyId)) return null;
 
+  const vaultRootName = optionalProjectFolderName(project);
+
   const existing = await marketingAccountsTable
     .findOne({ projectId, isDeleted: false, status: { $ne: "ended" } })
     .lean();
-  if (existing) return existing;
+  if (existing) {
+    await ensureAccountMediaVault(existing.id, companyId, userId, {
+      rootName: vaultRootName,
+    });
+    return existing;
+  }
 
   const soft = await marketingAccountsTable.findOne({ projectId, isDeleted: true });
   if (soft) {
@@ -111,14 +164,9 @@ export async function ensureDigitalAccountForProject(project, userId) {
     soft.status = "active";
     soft.companyId = companyId;
     await soft.save();
-    const hasVault = await marketingMediaItemsTable.exists({
-      accountId: soft.id,
-      parentId: null,
-      isDeleted: false,
+    await ensureAccountMediaVault(soft.id, companyId, userId, {
+      rootName: vaultRootName,
     });
-    if (!hasVault) {
-      await bootstrapAccountMediaVault(soft.id, companyId, userId);
-    }
     return soft.toObject ? soft.toObject() : soft;
   }
 
@@ -134,7 +182,7 @@ export async function ensureDigitalAccountForProject(project, userId) {
     createdBy: userId,
   });
 
-  await bootstrapAccountMediaVault(id, companyId, userId);
+  await ensureAccountMediaVault(id, companyId, userId, { rootName: vaultRootName });
   await recordMarketingActivity({
     accountId: id,
     companyId,
@@ -146,6 +194,11 @@ export async function ensureDigitalAccountForProject(project, userId) {
   });
 
   return doc.toObject ? doc.toObject() : doc;
+}
+
+function optionalProjectFolderName(project) {
+  const name = typeof project?.name === "string" ? project.name.trim() : "";
+  return name || "This PC";
 }
 
 /** Soft-delete the marketing account tied to a project. */
@@ -189,9 +242,9 @@ export async function ensureAccountsForAllDigitalProjects(userId) {
 
   const created = [];
   for (const project of projects) {
-    if (have.has(project.id)) continue;
+    // Always run ensure so Media vault folders exist even if the account row already did.
     const account = await ensureDigitalAccountForProject(project, userId);
-    if (account) created.push(account);
+    if (account && !have.has(project.id)) created.push(account);
   }
   return created;
 }

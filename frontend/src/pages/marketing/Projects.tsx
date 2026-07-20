@@ -187,6 +187,7 @@ export default function MarketingProjects() {
       setCreateOpen(false);
       void queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
       void queryClient.invalidateQueries({ queryKey: ["marketing", "accounts"] });
+      void queryClient.invalidateQueries({ queryKey: ["marketing", "media"] });
       if (created?.id) {
         setLocation(`/marketing/projects/${created.id}`);
       }
