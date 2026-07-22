@@ -1,7 +1,19 @@
 import { cn } from "@/lib/utils";
 import type { MarketingPlatform } from "../types";
 import { PLATFORM_LABELS } from "../constants";
-import { Facebook, Instagram, Linkedin, Twitter, Youtube, Globe, Link2 } from "lucide-react";
+import {
+  Facebook,
+  Instagram,
+  Linkedin,
+  Twitter,
+  Youtube,
+  Globe,
+  Link2,
+  Music2,
+  Pin,
+  Ghost,
+  MessageCircle,
+} from "lucide-react";
 
 const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
   facebook: Facebook,
@@ -11,6 +23,10 @@ const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
   youtube: Youtube,
   google: Globe,
   website: Link2,
+  tiktok: Music2,
+  pinterest: Pin,
+  snapchat: Ghost,
+  whatsapp: MessageCircle,
 };
 
 const platformColors: Record<MarketingPlatform, string> = {
@@ -21,6 +37,10 @@ const platformColors: Record<MarketingPlatform, string> = {
   youtube: "bg-red-500/10 text-red-600 border-red-500/25",
   google: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
   website: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
+  tiktok: "bg-zinc-800/10 text-zinc-800 border-zinc-800/25",
+  pinterest: "bg-rose-500/10 text-rose-700 border-rose-500/25",
+  snapchat: "bg-yellow-500/10 text-yellow-700 border-yellow-500/25",
+  whatsapp: "bg-green-500/10 text-green-700 border-green-500/25",
 };
 
 export function PlatformIconBadge({

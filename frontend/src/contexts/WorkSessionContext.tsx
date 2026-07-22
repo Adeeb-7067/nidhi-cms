@@ -26,7 +26,7 @@ import {
 interface WorkSessionContextType {
   activeSession: WorkSession | null;
   isLoading: boolean;
-  clockIn: () => Promise<void>;
+  clockIn: (opts?: { quietSuccess?: boolean }) => Promise<void>;
   clockOut: (reason?: "clock_out" | "app_quit" | "logout") => Promise<void>;
   isClockedIn: boolean;
 }
@@ -94,12 +94,15 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   const isClockingInRef = useRef(false);
   const shownSessionAlertRef = useRef<Set<number>>(new Set());
   const shownStopReasonRef = useRef<string | null>(null);
+  const clockInRef = useRef<(opts?: { quietSuccess?: boolean }) => Promise<void>>(async () => {});
 
   const SESSION_END_POLL_MESSAGES: Record<string, string> = {
-    shift_ended: "Automatically clocked out at shift end. Clock in again to continue your day.",
-    day_ended: "Work session ended — a new work day started.",
-    session_expired: "Work session ended — 24-hour limit reached.",
-    client_disconnected: "Work session ended — connection was lost.",
+    shift_ended: "Automatically clocked out — your shift ended. Clock in again for overtime.",
+    day_ended: "Previous work day ended — clock in to start today's new session.",
+    session_expired: "Session closed — 24-hour limit reached.",
+    system_sleep: "Session paused — PC went to sleep.",
+    system_shutdown: "Session paused — PC shut down.",
+    app_quit: "Session paused — app was closed.",
   };
 
   // Server-side policy closed the session between polls (shift end, day end, etc.).
@@ -109,7 +112,16 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     if (!reason || reason === shownStopReasonRef.current) return;
     shownStopReasonRef.current = reason;
     const message = SESSION_END_POLL_MESSAGES[reason];
-    if (message) {
+    if (!message) return;
+    if (reason === "shift_ended" || reason === "day_ended" || reason === "app_quit") {
+      toast.warning(message, {
+        duration: Infinity,
+        action: {
+          label: "Clock in",
+          onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
+        },
+      });
+    } else {
       toast.info(message, { duration: 10_000 });
     }
   }, [sessionEnabled, activeSession, activeData?.stopReason]);
@@ -158,28 +170,75 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!isElectron() || !window.electron?.onSessionEnded) return;
     const SESSION_END_MESSAGES: Record<string, string> = {
-      system_sleep: "Work session ended — PC went to sleep.",
-      system_shutdown: "Work session ended — PC is shutting down.",
-      network_lost: "Work session ended — no network for an extended period.",
-      app_quit: "Work session ended — app closed.",
-      client_disconnected: "Work session ended — no longer active on the server.",
-      session_expired: "Work session ended — 24-hour limit reached.",
-      day_ended: "Work session ended — a new work day started.",
-      shift_ended: "Automatically clocked out at shift end. Clock in again to continue your day.",
-      logout: "Work session ended — you logged out.",
-      admin_terminated: "Work session ended — an administrator ended your session.",
+      system_sleep: "Session paused — PC went to sleep. It will resume when the PC wakes.",
+      system_shutdown: "Session paused — PC is shutting down.",
+      app_quit: "Session paused — desktop app was closed.",
+      session_expired: "Session closed — 24-hour limit reached.",
+      day_ended: "Previous work day ended — clock in to start today's new session.",
+      shift_ended: "Automatically clocked out — your shift ended. Clock in again for overtime.",
+      logout: "Session paused — you logged out.",
+      admin_terminated: "Session ended — an administrator ended your session.",
     };
     const unsubscribe = window.electron.onSessionEnded(({ stopReason }) => {
       queryClient.setQueryData(activeSessionQueryKey(), { session: null });
       queryClient.invalidateQueries({ queryKey: ["work-sessions"] });
       const message = SESSION_END_MESSAGES[stopReason];
-      if (message) {
+      if (!message) return;
+      // Sleep is followed by auto-resume — keep this short. Shift end needs a sticky CTA.
+      if (stopReason === "shift_ended" || stopReason === "day_ended" || stopReason === "app_quit") {
+        toast.warning(message, {
+          duration: Infinity,
+          action: {
+            label: "Clock in",
+            onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
+          },
+        });
+      } else {
         toast.info(message, { duration: 8_000 });
       }
     });
     return unsubscribe;
   }, [queryClient]);
 
+  // After sleep/hibernate: auto clock-in so unpaid gaps don't grow until someone notices.
+  useEffect(() => {
+    if (!isElectron() || !window.electron?.onSystemResumed) return;
+    const unsubscribe = window.electron.onSystemResumed(async ({ shouldClockIn }) => {
+      await queryClient.invalidateQueries({ queryKey: activeSessionQueryKey() });
+      if (!shouldClockIn) return;
+      // Wait a beat for network/token after wake, then resume.
+      await new Promise((r) => setTimeout(r, 1500));
+      if (activeSessionRef.current?.isActive) {
+        toast.success("Still clocked in — session continued after wake.");
+        return;
+      }
+      try {
+        await clockInRef.current({ quietSuccess: true });
+        toast.warning(
+          "PC woke from sleep — session was paused while asleep and has been resumed. Sleep time is not counted as work.",
+          { duration: 12_000 },
+        );
+      } catch {
+        toast.error("Could not auto-resume after sleep. Please clock in manually.", {
+          duration: Infinity,
+          action: {
+            label: "Clock in",
+            onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
+          },
+        });
+      }
+    });
+    return unsubscribe;
+  }, [queryClient]);
+
+  // Sticky toasts / OS resume can request clock-in without going through the navbar button.
+  useEffect(() => {
+    const onRequest = () => {
+      void clockInRef.current();
+    };
+    window.addEventListener("cms:request-clock-in", onRequest);
+    return () => window.removeEventListener("cms:request-clock-in", onRequest);
+  }, []);
   // Safety net: stop Electron scheduler when user is cleared (token expiry, forced logout).
   // Explicit logout is already handled in AuthContext.logout() before tokens are cleared;
   // this effect catches the remaining cases (session_expired event, admin revocation).
@@ -207,10 +266,10 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, [activeSession]); // stable: clockOutMutationRef never changes identity
 
-  const clockIn = useCallback(async () => {
+  const clockIn = useCallback(async (opts?: { quietSuccess?: boolean }) => {
     if (isClockingInRef.current) return;
     if (activeSession?.isActive) {
-      toast.info("You are already clocked in.");
+      if (!opts?.quietSuccess) toast.info("You are already clocked in.");
       return;
     }
     isClockingInRef.current = true;
@@ -227,18 +286,24 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       if (isClockableRole) {
         void ensureNotificationPermission();
       }
-      if (result.resumed) {
-        toast.success("Session resumed — your timer continues from where you left off.");
-      } else {
-        toast.success("Clocked in. Have a productive session!");
+      if (!opts?.quietSuccess) {
+        if (result.resumed) {
+          toast.success("Session resumed — your timer continues from where you left off.");
+        } else {
+          toast.success("Clocked in. Have a productive session!");
+        }
       }
     } catch (error) {
       toastApiError(error, "Failed to clock in. Please try again.");
+      throw error;
     } finally {
       isClockingInRef.current = false;
     }
-  }, [activeSession, clockInMutation, queryClient]);
+  }, [activeSession, clockInMutation, queryClient, isClockableRole]);
 
+  useEffect(() => {
+    clockInRef.current = clockIn;
+  }, [clockIn]);
   const clockOut = useCallback(
     async (reason: "clock_out" | "app_quit" | "logout" = "clock_out") => {
       if (!activeSession?.isActive) {

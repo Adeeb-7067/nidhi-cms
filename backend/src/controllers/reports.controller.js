@@ -1,7 +1,8 @@
 import { reportsTable, reportTypes, getNextSequence } from "../models/schema/index.js";
 import { resolvePublicFileUrl } from "../lib/file-storage.js";
-import { badRequest, notFound } from "../utils/route-errors.js";
-import { assertValidLogProjectId } from "../services/daily-log-virtual-projects.js";
+import { badRequest, forbidden, notFound } from "../utils/route-errors.js";
+import { assertValidLogProjectId, isVirtualLogProjectId } from "../services/daily-log-virtual-projects.js";
+import { assertProjectAccess } from "../services/access/access-helpers.js";
 
 const LOG_REPORT_TYPES = new Set(["developer_monthly", "project_progress", "raw_log_export"]);
 
@@ -42,6 +43,9 @@ async function postReports(req, res) {
     }
   } else if (!Number.isFinite(projectIdNum) || projectIdNum <= 0) {
     badRequest("A valid project is required.", "projectId");
+  }
+  if (!isVirtualLogProjectId(projectIdNum)) {
+    await assertProjectAccess(req, projectIdNum);
   }
   const nextId = await getNextSequence("reports");
   const report = await reportsTable.create({
@@ -89,8 +93,11 @@ async function postReports(req, res) {
   res.status(202).json(formatReportRow(report, req));
 }
 async function getReportsByIdDownload(req, res) {
-  const report = await reportsTable.findOne({ id: parseInt(req.params["id"]) });
+  const report = await reportsTable.findOne({ id: parseInt(req.params["id"], 10) });
   if (!report) notFound("Report");
+  if (report.requestedBy !== req.user.id && req.user.role !== "super_admin") {
+    forbidden("You can only download your own reports.");
+  }
   const expiresAt = new Date(Date.now() + 3600 * 1e3).toISOString();
   const url = resolvePublicFileUrl(report.fileUrl, req) ?? report.fileUrl ?? "#";
   res.json({ url, expiresAt });

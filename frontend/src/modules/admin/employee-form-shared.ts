@@ -191,6 +191,36 @@ export function formatTeamEmployeeNetSalaryField(
   return String(computeTeamEmployeeNetSalary(basic, allowances, deductions));
 }
 
+/** Freelancers are project-paid — hide full-time HRM fields on the All-team form. */
+export function isFreelancerTeamFormRole(role: string | null | undefined): boolean {
+  return role === "freelancer";
+}
+
+type UseFormSetValueLike = (
+  name: keyof TeamEmployeeFormValues,
+  value: TeamEmployeeFormValues[keyof TeamEmployeeFormValues],
+  opts?: { shouldDirty?: boolean },
+) => void;
+
+/** Clear / neutralize HRM-only values when switching the form to Freelancer. */
+export function applyFreelancerTeamFormDefaults(setValue: UseFormSetValueLike) {
+  const opts = { shouldDirty: true } as const;
+  setValue("employeeType", "PART-TIME", opts);
+  setValue("position", "EMPLOYEE", opts);
+  setValue("departmentId", null, opts);
+  setValue("reportingManagerId", null, opts);
+  setValue("teamleaderId", null, opts);
+  setValue("shiftId", null, opts);
+  setValue("wfhMonthlyLimit", 0, opts);
+  setValue("leaveAccrualDaysPerMonth", "", opts);
+  setValue("probationEndDate", "", opts);
+  setValue("lateChargePercentage", 0, opts);
+  setValue("salaryBasic", "", opts);
+  setValue("salaryAllowances", "", opts);
+  setValue("salaryDeductions", "", opts);
+  setValue("salaryNet", "", opts);
+}
+
 export function defaultTeamEmployeeFormValues(defaultDepartmentId: number | null): TeamEmployeeFormValues {
   return {
     firstName: "",
@@ -498,12 +528,23 @@ export function buildTeamEmployeePayload(
   values: TeamEmployeeFormValues,
   departmentNameById: Map<number, string>,
 ) {
+  const isFreelancer = isFreelancerTeamFormRole(values.role);
   const departmentName =
     values.departmentId != null
       ? departmentNameById.get(values.departmentId) ?? "Engineering"
-      : "Engineering";
+      : isFreelancer
+        ? "Freelancers"
+        : "Engineering";
   const fullName =
     `${values.firstName?.trim() ?? ""} ${values.lastName?.trim() ?? ""}`.trim() || values.name.trim();
+
+  const bankAccount = {
+    accountHolderName: values.bankAccountHolder ?? "",
+    accountNumber: values.bankAccountNumber ?? "",
+    bankName: values.bankName ?? "",
+    branchName: values.bankBranch ?? "",
+    ifsc: values.bankIfsc ?? "",
+  };
 
   return {
     name: fullName,
@@ -516,20 +557,21 @@ export function buildTeamEmployeePayload(
     designation: values.designation,
     subType: values.subType,
     department: departmentName,
-    departmentId: values.departmentId ?? null,
-    reportingManagerId: values.reportingManagerId ?? null,
-    managerId: values.reportingManagerId ?? null,
-    teamleaderId: values.teamleaderId ?? null,
-    shiftId: values.shiftId ?? null,
-    wfhMonthlyLimit: values.wfhMonthlyLimit,
-    leaveAccrualDaysPerMonth:
-      values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
+    departmentId: isFreelancer ? null : values.departmentId ?? null,
+    reportingManagerId: isFreelancer ? null : values.reportingManagerId ?? null,
+    managerId: isFreelancer ? null : values.reportingManagerId ?? null,
+    teamleaderId: isFreelancer ? null : values.teamleaderId ?? null,
+    shiftId: isFreelancer ? null : values.shiftId ?? null,
+    wfhMonthlyLimit: isFreelancer ? 0 : values.wfhMonthlyLimit,
+    leaveAccrualDaysPerMonth: isFreelancer
+      ? null
+      : values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
         ? null
         : Number(values.leaveAccrualDaysPerMonth),
     phoneNumber: normalizePhoneForSubmit(values.phoneNumber) || undefined,
     joiningDate: values.joiningDate || null,
     exitDate: values.exitDate || null,
-    probationEndDate: values.probationEndDate || null,
+    probationEndDate: isFreelancer ? null : values.probationEndDate || null,
     linkedinUrl: values.linkedinUrl,
     githubId: normalizeGithubId(values.githubId) || null,
     dob: values.dob || null,
@@ -537,12 +579,12 @@ export function buildTeamEmployeePayload(
     maritalStatus: values.maritalStatus?.trim() ?? "",
     bloodGroup: values.bloodGroup?.trim() ?? "",
     bio: values.bio ?? "",
-    employeeType: values.employeeType ?? "FULL-TIME",
+    employeeType: isFreelancer ? "PART-TIME" : values.employeeType ?? "FULL-TIME",
     hrEmploymentStatus: values.hrEmploymentStatus ?? "Active",
     position: values.position ?? "EMPLOYEE",
     aadharNumber: values.aadharNumber ? Number(values.aadharNumber) : null,
     panNumber: values.panNumber || null,
-    lateChargePercentage: values.lateChargePercentage ?? 100,
+    lateChargePercentage: isFreelancer ? 0 : values.lateChargePercentage ?? 100,
     permanentAddress: values.permanentAddress,
     currentAddress: values.currentAddress,
     socialProfiles: {
@@ -554,32 +596,30 @@ export function buildTeamEmployeePayload(
       website: values.socialWebsite ?? "",
     },
     salary: {
-      basicSalary: parseSalaryFieldNumber(values.salaryBasic),
-      allowances: parseSalaryFieldNumber(values.salaryAllowances),
-      deductions: parseSalaryFieldNumber(values.salaryDeductions),
-      netSalary: computeTeamEmployeeNetSalary(
-        values.salaryBasic,
-        values.salaryAllowances,
-        values.salaryDeductions,
-      ),
-      bankAccount: {
-        accountHolderName: values.bankAccountHolder ?? "",
-        accountNumber: values.bankAccountNumber ?? "",
-        bankName: values.bankName ?? "",
-        branchName: values.bankBranch ?? "",
-        ifsc: values.bankIfsc ?? "",
-      },
+      // Freelancers are paid per project engagement — not monthly payroll.
+      basicSalary: isFreelancer ? 0 : parseSalaryFieldNumber(values.salaryBasic),
+      allowances: isFreelancer ? 0 : parseSalaryFieldNumber(values.salaryAllowances),
+      deductions: isFreelancer ? 0 : parseSalaryFieldNumber(values.salaryDeductions),
+      netSalary: isFreelancer
+        ? 0
+        : computeTeamEmployeeNetSalary(
+            values.salaryBasic,
+            values.salaryAllowances,
+            values.salaryDeductions,
+          ),
+      bankAccount,
     },
     resumeUrl: values.resumeUrl || null,
     idProofUrl: values.idProofUrl || null,
     addressProofUrl: values.addressProofUrl || null,
     leave: {
-      monthlyQuota:
-        values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
+      monthlyQuota: isFreelancer
+        ? 0
+        : values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
           ? 1
           : Number(values.leaveAccrualDaysPerMonth),
     },
-    wfh: { monthlyLimit: values.wfhMonthlyLimit },
+    wfh: { monthlyLimit: isFreelancer ? 0 : values.wfhMonthlyLimit },
   };
 }
 

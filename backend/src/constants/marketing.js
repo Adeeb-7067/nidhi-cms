@@ -9,9 +9,13 @@ export const MARKETING_PLATFORMS = [
   "youtube",
   "google",
   "website",
+  "tiktok",
+  "pinterest",
+  "snapchat",
+  "whatsapp",
 ];
 
-/** What is being scheduled (esp. Instagram): feed post, long video, short/reel, blog. */
+/** What is being scheduled: feed post, long video, short/reel, blog — any platform. */
 export const MARKETING_POST_CONTENT_FORMATS = [
   "post",
   "long_video",

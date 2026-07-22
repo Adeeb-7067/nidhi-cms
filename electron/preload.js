@@ -50,4 +50,15 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on('cms:session-ended', handler);
     return () => ipcRenderer.removeListener('cms:session-ended', handler);
   },
+
+  // Fired when the OS wakes from sleep/hibernate after an active session was interrupted.
+  onSystemResumed: (cb) => {
+    const handler = (_, payload) => cb(payload);
+    ipcRenderer.on('cms:system-resumed', handler);
+    return () => ipcRenderer.removeListener('cms:system-resumed', handler);
+  },
+
+  /** Show an OS notification from the main process (works when window is minimized). */
+  showSessionNotification: (payload) =>
+    ipcRenderer.send('cms:show-session-notification', payload),
 });

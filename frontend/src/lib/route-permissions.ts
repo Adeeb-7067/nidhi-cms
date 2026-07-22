@@ -4,6 +4,7 @@ import { NAV_HREF_PERMISSION } from "@/modules/permissions/constants";
 /** Longest-prefix wins after exact match on NAV_HREF_PERMISSION. */
 const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/admin/projects/", "admin_projects"],
+  ["/admin/project-documents", "admin_project_documents"],
   ["/admin/employees/", "hrm_employees"],
   ["/admin/employees", "admin_team"],
   ["/admin/roles", "roles_permissions"],
@@ -12,6 +13,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/admin/tickets", "admin_tickets"],
   ["/discussions", "admin_discussions"],
   ["/hrm/roles", "roles_permissions"],
+  ["/hrm/letters", "hrm_letters"],
   ["/sales/bde", "sales_dashboard"],
   ["/dev/tasks/", "dev_tasks"],
   ["/dev/projects/", "dev_projects"],
@@ -47,6 +49,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/hrm/assets", "hrm_assets"],
   ["/hrm/exit", "hrm_exit"],
   ["/hrm/id-cards", "hrm_id_cards"],
+  ["/hrm/letters", "hrm_letters"],
   ["/hrm/settings", "hrm_settings"],
   ["/hrm/audit", "hrm_audit"],
   ["/hrm", "hrm_dashboard"],

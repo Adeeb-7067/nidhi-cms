@@ -48,8 +48,8 @@ describe("RBAC P0 hardening contracts", () => {
       join(__dirname, "../../src/controllers/users.controller.js"),
       "utf8",
     );
-    assert.ok(src.includes("isPeopleAdmin"), "people-admin check required");
-    assert.ok(!src.includes("adminStaffRoles.includes(req.user.role)"), "must not grant sensitive to all staff");
+    assert.ok(src.includes("assertCanViewUserProfile"), "profile ACL required");
+    assert.ok(src.includes("includeSensitive"), "sensitive field gating required");
   });
 
   test("projects list scopes non-finance roles", () => {

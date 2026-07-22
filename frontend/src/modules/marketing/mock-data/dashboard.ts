@@ -62,10 +62,11 @@ export const mockMarketingActivity: MarketingActivity[] = [
 export function getClientCampaigns(clientId: string): ClientCampaign[] {
   const client = getClientById(clientId);
   if (!client) return [];
+  const budget = client.monthlyBudgetInr ?? 0;
   return [
-    { id: `${clientId}-camp1`, name: `${client.company.split(" ")[0]} Brand Awareness`, platform: client.platforms[0], status: "active", budgetInr: client.monthlyBudgetInr * 0.4, spentInr: client.monthlyBudgetInr * 0.28, startDate: "2026-06-01", endDate: "2026-06-30" },
-    { id: `${clientId}-camp2`, name: "Lead Gen — Q2", platform: client.platforms[1] ?? "google", status: "active", budgetInr: client.monthlyBudgetInr * 0.35, spentInr: client.monthlyBudgetInr * 0.22, startDate: "2026-06-01", endDate: "2026-06-30" },
-    { id: `${clientId}-camp3`, name: "Retargeting Warm Audience", platform: "facebook", status: "paused", budgetInr: client.monthlyBudgetInr * 0.15, spentInr: client.monthlyBudgetInr * 0.1, startDate: "2026-05-15", endDate: "2026-06-15" },
+    { id: `${clientId}-camp1`, name: `${client.company.split(" ")[0]} Brand Awareness`, platform: client.platforms[0], status: "active", budgetInr: budget * 0.4, spentInr: budget * 0.28, startDate: "2026-06-01", endDate: "2026-06-30" },
+    { id: `${clientId}-camp2`, name: "Lead Gen — Q2", platform: client.platforms[1] ?? "google", status: "active", budgetInr: budget * 0.35, spentInr: budget * 0.22, startDate: "2026-06-01", endDate: "2026-06-30" },
+    { id: `${clientId}-camp3`, name: "Retargeting Warm Audience", platform: "facebook", status: "paused", budgetInr: budget * 0.15, spentInr: budget * 0.1, startDate: "2026-05-15", endDate: "2026-06-15" },
   ];
 }
 

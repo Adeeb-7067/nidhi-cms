@@ -9,9 +9,9 @@ router.get("/projects/:id", requireAuth, asyncHandler(projectsController.getProj
 router.patch("/projects/:id", requireAuth, requireRole("super_admin", "bde", "digital"), asyncHandler(projectsController.patchProjectsById));
 router.delete("/projects/:id", requireAuth, requireRole("super_admin", "bde", "digital"), asyncHandler(projectsController.deleteProjectsById));
 router.get("/projects/:id/members", requireAuth, asyncHandler(projectsController.getProjectsByIdMembers));
-router.post("/projects/:id/members/batch", requireAuth, requireRole("super_admin", "hr"), asyncHandler(projectsController.postProjectsByIdMembersBatch));
-router.post("/projects/:id/members", requireAuth, requireRole("super_admin", "hr"), asyncHandler(projectsController.postProjectsByIdMembers));
-router.delete("/projects/:id/members/:userId", requireAuth, requireRole("super_admin", "hr"), asyncHandler(projectsController.deleteProjectsByIdMembersByUserId));
+router.post("/projects/:id/members/batch", requireAuth, requireRole("super_admin", "hr", "digital"), asyncHandler(projectsController.postProjectsByIdMembersBatch));
+router.post("/projects/:id/members", requireAuth, requireRole("super_admin", "hr", "digital"), asyncHandler(projectsController.postProjectsByIdMembers));
+router.delete("/projects/:id/members/:userId", requireAuth, requireRole("super_admin", "hr", "digital"), asyncHandler(projectsController.deleteProjectsByIdMembersByUserId));
 router.get("/projects/:id/apk-schedules", requireAuth, asyncHandler(projectsController.getProjectsByIdApkSchedules));
 router.post("/projects/:id/apk-schedules", requireAuth, requireRole("super_admin"), asyncHandler(projectsController.postProjectsByIdApkSchedules));
 router.get("/projects/:id/milestones", requireAuth, asyncHandler(projectsController.getProjectsByIdMilestones));

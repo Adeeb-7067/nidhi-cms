@@ -2,11 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { Notification } from "@/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { useMarkNotificationRead } from "@/api";
+import { useMarkNotificationRead, getListNotificationsQueryKey } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { getNotificationTarget } from "@/lib/notification-navigation";
 import { stopPersistentAlert } from "@/lib/notification-alert";
-import { toast } from "sonner";
 
 export function useNotificationClick(options?: {
   onAfterNavigate?: () => void;
@@ -29,24 +28,43 @@ export function useNotificationClick(options?: {
     [user?.role],
   );
 
+  const bumpUnreadCaches = useCallback(() => {
+    // Optimistically drop badge + dropdown unread lists so UI reacts immediately.
+    queryClient.setQueryData(
+      getListNotificationsQueryKey({ unreadOnly: true, limit: 1 }),
+      (prev: { unreadCount?: number; notifications?: Notification[]; total?: number } | undefined) => {
+        if (!prev) return prev;
+        const next = Math.max(0, (prev.unreadCount ?? 1) - 1);
+        return { ...prev, unreadCount: next, total: next };
+      },
+    );
+    queryClient.setQueryData(
+      getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
+      (prev: { unreadCount?: number; notifications?: Notification[]; total?: number } | undefined) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          unreadCount: Math.max(0, (prev.unreadCount ?? 1) - 1),
+          total: Math.max(0, (prev.total ?? 1) - 1),
+        };
+      },
+    );
+  }, [queryClient]);
+
   const handleNotificationClick = useCallback(
     (notification: Notification) => {
       if (busyRef.current) return;
 
       const target = getNotificationTarget(notification, user?.role);
-      if (!target) {
-        toast.info("This notification has no linked page.");
-        return;
-      }
 
       const finish = () => {
         busyRef.current = false;
         setIsNavigating(false);
       };
 
-      const runNavigate = () => {
+      const runAfter = () => {
         try {
-          setLocation(target.href);
+          if (target) setLocation(target.href);
           onAfterNavigateRef.current?.();
         } finally {
           finish();
@@ -56,7 +74,10 @@ export function useNotificationClick(options?: {
       busyRef.current = true;
       setIsNavigating(true);
 
-      if (!notification.readAt) {
+      // Always mark unread items read on click — even when there is no deep link
+      // (e.g. informational work-session alerts). Previously those stayed stuck unread.
+      if (!notification.readAt && Number.isFinite(notification.id) && notification.id > 0) {
+        bumpUnreadCaches();
         markOneRead.mutate(
           { id: notification.id },
           {
@@ -66,16 +87,19 @@ export function useNotificationClick(options?: {
                 stopPersistentAlert();
               }
             },
+            onError: () => {
+              queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+            },
             onSettled: () => {
-              runNavigate();
+              runAfter();
             },
           },
         );
       } else {
-        runNavigate();
+        runAfter();
       }
     },
-    [user?.role, setLocation, markOneRead, queryClient],
+    [user?.role, setLocation, markOneRead, queryClient, bumpUnreadCaches],
   );
 
   return { handleNotificationClick, isNavigating, getTarget };

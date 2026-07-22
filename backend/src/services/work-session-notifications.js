@@ -1,52 +1,56 @@
 import { notificationsTable, getNextSequence } from "../models/schema/index.js";
-import { notifyUser } from "../lib/realtime.js";
+import { notifyUser, emitToUsers } from "../lib/realtime.js";
 import { sendWebPushToUser } from "./push-notifications.js";
+import { logger } from "../lib/logger.js";
 
-/** User-facing copy when a session ends without manual clock-out. */
+/**
+ * User-facing copy when a session is auto-paused / closed.
+ * Always explain *why* — employees must know unpaid gaps are not silent.
+ */
 const SESSION_END_COPY = {
-  network_lost: {
-    title: "Work session ended",
-    body: "Your session ended after prolonged loss of network connectivity. Clock in again today to continue the same shift.",
-  },
   system_sleep: {
-    title: "Work session ended",
-    body: "Your session ended when your PC went to sleep. Clock in again today to continue the same shift.",
+    title: "Session paused — PC sleep",
+    body: "You were clocked out because your PC went to sleep. Clock in again to continue today's session (sleep time is not counted).",
   },
   system_shutdown: {
-    title: "Work session ended",
-    body: "Your session ended because your PC is shutting down. Clock in again today to continue the same shift.",
+    title: "Session paused — PC shutdown",
+    body: "You were clocked out because your PC is shutting down. Clock in again after restart to continue today's session.",
   },
   app_quit: {
-    title: "Work session ended",
-    body: "Your session ended when the desktop app was closed. Clock in again today to continue the same shift.",
+    title: "Session paused — app closed",
+    body: "You were clocked out because the desktop app window was closed. Clock in again today to continue the same session.",
   },
   logout: {
-    title: "Work session ended",
-    body: "Your session ended when you logged out. Clock in again today to continue the same shift.",
-  },
-  client_disconnected: {
-    title: "Work session ended",
-    body: "Your session is no longer active on the server. Clock in again today to continue your shift.",
-  },
-  session_expired: {
-    title: "Work session ended",
-    body: "Your session reached the 24-hour limit and was closed automatically. Clock in to start today’s shift.",
-  },
-  day_ended: {
-    title: "Work session ended",
-    body: "A new work day started — your previous session was closed. Clock in to start today’s shift.",
+    title: "Session paused — logged out",
+    body: "Your work session was paused when you logged out. Clock in again today to continue the same session.",
   },
   shift_ended: {
-    title: "Automatically clocked out",
-    body: "Your shift has ended. You were clocked out automatically. Clock in again if you are doing extra work — your session continues until the end of the day.",
+    title: "Automatically clocked out — shift ended",
+    body: "Your scheduled shift ended, so you were clocked out. Clock in again if you are still working (overtime), or that time will not be counted. Same day = same session.",
+  },
+  day_ended: {
+    title: "Previous work day ended",
+    body: "A new work day started — yesterday's session was closed. Clock in to start today's new session.",
+  },
+  session_expired: {
+    title: "Session closed — 24-hour limit",
+    body: "Your session hit the 24-hour safety limit and was closed. Clock in to start a new session.",
   },
   admin_terminated: {
-    title: "Work session ended by admin",
+    title: "Session ended by admin",
     body: "An administrator ended your work session. Clock in again when you are ready to work.",
   },
   leave_approved: {
     title: "Clocked out — leave approved",
-    body: "Your full-day leave was approved and your active work session was ended. You are marked on leave for today.",
+    body: "Your full-day leave was approved and your active work session was ended.",
+  },
+  network_lost: {
+    title: "Session paused — network lost",
+    body: "Your session was paused after prolonged network loss. Clock in again today to continue the same session.",
+  },
+  client_disconnected: {
+    title: "Session paused — connection lost",
+    body: "Your session was paused because the app stopped sending heartbeats. Clock in again today to continue the same session.",
   },
 };
 
@@ -60,12 +64,7 @@ export function getSessionEndCopy(stopReason) {
 
 const SHIFT_AUTO_CLOCK_OUT_COPY = SESSION_END_COPY.shift_ended;
 
-/**
- * Notify when shift ends — auto clock-out, not a terminal session end.
- * Uses a separate realtime event so clients treat it like clock-out, not session death.
- */
-export async function notifyShiftAutoClockOut({ userId, sessionId }) {
-  const copy = SHIFT_AUTO_CLOCK_OUT_COPY;
+async function alreadyNotifiedRecently({ userId, sessionId, title }) {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
   const existing = await notificationsTable
     .findOne({
@@ -73,82 +72,29 @@ export async function notifyShiftAutoClockOut({ userId, sessionId }) {
       type: "work_session",
       entityId: sessionId,
       createdAt: { $gte: oneHourAgo },
+      title,
     })
     .lean();
-  if (existing) return false;
-
-  const notifId = await getNextSequence("notifications");
-  await notificationsTable.create({
-    id: notifId,
-    userId,
-    type: "work_session",
-    title: copy.title,
-    body: copy.body,
-    entityType: "work_session",
-    entityId: sessionId,
-    relatedId: sessionId,
-    isRead: false,
-  });
-
-  const payload = {
-    id: notifId,
-    type: "work_session",
-    title: copy.title,
-    body: copy.body,
-    entityType: "work_session",
-    entityId: sessionId,
-    stopReason: "shift_ended",
-  };
-
-  await notifyUser(userId, "notification", payload);
-  await notifyUser(userId, "shift_auto_clock_out", payload);
-  await sendWebPushToUser(userId, {
-    title: copy.title,
-    body: copy.body,
-    data: {
-      type: "work_session",
-      entityType: "work_session",
-      entityId: sessionId,
-      stopReason: "shift_ended",
-    },
-  });
-  return true;
+  return Boolean(existing);
 }
 
 /**
- * Persist an in-app notification + realtime/FCM push when a work session ends
- * for reasons the employee may not notice (app closed, network loss, server cleanup).
+ * Deliver realtime first (instant toast/OS), then persist + FCM in the background.
+ * Previously socket waited on DB sequence + insert + FCM round-trips → late alerts.
  */
-export async function notifyWorkSessionEnded({ userId, sessionId, stopReason }) {
-  if (!shouldNotifySessionEnd(stopReason)) return false;
+async function deliverWorkSessionAlert({
+  userId,
+  sessionId,
+  stopReason,
+  copy,
+  realtimeEvent,
+}) {
+  if (await alreadyNotifiedRecently({ userId, sessionId, title: copy.title })) {
+    return false;
+  }
 
-  const copy = SESSION_END_COPY[stopReason];
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const existing = await notificationsTable
-    .findOne({
-      userId,
-      type: "work_session",
-      entityId: sessionId,
-      createdAt: { $gte: oneHourAgo },
-    })
-    .lean();
-  if (existing) return false;
-
-  const notifId = await getNextSequence("notifications");
-  await notificationsTable.create({
-    id: notifId,
-    userId,
-    type: "work_session",
-    title: copy.title,
-    body: copy.body,
-    entityType: "work_session",
-    entityId: sessionId,
-    relatedId: sessionId,
-    isRead: false,
-  });
-
-  const payload = {
-    id: notifId,
+  const provisionalPayload = {
+    id: null,
     type: "work_session",
     title: copy.title,
     body: copy.body,
@@ -157,17 +103,79 @@ export async function notifyWorkSessionEnded({ userId, sessionId, stopReason }) 
     stopReason,
   };
 
-  await notifyUser(userId, "notification", payload);
-  await notifyUser(userId, "work_session_ended", payload);
-  await sendWebPushToUser(userId, {
-    title: copy.title,
-    body: copy.body,
-    data: {
-      type: "work_session",
-      entityType: "work_session",
-      entityId: sessionId,
-      stopReason,
-    },
-  });
+  // 1) Instant path — socket only (no user DB lookup / FCM wait).
+  emitToUsers([userId], realtimeEvent, provisionalPayload);
+  emitToUsers([userId], "notification", provisionalPayload);
+
+  // 2) Persist + push without blocking the auto clock-out caller.
+  void (async () => {
+    try {
+      if (await alreadyNotifiedRecently({ userId, sessionId, title: copy.title })) {
+        return;
+      }
+      const notifId = await getNextSequence("notifications");
+      await notificationsTable.create({
+        id: notifId,
+        userId,
+        type: "work_session",
+        title: copy.title,
+        body: copy.body,
+        entityType: "work_session",
+        entityId: sessionId,
+        relatedId: sessionId,
+        isRead: false,
+      });
+
+      const persisted = { ...provisionalPayload, id: notifId };
+      // Refresh clients that only listen on the generic notification channel with an id.
+      await notifyUser(userId, "notification", persisted);
+
+      await sendWebPushToUser(userId, {
+        title: copy.title,
+        body: copy.body,
+        data: {
+          type: "work_session",
+          entityType: "work_session",
+          entityId: sessionId,
+          stopReason,
+        },
+      });
+    } catch (err) {
+      logger.error(
+        { err, userId, sessionId, stopReason },
+        "Failed to persist/push work-session alert",
+      );
+    }
+  })();
+
   return true;
+}
+
+/**
+ * Notify when shift ends — auto clock-out, not a terminal session end.
+ */
+export async function notifyShiftAutoClockOut({ userId, sessionId }) {
+  return deliverWorkSessionAlert({
+    userId,
+    sessionId,
+    stopReason: "shift_ended",
+    copy: SHIFT_AUTO_CLOCK_OUT_COPY,
+    realtimeEvent: "shift_auto_clock_out",
+  });
+}
+
+/**
+ * Persist an in-app notification + realtime/FCM push when a work session is
+ * auto-paused (sleep, shutdown, app close, day boundary, etc.).
+ */
+export async function notifyWorkSessionEnded({ userId, sessionId, stopReason }) {
+  if (!shouldNotifySessionEnd(stopReason)) return false;
+  const copy = SESSION_END_COPY[stopReason];
+  return deliverWorkSessionAlert({
+    userId,
+    sessionId,
+    stopReason,
+    copy,
+    realtimeEvent: "work_session_ended",
+  });
 }

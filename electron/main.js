@@ -52,8 +52,11 @@ let powerMonitorRegistered = false;
 let blurSensitiveAppsEnabled = false;
 /** Cached from renderer so heartbeat/screenshot/clock-out work when webContents is torn down. */
 let cachedAccessToken = null;
+/** True when suspend interrupted an active session — renderer should clock back in on resume. */
+let resumeShouldClockIn = false;
+let lastPowerStopReason = null;
 
-const HEARTBEAT_INTERVAL_MS = 60_000;
+const HEARTBEAT_INTERVAL_MS = 30_000;
 const CLOCK_OUT_TIMEOUT_MS = 15_000;
 const HEARTBEAT_FETCH_TIMEOUT_MS = 20_000;
 
@@ -66,35 +69,39 @@ const DEFINITIVE_LOCAL_STOP_REASONS = new Set([
 
 const SESSION_END_NATIVE_COPY = {
   system_sleep: {
-    title: 'Work session ended',
-    body: 'Your PC went to sleep. Clock in again today to continue your shift.',
+    title: 'Session paused — PC sleep',
+    body: 'You were clocked out because your PC went to sleep. Resuming when you wake…',
   },
   system_shutdown: {
-    title: 'Work session ended',
-    body: 'Your PC is shutting down. Clock in again today to continue your shift.',
+    title: 'Session paused — PC shutdown',
+    body: 'You were clocked out because your PC is shutting down. Clock in after restart.',
   },
   app_quit: {
-    title: 'Work session ended',
-    body: 'The desktop app was closed. Clock in again today to continue your shift.',
+    title: 'Session paused — app closed',
+    body: 'You were clocked out because the desktop app was closed. Clock in again today to continue.',
   },
-  client_disconnected: {
-    title: 'Work session ended',
-    body: 'Your session is no longer active on the server. Clock in again today to continue your shift.',
+  shift_ended: {
+    title: 'Automatically clocked out — shift ended',
+    body: 'Your scheduled shift ended. Clock in again for overtime or that time will not count.',
   },
   day_ended: {
-    title: 'Work session ended',
-    body: 'A new work day started. Clock in to begin today\'s shift.',
+    title: 'Previous work day ended',
+    body: 'A new work day started. Clock in to begin today\'s new session.',
   },
   session_expired: {
-    title: 'Work session ended',
-    body: 'Your session reached the 24-hour limit. Clock in to start a new shift.',
+    title: 'Session closed — 24-hour limit',
+    body: 'Your session hit the 24-hour limit. Clock in to start a new session.',
+  },
+  system_resumed: {
+    title: 'Resuming work session',
+    body: 'Your PC woke up. Continuing today\'s session (sleep time is not counted).',
   },
 };
 
-function showNativeSessionNotification(stopReason) {
+function showNativeSessionNotification(stopReason, override = null) {
   if (!Notification.isSupported()) return;
-  const copy = SESSION_END_NATIVE_COPY[stopReason];
-  if (!copy) return;
+  const copy = override ?? SESSION_END_NATIVE_COPY[stopReason];
+  if (!copy?.title || !copy?.body) return;
   const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
   const iconPath = path.join(ASSETS_DIR, iconFile);
   try {
@@ -427,7 +434,7 @@ function stopHeartbeat() {
  * @param {string} stopReason
  * @param {{ notify?: boolean }} opts — notify=false when alert was already sent server-side
  */
-async function syncLocalSessionEnded(stopReason = 'client_disconnected', { notify = false } = {}) {
+async function syncLocalSessionEnded(stopReason = 'shift_ended', { notify = false } = {}) {
   if (!currentSessionId) return;
   stopScreenshotScheduler();
   stopHeartbeat();
@@ -460,9 +467,10 @@ async function sendHeartbeat() {
         /* ignore parse errors */
       }
       if (data && !data.session) {
-        const reason = data.stopReason || 'client_disconnected';
+        const reason = data.stopReason || 'shift_ended';
         console.warn('[heartbeat] no active session on server — syncing local state', reason);
-        await syncLocalSessionEnded(reason, { notify: false });
+        // Always surface OS notification for auto pauses so employees see *why*.
+        await syncLocalSessionEnded(reason, { notify: true });
       }
       return;
     }
@@ -552,6 +560,10 @@ function registerPowerMonitorHandlers() {
 
   powerMonitor.on('suspend', () => {
     console.log('[power] system suspending — clocking out');
+    // Remember that sleep interrupted work so resume can auto clock-in.
+    // Without this, employees often stay clocked out for 1–2 hours after waking.
+    resumeShouldClockIn = currentSessionId > 0;
+    lastPowerStopReason = 'system_sleep';
     clockOutFromMain('system_sleep').catch((err) =>
       console.error('[power] suspend clock-out failed:', err.message)
     );
@@ -559,9 +571,24 @@ function registerPowerMonitorHandlers() {
 
   powerMonitor.on('shutdown', () => {
     console.log('[power] system shutting down — clocking out');
+    resumeShouldClockIn = currentSessionId > 0;
+    lastPowerStopReason = 'system_shutdown';
     clockOutFromMain('system_shutdown').catch((err) =>
       console.error('[power] shutdown clock-out failed:', err.message)
     );
+  });
+
+  powerMonitor.on('resume', () => {
+    console.log('[power] system resumed — shouldClockIn=', resumeShouldClockIn);
+    if (!resumeShouldClockIn) return;
+    const previousStopReason = lastPowerStopReason || 'system_sleep';
+    resumeShouldClockIn = false;
+    showNativeSessionNotification('system_resumed');
+    focusMainWindow();
+    sendToRenderer('cms:system-resumed', {
+      shouldClockIn: true,
+      previousStopReason,
+    });
   });
 }
 
@@ -692,6 +719,17 @@ async function captureAndUpload() {
     }
   }
 }
+
+ipcMain.on('cms:show-session-notification', (_, payload = {}) => {
+  const stopReason = payload.stopReason || 'shift_ended';
+  const title = typeof payload.title === 'string' ? payload.title.trim() : '';
+  const body = typeof payload.body === 'string' ? payload.body.trim() : '';
+  if (title && body) {
+    showNativeSessionNotification(stopReason, { title, body });
+  } else {
+    showNativeSessionNotification(stopReason);
+  }
+});
 
 ipcMain.on('cms:screenshot-config', (_, { enabled, intervalMs, sessionId, apiBaseUrl, blurSensitiveApps, accessToken }) => {
   if (apiBaseUrl) {

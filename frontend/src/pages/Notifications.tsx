@@ -7,8 +7,6 @@ import {
 } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNotificationClick } from "@/hooks/use-notification-click";
-import { canNavigateNotification } from "@/lib/notification-navigation";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageNotificationListSkeleton } from "@/components/loading";
@@ -34,7 +32,6 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 
 export default function NotificationsPage() {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
@@ -145,28 +142,23 @@ export default function NotificationsPage() {
               {notifications.map((n) => {
                 const isUnread = !n.readAt;
                 const target = getTarget(n);
-                const clickable = canNavigateNotification(n, user?.role);
                 return (
                   <li
                     key={n.id}
-                    role={clickable ? "button" : undefined}
-                    tabIndex={clickable ? 0 : undefined}
-                    onClick={clickable && !isNavigating ? () => handleNotificationClick(n) : undefined}
-                    onKeyDown={
-                      clickable
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              handleNotificationClick(n);
-                            }
-                          }
-                        : undefined
-                    }
+                    role="button"
+                    tabIndex={0}
+                    onClick={!isNavigating ? () => handleNotificationClick(n) : undefined}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (!isNavigating) handleNotificationClick(n);
+                      }
+                    }}
                     className={cn(
                       "flex items-start gap-3 p-4 transition-colors",
                       isUnread && "bg-primary/5 border-l-2 border-l-primary",
-                      clickable && !isNavigating && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
-                      clickable && isNavigating && "opacity-60 pointer-events-none",
+                      !isNavigating && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+                      isNavigating && "opacity-60 pointer-events-none",
                     )}
                   >
                     <div className="mt-0.5 h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">

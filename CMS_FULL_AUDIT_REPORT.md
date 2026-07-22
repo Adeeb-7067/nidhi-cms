@@ -1,21 +1,23 @@
 # Content Management Hub — Full Codebase Audit
 
-**Audit date:** 2026-07-22  
-**Auditor role:** Senior Software Architect & Code Auditor  
-**Repository:** `D:\Content-Management-Hub`  
-**Scope:** Live source only (`backend/`, `frontend/`, `electron/`, root configs/docs)  
-**Companion catalog:** [`CMS_AUDIT_FILE_CATALOG.json`](./CMS_AUDIT_FILE_CATALOG.json) — **1,127 files**, ~230k LOC  
+**Audit date:** 2026-07-22\
+**Auditor role:** Senior Software Architect & Code Auditor\
+**Repository:** `D:\Content-Management-Hub`\
+**Scope:** Live source only (`backend/`, `frontend/`, `electron/`, root configs/docs)\
+**Companion catalog:** [`CMS_AUDIT_FILE_CATALOG.json`](./CMS_AUDIT_FILE_CATALOG.json) — **1,127 files**, ~230k LOC
 
----
+***
 
 ## 0. Scope, exclusions, and methodology
 
 ### Included
-- All application source under `backend/src`, `frontend/src`, `electron/`
-- Tests, scripts, OpenAPI, configs, docs
-- Environment *templates* (not live secrets)
+
+* All application source under `backend/src`, `frontend/src`, `electron/`
+* Tests, scripts, OpenAPI, configs, docs
+* Environment *templates* (not live secrets)
 
 ### Explicitly excluded (not application source)
+
 | Path | Reason |
 |------|--------|
 | `node_modules/` | Third-party |
@@ -27,10 +29,11 @@
 | Live `.env` files | Secrets (names audited; values not reproduced) |
 
 ### Methodology
-1. Full recursive inventory → `CMS_AUDIT_FILE_CATALOG.json` (path, type, LOC, purpose class).  
-2. Knowledge-graph structure (code-review-graph: 455 indexed files / 1,818 nodes; graphify: 11k+ nodes).  
-3. Deep review of auth, crypto, uploads, RBAC, finance GST, realtime, god components.  
-4. Module-level quality scoring for every domain; **full per-file narrative** for security-critical and architecture-critical files (below).  
+
+1. Full recursive inventory → `CMS_AUDIT_FILE_CATALOG.json` (path, type, LOC, purpose class).
+2. Knowledge-graph structure (code-review-graph: 455 indexed files / 1,818 nodes; graphify: 11k+ nodes).
+3. Deep review of auth, crypto, uploads, RBAC, finance GST, realtime, god components.
+4. Module-level quality scoring for every domain; **full per-file narrative** for security-critical and architecture-critical files (below).
 5. Remaining files classified and scored at module/folder grain — identical 1–10 scoring of every UI atom is omitted where findings would be noise; catalog still lists **every** file.
 
 ### Running summary (final)
@@ -47,7 +50,7 @@
 | Technical debt estimate | **~14–20 engineer-weeks** to clear P0/P1 |
 | Production readiness | **62%** (internal agency, hardened env) / **48%** (internet-facing without fixes) |
 
----
+***
 
 ## 1. Complete project tree (meaningful)
 
@@ -80,14 +83,15 @@ Content-Management-Hub/
 └── CMS_FULL_AUDIT_REPORT.md         # This document
 ```
 
-**Not on disk:** top-level `artifacts/` (removed historically — was a Replit duplicate).  
+**Not on disk:** top-level `artifacts/` (removed historically — was a Replit duplicate).\
 **Counts:** frontend ~655 source files · backend ~473 · electron ~10–14 · tests ~48.
 
----
+***
 
 ## 2. Architecture Report
 
 ### Current pattern
+
 **Split monorepo** with clear backend MVC:
 
 ```
@@ -98,28 +102,31 @@ HTTP → app.js (helmet/cors/compress)
      → mappers (response shaping)
 ```
 
-Frontend: React 19 + Vite + Wouter + TanStack Query + Socket.IO client + role/permission-gated `PageOutlet`.  
+Frontend: React 19 + Vite + Wouter + TanStack Query + Socket.IO client + role/permission-gated `PageOutlet`.\
 Electron: shell only (remote API).
 
 ### Strengths
-- Documented layered architecture (`backend/ARCHITECTURE.md`)
-- Dual RBAC: CMS role + permission templates
-- AES-256-GCM for inventory & HRM payroll PII (fail-closed if key missing)
-- OpenAPI contract + generated Zod/Orval clients
-- Soft-delete patterns in marketing; GST awareness in finance-tax
-- Route-level `React.lazy` in PageOutlet
-- ~47 backend unit tests covering payroll, sales totals, RBAC matrix, crypto
+
+* Documented layered architecture (`backend/ARCHITECTURE.md`)
+* Dual RBAC: CMS role + permission templates
+* AES-256-GCM for inventory & HRM payroll PII (fail-closed if key missing)
+* OpenAPI contract + generated Zod/Orval clients
+* Soft-delete patterns in marketing; GST awareness in finance-tax
+* Route-level `React.lazy` in PageOutlet
+* \~47 backend unit tests covering payroll, sales totals, RBAC matrix, crypto
 
 ### Weaknesses
-- God components (2k+ LOC modals/pages)
-- Hand-written `api/{finance,sales,hrm}.ts` overlap Orval generated client
-- In-process caches (auth, permissions, presence) break multi-instance
-- Zod request validation middleware largely unused on routes
-- Zero frontend automated tests
-- JWT / credential-history crypto allow **hardcoded dev defaults**
-- Static `/uploads` outside auth gate
+
+* God components (2k+ LOC modals/pages)
+* Hand-written `api/{finance,sales,hrm}.ts` overlap Orval generated client
+* In-process caches (auth, permissions, presence) break multi-instance
+* Zod request validation middleware largely unused on routes
+* Zero frontend automated tests
+* JWT / credential-history crypto allow **hardcoded dev defaults**
+* Static `/uploads` outside auth gate
 
 ### Scalability
+
 | Area | Assessment |
 |------|------------|
 | Single-node agency (~50–200 users) | Adequate after P0 money/security fixes |
@@ -128,17 +135,19 @@ Electron: shell only (remote API).
 | Frontend bundle | Risk from FinanceFormModals / sales dialog monoliths |
 
 ### Suggested improvements
-1. Fail-closed secrets in production.  
-2. Auth-gated or signed-URL uploads.  
-3. Expense `isDeleted` in all money aggregations.  
-4. Redis adapter for realtime; DB pagination for ledgers.  
+
+1. Fail-closed secrets in production.
+2. Auth-gated or signed-URL uploads.
+3. Expense `isDeleted` in all money aggregations.
+4. Redis adapter for realtime; DB pagination for ledgers.
 5. Split god UI files; prefer Orval; add frontend smoke tests for auth/RBAC.
 
----
+***
 
 ## 3. Security Audit
 
 ### Critical
+
 | ID | Issue | File(s) | Risk if unfixed |
 |----|--------|---------|-----------------|
 | C1 | JWT secrets default to `"cms-*-secret-dev"` | `backend/src/lib/jwt.js` | Anyone can forge tokens if env unset |
@@ -147,6 +156,7 @@ Electron: shell only (remote API).
 | C4 | `express.static("/uploads")` unauthenticated | `backend/src/app.js` | Guessable URLs leak APKs, screenshots, docs |
 
 ### High
+
 | ID | Issue | File(s) |
 |----|--------|---------|
 | H1 | No rate limit on login/refresh/OTP | `auth.routes.js`, `auth.controller.js` |
@@ -158,12 +168,15 @@ Electron: shell only (remote API).
 | H7 | Impersonation mints target JWT without auditor claim | `auth.controller.js` |
 
 ### Medium / Low
+
 Helmet CSP off; Zod middleware unused; weak password policy (min 8); plaintext refresh tokens in sessions; 30s auth cache; unescaped `$regex` ReDoS; upload MIME not allowlisted; public proposal endpoints without rate limit.
 
 ### Dependency note
+
 Run `npm audit` in `backend/` and `frontend/` before each release (not executed in this pass — treat as process gap).
 
 ### Security improvement roadmap
+
 | Phase | Actions | Effort |
 |-------|---------|--------|
 | Week 1 | Fail-closed JWT/CRED keys in prod; rotate secrets; gate `/uploads` or signed URLs; rate-limit auth | 3–5 d |
@@ -173,31 +186,35 @@ Run `npm audit` in `backend/` and `frontend/` before each release (not executed 
 
 **Breaking changes:** cookie auth vs localStorage; signed upload URLs break hard-coded `/uploads/...` in Electron redirect — coordinate `electron/main.js` interceptors.
 
----
+***
 
 ## 4. Database Audit
 
 ### Schema quality
-- **82** entity schemas; numeric `id` + `ref` (agency pattern, not ObjectId FKs)
-- Indexes generally good on marketing/finance hot fields
-- Soft-delete **inconsistent**: marketing OK; expenses have `isDeleted` but money aggs omit it; projects/users queried with `isDeleted` without schema field
+
+* **82** entity schemas; numeric `id` + `ref` (agency pattern, not ObjectId FKs)
+* Indexes generally good on marketing/finance hot fields
+* Soft-delete **inconsistent**: marketing OK; expenses have `isDeleted` but money aggs omit it; projects/users queried with `isDeleted` without schema field
 
 ### Critical correctness
-**Soft-deleted expenses still count in GST paid / P&L / KPIs** — `finance-tax.service.js` and related report services omit `isDeleted: { $ne: true }` while list API filters them.
+
+**Soft-deleted expenses still count in GST paid / P\&L / KPIs** — `finance-tax.service.js` and related report services omit `isDeleted: { $ne: true }` while list API filters them.
 
 ### Index recommendations
-1. Expenses: `{ isDeleted, status, date }`  
-2. Finance & sales invoices: index `issueDate`  
-3. Comments: `{ threadType, threadId, isDeleted, createdAt }`  
-4. Payments: `{ direction, date }`  
+
+1. Expenses: `{ isDeleted, status, date }`
+2. Finance & sales invoices: index `issueDate`
+3. Comments: `{ threadType, threadId, isDeleted, createdAt }`
+4. Payments: `{ direction, date }`
 5. Align Projects soft-delete (add field or remove dead query filters)
 
 ### Query optimization
-- Stop `find({})` full loads in `unified-ledger.service.js` (invoices/payments/aging)
-- Push GST tax math to aggregation / denormalized `taxAmount`
-- Budget controller: eliminate per-budget N+1 and full `usersTable.find({})`
 
----
+* Stop `find({})` full loads in `unified-ledger.service.js` (invoices/payments/aging)
+* Push GST tax math to aggregation / denormalized `taxAmount`
+* Budget controller: eliminate per-budget N+1 and full `usersTable.find({})`
+
+***
 
 ## 5. Performance Audit
 
@@ -212,13 +229,14 @@ Run `npm audit` in `backend/` and `frontend/` before each release (not executed 
 | PageOutlet lazy routes | Good | OK |
 
 ### Performance roadmap
-1. DB pagination for unified invoices/payments  
-2. Shared expense match helper including `isDeleted`  
-3. Split FinanceFormModals / sales dialogs into lazy modules  
-4. Redis Socket.IO adapter before horizontal scale  
-5. TTL cache for tax/KPI snapshots  
 
----
+1. DB pagination for unified invoices/payments
+2. Shared expense match helper including `isDeleted`
+3. Split FinanceFormModals / sales dialogs into lazy modules
+4. Redis Socket.IO adapter before horizontal scale
+5. TTL cache for tax/KPI snapshots
+
+***
 
 ## 6. Maintainability Report
 
@@ -226,259 +244,306 @@ Run `npm audit` in `backend/` and `frontend/` before each release (not executed 
 |-------|----------------|
 | Folder structure | **8/10** — clear MVC + domain folders |
 | Coding standards | **7/10** — conventions documented; some god files violate SRP |
-| Documentation | **8/10** — ARCHITECTURE, CODEBASE_ANALYSIS, AGENTS |
+| Documentation | **8/10** — ARCHITECTURE, CODEBASE\_ANALYSIS, AGENTS |
 | Tests | **5/10** — solid backend unit islands; **0** frontend |
 | Technical debt | God pages (Discussions 1.5k, Employees 1.3k, Projects 1.2k); dual API clients; graphify pollution from external HRM path names |
-| Dead code (graph) | 0 symbols flagged in `backend/src` via dead_code mode |
+| Dead code (graph) | 0 symbols flagged in `backend/src` via dead\_code mode |
 
----
+***
 
 ## 7. File-by-file deep audit (critical & architecture paths)
 
-> Full inventory of all 1,127 files (name, path, type, LOC, purpose) is in `CMS_AUDIT_FILE_CATALOG.json`.  
+> Full inventory of all 1,127 files (name, path, type, LOC, purpose) is in `CMS_AUDIT_FILE_CATALOG.json`.\
 > Below: complete narrative format for highest-impact files.
 
----
+***
 
 ### 7.1 `backend/src/lib/jwt.js`
 
 #### File Information
-- **File Name:** jwt.js  
-- **File Path:** `backend/src/lib/jwt.js`  
-- **File Type:** Infrastructure / crypto  
-- **Lines of Code:** ~23  
-- **Purpose:** Sign and verify access/refresh JWTs  
+
+* **File Name:** jwt.js
+* **File Path:** `backend/src/lib/jwt.js`
+* **File Type:** Infrastructure / crypto
+* **Lines of Code:** ~23
+* **Purpose:** Sign and verify access/refresh JWTs
 
 #### Code Analysis
-- Exports: `signAccessToken`, `signRefreshToken`, `verifyAccessToken`, `verifyRefreshToken`  
-- Uses `jsonwebtoken`; access 15m, refresh 30d  
-- No DB; used by auth controller + auth middleware  
+
+* Exports: `signAccessToken`, `signRefreshToken`, `verifyAccessToken`, `verifyRefreshToken`
+* Uses `jsonwebtoken`; access 15m, refresh 30d
+* No DB; used by auth controller + auth middleware
 
 #### Quality Assessment
-- Quality **4/10** · Readability **9** · Maintainability **6**  
-- Scalability OK · Performance OK  
-- **Security: Critical** — hardcoded secret fallbacks  
-- Error handling: relies on jwt.verify throw  
+
+* Quality **4/10** · Readability **9** · Maintainability **6**
+* Scalability OK · Performance OK
+* **Security: Critical** — hardcoded secret fallbacks
+* Error handling: relies on jwt.verify throw
 
 #### Issues Found
-- Default secrets `"cms-access-secret-dev"` / `"cms-refresh-secret-dev"`  
-- Role embedded in token but auth middleware reloads user from DB (good)  
+
+* Default secrets `"cms-access-secret-dev"` / `"cms-refresh-secret-dev"`
+* Role embedded in token but auth middleware reloads user from DB (good)
 
 #### Recommendations
-- Require secrets when `NODE_ENV=production`; refuse to boot otherwise  
-- Tests: boot without secrets must fail in prod  
+
+* Require secrets when `NODE_ENV=production`; refuse to boot otherwise
+* Tests: boot without secrets must fail in prod
 
 #### Impact Analysis
-- **Severity:** Critical  
-- **Risk:** Token forgery  
-- **Effort:** 0.5 day  
 
----
+* **Severity:** Critical
+* **Risk:** Token forgery
+* **Effort:** 0.5 day
+
+***
 
 ### 7.2 `backend/src/lib/password.js`
 
 #### File Information
-- **File Name:** password.js  
-- **Path:** `backend/src/lib/password.js`  
-- **Type:** Crypto helper  
-- **LOC:** ~35  
-- **Purpose:** bcrypt hash/verify + reversible credential-history encoding  
+
+* **File Name:** password.js
+* **Path:** `backend/src/lib/password.js`
+* **Type:** Crypto helper
+* **LOC:** ~35
+* **Purpose:** bcrypt hash/verify + reversible credential-history encoding
 
 #### Code Analysis
-- bcrypt 12 rounds (good)  
-- XOR “encryption” for password history with key fallback  
+
+* bcrypt 12 rounds (good)
+* XOR “encryption” for password history with key fallback
 
 #### Quality Assessment
-- Quality **3/10** (history path) · bcrypt portion **8/10**  
-- Security: Critical on history path  
+
+* Quality **3/10** (history path) · bcrypt portion **8/10**
+* Security: Critical on history path
 
 #### Issues Found
-- XOR is not authenticated encryption; default key  
-- Used by users/client-team/recruitment when storing revealable passwords  
+
+* XOR is not authenticated encryption; default key
+* Used by users/client-team/recruitment when storing revealable passwords
 
 #### Recommendations
-- Replace with AES-GCM (same pattern as `inventory-crypto.js`); migrate rows  
-- Never reveal passwords in UI long-term — prefer one-time reset  
+
+* Replace with AES-GCM (same pattern as `inventory-crypto.js`); migrate rows
+* Never reveal passwords in UI long-term — prefer one-time reset
 
 #### Impact
-- **Critical** · Effort: 2–3 days including migration  
 
----
+* **Critical** · Effort: 2–3 days including migration
+
+***
 
 ### 7.3 `backend/src/lib/inventory-crypto.js` / `hrm-crypto.js`
 
 #### File Information
-- AES-256-GCM, scrypt-derived keys, fail if env missing  
+
+* AES-256-GCM, scrypt-derived keys, fail if env missing
 
 #### Quality Assessment
-- Quality **9/10** · Security strong  
+
+* Quality **9/10** · Security strong
 
 #### Recommendations
-- Align `password.js` history to this pattern  
-- Document key rotation runbook  
+
+* Align `password.js` history to this pattern
+* Document key rotation runbook
 
 #### Impact
-- Low (positive control)  
 
----
+* Low (positive control)
+
+***
 
 ### 7.4 `backend/src/middlewares/auth.js`
 
 #### File Information
-- **LOC:** ~130  
-- **Purpose:** `requireAuth`, `requireRole`, `requireClientAdmin`, auth user TTL cache  
+
+* **LOC:** ~130
+* **Purpose:** `requireAuth`, `requireRole`, `requireClientAdmin`, auth user TTL cache
 
 #### Code Analysis
-- Bearer + `X-Access-Token`  
-- Caches active users 30s, max 2000; evict helper for deactivation  
-- Loads client context for client-admin gate  
+
+* Bearer + `X-Access-Token`
+* Caches active users 30s, max 2000; evict helper for deactivation
+* Loads client context for client-admin gate
 
 #### Quality Assessment
-- Quality **8/10** · Security **7/10** (cache delay)  
-- Multi-instance: cache not shared  
+
+* Quality **8/10** · Security **7/10** (cache delay)
+* Multi-instance: cache not shared
 
 #### Issues
-- Deactivation lag up to 30s  
-- Dual header surface  
+
+* Deactivation lag up to 30s
+* Dual header surface
 
 #### Impact
-- Medium · Effort: 1 day for Redis/shared cache if scaling  
 
----
+* Medium · Effort: 1 day for Redis/shared cache if scaling
+
+***
 
 ### 7.5 `backend/src/app.js`
 
 #### File Information
-- Express bootstrap: helmet, cors, compression, `/uploads` static, `/api` router  
+
+* Express bootstrap: helmet, cors, compression, `/uploads` static, `/api` router
 
 #### Issues
-- CSP disabled  
-- Unauthenticated `/uploads`  
-- JSON body 10mb  
+
+* CSP disabled
+* Unauthenticated `/uploads`
+* JSON body 10mb
 
 #### Impact
-- **Critical** (uploads) · Effort: 1–2 days  
 
----
+* **Critical** (uploads) · Effort: 1–2 days
+
+***
 
 ### 7.6 `backend/src/config/env.js` / `api.js`
 
 #### File Information
-- Port required; CORS origins; public API allowlist  
+
+* Port required; CORS origins; public API allowlist
 
 #### Issues
-- `getAllowedOrigins()` returns `true` (reflect all) if unset  
-- Public prefixes for sales proposals  
+
+* `getAllowedOrigins()` returns `true` (reflect all) if unset
+* Public prefixes for sales proposals
 
 #### Impact
-- High · Effort: 0.5 day fail-closed CORS in prod  
 
----
+* High · Effort: 0.5 day fail-closed CORS in prod
+
+***
 
 ### 7.7 `backend/src/controllers/auth.controller.js`
 
 #### File Information
-- Login, refresh, OTP reset, impersonate, FCM  
+
+* Login, refresh, OTP reset, impersonate, FCM
 
 #### Issues
-- No rate limiting / lockout  
-- Sessions store refresh token plaintext  
-- Impersonation without `act`/impersonator claim  
+
+* No rate limiting / lockout
+* Sessions store refresh token plaintext
+* Impersonation without `act`/impersonator claim
 
 #### Quality
-- Quality **6/10** · Security **5/10**  
+
+* Quality **6/10** · Security **5/10**
 
 #### Impact
-- High · Effort: 2–3 days  
 
----
+* High · Effort: 2–3 days
+
+***
 
 ### 7.8 `backend/src/controllers/users.controller.js`
 
 #### Issues
-- `getUsersById`: only clients restricted to self — staff can read others’ profiles  
-- Sensitive fields gated for salary/PAN (good)  
-- Credential reveal uses XOR history  
+
+* `getUsersById`: only clients restricted to self — staff can read others’ profiles
+* Sensitive fields gated for salary/PAN (good)
+* Credential reveal uses XOR history
 
 #### Impact
-- High (IDOR privacy) · Effort: 1 day  
 
----
+* High (IDOR privacy) · Effort: 1 day
+
+***
 
 ### 7.9 `backend/src/services/permissions.service.js`
 
 #### File Information
-- **LOC:** ~840  
-- **Purpose:** Role templates, module×action matrix  
+
+* **LOC:** ~840
+* **Purpose:** Role templates, module×action matrix
 
 #### Quality
-- Quality **7/10** · Maintainability **6/10** (large)  
-- Covered by `role-matrix-completeness` tests (good)  
+
+* Quality **7/10** · Maintainability **6/10** (large)
+* Covered by `role-matrix-completeness` tests (good)
 
 #### Recommendations
-- Split template seed vs runtime checks  
 
----
+* Split template seed vs runtime checks
+
+***
 
 ### 7.10 `backend/src/services/access/company-access.js` + `list-scope.js`
 
 #### Purpose
-- Project/company access and list ID scoping  
+
+* Project/company access and list ID scoping
 
 #### Quality
-- **8/10** — central to IDOR prevention on projects  
-- Related: projects controller uses `getProjectAccess`  
 
----
+* **8/10** — central to IDOR prevention on projects
+* Related: projects controller uses `getProjectAccess`
+
+***
 
 ### 7.11 `backend/src/services/finance/finance-tax.service.js`
 
 #### Issues
-- Soft-deleted expenses in GST paid  
-- Full invoice loads for GST collected  
-- TDS filters payroll in JS  
+
+* Soft-deleted expenses in GST paid
+* Full invoice loads for GST collected
+* TDS filters payroll in JS
 
 #### Impact
-- **Critical** (money correctness) · Effort: 2–4 days  
 
----
+* **Critical** (money correctness) · Effort: 2–4 days
+
+***
 
 ### 7.12 `backend/src/services/finance/unified-ledger.service.js`
 
 #### Issues
-- In-memory merge/pagination of invoice collections  
-- Summaries with `limit: 100_000`  
+
+* In-memory merge/pagination of invoice collections
+* Summaries with `limit: 100_000`
 
 #### Impact
-- High · Effort: 3–5 days  
 
----
+* High · Effort: 3–5 days
+
+***
 
 ### 7.13 `frontend/src/lib/auth-storage.ts` + `AuthContext.tsx`
 
 #### Issues
-- localStorage tokens; impersonation token swap complexity  
+
+* localStorage tokens; impersonation token swap complexity
 
 #### Impact
-- Critical (XSS) · Cookie migration is breaking for Electron  
 
----
+* Critical (XSS) · Cookie migration is breaking for Electron
+
+***
 
 ### 7.14 `frontend/src/components/layout/PageOutlet.tsx`
 
 #### File Information
-- **LOC:** ~870  
-- **Purpose:** Route table + lazy pages + permission gates  
-- Hub node in graph (degree ~475)  
+
+* **LOC:** ~870
+* **Purpose:** Route table + lazy pages + permission gates
+* Hub node in graph (degree ~475)
 
 #### Quality
-- Quality **7/10** · Maintainability **5/10** (size)  
-- Untested hotspot  
+
+* Quality **7/10** · Maintainability **5/10** (size)
+* Untested hotspot
 
 #### Recommendations
-- Extract route config tables; add smoke tests for role→home  
 
----
+* Extract route config tables; add smoke tests for role→home
+
+***
 
 ### 7.15 God UI files (maintainability Critical for debt)
 
@@ -495,7 +560,7 @@ Run `npm audit` in `backend/` and `frontend/` before each release (not executed 
 
 Each: single responsibility violated; split by entity/action; add tests around extracted pure logic.
 
----
+***
 
 ## 8. Module catalog quality scores (all domains)
 
@@ -529,32 +594,32 @@ Scoring: Quality / Readability / Maintainability (1–10). Severity = worst open
 | Frontend tests | 0 | 1 | — | — | High | Coverage gap |
 | Scripts / ops | ~44 | 6 | 6 | 6 | Low | Keep out of prod image |
 
----
+***
 
 ## 9. Prioritized issues (Critical → Low)
 
-1. **C1** JWT hardcoded secret fallbacks — `jwt.js`  
-2. **C2** XOR credential history + default key — `password.js`  
-3. **C4** Public `/uploads` — `app.js`  
-4. **P0 Money** Soft-deleted expenses in GST/P&L — `finance-tax.service.js` (+ reports/KPIs)  
-5. **C3** localStorage tokens — `auth-storage.ts`  
-6. **H1** Auth rate limiting  
-7. **H4** CORS allow-all default  
-8. **P0/P1** Unified ledger full-collection loads  
-9. **H2** User profile IDOR  
-10. **H3** Token in query string  
-11. **H5** Upload finalize key binding  
-12. **H6** Inventory bulk decrypt  
-13. **H7** Impersonation audit claims  
-14. Missing `issueDate` / expense soft-delete indexes  
-15. Socket.IO no Redis adapter  
-16. FinanceFormModals / sales god components  
-17. Zod validation unused on routes  
-18. Helmet CSP off  
-19. Zero frontend tests  
-20. Projects/users `isDeleted` query/schema drift  
+1. **C1** JWT hardcoded secret fallbacks — `jwt.js`
+2. **C2** XOR credential history + default key — `password.js`
+3. **C4** Public `/uploads` — `app.js`
+4. **P0 Money** Soft-deleted expenses in GST/P\&L — `finance-tax.service.js` (+ reports/KPIs)
+5. **C3** localStorage tokens — `auth-storage.ts`
+6. **H1** Auth rate limiting
+7. **H4** CORS allow-all default
+8. **P0/P1** Unified ledger full-collection loads
+9. **H2** User profile IDOR
+10. **H3** Token in query string
+11. **H5** Upload finalize key binding
+12. **H6** Inventory bulk decrypt
+13. **H7** Impersonation audit claims
+14. Missing `issueDate` / expense soft-delete indexes
+15. Socket.IO no Redis adapter
+16. FinanceFormModals / sales god components
+17. Zod validation unused on routes
+18. Helmet CSP off
+19. Zero frontend tests
+20. Projects/users `isDeleted` query/schema drift
 
----
+***
 
 ## 10. Refactoring roadmap
 
@@ -567,7 +632,7 @@ Scoring: Quality / Readability / Maintainability (1–10). Severity = worst open
 | Q2 | Multi-instance ready | Redis for Socket.IO, presence, optional auth cache |
 | Ongoing | Tests | Frontend Playwright smoke: login, RBAC home, finance tax fixture |
 
----
+***
 
 ## 11. Production readiness
 
@@ -584,46 +649,46 @@ Scoring: Quality / Readability / Maintainability (1–10). Severity = worst open
 
 Ready for **controlled internal production** only after Week-1 security + expense soft-delete fixes and verified production env secrets/CORS.
 
----
+***
 
 ## 12. Top 10 highest-impact actions
 
-1. Fail-closed JWT and `CRED_ENCRYPT_KEY` in production; rotate all secrets.  
-2. Auth-gate or signed URLs for `/uploads`; remove static public mount.  
-3. Fix expense `isDeleted` exclusion in all finance GST/P&L/KPI aggregations.  
-4. Rate-limit `/auth/login`, refresh, and OTP endpoints.  
-5. Require `ALLOWED_ORIGINS` in production (no CORS `true`).  
-6. Replace XOR credential history with AES-GCM; stop default keys.  
-7. DB-paginate unified invoice/payment ledgers; add `issueDate` indexes.  
-8. Restrict `GET /users/:id` to self / HR / super_admin (or permission).  
-9. Split `FinanceFormModals.tsx` into lazy per-entity modals.  
+1. Fail-closed JWT and `CRED_ENCRYPT_KEY` in production; rotate all secrets.
+2. Auth-gate or signed URLs for `/uploads`; remove static public mount.
+3. Fix expense `isDeleted` exclusion in all finance GST/P\&L/KPI aggregations.
+4. Rate-limit `/auth/login`, refresh, and OTP endpoints.
+5. Require `ALLOWED_ORIGINS` in production (no CORS `true`).
+6. Replace XOR credential history with AES-GCM; stop default keys.
+7. DB-paginate unified invoice/payment ledgers; add `issueDate` indexes.
+8. Restrict `GET /users/:id` to self / HR / super\_admin (or permission).
+9. Split `FinanceFormModals.tsx` into lazy per-entity modals.
 10. Add Redis Socket.IO adapter before any second Node replica.
 
----
+***
 
 ## 13. Executive summary (stakeholders)
 
-Content Management Hub is a mature **agency operations platform** (projects, QA, HRM, sales, finance, marketing, client portal, Electron monitoring) with a **clear backend architecture** and substantial feature surface.  
+Content Management Hub is a mature **agency operations platform** (projects, QA, HRM, sales, finance, marketing, client portal, Electron monitoring) with a **clear backend architecture** and substantial feature surface.
 
-**It is not fully production-hardened.** The highest business risks are: (1) **forgeable sessions** if JWT secrets are left at defaults, (2) **public file URLs** for uploads, (3) **incorrect tax/P&L** if soft-deleted expenses remain in aggregates, and (4) **session theft via XSS** because tokens live in `localStorage`.  
+**It is not fully production-hardened.** The highest business risks are: (1) **forgeable sessions** if JWT secrets are left at defaults, (2) **public file URLs** for uploads, (3) **incorrect tax/P\&L** if soft-deleted expenses remain in aggregates, and (4) **session theft via XSS** because tokens live in `localStorage`.
 
-With a focused 1–2 week hardening sprint (secrets, uploads, tax soft-delete, rate limits, CORS), the system is suitable for **internal production**. Horizontal scale and public-internet exposure need further work (Redis realtime, ledger pagination, cookie auth).  
+With a focused 1–2 week hardening sprint (secrets, uploads, tax soft-delete, rate limits, CORS), the system is suitable for **internal production**. Horizontal scale and public-internet exposure need further work (Redis realtime, ledger pagination, cookie auth).
 
 **Estimated readiness: 62%.** Technical debt to clear P0/P1: roughly **3–5 engineer-weeks**.
 
----
+***
 
 ## 14. Technical summary (developers)
 
-- Stack: Express 5 MVC + Mongoose, React 19/Vite, Socket.IO, Electron shell, OpenAPI→Zod/Orval.  
-- Auth: JWT bearer + refresh sessions; permission templates + role gates; project access helpers.  
-- Crypto: inventory/HRM AES-GCM (good); password history XOR (bad); JWT defaults (bad).  
-- Money: `finance-tax.service.js` / unified ledger need soft-delete + DB-side paging.  
-- Frontend: lazy routes good; FinanceFormModals and admin pages are SRP violations; no FE tests.  
-- Catalog of all 1,127 audited source files: `CMS_AUDIT_FILE_CATALOG.json`.  
-- Prior art: `CODEBASE_ANALYSIS.txt` (feature docs) — this report is the **quality/security audit** overlay.
+* Stack: Express 5 MVC + Mongoose, React 19/Vite, Socket.IO, Electron shell, OpenAPI→Zod/Orval.
+* Auth: JWT bearer + refresh sessions; permission templates + role gates; project access helpers.
+* Crypto: inventory/HRM AES-GCM (good); password history XOR (bad); JWT defaults (bad).
+* Money: `finance-tax.service.js` / unified ledger need soft-delete + DB-side paging.
+* Frontend: lazy routes good; FinanceFormModals and admin pages are SRP violations; no FE tests.
+* Catalog of all 1,127 audited source files: `CMS_AUDIT_FILE_CATALOG.json`.
+* Prior art: `CODEBASE_ANALYSIS.txt` (feature docs) — this report is the **quality/security audit** overlay.
 
----
+***
 
 ## Appendix A — Backend routes map
 
@@ -637,6 +702,6 @@ See §1 inventory agent output: 34 routers covering health, auth, users, clients
 
 47 backend unit tests under `backend/tests/unit/`; 1 electron sensitive-apps test; **0** frontend unit/e2e in-repo.
 
----
+***
 
 *End of audit report. For interactive dashboard, open the Cursor canvas delivered alongside this document.*

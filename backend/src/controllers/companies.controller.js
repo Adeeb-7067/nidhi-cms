@@ -42,6 +42,21 @@ async function getCompanies(req, res) {
     { page, limit, skip },
     { sort: { clientSince: -1 } }
   );
+  const wantPicker =
+    req.query.picker === "1" ||
+    req.query.picker === "true" ||
+    req.query.fields === "picker";
+  if (wantPicker) {
+    const companies = items.map((c) => ({
+      id: c.id,
+      name: c.companyName ?? c.name ?? null,
+      companyName: c.companyName ?? null,
+      status: c.status ?? null,
+      companyCode: c.companyCode ?? null,
+    }));
+    res.json({ companies, clients: companies, total, page: pageNum, limit: limitNum });
+    return;
+  }
   const formatted = await formatCompanyRecordsBatch(items);
   res.json({ companies: formatted, clients: formatted, total, page: pageNum, limit: limitNum });
 }

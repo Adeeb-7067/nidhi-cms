@@ -120,7 +120,17 @@ export function getNotificationTarget(
   }
 
   if (entityType === "work_session" || type === "work_session") {
-    return { href: "/dev/my-screenshots", label: "Work session" };
+    // Monitorable staff → screenshots; everyone else → notifications hub (still actionable).
+    if (
+      role === "developer" ||
+      role === "tester" ||
+      role === "qa" ||
+      role === "manager" ||
+      role === "hr"
+    ) {
+      return { href: "/dev/my-screenshots", label: "Work session" };
+    }
+    return { href: "/notifications", label: "View notifications" };
   }
 
   return null;

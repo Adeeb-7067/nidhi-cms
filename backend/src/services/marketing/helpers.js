@@ -15,6 +15,7 @@ import {
   normalizeDigitalServices,
   normalizeSocialLinks,
   deriveMarketingPlatformEnums,
+  mergeMarketingPlatformEnums,
 } from "../../utils/digital-project-fields.js";
 
 export async function recordMarketingActivity({
@@ -154,17 +155,17 @@ export async function ensureDigitalAccountForProject(project, userId) {
   const vaultRootName = optionalProjectFolderName(project);
   const digitalServices = normalizeDigitalServices(project.digitalServices);
   const socialLinks = normalizeSocialLinks(project.socialLinks);
-  const derivedPlatforms = deriveMarketingPlatformEnums(digitalServices, socialLinks);
+  const derivedPlatforms = deriveMarketingPlatformEnums(
+    digitalServices,
+    socialLinks,
+    project.techStack,
+  );
 
   const existing = await marketingAccountsTable
     .findOne({ projectId, isDeleted: false, status: { $ne: "ended" } });
   if (existing) {
-    const nextPlatforms =
-      derivedPlatforms.length > 0
-        ? derivedPlatforms
-        : Array.isArray(existing.platforms)
-          ? existing.platforms
-          : [];
+    // Keep workspace-bound platforms; never shrink to a single derived channel (e.g. IG-only).
+    const nextPlatforms = mergeMarketingPlatformEnums(existing.platforms, derivedPlatforms);
     existing.companyId = companyId;
     existing.digitalServices = digitalServices;
     existing.socialLinks = socialLinks;
@@ -185,7 +186,7 @@ export async function ensureDigitalAccountForProject(project, userId) {
     soft.companyId = companyId;
     soft.digitalServices = digitalServices;
     soft.socialLinks = socialLinks;
-    if (derivedPlatforms.length) soft.platforms = derivedPlatforms;
+    soft.platforms = mergeMarketingPlatformEnums(soft.platforms, derivedPlatforms);
     await soft.save();
     await ensureAccountMediaVault(soft.id, companyId, userId, {
       rootName: vaultRootName,
@@ -392,8 +393,9 @@ export function inferMediaKind(filename, mimetype) {
  * account createdBy, accountManagerId alone, or task assignee side-channels.
  */
 export async function getScopedDigitalUserAccess(user) {
-  const isAdmin = ["super_admin", "hr"].includes(user?.role);
-  if (isAdmin) {
+  // Only super_admin is unscoped for marketing. HR uses org pickers elsewhere but
+  // must not receive organization-wide marketing analytics (Hybrid RBAC).
+  if (user?.role === "super_admin") {
     return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
   }
 
@@ -405,14 +407,25 @@ export async function getScopedDigitalUserAccess(user) {
   const userId = Number(user.id);
 
   const pmProjects = await projectsTable
-    .find({ pmId: userId, isDeleted: { $ne: true } }, { id: 1, companyId: 1, clientId: 1 })
+    .find(
+      {
+        pmId: userId,
+        isDeleted: { $ne: true },
+        ...(user.role === "digital" ? { type: "digital" } : {}),
+      },
+      { id: 1, companyId: 1, clientId: 1 },
+    )
     .lean();
   const memberRows = await projectMembersTable.find({ userId }).select({ projectId: 1 }).lean();
   const memberProjectIds = memberRows.map((r) => r.projectId);
   const memberProjects = memberProjectIds.length
     ? await projectsTable
         .find(
-          { id: { $in: memberProjectIds }, isDeleted: { $ne: true } },
+          {
+            id: { $in: memberProjectIds },
+            isDeleted: { $ne: true },
+            ...(user.role === "digital" ? { type: "digital" } : {}),
+          },
           { id: 1, companyId: 1, clientId: 1 },
         )
         .lean()

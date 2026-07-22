@@ -15,14 +15,10 @@ const DAY_MS = 864e5;
 // Max session wall-clock span — aligned with work-session-policy.js (24 h).
 const STALE_SESSION_HOURS = 24;
 
-// Active sessions with no heartbeat for this long are auto-closed (app crash/kill, app closed
-// without graceful quit). Electron sends heartbeats every 60 s — 10 min ≈ 10 missed beats.
-// Do NOT set too low: brief network/API outages must not end active work sessions.
-const HEARTBEAT_STALE_MINUTES = 10;
+// Stale-heartbeat auto-close is disabled (see closeStaleHeartbeatSessions).
+// Auto-pause is only: shift end, PC sleep, app/window shutdown (+ day boundary).
+const HEARTBEAT_STALE_MINUTES = 90;
 
-// Record when this server process started so the stale-heartbeat cleanup uses a grace window
-// on startup — prevents a server restart from immediately killing sessions that had heartbeats
-// right before the downtime.
 const SERVER_STARTED_AT = Date.now();
 
 async function runScreenshotPurge() {
@@ -101,14 +97,20 @@ async function runShiftEndSessionCleanup() {
 async function runHeartbeatStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
-  // Use the more lenient of the two cutoffs: the normal rolling window, or a window
-  // anchored to server start. This prevents a restart from immediately closing sessions
-  // whose last heartbeat was just before the server went down.
+  // No-op by policy — kept so operators can see the job still runs.
   const staleMs = HEARTBEAT_STALE_MINUTES * 60 * 1000;
   const normalCutoff = Date.now() - staleMs;
   const startupCutoff = SERVER_STARTED_AT - staleMs;
   const cutoff = new Date(Math.min(normalCutoff, startupCutoff));
-  const { closed } = await closeStaleHeartbeatSessions(cutoff);
+  const { closed, disabled } = await closeStaleHeartbeatSessions(cutoff);
+
+  if (disabled) {
+    logger.debug(
+      { thresholdMinutes: HEARTBEAT_STALE_MINUTES },
+      "Heartbeat stale session cleanup skipped (auto-pause limited to shift/sleep/shutdown)",
+    );
+    return;
+  }
 
   if (closed > 0) {
     logger.info(
@@ -120,7 +122,10 @@ async function runHeartbeatStaleSessionCleanup() {
 
 function startScreenshotPurgeJob() {
   const dailyIntervalMs = 24 * 60 * 60 * 1e3;
-  const heartbeatIntervalMs = 2 * 60 * 1e3;
+  // Day-boundary / max-duration / stale checks — less urgent.
+  const sessionPolicyIntervalMs = 60 * 1e3;
+  // Shift-end must feel on-time: was 2 minutes (employees saw late clock-out + late push).
+  const shiftEndIntervalMs = 15 * 1e3;
 
   const dailyTick = () => {
     runScreenshotPurge().catch((err) =>
@@ -131,12 +136,9 @@ function startScreenshotPurgeJob() {
     );
   };
 
-  const heartbeatTick = () => {
+  const sessionPolicyTick = () => {
     runWorkDaySessionCleanup().catch((err) =>
       logger.error({ err }, "Work-day session cleanup job failed")
-    );
-    runShiftEndSessionCleanup().catch((err) =>
-      logger.error({ err }, "Shift-end session cleanup job failed")
     );
     runStaleSessionCleanup().catch((err) =>
       logger.error({ err }, "Max-duration session cleanup job failed")
@@ -146,10 +148,23 @@ function startScreenshotPurgeJob() {
     );
   };
 
+  const shiftEndTick = () => {
+    runShiftEndSessionCleanup().catch((err) =>
+      logger.error({ err }, "Shift-end session cleanup job failed")
+    );
+  };
+
   setInterval(dailyTick, dailyIntervalMs);
-  setInterval(heartbeatTick, heartbeatIntervalMs);
-  // Return daily tick so the caller (index.js) can run it immediately after DB is ready.
-  return { dailyTick, heartbeatTick };
+  setInterval(sessionPolicyTick, sessionPolicyIntervalMs);
+  setInterval(shiftEndTick, shiftEndIntervalMs);
+
+  // Keep heartbeatTick alias so index.js startup call still runs everything once.
+  const heartbeatTick = () => {
+    sessionPolicyTick();
+    shiftEndTick();
+  };
+
+  return { dailyTick, heartbeatTick, shiftEndTick };
 }
 
 export { startScreenshotPurgeJob };

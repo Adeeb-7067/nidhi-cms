@@ -28,7 +28,7 @@ const audiences = [
 
 export const mockMetaCampaigns: MetaAdCampaign[] = Array.from({ length: 18 }, (_, i) => {
   const client = mockMarketingClients[i % mockMarketingClients.length];
-  const budget = Math.round(client.monthlyBudgetInr * (0.2 + (i % 5) * 0.1));
+  const budget = Math.round((client.monthlyBudgetInr ?? 0) * (0.2 + (i % 5) * 0.1));
   return {
     id: `meta${i + 1}`,
     name: `${client.company.split(" ")[0]} — ${["Monsoon Sale", "Brand Lift", "Lead Gen", "Retargeting"][i % 4]}`,
@@ -49,7 +49,7 @@ export const mockMetaCampaigns: MetaAdCampaign[] = Array.from({ length: 18 }, (_
 
 export const mockGoogleCampaigns: GoogleAdCampaign[] = Array.from({ length: 16 }, (_, i) => {
   const client = mockMarketingClients[i % mockMarketingClients.length];
-  const budget = Math.round(client.monthlyBudgetInr * (0.15 + (i % 4) * 0.08));
+  const budget = Math.round((client.monthlyBudgetInr ?? 0) * (0.15 + (i % 4) * 0.08));
   const kwSets = [
     ["organic food delivery mumbai", "fresh vegetables online"],
     ["cloud erp india", "saas solutions bangalore"],

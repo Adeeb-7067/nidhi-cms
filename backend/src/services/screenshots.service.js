@@ -2,9 +2,16 @@ import { employeeScreenshotsTable, workSessionsTable, getNextSequence } from "..
 import { storeUpload, deleteStoredFile } from "../lib/file-storage.js";
 import { badRequest, notFound, forbidden } from "../utils/route-errors.js";
 import { logger } from "../lib/logger.js";
+import { userHasPermission } from "./permissions.service.js";
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47]; // \x89PNG
 const JPEG_MAGIC = [0xff, 0xd8, 0xff];       // SOI marker
+
+export async function canMonitorScreenshots(user) {
+  if (!user) return false;
+  if (user.role === "super_admin") return true;
+  return userHasPermission(user.id, "monitor_screenshots", "view");
+}
 
 function validateImageMagicBytes(buffer) {
   if (buffer.length < 8) badRequest("Invalid image file.", "file");
@@ -36,7 +43,7 @@ export async function uploadScreenshot({ buffer, originalName, mimetype, userId,
 }
 
 export async function listScreenshots({ userId, projectId, startDate, endDate, page, limit, skip, requestingUser }) {
-  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
+  const isAdmin = await canMonitorScreenshots(requestingUser);
 
   if (!isAdmin) {
     userId = requestingUser.id;
@@ -66,8 +73,9 @@ export async function listScreenshots({ userId, projectId, startDate, endDate, p
 }
 
 export async function deleteScreenshot(id, requestingUser) {
-  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
-  if (!isAdmin) forbidden("Only admins can delete screenshots.");
+  if (!(await canMonitorScreenshots(requestingUser))) {
+    forbidden("Only monitoring admins can delete screenshots.");
+  }
 
   const doc = await employeeScreenshotsTable.findOne({ id });
   if (!doc) notFound("Screenshot");
@@ -85,8 +93,9 @@ export async function bulkDeleteScreenshots(ids, requestingUser) {
     badRequest("ids must be a non-empty array.", "ids");
   }
 
-  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
-  if (!isAdmin) forbidden("Only admins can delete screenshots.");
+  if (!(await canMonitorScreenshots(requestingUser))) {
+    forbidden("Only monitoring admins can delete screenshots.");
+  }
 
   const docs = await employeeScreenshotsTable.find({ id: { $in: ids } }, { id: 1, fileUrl: 1 }).lean();
   for (const doc of docs) {

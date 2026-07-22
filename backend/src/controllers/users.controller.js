@@ -4,8 +4,6 @@ import {
   auditLogsTable,
   getNextSequence,
   staffEmployeeRoles,
-  adminStaffRoles,
-  userRoles
 } from "../models/schema/index.js";
 import {
   hashPassword,
@@ -47,74 +45,51 @@ import {
   parsePagination,
   optionalString,
 } from "../utils/route-errors.js";
-import { isDevPortalStaffRole } from "../constants/user-roles.js";
-const USER_LIST_PROJECTION = {
-  id: 1,
-  employeeId: 1,
-  name: 1,
-  email: 1,
-  role: 1,
-  subType: 1,
-  designation: 1,
-  avatarUrl: 1,
-  department: 1,
-  departmentId: 1,
-  reportingManagerId: 1,
-  hrmRoleTemplateId: 1,
-  roleTemplateId: 1,
-  wfhMonthlyLimit: 1,
-  phoneNumber: 1,
-  joiningDate: 1,
-  linkedinUrl: 1,
-  githubId: 1,
-  status: 1,
-  lastLoginAt: 1,
-  lastSeenAt: 1,
-  createdAt: 1
-};
+import {
+  USER_DIRECTORY_PROJECTION,
+  assertCanViewUserProfile,
+  buildStaffPickerQuery,
+  formatStaffPickerUser,
+  isPeopleAdminRole,
+} from "../services/access/access-context.js";
+
 async function getUsers(req, res) {
   const { role, subType, search, staff } = req.query;
   const pagination = parsePagination(req.query);
   const viewerRole = req.user.role;
-  const isPeopleAdmin = viewerRole === "super_admin" || viewerRole === "hr";
-  const canStaffPicker =
-    isPeopleAdmin ||
-    viewerRole === "digital" ||
-    viewerRole === "manager" ||
-    isDevPortalStaffRole(viewerRole) ||
-    viewerRole === "bde" ||
-    viewerRole === "finance";
+  const isPeopleAdmin = isPeopleAdminRole(viewerRole);
+  const isStaffPicker = staff === "true" || staff === "1";
 
-  const query = {};
-  if (staff === "true" || staff === "1") {
-    if (!canStaffPicker) forbidden("You cannot list staff users.");
-    if (viewerRole === "digital") {
-      // Assignees for digital work — not the full org directory
-      query.role = { $in: ["digital", "manager", "super_admin"] };
-    } else if (!isPeopleAdmin) {
-      query.role = { $in: adminStaffRoles };
-    } else {
-      query.role = { $in: adminStaffRoles };
-    }
+  let query = {};
+  let projection = USER_DIRECTORY_PROJECTION;
+  let usePickerFormat = false;
+
+  if (isStaffPicker) {
+    const picker = await buildStaffPickerQuery(req.user);
+    query = { ...picker.query };
+    projection = picker.projection;
+    usePickerFormat = picker.usePickerFormat;
   } else {
     if (!isPeopleAdmin) forbidden("You cannot list all users.");
     if (role) query.role = role;
   }
   if (subType) query.subType = subType;
   if (search?.trim()) {
-    query.$or = [
-      { name: { $regex: search.trim(), $options: "i" } },
-      { email: { $regex: search.trim(), $options: "i" } },
-    ];
+    const term = { $regex: search.trim(), $options: "i" };
+    query.$or = usePickerFormat
+      ? [{ name: term }, { employeeId: term }]
+      : [{ name: term }, { email: term }];
   }
   const { items, total, page, limit } = await paginateModel(
     usersTable,
     query,
     pagination,
-    { projection: USER_LIST_PROJECTION },
+    { projection },
   );
   res.json({
-    users: items.map((u) => formatUser(u, { withPresence: true })),
+    users: usePickerFormat
+      ? items.map((u) => formatStaffPickerUser(u))
+      : items.map((u) => formatUser(u, { withPresence: true })),
     total,
     page,
     limit,
@@ -225,16 +200,7 @@ async function getUsersById(req, res) {
   const user = await usersTable.findOne({ id }).lean();
   if (!user) notFound("User");
 
-  const isSelf = req.user.id === id;
-  const isPeopleAdmin = req.user.role === "super_admin" || req.user.role === "hr";
-
-  // Clients may only read their own user record
-  if (req.user.role === "client" && !isSelf) {
-    forbidden("You can only view your own profile.");
-  }
-
-  // Sensitive fields (salary, PAN, Aadhaar): self or people admins only
-  const includeSensitive = isSelf || isPeopleAdmin;
+  const { includeSensitive } = await assertCanViewUserProfile(req.user, id);
   res.json(formatUser(user, { withPresence: true, includeSensitive }));
 }
 async function adminSetUserPassword(userId, newPassword, adminUser) {

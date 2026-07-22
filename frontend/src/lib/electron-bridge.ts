@@ -27,6 +27,15 @@ declare global {
       notifyClockOutDone: () => void;
       onPreQuit: (cb: () => Promise<void>) => () => void;
       onSessionEnded: (cb: (payload: { stopReason: string; silent?: boolean }) => void) => () => void;
+      onSystemResumed?: (cb: (payload: {
+        shouldClockIn: boolean;
+        previousStopReason?: string;
+      }) => void) => () => void;
+      showSessionNotification?: (payload: {
+        title: string;
+        body: string;
+        stopReason?: string;
+      }) => void;
     };
   }
 }

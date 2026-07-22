@@ -10,7 +10,14 @@ import {
   Search,
   MessageSquare,
   ChevronRight,
+  Ticket,
+  Bug,
+  ListTodo,
+  MessageCircle,
+  Clock3,
+  AlertCircle,
 } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import {
   useListNotifications,
@@ -19,7 +26,7 @@ import {
   type Notification,
 } from "@/api";
 import { useNotificationClick } from "@/hooks/use-notification-click";
-import { canNavigateNotification } from "@/lib/notification-navigation";
+import { getNotificationTarget } from "@/lib/notification-navigation";
 import { Link, useLocation } from "wouter";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -35,18 +42,37 @@ import {
   getSearchShortcutLabel,
   getTimeGreeting,
 } from "@/lib/navbar-utils";
-import { cn } from "@/lib/utils"; 
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 const spring = { type: "spring" as const, stiffness: 420, damping: 32 };
+
+function notificationIcon(type: string) {
+  const t = (type ?? "").toLowerCase();
+  if (t.includes("ticket")) return Ticket;
+  if (t.includes("bug")) return Bug;
+  if (t.includes("task")) return ListTodo;
+  if (t.includes("comment") || t.includes("mention")) return MessageCircle;
+  if (t.includes("work_session") || t.includes("session")) return Clock3;
+  return AlertCircle;
+}
+
+function formatNotifTime(iso: string) {
+  try {
+    return formatDistanceToNow(new Date(iso), { addSuffix: true });
+  } catch {
+    return "";
+  }
+}
 
 function MobilePageTitle({ pathname, role }: { pathname: string; role?: string }) {
   const crumbs = getRouteBreadcrumbs(pathname, role);
@@ -199,11 +225,12 @@ function OrbitDock({
   onMarkAllRead,
   onNotificationClick,
   notifications,
-  canNavigate,
+  getTarget,
   markAllPending,
   notifMenuOpen,
   onNotifMenuOpenChange,
   notifListLoading,
+  isNavigating,
 }: {
   unreadCount: number;
   theme: string;
@@ -211,11 +238,12 @@ function OrbitDock({
   onMarkAllRead: () => void;
   onNotificationClick: (notification: Notification) => void;
   notifications: Notification[] | undefined;
-  canNavigate: (notification: Notification) => boolean;
+  getTarget: (notification: Notification) => { href: string; label: string } | null;
   markAllPending: boolean;
   notifMenuOpen: boolean;
   onNotifMenuOpenChange: (open: boolean) => void;
   notifListLoading: boolean;
+  isNavigating: boolean;
 }) {
   return (
     <LayoutGroup>
@@ -252,29 +280,41 @@ function OrbitDock({
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label={
+                    unreadCount > 0
+                      ? `Notifications, ${unreadCount} unread`
+                      : "Notifications"
+                  }
                   className="orbit-item relative z-30 -ml-2 h-10 w-10 rounded-full border-border/60 bg-card shadow-sm transition-[margin] duration-200 md:h-9 md:w-9"
                 >
-                  <Bell className="h-4 w-4" />
+                  <Bell className={cn("h-4 w-4", unreadCount > 0 && "text-primary")} />
                   {unreadCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground ring-2 ring-card">
+                    <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold leading-none text-destructive-foreground ring-2 ring-card">
                       {unreadCount > 99 ? "99+" : unreadCount}
                     </span>
                   )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[min(20rem,calc(100vw-2rem))] rounded-xl">
-                <div className="flex items-center justify-between px-3 py-2">
-                  <DropdownMenuLabel className="p-0 text-sm font-semibold">
-                    Notifications
-                    {unreadCount > 0 && (
-                      <span className="ml-1 text-destructive">({unreadCount})</span>
-                    )}
-                  </DropdownMenuLabel>
+              <DropdownMenuContent
+                align="end"
+                className="w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl p-0 shadow-lg"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-border/70 bg-muted/30 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <DropdownMenuLabel className="p-0 text-sm font-semibold tracking-tight">
+                      Notifications
+                    </DropdownMenuLabel>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {unreadCount > 0
+                        ? `${unreadCount} unread`
+                        : "You're up to date"}
+                    </p>
+                  </div>
                   {unreadCount > 0 && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs"
+                      className="h-7 shrink-0 px-2 text-xs"
                       disabled={markAllPending}
                       onClick={(e) => {
                         e.preventDefault();
@@ -283,43 +323,107 @@ function OrbitDock({
                       }}
                     >
                       <CheckCheck className="mr-1 h-3.5 w-3.5" />
-                      Mark all read
+                      Mark all
                     </Button>
                   )}
                 </div>
-                <DropdownMenuSeparator />
-                {notifListLoading ? (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    Loading…
-                  </div>
-                ) : notifications?.length ? (
-                  <div className="dialog-scroll max-h-[320px] overflow-y-scroll">
-                    {notifications.map((n) => (
-                      <DropdownMenuItem
-                        key={n.id}
-                        className="mx-1 flex cursor-pointer flex-col items-start gap-0.5 rounded-lg p-3"
-                        onClick={() => {
-                          if (canNavigate(n)) onNotificationClick(n);
-                        }}
-                      >
-                        <span className="w-full truncate text-sm font-medium">{n.title}</span>
-                        <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
-                        {canNavigate(n) && (
-                          <span className="text-[10px] font-medium text-primary">View</span>
-                        )}
-                      </DropdownMenuItem>
+
+                {notifListLoading && !notifications?.length ? (
+                  <div className="space-y-2 px-3 py-4">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex gap-2.5 animate-pulse">
+                        <div className="h-8 w-8 shrink-0 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-1.5 py-0.5">
+                          <div className="h-3 w-3/4 rounded bg-muted" />
+                          <div className="h-2.5 w-full rounded bg-muted/70" />
+                        </div>
+                      </div>
                     ))}
                   </div>
+                ) : notifications?.length ? (
+                  <div className="dialog-scroll max-h-[min(22rem,50vh)] overflow-y-auto">
+                    {notifications.map((n) => {
+                      const Icon = notificationIcon(n.type);
+                      const target = getTarget(n);
+                      const unread = !n.readAt;
+                      return (
+                        <DropdownMenuItem
+                          key={n.id}
+                          disabled={isNavigating}
+                          className={cn(
+                            "mx-0 cursor-pointer rounded-none border-b border-border/40 px-3 py-2.5 focus:bg-muted/60",
+                            unread && "bg-primary/[0.04]",
+                          )}
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            onNotificationClick(n);
+                          }}
+                        >
+                          <div className="flex w-full items-start gap-2.5">
+                            <div
+                              className={cn(
+                                "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+                                unread ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              <Icon className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start gap-2">
+                                <span
+                                  className={cn(
+                                    "line-clamp-1 flex-1 text-sm leading-snug",
+                                    unread ? "font-semibold text-foreground" : "font-medium text-foreground/90",
+                                  )}
+                                >
+                                  {n.title}
+                                </span>
+                                {unread && (
+                                  <span
+                                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"
+                                    aria-hidden
+                                  />
+                                )}
+                              </div>
+                              <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                                {n.body}
+                              </p>
+                              <div className="mt-1.5 flex items-center justify-between gap-2">
+                                <span className="text-[10px] text-muted-foreground/80">
+                                  {formatNotifTime(n.createdAt)}
+                                </span>
+                                {target && (
+                                  <span className="text-[10px] font-medium text-primary">
+                                    {target.label}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </div>
                 ) : (
-                  <div className="py-10 text-center text-sm text-muted-foreground">
-                    <Bell className="mx-auto mb-2 h-8 w-8 opacity-20" />
-                    You&apos;re all caught up
+                  <div className="px-4 py-10 text-center">
+                    <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-muted">
+                      <Bell className="h-5 w-5 text-muted-foreground/50" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">All caught up</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      New alerts will show up here
+                    </p>
                   </div>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild className="justify-center text-sm text-primary">
-                  <Link href="/notifications">View all</Link>
-                </DropdownMenuItem>
+
+                <div className="border-t border-border/70 bg-muted/20 p-1.5">
+                  <DropdownMenuItem
+                    asChild
+                    className="justify-center rounded-lg text-sm font-medium text-primary"
+                  >
+                    <Link href="/notifications">View all notifications</Link>
+                  </DropdownMenuItem>
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           </motion.div>
@@ -341,16 +445,19 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
   const { user } = useAuth();
   const { unreadNotificationCount, isConnected } = useRealtime();
   const [notifMenuOpen, setNotifMenuOpen] = useState(false);
-  const { data: notificationsData, isLoading: notifListLoading } = useListNotifications(
-    { unreadOnly: true, limit: 10 },
-    {
-      query: {
-        queryKey: getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
-        enabled: !!user && notifMenuOpen,
-        staleTime: QUERY_STALE.list,
+  const { data: notificationsData, isLoading: notifListLoading, isFetching: notifListFetching } =
+    useListNotifications(
+      { unreadOnly: true, limit: 10 },
+      {
+        query: {
+          queryKey: getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
+          // Keep list warm so the dropdown opens instantly; refetch when opened.
+          enabled: !!user,
+          staleTime: QUERY_STALE.notificationsBadge ?? QUERY_STALE.list,
+          refetchOnMount: "always",
+        },
       },
-    },
-  );
+    );
   const unreadCount = unreadNotificationCount;
   const { theme, toggleTheme } = useTheme();
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -358,10 +465,17 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
   const searchShortcut = getSearchShortcutLabel();
 
   const markAllRead = useMarkAllNotificationsRead();
-  const { handleNotificationClick } = useNotificationClick({
+  const { handleNotificationClick, getTarget, isNavigating } = useNotificationClick({
     unreadCount,
     onAfterNavigate: () => setNotifMenuOpen(false),
   });
+
+  useEffect(() => {
+    if (!notifMenuOpen || !user) return;
+    void queryClient.invalidateQueries({
+      queryKey: getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
+    });
+  }, [notifMenuOpen, user, queryClient]);
 
   const firstName = user?.name?.trim().split(/\s+/)[0];
   const greeting = getTimeGreeting(now.getHours());
@@ -383,9 +497,24 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
   }, []);
 
   const handleMarkAllRead = () => {
+    queryClient.setQueryData(
+      getListNotificationsQueryKey({ unreadOnly: true, limit: 1 }),
+      (prev: { unreadCount?: number; notifications?: Notification[]; total?: number } | undefined) =>
+        prev ? { ...prev, unreadCount: 0, notifications: [], total: 0 } : prev,
+    );
+    queryClient.setQueryData(
+      getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
+      (prev: { unreadCount?: number; notifications?: Notification[]; total?: number } | undefined) =>
+        prev ? { ...prev, unreadCount: 0, notifications: [], total: 0 } : prev,
+    );
     markAllRead.mutate(undefined, {
       onSuccess: () => {
         stopPersistentAlert();
+        toast.success("All notifications marked as read");
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      },
+      onError: (err) => {
+        toast.error(getApiErrorMessage(err, "Failed to mark notifications as read"));
         queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       },
     });
@@ -484,11 +613,12 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
             onMarkAllRead={handleMarkAllRead}
             onNotificationClick={handleNotificationClick}
             notifications={notificationsData?.notifications}
-            canNavigate={(n) => canNavigateNotification(n, user?.role)}
+            getTarget={getTarget}
             markAllPending={markAllRead.isPending}
             notifMenuOpen={notifMenuOpen}
             onNotifMenuOpenChange={setNotifMenuOpen}
-            notifListLoading={notifListLoading}
+            notifListLoading={notifListLoading || (notifListFetching && !notificationsData)}
+            isNavigating={isNavigating}
           />
         </div>
         </motion.div>

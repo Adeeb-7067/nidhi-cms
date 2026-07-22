@@ -89,7 +89,7 @@ function openDevTask(t: WorkTask): boolean {
 }
 
 function openMarketingTask(t: MarketingTaskDto): boolean {
-  return t.status !== "done" && t.status !== "cancelled";
+  return t.status !== "completed" && t.status !== "cancelled";
 }
 
 export default function FreelancerDashboard() {

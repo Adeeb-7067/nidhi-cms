@@ -18,7 +18,9 @@ type Props = {
   allowUnassigned?: boolean;
 };
 
-/** Staff assignee picker for Digital forms (Tasks, Graphics, Videos, Content, Posts). */
+/** Assignee picker for Digital forms (Tasks, Graphics, Videos, Content, Posts).
+ * Includes digital specialists and freelancers who can be staffed on digital work.
+ */
 export function MarketingAssigneeSelect({
   value,
   onValueChange,
@@ -33,8 +35,15 @@ export function MarketingAssigneeSelect({
 
   const staff = useMemo(() => {
     const users = (data as { users?: User[] } | undefined)?.users ?? [];
+    const digitalAssignable = new Set([
+      "digital",
+      "freelancer",
+      "manager",
+      "super_admin",
+      "hr",
+    ]);
     return users
-      .filter((u) => u.status === "active")
+      .filter((u) => u.status === "active" && digitalAssignable.has(u.role ?? ""))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [data]);
 

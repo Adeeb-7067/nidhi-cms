@@ -41,7 +41,32 @@ function parseComplianceTimezone(value) {
 
 async function getSettings(req, res) {
   const settings = await getOrCreateSettings();
-  res.json(formatSettings(settings));
+  const full = formatSettings(settings);
+  const role = req.user?.role;
+  if (role === "super_admin" || role === "hr") {
+    res.json(full);
+    return;
+  }
+  // Operational subset for staff/Electron — no full HRM admin tuning dump required,
+  // but work-policy + screenshot config must remain for existing workflows.
+  res.json({
+    id: full.id,
+    companyName: full.companyName,
+    logoUrl: full.logoUrl,
+    address: full.address,
+    sealUrl: full.sealUrl,
+    requiredDailyWorkHours: full.requiredDailyWorkHours,
+    dailyLogComplianceEnabled: full.dailyLogComplianceEnabled,
+    dailyLogReminderHour: full.dailyLogReminderHour,
+    complianceTimezone: full.complianceTimezone,
+    screenshotEnabled: full.screenshotEnabled,
+    screenshotIntervalMinutes: full.screenshotIntervalMinutes,
+    screenshotRetentionDays: full.screenshotRetentionDays,
+    screenshotBlurEnabled: full.screenshotBlurEnabled,
+    screenshotConsentVersion: full.screenshotConsentVersion,
+    hrmElectronOnlyClock: full.hrmElectronOnlyClock,
+    hrmWeekendDays: full.hrmWeekendDays,
+  });
 }
 
 function parseScreenshotInterval(value) {

@@ -111,13 +111,7 @@ export function RoleGate({
       );
     }
     if (can(permModule, action)) return <>{children}</>;
-    if (
-      permModule.startsWith("dev_") &&
-      action === "view" &&
-      isDevPortalRole(user.role)
-    ) {
-      return <>{children}</>;
-    }
+    // Delivery roles: allow admin_projects list via redirect helpers below, not a blank grant.
     if (
       permModule === "admin_projects" &&
       action === "view" &&
@@ -144,6 +138,15 @@ export function RoleGate({
     if (location === "/admin/projects" && isDevPortalRole(user.role)) {
       return <Redirect to={getProjectsListHref(user.role)} replace />;
     }
+    return <Unauthorized />;
+  }
+
+  // Unmapped routes: deny admin hub mounts; allow role-only / public pages.
+  const pathOnlyForDeny = location.split("?")[0];
+  if (
+    !allowedRoles &&
+    (pathOnlyForDeny === "/admin" || pathOnlyForDeny.startsWith("/admin/"))
+  ) {
     return <Unauthorized />;
   }
 

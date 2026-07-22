@@ -14,30 +14,44 @@ import {
 import { evaluateShiftEndPolicy } from "./shift-end-clockout.service.js";
 import { broadcastWorkSessionSync } from "./work-session-sync.js";
 
-/** Sessions paused for these reasons can resume on the next clock-in (same work day only). */
+/**
+ * Auto pause (not permanent end) — only these may stop a session without a manual clock-out click.
+ * day_ended is a work-day boundary (yesterday's session closes; today starts a new one).
+ */
+export const AUTO_PAUSE_STOP_REASONS = [
+  "shift_ended",
+  "system_sleep",
+  "system_shutdown",
+  "app_quit",
+];
+
+/** Same-day clock-in always resumes today's session for these (and any other same-day pause). */
 const RESUMABLE_STOP_REASONS = [
   "clock_out",
   "shift_ended",
-  // day_ended sessions started yesterday — resuming them is immediately killed by
-  // sessionPolicyStopReason (startedAt is previous work day) and creates a resume loop.
   "app_quit",
   "logout",
   "system_sleep",
   "system_shutdown",
+  // Legacy rows — still resume same day, but new auto-closes no longer emit these.
   "network_lost",
   "client_disconnected",
 ];
 
-/** Client-initiated clock-out — never push from the API (user already knows). */
-const USER_INITIATED_STOP_REASONS = new Set(["clock_out", "app_quit", "logout"]);
+/**
+ * Manual / intentional stops — skip push notification (user already knows).
+ * app_quit / sleep / shutdown DO notify so employees see why they were paused.
+ */
+const SILENT_USER_STOP_REASONS = new Set(["clock_out", "logout"]);
 
 /** Surface auto-close reason on poll/heartbeat shortly after background cleanup (web has no socket). */
-const RECENT_STOP_SURFACING_MS = 5 * 60 * 1000;
+const RECENT_STOP_SURFACING_MS = 15 * 60 * 1000;
 const SURFACED_AUTO_STOP_REASONS = [
   "shift_ended",
   "day_ended",
-  "session_expired",
-  "client_disconnected",
+  "system_sleep",
+  "system_shutdown",
+  "app_quit",
 ];
 
 function sumPauseDurationMs(pausePeriods = []) {
@@ -155,10 +169,42 @@ async function closeActiveSessions(userId, { endedAt = new Date(), stopReason = 
   await workSessionsTable.updateMany({ userId, isActive: true }, { $set: update });
 }
 
+/**
+ * One work day → one session. Find today's session (active or paused) to resume.
+ * Yesterday's sessions are never resumed (next day → new session).
+ */
+async function findSameDaySession(userId) {
+  const tz = await resolveTimezone();
+  const now = new Date();
+  const todayKey = workDayKey(now, tz);
+
+  const candidates = await workSessionsTable
+    .find({ userId })
+    .sort({ startedAt: -1 })
+    .limit(30)
+    .lean();
+
+  for (const session of candidates) {
+    if (!session?.startedAt) continue;
+    if (workDayKey(session.startedAt, tz) !== todayKey) continue;
+    return session;
+  }
+  return null;
+}
+
 async function listResumableSessions(userId) {
   const tz = await resolveTimezone();
   const now = new Date();
   const matching = [];
+
+  // Prefer the single same-day session regardless of stopReason (one day → one session).
+  const sameDay = await findSameDaySession(userId);
+  if (sameDay && !sameDay.isActive && sameDay.endedAt) {
+    if (isPausedSessionResumableToday(sameDay, now, tz)) {
+      matching.push(sameDay);
+      return matching;
+    }
+  }
 
   const candidates = await workSessionsTable
     .find({
@@ -173,25 +219,6 @@ async function listResumableSessions(userId) {
   for (const session of candidates) {
     if (!session.endedAt) continue;
     if (!isPausedSessionResumableToday(session, now, tz)) continue;
-    if (!isSessionWithinMaxDuration(session, now)) continue;
-    matching.push(session);
-  }
-
-  const orphans = await workSessionsTable
-    .find({
-      userId,
-      isActive: false,
-      endedAt: { $ne: null },
-      stopReason: null,
-    })
-    .sort({ endedAt: -1 })
-    .limit(5)
-    .lean();
-
-  for (const session of orphans) {
-    if (!isPausedSessionResumableToday(session, now, tz)) continue;
-    if (!isSessionWithinMaxDuration(session, now)) continue;
-    if (computeSessionDurations(session).activeDurationMs < 30 * 60 * 1000) continue;
     matching.push(session);
   }
 
@@ -264,9 +291,10 @@ async function tryReclaimStrayActiveSession(userId) {
 }
 
 export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
+  // Policy: one work day → one session. forceNew cannot create a second same-day session.
   const existingActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (existingActive) {
-    const reclaimed = !forceNew ? await tryReclaimStrayActiveSession(userId) : null;
+    const reclaimed = await tryReclaimStrayActiveSession(userId);
     if (reclaimed && reclaimed.id !== existingActive.id) {
       const delivered = await deliverClockInSession(reclaimed);
       if (delivered.session) return { session: delivered.session, resumed: true };
@@ -276,27 +304,37 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
     }
   }
 
-  if (!forceNew) {
+  const sameDay = await findSameDaySession(userId);
+  if (sameDay && !sameDay.isActive) {
+    const session = await resumeSession(sameDay, deviceInfo);
+    if (session) {
+      const delivered = await deliverClockInSession(session);
+      if (delivered.session) return { session: delivered.session, resumed: true };
+      // Only create a brand-new session when the work day itself rolled over.
+      if (delivered.stopReason !== "day_ended") {
+        throw new Error(
+          "Could not resume today's work session. Please try clock-in again.",
+        );
+      }
+    }
+  } else if (!sameDay) {
     const resumableSessions = await listResumableSessions(userId);
     for (const resumable of resumableSessions) {
       const session = await resumeSession(resumable, deviceInfo);
       if (!session) continue;
       const delivered = await deliverClockInSession(session);
       if (delivered.session) return { session: delivered.session, resumed: true };
-      // Resume died under policy (should be rare after same-day-only filter).
-      // Do not keep retrying a previous-day session — fall through to a fresh start.
-      if (delivered.stopReason === "day_ended" || delivered.stopReason === "session_expired") {
-        break;
-      }
-    }
-
-    const racedActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
-    if (racedActive) {
-      const delivered = await deliverClockInSession(racedActive);
-      if (delivered.session) return { session: delivered.session, resumed: false };
+      if (delivered.stopReason === "day_ended") break;
     }
   }
 
+  const racedActive = await workSessionsTable.findOne({ userId, isActive: true }).lean();
+  if (racedActive) {
+    const delivered = await deliverClockInSession(racedActive);
+    if (delivered.session) return { session: delivered.session, resumed: false };
+  }
+
+  // New session only when no same-day session exists (first clock-in of the work day).
   await closeActiveSessions(userId, { stopReason: "clock_out" });
 
   const id = await getNextSequence("workSession");
@@ -334,11 +372,7 @@ export async function clockOut(userId, stopReason = "clock_out") {
     { $set: { isActive: false, endedAt: new Date(), stopReason } },
     { new: true },
   );
-  if (
-    session &&
-    !USER_INITIATED_STOP_REASONS.has(stopReason) &&
-    shouldNotifySessionEnd(stopReason)
-  ) {
+  if (session && !SILENT_USER_STOP_REASONS.has(stopReason) && shouldNotifySessionEnd(stopReason)) {
     await notifyWorkSessionEnded({
       userId: session.userId,
       sessionId: session.id,
@@ -430,27 +464,13 @@ export async function closeSessionsExceedingMaxDuration() {
   return { closed };
 }
 
-/** Close active sessions with no recent heartbeat (crashed/killed clients). */
-export async function closeStaleHeartbeatSessions(cutoff) {
-  const now = new Date();
-  const stale = await workSessionsTable
-    .find({
-      isActive: true,
-      $or: [
-        { lastHeartbeatAt: { $lt: cutoff } },
-        { lastHeartbeatAt: null, startedAt: { $lt: cutoff } },
-      ],
-    })
-    .select({ id: 1, userId: 1, startedAt: 1, isActive: 1, pausePeriods: 1 })
-    .lean();
-
-  let closed = 0;
-  for (const session of stale) {
-    const updated = await closeActiveSession(session, "client_disconnected", now);
-    if (updated) closed++;
-  }
-
-  return { closed };
+/**
+ * Stale-heartbeat auto-close is DISABLED.
+ * Policy: only shift end, sleep, and app/window shutdown may auto-pause a session.
+ * Missed heartbeats must not silently erase work time.
+ */
+export async function closeStaleHeartbeatSessions(_cutoff) {
+  return { closed: 0, disabled: true };
 }
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;

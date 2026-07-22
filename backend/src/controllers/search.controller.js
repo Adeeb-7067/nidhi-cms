@@ -20,8 +20,7 @@ async function getSearch(req, res) {
   const limit = Math.min(parseInt(req.query["limit"] || "5", 10) || 5, 10);
   const regex = { $regex: q, $options: "i" };
   const role = req.user?.role;
-  const isPrivileged =
-    role === "super_admin" || role === "hr" || role === "finance" || role === "digital";
+  const isPrivileged = role === "super_admin" || role === "hr" || role === "finance";
 
   const [projectIds, companyIds] = await Promise.all([
     getAccessibleProjectIds(req.user),
@@ -71,7 +70,7 @@ async function getSearch(req, res) {
     // Digital with no projects: still allow searching digital peers by name for assignees
     if (role === "digital" && !memberProjectIds.length) {
       employeeFilter = {
-        role: { $in: ["digital", "manager", "super_admin"] },
+        role: { $in: ["digital", "freelancer", "manager", "super_admin"] },
         status: "active",
         $or: [{ name: regex }, { email: regex }],
       };

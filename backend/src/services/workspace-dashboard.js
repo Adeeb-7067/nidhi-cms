@@ -101,7 +101,7 @@ export async function buildWorkspaceDashboard(user) {
   ] = await Promise.all([
     projectsTable.find(projectFilter).sort({ updatedAt: -1 }).limit(24).lean().exec(),
     bugsTable.countDocuments({ ...bugProjectFilter, ...LISTABLE_BUG, ...OPEN_BUG_FILTER }),
-    ticketsTable.countDocuments(buildOpenTicketCountFilter(user)),
+    ticketsTable.countDocuments(await buildOpenTicketCountFilter(user)),
     notificationsTable.countDocuments({ userId: user.id, isRead: false }),
     bugsTable.aggregate([
       { $match: { ...bugProjectFilter, ...LISTABLE_BUG, ...OPEN_BUG_FILTER } },

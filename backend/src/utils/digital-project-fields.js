@@ -76,11 +76,44 @@ export function deriveDigitalPlatforms(services, socialLinks, existingTechStack 
   return [...set];
 }
 
+const MARKETING_PLATFORM_ENUMS = new Set([
+  "facebook",
+  "instagram",
+  "linkedin",
+  "twitter",
+  "youtube",
+  "google",
+  "website",
+  "tiktok",
+  "pinterest",
+  "snapchat",
+  "whatsapp",
+]);
+
+/** Map human techStack / service labels → marketing account platform enums. */
+const TECH_STACK_LABEL_TO_PLATFORM = {
+  Facebook: "facebook",
+  Instagram: "instagram",
+  LinkedIn: "linkedin",
+  "Twitter / X": "twitter",
+  Twitter: "twitter",
+  YouTube: "youtube",
+  Website: "website",
+  Google: "google",
+  "Google Ads": "google",
+  "SEO & SEM": "google",
+  TikTok: "tiktok",
+  Pinterest: "pinterest",
+  Snapchat: "snapchat",
+  "WhatsApp Business": "whatsapp",
+  WhatsApp: "whatsapp",
+};
+
 /**
  * Marketing account.platforms uses MARKETING_PLATFORMS enums only.
- * SEO / Meta Ads / Google Ads live on digitalServices; social URLs imply channel presence.
+ * SEO / Meta Ads / Google Ads live on digitalServices; social URLs and techStack imply channels.
  */
-export function deriveMarketingPlatformEnums(services, socialLinks) {
+export function deriveMarketingPlatformEnums(services, socialLinks, techStack = []) {
   const s = normalizeDigitalServices(services);
   const links = normalizeSocialLinks(socialLinks);
   const out = new Set();
@@ -90,5 +123,45 @@ export function deriveMarketingPlatformEnums(services, socialLinks) {
   if (links.twitter) out.add("twitter");
   if (links.youtube || s.googleAds) out.add("youtube");
   if (s.googleAds || s.seo) out.add("google");
+  if (links.tiktok) out.add("tiktok");
+  if (links.pinterest) out.add("pinterest");
+  if (links.whatsapp) out.add("whatsapp");
+
+  if (Array.isArray(techStack)) {
+    for (const raw of techStack) {
+      if (typeof raw !== "string") continue;
+      const item = raw.trim();
+      if (!item) continue;
+      if (MARKETING_PLATFORM_ENUMS.has(item)) {
+        out.add(item);
+        continue;
+      }
+      if (item === "Meta Ads") {
+        out.add("facebook");
+        out.add("instagram");
+        continue;
+      }
+      const mapped = TECH_STACK_LABEL_TO_PLATFORM[item];
+      if (mapped) out.add(mapped);
+    }
+  }
+
   return [...out];
+}
+
+/** Union of valid marketing platform enums (order: first-seen). */
+export function mergeMarketingPlatformEnums(...lists) {
+  const out = [];
+  const seen = new Set();
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const raw of list) {
+      if (typeof raw !== "string") continue;
+      const p = raw.trim();
+      if (!MARKETING_PLATFORM_ENUMS.has(p) || seen.has(p)) continue;
+      seen.add(p);
+      out.push(p);
+    }
+  }
+  return out;
 }

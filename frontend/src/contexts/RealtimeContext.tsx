@@ -306,9 +306,24 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         const title = data.title ?? "Automatically clocked out";
         const body =
           data.body ??
-          "Your shift has ended. Clock in again if you are doing extra work.";
-        toast.info(title, { description: body, duration: 10_000 });
-        if (!isElectron()) {
+          "Your shift has ended. Clock in again if you are doing extra work — unpaid time starts now.";
+        toast.warning(title, {
+          description: body,
+          duration: Infinity,
+          action: {
+            label: "Clock in",
+            onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
+          },
+        });
+        // Electron disables FCM (file://). Show OS notification immediately via main process
+        // (and renderer Notification as fallback) — previously skipped, so alerts waited on heartbeat.
+        if (isElectron() && window.electron?.showSessionNotification) {
+          window.electron.showSessionNotification({
+            title,
+            body,
+            stopReason: "shift_ended",
+          });
+        } else {
           showWebPushNotification(title, body, { tag: "work-session-shift-ended" });
         }
       },
@@ -336,8 +351,21 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         const body =
           data.body ??
           "Your work session has ended. Clock in again today to continue the same shift.";
-        toast.warning(title, { description: body, duration: 10_000 });
-        if (!isElectron()) {
+        toast.warning(title, {
+          description: body,
+          duration: Infinity,
+          action: {
+            label: "Clock in",
+            onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
+          },
+        });
+        if (isElectron() && window.electron?.showSessionNotification) {
+          window.electron.showSessionNotification({
+            title,
+            body,
+            stopReason: data.stopReason,
+          });
+        } else {
           showWebPushNotification(title, body, {
             tag: data.stopReason ? `work-session-${data.stopReason}` : "work-session-ended",
           });

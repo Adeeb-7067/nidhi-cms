@@ -47,6 +47,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  useMarketingAccounts,
   useMarketingPosts,
   useCreateMarketingPost,
   useUpdateMarketingPost,
@@ -58,6 +59,7 @@ import {
   PLATFORM_LABELS,
   POST_CONTENT_FORMAT_LABELS,
   POST_CONTENT_FORMATS,
+  ALL_MARKETING_PLATFORMS,
 } from "@/modules/marketing/constants";
 import type { MarketingPlatform, PostContentFormat, PostScheduleStatus } from "@/modules/marketing/types";
 import {
@@ -87,14 +89,30 @@ const scheduleTabs: (PostScheduleStatus | "all")[] = [
   "rejected",
 ];
 
-const CALENDAR_PLATFORMS: MarketingPlatform[] = [
-  "instagram",
-  "facebook",
-  "linkedin",
-  "youtube",
-  "twitter",
-  "website",
-];
+/** Prefer bound platforms first, then the rest of the full channel list. */
+function platformsForAccount(
+  platforms: string[] | null | undefined,
+): MarketingPlatform[] {
+  const known = ALL_MARKETING_PLATFORMS;
+  const bound = (platforms ?? []).filter((p): p is MarketingPlatform =>
+    known.includes(p as MarketingPlatform),
+  );
+  if (bound.length === 0) return [...known];
+  const rest = known.filter((p) => !bound.includes(p));
+  return [...bound, ...rest];
+}
+
+function pickPlatformForAccount(
+  platforms: string[] | null | undefined,
+  preferred?: MarketingPlatform | "",
+): MarketingPlatform {
+  const options = platformsForAccount(platforms);
+  if (preferred && options.includes(preferred)) return preferred;
+  const bound = (platforms ?? []).filter((p): p is MarketingPlatform =>
+    ALL_MARKETING_PLATFORMS.includes(p as MarketingPlatform),
+  );
+  return bound[0] ?? options[0] ?? "instagram";
+}
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -160,11 +178,24 @@ export default function MarketingCalendar() {
   const { data, isLoading, isError } = useMarketingPosts(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
+  const { data: accountsData } = useMarketingAccounts();
+  const accounts = accountsData?.accounts ?? [];
   const createPost = useCreateMarketingPost();
   const updatePost = useUpdateMarketingPost();
   const deletePost = useDeleteMarketingPost();
   const posts = data?.posts ?? [];
   const saving = createPost.isPending || updatePost.isPending;
+
+  const scheduleAccount = useMemo(() => {
+    const id = form.accountId ? Number(form.accountId) : NaN;
+    if (!Number.isFinite(id)) return null;
+    return accounts.find((a) => a.id === id) ?? null;
+  }, [accounts, form.accountId]);
+
+  const schedulePlatformOptions = useMemo(
+    () => platformsForAccount(scheduleAccount?.platforms),
+    [scheduleAccount],
+  );
 
   const filtered = useMemo(() => {
     return posts.filter((p) => {
@@ -235,10 +266,15 @@ export default function MarketingCalendar() {
     setEditing(null);
     const day = prefillDay ?? selectedDay;
     const stamp = `${format(day, "yyyy-MM-dd")}T10:00`;
+    const accountId = projectFilter || "";
+    const account = accountId
+      ? accounts.find((a) => String(a.id) === accountId)
+      : null;
     setForm({
       ...emptyForm,
       scheduleStatus: "pending",
-      accountId: projectFilter || "",
+      accountId,
+      platform: pickPlatformForAccount(account?.platforms),
       scheduledAt: stamp,
     });
     setDialogOpen(true);
@@ -587,13 +623,11 @@ export default function MarketingCalendar() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <PlatformIconBadge platform={p.platform} />
-                              {p.platform === "instagram" ? (
-                                <Badge variant="secondary" className="text-[10px] font-normal">
-                                  {POST_CONTENT_FORMAT_LABELS[
-                                    (p.contentFormat ?? "post") as PostContentFormat
-                                  ]}
-                                </Badge>
-                              ) : null}
+                              <Badge variant="secondary" className="text-[10px] font-normal">
+                                {POST_CONTENT_FORMAT_LABELS[
+                                  (p.contentFormat ?? "post") as PostContentFormat
+                                ]}
+                              </Badge>
                               <Badge variant="outline" className="text-[10px] font-normal capitalize">
                                 {POST_SCHEDULE_STATUS_LABELS[p.scheduleStatus]}
                               </Badge>
@@ -709,7 +743,14 @@ export default function MarketingCalendar() {
                 <Label className="text-xs">Digital project</Label>
                 <DigitalProjectSelect
                   value={form.accountId}
-                  onValueChange={(v) => setForm((f) => ({ ...f, accountId: v }))}
+                  onValueChange={(v) => {
+                    const account = accounts.find((a) => String(a.id) === v);
+                    setForm((f) => ({
+                      ...f,
+                      accountId: v,
+                      platform: pickPlatformForAccount(account?.platforms, f.platform),
+                    }));
+                  }}
                   className="h-8 w-full text-xs"
                 />
               </div>
@@ -718,20 +759,26 @@ export default function MarketingCalendar() {
               <Label className="text-xs">Platform</Label>
               <Select
                 value={form.platform}
+                disabled={!editing && !form.accountId}
                 onValueChange={(v) =>
                   setForm((f) => ({
                     ...f,
                     platform: v as MarketingPlatform,
-                    contentFormat:
-                      v === "instagram" ? f.contentFormat || "post" : f.contentFormat,
+                    contentFormat: f.contentFormat || "post",
                   }))
                 }
               >
                 <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
+                  <SelectValue
+                    placeholder={
+                      !editing && !form.accountId
+                        ? "Select a digital project first"
+                        : "Select platform"
+                    }
+                  />
                 </SelectTrigger>
                 <SelectContent>
-                  {CALENDAR_PLATFORMS.map((p) => (
+                  {schedulePlatformOptions.map((p) => (
                     <SelectItem key={p} value={p}>
                       {PLATFORM_LABELS[p]}
                     </SelectItem>
@@ -739,28 +786,26 @@ export default function MarketingCalendar() {
                 </SelectContent>
               </Select>
             </div>
-            {form.platform === "instagram" ? (
-              <div className="space-y-1.5">
-                <Label className="text-xs">What are you scheduling?</Label>
-                <Select
-                  value={form.contentFormat}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, contentFormat: v as PostContentFormat }))
-                  }
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POST_CONTENT_FORMATS.map((fmt) => (
-                      <SelectItem key={fmt} value={fmt}>
-                        {POST_CONTENT_FORMAT_LABELS[fmt]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
+            <div className="space-y-1.5">
+              <Label className="text-xs">What are you scheduling?</Label>
+              <Select
+                value={form.contentFormat}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, contentFormat: v as PostContentFormat }))
+                }
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {POST_CONTENT_FORMATS.map((fmt) => (
+                    <SelectItem key={fmt} value={fmt}>
+                      {POST_CONTENT_FORMAT_LABELS[fmt]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Caption</Label>
               <Textarea

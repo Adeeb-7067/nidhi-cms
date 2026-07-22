@@ -315,4 +315,6 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/hrm": "hrm_dashboard",
   "/admin/roles": "roles_permissions",
   "/hrm/roles": "roles_permissions",
+  "/admin/project-documents": "admin_project_documents",
+  "/hrm/letters": "hrm_letters",
 };

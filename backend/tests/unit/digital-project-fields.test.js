@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveDigitalPlatforms,
   deriveMarketingPlatformEnums,
+  mergeMarketingPlatformEnums,
   normalizeDigitalServices,
   normalizeSocialLinks,
 } from "../../src/utils/digital-project-fields.js";
@@ -40,6 +41,22 @@ describe("digital-project-fields", () => {
         { linkedin: "https://linkedin.com/company/x" },
       ),
     ).toEqual(expect.arrayContaining(["facebook", "instagram", "linkedin", "google", "youtube"]));
+  });
+
+  it("includes techStack labels and enums in marketing platforms", () => {
+    expect(
+      deriveMarketingPlatformEnums(
+        { seo: false, metaAds: false, googleAds: false },
+        { instagram: "https://instagram.com/acme" },
+        ["LinkedIn", "youtube", "Email Marketing"],
+      ),
+    ).toEqual(expect.arrayContaining(["instagram", "linkedin", "youtube"]));
+  });
+
+  it("merges platform lists without dropping bound channels", () => {
+    expect(
+      mergeMarketingPlatformEnums(["facebook", "linkedin"], ["instagram"], ["linkedin", "bogus"]),
+    ).toEqual(["facebook", "linkedin", "instagram"]);
   });
 
   it("trims social link values", () => {

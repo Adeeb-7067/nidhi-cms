@@ -1,6 +1,13 @@
 /** Max wall-clock span for one work session (ms). */
 export const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Work-session policy (product rules):
+ * - Auto-pause only: shift end, PC sleep, PC/app shutdown (window close).
+ * - Everything else is manual clock-out.
+ * - One work day → one session: pause/resume same day; next day → new session.
+ */
+
 export function resolveWorkDayTimezone(settingsTz) {
   return settingsTz?.trim() || process.env.COMPLIANCE_TIMEZONE?.trim() || "UTC";
 }

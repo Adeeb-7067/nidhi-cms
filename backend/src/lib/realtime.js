@@ -89,21 +89,12 @@ function getIO() {
   return io;
 }
 
-import { getFirebaseAdmin } from "./firebase.js";
 import { usersTable } from "../models/schema/index.js";
 import {
   isUserAccountActive,
   REALTIME_EVENTS_WHEN_INACTIVE,
 } from "../services/user-access.js";
-
-function stringifyFcmData(data) {
-  const out = {};
-  for (const [key, value] of Object.entries(data ?? {})) {
-    if (value == null) continue;
-    out[key] = typeof value === "string" ? value : String(value);
-  }
-  return out;
-}
+import { sendHighPriorityFcmToTokens } from "../services/push-notifications.js";
 
 async function notifyUser(userId, event, data) {
   const user = await usersTable
@@ -118,7 +109,7 @@ async function notifyUser(userId, event, data) {
   if (io) {
     io.to(`user:${userId}`).emit(event, data);
   }
-  // Work-session alerts use sendWebPushToUser (high-urgency webpush config) — skip generic FCM here to avoid duplicates.
+  // Work-session alerts already call sendWebPushToUser — skip duplicate FCM here.
   if (
     event === "notification" &&
     data.title &&
@@ -128,20 +119,15 @@ async function notifyUser(userId, event, data) {
   ) {
     try {
       if (user?.fcmTokens?.length > 0) {
-        const admin = getFirebaseAdmin();
-        if (admin.apps.length > 0) {
-          await admin.messaging().sendEachForMulticast({
-            tokens: user.fcmTokens,
-            notification: {
-              title: data.title,
-              body: data.body,
-            },
-            data: stringifyFcmData({
-              click_action: "FLUTTER_NOTIFICATION_CLICK",
-              ...data,
-            }),
-          });
-        }
+        // Always high priority on Android / APNs / Web — same as work-session pushes.
+        await sendHighPriorityFcmToTokens(user.fcmTokens, {
+          title: data.title,
+          body: data.body,
+          data: {
+            click_action: "FLUTTER_NOTIFICATION_CLICK",
+            ...data,
+          },
+        });
       }
     } catch (err) {
       logger.error({ err, userId }, "Failed to send FCM push notification");

@@ -3,6 +3,7 @@ import asyncHandler from "express-async-handler";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
+import { requirePermission } from "../middlewares/permission.js";
 import { UPLOAD_MAX_BYTES_DEFAULT } from "../config/upload-limits.js";
 import { monitorableStaffRoles } from "../constants/user-roles.js";
 import * as screenshotsController from "../controllers/screenshots.controller.js";
@@ -30,12 +31,21 @@ router.post(
   upload.single("file"),
   asyncHandler(screenshotsController.create)
 );
-// List and delete: admins only for mutations; list enforced in service.
+// List: auth + service-level monitor scope. Delete: permission-first.
 router.get("/screenshots", requireAuth, asyncHandler(screenshotsController.list));
-router.delete("/screenshots/:id", requireAuth, asyncHandler(screenshotsController.remove));
-router.post("/screenshots/bulk-delete", requireAuth, asyncHandler(screenshotsController.bulkDelete));
+router.delete(
+  "/screenshots/:id",
+  requireAuth,
+  requirePermission("monitor_screenshots", "view"),
+  asyncHandler(screenshotsController.remove),
+);
+router.post(
+  "/screenshots/bulk-delete",
+  requireAuth,
+  requirePermission("monitor_screenshots", "view"),
+  asyncHandler(screenshotsController.bulkDelete),
+);
 // Authenticated content proxy — ?token= is extracted globally in routes/index.js
-// so <img src="...?token="> works without a custom Authorization header.
 router.get(
   "/screenshots/:id/content",
   requireAuth,

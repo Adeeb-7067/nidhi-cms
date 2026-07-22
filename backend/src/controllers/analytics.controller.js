@@ -17,6 +17,9 @@ import {
   buildClientHubDashboard,
 } from "../services/workspace-dashboard.js";
 import { buildRecentActivity } from "../services/dashboard-activity.js";
+import { assertProjectAccess } from "../services/access/access-helpers.js";
+import { applyIdScope, getAccessibleProjectIds } from "../services/access/list-scope.js";
+import { forbidden } from "../utils/route-errors.js";
 
 async function getAnalyticsDashboard(req, res) {
   const now = /* @__PURE__ */ new Date();
@@ -124,7 +127,8 @@ async function getAnalyticsDashboard(req, res) {
   });
 }
 async function getAnalyticsProjectsById(req, res) {
-  const projectId = parseInt(req.params["id"]);
+  const projectId = parseInt(req.params["id"], 10);
+  await assertProjectAccess(req, projectId);
   const members = await projectMembersTable.find({ projectId });
   const logs = await dailyLogsTable.find({ projectId }).sort({ logDate: 1 });
   const completionMap = /* @__PURE__ */ new Map();
@@ -290,7 +294,27 @@ async function getAnalyticsTeam(req, res) {
 async function getAnalyticsBugs(req, res) {
   const { projectId } = req.query;
   const query = {};
-  if (projectId) query.projectId = parseInt(projectId);
+  if (projectId) {
+    const pid = parseInt(projectId, 10);
+    await assertProjectAccess(req, pid);
+    query.projectId = pid;
+  } else {
+    const projectIds = await getAccessibleProjectIds(req.user);
+    if (projectIds === null) {
+      if (req.user.role !== "super_admin") {
+        forbidden("Organization-wide bug analytics requires super admin access.");
+      }
+    } else if (!applyIdScope(query, "projectId", projectIds)) {
+      res.json({
+        totalOpen: 0,
+        totalFixed: 0,
+        severityDistribution: [],
+        statusDistribution: [],
+        platformDistribution: [],
+      });
+      return;
+    }
+  }
   const listableRoots = { $or: [{ parentBugId: null }, { parentBugId: { $exists: false } }] };
   const openFilter = resolveListStatusFilter("open");
   const closedFilter = resolveListStatusFilter("closed");

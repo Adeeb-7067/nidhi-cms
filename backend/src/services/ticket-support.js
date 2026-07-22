@@ -1,6 +1,8 @@
 import { ticketsTable, usersTable } from "../models/schema/index.js";
 import { notFound, forbidden } from "../utils/route-errors.js";
 import { devPortalStaffRoles, isDevPortalStaffRole } from "../constants/user-roles.js";
+import { userHasPermission } from "./permissions.service.js";
+import { getAccessibleProjectIds } from "./access/list-scope.js";
 
 export const TICKET_AUDIENCES = ["client", "staff"];
 const STAFF_CREATOR_ROLES = new Set([...devPortalStaffRoles, "super_admin"]);
@@ -15,38 +17,57 @@ export function isStaffTicketRole(role) {
 
 const OPEN_TICKET_STATUSES = ["open", "pending"];
 
+async function canViewAllTickets(user) {
+  if (!user) return false;
+  if (user.role === "super_admin") return true;
+  return userHasPermission(user.id, "admin_tickets", "view");
+}
+
 /** Role-scoped Mongo filter for GET /tickets list queries. */
 export async function buildTicketListFilter(user, { audience } = {}) {
   const and = [];
 
   if (user.role === "client") {
     and.push({ creatorId: user.id });
-  } else if (isStaffTicketRole(user.role)) {
-    and.push({
-      $or: [{ creatorId: user.id }, { assignedTo: user.id }],
-    });
-  } else if (user.role === "super_admin" && audience && audience !== "all") {
-    const audienceFilter = await buildTicketAudienceCondition(audience);
-    if (audienceFilter) and.push(audienceFilter);
+    return and;
   }
 
+  if (await canViewAllTickets(user)) {
+    if (audience && audience !== "all") {
+      const audienceFilter = await buildTicketAudienceCondition(audience);
+      if (audienceFilter) and.push(audienceFilter);
+    }
+    return and;
+  }
+
+  // Creator / assignee, or tickets on accessible projects (Hybrid: no org-wide leak)
+  const or = [{ creatorId: user.id }, { assignedTo: user.id }];
+  const projectIds = await getAccessibleProjectIds(user);
+  if (projectIds === null) {
+    // Unrestricted project axis (finance) — still not org-wide tickets; keep self only
+  } else if (projectIds.length) {
+    or.push({ projectId: { $in: projectIds } });
+  }
+  and.push({ $or: or });
   return and;
 }
 
 /** Open ticket count for workspace KPIs — matches list visibility per role. */
-export function buildOpenTicketCountFilter(user) {
+export async function buildOpenTicketCountFilter(user) {
   const statusFilter = { status: { $in: OPEN_TICKET_STATUSES } };
 
-  if (user.role === "super_admin") return statusFilter;
+  if (await canViewAllTickets(user)) return statusFilter;
 
-  if (user.role === "client" || isStaffTicketRole(user.role)) {
-    return {
-      ...statusFilter,
-      $or: [{ creatorId: user.id }, { assignedTo: user.id }],
-    };
+  if (user.role === "client") {
+    return { ...statusFilter, creatorId: user.id };
   }
 
-  return { id: -1 };
+  const or = [{ creatorId: user.id }, { assignedTo: user.id }];
+  const projectIds = await getAccessibleProjectIds(user);
+  if (projectIds?.length) {
+    or.push({ projectId: { $in: projectIds } });
+  }
+  return { ...statusFilter, $or: or };
 }
 
 /** Mongo filter for super-admin Client vs Dev/QA tabs (includes legacy tickets without audience). */
@@ -86,16 +107,21 @@ export async function loadTicketOrThrow(ticketId) {
   return ticket;
 }
 
-export function userCanAccessTicket(user, ticket) {
-  if (user.role === "super_admin") return true;
+export async function userCanAccessTicket(user, ticket) {
+  if (await canViewAllTickets(user)) return true;
   if (ticket.creatorId === user.id) return true;
   if (ticket.assignedTo === user.id) return true;
+  if (ticket.projectId != null) {
+    const projectIds = await getAccessibleProjectIds(user);
+    if (projectIds === null) return false;
+    if (projectIds.includes(Number(ticket.projectId))) return true;
+  }
   return false;
 }
 
 export async function assertTicketAccess(user, ticketId) {
   const ticket = await loadTicketOrThrow(ticketId);
-  if (!userCanAccessTicket(user, ticket)) forbidden("You cannot access this ticket.");
+  if (!(await userCanAccessTicket(user, ticket))) forbidden("You cannot access this ticket.");
   return ticket;
 }
 

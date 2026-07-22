@@ -119,9 +119,6 @@ export async function createPost(req, res) {
       "contentFormat",
     );
   }
-  if (platform === "instagram" && !body.contentFormat) {
-    contentFormat = "post";
-  }
 
   const account = await marketingAccountsTable
     .findOne({ id: accountId, isDeleted: false })

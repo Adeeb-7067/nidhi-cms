@@ -28,8 +28,10 @@ import {
 import { PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
 import type { User } from "@/api";
 import {
+  applyFreelancerTeamFormDefaults,
   computeTeamEmployeeNetSalary,
   formatTeamEmployeeNetSalaryField,
+  isFreelancerTeamFormRole,
   type TeamEmployeeFormValues,
   type EmployeeFormTab,
 } from "@/modules/admin/employee-form-shared";
@@ -51,6 +53,7 @@ import {
   employeeFormInputClass,
   employeeFormSelectTriggerClass,
 } from "./employee-form-ui";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type Dept = { id: number; name: string };
 type Manager = { id: number; name: string; designation?: string | null };
@@ -222,26 +225,48 @@ export function EmployeeFormTabs({
   employeeDocumentsLoading?: boolean;
   payrollStructure?: { basic: number; net: number } | null;
 }) {
+  const watchedRole = form.watch("role");
+  const isFreelancer = isFreelancerTeamFormRole(lockRole ?? watchedRole);
+
   const copyPermanentToCurrent = () => {
     const permanent = form.getValues("permanentAddress");
     form.setValue("currentAddress", { ...permanent }, { shouldDirty: true });
   };
 
+  const tabOrder = EMPLOYEE_FORM_TAB_ORDER;
+  const tabColsClass =
+    tabOrder.length >= 5 ? "grid-cols-5" : `grid-cols-${tabOrder.length}`;
+
   return (
     <Tabs value={tab} onValueChange={(v) => onTabChange(v as EmployeeFormTab)} className="w-full space-y-4">
-      <PortalTabsList className="grid w-full grid-cols-5">
-        {EMPLOYEE_FORM_TAB_ORDER.map((key) => {
+      <PortalTabsList className={`grid w-full ${tabColsClass}`}>
+        {tabOrder.map((key) => {
           const meta = EMPLOYEE_FORM_TAB_META[key];
           const Icon = meta.icon;
+          const label =
+            isFreelancer && key === "compensation"
+              ? "Bank"
+              : isFreelancer && key === "work"
+                ? "Access"
+                : meta.shortLabel;
           return (
             <PortalTabsTrigger key={key} value={key} className="gap-1.5 px-2 sm:px-3">
               <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-              <span className="hidden sm:inline">{meta.shortLabel}</span>
+              <span className="hidden sm:inline">{label}</span>
               <span className="sm:hidden">{meta.step}</span>
             </PortalTabsTrigger>
           );
         })}
       </PortalTabsList>
+
+      {isFreelancer ? (
+        <Alert className="border-blue-500/30 bg-blue-500/5 text-foreground">
+          <AlertDescription className="text-xs leading-relaxed">
+            Freelancer profile — only account, contact, bank, and documents are needed.
+            Project fees are set when you assign them to a project (not monthly payroll).
+          </AlertDescription>
+        </Alert>
+      ) : null}
 
       <TabsContent forceMount value="personal" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
         <FormSection title="Identity" description="Legal name and employee identifier used across HRM.">
@@ -373,7 +398,7 @@ export function EmployeeFormTabs({
               name="joiningDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{L.joiningDate}</FormLabel>
+                  <FormLabel>{isFreelancer ? "Start date" : L.joiningDate}</FormLabel>
                   <FormControl>
                     <Input className={employeeFormInputClass} type="date" {...field} />
                   </FormControl>
@@ -622,8 +647,12 @@ export function EmployeeFormTabs({
                         {...field}
                         value={field.value ?? "developer"}
                         onChange={(e) => {
-                          field.onChange(e.target.value);
+                          const nextRole = e.target.value;
+                          field.onChange(nextRole);
                           form.setValue("roleTemplateId", null, { shouldDirty: true });
+                          if (isFreelancerTeamFormRole(nextRole)) {
+                            applyFreelancerTeamFormDefaults(form.setValue);
+                          }
                         }}
                         options={cmsRoleOptions.map((r) => ({ value: r.value, label: r.label }))}
                       />
@@ -681,338 +710,386 @@ export function EmployeeFormTabs({
 
         <Separator />
 
-        <FormSection title="Employment">
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="employeeType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.employmentType}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      {...field}
-                      value={field.value ?? "FULL-TIME"}
-                      options={EMPLOYEE_TYPES.map((t) => ({ value: t, label: t.replace("-", " ") }))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="hrEmploymentStatus"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>HR status</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      {...field}
-                      value={field.value ?? "Active"}
-                      options={HR_EMPLOYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
+        <FormSection
+          title={isFreelancer ? "Profile" : "Employment"}
+          description={
+            isFreelancer
+              ? "Optional title shown on their freelancer profile."
+              : undefined
+          }
+        >
+          {!isFreelancer ? (
+            <FormRow>
+              <FormField
+                control={form.control}
+                name="employeeType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{L.employmentType}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value ?? "FULL-TIME"}
+                        options={EMPLOYEE_TYPES.map((t) => ({ value: t, label: t.replace("-", " ") }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="hrEmploymentStatus"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>HR status</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value ?? "Active"}
+                        options={HR_EMPLOYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormRow>
+          ) : null}
           <FormRow>
             <FormField
               control={form.control}
               name="designation"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{L.designation}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} placeholder="Senior Developer" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="position"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.position}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      {...field}
-                      value={field.value ?? "EMPLOYEE"}
-                      options={EMPLOYEE_POSITIONS.map((p) => ({ value: p, label: p.replace(/_/g, " ") }))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
-          <FormField
-            control={form.control}
-            name="subType"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Team / specialty</FormLabel>
-                <FormControl>
-                  <Input className={employeeFormInputClass} placeholder="e.g. Mobile, Backend" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="exitDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.exitDate}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="probationEndDate"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.probationEndDate}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="date" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
-        </FormSection>
-
-        <Separator />
-
-        <FormSection title="Organization">
-          <FormField
-            control={form.control}
-            name="departmentId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{L.department}</FormLabel>
-                <FormControl>
-                  <NativeSelect
-                    {...field}
-                    value={field.value != null ? String(field.value) : ""}
-                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                    options={[
-                      { value: "", label: "Unassigned" },
-                      ...hrmDepartments.map((d) => ({ value: String(d.id), label: d.name })),
-                    ]}
-                  />
-                </FormControl>
-                {hrmDepartments.length === 0 ? (
-                  <FormDescription className="text-amber-700">
-                    Add departments under HRM → Departments first.
-                  </FormDescription>
-                ) : null}
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="reportingManagerId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.reportingManager}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      {...field}
-                      value={field.value != null ? String(field.value) : ""}
-                      onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                      options={[
-                        { value: "", label: "None" },
-                        ...managerOptions.map((m) => ({
-                          value: String(m.id),
-                          label: m.designation ? `${m.name} · ${m.designation}` : m.name,
-                        })),
-                      ]}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="teamleaderId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.teamLeader}</FormLabel>
-                  <FormControl>
-                    <NativeSelect
-                      {...field}
-                      value={field.value != null ? String(field.value) : ""}
-                      onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                      options={[
-                        { value: "", label: "None" },
-                        ...managerOptions.map((m) => ({ value: String(m.id), label: m.name })),
-                      ]}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
-          <FormField
-            control={form.control}
-            name="shiftId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>{L.shiftTemplate}</FormLabel>
-                <FormControl>
-                  <NativeSelect
-                    {...field}
-                    value={field.value != null ? String(field.value) : ""}
-                    onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                    options={[
-                      { value: "", label: "Company default" },
-                      ...shiftTemplates.map((s) => ({ value: String(s.id), label: s.name })),
-                    ]}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </FormSection>
-
-        <Separator />
-
-        <FormSection title="HRM policies" description="Overrides for leave, WFH, and attendance rules.">
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="wfhMonthlyLimit"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.maxWfhDaysPerMonth}</FormLabel>
+                  <FormLabel>{isFreelancer ? "Title / specialty" : L.designation}</FormLabel>
                   <FormControl>
                     <Input
                       className={employeeFormInputClass}
-                      type="number"
-                      min={0}
+                      placeholder={isFreelancer ? "e.g. React Developer" : "Senior Developer"}
                       {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
                     />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="leaveAccrualDaysPerMonth"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.paidLeaveDaysPerMonth}</FormLabel>
-                  <FormControl>
-                    <Input
-                      className={employeeFormInputClass}
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      placeholder="Company default"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>Leave blank to use company HRM default.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
-          <FormField
-            control={form.control}
-            name="lateChargePercentage"
-            render={({ field }) => (
-              <FormItem className="max-w-xs">
-                <FormLabel>{L.lateDeductionRate}</FormLabel>
-                <FormControl>
-                  <Input
-                    className={employeeFormInputClass}
-                    type="number"
-                    min={0}
-                    max={100}
-                    {...field}
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                </FormControl>
-                <FormDescription>Percentage applied for late attendance.</FormDescription>
-                <FormMessage />
-              </FormItem>
+            {!isFreelancer ? (
+              <FormField
+                control={form.control}
+                name="position"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{L.position}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value ?? "EMPLOYEE"}
+                        options={EMPLOYEE_POSITIONS.map((p) => ({ value: p, label: p.replace(/_/g, " ") }))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <FormField
+                control={form.control}
+                name="subType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Skills / focus</FormLabel>
+                    <FormControl>
+                      <Input className={employeeFormInputClass} placeholder="e.g. Mobile, Backend" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
-          />
+          </FormRow>
+          {!isFreelancer ? (
+            <>
+              <FormField
+                control={form.control}
+                name="subType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team / specialty</FormLabel>
+                    <FormControl>
+                      <Input className={employeeFormInputClass} placeholder="e.g. Mobile, Backend" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="exitDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.exitDate}</FormLabel>
+                      <FormControl>
+                        <Input className={employeeFormInputClass} type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="probationEndDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.probationEndDate}</FormLabel>
+                      <FormControl>
+                        <Input className={employeeFormInputClass} type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormRow>
+            </>
+          ) : null}
         </FormSection>
+
+        {!isFreelancer ? (
+          <>
+            <Separator />
+
+            <FormSection title="Organization">
+              <FormField
+                control={form.control}
+                name="departmentId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{L.department}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value != null ? String(field.value) : ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        options={[
+                          { value: "", label: "Unassigned" },
+                          ...hrmDepartments.map((d) => ({ value: String(d.id), label: d.name })),
+                        ]}
+                      />
+                    </FormControl>
+                    {hrmDepartments.length === 0 ? (
+                      <FormDescription className="text-amber-700">
+                        Add departments under HRM → Departments first.
+                      </FormDescription>
+                    ) : null}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="reportingManagerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.reportingManager}</FormLabel>
+                      <FormControl>
+                        <NativeSelect
+                          {...field}
+                          value={field.value != null ? String(field.value) : ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          options={[
+                            { value: "", label: "None" },
+                            ...managerOptions.map((m) => ({
+                              value: String(m.id),
+                              label: m.designation ? `${m.name} · ${m.designation}` : m.name,
+                            })),
+                          ]}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="teamleaderId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.teamLeader}</FormLabel>
+                      <FormControl>
+                        <NativeSelect
+                          {...field}
+                          value={field.value != null ? String(field.value) : ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                          options={[
+                            { value: "", label: "None" },
+                            ...managerOptions.map((m) => ({ value: String(m.id), label: m.name })),
+                          ]}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormRow>
+              <FormField
+                control={form.control}
+                name="shiftId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{L.shiftTemplate}</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value != null ? String(field.value) : ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                        options={[
+                          { value: "", label: "Company default" },
+                          ...shiftTemplates.map((s) => ({ value: String(s.id), label: s.name })),
+                        ]}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormSection>
+
+            <Separator />
+
+            <FormSection title="HRM policies" description="Overrides for leave, WFH, and attendance rules.">
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="wfhMonthlyLimit"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.maxWfhDaysPerMonth}</FormLabel>
+                      <FormControl>
+                        <Input
+                          className={employeeFormInputClass}
+                          type="number"
+                          min={0}
+                          {...field}
+                          onChange={(e) => field.onChange(Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="leaveAccrualDaysPerMonth"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.paidLeaveDaysPerMonth}</FormLabel>
+                      <FormControl>
+                        <Input
+                          className={employeeFormInputClass}
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          placeholder="Company default"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>Leave blank to use company HRM default.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormRow>
+              <FormField
+                control={form.control}
+                name="lateChargePercentage"
+                render={({ field }) => (
+                  <FormItem className="max-w-xs">
+                    <FormLabel>{L.lateDeductionRate}</FormLabel>
+                    <FormControl>
+                      <Input
+                        className={employeeFormInputClass}
+                        type="number"
+                        min={0}
+                        max={100}
+                        {...field}
+                        onChange={(e) => field.onChange(Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormDescription>Percentage applied for late attendance.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </FormSection>
+          </>
+        ) : null}
       </TabsContent>
 
       <TabsContent forceMount value="compensation" className="mt-0 space-y-5 focus-visible:outline-none data-[state=inactive]:hidden">
-        <PayrollStructureConflictHint form={form} payrollStructure={payrollStructure} />
-        <FormSection title="Compensation" description="Monthly net salary used for payroll (basic must be greater than 0).">
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="salaryBasic"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.basicSalary}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="salaryAllowances"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.allowances}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </FormRow>
-          <FormRow>
-            <FormField
-              control={form.control}
-              name="salaryDeductions"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>{L.deductions}</FormLabel>
-                  <FormControl>
-                    <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <SalaryNetField form={form} />
-          </FormRow>
-        </FormSection>
+        {!isFreelancer ? (
+          <>
+            <PayrollStructureConflictHint form={form} payrollStructure={payrollStructure} />
+            <FormSection title="Compensation" description="Monthly net salary used for payroll (basic must be greater than 0).">
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="salaryBasic"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.basicSalary}</FormLabel>
+                      <FormControl>
+                        <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="salaryAllowances"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.allowances}</FormLabel>
+                      <FormControl>
+                        <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FormRow>
+              <FormRow>
+                <FormField
+                  control={form.control}
+                  name="salaryDeductions"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{L.deductions}</FormLabel>
+                      <FormControl>
+                        <Input className={employeeFormInputClass} type="number" min={0} placeholder="0" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <SalaryNetField form={form} />
+              </FormRow>
+            </FormSection>
 
-        <Separator />
+            <Separator />
+          </>
+        ) : null}
 
-        <FormSection title="Bank account">
+        <FormSection
+          title="Bank account"
+          description={
+            isFreelancer
+              ? "Used for project fee payouts. Monthly salary fields are not used for freelancers."
+              : undefined
+          }
+        >
           <div className="rounded-xl border border-border/60 bg-muted/15 p-4">
             <FormRow>
               {(

@@ -167,7 +167,7 @@ async function getAlertsPending(req, res) {
     .lean();
   res.json({
     alerts: alerts.map((a) => ({
-      id: a.id, 
+      id: a.id,
       title: a.title,
       description: a.description,
       photoUrl: a.photoUrl ?? null,
@@ -175,8 +175,8 @@ async function getAlertsPending(req, res) {
   });
 }
 
-async function postAlertsDismiss(req, res) { 
-  const id = parseIdParam(req.params.id, "alert id"); 
+async function postAlertsDismiss(req, res) {
+  const id = parseIdParam(req.params.id, "alert id");
   await alertDeliveriesTable.updateOne(
     { alertId: id, userId: req.user.id },
     { $set: { dismissedAt: new Date() } }

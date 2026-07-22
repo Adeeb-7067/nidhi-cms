@@ -77,7 +77,7 @@ async function getProjectAccess(req, projectId) {
   if (role === "super_admin") {
     return { allowed: true, canManage: true, isClient: false, companyId };
   }
-  if (role === "digital" || role === "freelancer") {
+  if (role === "digital") {
     const access = await getScopedDigitalUserAccess(req.user);
     const allowed = (access.projectIds ?? []).includes(Number(projectId));
     return {
@@ -96,7 +96,16 @@ async function getProjectAccess(req, projectId) {
     // Expense/invoice project linking — read access to any project metadata
     return { allowed: true, canManage: false, isClient: false, companyId };
   }
-  if (isDevPortalStaffRole(role) || role === "bde") {
+  if (role === "hr") {
+    const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
+    return {
+      allowed: !!member,
+      canManage: false,
+      isClient: false,
+      companyId,
+    };
+  }
+  if (isDevPortalStaffRole(role) || role === "bde" || role === "freelancer") {
     const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
     return {
       allowed: !!member,

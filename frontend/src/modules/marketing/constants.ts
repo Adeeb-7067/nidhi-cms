@@ -52,7 +52,14 @@ export const PLATFORM_LABELS: Record<MarketingPlatform, string> = {
   youtube: "YouTube",
   google: "Google",
   website: "Website",
+  tiktok: "TikTok",
+  pinterest: "Pinterest",
+  snapchat: "Snapchat",
+  whatsapp: "WhatsApp",
 };
+
+/** Full scheduling / workspace platform list (keep aligned with backend MARKETING_PLATFORMS). */
+export const ALL_MARKETING_PLATFORMS = Object.keys(PLATFORM_LABELS) as MarketingPlatform[];
 
 export const POST_CONTENT_FORMAT_LABELS: Record<PostContentFormat, string> = {
   post: "Post",

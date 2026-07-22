@@ -620,6 +620,7 @@ export default function AdminProjectDetail() {
           <ProjectTeamPanel
             projectId={projectId}
             onViewProjectLogs={() => setActiveTab("logs")}
+            variant={project?.type === "digital" ? "digital" : "development"}
             canManage
           />
         </TabsContent>

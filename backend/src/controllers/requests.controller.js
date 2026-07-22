@@ -3,7 +3,7 @@ import {
   resourceRequestsTable,
   usersTable,
   notificationsTable,
-  getNextSequence
+  getNextSequence,
 } from "../models/schema/index.js";
 import { notifyUser, broadcast } from "../lib/realtime.js";
 import { formatRequestRow, formatRequestRows } from "../mappers/request-format.js";
@@ -11,24 +11,65 @@ import { paginateModel } from "../utils/mongo-list.js";
 import { logger } from "../lib/logger.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
-  optionalString
+  optionalString,
 } from "../utils/route-errors.js";
+import { getAccessibleProjectIds, applyIdScope } from "../services/access/list-scope.js";
+import { userHasPermission } from "../services/permissions.service.js";
+import { assertProjectAccess } from "../services/access/access-helpers.js";
+
+async function canViewAllRequests(user) {
+  if (user.role === "super_admin") return true;
+  return userHasPermission(user.id, "admin_requests", "view");
+}
+
+async function assertCanAccessRequest(req, request) {
+  if (await canViewAllRequests(req.user)) return;
+  if (request.developerId === req.user.id) return;
+  const projectIds = await getAccessibleProjectIds(req.user);
+  if (projectIds === null) {
+    forbidden("You cannot access this request.");
+  }
+  if (projectIds.includes(Number(request.projectId))) return;
+  forbidden("You cannot access this request.");
+}
+
 async function getRequests(req, res) {
   const { status, projectId } = req.query;
   const pagination = parsePagination(req.query);
   const query = {};
-  if (isDeveloperRole(req.user.role) || req.user.role === "client") {
-    query.developerId = req.user.id;
+
+  if (!(await canViewAllRequests(req.user))) {
+    if (isDeveloperRole(req.user.role) || req.user.role === "client") {
+      query.developerId = req.user.id;
+    } else {
+      const projectIds = await getAccessibleProjectIds(req.user);
+      if (projectIds === null) {
+        query.developerId = req.user.id;
+      } else if (!applyIdScope(query, "projectId", projectIds)) {
+        res.json({ requests: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
+    }
   }
+
   if (status) query.status = status;
-  if (projectId) query.projectId = parseInt(projectId, 10);
+  if (projectId) {
+    const pid = parseInt(projectId, 10);
+    if (query.projectId?.$in && !query.projectId.$in.includes(pid)) {
+      res.json({ requests: [], total: 0, page: pagination.page, limit: pagination.limit });
+      return;
+    }
+    query.projectId = pid;
+  }
   const { items, total, page, limit } = await paginateModel(resourceRequestsTable, query, pagination);
   const requests = await formatRequestRows(items);
   res.json({ requests, total, page, limit });
 }
+
 async function postRequests(req, res) {
   const body = req.body;
   const projectId = Number(body.projectId);
@@ -41,6 +82,7 @@ async function postRequests(req, res) {
   if (!title) badRequest("Title is required.", "title");
   if (!description) badRequest("Description is required.", "description");
   if (!urgency) badRequest("Urgency is required.", "urgency");
+  await assertProjectAccess(req, projectId);
   const nextId = await getNextSequence("resource_requests");
   const request = await resourceRequestsTable.create({
     id: nextId,
@@ -49,7 +91,7 @@ async function postRequests(req, res) {
     type,
     title,
     description,
-    urgency
+    urgency,
   });
   const formatted = await formatRequestRow(request);
   try {
@@ -67,14 +109,14 @@ async function postRequests(req, res) {
           body: `${requesterName} submitted: "${title}"`,
           entityType: "request",
           entityId: nextId,
-          isRead: false
+          isRead: false,
         });
         notifyUser(admin.id, "notification", {
           type: "request",
           title: `New ${requestLabel} Request`,
-          body: `${requesterName} submitted: "${title}"`
+          body: `${requesterName} submitted: "${title}"`,
         });
-      })
+      }),
     );
     broadcast("request_update", { id: nextId });
   } catch (err) {
@@ -82,12 +124,15 @@ async function postRequests(req, res) {
   }
   res.status(201).json(formatted);
 }
+
 async function getRequestsById(req, res) {
   const id = parseIdParam(req.params.id, "request id");
   const r = await resourceRequestsTable.findOne({ id }).lean();
   if (!r) notFound("Request");
+  await assertCanAccessRequest(req, r);
   res.json(await formatRequestRow(r));
 }
+
 async function patchRequestsById(req, res) {
   const id = parseIdParam(req.params.id, "request id");
   const status = optionalString(req.body.status);
@@ -95,7 +140,7 @@ async function patchRequestsById(req, res) {
   const r = await resourceRequestsTable.findOneAndUpdate(
     { id },
     { $set: { status, adminNote } },
-    { new: true }
+    { new: true },
   );
   if (!r) notFound("Request");
   const formatted = await formatRequestRow(r);
@@ -111,12 +156,12 @@ async function patchRequestsById(req, res) {
         body: `Your request "${r.title}" has been ${status}`,
         entityType: "request",
         entityId: r.id,
-        isRead: false
+        isRead: false,
       });
       notifyUser(r.developerId, "notification", {
         type: "request",
         title: `Request ${statusLabel}`,
-        body: `Your request "${r.title}" has been ${status}`
+        body: `Your request "${r.title}" has been ${status}`,
       });
       broadcast("request_update", { id: r.id });
     } catch (err) {
@@ -125,9 +170,10 @@ async function patchRequestsById(req, res) {
   }
   res.json(formatted);
 }
+
 export {
   getRequests,
   getRequestsById,
   patchRequestsById,
-  postRequests
+  postRequests,
 };

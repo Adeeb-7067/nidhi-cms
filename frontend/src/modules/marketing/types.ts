@@ -5,9 +5,13 @@ export type MarketingPlatform =
   | "twitter"
   | "youtube"
   | "google"
-  | "website";
+  | "website"
+  | "tiktok"
+  | "pinterest"
+  | "snapchat"
+  | "whatsapp";
 
-/** What is being scheduled on a calendar entry (esp. Instagram). */
+/** What is being scheduled on a calendar entry (post, long/short video, blog). */
 export type PostContentFormat = "post" | "long_video" | "short_video" | "blog";
 
 export type MarketingPackage = "basic" | "standard" | "premium" | "enterprise";

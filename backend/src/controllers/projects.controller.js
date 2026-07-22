@@ -124,6 +124,27 @@ async function getProjects(req, res) {
     }
   }
   const { items, total, page, limit } = await paginateModel(projectsTable, query, pagination);
+  const wantPicker =
+    req.query.picker === "1" ||
+    req.query.picker === "true" ||
+    req.query.fields === "picker" ||
+    req.user.role === "finance";
+  if (wantPicker) {
+    res.json({
+      projects: items.map((p) => ({
+        id: p.id,
+        name: p.name,
+        status: p.status,
+        type: p.type ?? null,
+        companyId: p.companyId ?? p.clientId ?? null,
+        clientId: p.clientId ?? p.companyId ?? null,
+      })),
+      total,
+      page,
+      limit,
+    });
+    return;
+  }
   const includeTeam = req.user.role === "super_admin";
   const formatted = await formatProjectList(items, { includeTeam });
   res.json({ projects: formatted, total, page, limit });
@@ -456,8 +477,25 @@ function formatMemberResponse(m, user, lastLogDate = null) {
     lastLogDate,
   };
 }
+
+/** super_admin/hr: any project; digital: digital projects only. */
+async function assertCanManageProjectMembers(req, projectId) {
+  const role = req.user?.role;
+  if (role === "super_admin" || role === "hr") return;
+  if (role === "digital") {
+    const project = await projectsTable.findOne({ id: projectId }).select({ type: 1 }).lean();
+    if (!project) notFound("Project");
+    if (project.type !== "digital") {
+      forbidden("Digital specialists can only manage team on digital projects.");
+    }
+    return;
+  }
+  forbidden("You cannot manage project members.");
+}
+
 async function postProjectsByIdMembers(req, res) {
   const projectId = parseInt(req.params["id"]);
+  await assertCanManageProjectMembers(req, projectId);
   const { userId, subType } = req.body;
   if (!userId) badRequest("userId is required.", "userId");
   const uid = Number(userId);
@@ -488,6 +526,7 @@ async function postProjectsByIdMembers(req, res) {
 
 async function postProjectsByIdMembersBatch(req, res) {
   const projectId = parseInt(req.params["id"], 10);
+  await assertCanManageProjectMembers(req, projectId);
   const rawIds = req.body.userIds;
   const subType = optionalString(req.body.subType) ?? null;
 
@@ -545,6 +584,7 @@ async function postProjectsByIdMembersBatch(req, res) {
 }
 async function deleteProjectsByIdMembersByUserId(req, res) {
   const projectId = parseInt(req.params["id"]);
+  await assertCanManageProjectMembers(req, projectId);
   const userId = parseInt(req.params["userId"]);
   await projectMembersTable.deleteOne({ projectId, userId });
   res.json({ message: "Member removed" });

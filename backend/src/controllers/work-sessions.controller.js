@@ -12,14 +12,13 @@ import {
 import { broadcastWorkSessionSync } from "../services/work-session-sync.js";
 import { badRequest, parseIdParam } from "../utils/route-errors.js";
 
-// Only these values are accepted from external callers — prevents injection of internal codes.
+// Client may only request these stop reasons. Auto policies (shift_ended, day_ended) are server-only.
 const ALLOWED_STOP_REASONS = [
   "clock_out",
   "app_quit",
   "logout",
   "system_sleep",
   "system_shutdown",
-  "network_lost",
 ];
 
 function formatSession(session) {

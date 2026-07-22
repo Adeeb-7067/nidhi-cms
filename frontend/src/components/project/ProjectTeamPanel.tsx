@@ -90,7 +90,7 @@ export function ProjectTeamPanel({
     query: { enabled: !!projectId, queryKey: getGetProjectMembersQueryKey(projectId) },
   });
 
-  const staffParams = { staff: "1" as const, limit: 100 };
+  const staffParams = { staff: "1" as const, limit: 300 };
   const { data: usersData } = useListUsers(staffParams, {
     query: {
       queryKey: getListUsersQueryKey(staffParams),

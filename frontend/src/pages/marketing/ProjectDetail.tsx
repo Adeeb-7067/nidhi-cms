@@ -566,7 +566,11 @@ export default function MarketingProjectDetail() {
               canEditServices={canEditServices}
               canEditWorkspace={canEditWorkspace}
               canViewClientBudget={canViewMarketingClientBudget(user?.role)}
-              canManageTeam={user?.role === "super_admin" || user?.role === "hr"}
+              canManageTeam={
+                user?.role === "super_admin" ||
+                user?.role === "hr" ||
+                user?.role === "digital"
+              }
               onEditServices={openEditServices}
               onEditWorkspace={openEditWorkspace}
               moduleLinks={[
