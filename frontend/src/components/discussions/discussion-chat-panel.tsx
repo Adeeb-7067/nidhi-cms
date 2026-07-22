@@ -266,7 +266,7 @@ export function DiscussionChatPanel({
             {discussionChannelTitle(project.name, threadType, peerUser)}
           </h1>
           <p className="truncate text-[11px] text-muted-foreground">
-            {discussionChannelSubtitle(threadType, peerUser)}
+            {discussionChannelSubtitle(threadType, peerUser, project)}
             {messages.length > 0 && (
               <span className="text-muted-foreground/80">
                 {" "}

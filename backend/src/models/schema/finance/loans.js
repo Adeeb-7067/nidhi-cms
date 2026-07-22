@@ -12,6 +12,7 @@ const loanSchema = new Schema(
     /** Whether the loan is from a bank or from the market (informal / private). */
     source: { type: String, enum: loanSources, default: "bank", required: true, index: true },
     principal: { type: Number, required: true, min: 0.01 },
+    /** Interest rate as % per month (reducing balance). */
     interestRate: { type: Number, default: null, min: 0 },
     startDate: { type: Date, required: true },
     endDate: { type: Date, default: null },

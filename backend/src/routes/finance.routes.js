@@ -15,8 +15,10 @@ import * as ledgersCtrl from "../controllers/finance/ledgers.controller.js";
 import * as taxCtrl from "../controllers/finance/tax.controller.js";
 import * as reportsCtrl from "../controllers/finance/reports.controller.js";
 import * as vendorsCtrl from "../controllers/finance/vendors.controller.js";
+import * as vendorInvoicesCtrl from "../controllers/finance/vendor-invoices.controller.js";
 import * as notificationsCtrl from "../controllers/finance/notifications.controller.js";
 import * as syncCtrl from "../controllers/finance/sync.controller.js";
+import * as freelancerEngagementsCtrl from "../controllers/finance/freelancer-engagements.controller.js";
 
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
@@ -161,6 +163,32 @@ router.post("/finance/vendors", ...p("finance_vendors", "create"), wrap(vendorsC
 router.patch("/finance/vendors/:id", ...p("finance_vendors", "edit"), wrap(vendorsCtrl.updateVendor));
 router.delete("/finance/vendors/:id", ...p("finance_vendors", "delete"), wrap(vendorsCtrl.deleteVendor));
 
+router.get(
+  "/finance/vendors/:vendorId/invoices",
+  ...p("finance_vendors"),
+  wrap(vendorInvoicesCtrl.listVendorInvoices),
+);
+router.post(
+  "/finance/vendors/:vendorId/invoices",
+  ...p("finance_vendors", "create"),
+  wrap(vendorInvoicesCtrl.createVendorInvoice),
+);
+router.get(
+  "/finance/vendor-invoices/:id",
+  ...p("finance_vendors"),
+  wrap(vendorInvoicesCtrl.getVendorInvoiceById),
+);
+router.patch(
+  "/finance/vendor-invoices/:id",
+  ...p("finance_vendors", "edit"),
+  wrap(vendorInvoicesCtrl.updateVendorInvoice),
+);
+router.delete(
+  "/finance/vendor-invoices/:id",
+  ...p("finance_vendors", "delete"),
+  wrap(vendorInvoicesCtrl.deleteVendorInvoice),
+);
+
 // ── Notifications ────────────────────────────────────────────────────────
 router.get("/finance/notifications", ...p("finance_notifications"), wrap(notificationsCtrl.getFinanceNotifications));
 router.post(
@@ -175,5 +203,47 @@ router.post(
 );
 
 router.post("/finance/sync/sales-payments", ...p("finance_dashboard", "edit"), wrap(syncCtrl.syncSalesPayments));
+
+// ── Freelancer project engagements ───────────────────────────────────────
+router.get(
+  "/finance/freelancer-engagements",
+  ...p("finance_freelancers"),
+  wrap(freelancerEngagementsCtrl.listEngagements),
+);
+router.post(
+  "/finance/freelancer-engagements",
+  ...p("finance_freelancers", "create"),
+  wrap(freelancerEngagementsCtrl.createEngagement),
+);
+router.get(
+  "/finance/freelancer-engagements/:id",
+  ...p("finance_freelancers"),
+  wrap(freelancerEngagementsCtrl.getEngagementById),
+);
+router.patch(
+  "/finance/freelancer-engagements/:id",
+  ...p("finance_freelancers", "edit"),
+  wrap(freelancerEngagementsCtrl.updateEngagement),
+);
+router.delete(
+  "/finance/freelancer-engagements/:id",
+  ...p("finance_freelancers", "delete"),
+  wrap(freelancerEngagementsCtrl.deleteEngagement),
+);
+router.post(
+  "/finance/freelancer-engagements/:id/installments",
+  ...p("finance_freelancers", "create"),
+  wrap(freelancerEngagementsCtrl.addInstallment),
+);
+router.patch(
+  "/finance/freelancer-engagements/:id/installments/:installmentId",
+  ...p("finance_freelancers", "edit"),
+  wrap(freelancerEngagementsCtrl.updateInstallment),
+);
+router.delete(
+  "/finance/freelancer-engagements/:id/installments/:installmentId",
+  ...p("finance_freelancers", "delete"),
+  wrap(freelancerEngagementsCtrl.deleteInstallment),
+);
 
 export default router;

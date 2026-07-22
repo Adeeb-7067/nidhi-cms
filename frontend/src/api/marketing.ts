@@ -26,7 +26,8 @@ export interface MarketingAccount {
   accountManagerId: number | null;
   accountManager: string | null;
   platforms: MarketingPlatform[];
-  monthlyBudgetInr: number;
+  /** Null for non–super_admin (client retainer is restricted). */
+  monthlyBudgetInr: number | null;
   renewalDate: string | null;
   status: "active" | "paused" | "ended";
   performanceScore: number;
@@ -87,8 +88,8 @@ export interface MarketingDashboardDto {
     accountCount?: number;
     activeAccounts?: number;
     performanceScore: number;
-    totalMonthlyBudget?: number;
-    activeBudget?: number;
+    totalMonthlyBudget?: number | null;
+    activeBudget?: number | null;
     mediaFiles?: number;
     graphicsCount?: number;
     videosInFlight?: number;
@@ -115,7 +116,7 @@ export interface MarketingDashboardDto {
     companyName: string;
     package: MarketingPackage;
     performanceScore: number;
-    monthlyBudgetInr: number;
+    monthlyBudgetInr: number | null;
     platforms: MarketingPlatform[];
     status: string;
   }[];

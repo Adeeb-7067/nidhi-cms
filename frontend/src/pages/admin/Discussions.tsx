@@ -52,6 +52,7 @@ import {
   discussionChannelSubtitle,
   discussionChannelTitle,
   isCompanyTeamChannel,
+  isDigitalDiscussionProject,
   isDirectChannel,
   type DiscussionChannel,
   type DiscussionChannelFilter,
@@ -121,11 +122,18 @@ import {
 function channelMatchesSearch(channel: DiscussionChannel, q: string): boolean {
   if (!q) return true;
   const title = discussionChannelTitle(channel.project.name, channel.threadType, channel.peerUser).toLowerCase();
-  const subtitle = discussionChannelSubtitle(channel.threadType, channel.peerUser).toLowerCase();
+  const subtitle = discussionChannelSubtitle(
+    channel.threadType,
+    channel.peerUser,
+    channel.project,
+  ).toLowerCase();
+  const company = (channel.project.companyName || channel.project.clientName || "").toLowerCase();
   return (
     channel.project.name.toLowerCase().includes(q) ||
     (channel.peerUser?.name.toLowerCase().includes(q) ?? false) ||
     (channel.peerUser?.subtitle?.toLowerCase().includes(q) ?? false) ||
+    company.includes(q) ||
+    (channel.project.type === "digital" && "digital".includes(q)) ||
     title.includes(q) ||
     subtitle.includes(q)
   );
@@ -1033,11 +1041,14 @@ export default function DiscussionsPage() {
     if (!q) return channels;
     return channels.filter((c) => {
       const title = discussionChannelTitle(c.project.name, c.threadType, c.peerUser).toLowerCase();
-      const subtitle = discussionChannelSubtitle(c.threadType, c.peerUser).toLowerCase();
+      const subtitle = discussionChannelSubtitle(c.threadType, c.peerUser, c.project).toLowerCase();
+      const company = (c.project.companyName || c.project.clientName || "").toLowerCase();
       return (
         c.project.name.toLowerCase().includes(q) ||
         c.peerUser?.name.toLowerCase().includes(q) ||
         c.peerUser?.subtitle?.toLowerCase().includes(q) ||
+        company.includes(q) ||
+        (c.project.type === "digital" && "digital".includes(q)) ||
         title.includes(q) ||
         subtitle.includes(q)
       );
@@ -1097,9 +1108,11 @@ export default function DiscussionsPage() {
       teamUnread: 0,
       teamDirectUnread: 0,
       clientsUnread: 0,
+      digitalClientsUnread: 0,
       clientsDirectUnread: 0,
       internalUnread: 0,
       clientsCount: 0,
+      digitalClientsCount: 0,
       internalCount: 0,
     };
     for (const c of channels) {
@@ -1107,8 +1120,13 @@ export default function DiscussionsPage() {
       if (isCompanyTeamChannel(c.threadType)) {
         summary.teamUnread += unread;
       } else if (c.threadType === "project") {
-        summary.clientsCount += 1;
-        summary.clientsUnread += unread;
+        if (isDigitalDiscussionProject(c.project)) {
+          summary.digitalClientsCount += 1;
+          summary.digitalClientsUnread += unread;
+        } else {
+          summary.clientsCount += 1;
+          summary.clientsUnread += unread;
+        }
       } else if (c.threadType === "project_internal") {
         summary.internalCount += 1;
         summary.internalUnread += unread;
@@ -1138,7 +1156,13 @@ export default function DiscussionsPage() {
       } else if (adminSection === "team_direct") {
         list = teamDirectChannels;
       } else if (adminSection === "clients") {
-        list = filteredChannels.filter((c) => c.threadType === "project");
+        list = filteredChannels.filter(
+          (c) => c.threadType === "project" && !isDigitalDiscussionProject(c.project),
+        );
+      } else if (adminSection === "digital_clients") {
+        list = filteredChannels.filter(
+          (c) => c.threadType === "project" && isDigitalDiscussionProject(c.project),
+        );
       } else if (adminSection === "clients_direct") {
         list = clientDirectChannels;
       } else {
@@ -1233,7 +1257,9 @@ export default function DiscussionsPage() {
           : channel.threadType === "project_internal"
             ? "internal"
             : channel.threadType === "project"
-              ? "clients"
+              ? isDigitalDiscussionProject(channel.project)
+                ? "digital_clients"
+                : "clients"
               : adminSection;
     setAdminSection((current) => (current === target ? current : target));
   }, [
@@ -1387,9 +1413,11 @@ export default function DiscussionsPage() {
             teamUnread={sectionSummary.teamUnread}
             teamDirectUnread={sectionSummary.teamDirectUnread}
             clientsUnread={sectionSummary.clientsUnread}
+            digitalClientsUnread={sectionSummary.digitalClientsUnread}
             clientsDirectUnread={sectionSummary.clientsDirectUnread}
             internalUnread={sectionSummary.internalUnread}
             clientsCount={sectionSummary.clientsCount}
+            digitalClientsCount={sectionSummary.digitalClientsCount}
             internalCount={sectionSummary.internalCount}
             className={mobileChatOpen ? "hidden md:flex" : "flex"}
           />
@@ -1416,9 +1444,11 @@ export default function DiscussionsPage() {
                   ? "Staff messages"
                   : adminSection === "clients"
                     ? "Client channels"
-                    : adminSection === "clients_direct"
-                      ? "Client messages"
-                      : "Internal channels"
+                    : adminSection === "digital_clients"
+                      ? "Digital client channels"
+                      : adminSection === "clients_direct"
+                        ? "Client messages"
+                        : "Internal channels"
               : undefined
           }
           headerSubtitle={
@@ -1428,10 +1458,12 @@ export default function DiscussionsPage() {
                 : adminSection === "team_direct"
                   ? "One-to-one with staff members"
                   : adminSection === "clients"
-                    ? `${sectionSummary.clientsCount} project${sectionSummary.clientsCount === 1 ? "" : "s"} · visible to clients`
-                    : adminSection === "clients_direct"
-                      ? "One-to-one with clients"
-                      : `${sectionSummary.internalCount} project${sectionSummary.internalCount === 1 ? "" : "s"} · staff only`
+                    ? `${sectionSummary.clientsCount} delivery project${sectionSummary.clientsCount === 1 ? "" : "s"} · visible to clients`
+                    : adminSection === "digital_clients"
+                      ? `${sectionSummary.digitalClientsCount} digital project${sectionSummary.digitalClientsCount === 1 ? "" : "s"} · SEO, ads & social clients`
+                      : adminSection === "clients_direct"
+                        ? "One-to-one with clients"
+                        : `${sectionSummary.internalCount} project${sectionSummary.internalCount === 1 ? "" : "s"} · staff only`
               : undefined
           }
           searchPlaceholder={isAdminView ? "Search or start new chat" : undefined}
@@ -1447,9 +1479,13 @@ export default function DiscussionsPage() {
                     : "No staff conversations yet"
                   : adminSection === "clients"
                     ? channelFilter === "unread"
-                      ? "All client channels read"
-                      : "No client channels"
-                    : adminSection === "clients_direct"
+                      ? "All delivery client channels read"
+                      : "No delivery client channels"
+                    : adminSection === "digital_clients"
+                      ? channelFilter === "unread"
+                        ? "All digital client channels read"
+                        : "No digital client channels"
+                      : adminSection === "clients_direct"
                       ? channelFilter === "unread"
                         ? "All caught up"
                         : "No client conversations yet"
@@ -1549,8 +1585,10 @@ export default function DiscussionsPage() {
                 : isAdminView && adminSection === "team_direct"
                   ? "Select a staff member or start a new conversation."
                   : isAdminView && adminSection === "clients"
-                    ? "Select a project channel to open the client chat."
-                    : isAdminView && adminSection === "clients_direct"
+                    ? "Select a delivery project channel to open the client chat."
+                    : isAdminView && adminSection === "digital_clients"
+                      ? "Select a digital project channel for SEO, ads, and social clients."
+                      : isAdminView && adminSection === "clients_direct"
                       ? "Select a client or start a new conversation."
                       : isClientView
                         ? "Select a project chat or a message from your team."

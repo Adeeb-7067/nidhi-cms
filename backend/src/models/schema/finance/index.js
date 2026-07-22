@@ -9,3 +9,5 @@ export * from "./cheques.js";
 export * from "./bank-accounts.js";
 export * from "./tax-deposits.js";
 export * from "./vendors.js";
+export * from "./vendor-invoices.js";
+export * from "./freelancer-engagements.js";

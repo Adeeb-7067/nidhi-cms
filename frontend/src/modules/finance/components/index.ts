@@ -26,6 +26,7 @@ export {
   LoanFormModal,
   PayLoanInstallmentModal,
   VendorFormModal,
+  VendorInvoiceFormModal,
   BankAccountFormModal,
   TaxDepositFormModal,
   IncomeEditModal,

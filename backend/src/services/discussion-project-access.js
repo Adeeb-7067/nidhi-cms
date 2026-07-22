@@ -5,6 +5,7 @@ import {
   usersTable,
 } from "../models/schema/index.js";
 import { findClientCompanyForUser, getClientCompanyUserIds } from "./client-team.js";
+import { getScopedDigitalUserAccess } from "./marketing/helpers.js";
 
 const CLIENT_VISIBLE_THREAD = "project";
 const INTERNAL_THREAD = "project_internal";
@@ -110,6 +111,10 @@ export function getDiscussionParticipantIds(projectId, threadType) {
 /** Project IDs the user may access in discussions (mirrors list projects rules). */
 export async function getAccessibleProjectIds(user) {
   const role = user.role;
+  if (role === "digital") {
+    const access = await getScopedDigitalUserAccess(user);
+    return access.projectIds ?? [];
+  }
   if (isDevPortalStaffRole(role) || role === "bde") {
     const rows = await projectMembersTable.find({ userId: user.id }, { projectId: 1 }).lean().exec();
     return rows.map((m) => m.projectId).filter((id) => id != null);

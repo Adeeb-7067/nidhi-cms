@@ -60,7 +60,11 @@ export const MONITORABLE_STAFF_ROLES: UserRole[] = [
 export const HRM_ADMIN_ROLES: UserRole[] = ["super_admin", "hr"];
 
 /** Clock in/out for attendance tracking — every staff role except super_admin (view only) and client (external). */
-export const CLOCKABLE_STAFF_ROLES: UserRole[] = ["hr", ...STAFF_EMPLOYEE_ROLES];
+/** Roles that use work-session clock-in (freelancers are project-paid, not attendance-clocked). */
+export const CLOCKABLE_STAFF_ROLES: UserRole[] = [
+  "hr",
+  ...STAFF_EMPLOYEE_ROLES.filter((r) => r !== "freelancer"),
+];
 
 /** Roles that can access CRM & Sales — super_admin manages, bde operates */
 export const SALES_STAFF_ROLES: UserRole[] = ["super_admin", "bde"];

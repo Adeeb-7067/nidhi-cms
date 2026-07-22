@@ -255,6 +255,28 @@ export const ProjectType = {
   digital: 'digital',
 } as const;
 
+export interface ProjectDigitalServices {
+  /** Managing SEO campaigns */
+  seo?: boolean;
+  /** Running Meta (Facebook & Instagram) ads */
+  metaAds?: boolean;
+  /** Running Google Ads */
+  googleAds?: boolean;
+}
+
+export interface ProjectSocialLinks {
+  facebook?: string;
+  instagram?: string;
+  linkedin?: string;
+  /** X / Twitter profile URL */
+  twitter?: string;
+  youtube?: string;
+  tiktok?: string;
+  pinterest?: string;
+  whatsapp?: string;
+  other?: string;
+}
+
 export interface Project {
   id: number;
   name: string;
@@ -279,6 +301,8 @@ export interface Project {
   startDate: string;
   deadline: string;
   techStack: string[];
+  digitalServices?: ProjectDigitalServices;
+  socialLinks?: ProjectSocialLinks;
   /** @nullable */
   figmaUrl?: string | null;
   /** @nullable */
@@ -685,6 +709,8 @@ export interface ProjectInput {
   startDate: string;
   deadline: string;
   techStack?: string[];
+  digitalServices?: ProjectDigitalServices;
+  socialLinks?: ProjectSocialLinks;
   figmaUrl?: string;
   repoUrl?: string;
   stagingUrl?: string;
@@ -736,6 +762,8 @@ export interface ProjectUpdate {
   startDate?: string;
   deadline?: string;
   techStack?: string[];
+  digitalServices?: ProjectDigitalServices;
+  socialLinks?: ProjectSocialLinks;
   figmaUrl?: string;
   repoUrl?: string;
   stagingUrl?: string;

@@ -13,14 +13,11 @@ import {
   Clock,
   Megaphone,
   Calendar,
-  Palette,
-  Film,
-  FileText,
   Share2,
   ArrowRight,
   Gauge,
-  Search,
   IndianRupee,
+  Pencil,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,12 +38,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid, PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
 import { ProjectDetailPageSkeleton } from "@/components/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -55,7 +51,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useGetProject } from "@/api";
+import { useGetProject, useUpdateProject, getGetProjectQueryKey, getListProjectsQueryKey } from "@/api";
+import { DigitalProjectOverview, digitalOverviewModuleIcons } from "@/components/project/DigitalProjectOverview";
+import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
+import {
+  EMPTY_DIGITAL_SERVICES,
+  EMPTY_SOCIAL_LINKS,
+  normalizeDigitalServicesForm,
+  normalizeSocialLinksForm,
+  type DigitalServicesForm,
+  type SocialLinksForm,
+} from "@/lib/project-type-fields";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useMarketingAccounts,
   useUpdateMarketingAccount,
@@ -86,6 +94,8 @@ import {
   TASK_CATEGORY_LABELS,
   CONTENT_TYPE_LABELS,
   formatCompactCurrency,
+  canManageMarketingClientCommercial,
+  canViewMarketingClientBudget,
 } from "@/modules/marketing/constants";
 import type {
   MarketingPackage,
@@ -111,13 +121,6 @@ const STATUS_LABELS: Record<string, string> = {
   uat: "UAT",
   completed: "Completed",
   maintenance: "Maintenance",
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  critical: "Critical",
 };
 
 type WorkspaceForm = {
@@ -158,10 +161,16 @@ function ViewAllLink({ href, label }: { href: string; label: string }) {
 export default function MarketingProjectDetail() {
   const [, params] = useRoute("/marketing/projects/:id");
   const [, navigate] = useLocation();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const projectId = Number(params?.id);
   const enabled = Number.isFinite(projectId) && projectId > 0;
   const [tab, setTab] = useState("overview");
   const [workspaceDialogOpen, setWorkspaceDialogOpen] = useState(false);
+  const [servicesDialogOpen, setServicesDialogOpen] = useState(false);
+  const [servicesForm, setServicesForm] = useState<DigitalServicesForm>({ ...EMPTY_DIGITAL_SERVICES });
+  const [socialForm, setSocialForm] = useState<SocialLinksForm>({ ...EMPTY_SOCIAL_LINKS });
+  const [platformsForm, setPlatformsForm] = useState<string[]>([]);
   const [workspaceForm, setWorkspaceForm] = useState<WorkspaceForm>({
     package: "standard",
     monthlyBudgetInr: "0",
@@ -177,7 +186,13 @@ export default function MarketingProjectDetail() {
 
   const { can } = usePermissions();
   const canEditWorkspace = can("marketing_clients", "edit");
+  const canEditServices =
+    user?.role === "super_admin" ||
+    user?.role === "digital" ||
+    user?.role === "bde" ||
+    canEditWorkspace;
   const updateAccount = useUpdateMarketingAccount();
+  const updateProject = useUpdateProject();
 
   const { data: project, isLoading, isError } = useGetProject(projectId, {
     query: { enabled },
@@ -291,6 +306,35 @@ export default function MarketingProjectDetail() {
     setWorkspaceDialogOpen(true);
   };
 
+  const openEditServices = () => {
+    if (!project) return;
+    setServicesForm(normalizeDigitalServicesForm(project.digitalServices));
+    setSocialForm(normalizeSocialLinksForm(project.socialLinks));
+    setPlatformsForm([...(project.techStack ?? [])]);
+    setServicesDialogOpen(true);
+  };
+
+  const handleSaveServices = async () => {
+    if (!project) return;
+    try {
+      await updateProject.mutateAsync({
+        id: project.id,
+        data: {
+          digitalServices: servicesForm,
+          socialLinks: socialForm,
+          techStack: platformsForm,
+        },
+      });
+      toast.success("Services & social profiles updated");
+      setServicesDialogOpen(false);
+      void queryClient.invalidateQueries({ queryKey: getGetProjectQueryKey(project.id) });
+      void queryClient.invalidateQueries({ queryKey: getListProjectsQueryKey() });
+      void queryClient.invalidateQueries({ queryKey: ["marketing", "accounts"] });
+    } catch (err) {
+      toastApiError(err, "Failed to update services");
+    }
+  };
+
   const togglePlatform = (platform: MarketingPlatform) => {
     setWorkspaceForm((f) => ({
       ...f,
@@ -302,12 +346,17 @@ export default function MarketingProjectDetail() {
 
   const handleSaveWorkspace = async () => {
     if (!account) return;
+    const canManageCommercial = canManageMarketingClientCommercial(user?.role);
     try {
       await updateAccount.mutateAsync({
         id: account.id,
         data: {
-          package: workspaceForm.package,
-          monthlyBudgetInr: Number(workspaceForm.monthlyBudgetInr),
+          ...(canManageCommercial
+            ? {
+                package: workspaceForm.package,
+                monthlyBudgetInr: Number(workspaceForm.monthlyBudgetInr),
+              }
+            : {}),
           accountManagerId: parseAssigneeId(workspaceForm.accountManagerId),
           status: workspaceForm.status,
           platforms: workspaceForm.platforms,
@@ -355,12 +404,24 @@ export default function MarketingProjectDetail() {
 
   const q = accountId ? `?account=${accountId}` : "";
   const companyLabel = project?.companyName || project?.clientName || "Digital project";
+  const activeServices = [
+    project?.digitalServices?.seo ? "SEO" : null,
+    project?.digitalServices?.metaAds ? "Meta Ads" : null,
+    project?.digitalServices?.googleAds ? "Google Ads" : null,
+  ].filter(Boolean);
+  const headerDescription = [
+    companyLabel,
+    account ? PACKAGE_LABELS[account.package] ?? account.package : null,
+    activeServices.length ? activeServices.join(" · ") : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <PortalPageShell>
       <MarketingPageHeader
         title={project?.name ?? "Project"}
-        description={`${companyLabel}${account ? ` · ${PACKAGE_LABELS[account.package] ?? account.package}` : ""}`}
+        description={headerDescription}
         breadcrumbs={[
           { label: "Digital", href: "/marketing" },
           { label: "Projects", href: "/marketing/projects" },
@@ -368,6 +429,17 @@ export default function MarketingProjectDetail() {
         ]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {canEditServices && project ? (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5"
+                onClick={openEditServices}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Services
+              </Button>
+            ) : null}
             {account && (
               <>
                 <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
@@ -454,17 +526,9 @@ export default function MarketingProjectDetail() {
 
       {isLoading || !project ? (
         <ProjectDetailPageSkeleton />
-      ) : !account && !accountsLoading ? (
-        <MarketingEmptyState
-          icon={HardDrive}
-          title="Digital workspace not ready"
-          description="Open any Digital page (Tasks or Media) once to provision this project's workspace, then refresh."
-          actionLabel="Open tasks"
-          onAction={() => navigate("/marketing/tasks")}
-        />
       ) : (
-        <Tabs value={tab} onValueChange={setTab} className="space-y-3">
-          <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
+        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+          <PortalTabsList>
             {(
               [
                 ["overview", "Overview"],
@@ -476,224 +540,80 @@ export default function MarketingProjectDetail() {
                 ["media", "Media"],
               ] as const
             ).map(([value, label]) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="text-xs data-[state=active]:bg-primary/10"
-              >
+              <PortalTabsTrigger key={value} value={value}>
                 {label}
-              </TabsTrigger>
+              </PortalTabsTrigger>
             ))}
-          </TabsList>
+          </PortalTabsList>
 
-          <TabsContent value="overview" className="space-y-3 mt-0">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium">Project overview</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-xs">
-                  <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Company</span>
-                    <span className="font-medium text-right">{companyLabel}</span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Status</span>
-                    <Badge variant="secondary" className="text-[10px] font-normal">
-                      {STATUS_LABELS[project.status] ?? project.status}
-                    </Badge>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Priority</span>
-                    <span className="font-medium">
-                      {PRIORITY_LABELS[project.priority] ?? project.priority}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Start</span>
-                    <span className="font-medium">
-                      {project.startDate
-                        ? format(new Date(project.startDate), "MMM d, yyyy")
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-4">
-                    <span className="text-muted-foreground">Deadline</span>
-                    <span className="font-medium">
-                      {project.deadline
-                        ? format(new Date(project.deadline), "MMM d, yyyy")
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">{project.completionPct ?? 0}%</span>
-                    </div>
-                    <Progress value={project.completionPct ?? 0} className="h-1.5" />
-                  </div>
-                  {project.description?.trim() ? (
-                    <p className="whitespace-pre-wrap rounded-md border bg-muted/20 p-2 text-muted-foreground">
-                      {project.description}
-                    </p>
-                  ) : null}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-                  <CardTitle className="text-sm font-medium">Digital workspace</CardTitle>
-                  {account && canEditWorkspace ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={openEditWorkspace}
-                    >
-                      Edit workspace
-                    </Button>
-                  ) : null}
-                </CardHeader>
-                <CardContent className="space-y-3 text-xs">
-                  {account ? (
-                    <>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-muted-foreground">Package</span>
-                        <span className="font-medium">
-                          {PACKAGE_LABELS[account.package as MarketingPackage] ?? account.package}
-                        </span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-muted-foreground">Monthly budget</span>
-                        <span className="font-medium tabular-nums">
-                          {formatCompactCurrency(account.monthlyBudgetInr)}
-                        </span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-muted-foreground">Account manager</span>
-                        <span className="font-medium">{account.accountManager ?? "—"}</span>
-                      </div>
-                      <div className="flex justify-between gap-4">
-                        <span className="text-muted-foreground">Workspace status</span>
-                        <Badge variant="secondary" className="text-[10px] capitalize">
-                          {account.status}
-                        </Badge>
-                      </div>
-                      <div className="space-y-1.5">
-                        <span className="text-muted-foreground">Platforms</span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {(account.platforms ?? []).length === 0 ? (
-                            <span className="text-muted-foreground">None set</span>
-                          ) : (
-                            account.platforms.map((p) => (
-                              <PlatformIconBadge
-                                key={p}
-                                platform={p as MarketingPlatform}
-                              />
-                            ))
-                          )}
-                        </div>
-                      </div>
-                      {account.usage ? (
-                        <div className="space-y-2 border-t pt-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                            Package usage
-                          </p>
-                          {(
-                            [
-                              ["Graphics", account.usage.graphics],
-                              ["UGC", account.usage.ugc],
-                              ["Reels", account.usage.reels],
-                              ["Blogs", account.usage.blogs],
-                            ] as const
-                          ).map(([label, u]) => {
-                            const pct =
-                              u.quota > 0 ? Math.min(100, Math.round((u.used / u.quota) * 100)) : 0;
-                            return (
-                              <div key={label} className="space-y-1">
-                                <div className="flex justify-between">
-                                  <span>{label}</span>
-                                  <span className="tabular-nums text-muted-foreground">
-                                    {u.used}/{u.quota}
-                                  </span>
-                                </div>
-                                <Progress value={pct} className="h-1" />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </>
-                  ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Loading workspace…
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {[
+          <TabsContent value="overview" className="mt-0 space-y-4">
+            {!account && !accountsLoading ? (
+              <MarketingEmptyState
+                icon={HardDrive}
+                title="Digital workspace not ready"
+                description="Open Tasks or Media once to provision this project's workspace. You can still manage services and social profiles below."
+                actionLabel="Open tasks"
+                onAction={() => navigate("/marketing/tasks")}
+              />
+            ) : null}
+            <DigitalProjectOverview
+              project={project}
+              projectId={projectId}
+              companyLabel={companyLabel}
+              account={account}
+              accountLoading={accountsLoading}
+              accountQuery={q}
+              canEditServices={canEditServices}
+              canEditWorkspace={canEditWorkspace}
+              canViewClientBudget={canViewMarketingClientBudget(user?.role)}
+              canManageTeam={user?.role === "super_admin" || user?.role === "hr"}
+              onEditServices={openEditServices}
+              onEditWorkspace={openEditWorkspace}
+              moduleLinks={[
                 {
                   label: "Graphics",
                   value: graphics.length,
-                  icon: Palette,
+                  icon: digitalOverviewModuleIcons.Palette,
                   href: `/marketing/graphics${q}`,
                 },
                 {
                   label: "Videos",
                   value: videos.length,
-                  icon: Film,
+                  icon: digitalOverviewModuleIcons.Film,
                   href: `/marketing/videos${q}`,
                 },
                 {
                   label: "Content pieces",
                   value: content.length,
-                  icon: FileText,
+                  icon: digitalOverviewModuleIcons.FileText,
                   href: `/marketing/content${q}`,
                 },
                 {
                   label: "Media files",
                   value: mediaFileCount,
-                  icon: HardDrive,
+                  icon: digitalOverviewModuleIcons.HardDrive,
                   href: `/marketing/media${q}`,
                 },
                 {
                   label: "Social platforms",
                   value: socialMetrics.length,
-                  icon: Share2,
+                  icon: digitalOverviewModuleIcons.Share2,
                   href: `/marketing/social${q}`,
                 },
                 {
                   label: "SEO keywords",
                   value: seoKeywords.length,
-                  icon: Search,
+                  icon: digitalOverviewModuleIcons.Search,
                   href: `/marketing/seo${q}`,
                 },
                 {
                   label: "Team members",
                   value: performanceMembers.length,
-                  icon: Gauge,
+                  icon: digitalOverviewModuleIcons.Gauge,
                   href: `/marketing/performance${q}`,
                 },
-              ].map((item) => (
-                <Link key={item.label} href={item.href}>
-                  <Card className="transition-colors hover:border-primary/40">
-                    <CardContent className="flex items-center gap-3 p-4">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted">
-                        <item.icon className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-muted-foreground">{item.label}</p>
-                        <p className="text-lg font-semibold tabular-nums">{item.value}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
-            </div>
+              ]}
+            />
           </TabsContent>
 
           <TabsContent value="tasks" className="mt-0">
@@ -1038,44 +958,87 @@ export default function MarketingProjectDetail() {
         </Tabs>
       )}
 
+      <Dialog open={servicesDialogOpen} onOpenChange={setServicesDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Services & social profiles</DialogTitle>
+          </DialogHeader>
+          <DigitalProjectServiceFields
+            compact
+            services={servicesForm}
+            socialLinks={socialForm}
+            platforms={platformsForm}
+            onServicesChange={setServicesForm}
+            onSocialLinksChange={setSocialForm}
+            onPlatformsChange={setPlatformsForm}
+          />
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setServicesDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={updateProject.isPending}
+              onClick={() => void handleSaveServices()}
+            >
+              {updateProject.isPending && (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              )}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={workspaceDialogOpen} onOpenChange={setWorkspaceDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit digital workspace</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Package</Label>
-              <Select
-                value={workspaceForm.package}
-                onValueChange={(v) =>
-                  setWorkspaceForm((f) => ({ ...f, package: v as MarketingPackage }))
-                }
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(Object.keys(PACKAGE_LABELS) as MarketingPackage[]).map((pkg) => (
-                    <SelectItem key={pkg} value={pkg}>
-                      {PACKAGE_LABELS[pkg]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Monthly budget (INR)</Label>
-              <Input
-                type="number"
-                min={0}
-                value={workspaceForm.monthlyBudgetInr}
-                onChange={(e) =>
-                  setWorkspaceForm((f) => ({ ...f, monthlyBudgetInr: e.target.value }))
-                }
-                className="h-8 text-xs"
-              />
-            </div>
+            {canManageMarketingClientCommercial(user?.role) ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Package</Label>
+                <Select
+                  value={workspaceForm.package}
+                  onValueChange={(v) =>
+                    setWorkspaceForm((f) => ({ ...f, package: v as MarketingPackage }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PACKAGE_LABELS) as MarketingPackage[]).map((pkg) => (
+                      <SelectItem key={pkg} value={pkg}>
+                        {PACKAGE_LABELS[pkg]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Package</Label>
+                <p className="text-xs font-medium h-8 flex items-center">
+                  {PACKAGE_LABELS[workspaceForm.package] ?? workspaceForm.package}
+                </p>
+              </div>
+            )}
+            {canViewMarketingClientBudget(user?.role) ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">Monthly budget (INR)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={workspaceForm.monthlyBudgetInr}
+                  onChange={(e) =>
+                    setWorkspaceForm((f) => ({ ...f, monthlyBudgetInr: e.target.value }))
+                  }
+                  className="h-8 text-xs"
+                />
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <Label className="text-xs">Account manager</Label>
               <MarketingAssigneeSelect

@@ -106,7 +106,7 @@ export default function LoanDetailPage() {
           {format(new Date(loan.startDate), "MMM d, yyyy")}
           {loan.endDate ? ` → ${format(new Date(loan.endDate), "MMM d, yyyy")}` : ""}
         </span>
-        {loan.interestRate != null && <span>· {loan.interestRate}% p.a.</span>}
+        {loan.interestRate != null && <span>· {loan.interestRate}% / month</span>}
         {loan.tenureMonths != null && <span>· {loan.tenureMonths} months</span>}
         {loan.emiAmount != null && <span>· EMI {formatCurrency(loan.emiAmount)}</span>}
       </div>
@@ -173,13 +173,13 @@ export default function LoanDetailPage() {
               </div>
               {loan.estimatedTotalInterest != null && (
                 <div className="flex justify-between gap-2 border-t pt-2">
-                  <dt className="text-muted-foreground">Est. total interest</dt>
+                  <dt className="text-muted-foreground">Est. interest (full EMI schedule)</dt>
                   <dd className="tabular-nums">{formatCurrency(loan.estimatedTotalInterest)}</dd>
                 </div>
               )}
               {loan.estimatedTotalPayable != null && (
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted-foreground">Est. total payable</dt>
+                  <dt className="text-muted-foreground">Est. total payable (full schedule)</dt>
                   <dd className="tabular-nums">{formatCurrency(loan.estimatedTotalPayable)}</dd>
                 </div>
               )}

@@ -56,6 +56,8 @@ import {
   useRecordLoanInstallment,
   useCreateVendor,
   useUpdateVendor,
+  useCreateVendorInvoice,
+  useUpdateVendorInvoice,
   useCreateBankAccount,
   useUpdateBankAccount,
   useCreateTaxDeposit,
@@ -66,6 +68,8 @@ import {
   type FinancePayment,
   type FinanceInvoice,
   type FinanceVendor,
+  type VendorInvoice,
+  type VendorInvoiceStatus,
   type FinanceBankAccount,
   type Budget,
   type Loan,
@@ -77,7 +81,7 @@ import {
   type TaxDeposit,
 } from "@/api/finance";
 import { vendorToFormDefaults } from "@/modules/finance/vendor-utils";
-import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, LOAN_SOURCE_LABELS, calcInvoiceTotal, formatCurrency } from "../constants";
+import { EXPENSE_CATEGORY_LABELS, PAYMENT_MODE_LABELS, LOAN_SOURCE_LABELS, calcInvoiceTotal, calcVendorInvoiceAmounts, formatCurrency } from "../constants";
 
 type ModalBaseProps = {
   open: boolean;
@@ -1056,11 +1060,11 @@ function calcTenureMonths(startDate: string, endDate: string): number | null {
   return months >= 1 ? months : 1;
 }
 
-/** Standard reducing-balance EMI; interestRate is annual %. */
-function calcEmiAmount(principal: number, annualRatePercent: number, tenureMonths: number): number | null {
+/** Standard reducing-balance EMI; interestRate is % per month. */
+function calcEmiAmount(principal: number, monthlyRatePercent: number, tenureMonths: number): number | null {
   if (!(principal > 0) || !(tenureMonths >= 1)) return null;
-  if (!(annualRatePercent > 0)) return Math.round(principal / tenureMonths);
-  const r = annualRatePercent / 12 / 100;
+  if (!(monthlyRatePercent > 0)) return Math.round(principal / tenureMonths);
+  const r = monthlyRatePercent / 100;
   const factor = Math.pow(1 + r, tenureMonths);
   if (!Number.isFinite(factor) || factor === 1) return Math.round(principal / tenureMonths);
   return Math.round((principal * r * factor) / (factor - 1));
@@ -1231,7 +1235,18 @@ export function LoanFormModal({
                   <FormItem><FormLabel>Loan amount (₹)</FormLabel><FormControl><Input type="number" min={0} {...field} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="interestRate" render={({ field }) => (
-                  <FormItem><FormLabel>Interest rate (% p.a.)</FormLabel><FormControl><Input type="number" min={0} step="0.01" placeholder="e.g. 10.5" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem>
+                    <FormLabel>Interest rate (% per month)</FormLabel>
+                    <FormControl>
+                      <Input type="number" min={0} step="0.01" placeholder="e.g. 1.5" {...field} />
+                    </FormControl>
+                    {Number(interestRate) > 5 && (
+                      <p className="text-[10px] text-amber-600 dark:text-amber-400">
+                        {Number(interestRate)}%/month is high (~{(Number(interestRate) * 12).toFixed(0)}% simple annual). Confirm this is monthly, not yearly.
+                      </p>
+                    )}
+                    <FormMessage />
+                  </FormItem>
                 )} />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -1316,7 +1331,7 @@ const LOAN_ALLOCATION_OPTIONS = [
   {
     value: "interest" as const,
     label: "Interest only",
-    hint: "Pays accrued interest; principal balance stays the same",
+    hint: "Pays up to this month's interest due; any surplus reduces principal",
   },
   {
     value: "principal" as const,
@@ -1341,7 +1356,7 @@ function suggestedInstallmentAmount(
 ): string {
   const remaining = loan.remainingPrincipal ?? loan.remainingAmount ?? loan.principal ?? 0;
   const rate = loan.interestRate ?? 0;
-  const monthlyInterest = Math.round(remaining * (rate / 12 / 100));
+  const monthlyInterest = Math.round(remaining * (rate / 100));
 
   if (allocation === "interest") {
     return monthlyInterest > 0 ? String(monthlyInterest) : "";
@@ -1420,7 +1435,7 @@ export function PayLoanInstallmentModal({
 
   const remainingPrincipal = loan.remainingPrincipal ?? loan.remainingAmount ?? loan.principal ?? 0;
   const interestRate = loan.interestRate ?? 0;
-  const monthlyRate = interestRate / 12 / 100;
+  const monthlyRate = interestRate / 100;
   const amountVal = Number(amountWatch);
   const hasAmount = !Number.isNaN(amountVal) && amountVal > 0;
 
@@ -1428,8 +1443,11 @@ export function PayLoanInstallmentModal({
   let estPrincipal = 0;
   if (hasAmount) {
     if (loanAllocation === "interest") {
-      estInterest = amountVal;
-      estPrincipal = 0;
+      const interestDue = Math.round(remainingPrincipal * monthlyRate);
+      estInterest = Math.min(amountVal, interestDue);
+      estPrincipal = Math.max(0, amountVal - estInterest);
+      if (estPrincipal > remainingPrincipal) estPrincipal = remainingPrincipal;
+      estInterest = amountVal - estPrincipal;
     } else if (loanAllocation === "principal") {
       estPrincipal = Math.min(amountVal, remainingPrincipal);
       estInterest = amountVal - estPrincipal;
@@ -1523,7 +1541,9 @@ export function PayLoanInstallmentModal({
                   </div>
                   <div className="text-[10px] text-muted-foreground border-t border-border/40 pt-1 mt-1 font-medium">
                     {loanAllocation === "interest"
-                      ? "Interest only — principal balance will not decrease."
+                      ? estPrincipal > 0
+                        ? "Interest due covered; surplus reduces principal."
+                        : "Interest only — up to this month's interest due."
                       : loanAllocation === "principal"
                         ? estInterest > 0
                           ? "Principal first — any amount above remaining principal counts as interest."
@@ -1662,6 +1682,184 @@ function VendorFieldsEditor({
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Vendor invoice (purchase bill / input GST) ───────────────────────────
+
+const vendorInvoiceSchema = z.object({
+  invoiceNumber: z.string().min(1, "Invoice number is required"),
+  invoiceDate: z.string().min(1, "Date is required"),
+  taxableAmount: positiveAmountString,
+  gstEnabled: z.boolean(),
+  gstRate: z.string(),
+  status: z.enum(["unpaid", "paid", "cancelled"]),
+  notes: z.string().optional(),
+});
+type VendorInvoiceFormValues = z.infer<typeof vendorInvoiceSchema>;
+
+export function VendorInvoiceFormModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  vendorId,
+  invoice,
+}: ModalBaseProps & { vendorId: number; invoice?: VendorInvoice | null }) {
+  const isEdit = invoice != null;
+  const createInvoice = useCreateVendorInvoice();
+  const updateInvoice = useUpdateVendorInvoice();
+  const isPending = createInvoice.isPending || updateInvoice.isPending;
+
+  const blankDefaults: VendorInvoiceFormValues = {
+    invoiceNumber: "",
+    invoiceDate: new Date().toISOString().slice(0, 10),
+    taxableAmount: "",
+    gstEnabled: true,
+    gstRate: "18",
+    status: "unpaid",
+    notes: "",
+  };
+
+  const form = useForm<VendorInvoiceFormValues>({
+    resolver: zodResolver(vendorInvoiceSchema),
+    defaultValues: blankDefaults,
+  });
+
+  const watchedTaxable = form.watch("taxableAmount");
+  const watchedGstEnabled = form.watch("gstEnabled");
+  const watchedGstRate = form.watch("gstRate");
+  const totals = calcVendorInvoiceAmounts(
+    Number(watchedTaxable) || 0,
+    Number(watchedGstRate) || 0,
+    watchedGstEnabled,
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    form.reset(
+      invoice
+        ? {
+            invoiceNumber: invoice.invoiceNumber,
+            invoiceDate: invoice.invoiceDate.slice(0, 10),
+            taxableAmount: String(invoice.taxableAmount),
+            gstEnabled: invoice.gstEnabled,
+            gstRate: String(invoice.gstRate ?? 18),
+            status: invoice.status,
+            notes: invoice.notes ?? "",
+          }
+        : blankDefaults,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, invoice, form]);
+
+  const onSubmit = async (values: VendorInvoiceFormValues) => {
+    if (totals.totalAmount <= 0) {
+      toast.error("Invoice total must be greater than ₹0");
+      return;
+    }
+    const payload = {
+      invoiceNumber: values.invoiceNumber.trim(),
+      invoiceDate: values.invoiceDate,
+      taxableAmount: Number(values.taxableAmount),
+      gstEnabled: values.gstEnabled,
+      gstRate: Number(values.gstRate) || 0,
+      status: values.status as VendorInvoiceStatus,
+      notes: values.notes || undefined,
+    };
+    try {
+      if (isEdit && invoice) {
+        await updateInvoice.mutateAsync({ id: invoice.id, vendorId, ...payload });
+        toast.success("Vendor invoice updated");
+      } else {
+        await createInvoice.mutateAsync({ vendorId, ...payload });
+        toast.success("Vendor invoice added");
+      }
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (err) {
+      toastApiError(err, isEdit ? "Failed to update invoice" : "Failed to add invoice");
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md bg-card border-border p-0 gap-0">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b border-border/60">
+          <DialogTitle>{isEdit ? "Edit vendor invoice" : "Add vendor invoice"}</DialogTitle>
+          <DialogDescription>
+            Record a purchase bill from this vendor for input GST (GST taking) tracking.
+          </DialogDescription>
+        </DialogHeader>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <DialogBody className="px-6 py-4 space-y-4">
+              <FormField control={form.control} name="invoiceNumber" render={({ field }) => (
+                <FormItem><FormLabel>Vendor invoice no.</FormLabel><FormControl><Input placeholder="INV-2026-001" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="invoiceDate" render={({ field }) => (
+                <FormItem><FormLabel>Invoice date</FormLabel><FormControl><Input type="date" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="taxableAmount" render={({ field }) => (
+                <FormItem><FormLabel>Taxable amount (₹)</FormLabel><FormControl><Input type="number" min={0} step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="gstEnabled" render={({ field }) => (
+                  <FormItem className="flex flex-col justify-end">
+                    <FormLabel className="mb-2">GST applicable</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="gstRate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST rate (%)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={!watchedGstEnabled}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {["0", "5", "12", "18", "28"].map((r) => (
+                          <SelectItem key={r} value={r}>{r}%</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              <FormField control={form.control} name="status" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Status</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="unpaid">Unpaid</SelectItem>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              <FormField control={form.control} name="notes" render={({ field }) => (
+                <FormItem><FormLabel>Notes</FormLabel><FormControl><Textarea rows={2} {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <div className="rounded-lg border bg-muted/20 p-3 grid grid-cols-3 gap-2 text-xs">
+                <div><p className="text-muted-foreground">Taxable</p><p className="font-semibold tabular-nums">{formatCurrency(totals.taxableAmount)}</p></div>
+                <div><p className="text-muted-foreground">Input GST</p><p className="font-semibold tabular-nums">{formatCurrency(totals.gstAmount)}</p></div>
+                <div><p className="text-muted-foreground">Total</p><p className="font-bold tabular-nums">{formatCurrency(totals.totalAmount)}</p></div>
+              </div>
+            </DialogBody>
+            <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>Cancel</Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isEdit ? "Save changes" : "Add invoice"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

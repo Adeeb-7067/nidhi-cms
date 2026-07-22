@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   useGetProjectMembers,
   getGetProjectMembersQueryKey,
@@ -32,6 +32,8 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatUserRole } from "@/lib/bug-workflow";
 import { isStaffEmployeeRole } from "@/lib/user-roles";
+import { FreelancerEngagementDialog } from "@/components/project/FreelancerEngagementDialog";
+import { usePermissions } from "@/modules/permissions/usePermission";
 import {
   Loader2,
   Trash2,
@@ -41,6 +43,7 @@ import {
   Clock,
   ChevronDown,
   X,
+  Wallet,
 } from "lucide-react";
 import { TeamMemberWorkSheet, type MemberWorkTab } from "@/components/project/TeamMemberWorkSheet";
 import { toast } from "sonner";
@@ -48,19 +51,37 @@ import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { addProjectMembersBatch, getListProjectsQueryKey } from "@/api";
 
-const SUB_TYPES = ["Developer", "QA", "Project Manager", "Designer", "DevOps"] as const;
+const DEV_SUB_TYPES = ["Developer", "QA", "Project Manager", "Designer", "DevOps", "Freelancer"] as const;
+const DIGITAL_SUB_TYPES = [
+  "Digital Specialist",
+  "Content Creator",
+  "Account Manager",
+  "Designer",
+  "Ads Manager",
+  "Freelancer",
+] as const;
 
 type ProjectTeamPanelProps = {
   projectId: number;
   /** Switch project hub to the Logs tab (e.g. from member sheet). */
   onViewProjectLogs?: () => void;
+  /** Digital projects: filter roster to digital team roles and labels. */
+  variant?: "development" | "digital";
+  /** Show add/remove controls (API allows super_admin only). */
+  canManage?: boolean;
 };
 
-export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPanelProps) {
+export function ProjectTeamPanel({
+  projectId,
+  onViewProjectLogs,
+  variant = "development",
+  canManage = true,
+}: ProjectTeamPanelProps) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [subType, setSubType] = useState<string>("Developer");
+  const subTypes = variant === "digital" ? DIGITAL_SUB_TYPES : DEV_SUB_TYPES;
+  const [subType, setSubType] = useState<string>(subTypes[0]);
   const [workSheetOpen, setWorkSheetOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
   const [workSheetTab, setWorkSheetTab] = useState<MemberWorkTab>("tasks");
@@ -78,14 +99,29 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
   });
   const [adding, setAdding] = useState(false);
   const removeMember = useRemoveProjectMember();
+  const { can } = usePermissions();
+  const canManagePay = can("finance_freelancers", "create") || can("finance_freelancers", "edit");
+  const [payMember, setPayMember] = useState<{ userId: number; name: string } | null>(null);
 
   const assignedIds = new Set((members ?? []).map((m) => m.userId));
-  const availableUsers = (usersData?.users ?? []).filter(
-    (u) =>
-      isStaffEmployeeRole(u.role) &&
-      u.status === "active" &&
-      !assignedIds.has(u.id),
-  );
+  const userById = useMemo(() => {
+    const map = new Map<number, { id: number; role?: string; name: string }>();
+    for (const u of usersData?.users ?? []) map.set(u.id, u);
+    return map;
+  }, [usersData?.users]);
+
+  const availableUsers = (usersData?.users ?? []).filter((u) => {
+    if (u.status !== "active" || assignedIds.has(u.id)) return false;
+    if (variant === "digital") {
+      return (
+        u.role === "digital" ||
+        u.role === "freelancer" ||
+        u.role === "manager" ||
+        u.role === "super_admin"
+      );
+    }
+    return isStaffEmployeeRole(u.role) && u.role !== "digital";
+  });
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getGetProjectMembersQueryKey(projectId) });
@@ -94,7 +130,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
 
   const resetAddDialog = () => {
     setSelectedUserIds([]);
-    setSubType("Developer");
+    setSubType(subTypes[0]);
   };
 
   const toggleUser = (id: string, checked: boolean) => {
@@ -160,6 +196,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
       <CardHeader className="p-3">
         <div className="flex items-center justify-between gap-2">
           <CardTitle className="text-sm">Project team</CardTitle>
+          {canManage ? (
           <Dialog
             open={open}
             onOpenChange={(next) => {
@@ -177,7 +214,9 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
               <DialogHeader>
                 <DialogTitle className="text-sm">Add team members</DialogTitle>
                 <DialogDescription className="text-xs">
-                  Select one or more developers or QA to assign to this project.
+                  {variant === "digital"
+                    ? "Select digital specialists or freelancers to assign to this project."
+                    : "Select developers, QA, or freelancers to assign to this project."}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
@@ -262,7 +301,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {SUB_TYPES.map((t) => (
+                      {subTypes.map((t) => (
                         <SelectItem key={t} value={t}>
                           {t}
                         </SelectItem>
@@ -286,6 +325,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          ) : null}
         </div>
       </CardHeader>
       <CardContent className="p-3 pt-0">
@@ -293,7 +333,9 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
           <p className="text-xs text-muted-foreground py-6 text-center">Loading team…</p>
         ) : !members?.length ? (
           <div className="text-center py-8 text-muted-foreground text-xs border border-dashed rounded-lg">
-            No team members assigned. Use Add member to assign developers or QA.
+            {variant === "digital"
+              ? "No digital team assigned yet."
+              : "No team members assigned. Use Add member to assign developers or QA."}
           </div>
         ) : (
           <div className="space-y-2">
@@ -349,6 +391,24 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
                     <Clock className="h-3 w-3 mr-1" />
                     Logs
                   </Button>
+                  {canManagePay &&
+                  (userById.get(member.userId)?.role === "freelancer" ||
+                    member.subType === "Freelancer") ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-[10px] px-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPayMember({ userId: member.userId, name: member.name });
+                      }}
+                    >
+                      <Wallet className="h-3 w-3 mr-1" />
+                      Pay
+                    </Button>
+                  ) : null}
+                  {canManage ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -363,6 +423,7 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -378,6 +439,18 @@ export function ProjectTeamPanel({ projectId, onViewProjectLogs }: ProjectTeamPa
         initialTab={workSheetTab}
         onViewProjectLogs={onViewProjectLogs}
       />
+
+      {payMember ? (
+        <FreelancerEngagementDialog
+          open={!!payMember}
+          onOpenChange={(next) => {
+            if (!next) setPayMember(null);
+          }}
+          projectId={projectId}
+          userId={payMember.userId}
+          freelancerName={payMember.name}
+        />
+      ) : null}
     </Card>
   );
 }

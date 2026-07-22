@@ -27,7 +27,7 @@ export async function create(req, res) {
 
 export async function list(req, res) {
   const { page, limit, skip } = parsePagination(req.query);
-  const isAdmin = ["super_admin", "admin"].includes(req.user.role);
+  const isAdmin = ["super_admin", "hr"].includes(req.user.role);
   const userId = req.query.userId
     ? Number(req.query.userId)
     : isAdmin ? undefined : req.user.id;
@@ -75,7 +75,7 @@ export async function serveContent(req, res) {
   const doc = await employeeScreenshotsTable.findOne({ id }).lean();
   if (!doc) notFound("Screenshot");
 
-  const isAdmin = ["super_admin", "admin"].includes(req.user.role);
+  const isAdmin = ["super_admin", "hr"].includes(req.user.role);
   if (!isAdmin && doc.userId !== req.user.id) {
     forbidden("You can only view your own screenshots.");
   }

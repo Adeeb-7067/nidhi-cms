@@ -1,0 +1,43 @@
+---
+description: Prevent incomplete role, project-type, and finance features from shipping with gaps across BE/FE/tests
+alwaysApply: true
+---
+
+# Feature completeness (role / type / money)
+
+When adding or changing a **CMS role**, **project type**, or **finance money/GST entity**, finish the full surface — do not stop at the happy path you touched.
+
+## New or changed CMS role
+
+Update **all** of these (or document why N/A):
+
+1. `backend/src/constants/user-roles.js` — every relevant list (`userRoles`, staff, HRM, monitorable, etc.)
+2. `frontend/src/lib/user-roles.ts` — mirror the same lists + labels/colors
+3. `backend/openapi.yaml` + regenerate Zod (`api-zod`) role enums
+4. Permission template in `permissions.service.js` (`cmsRole` must match)
+5. Login home / nav / `PageOutlet` / `route-permissions` / `navigation.ts`
+6. Team create/edit UI if the role is hireable (`fixedRole` or role picker)
+7. Access scoping (projects, discussions, clients) for that role
+8. Unit tests: extend `profile-page-roles` / `role-matrix-completeness` — **never leave expected arrays missing the new role**
+
+## New or changed project type (e.g. digital)
+
+1. Backend create/list filters and access rules
+2. Admin create/edit form: **type-dependent fields** (labels + options) must switch with type; clear incompatible values on type change
+3. Dedicated portal detail route must support team assign if membership scopes access
+4. List/detail copy (“Tech stack” vs “Platforms”) must match type
+5. Auto-provision side effects (e.g. digital workspace account)
+
+## Finance / GST / ledgers
+
+1. **One source of truth for GST** — do not count the same tax on two entities (e.g. expense `gstAmount` + vendor invoice). Prefer: bill holds GST; payment is cash only and links to the bill.
+2. Wire Tax summary aggregations when adding a new GST-bearing document
+3. Soft-delete / cancelled rows must be excluded from tax totals
+4. Add unit tests for amount math and for “what feeds gstPaid / gstCollected”
+
+## QA mindset before done
+
+- [ ] New role/type appears in enums, permissions, nav, and tests
+- [ ] Opposite portal (admin vs marketing vs finance) can complete the job end-to-end
+- [ ] No duplicate money/GST paths without an explicit link field
+- [ ] Regression tests updated in the same PR (stale expected arrays are bugs)

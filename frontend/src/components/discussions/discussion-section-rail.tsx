@@ -1,10 +1,11 @@
-import { Building2, Lock, MessageCircle, Users } from "lucide-react";
+import { Building2, Lock, Megaphone, MessageCircle, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type DiscussionAdminSection =
   | "team"
   | "team_direct"
   | "clients"
+  | "digital_clients"
   | "clients_direct"
   | "internal";
 
@@ -14,9 +15,11 @@ export type DiscussionSectionRailProps = {
   teamUnread: number;
   teamDirectUnread: number;
   clientsUnread: number;
+  digitalClientsUnread: number;
   clientsDirectUnread: number;
   internalUnread: number;
   clientsCount: number;
+  digitalClientsCount: number;
   internalCount: number;
   className?: string;
 };
@@ -36,9 +39,11 @@ export function DiscussionSectionRail({
   teamUnread,
   teamDirectUnread,
   clientsUnread,
+  digitalClientsUnread,
   clientsDirectUnread,
   internalUnread,
   clientsCount,
+  digitalClientsCount,
   internalCount,
   className,
 }: DiscussionSectionRailProps) {
@@ -60,10 +65,18 @@ export function DiscussionSectionRail({
     {
       id: "clients",
       label: "Clients",
-      description: "Project chats",
+      description: "Delivery projects",
       icon: Building2,
       unread: clientsUnread,
       count: clientsCount,
+    },
+    {
+      id: "digital_clients",
+      label: "Digital",
+      description: "Digital projects",
+      icon: Megaphone,
+      unread: digitalClientsUnread,
+      count: digitalClientsCount,
     },
     {
       id: "clients_direct",

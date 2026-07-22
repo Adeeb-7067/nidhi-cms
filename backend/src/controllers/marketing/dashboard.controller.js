@@ -14,6 +14,10 @@ import {
   clientsTable,
 } from "../../models/schema/index.js";
 import { toIso } from "../../utils/mongo-list.js";
+import {
+  canViewMarketingClientBudget,
+  getScopedDigitalUserAccess,
+} from "../../services/marketing/helpers.js";
 
 function startOfDay(d = new Date()) {
   const x = new Date(d);
@@ -39,8 +43,6 @@ function entries(map) {
 function dayKey(date) {
   return new Date(date).toISOString().slice(0, 10);
 }
-
-import { getScopedDigitalUserAccess } from "../../services/marketing/helpers.js";
 
 export async function getDashboard(req, res) {
   const now = new Date();
@@ -199,8 +201,13 @@ export async function getDashboard(req, res) {
           activeAccounts.length,
       )
     : 0;
-  const totalMonthlyBudget = accounts.reduce((s, a) => s + Number(a.monthlyBudgetInr || 0), 0);
-  const activeBudget = activeAccounts.reduce((s, a) => s + Number(a.monthlyBudgetInr || 0), 0);
+  const includeClientBudget = canViewMarketingClientBudget(req.user?.role);
+  const totalMonthlyBudget = includeClientBudget
+    ? accounts.reduce((s, a) => s + Number(a.monthlyBudgetInr || 0), 0)
+    : null;
+  const activeBudget = includeClientBudget
+    ? activeAccounts.reduce((s, a) => s + Number(a.monthlyBudgetInr || 0), 0)
+    : null;
 
   const tasksByStatusMap = {};
   const tasksByCategoryMap = {};
@@ -291,7 +298,7 @@ export async function getDashboard(req, res) {
       companyName: companyName.get(a.companyId) ?? `Company #${a.companyId}`,
       package: a.package,
       performanceScore: Number(a.performanceScore || 0),
-      monthlyBudgetInr: Number(a.monthlyBudgetInr || 0),
+      monthlyBudgetInr: includeClientBudget ? Number(a.monthlyBudgetInr || 0) : null,
       platforms: a.platforms ?? [],
       status: a.status,
     }));

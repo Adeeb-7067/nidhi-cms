@@ -149,6 +149,7 @@ export function discussionChannelTitle(
 export function discussionChannelSubtitle(
   threadType: ProjectDiscussionThreadType,
   peerUser?: DiscussionPeerUser,
+  project?: Pick<Project, "type" | "companyName" | "clientName"> | null,
 ): string {
   if (threadType === "direct") {
     const detail = peerUser?.subtitle ?? "Private";
@@ -156,7 +157,22 @@ export function discussionChannelSubtitle(
   }
   if (threadType === "company_team") return "Office · official";
   if (threadType === "company_team_unofficial") return "Office · unofficial";
-  return threadType === "project_internal" ? "Staff only" : "Team & client";
+  if (threadType === "project_internal") {
+    const company = project?.companyName || project?.clientName;
+    const kind = project?.type === "digital" ? "Digital" : "Delivery";
+    return company ? `Staff only · ${kind} · ${company}` : `Staff only · ${kind}`;
+  }
+  const company = project?.companyName || project?.clientName;
+  if (project?.type === "digital") {
+    return company ? `Digital client · ${company}` : "Digital client";
+  }
+  return company ? `Delivery client · ${company}` : "Team & client";
+}
+
+export function isDigitalDiscussionProject(
+  project?: Pick<Project, "type"> | null,
+): boolean {
+  return project?.type === "digital";
 }
 
 /** Synthetic id for a 1:1 row before a conversation exists on the server. */

@@ -291,12 +291,20 @@ function createWindow() {
 
   isCreatingWindow = true;
   try {
+    const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+    const iconPath = path.join(ASSETS_DIR, iconFile);
+    const fallbackIconPath = path.join(ASSETS_DIR, 'icon.png');
+    const windowIcon = fs.existsSync(iconPath)
+      ? iconPath
+      : (fs.existsSync(fallbackIconPath) ? fallbackIconPath : undefined);
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
     minWidth: 900,
     minHeight: 600,
     title: 'CMS Desktop',
+    icon: windowIcon,
     show: false, // show after ready-to-show to avoid white flash
     webPreferences: {
       contextIsolation: true,      // renderer cannot access Node APIs

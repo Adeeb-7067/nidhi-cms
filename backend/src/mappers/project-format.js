@@ -80,6 +80,8 @@ function mapProjectRow(project, ctx) {
       ? new Date(project.deadline).toISOString()
       : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
     techStack: project.techStack,
+    digitalServices: project.digitalServices ?? {},
+    socialLinks: project.socialLinks ?? {},
     figmaUrl: project.figmaUrl,
     repoUrl: project.repoUrl,
     stagingUrl: project.stagingUrl,

@@ -58,6 +58,7 @@ function getHomePath(role: string): string {
   if (role === "hr") return "/hrm";
   if (role === "bde") return "/sales/bde";
   if (role === "finance") return "/finance";
+  if (role === "digital") return "/marketing";
   if (isDevPortalRole(role)) return "/dev";
   if (role === "client") return "/client";
   return "/sales";

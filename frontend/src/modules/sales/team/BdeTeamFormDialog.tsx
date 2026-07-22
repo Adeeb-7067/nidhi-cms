@@ -40,8 +40,11 @@ import {
 
 const BDE_ROLE = "bde";
 
-function defaultBdeFormValues(defaultDepartmentId: number | null): TeamEmployeeFormValues {
-  return { ...defaultTeamEmployeeFormValues(defaultDepartmentId), role: BDE_ROLE };
+function defaultFixedRoleFormValues(
+  fixedRole: string,
+  defaultDepartmentId: number | null,
+): TeamEmployeeFormValues {
+  return { ...defaultTeamEmployeeFormValues(defaultDepartmentId), role: fixedRole };
 }
 
 export function BdeTeamFormDialog({
@@ -49,11 +52,14 @@ export function BdeTeamFormDialog({
   onOpenChange,
   editUser,
   onSaved,
+  /** When set, create/edit always persists this CMS role (e.g. "digital"). */
+  fixedRole = BDE_ROLE,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editUser: User | null;
   onSaved?: () => void;
+  fixedRole?: string;
 }) {
   const queryClient = useQueryClient();
   const [employeeFormTab, setEmployeeFormTab] = useState<EmployeeFormTab>("personal");
@@ -92,7 +98,7 @@ export function BdeTeamFormDialog({
 
   const form = useForm<TeamEmployeeFormValues>({
     resolver: zodResolver(teamEmployeeSchema),
-    defaultValues: defaultBdeFormValues(defaultDepartmentId),
+    defaultValues: defaultFixedRoleFormValues(fixedRole, defaultDepartmentId),
     shouldUnregister: false,
   });
 
@@ -147,7 +153,7 @@ export function BdeTeamFormDialog({
         ),
         libraryDocs,
       );
-      mapped.role = BDE_ROLE;
+      mapped.role = fixedRole;
       editBaselineRef.current = {
         ...mapped,
         roleTemplateId: storedRoleTemplateId(editUserProfile as User & Record<string, unknown>),
@@ -161,7 +167,7 @@ export function BdeTeamFormDialog({
     setEditFormSynced(true);
     if (createFormInitializedRef.current) return;
     createFormInitializedRef.current = true;
-    form.reset(defaultBdeFormValues(defaultDepartmentId), {
+    form.reset(defaultFixedRoleFormValues(fixedRole, defaultDepartmentId), {
       keepDirty: false,
       keepDefaultValues: false,
     });
@@ -177,6 +183,7 @@ export function BdeTeamFormDialog({
     cmsRoleOptions,
     roleTemplateOptions,
     editUser?.employeeId,
+    fixedRole,
     form,
   ]);
 
@@ -216,7 +223,7 @@ export function BdeTeamFormDialog({
   };
 
   const onSubmit = async (values: TeamEmployeeFormValues) => {
-    const payload = { ...values, role: values.role || BDE_ROLE };
+    const payload = { ...values, role: fixedRole };
     try {
       if (editUser) {
         const baseline = editBaselineRef.current;
@@ -262,15 +269,20 @@ export function BdeTeamFormDialog({
     }
   };
 
+  const roleLabel =
+    fixedRole === "digital" ? "Digital Specialist" : fixedRole === "bde" ? "BDE" : fixedRole;
+  const roleNoun =
+    fixedRole === "digital" ? "Digital Specialist" : fixedRole === "bde" ? "BDE member" : `${fixedRole} member`;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 gap-0">
         <DialogHeader className="px-6 pt-6 pb-2 shrink-0">
-          <DialogTitle>{editUser ? "Edit BDE member" : "Add BDE member"}</DialogTitle>
+          <DialogTitle>{editUser ? `Edit ${roleNoun}` : `Add ${roleNoun}`}</DialogTitle>
           <DialogDescription>
             {editUser
-              ? "Update profile and access for this business development executive."
-              : "Create a new BDE account with the standard employee profile fields."}
+              ? `Update profile and access for this ${roleLabel}.`
+              : `Create a new ${roleLabel} account with the standard employee profile fields.`}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -297,6 +309,7 @@ export function BdeTeamFormDialog({
                   onSyncDisplayName={syncDisplayNameFromParts}
                   employeeDocuments={editUserDocumentsData?.documents}
                   employeeDocumentsLoading={editDocumentsFetching}
+                  lockRole={fixedRole}
                 />
               )}
             </div>

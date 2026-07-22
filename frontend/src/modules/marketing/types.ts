@@ -99,7 +99,7 @@ export interface MarketingClient {
   package: MarketingPackage;
   accountManager: string;
   platforms: MarketingPlatform[];
-  monthlyBudgetInr: number;
+  monthlyBudgetInr: number | null;
   renewalDate: string;
   city: string;
   performanceScore: number;

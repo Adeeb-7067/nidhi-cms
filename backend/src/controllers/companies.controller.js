@@ -11,6 +11,7 @@ import {
 import { formatProject } from "../mappers/project-format.js";
 import { createClientCompanyRecord } from "../services/client-company-provision.js";
 import { assertCompanyAccess } from "../services/access/access-helpers.js";
+import { getAccessibleCompanyIds, applyIdScope } from "../services/access/list-scope.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import {
   badRequest,
@@ -30,6 +31,11 @@ async function getCompanies(req, res) {
   const query = {};
   if (status) query.status = status;
   if (search?.trim()) query.companyName = { $regex: search.trim(), $options: "i" };
+  const companyIds = await getAccessibleCompanyIds(req.user);
+  if (!applyIdScope(query, "id", companyIds)) {
+    res.json({ companies: [], clients: [], total: 0, page, limit });
+    return;
+  }
   const { items, total, page: pageNum, limit: limitNum } = await paginateModel(
     clientsTable,
     query,

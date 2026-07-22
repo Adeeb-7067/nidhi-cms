@@ -126,17 +126,48 @@ export type NavSection = {
   items: NavItem[];
 };
 
-export function getHomeHref(role: UserRole): string {
+export function getHomeHref(
+  role: UserRole,
+  freelancerTracks?: FreelancerNavTracks | null,
+): string {
   if (role === "super_admin") return "/admin";
   if (role === "hr") return "/hrm";
   if (role === "bde") return "/sales/bde";
   if (role === "finance") return "/finance";
   if (role === "digital") return "/marketing";
   if (role === "client") return "/client";
+  if (role === "freelancer") {
+    if (freelancerTracks?.digital && !freelancerTracks.delivery) return "/marketing";
+    if (freelancerTracks?.delivery) return "/dev";
+    if (freelancerTracks?.digital) return "/marketing";
+    return "/dev/payments";
+  }
   return "/dev";
 }
 
-export function getNavSections(role: UserRole): NavSection[] {
+/** Which portals a freelancer should see, based on assigned project types. */
+export type FreelancerNavTracks = {
+  digital: boolean;
+  delivery: boolean;
+};
+
+export function getFreelancerNavTracks(
+  projects: Array<{ type?: string | null } | null | undefined> | undefined,
+): FreelancerNavTracks {
+  let digital = false;
+  let delivery = false;
+  for (const p of projects ?? []) {
+    if (!p) continue;
+    if (p.type === "digital") digital = true;
+    else delivery = true;
+  }
+  return { digital, delivery };
+}
+
+export function getNavSections(
+  role: UserRole,
+  opts?: { freelancerTracks?: FreelancerNavTracks | null },
+): NavSection[] {
   const all: NavSection[] = [
     // =========================
     // MANAGE (FIRST PRIORITY)
@@ -226,23 +257,23 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "CRM & Sales",
       railLabel: "Sales",
       icon: TrendingUp,
-      roles: [...INTERNAL_STAFF_ROLES],
+      roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"),
       items: [
         { title: "My Dashboard", href: "/sales/bde", icon: LayoutDashboard, roles: ["bde"], group: "Overview" },
         { title: "My Projects", href: "/sales/bde/projects", icon: FolderKanban, roles: ["bde"], group: "Overview" },
         { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["bde"], group: "Overview" },
-        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde"), group: "Overview" },
-        { title: "Lead management", href: "/sales/leads", icon: Target, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
-        { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
-        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
-        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
-        { title: "Client team", href: "/sales/client-team", icon: UsersRound, roles: [...INTERNAL_STAFF_ROLES], group: "Pipeline" },
-        { title: "Installments", href: "/sales/installments", icon: Layers, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
-        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
-        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: [...INTERNAL_STAFF_ROLES], group: "Billing" },
-        { title: "Products", href: "/sales/products", icon: Package, roles: [...INTERNAL_STAFF_ROLES], group: "Catalog" },
-        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: [...INTERNAL_STAFF_ROLES], group: "Insights" },
-        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: [...INTERNAL_STAFF_ROLES], group: "Insights" },
+        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde" && r !== "digital"), group: "Overview" },
+        { title: "Lead management", href: "/sales/leads", icon: Target, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
+        { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
+        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
+        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
+        { title: "Client team", href: "/sales/client-team", icon: UsersRound, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
+        { title: "Installments", href: "/sales/installments", icon: Layers, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
+        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
+        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
+        { title: "Products", href: "/sales/products", icon: Package, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Catalog" },
+        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Insights" },
+        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Insights" },
         { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin", "hr"], group: "Team" },
         { title: "Automation", href: "/sales/settings", icon: Settings, roles: [...HRM_ADMIN_ROLES], group: "Team" },
       ],
@@ -270,6 +301,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
         { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
+        { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["freelancer"], group: "Operations" },
         { title: "Digital team", href: "/marketing/team", icon: UsersRound, roles: ["super_admin", "hr"], group: "Team" },
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: [...MARKETING_ACCESS_ROLES], group: "Team" },
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: [...MARKETING_ACCESS_ROLES], group: "Reports" },
@@ -283,7 +315,7 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "Delivery",
       railLabel: "Delivery",
       icon: Package,
-      roles: ["super_admin", ...DEV_PORTAL_STAFF_ROLES],
+      roles: ["super_admin", "digital", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES],
       items: [
         {
           title: "Workspace",
@@ -352,19 +384,25 @@ export function getNavSections(role: UserRole): NavSection[] {
       label: "Collaboration",
       railLabel: "Collab",
       icon: MessageSquare,
-      roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+      roles: ["super_admin", "hr", "bde", "finance", "digital", ...DEV_PORTAL_STAFF_ROLES, "client"],
       items: [
         {
           title: "Discussions",
           href: "/discussions",
           icon: MessageSquare,
-          roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: ["super_admin", "hr", "bde", "finance", "digital", ...DEV_PORTAL_STAFF_ROLES, "client"],
         },
         {
           title: "Tickets",
           href: "/admin/tickets",
           icon: Ticket,
-          roles: ["super_admin", "hr", "bde", ...DEV_PORTAL_STAFF_ROLES, "client"],
+          roles: ["super_admin", "hr", "bde", "finance", "digital", ...DEV_PORTAL_STAFF_ROLES, "client"],
+        },
+        {
+          title: "My payments",
+          href: "/dev/payments",
+          icon: Wallet,
+          roles: ["freelancer"],
         },
       ],
     },
@@ -529,6 +567,7 @@ export function getNavSections(role: UserRole): NavSection[] {
         { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Loans", href: "/finance/loans", icon: HandCoins, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Subscriptions", href: "/finance/subscriptions", icon: KeyRound, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
+        { title: "Freelancers", href: "/finance/freelancers", icon: UsersRound, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Tax", href: "/finance/tax", icon: Percent, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: [...FINANCE_ACCESS_ROLES], group: "Reports" },
@@ -580,7 +619,18 @@ export function getNavSections(role: UserRole): NavSection[] {
       ...s,
       items: s.items.filter((i) => i.roles.includes(role)),
     }))
-    .filter((s) => s.items.length > 0);
+    .filter((s) => s.items.length > 0)
+    .filter((s) => {
+      if (role !== "freelancer") return true;
+      const tracks = opts?.freelancerTracks;
+      // Until project membership loads, hide both portals (payments stay under Collab).
+      if (!tracks) {
+        return s.label !== "Digital" && s.label !== "Delivery";
+      }
+      if (s.label === "Digital") return tracks.digital;
+      if (s.label === "Delivery") return tracks.delivery;
+      return true;
+    });
 }
 
 export function isNavActive(pathname: string, href: string): boolean {
@@ -605,6 +655,7 @@ export function isNavActive(pathname: string, href: string): boolean {
       hrefPath === "/ca" ||
       hrefPath === "/finance" ||
       hrefPath === "/hrm" ||
+      hrefPath === "/marketing" ||
       hrefPath === "/admin/roles" ||
       hrefPath === "/discussions"
     ) {

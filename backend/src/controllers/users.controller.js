@@ -41,11 +41,13 @@ import { syncSalaryStructureFromProfile } from "../services/hrm/payroll.service.
 import {
   badRequest,
   conflict,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString,
 } from "../utils/route-errors.js";
+import { isDevPortalStaffRole } from "../constants/user-roles.js";
 const USER_LIST_PROJECTION = {
   id: 1,
   employeeId: 1,
@@ -73,30 +75,49 @@ const USER_LIST_PROJECTION = {
 async function getUsers(req, res) {
   const { role, subType, search, staff } = req.query;
   const pagination = parsePagination(req.query);
+  const viewerRole = req.user.role;
+  const isPeopleAdmin = viewerRole === "super_admin" || viewerRole === "hr";
+  const canStaffPicker =
+    isPeopleAdmin ||
+    viewerRole === "digital" ||
+    viewerRole === "manager" ||
+    isDevPortalStaffRole(viewerRole) ||
+    viewerRole === "bde" ||
+    viewerRole === "finance";
+
   const query = {};
   if (staff === "true" || staff === "1") {
-    query.role = { $in: adminStaffRoles };
-  } else if (role) {
-    query.role = role;
+    if (!canStaffPicker) forbidden("You cannot list staff users.");
+    if (viewerRole === "digital") {
+      // Assignees for digital work — not the full org directory
+      query.role = { $in: ["digital", "manager", "super_admin"] };
+    } else if (!isPeopleAdmin) {
+      query.role = { $in: adminStaffRoles };
+    } else {
+      query.role = { $in: adminStaffRoles };
+    }
+  } else {
+    if (!isPeopleAdmin) forbidden("You cannot list all users.");
+    if (role) query.role = role;
   }
   if (subType) query.subType = subType;
   if (search?.trim()) {
     query.$or = [
       { name: { $regex: search.trim(), $options: "i" } },
-      { email: { $regex: search.trim(), $options: "i" } }
+      { email: { $regex: search.trim(), $options: "i" } },
     ];
   }
   const { items, total, page, limit } = await paginateModel(
     usersTable,
     query,
     pagination,
-    { projection: USER_LIST_PROJECTION }
+    { projection: USER_LIST_PROJECTION },
   );
   res.json({
     users: items.map((u) => formatUser(u, { withPresence: true })),
     total,
     page,
-    limit
+    limit,
   });
 }
 async function getUsersPreviewEmployeeId(req, res) {
@@ -203,10 +224,17 @@ async function getUsersById(req, res) {
   const id = parseIdParam(req.params.id, "user id");
   const user = await usersTable.findOne({ id }).lean();
   if (!user) notFound("User");
-  const includeSensitive =
-    req.user.role === "super_admin" ||
-    adminStaffRoles.includes(req.user.role) ||
-    req.user.id === id;
+
+  const isSelf = req.user.id === id;
+  const isPeopleAdmin = req.user.role === "super_admin" || req.user.role === "hr";
+
+  // Clients may only read their own user record
+  if (req.user.role === "client" && !isSelf) {
+    forbidden("You can only view your own profile.");
+  }
+
+  // Sensitive fields (salary, PAN, Aadhaar): self or people admins only
+  const includeSensitive = isSelf || isPeopleAdmin;
   res.json(formatUser(user, { withPresence: true, includeSensitive }));
 }
 async function adminSetUserPassword(userId, newPassword, adminUser) {

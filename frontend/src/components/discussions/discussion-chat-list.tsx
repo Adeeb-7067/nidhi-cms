@@ -4,6 +4,7 @@ import {
   discussionChannelSubtitle,
   discussionChannelTitle,
   isCompanyTeamChannel,
+  isDigitalDiscussionProject,
   isDirectChannel,
   parsePendingDirectPeerId,
   type DiscussionChannel,
@@ -14,7 +15,7 @@ import { ProjectDiscussionAvatar } from "@/components/discussions/project-discus
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, MessageCircle, Lock, Users, UserPlus } from "lucide-react";
+import { Search, MessageCircle, Lock, Users, UserPlus, Megaphone } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useQueryClient } from "@tanstack/react-query";
 import { getListCommentsQueryOptions } from "@/api";
@@ -49,8 +50,9 @@ const ChatListRow = React.memo(function ChatListRow({
   const isInternal = threadType === "project_internal";
   const isCompanyTeam = isCompanyTeamChannel(threadType);
   const isDirect = isDirectChannel(threadType);
+  const isDigital = isDigitalDiscussionProject(project);
   const displayTitle = discussionChannelTitle(project.name, threadType, channel.peerUser);
-  const displaySubtitle = discussionChannelSubtitle(threadType, channel.peerUser);
+  const displaySubtitle = discussionChannelSubtitle(threadType, channel.peerUser, project);
 
   return (
     <li>
@@ -85,23 +87,43 @@ const ChatListRow = React.memo(function ChatListRow({
             </AvatarFallback>
           </Avatar>
         ) : (
-          <ProjectDiscussionAvatar
-            project={project}
-            className="h-11 w-11"
-            fallbackClassName={
-              isSelected ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"
-            }
-          />
+          <div className="relative shrink-0">
+            <ProjectDiscussionAvatar
+              project={project}
+              className="h-11 w-11"
+              fallbackClassName={
+                isDigital
+                  ? isSelected
+                    ? "bg-violet-500/20 text-violet-700 dark:text-violet-300"
+                    : "bg-violet-500/15 text-violet-700 dark:text-violet-300"
+                  : isSelected
+                    ? "bg-primary/20 text-primary"
+                    : "bg-muted text-muted-foreground"
+              }
+            />
+            {isDigital && !isInternal ? (
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full border border-background bg-violet-600 text-white">
+                <Megaphone className="h-2.5 w-2.5" />
+              </span>
+            ) : null}
+          </div>
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-2">
-            <span
-              className={cn(
-                "truncate text-sm",
-                unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground",
-              )}
-            >
-              {displayTitle}
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span
+                className={cn(
+                  "truncate text-sm",
+                  unread > 0 ? "font-semibold text-foreground" : "font-medium text-foreground",
+                )}
+              >
+                {displayTitle}
+              </span>
+              {isDigital && (threadType === "project" || threadType === "project_internal") ? (
+                <span className="shrink-0 rounded bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                  Digital
+                </span>
+              ) : null}
             </span>
             {timeLabel ? (
               <span

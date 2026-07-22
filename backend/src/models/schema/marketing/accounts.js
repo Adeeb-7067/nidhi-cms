@@ -28,6 +28,10 @@ const marketingAccountSchema = new Schema(
       type: [{ type: String, enum: MARKETING_PLATFORMS }],
       default: [],
     },
+    /** Mirrors project.digitalServices — { seo, metaAds, googleAds } */
+    digitalServices: { type: Schema.Types.Mixed, default: {} },
+    /** Mirrors project.socialLinks — profile URLs by network */
+    socialLinks: { type: Schema.Types.Mixed, default: {} },
     monthlyBudgetInr: { type: Number, default: 0, min: 0 },
     renewalDate: { type: Date, default: null },
     status: {

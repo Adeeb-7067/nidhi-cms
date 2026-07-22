@@ -1,4 +1,10 @@
-import { vendorsTable, FinanceExpenses, FinancePayments, getNextSequence } from "../../models/schema/index.js";
+import {
+  vendorsTable,
+  FinanceExpenses,
+  FinancePayments,
+  FinanceVendorInvoices,
+  getNextSequence,
+} from "../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString, conflict } from "../../utils/route-errors.js";
 import { escapeRegex } from "../../utils/regex.js";
 import {
@@ -139,13 +145,14 @@ async function deleteVendor(req, res) {
   const vendor = await vendorsTable.findOne({ id }).select({ id: 1 }).lean();
   if (!vendor) notFound("Vendor");
 
-  const [linkedExpense, linkedPayment] = await Promise.all([
+  const [linkedExpense, linkedPayment, linkedInvoice] = await Promise.all([
     FinanceExpenses.findOne({ vendorId: id }).select({ id: 1 }).lean(),
     FinancePayments.findOne({ vendorId: id }).select({ id: 1 }).lean(),
+    FinanceVendorInvoices.findOne({ vendorId: id }).select({ id: 1 }).lean(),
   ]);
-  if (linkedExpense || linkedPayment) {
+  if (linkedExpense || linkedPayment || linkedInvoice) {
     conflict(
-      "This vendor is used by existing expenses or payments and cannot be deleted.",
+      "This vendor is used by existing expenses, payments, or invoices and cannot be deleted.",
       "vendorId",
     );
   }

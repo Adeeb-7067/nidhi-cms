@@ -36,7 +36,7 @@ export async function uploadScreenshot({ buffer, originalName, mimetype, userId,
 }
 
 export async function listScreenshots({ userId, projectId, startDate, endDate, page, limit, skip, requestingUser }) {
-  const isAdmin = ["super_admin", "admin"].includes(requestingUser.role);
+  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
 
   if (!isAdmin) {
     userId = requestingUser.id;
@@ -66,7 +66,7 @@ export async function listScreenshots({ userId, projectId, startDate, endDate, p
 }
 
 export async function deleteScreenshot(id, requestingUser) {
-  const isAdmin = ["super_admin", "admin"].includes(requestingUser.role);
+  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
   if (!isAdmin) forbidden("Only admins can delete screenshots.");
 
   const doc = await employeeScreenshotsTable.findOne({ id });
@@ -85,7 +85,7 @@ export async function bulkDeleteScreenshots(ids, requestingUser) {
     badRequest("ids must be a non-empty array.", "ids");
   }
 
-  const isAdmin = ["super_admin", "admin"].includes(requestingUser.role);
+  const isAdmin = ["super_admin", "hr"].includes(requestingUser.role);
   if (!isAdmin) forbidden("Only admins can delete screenshots.");
 
   const docs = await employeeScreenshotsTable.find({ id: { $in: ids } }, { id: 1, fileUrl: 1 }).lean();

@@ -18,14 +18,17 @@ import {
 import {
   useListRequests,
   useListBugs,
+  useListProjects,
   getListRequestsQueryKey,
   getListBugsQueryKey,
+  getListProjectsQueryKey,
 } from "@/api";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { QUERY_STALE } from "@/lib/query-config";
 import {
   getNavSections,
   getHomeHref,
+  getFreelancerNavTracks,
   isNavActive,
   findActiveNavGroupLabel,
   getSectionDefaultHref,
@@ -174,9 +177,25 @@ function useSidebarNavState() {
 
   const role = user?.role as UserRole;
   const { canViewHref } = usePermissions();
+
+  const freelancerProjectsParams = { limit: 100 };
+  const { data: freelancerProjectsData } = useListProjects(freelancerProjectsParams, {
+    query: {
+      enabled: role === "freelancer",
+      queryKey: getListProjectsQueryKey(freelancerProjectsParams),
+      staleTime: 60_000,
+    },
+  });
+
+  const freelancerTracks = useMemo(() => {
+    if (role !== "freelancer") return null;
+    if (!freelancerProjectsData) return null;
+    return getFreelancerNavTracks(freelancerProjectsData.projects ?? []);
+  }, [role, freelancerProjectsData]);
+
   const rawSections = useMemo(
-    () => (user ? getNavSections(role) : []),
-    [user, role],
+    () => (user ? getNavSections(role, { freelancerTracks }) : []),
+    [user, role, freelancerTracks],
   );
 
   const sections = useMemo<NavSection[]>(() => {
@@ -223,7 +242,7 @@ function useSidebarNavState() {
     canViewHref,
   ]);
 
-  const homeHref = user ? getHomeHref(role) : "/login";
+  const homeHref = user ? getHomeHref(role, freelancerTracks) : "/login";
 
   const [activeGroup, setActiveGroup] = useState(() =>
     sections.length ? (findActiveNavGroupLabel(sections, location) ?? sections[0].label) : "",

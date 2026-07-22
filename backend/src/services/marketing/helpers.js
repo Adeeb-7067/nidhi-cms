@@ -12,6 +12,11 @@ import {
 import { DEFAULT_MEDIA_SUBFOLDERS } from "../../constants/marketing.js";
 import { toIso } from "../../utils/mongo-list.js";
 import { badRequest, forbidden } from "../../utils/route-errors.js";
+import {
+  normalizeDigitalServices,
+  normalizeSocialLinks,
+  deriveMarketingPlatformEnums,
+} from "../../utils/digital-project-fields.js";
 
 export async function recordMarketingActivity({
   accountId = null,
@@ -148,15 +153,29 @@ export async function ensureDigitalAccountForProject(project, userId) {
   if (!Number.isFinite(projectId) || !Number.isFinite(companyId)) return null;
 
   const vaultRootName = optionalProjectFolderName(project);
+  const digitalServices = normalizeDigitalServices(project.digitalServices);
+  const socialLinks = normalizeSocialLinks(project.socialLinks);
+  const derivedPlatforms = deriveMarketingPlatformEnums(digitalServices, socialLinks);
 
   const existing = await marketingAccountsTable
-    .findOne({ projectId, isDeleted: false, status: { $ne: "ended" } })
-    .lean();
+    .findOne({ projectId, isDeleted: false, status: { $ne: "ended" } });
   if (existing) {
-    await ensureAccountMediaVault(existing.id, companyId, userId, {
+    const nextPlatforms =
+      derivedPlatforms.length > 0
+        ? derivedPlatforms
+        : Array.isArray(existing.platforms)
+          ? existing.platforms
+          : [];
+    existing.companyId = companyId;
+    existing.digitalServices = digitalServices;
+    existing.socialLinks = socialLinks;
+    existing.platforms = nextPlatforms;
+    await existing.save();
+    const lean = existing.toObject ? existing.toObject() : existing;
+    await ensureAccountMediaVault(lean.id, companyId, userId, {
       rootName: vaultRootName,
     });
-    return existing;
+    return lean;
   }
 
   const soft = await marketingAccountsTable.findOne({ projectId, isDeleted: true });
@@ -165,6 +184,9 @@ export async function ensureDigitalAccountForProject(project, userId) {
     soft.deletedAt = null;
     soft.status = "active";
     soft.companyId = companyId;
+    soft.digitalServices = digitalServices;
+    soft.socialLinks = socialLinks;
+    if (derivedPlatforms.length) soft.platforms = derivedPlatforms;
     await soft.save();
     await ensureAccountMediaVault(soft.id, companyId, userId, {
       rootName: vaultRootName,
@@ -178,7 +200,9 @@ export async function ensureDigitalAccountForProject(project, userId) {
     companyId,
     projectId,
     package: "standard",
-    platforms: [],
+    platforms: derivedPlatforms,
+    digitalServices,
+    socialLinks,
     monthlyBudgetInr: 0,
     status: "active",
     createdBy: userId,
@@ -251,7 +275,8 @@ export async function ensureAccountsForAllDigitalProjects(userId) {
   return created;
 }
 
-export function formatAccount(doc, company, manager, project = null) {
+export function formatAccount(doc, company, manager, project = null, options = {}) {
+  const includeClientBudget = options.includeClientBudget === true;
   return {
     id: doc.id,
     companyId: doc.companyId,
@@ -264,7 +289,10 @@ export function formatAccount(doc, company, manager, project = null) {
     accountManagerId: doc.accountManagerId ?? null,
     accountManager: manager?.name ?? null,
     platforms: doc.platforms ?? [],
-    monthlyBudgetInr: Number(doc.monthlyBudgetInr ?? 0),
+    digitalServices: doc.digitalServices ?? {},
+    socialLinks: doc.socialLinks ?? {},
+    /** Client retainer — only for super_admin (omit otherwise). */
+    monthlyBudgetInr: includeClientBudget ? Number(doc.monthlyBudgetInr ?? 0) : null,
     renewalDate: toIso(doc.renewalDate)?.slice(0, 10) ?? null,
     status: doc.status,
     performanceScore: Number(doc.performanceScore ?? 0),
@@ -272,6 +300,16 @@ export function formatAccount(doc, company, manager, project = null) {
     createdAt: toIso(doc.createdAt),
     updatedAt: toIso(doc.updatedAt),
   };
+}
+
+/** Client monthly retainer / commercial package — super_admin only. */
+export function canViewMarketingClientBudget(role) {
+  return role === "super_admin";
+}
+
+/** Alias: commercial client terms (retainer, package tier edits). */
+export function canManageMarketingClientCommercial(role) {
+  return role === "super_admin";
 }
 
 export async function loadCompany(companyId) {
@@ -349,14 +387,17 @@ export function inferMediaKind(filename, mimetype) {
 }
 
 /**
- * For a non-admin digital user (user.role === 'digital'):
- * Find all accountIds, projectIds, and companyIds assigned to this user.
- * Returns { isScoped: boolean, accountIds: number[], projectIds: number[], companyIds: number[] }
+ * Scoped marketing access for digital specialists and freelancers on assigned work.
+ * Returns { isScoped, accountIds, projectIds, companyIds }
  */
 export async function getScopedDigitalUserAccess(user) {
-  const isDigital = user?.role === "digital";
   const isAdmin = ["super_admin", "hr"].includes(user?.role);
-  if (!isDigital || isAdmin) {
+  if (isAdmin) {
+    return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
+  }
+
+  const needsScope = user?.role === "digital" || user?.role === "freelancer";
+  if (!needsScope) {
     return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
   }
 

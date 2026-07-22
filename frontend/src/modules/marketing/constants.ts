@@ -15,7 +15,16 @@ import type {
   VideoRenderStatus,
 } from "./types";
 
-export const MARKETING_ACCESS_ROLES = ["super_admin", "digital"] as const;
+export const MARKETING_ACCESS_ROLES = ["super_admin", "digital", "freelancer"] as const;
+
+/** Client retainer / package tier changes — super_admin only (not digital specialists). */
+export function canManageMarketingClientCommercial(role: string | null | undefined): boolean {
+  return role === "super_admin";
+}
+
+export function canViewMarketingClientBudget(role: string | null | undefined): boolean {
+  return canManageMarketingClientCommercial(role);
+}
 
 export const PACKAGE_LABELS: Record<MarketingPackage, string> = {
   basic: "Basic",

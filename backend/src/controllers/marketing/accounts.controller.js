@@ -11,6 +11,7 @@ import { PACKAGE_QUOTAS } from "../../constants/marketing.js";
 import {
   badRequest,
   notFound,
+  forbidden,
   parseIdParam,
   parsePagination,
   optionalString,
@@ -21,6 +22,8 @@ import {
   bootstrapAccountMediaVault,
   ensureAccountsForAllDigitalProjects,
   formatAccount,
+  canViewMarketingClientBudget,
+  canManageMarketingClientCommercial,
   loadCompany,
   loadUser,
   loadProject,
@@ -34,13 +37,15 @@ import {
   MARKETING_ACCOUNT_STATUSES,
 } from "../../constants/marketing.js";
 
-async function formatAccountRow(doc) {
+async function formatAccountRow(doc, req) {
   const [company, manager, project] = await Promise.all([
     loadCompany(doc.companyId),
     loadUser(doc.accountManagerId),
     loadProject(doc.projectId),
   ]);
-  return formatAccount(doc, company, manager, project);
+  return formatAccount(doc, company, manager, project, {
+    includeClientBudget: canViewMarketingClientBudget(req?.user?.role),
+  });
 }
 
 export async function listAccounts(req, res) {
@@ -141,6 +146,7 @@ export async function listAccounts(req, res) {
         companies.get(a.companyId),
         users.get(a.accountManagerId),
         projects.get(a.projectId),
+        { includeClientBudget: canViewMarketingClientBudget(req.user?.role) },
       ),
     ),
     total,
@@ -155,7 +161,7 @@ export async function getAccountById(req, res) {
   if (!doc) notFound("Digital account");
 
   const [account, usage] = await Promise.all([
-    formatAccountRow(doc),
+    formatAccountRow(doc, req),
     getDeliverableUsage(id, doc.package),
   ]);
 
@@ -215,12 +221,22 @@ export async function createAccount(req, res) {
 
   const pkg = optionalString(body.package) ?? "standard";
   if (!MARKETING_PACKAGES.includes(pkg)) badRequest("Invalid package.", "package");
+  if (
+    body.package != null &&
+    !canManageMarketingClientCommercial(req.user?.role) &&
+    pkg !== "standard"
+  ) {
+    forbidden("Only super admin can set a non-default client package.");
+  }
 
   const platforms = Array.isArray(body.platforms)
     ? body.platforms.filter((p) => MARKETING_PLATFORMS.includes(p))
     : [];
 
   const id = await getNextSequence("marketing_accounts");
+  const monthlyBudgetInr = canManageMarketingClientCommercial(req.user?.role)
+    ? Number(body.monthlyBudgetInr ?? 0)
+    : 0;
   const doc = await marketingAccountsTable.create({
     id,
     companyId,
@@ -228,7 +244,7 @@ export async function createAccount(req, res) {
     package: pkg,
     accountManagerId: body.accountManagerId != null ? Number(body.accountManagerId) : null,
     platforms,
-    monthlyBudgetInr: Number(body.monthlyBudgetInr ?? 0),
+    monthlyBudgetInr,
     renewalDate: body.renewalDate ? new Date(body.renewalDate) : null,
     status: MARKETING_ACCOUNT_STATUSES.includes(body.status) ? body.status : "active",
     industry: optionalString(body.industry),
@@ -249,7 +265,7 @@ export async function createAccount(req, res) {
     entityId: id,
   });
 
-  res.status(201).json(await formatAccountRow(doc.toObject ? doc.toObject() : doc));
+  res.status(201).json(await formatAccountRow(doc.toObject ? doc.toObject() : doc, req));
 }
 
 export async function updateAccount(req, res) {
@@ -259,6 +275,9 @@ export async function updateAccount(req, res) {
 
   const body = req.body ?? {};
   if (body.package != null) {
+    if (!canManageMarketingClientCommercial(req.user?.role)) {
+      forbidden("Only super admin can change the client package.");
+    }
     if (!MARKETING_PACKAGES.includes(body.package)) badRequest("Invalid package.", "package");
     doc.package = body.package;
   }
@@ -275,7 +294,12 @@ export async function updateAccount(req, res) {
       ? body.platforms.filter((p) => MARKETING_PLATFORMS.includes(p))
       : doc.platforms;
   }
-  if (body.monthlyBudgetInr != null) doc.monthlyBudgetInr = Number(body.monthlyBudgetInr);
+  if (body.monthlyBudgetInr != null) {
+    if (!canManageMarketingClientCommercial(req.user?.role)) {
+      forbidden("Only super admin can view or change client monthly budget.");
+    }
+    doc.monthlyBudgetInr = Number(body.monthlyBudgetInr);
+  }
   if (body.renewalDate !== undefined) {
     doc.renewalDate = body.renewalDate ? new Date(body.renewalDate) : null;
   }
@@ -313,7 +337,7 @@ export async function updateAccount(req, res) {
   }
 
   await doc.save();
-  res.json(await formatAccountRow(doc.toObject ? doc.toObject() : doc));
+  res.json(await formatAccountRow(doc.toObject ? doc.toObject() : doc, req));
 }
 
 export async function deleteAccount(req, res) {

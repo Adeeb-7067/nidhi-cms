@@ -159,11 +159,14 @@ function MediaThumb({
 export function MediaDesktopExplorer({
   accountId,
   className,
+  onBackToAllProjects,
 }: {
   accountId: number;
   /** @deprecated use accountId */
   initialClientId?: string;
   className?: string;
+  /** When at vault root, Up / All projects returns to the multi-project home. */
+  onBackToAllProjects?: () => void;
 }) {
   const { data, isLoading, isError, refetch } = useMarketingMediaTree(accountId);
   const createFolder = useCreateMarketingFolder();
@@ -244,7 +247,11 @@ export function MediaDesktopExplorer({
 
   const goUp = () => {
     const current = currentId ? byId.get(currentId) : undefined;
-    if (current?.parentId) navigate(current.parentId);
+    if (current?.parentId) {
+      navigate(current.parentId);
+      return;
+    }
+    onBackToAllProjects?.();
   };
 
   const path = useMemo(() => {
@@ -452,12 +459,32 @@ export function MediaDesktopExplorer({
           <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={historyIndex >= history.length - 1} onClick={goForward}>
             <ArrowRight className="h-3.5 w-3.5" />
           </Button>
-          <Button type="button" size="icon" variant="ghost" className="h-7 w-7" disabled={!currentFolder?.parentId} onClick={goUp}>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-7 w-7"
+            disabled={!currentFolder?.parentId && !onBackToAllProjects}
+            onClick={goUp}
+            title={currentFolder?.parentId ? "Up" : "All projects"}
+          >
             <ArrowUp className="h-3.5 w-3.5" />
           </Button>
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-md border bg-background/90 px-2 py-1 text-[11px]">
+          {onBackToAllProjects ? (
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={onBackToAllProjects}
+                className="rounded px-1 py-0.5 text-muted-foreground hover:bg-muted"
+              >
+                All projects
+              </button>
+              <ChevronRight className="h-3 w-3 text-muted-foreground" />
+            </span>
+          ) : null}
           {path.map((crumb, i) => (
             <span key={crumb.id} className="flex shrink-0 items-center gap-1">
               {i > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground" />}

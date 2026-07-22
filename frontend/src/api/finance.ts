@@ -355,6 +355,34 @@ export interface FinanceVendor {
   updatedAt?: string;
 }
 
+export type VendorInvoiceStatus = "unpaid" | "paid" | "cancelled";
+
+export interface VendorInvoice {
+  id: number;
+  vendorId: number;
+  vendorName?: string | null;
+  invoiceNumber: string;
+  invoiceDate: string;
+  taxableAmount: number;
+  gstEnabled: boolean;
+  gstRate: number;
+  gstAmount: number;
+  totalAmount: number;
+  status: VendorInvoiceStatus;
+  notes?: string | null;
+  attachments?: FinanceAttachment[];
+  createdBy: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface VendorInvoiceSummary {
+  invoiceCount: number;
+  totalBilled: number;
+  inputGst: number;
+  unpaidTotal: number;
+}
+
 export interface FinanceDashboardKpis {
   totalIncome: number;
   totalExpenses: number;
@@ -452,6 +480,7 @@ export const financeKeys = {
   departmentPayroll: (year?: number, month?: number) => ["finance-department-payroll", year, month] as const,
   vendors: (params?: object) => ["finance-vendors", params] as const,
   vendor: (id: number) => ["finance-vendor", id] as const,
+  vendorInvoices: (vendorId: number) => ["finance-vendor-invoices", vendorId] as const,
   vendorAnalytics: (period?: string) => ["finance-vendor-analytics", period] as const,
   notifications: (params?: object) => ["finance-notifications", params] as const,
 };
@@ -1675,6 +1704,76 @@ export function useDeleteVendor() {
   });
 }
 
+// ─── Vendor invoices (purchase bills / input GST) ─────────────────────────
+
+export function useListVendorInvoices(vendorId: number, enabled = true) {
+  return useQuery<{ invoices: VendorInvoice[]; summary: VendorInvoiceSummary }>({
+    queryKey: financeKeys.vendorInvoices(vendorId),
+    queryFn: () => customFetch(apiUrl(`/api/finance/vendors/${vendorId}/invoices`)),
+    enabled: enabled && Number.isFinite(vendorId) && vendorId > 0,
+    staleTime: 10_000,
+  });
+}
+
+export interface CreateVendorInvoicePayload {
+  invoiceNumber: string;
+  invoiceDate: string;
+  taxableAmount: number;
+  gstEnabled?: boolean;
+  gstRate?: number;
+  status?: VendorInvoiceStatus;
+  notes?: string;
+  attachments?: FinanceAttachment[];
+}
+
+export function useCreateVendorInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ vendorId, ...body }: CreateVendorInvoicePayload & { vendorId: number }) =>
+      customFetch<VendorInvoice>(apiUrl(`/api/finance/vendors/${vendorId}/invoices`), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: financeKeys.vendorInvoices(vars.vendorId) });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("monthly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("quarterly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("annual") });
+    },
+  });
+}
+
+export function useUpdateVendorInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, vendorId: _vendorId, ...body }: Partial<CreateVendorInvoicePayload> & { id: number; vendorId: number }) =>
+      customFetch<VendorInvoice>(apiUrl(`/api/finance/vendor-invoices/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: financeKeys.vendorInvoices(vars.vendorId) });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("monthly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("quarterly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("annual") });
+    },
+  });
+}
+
+export function useDeleteVendorInvoice() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: number; vendorId: number }) =>
+      customFetch(apiUrl(`/api/finance/vendor-invoices/${id}`), { method: "DELETE" }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: financeKeys.vendorInvoices(vars.vendorId) });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("monthly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("quarterly") });
+      qc.invalidateQueries({ queryKey: financeKeys.taxSummary("annual") });
+    },
+  });
+}
+
 // ─── Notifications ────────────────────────────────────────────────────────
 
 export function useFinanceNotifications(params?: { unreadOnly?: boolean; page?: number; limit?: number }, enabled = true) {
@@ -1699,5 +1798,183 @@ export function useMarkAllFinanceNotificationsRead() {
   return useMutation({
     mutationFn: () => customFetch(apiUrl("/api/finance/notifications/mark-all-read"), { method: "POST" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-notifications"] }),
+  });
+}
+
+// ─── Freelancer project engagements ───────────────────────────────────────
+
+export type FreelancerPaymentStatus = "unpaid" | "partially_paid" | "paid";
+export type FreelancerEngagementStatus = "active" | "completed" | "cancelled";
+export type FreelancerEngagementPaymentMode = "lump_sum" | "installments";
+export type FreelancerInstallmentStatus = "pending" | "paid" | "cancelled";
+
+export type FreelancerInstallment = {
+  id: number;
+  engagementId: number;
+  label: string;
+  amount: number;
+  dueDate: string | null;
+  status: FreelancerInstallmentStatus;
+  paidAt: string | null;
+  paymentMode: string | null;
+  reference: string | null;
+  notes: string | null;
+  recordedBy: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type FreelancerEngagement = {
+  id: number;
+  projectId: number;
+  userId: number;
+  agreedAmount: number;
+  currency: string;
+  paymentMode: FreelancerEngagementPaymentMode;
+  status: FreelancerEngagementStatus;
+  notes: string | null;
+  createdBy: number;
+  createdAt?: string;
+  updatedAt?: string;
+  paidAmount: number;
+  pendingAmount: number;
+  remainingAmount: number;
+  paymentStatus: FreelancerPaymentStatus;
+  freelancerName: string | null;
+  projectName: string | null;
+  projectType: string | null;
+  installments: FreelancerInstallment[];
+};
+
+export type CreateFreelancerEngagementPayload = {
+  projectId: number;
+  userId: number;
+  agreedAmount: number;
+  paymentMode: FreelancerEngagementPaymentMode;
+  notes?: string | null;
+  dueDate?: string | null;
+  installments?: Array<{
+    label: string;
+    amount: number;
+    dueDate?: string | null;
+  }>;
+};
+
+export function useListFreelancerEngagements(
+  params?: { projectId?: number; userId?: number; status?: string },
+  enabled = true,
+) {
+  return useQuery<{ engagements: FreelancerEngagement[] }>({
+    queryKey: ["finance-freelancer-engagements", params],
+    queryFn: () =>
+      customFetch(apiUrl(`/api/finance/freelancer-engagements${toQueryString(params)}`)),
+    enabled,
+  });
+}
+
+export function useGetFreelancerEngagement(id: number, enabled = true) {
+  return useQuery<FreelancerEngagement>({
+    queryKey: ["finance-freelancer-engagement", id],
+    queryFn: () => customFetch(apiUrl(`/api/finance/freelancer-engagements/${id}`)),
+    enabled: enabled && id > 0,
+  });
+}
+
+export function useCreateFreelancerEngagement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CreateFreelancerEngagementPayload) =>
+      customFetch<FreelancerEngagement>(apiUrl("/api/finance/freelancer-engagements"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] }),
+  });
+}
+
+export function useUpdateFreelancerEngagement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      agreedAmount?: number;
+      paymentMode?: FreelancerEngagementPaymentMode;
+      status?: FreelancerEngagementStatus;
+      notes?: string | null;
+    }) =>
+      customFetch<FreelancerEngagement>(apiUrl(`/api/finance/freelancer-engagements/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] });
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagement", vars.id] });
+    },
+  });
+}
+
+export function useDeleteFreelancerEngagement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/finance/freelancer-engagements/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] }),
+  });
+}
+
+export function useUpdateFreelancerInstallment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      engagementId,
+      installmentId,
+      ...body
+    }: {
+      engagementId: number;
+      installmentId: number;
+      status?: FreelancerInstallmentStatus;
+      label?: string;
+      amount?: number;
+      dueDate?: string | null;
+      paymentMode?: string | null;
+      reference?: string | null;
+      notes?: string | null;
+      paidAt?: string | null;
+    }) =>
+      customFetch<FreelancerInstallment>(
+        apiUrl(`/api/finance/freelancer-engagements/${engagementId}/installments/${installmentId}`),
+        { method: "PATCH", body: JSON.stringify(body) },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] });
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagement", vars.engagementId] });
+    },
+  });
+}
+
+export function useAddFreelancerInstallment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      engagementId,
+      ...body
+    }: {
+      engagementId: number;
+      label: string;
+      amount: number;
+      dueDate?: string | null;
+      notes?: string | null;
+    }) =>
+      customFetch<FreelancerInstallment>(
+        apiUrl(`/api/finance/freelancer-engagements/${engagementId}/installments`),
+        { method: "POST", body: JSON.stringify(body) },
+      ),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] });
+      qc.invalidateQueries({ queryKey: ["finance-freelancer-engagement", vars.engagementId] });
+    },
   });
 }

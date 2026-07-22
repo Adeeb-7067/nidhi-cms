@@ -6,11 +6,13 @@ import {
   ArrowRight,
   BookOpen,
   Building2,
+  FileText,
   Globe,
   Mail,
   MapPin,
   Pencil,
   Phone,
+  Plus,
   Trash2,
   User,
 } from "lucide-react";
@@ -30,13 +32,19 @@ import {
   FinancePageHeader,
   FinanceEmptyState,
   VendorFormModal,
+  VendorInvoiceFormModal,
   FinanceConfirmDialog,
+  FinanceStatusBadge,
+  GstClassificationBadge,
 } from "@/modules/finance/components";
 import { FinanceDetailPageSkeleton } from "@/components/loading";
 import {
   useGetVendor,
   useDeleteVendor,
   useVendorLedgers,
+  useListVendorInvoices,
+  useDeleteVendorInvoice,
+  type VendorInvoice,
 } from "@/api/finance";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { ensureHttpUrl } from "@/modules/finance/vendor-utils";
@@ -50,18 +58,29 @@ export default function VendorDetailPage() {
   const { data: vendor, isLoading, isError, refetch } = useGetVendor(vendorId);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+  const [editInvoice, setEditInvoice] = useState<VendorInvoice | null>(null);
+  const [deleteInvoiceTarget, setDeleteInvoiceTarget] = useState<VendorInvoice | null>(null);
   const deleteVendor = useDeleteVendor();
+  const deleteVendorInvoice = useDeleteVendorInvoice();
   const { can } = usePermissions();
   const canEdit = can("finance_vendors", "edit");
+  const canCreate = can("finance_vendors", "create");
   const canDelete = can("finance_vendors", "delete");
   const canViewLedgers = can("finance_ledgers", "view");
   const { data: ledgerData } = useVendorLedgers(
     vendorId,
     Number.isFinite(vendorId) && vendorId > 0 && canViewLedgers,
   );
+  const { data: invoiceData, refetch: refetchInvoices } = useListVendorInvoices(
+    vendorId,
+    Number.isFinite(vendorId) && vendorId > 0,
+  );
 
   const ledger = ledgerData?.accounts?.[0] ?? null;
   const entries = ledger?.entries ?? [];
+  const invoices = invoiceData?.invoices ?? [];
+  const invoiceSummary = invoiceData?.summary;
   const fields = (vendor?.fields ?? []).filter((f) => f.label?.trim() && f.value?.trim());
 
   const handleDelete = async () => {
@@ -74,6 +93,28 @@ export default function VendorDetailPage() {
     } catch (err) {
       toastApiError(err, "Failed to delete vendor");
     }
+  };
+
+  const handleDeleteInvoice = async () => {
+    if (!deleteInvoiceTarget) return;
+    try {
+      await deleteVendorInvoice.mutateAsync({ id: deleteInvoiceTarget.id, vendorId });
+      toast.success("Vendor invoice deleted");
+      setDeleteInvoiceTarget(null);
+      void refetchInvoices();
+    } catch (err) {
+      toastApiError(err, "Failed to delete invoice");
+    }
+  };
+
+  const openCreateInvoice = () => {
+    setEditInvoice(null);
+    setInvoiceModalOpen(true);
+  };
+
+  const openEditInvoice = (invoice: VendorInvoice) => {
+    setEditInvoice(invoice);
+    setInvoiceModalOpen(true);
   };
 
   if (isLoading) return <FinanceDetailPageSkeleton />;
@@ -135,7 +176,7 @@ export default function VendorDetailPage() {
       />
 
       <PortalKpiGrid
-        columns={canViewLedgers ? 3 : 2}
+        columns={4}
         items={[
           ...(canViewLedgers
             ? [
@@ -156,12 +197,30 @@ export default function VendorDetailPage() {
               ]
             : []),
           {
-            title: "Service fields",
-            value: fields.length,
-            icon: Globe,
-            accent: "amber" as const,
+            title: "Purchase invoices",
+            value: invoiceSummary?.invoiceCount ?? invoices.length,
+            icon: FileText,
+            accent: "green" as const,
             delay: canViewLedgers ? 2 : 0,
           },
+          {
+            title: "Input GST (taking)",
+            value: formatCurrency(invoiceSummary?.inputGst ?? 0),
+            icon: FileText,
+            accent: "amber" as const,
+            delay: canViewLedgers ? 3 : 1,
+          },
+          ...(!canViewLedgers
+            ? [
+                {
+                  title: "Service fields",
+                  value: fields.length,
+                  icon: Globe,
+                  accent: "violet" as const,
+                  delay: 2,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -273,6 +332,115 @@ export default function VendorDetailPage() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Purchase invoices
+            </CardTitle>
+            <div className="flex items-center gap-3 text-xs">
+              {invoiceSummary && (
+                <>
+                  <span>
+                    <span className="text-muted-foreground">Billed:</span>{" "}
+                    <strong className="tabular-nums">{formatCurrency(invoiceSummary.totalBilled)}</strong>
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Input GST:</span>{" "}
+                    <strong className="tabular-nums">{formatCurrency(invoiceSummary.inputGst)}</strong>
+                  </span>
+                </>
+              )}
+              {canCreate && (
+                <Button size="sm" className="h-7 gap-1" onClick={openCreateInvoice}>
+                  <Plus className="h-3.5 w-3.5" />
+                  Add invoice
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {invoices.length === 0 ? (
+            <p className="text-xs text-muted-foreground text-center py-6">
+              No purchase invoices yet. Add vendor bills here to track input GST (GST taking).
+            </p>
+          ) : (
+            <div className="rounded-lg border overflow-x-auto">
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow className="bg-muted/30">
+                    <TableHead className="text-xs">Date</TableHead>
+                    <TableHead className="text-xs">Invoice no.</TableHead>
+                    <TableHead className="text-xs">GST</TableHead>
+                    <TableHead className="text-xs text-right">Taxable</TableHead>
+                    <TableHead className="text-xs text-right">Input GST</TableHead>
+                    <TableHead className="text-xs text-right">Total</TableHead>
+                    <TableHead className="text-xs">Status</TableHead>
+                    {(canEdit || canDelete) && <TableHead className="text-xs w-[80px]" />}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((invoice) => (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="text-xs whitespace-nowrap">
+                        {format(new Date(invoice.invoiceDate), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell className="text-xs font-mono">{invoice.invoiceNumber}</TableCell>
+                      <TableCell className="text-xs">
+                        <GstClassificationBadge gstEnabled={invoice.gstEnabled} />
+                        {invoice.gstEnabled && (
+                          <span className="ml-1 text-muted-foreground">{invoice.gstRate}%</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">
+                        {formatCurrency(invoice.taxableAmount)}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums">
+                        {invoice.gstEnabled ? formatCurrency(invoice.gstAmount) : "—"}
+                      </TableCell>
+                      <TableCell className="text-xs text-right tabular-nums font-medium">
+                        {formatCurrency(invoice.totalAmount)}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        <FinanceStatusBadge variant="invoice" value={invoice.status} />
+                      </TableCell>
+                      {(canEdit || canDelete) && (
+                        <TableCell className="text-xs">
+                          <div className="flex items-center gap-1">
+                            {canEdit && invoice.status !== "cancelled" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => openEditInvoice(invoice)}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {canDelete && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:text-destructive"
+                                onClick={() => setDeleteInvoiceTarget(invoice)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {canViewLedgers && (
       <Card>
         <CardHeader className="pb-2">
@@ -359,13 +527,32 @@ export default function VendorDetailPage() {
           void refetch();
         }}
       />
+      <VendorInvoiceFormModal
+        open={invoiceModalOpen}
+        onOpenChange={setInvoiceModalOpen}
+        vendorId={vendor.id}
+        invoice={editInvoice}
+        onSuccess={() => {
+          void refetchInvoices();
+        }}
+      />
       <FinanceConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
         title="Delete vendor?"
-        description={`"${vendor.name}" will be removed. Vendors used by expenses or payments can't be deleted.`}
+        description={`"${vendor.name}" will be removed. Vendors used by expenses, payments, or invoices can't be deleted.`}
         loading={deleteVendor.isPending}
         onConfirm={handleDelete}
+      />
+      <FinanceConfirmDialog
+        open={!!deleteInvoiceTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteInvoiceTarget(null);
+        }}
+        title="Delete vendor invoice?"
+        description={`Remove invoice "${deleteInvoiceTarget?.invoiceNumber}"? This affects GST input totals on the Tax page.`}
+        loading={deleteVendorInvoice.isPending}
+        onConfirm={handleDeleteInvoice}
       />
     </PortalPageShell>
   );

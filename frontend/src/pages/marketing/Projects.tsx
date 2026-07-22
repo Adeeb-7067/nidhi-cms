@@ -24,6 +24,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
+import {
+  EMPTY_DIGITAL_SERVICES,
+  EMPTY_SOCIAL_LINKS,
+  type DigitalServicesForm,
+  type SocialLinksForm,
+} from "@/lib/project-type-fields";
 import {
   Select,
   SelectContent,
@@ -75,6 +82,11 @@ type CreateProjectForm = {
   startDate: string;
   deadline: string;
   description: string;
+  platforms: string[];
+  digitalServices: DigitalServicesForm;
+  socialLinks: SocialLinksForm;
+  websiteUrl: string;
+  figmaUrl: string;
 };
 
 const emptyForm: CreateProjectForm = {
@@ -84,6 +96,11 @@ const emptyForm: CreateProjectForm = {
   startDate: new Date().toISOString().slice(0, 10),
   deadline: "",
   description: "",
+  platforms: [],
+  digitalServices: { ...EMPTY_DIGITAL_SERVICES },
+  socialLinks: { ...EMPTY_SOCIAL_LINKS },
+  websiteUrl: "",
+  figmaUrl: "",
 };
 
 export default function MarketingProjects() {
@@ -180,7 +197,11 @@ export default function MarketingProjects() {
           startDate: form.startDate,
           deadline: form.deadline,
           description: form.description.trim() || undefined,
-          techStack: [],
+          techStack: form.platforms,
+          digitalServices: form.digitalServices,
+          socialLinks: form.socialLinks,
+          websiteUrl: form.websiteUrl.trim() || undefined,
+          figmaUrl: form.figmaUrl.trim() || undefined,
         },
       });
       toast.success("Digital project created");
@@ -306,7 +327,7 @@ export default function MarketingProjects() {
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add digital project</DialogTitle>
           </DialogHeader>
@@ -390,6 +411,35 @@ export default function MarketingProjects() {
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 className="h-8 text-xs"
               />
+            </div>
+            <DigitalProjectServiceFields
+              compact
+              services={form.digitalServices}
+              socialLinks={form.socialLinks}
+              platforms={form.platforms}
+              onServicesChange={(digitalServices) => setForm((f) => ({ ...f, digitalServices }))}
+              onSocialLinksChange={(socialLinks) => setForm((f) => ({ ...f, socialLinks }))}
+              onPlatformsChange={(platforms) => setForm((f) => ({ ...f, platforms }))}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Assets / Drive Link</Label>
+                <Input
+                  placeholder="https://drive.google.com/..."
+                  value={form.figmaUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, figmaUrl: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Website / Landing Page</Label>
+                <Input
+                  placeholder="https://example.com/campaign"
+                  value={form.websiteUrl}
+                  onChange={(e) => setForm((f) => ({ ...f, websiteUrl: e.target.value }))}
+                  className="h-8 text-xs"
+                />
+              </div>
             </div>
           </div>
           <DialogFooter>

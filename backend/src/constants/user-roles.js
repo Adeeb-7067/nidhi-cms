@@ -23,7 +23,8 @@ const devPortalStaffRoles = ["manager", "developer", "tester", "qa", "freelancer
 const monitorableStaffRoles = ["manager", "developer", "tester", "qa", "freelancer", "digital"];
 
 /** Clock in/out for attendance tracking — every staff role except super_admin (view only) and client (external). */
-const clockableStaffRoles = ["hr", ...staffEmployeeRoles];
+/** Roles that use work-session clock-in (freelancers are project-paid, not attendance-clocked). */
+const clockableStaffRoles = ["hr", ...staffEmployeeRoles.filter((r) => r !== "freelancer")];
 
 /** HRM admin roles (email login). */
 const hrmAdminRoles = ["super_admin", "hr"];

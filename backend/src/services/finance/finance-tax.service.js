@@ -1,4 +1,13 @@
-import { FinanceInvoices, FinanceExpenses, FinanceIncome, PayrollRuns, PayrollLines, FinanceTaxDeposits, SalesInvoices } from "../../models/schema/index.js";
+import {
+  FinanceInvoices,
+  FinanceExpenses,
+  FinanceIncome,
+  FinanceVendorInvoices,
+  PayrollRuns,
+  PayrollLines,
+  FinanceTaxDeposits,
+  SalesInvoices,
+} from "../../models/schema/index.js";
 import { calcInvoiceTotal } from "../../utils/finance-totals.js";
 import { calcSalesInvoiceBreakdown } from "../../utils/sales-totals.js";
 import { recognizedExpenseGstExpr } from "./expense-cash.service.js";
@@ -49,12 +58,35 @@ async function gstCollectedInRange(start, end) {
 }
 
 async function gstPaidInRange(start, end) {
-  const rows = await FinanceExpenses.aggregate([
-    { $match: { date: { $gte: start, $lt: end }, status: "approved", gstEnabled: true } },
-    { $addFields: { _gstPaid: recognizedExpenseGstExpr() } },
-    { $group: { _id: null, total: { $sum: "$_gstPaid" } } },
+  // Input GST (GST taking):
+  // - Vendor purchase bills → FinanceVendorInvoices (authoritative for vendor GST)
+  // - Non-vendor expenses only → FinanceExpenses (petty cash / no vendor bill)
+  // Expenses with vendorId are excluded so the same bill is never counted twice.
+  const [expenseRows, vendorInvoiceRows] = await Promise.all([
+    FinanceExpenses.aggregate([
+      {
+        $match: {
+          date: { $gte: start, $lt: end },
+          status: "approved",
+          gstEnabled: true,
+          $or: [{ vendorId: null }, { vendorId: { $exists: false } }],
+        },
+      },
+      { $addFields: { _gstPaid: recognizedExpenseGstExpr() } },
+      { $group: { _id: null, total: { $sum: "$_gstPaid" } } },
+    ]),
+    FinanceVendorInvoices.aggregate([
+      {
+        $match: {
+          invoiceDate: { $gte: start, $lt: end },
+          status: { $ne: "cancelled" },
+          gstEnabled: true,
+        },
+      },
+      { $group: { _id: null, total: { $sum: "$gstAmount" } } },
+    ]),
   ]);
-  return rows[0]?.total ?? 0;
+  return (expenseRows[0]?.total ?? 0) + (vendorInvoiceRows[0]?.total ?? 0);
 }
 
 async function tdsDeductedInRange(startYear, startMonth, endYear, endMonth) {

@@ -27,7 +27,7 @@ Replace the API URL with your **live backend** (employees must reach it from the
 ```powershell
 cd D:\Content-Management-Hub\electron
 
-$env:VITE_API_BASE_URL = "https://api.cms.satyakabir.com"
+$env:VITE_API_BASE_URL = "https://api.cms.satyakabir.co.in"
 
 npm run build:win
 ```

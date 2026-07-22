@@ -54,6 +54,7 @@ import {
   PACKAGE_LABELS,
   POST_SCHEDULE_STATUS_LABELS,
   formatCompactCurrency,
+  canViewMarketingClientBudget,
 } from "@/modules/marketing/constants";
 import type {
   TaskStatus,
@@ -62,6 +63,8 @@ import type {
   MarketingPackage,
 } from "@/modules/marketing/types";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { ClockInButton } from "@/components/ClockInButton";
 
 function labelOf<T extends string>(map: Record<T, string>, key: string): string {
   return (map as Record<string, string>)[key] ?? key.replace(/_/g, " ");
@@ -97,13 +100,11 @@ function DashboardSkeleton() {
   );
 }
 
-import { useAuth } from "@/contexts/AuthContext";
-import { ClockInButton } from "@/components/ClockInButton";
-
 export default function MarketingDashboard() {
   const { user } = useAuth();
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
   const isAdmin = user?.role === "super_admin" || user?.role === "hr";
+  const canViewClientBudget = canViewMarketingClientBudget(user?.role);
 
   const kpis = data?.kpis;
   const openTasks = kpis?.openTasks ?? kpis?.todaysTasks ?? 0;
@@ -534,7 +535,7 @@ export default function MarketingDashboard() {
             </p>
             <PortalKpiGrid
               columns={4}
-              count={8}
+              count={canViewClientBudget ? 8 : 7}
               items={[
                 {
                   title: "Digital projects",
@@ -545,15 +546,19 @@ export default function MarketingDashboard() {
                   href: "/marketing/projects",
                   delay: 0,
                 },
-                {
-                  title: "Active budget",
-                  value: formatCompactCurrency(kpis?.activeBudget ?? 0),
-                  hint: "Monthly retainers",
-                  icon: IndianRupee,
-                  accent: "green",
-                  href: "/marketing/projects",
-                  delay: 1,
-                },
+                ...(canViewClientBudget
+                  ? [
+                      {
+                        title: "Active budget",
+                        value: formatCompactCurrency(kpis?.activeBudget ?? 0),
+                        hint: "Monthly retainers",
+                        icon: IndianRupee,
+                        accent: "green" as const,
+                        href: "/marketing/projects",
+                        delay: 1,
+                      },
+                    ]
+                  : []),
                 {
                   title: "Campaign budget",
                   value: formatCompactCurrency(kpis?.campaignBudget ?? 0),
@@ -852,8 +857,9 @@ export default function MarketingDashboard() {
                             <p className="truncate font-medium">{a.companyName}</p>
                             <p className="text-[10px] text-muted-foreground">
                               {PACKAGE_LABELS[a.package as MarketingPackage] ?? a.package}
-                              {" · "}
-                              {formatCompactCurrency(a.monthlyBudgetInr)}
+                              {canViewClientBudget && a.monthlyBudgetInr != null
+                                ? ` · ${formatCompactCurrency(a.monthlyBudgetInr)}`
+                                : ""}
                             </p>
                           </div>
                           <span className="shrink-0 tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">

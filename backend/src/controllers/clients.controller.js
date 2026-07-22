@@ -1,5 +1,4 @@
 import { clientsTable, usersTable } from "../models/schema/index.js";
-import { getScopedDigitalUserAccess } from "../services/marketing/helpers.js";
 import { formatCompanyRecord, formatCompanyRecordsBatch } from "../mappers/company-format.js";
 import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
@@ -21,6 +20,8 @@ import {
   parsePagination,
   optionalString,
 } from "../utils/route-errors.js";
+import { assertCompanyAccess } from "../services/access/access-helpers.js";
+import { getAccessibleCompanyIds, applyIdScope } from "../services/access/list-scope.js";
 
 function resolveGstNumber(body) {
   const value = body.gstNumber ?? body.businessId;
@@ -91,14 +92,14 @@ async function getClients(req, res) {
   if (status) query.status = status;
   if (search?.trim()) query.companyName = { $regex: search.trim(), $options: "i" };
 
-  if (req.user.role === "digital") {
-    const access = await getScopedDigitalUserAccess(req.user);
-    if (!access.companyIds.length) {
-      res.json({ clients: [], total: 0, page, limit });
-      return;
-    }
-    query.id = { $in: access.companyIds };
+  const companyIds = await getAccessibleCompanyIds(req.user);
+  if (!applyIdScope(query, "id", companyIds)) {
+    res.json({ clients: [], total: 0, page, limit });
+    return;
   }
+
+  // Digital specialists need the client picker to create digital projects.
+  // Marketing data remains scoped via project membership on other endpoints.
   const { items, total, page: pageNum, limit: limitNum } = await paginateModel(
     clientsTable,
     query,
@@ -141,6 +142,7 @@ async function postClients(req, res) {
 
 async function getClientsById(req, res) {
   const id = parseIdParam(req.params.id, "client id");
+  await assertCompanyAccess(req, id);
   const client = await clientsTable.findOne({ id });
   if (!client) notFound("Client company");
   res.json(await formatClient(client));

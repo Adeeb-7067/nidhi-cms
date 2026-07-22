@@ -388,6 +388,11 @@ export default function DigitalTeam() {
           open={formOpen}
           onOpenChange={setFormOpen}
           editUser={editUser}
+          fixedRole="digital"
+          onSaved={() => {
+            void refetch();
+            queryClient.invalidateQueries({ queryKey: ["marketing-dashboard"] });
+          }}
         />
       )}
 

@@ -162,3 +162,14 @@ export function calcInvoiceTotal(
   return { subtotal, tax, total: afterDiscount + tax };
 }
 
+export function calcVendorInvoiceAmounts(
+  taxableAmount: number,
+  gstRate: number,
+  gstEnabled: boolean,
+): { taxableAmount: number; gstAmount: number; totalAmount: number } {
+  const base = Math.round(Number(taxableAmount) || 0);
+  const rate = gstEnabled ? Math.min(100, Math.max(0, Number(gstRate) || 0)) : 0;
+  const gstAmount = gstEnabled && base > 0 ? Math.round((base * rate) / 100) : 0;
+  return { taxableAmount: base, gstAmount, totalAmount: base + gstAmount };
+}
+

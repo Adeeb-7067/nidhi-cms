@@ -21,17 +21,37 @@ async function nextExpenseReference() {
 
 const LOAN_ALLOCATIONS = new Set(["both", "interest", "principal"]);
 
+/** Reducing-balance EMI; interestRate is % per month. */
+function calcEmiAmount(principal, monthlyRatePercent, tenureMonths) {
+  const p = Number(principal);
+  const n = Number(tenureMonths);
+  const rate = Number(monthlyRatePercent) || 0;
+  if (!(p > 0) || !(n >= 1)) return null;
+  if (!(rate > 0)) return Math.round(p / n);
+  const r = rate / 100;
+  const factor = Math.pow(1 + r, n);
+  if (!Number.isFinite(factor) || factor === 1) return Math.round(p / n);
+  return Math.round((p * r * factor) / (factor - 1));
+}
+
+function monthlyInterestDue(outstanding, monthlyRatePercent) {
+  const rate = Number(monthlyRatePercent) || 0;
+  if (!(outstanding > 0) || !(rate > 0)) return 0;
+  return Math.round(outstanding * (rate / 100));
+}
+
 /**
  * Allocate each approved installment into interest vs principal (reducing balance).
  * Payments must be chronological (oldest first).
  *
  * loanAllocation on the expense:
  * - both (default): interest due first, remainder to principal (standard EMI)
- * - interest: entire payment is interest; principal unchanged
+ * - interest: up to one month's interest due; any excess reduces principal
  * - principal: apply to principal first; any excess beyond outstanding → interest
  */
 function allocateInstallments(loan, paymentsAsc) {
-  const monthlyRate = (Number(loan.interestRate) || 0) / 12 / 100;
+  // interestRate is % per month (not annual).
+  const monthlyRatePercent = Number(loan.interestRate) || 0;
   let outstanding = Number(loan.principal) || 0;
   let totalInterestPaid = 0;
   let totalPrincipalPaid = 0;
@@ -69,17 +89,21 @@ function allocateInstallments(loan, paymentsAsc) {
 
     let principalPortion = 0;
     let interestActual = 0;
+    const interestDue = monthlyInterestDue(outstanding, monthlyRatePercent);
 
     if (allocation === "interest") {
-      interestActual = amount;
-      principalPortion = 0;
+      // Cap interest at this month's due; surplus reduces principal.
+      interestActual = Math.min(amount, interestDue);
+      principalPortion = amount - interestActual;
+      if (principalPortion > outstanding) principalPortion = outstanding;
+      interestActual = amount - principalPortion;
     } else if (allocation === "principal") {
       principalPortion = Math.min(amount, outstanding);
       interestActual = amount - principalPortion;
     } else {
       // both — interest due first, remainder to principal
-      const interestDue = Math.min(amount, Math.round(outstanding * monthlyRate));
-      principalPortion = amount - interestDue;
+      const interestCap = Math.min(amount, interestDue);
+      principalPortion = amount - interestCap;
       if (principalPortion > outstanding) principalPortion = outstanding;
       if (principalPortion < 0) principalPortion = 0;
       interestActual = amount - principalPortion;
@@ -142,19 +166,35 @@ async function loadLoanPayments(loanId) {
     .lean();
 }
 
+function emptyLoanSummary(principal = 0) {
+  return {
+    totalCashPaid: 0,
+    totalPrincipalPaid: 0,
+    totalInterestPaid: 0,
+    remainingPrincipal: Math.round(Number(principal) || 0),
+    paidAmount: 0,
+    remainingAmount: Math.round(Number(principal) || 0),
+    estimatedTotalInterest: null,
+    estimatedTotalPayable: null,
+    installmentsPaid: 0,
+    installmentsPending: 0,
+  };
+}
+
 function enrichLoan(loan, summary) {
+  const s = summary ?? emptyLoanSummary(loan?.principal);
   return {
     ...loan,
-    paidAmount: summary.paidAmount,
-    remainingAmount: summary.remainingAmount,
-    totalCashPaid: summary.totalCashPaid,
-    totalPrincipalPaid: summary.totalPrincipalPaid,
-    totalInterestPaid: summary.totalInterestPaid,
-    remainingPrincipal: summary.remainingPrincipal,
-    estimatedTotalInterest: summary.estimatedTotalInterest,
-    estimatedTotalPayable: summary.estimatedTotalPayable,
-    installmentsPaid: summary.installmentsPaid,
-    installmentsPending: summary.installmentsPending,
+    paidAmount: s.paidAmount,
+    remainingAmount: s.remainingAmount,
+    totalCashPaid: s.totalCashPaid,
+    totalPrincipalPaid: s.totalPrincipalPaid,
+    totalInterestPaid: s.totalInterestPaid,
+    remainingPrincipal: s.remainingPrincipal,
+    estimatedTotalInterest: s.estimatedTotalInterest,
+    estimatedTotalPayable: s.estimatedTotalPayable,
+    installmentsPaid: s.installmentsPaid,
+    installmentsPending: s.installmentsPending,
   };
 }
 
@@ -163,7 +203,19 @@ async function buildSummariesForLoans(loans) {
   const ids = loans.map((l) => l.id);
   const expenses = await FinanceExpenses.find({ loanId: { $in: ids } })
     .sort({ date: 1, id: 1 })
-    .select({ id: 1, loanId: 1, reference: 1, date: 1, amount: 1, status: 1, notes: 1, paymentMode: 1, paidAmount: 1, paymentStatus: 1 })
+    .select({
+      id: 1,
+      loanId: 1,
+      reference: 1,
+      date: 1,
+      amount: 1,
+      status: 1,
+      notes: 1,
+      paymentMode: 1,
+      paidAmount: 1,
+      paymentStatus: 1,
+      loanAllocation: 1,
+    })
     .lean();
 
   const byLoan = new Map();
@@ -256,8 +308,9 @@ async function createLoan(req, res) {
     if (!(tenureMonths >= 1)) badRequest("tenureMonths must be at least 1.", "tenureMonths");
   }
 
-  let emiAmount = null;
-  if (body.emiAmount != null && body.emiAmount !== "") {
+  // Prefer server-side EMI so the stored schedule matches monthly-rate math.
+  let emiAmount = calcEmiAmount(principal, interestRate ?? 0, tenureMonths);
+  if (emiAmount == null && body.emiAmount != null && body.emiAmount !== "") {
     emiAmount = Number(body.emiAmount);
     if (!(emiAmount >= 0)) badRequest("emiAmount must be zero or positive.", "emiAmount");
   }
@@ -327,14 +380,31 @@ async function updateLoan(req, res) {
       updates.tenureMonths = tenureMonths;
     }
   }
-  if (body.emiAmount !== undefined) {
+
+  const nextPrincipal = updates.principal ?? loan.principal;
+  const nextRate =
+    updates.interestRate !== undefined ? updates.interestRate : loan.interestRate;
+  const nextTenure =
+    updates.tenureMonths !== undefined ? updates.tenureMonths : loan.tenureMonths;
+  const recomputedEmi = calcEmiAmount(nextPrincipal, nextRate ?? 0, nextTenure);
+  if (recomputedEmi != null) {
+    updates.emiAmount = recomputedEmi;
+  } else if (
+    body.emiAmount !== undefined ||
+    updates.principal !== undefined ||
+    updates.interestRate !== undefined ||
+    updates.tenureMonths !== undefined
+  ) {
     if (body.emiAmount == null || body.emiAmount === "") updates.emiAmount = null;
-    else {
+    else if (body.emiAmount !== undefined) {
       const emiAmount = Number(body.emiAmount);
       if (!(emiAmount >= 0)) badRequest("emiAmount must be zero or positive.", "emiAmount");
       updates.emiAmount = emiAmount;
+    } else {
+      updates.emiAmount = null;
     }
   }
+
   if (body.status !== undefined) {
     if (!loanStatuses.includes(body.status)) {
       badRequest(`status must be one of: ${loanStatuses.join(", ")}.`, "status");

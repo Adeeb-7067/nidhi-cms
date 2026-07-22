@@ -17,10 +17,16 @@ import {
 } from "../services/marketing/helpers.js";
 import { formatProject, formatProjectList } from "../mappers/project-format.js";
 import { validateStoredFileUrl } from "../lib/file-storage.js";
+import {
+  normalizeDigitalServices,
+  normalizeSocialLinks,
+  deriveDigitalPlatforms,
+} from "../utils/digital-project-fields.js";
 import { attachPresenceToUser } from "../services/presence.js";
 import { toIso } from "../utils/mongo-list.js";
 import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/company-access.js";
 import { assertProjectAccess } from "../services/access/access-helpers.js";
+import { getAccessibleProjectIds, applyIdScope } from "../services/access/list-scope.js";
 import { assertClientPermission, findClientCompanyForUser } from "../services/client-team.js";
 import { bdeOwnsCustomer } from "../utils/sales-bde-customer-scope.js";
 import { paginateModel } from "../utils/mongo-list.js";
@@ -71,42 +77,50 @@ async function getProjects(req, res) {
   }
   if (clientId) query.clientId = parseInt(clientId);
   if (search) query.name = { $regex: search, $options: "i" };
-  if (req.user.role === "digital") {
-    const access = await getScopedDigitalUserAccess(req.user);
-    if (!access.projectIds.length) {
-      res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
-      return;
-    }
-    query.id = { $in: access.projectIds };
-  } else if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
-    const memberRows = await projectMembersTable.find({ userId: req.user.id });
-    const projectIds = memberRows.map((m) => m.projectId);
-    if (!projectIds.length) {
-      res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
-      return;
-    }
-    query.id = { $in: projectIds };
-  }
-  if (req.user.role === "client") {
-    // Recognises both the primary client contact and active team members.
-    // If the user has no resolvable company, force the result to be empty
-    // so a misconfigured client account never falls through to "see all".
-    const clientRow = await findClientCompanyForUser(req.user.id);
-    if (!clientRow) {
-      res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
-      return;
-    }
-    // AND company scope with any existing type/$or filters (do not overwrite).
-    const companyScope = {
-      $or: [{ companyId: clientRow.id }, { clientId: clientRow.id }],
-    };
-    if (query.$or || query.$and) {
-      const existing = { ...query };
-      const keys = Object.keys(existing);
-      for (const k of keys) delete query[k];
-      query.$and = [existing, companyScope];
+
+  // Row scope: only super_admin / finance see all projects.
+  // Digital, delivery, bde, client, hr → membership / company / digital access.
+  if (req.user.role !== "super_admin" && req.user.role !== "finance") {
+    // Prefer existing branches for clarity, then default-deny via helper.
+    if (req.user.role === "digital") {
+      const access = await getScopedDigitalUserAccess(req.user);
+      if (!access.projectIds.length) {
+        res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
+      query.id = { $in: access.projectIds };
+    } else if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
+      const memberRows = await projectMembersTable.find({ userId: req.user.id });
+      const projectIds = memberRows.map((m) => m.projectId);
+      if (!projectIds.length) {
+        res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
+      query.id = { $in: projectIds };
+    } else if (req.user.role === "client") {
+      const clientRow = await findClientCompanyForUser(req.user.id);
+      if (!clientRow) {
+        res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
+      const companyScope = {
+        $or: [{ companyId: clientRow.id }, { clientId: clientRow.id }],
+      };
+      if (query.$or || query.$and) {
+        const existing = { ...query };
+        const keys = Object.keys(existing);
+        for (const k of keys) delete query[k];
+        query.$and = [existing, companyScope];
+      } else {
+        Object.assign(query, companyScope);
+      }
     } else {
-      Object.assign(query, companyScope);
+      // hr and any other role: membership only (empty if not a member)
+      const ids = await getAccessibleProjectIds(req.user);
+      if (!applyIdScope(query, "id", ids)) {
+        res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
     }
   }
   const { items, total, page, limit } = await paginateModel(projectsTable, query, pagination);
@@ -135,8 +149,22 @@ async function postProjects(req, res) {
       forbidden("You can only create projects for your own customers.");
     }
   }
+  const requestedType = optionalString(body.type) ?? "development";
+  if (req.user.role === "digital" && requestedType !== "digital") {
+    badRequest("Digital specialists can only create digital projects.", "type");
+  }
+  const projectType = req.user.role === "digital" ? "digital" : requestedType;
   const logoUrl = optionalString(body.logoUrl);
   if (logoUrl) validateStoredFileUrl(logoUrl, "logoUrl");
+  const digitalServices =
+    projectType === "digital" ? normalizeDigitalServices(body.digitalServices) : {};
+  const socialLinks =
+    projectType === "digital" ? normalizeSocialLinks(body.socialLinks) : {};
+  const rawTechStack = Array.isArray(body.techStack) ? body.techStack : [];
+  const techStack =
+    projectType === "digital"
+      ? deriveDigitalPlatforms(digitalServices, socialLinks, rawTechStack)
+      : rawTechStack;
   const nextId = await getNextSequence("projects");
   const project = await projectsTable.create({
     id: nextId,
@@ -147,11 +175,13 @@ async function postProjects(req, res) {
     pmId: body.pmId != null ? Number(body.pmId) : null,
     description: optionalString(body.description) ?? null,
     status: optionalString(body.status) ?? "scoping",
-    type: optionalString(body.type) ?? "development",
+    type: projectType,
     priority,
     startDate: new Date(startDate),
     deadline: new Date(deadline),
-    techStack: Array.isArray(body.techStack) ? body.techStack : [],
+    techStack,
+    digitalServices,
+    socialLinks,
     figmaUrl: optionalString(body.figmaUrl) ?? null,
     repoUrl: optionalString(body.repoUrl) ?? null,
     stagingUrl: optionalString(body.stagingUrl) ?? null,
@@ -160,7 +190,7 @@ async function postProjects(req, res) {
     websiteUrl: optionalString(body.websiteUrl) ?? null,
     postmanJson: body.postmanJson ?? null
   });
-  if (req.user.role === "bde") {
+  if (req.user.role === "bde" || req.user.role === "digital") {
     const memberId = await getNextSequence("project_members");
     await projectMembersTable.create({
       id: memberId,
@@ -171,7 +201,7 @@ async function postProjects(req, res) {
       completionPct: 0
     });
   }
-  if ((optionalString(body.type) ?? "development") === "digital") {
+  if (projectType === "digital") {
     try {
       await ensureDigitalAccountForProject(
         project.toObject ? project.toObject() : project,
@@ -196,38 +226,106 @@ async function getProjectsById(req, res) {
 }
 async function patchProjectsById(req, res) {
   const id = parseInt(req.params["id"]);
-  const { name, pmId, description, status, type, priority, startDate, deadline, techStack, figmaUrl, repoUrl, stagingUrl, productionUrl, completionOverride, adminUrl, websiteUrl, postmanJson, logoUrl } = req.body;
+  const {
+    name,
+    pmId,
+    description,
+    status,
+    type,
+    priority,
+    startDate,
+    deadline,
+    techStack,
+    digitalServices,
+    socialLinks,
+    figmaUrl,
+    repoUrl,
+    stagingUrl,
+    productionUrl,
+    completionOverride,
+    adminUrl,
+    websiteUrl,
+    postmanJson,
+    logoUrl,
+  } = req.body;
   if (req.user.role !== "super_admin") {
     await assertProjectAccess(req, id, { needManage: true });
+  }
+  if (req.user.role === "digital") {
+    const existing = await projectsTable.findOne({ id }).select({ type: 1 }).lean();
+    if (!existing) notFound("Project");
+    if (existing.type !== "digital") {
+      forbidden("Digital specialists can only update digital projects.");
+    }
+    if (type !== undefined && type !== "digital") {
+      badRequest("Digital specialists cannot change project type away from digital.", "type");
+    }
   }
   if (logoUrl !== void 0) {
     const normalized = optionalString(logoUrl);
     if (normalized) validateStoredFileUrl(normalized, "logoUrl");
   }
+
+  const existingForMerge = await projectsTable
+    .findOne({ id })
+    .select({ type: 1, digitalServices: 1, socialLinks: 1, techStack: 1 })
+    .lean();
+  if (!existingForMerge) notFound("Project");
+
+  const nextType = type !== void 0 ? type : existingForMerge.type;
+  const patch = {
+    ...name !== void 0 && { name },
+    ...logoUrl !== void 0 && { logoUrl: optionalString(logoUrl) ?? null },
+    ...pmId !== void 0 && { pmId },
+    ...description !== void 0 && { description },
+    ...status !== void 0 && { status },
+    ...type !== void 0 && { type },
+    ...priority !== void 0 && { priority },
+    ...startDate !== void 0 && { startDate: new Date(startDate) },
+    ...deadline !== void 0 && { deadline: new Date(deadline) },
+    ...figmaUrl !== void 0 && { figmaUrl },
+    ...repoUrl !== void 0 && { repoUrl },
+    ...stagingUrl !== void 0 && { stagingUrl },
+    ...productionUrl !== void 0 && { productionUrl },
+    ...adminUrl !== void 0 && { adminUrl },
+    ...websiteUrl !== void 0 && { websiteUrl },
+    ...postmanJson !== void 0 && { postmanJson },
+    ...completionOverride !== void 0 && { completionOverride },
+  };
+
+  if (nextType === "digital") {
+    const nextServices =
+      digitalServices !== void 0
+        ? normalizeDigitalServices(digitalServices)
+        : normalizeDigitalServices(existingForMerge.digitalServices);
+    const nextLinks =
+      socialLinks !== void 0
+        ? normalizeSocialLinks(socialLinks)
+        : normalizeSocialLinks(existingForMerge.socialLinks);
+    if (digitalServices !== void 0) patch.digitalServices = nextServices;
+    if (socialLinks !== void 0) patch.socialLinks = nextLinks;
+    const baseStack =
+      techStack !== void 0
+        ? Array.isArray(techStack)
+          ? techStack
+          : []
+        : existingForMerge.techStack ?? [];
+    if (
+      techStack !== void 0 ||
+      digitalServices !== void 0 ||
+      socialLinks !== void 0
+    ) {
+      patch.techStack = deriveDigitalPlatforms(nextServices, nextLinks, baseStack);
+    }
+  } else {
+    if (techStack !== void 0) patch.techStack = techStack;
+    if (digitalServices !== void 0) patch.digitalServices = {};
+    if (socialLinks !== void 0) patch.socialLinks = {};
+  }
+
   const project = await projectsTable.findOneAndUpdate(
     { id },
-    {
-      $set: {
-        ...name !== void 0 && { name },
-        ...logoUrl !== void 0 && { logoUrl: optionalString(logoUrl) ?? null },
-        ...pmId !== void 0 && { pmId },
-        ...description !== void 0 && { description },
-        ...status !== void 0 && { status },
-        ...type !== void 0 && { type },
-        ...priority !== void 0 && { priority },
-        ...startDate !== void 0 && { startDate: new Date(startDate) },
-        ...deadline !== void 0 && { deadline: new Date(deadline) },
-        ...techStack !== void 0 && { techStack },
-        ...figmaUrl !== void 0 && { figmaUrl },
-        ...repoUrl !== void 0 && { repoUrl },
-        ...stagingUrl !== void 0 && { stagingUrl },
-        ...productionUrl !== void 0 && { productionUrl },
-        ...adminUrl !== void 0 && { adminUrl },
-        ...websiteUrl !== void 0 && { websiteUrl },
-        ...postmanJson !== void 0 && { postmanJson },
-        ...completionOverride !== void 0 && { completionOverride }
-      }
-    },
+    { $set: patch },
     { new: true }
   );
   if (!project) notFound("Project");
@@ -253,6 +351,13 @@ async function deleteProjectsById(req, res) {
   const id = parseInt(req.params["id"]);
   if (req.user.role !== "super_admin") {
     await assertProjectAccess(req, id, { needManage: true });
+  }
+  if (req.user.role === "digital") {
+    const existing = await projectsTable.findOne({ id }).select({ type: 1 }).lean();
+    if (!existing) notFound("Project");
+    if (existing.type !== "digital") {
+      forbidden("Digital specialists can only delete digital projects.");
+    }
   }
   await projectsTable.deleteOne({ id });
   await projectMembersTable.deleteMany({ projectId: id });

@@ -444,13 +444,79 @@ export default function AdminProjectDetail() {
                   </FormattedText>
                 </div>
                 <div>
-                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Tech Stack</h4>
+                  <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">
+                    {project.type === 'digital' ? 'Platforms' : 'Tech Stack'}
+                  </h4>
                   <div className="flex flex-wrap gap-1.5">
                     {project.techStack?.map(tech => (
                       <Badge key={tech} variant="secondary" className="text-[10px] px-1.5 py-0 h-4">{tech}</Badge>
                     ))}
+                    {!project.techStack?.length && (
+                      <p className="text-xs text-muted-foreground italic">None listed.</p>
+                    )}
                   </div>
                 </div>
+                {project.type === 'digital' && (
+                  <>
+                    <div>
+                      <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">
+                        Services
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {project.digitalServices?.seo && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">SEO</Badge>
+                        )}
+                        {project.digitalServices?.metaAds && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Meta Ads</Badge>
+                        )}
+                        {project.digitalServices?.googleAds && (
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">Google Ads</Badge>
+                        )}
+                        {!project.digitalServices?.seo &&
+                          !project.digitalServices?.metaAds &&
+                          !project.digitalServices?.googleAds && (
+                            <p className="text-xs text-muted-foreground italic">No services selected.</p>
+                          )}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-[10px] font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">
+                        Social profiles
+                      </h4>
+                      <div className="space-y-1.5">
+                        {(
+                          [
+                            ["facebook", "Facebook"],
+                            ["instagram", "Instagram"],
+                            ["linkedin", "LinkedIn"],
+                            ["twitter", "X / Twitter"],
+                            ["youtube", "YouTube"],
+                            ["tiktok", "TikTok"],
+                            ["pinterest", "Pinterest"],
+                            ["whatsapp", "WhatsApp"],
+                            ["other", "Other"],
+                          ] as const
+                        )
+                          .filter(([key]) => Boolean(project.socialLinks?.[key]))
+                          .map(([key, label]) => (
+                            <a
+                              key={key}
+                              href={project.socialLinks?.[key]}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center text-xs text-blue-500 hover:underline"
+                            >
+                              <Globe className="mr-2 h-3.5 w-3.5 shrink-0" />
+                              {label}
+                            </a>
+                          ))}
+                        {!Object.values(project.socialLinks ?? {}).some(Boolean) && (
+                          <p className="text-xs text-muted-foreground italic">No social profiles added.</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -505,34 +571,39 @@ export default function AdminProjectDetail() {
                 <CardTitle className="text-sm">Links</CardTitle>
               </CardHeader>
               <CardContent className="p-3 space-y-2">
-                {project.repoUrl && (
+                {project.repoUrl && project.type !== 'digital' && (
                   <a href={project.repoUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-500 hover:underline">
-                    <Github className="mr-2 h-3.5 w-3.5" /> Repository
+                    <Globe className="mr-2 h-3.5 w-3.5" /> Repository
+                  </a>
+                )}
+                {project.repoUrl && project.type === 'digital' && (
+                  <a href={project.repoUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-blue-500 hover:underline">
+                    <Globe className="mr-2 h-3.5 w-3.5" /> Other channel link
                   </a>
                 )}
                 {project.figmaUrl && (
                   <a href={project.figmaUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-pink-500 hover:underline">
-                    <Layout className="mr-2 h-3.5 w-3.5" /> Figma Design
+                    <Layout className="mr-2 h-3.5 w-3.5" /> {project.type === 'digital' ? 'Assets / Drive Link' : 'Figma Design'}
                   </a>
                 )}
                 {project.stagingUrl && (
                   <a href={project.stagingUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-amber-500 hover:underline">
-                    <Globe className="mr-2 h-3.5 w-3.5" /> Staging Environment
+                    <Globe className="mr-2 h-3.5 w-3.5" /> {project.type === 'digital' ? 'Preview Link' : 'Staging Environment'}
                   </a>
                 )}
                 {project.productionUrl && (
                   <a href={project.productionUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-green-500 hover:underline">
-                    <Globe className="mr-2 h-3.5 w-3.5" /> Production URL
+                    <Globe className="mr-2 h-3.5 w-3.5" /> {project.type === 'digital' ? 'Ad Manager / Campaign' : 'Production URL'}
                   </a>
                 )}
                 {project.adminUrl && (
                   <a href={project.adminUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-indigo-500 hover:underline">
-                    <Lock className="mr-2 h-3.5 w-3.5" /> Admin Portal
+                    <Lock className="mr-2 h-3.5 w-3.5" /> {project.type === 'digital' ? 'Analytics Dashboard' : 'Admin Portal'}
                   </a>
                 )}
                 {project.websiteUrl && (
                   <a href={project.websiteUrl} target="_blank" rel="noreferrer" className="flex items-center text-xs text-teal-500 hover:underline">
-                    <Globe className="mr-2 h-3.5 w-3.5" /> Website URL
+                    <Globe className="mr-2 h-3.5 w-3.5" /> {project.type === 'digital' ? 'Website / Landing Page' : 'Website URL'}
                   </a>
                 )}
                 {project.postmanJson && (
@@ -549,6 +620,7 @@ export default function AdminProjectDetail() {
           <ProjectTeamPanel
             projectId={projectId}
             onViewProjectLogs={() => setActiveTab("logs")}
+            canManage
           />
         </TabsContent>
 

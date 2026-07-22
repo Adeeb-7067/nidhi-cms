@@ -12,6 +12,15 @@ import {
 } from "@/api";
 import { QUERY_STALE } from "@/lib/query-config";
 import {
+  EMPTY_DIGITAL_SERVICES,
+  EMPTY_SOCIAL_LINKS,
+  normalizeDigitalServicesForm,
+  normalizeSocialLinksForm,
+  projectStackFieldLabel,
+  projectStackOptions,
+} from "@/lib/project-type-fields";
+import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -144,6 +153,26 @@ const projectSchema = z
     deadline: z.string().min(1, "Deadline is required"),
     description: z.string().optional(),
     techStack: z.array(z.string()).optional(),
+    digitalServices: z
+      .object({
+        seo: z.boolean(),
+        metaAds: z.boolean(),
+        googleAds: z.boolean(),
+      })
+      .optional(),
+    socialLinks: z
+      .object({
+        facebook: z.string().optional(),
+        instagram: z.string().optional(),
+        linkedin: z.string().optional(),
+        twitter: z.string().optional(),
+        youtube: z.string().optional(),
+        tiktok: z.string().optional(),
+        pinterest: z.string().optional(),
+        whatsapp: z.string().optional(),
+        other: z.string().optional(),
+      })
+      .optional(),
     figmaUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
     repoUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
     adminUrl: z.string().url("Invalid URL").optional().or(z.literal("")),
@@ -162,25 +191,6 @@ const projectSchema = z
   );
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
-
-const TECH_OPTIONS = [
-  "React Native",
-  "Flutter",
-  "iOS Native",
-  "Android Native",
-  "React",
-  "Next.js",
-  "Vue",
-  "Angular",
-  "Node.js",
-  "Django",
-  "Laravel",
-  "PostgreSQL",
-  "MongoDB",
-  "Firebase",
-  "AWS",
-  "Docker",
-];
 
 export default function AdminProjects() {
   const queryClient = useQueryClient();
@@ -241,6 +251,8 @@ export default function AdminProjects() {
       deadline: "",
       description: "",
       techStack: [],
+      digitalServices: { ...EMPTY_DIGITAL_SERVICES },
+      socialLinks: { ...EMPTY_SOCIAL_LINKS },
       figmaUrl: "",
       repoUrl: "",
       adminUrl: "",
@@ -262,6 +274,8 @@ export default function AdminProjects() {
         deadline: editProject.deadline.split("T")[0],
         description: editProject.description || "",
         techStack: editProject.techStack || [],
+        digitalServices: normalizeDigitalServicesForm(editProject.digitalServices),
+        socialLinks: normalizeSocialLinksForm(editProject.socialLinks),
         figmaUrl: editProject.figmaUrl || "",
         repoUrl: editProject.repoUrl || "",
         adminUrl: editProject.adminUrl || "",
@@ -280,6 +294,8 @@ export default function AdminProjects() {
         deadline: "",
         description: "",
         techStack: [],
+        digitalServices: { ...EMPTY_DIGITAL_SERVICES },
+        socialLinks: { ...EMPTY_SOCIAL_LINKS },
         figmaUrl: "",
         repoUrl: "",
         adminUrl: "",
@@ -305,6 +321,12 @@ export default function AdminProjects() {
           data: {
             ...updatePayload,
             techStack: values.techStack || [],
+            ...(values.type === "digital"
+              ? {
+                  digitalServices: values.digitalServices || EMPTY_DIGITAL_SERVICES,
+                  socialLinks: values.socialLinks || EMPTY_SOCIAL_LINKS,
+                }
+              : {}),
           },
         });
         if (descriptionResources.length || descriptionResourceBaseline.size) {
@@ -323,6 +345,12 @@ export default function AdminProjects() {
             clientId: parseInt(values.clientId),
             companyId: parseInt(values.clientId),
             techStack: values.techStack || [],
+            ...(values.type === "digital"
+              ? {
+                  digitalServices: values.digitalServices || EMPTY_DIGITAL_SERVICES,
+                  socialLinks: values.socialLinks || EMPTY_SOCIAL_LINKS,
+                }
+              : {}),
           },
         });
         if (descriptionResources.length && created?.id) {
@@ -548,7 +576,7 @@ export default function AdminProjects() {
     },
     {
       id: "techStack",
-      header: "Tech stack",
+      header: activeTab === ListProjectsType.digital ? "Platforms" : "Tech stack",
       detailOnly: true,
       detailCell: (project) =>
         project.techStack?.length ? project.techStack.join(", ") : "—",
@@ -705,7 +733,7 @@ export default function AdminProjects() {
                 <Plus className="mr-2 h-4 w-4" /> New Project
               </Button>
             </DialogTrigger>
-          <DialogContent className="sm:max-w-[600px] bg-card border-border">
+          <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto bg-card border-border">
             <DialogHeader>
               <DialogTitle>
                 {editProject ? "Edit Project" : "New Project"}
@@ -770,7 +798,12 @@ export default function AdminProjects() {
                           <FormItem>
                             <FormLabel>Project Category</FormLabel>
                             <Select
-                              onValueChange={field.onChange}
+                              onValueChange={(value) => {
+                                field.onChange(value);
+                                form.setValue("techStack", []);
+                                form.setValue("digitalServices", { ...EMPTY_DIGITAL_SERVICES });
+                                form.setValue("socialLinks", { ...EMPTY_SOCIAL_LINKS });
+                              }}
                               value={field.value}
                             >
                               <FormControl>
@@ -940,139 +973,172 @@ export default function AdminProjects() {
                     onChange={setDescriptionResources}
                     onBaselineChange={setDescriptionResourceBaseline}
                   />
-                  <FormField
-                    control={form.control}
-                    name="techStack"
-                    render={() => (
-                      <FormItem>
-                        <FormLabel>Tech Stack</FormLabel>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border border-border rounded-md p-3">
-                          {TECH_OPTIONS.map((tech) => (
-                            <FormField
-                              key={tech}
-                              control={form.control}
-                              name="techStack"
-                              render={({ field }) => {
-                                return (
-                                  <FormItem
-                                    key={tech}
-                                    className="flex flex-row items-start space-x-2 space-y-0"
-                                  >
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={field.value?.includes(tech)}
-                                        onCheckedChange={(checked) => {
-                                          return checked
-                                            ? field.onChange([
-                                                ...(field.value || []),
-                                                tech,
-                                              ])
-                                            : field.onChange(
-                                                field.value?.filter(
-                                                  (value) => value !== tech,
-                                                ),
-                                              );
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="text-xs font-normal cursor-pointer">
-                                      {tech}
-                                    </FormLabel>
-                                  </FormItem>
-                                );
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="figmaUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Figma URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="https://figma.com/..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="repoUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Repository URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="https://github.com/..."
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="adminUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Admin Portal URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="https://admin.example.com"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="websiteUrl"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Website URL</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="https://example.com"
-                              {...field}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  <FormField
-                    control={form.control}
-                    name="postmanJson"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Postman Collection JSON</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Paste exported Postman JSON blob here..."
-                            className="min-h-[100px] font-mono text-[10px]"
-                            {...field}
+                  {(() => {
+                    const currentType = form.watch("type");
+                    const isDigital = currentType === "digital";
+                    const platformOptions = projectStackOptions(currentType);
+
+                    return (
+                      <>
+                        {isDigital ? (
+                          <DigitalProjectServiceFields
+                            services={normalizeDigitalServicesForm(form.watch("digitalServices"))}
+                            socialLinks={normalizeSocialLinksForm(form.watch("socialLinks"))}
+                            platforms={form.watch("techStack") || []}
+                            onServicesChange={(digitalServices) =>
+                              form.setValue("digitalServices", digitalServices, {
+                                shouldDirty: true,
+                              })
+                            }
+                            onSocialLinksChange={(socialLinks) =>
+                              form.setValue("socialLinks", socialLinks, { shouldDirty: true })
+                            }
+                            onPlatformsChange={(techStack) =>
+                              form.setValue("techStack", techStack, { shouldDirty: true })
+                            }
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        ) : (
+                          <FormField
+                            control={form.control}
+                            name="techStack"
+                            render={() => (
+                              <FormItem>
+                                <FormLabel>{projectStackFieldLabel(currentType)}</FormLabel>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 border border-border rounded-md p-3">
+                                  {platformOptions.map((tech) => (
+                                    <FormField
+                                      key={tech}
+                                      control={form.control}
+                                      name="techStack"
+                                      render={({ field }) => {
+                                        return (
+                                          <FormItem
+                                            key={tech}
+                                            className="flex flex-row items-start space-x-2 space-y-0"
+                                          >
+                                            <FormControl>
+                                              <Checkbox
+                                                checked={field.value?.includes(tech)}
+                                                onCheckedChange={(checked) => {
+                                                  return checked
+                                                    ? field.onChange([
+                                                        ...(field.value || []),
+                                                        tech,
+                                                      ])
+                                                    : field.onChange(
+                                                        field.value?.filter(
+                                                          (value) => value !== tech,
+                                                        ),
+                                                      );
+                                                }}
+                                              />
+                                            </FormControl>
+                                            <FormLabel className="text-xs font-normal cursor-pointer">
+                                              {tech}
+                                            </FormLabel>
+                                          </FormItem>
+                                        );
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="figmaUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{isDigital ? "Assets / Drive Link" : "Figma URL"}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder={isDigital ? "https://drive.google.com/..." : "https://figma.com/..."}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          {!isDigital && (
+                            <FormField
+                              control={form.control}
+                              name="repoUrl"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Repository URL</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      placeholder="https://github.com/..."
+                                      {...field}
+                                    />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <FormField
+                            control={form.control}
+                            name="adminUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{isDigital ? "Analytics Dashboard Link" : "Admin Portal URL"}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder={isDigital ? "https://analytics.google.com/..." : "https://admin.example.com"}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="websiteUrl"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>{isDigital ? "Website / Landing Page Link" : "Website URL"}</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    placeholder={isDigital ? "https://example.com/campaign" : "https://example.com"}
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                        {!isDigital && (
+                          <FormField
+                            control={form.control}
+                            name="postmanJson"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Postman Collection JSON</FormLabel>
+                                <FormControl>
+                                  <Textarea
+                                    placeholder="Paste exported Postman JSON blob here..."
+                                    className="min-h-[100px] font-mono text-[10px]"
+                                    {...field}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
+                      </>
+                    );
+                  })()}
                   </div>
                 <DialogFooter className="pt-2">
                   <Button

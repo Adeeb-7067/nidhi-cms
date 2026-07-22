@@ -77,7 +77,12 @@ const FINANCE_FULL_ACCESS = new Set([
   "finance_subscriptions",
   "finance_cheques",
   "finance_notifications",
+  "finance_freelancers",
 ]);
+
+const MARKETING_OPERATIONAL_GRANTS = marketingModules.flatMap((module) =>
+  ["view", "create", "edit"].map((action) => ({ module, action })),
+);
 
 const FINANCE_GRANTS = FINANCE_MODULES.flatMap((module) => {
   const grants = [{ module, action: "view" }];
@@ -206,6 +211,7 @@ const DEFAULT_TEMPLATES = [
     isSystem: true,
     grants: [
       ...MARKETING_GRANTS,
+      { module: "hrm_dashboard", action: "view" },
       { module: "dev_logs", action: "view" },
       { module: "dev_logs", action: "create" },
       { module: "dev_logs", action: "edit" },
@@ -222,6 +228,22 @@ const DEFAULT_TEMPLATES = [
       { module: "admin_discussions", action: "create" },
       { module: "admin_tickets", action: "view" },
       { module: "admin_tickets", action: "create" },
+    ],
+  },
+  {
+    code: "freelancer",
+    name: "Freelancer",
+    cmsRole: "freelancer",
+    isSystem: true,
+    grants: [
+      ...DEV_PORTAL_VIEW,
+      ...MARKETING_OPERATIONAL_GRANTS,
+      { module: "dev_logs", action: "edit" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_discussions", action: "create" },
+      { module: "admin_tickets", action: "view" },
+      { module: "admin_tickets", action: "create" },
+      { module: "finance_freelancers", action: "view" },
     ],
   },
   {
@@ -436,6 +458,25 @@ export async function backfillSystemTemplatePermissions() {
     }
 
     if (changed) evictPermissionCache(null);
+  }
+
+  // Move CMS freelancers off the shared "employee" template onto "freelancer".
+  const freelancerTpl = await hrmRoleTemplatesTable.findOne({ code: "freelancer" }).lean();
+  const employeeTpl = await hrmRoleTemplatesTable.findOne({ code: "employee" }).lean();
+  if (freelancerTpl && employeeTpl) {
+    const result = await usersTable.updateMany(
+      {
+        role: "freelancer",
+        $or: [
+          { roleTemplateId: employeeTpl.id },
+          { hrmRoleTemplateId: employeeTpl.id },
+          { roleTemplateId: null },
+          { roleTemplateId: { $exists: false } },
+        ],
+      },
+      { $set: { roleTemplateId: freelancerTpl.id, hrmRoleTemplateId: freelancerTpl.id } },
+    );
+    if (result.modifiedCount > 0) evictPermissionCache(null);
   }
 }
 

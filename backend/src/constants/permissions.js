@@ -77,6 +77,7 @@ export const cmsModuleGroups = [
       "finance_reports",
       "finance_notifications",
       "finance_vendors",
+      "finance_freelancers",
     ],
   },
   {
@@ -198,7 +199,7 @@ export const defaultTemplateByRole = {
   developer: "employee",
   tester: "employee",
   qa: "employee",
-  freelancer: "employee",
+  freelancer: "freelancer",
   bde: "bde",
   finance: "finance",
   digital: "digital",

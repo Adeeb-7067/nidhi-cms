@@ -24,6 +24,10 @@ const projectSchema = new Schema({
   adminUrl: { type: String },
   websiteUrl: { type: String },
   postmanJson: { type: String },
+  /** Digital: { seo, metaAds, googleAds } */
+  digitalServices: { type: Schema.Types.Mixed, default: {} },
+  /** Digital: social profile URLs keyed by network */
+  socialLinks: { type: Schema.Types.Mixed, default: {} },
   completionOverride: { type: Number }
 }, { timestamps: true });
 projectSchema.index({ companyId: 1, status: 1 });
