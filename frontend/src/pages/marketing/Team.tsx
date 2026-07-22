@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { PortalPageShell, PortalKpiGrid, PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useMarketingDashboard, useMarketingPerformance } from "@/api/marketing";
 import {
   MarketingPageHeader,
@@ -109,7 +110,8 @@ export default function DigitalTeam() {
       name: m.name,
       email: m.email,
       role: "digital",
-      status: m.status as any,
+      status: m.status as User["status"],
+      avatarUrl: m.avatarUrl ?? null,
       createdAt: "",
     } as User);
     setFormOpen(true);
@@ -234,13 +236,19 @@ export default function DigitalTeam() {
                     <TableRow key={m.id} className="hover:bg-muted/40 transition-colors">
                       <TableCell className="py-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-500/10 text-teal-700 font-semibold text-xs dark:bg-teal-500/20 dark:text-teal-400">
-                            {m.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()}
-                          </div>
+                          <Avatar className="h-9 w-9 border border-border/60">
+                            {m.avatarUrl ? (
+                              <AvatarImage src={m.avatarUrl} alt={m.name} className="object-cover" />
+                            ) : null}
+                            <AvatarFallback className="bg-teal-500/10 text-teal-700 text-[10px] font-semibold dark:bg-teal-500/20 dark:text-teal-400">
+                              {m.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .slice(0, 2)
+                                .toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
                           <div>
                             <p className="font-semibold text-xs text-foreground leading-snug">{m.name}</p>
                             <p className="text-[11px] text-muted-foreground flex items-center gap-1">

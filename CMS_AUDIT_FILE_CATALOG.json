@@ -1,0 +1,6789 @@
+{
+  "generated": "2026-07-22T06:50:58.150Z",
+  "total": 1127,
+  "totalLoc": 230139,
+  "byKind": {
+    "other": 39,
+    "script": 44,
+    "config": 13,
+    "controller": 79,
+    "lib": 74,
+    "mapper": 12,
+    "middleware": 10,
+    "schema": 87,
+    "route": 34,
+    "service": 96,
+    "test": 48,
+    "electron": 5,
+    "api-client": 30,
+    "component": 169,
+    "context": 6,
+    "hook": 9,
+    "module-ui": 210,
+    "page": 162
+  },
+  "files": [
+    {
+      "rel": "backend/build.mjs",
+      "kind": "other",
+      "lines": 127,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/ecosystem.config.cjs",
+      "kind": "other",
+      "lines": 24,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/index.js",
+      "kind": "other",
+      "lines": 126,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/load-env.js",
+      "kind": "other",
+      "lines": 20,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/scratch_check.mjs",
+      "kind": "other",
+      "lines": 26,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/scripts/audit-imports.mjs",
+      "kind": "script",
+      "lines": 375,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/audit-monitoring.mjs",
+      "kind": "script",
+      "lines": 258,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/backfill-ticket-audience.js",
+      "kind": "script",
+      "lines": 34,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/check-company-code-nulls.mjs",
+      "kind": "script",
+      "lines": 21,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/check-customer-invoices.mjs",
+      "kind": "script",
+      "lines": 42,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/clean-db.js",
+      "kind": "script",
+      "lines": 116,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/cleanup-digital-test-client.mjs",
+      "kind": "script",
+      "lines": 107,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/configure-bucket-cors.mjs",
+      "kind": "script",
+      "lines": 70,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/debug-session-time.mjs",
+      "kind": "script",
+      "lines": 48,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/delete-lead-cascade.mjs",
+      "kind": "script",
+      "lines": 457,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/delete-roopai-installments.js",
+      "kind": "script",
+      "lines": 99,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/diagnose-customer-create-conflict.mjs",
+      "kind": "script",
+      "lines": 85,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/find-customer-create-blockers.mjs",
+      "kind": "script",
+      "lines": 41,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/fix-draft-proposal-seen.mjs",
+      "kind": "script",
+      "lines": 26,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/fix-esm-extensions.mjs",
+      "kind": "script",
+      "lines": 65,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/fix-legacy-leave-balances.mjs",
+      "kind": "script",
+      "lines": 64,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/fix-mvc-imports.mjs",
+      "kind": "script",
+      "lines": 57,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/fix-sales-payment-id-index.mjs",
+      "kind": "script",
+      "lines": 56,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/inspect-leave-balances.mjs",
+      "kind": "script",
+      "lines": 50,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/list-client-indexes.mjs",
+      "kind": "script",
+      "lines": 19,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/merge-sales-customers-into-clients.mjs",
+      "kind": "script",
+      "lines": 124,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/migrate-company-hierarchy.js",
+      "kind": "script",
+      "lines": 81,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/migrate-departments.mjs",
+      "kind": "script",
+      "lines": 36,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/migrate-vendors-to-own-collection.mjs",
+      "kind": "script",
+      "lines": 132,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/reassign-invoice-customer.mjs",
+      "kind": "script",
+      "lines": 53,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/rematerialize-leave-attendance.mjs",
+      "kind": "script",
+      "lines": 57,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/remove-alias-imports.mjs",
+      "kind": "script",
+      "lines": 59,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/run-bundled.mjs",
+      "kind": "script",
+      "lines": 37,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/seed-digital-test-client.mjs",
+      "kind": "script",
+      "lines": 688,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/seed-hrm-defaults.mjs",
+      "kind": "script",
+      "lines": 34,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/seed-more.js",
+      "kind": "script",
+      "lines": 563,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/seed.js",
+      "kind": "script",
+      "lines": 306,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/smoke-create-customer-api.mjs",
+      "kind": "script",
+      "lines": 171,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/smoke-direct-conversations.mjs",
+      "kind": "script",
+      "lines": 94,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/smoke-discussions.mjs",
+      "kind": "script",
+      "lines": 178,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/smoke-proposal-create-send.mjs",
+      "kind": "script",
+      "lines": 86,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/smoke-session-apis.mjs",
+      "kind": "script",
+      "lines": 74,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/split-mvc.mjs",
+      "kind": "script",
+      "lines": 416,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/sync-prod-to-local.mjs",
+      "kind": "script",
+      "lines": 130,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/test-customer-create.mjs",
+      "kind": "script",
+      "lines": 37,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/ts-to-js.mjs",
+      "kind": "script",
+      "lines": 105,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/verify-company-code-null.mjs",
+      "kind": "script",
+      "lines": 46,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/scripts/verify-expense-cash.mjs",
+      "kind": "script",
+      "lines": 92,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "backend/src/api-zod/generated/api.js",
+      "kind": "other",
+      "lines": 2745,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/api-zod/index.js",
+      "kind": "other",
+      "lines": 7,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/app.js",
+      "kind": "other",
+      "lines": 70,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/config/api.js",
+      "kind": "config",
+      "lines": 32,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/config/env.js",
+      "kind": "config",
+      "lines": 46,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/config/index.js",
+      "kind": "config",
+      "lines": 9,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/config/upload-limits.js",
+      "kind": "config",
+      "lines": 10,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/attendance-status.js",
+      "kind": "config",
+      "lines": 46,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/client-team.js",
+      "kind": "config",
+      "lines": 100,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/employee-profile.js",
+      "kind": "config",
+      "lines": 32,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/finance-labels.js",
+      "kind": "config",
+      "lines": 15,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/hrm-workflow.js",
+      "kind": "config",
+      "lines": 77,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/hrm.js",
+      "kind": "config",
+      "lines": 9,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/marketing.js",
+      "kind": "config",
+      "lines": 107,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/permissions.js",
+      "kind": "config",
+      "lines": 222,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/constants/user-roles.js",
+      "kind": "config",
+      "lines": 93,
+      "purpose": "Configuration or constants"
+    },
+    {
+      "rel": "backend/src/controllers/alerts.controller.js",
+      "kind": "controller",
+      "lines": 195,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/analytics.controller.js",
+      "kind": "controller",
+      "lines": 446,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/apk.controller.js",
+      "kind": "controller",
+      "lines": 78,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/auth.controller.js",
+      "kind": "controller",
+      "lines": 409,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/bugs.controller.js",
+      "kind": "controller",
+      "lines": 773,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/client-team.controller.js",
+      "kind": "controller",
+      "lines": 750,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/clients.controller.js",
+      "kind": "controller",
+      "lines": 240,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/comments.controller.js",
+      "kind": "controller",
+      "lines": 583,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/companies.controller.js",
+      "kind": "controller",
+      "lines": 164,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/direct-conversations.controller.js",
+      "kind": "controller",
+      "lines": 47,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/budgets.controller.js",
+      "kind": "controller",
+      "lines": 135,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/cheques.controller.js",
+      "kind": "controller",
+      "lines": 551,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/dashboard.controller.js",
+      "kind": "controller",
+      "lines": 49,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/expenses.controller.js",
+      "kind": "controller",
+      "lines": 553,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/freelancer-engagements.controller.js",
+      "kind": "controller",
+      "lines": 580,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/income.controller.js",
+      "kind": "controller",
+      "lines": 166,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/invoices.controller.js",
+      "kind": "controller",
+      "lines": 215,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/ledgers.controller.js",
+      "kind": "controller",
+      "lines": 90,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/loans.controller.js",
+      "kind": "controller",
+      "lines": 551,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/notifications.controller.js",
+      "kind": "controller",
+      "lines": 170,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/payments.controller.js",
+      "kind": "controller",
+      "lines": 191,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/reports.controller.js",
+      "kind": "controller",
+      "lines": 34,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/subscriptions.controller.js",
+      "kind": "controller",
+      "lines": 363,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/sync.controller.js",
+      "kind": "controller",
+      "lines": 10,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/tax.controller.js",
+      "kind": "controller",
+      "lines": 87,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/vendor-invoices.controller.js",
+      "kind": "controller",
+      "lines": 192,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/finance/vendors.controller.js",
+      "kind": "controller",
+      "lines": 172,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/health.controller.js",
+      "kind": "controller",
+      "lines": 9,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/hrm.controller.js",
+      "kind": "controller",
+      "lines": 1071,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/activities.controller.js",
+      "kind": "controller",
+      "lines": 35,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/builds.controller.js",
+      "kind": "controller",
+      "lines": 39,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/credentials.controller.js",
+      "kind": "controller",
+      "lines": 154,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/devices.controller.js",
+      "kind": "controller",
+      "lines": 80,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/environments.controller.js",
+      "kind": "controller",
+      "lines": 72,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/folders.controller.js",
+      "kind": "controller",
+      "lines": 34,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/guard.js",
+      "kind": "controller",
+      "lines": 23,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/index.js",
+      "kind": "controller",
+      "lines": 10,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/resources.controller.js",
+      "kind": "controller",
+      "lines": 137,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/subscriptions.controller.js",
+      "kind": "controller",
+      "lines": 50,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/inventory/summary.controller.js",
+      "kind": "controller",
+      "lines": 35,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/logs.controller.js",
+      "kind": "controller",
+      "lines": 354,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/accounts.controller.js",
+      "kind": "controller",
+      "lines": 395,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/dashboard.controller.js",
+      "kind": "controller",
+      "lines": 421,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/insights.controller.js",
+      "kind": "controller",
+      "lines": 654,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/media.controller.js",
+      "kind": "controller",
+      "lines": 315,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/queues.controller.js",
+      "kind": "controller",
+      "lines": 459,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/tasks.controller.js",
+      "kind": "controller",
+      "lines": 234,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/marketing/workflow.controller.js",
+      "kind": "controller",
+      "lines": 407,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/monitoring.controller.js",
+      "kind": "controller",
+      "lines": 58,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/notifications.controller.js",
+      "kind": "controller",
+      "lines": 81,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/permissions.controller.js",
+      "kind": "controller",
+      "lines": 82,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/presence.controller.js",
+      "kind": "controller",
+      "lines": 46,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/project-documents.controller.js",
+      "kind": "controller",
+      "lines": 248,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/projects.controller.js",
+      "kind": "controller",
+      "lines": 865,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/reports.controller.js",
+      "kind": "controller",
+      "lines": 103,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/requests.controller.js",
+      "kind": "controller",
+      "lines": 134,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/client-team.controller.js",
+      "kind": "controller",
+      "lines": 361,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/config.controller.js",
+      "kind": "controller",
+      "lines": 44,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/customers.controller.js",
+      "kind": "controller",
+      "lines": 617,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/dashboard.controller.js",
+      "kind": "controller",
+      "lines": 371,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/followups.controller.js",
+      "kind": "controller",
+      "lines": 172,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/installments.controller.js",
+      "kind": "controller",
+      "lines": 434,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/invoices.controller.js",
+      "kind": "controller",
+      "lines": 514,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/leads.controller.js",
+      "kind": "controller",
+      "lines": 540,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/notifications.controller.js",
+      "kind": "controller",
+      "lines": 223,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/payments.controller.js",
+      "kind": "controller",
+      "lines": 324,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/products.controller.js",
+      "kind": "controller",
+      "lines": 73,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/proposals.controller.js",
+      "kind": "controller",
+      "lines": 803,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/settings.controller.js",
+      "kind": "controller",
+      "lines": 116,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/targets.controller.js",
+      "kind": "controller",
+      "lines": 70,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/sales/team.controller.js",
+      "kind": "controller",
+      "lines": 393,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/screenshots.controller.js",
+      "kind": "controller",
+      "lines": 142,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/search.controller.js",
+      "kind": "controller",
+      "lines": 161,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/settings.controller.js",
+      "kind": "controller",
+      "lines": 154,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/tasks.controller.js",
+      "kind": "controller",
+      "lines": 256,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/tickets.controller.js",
+      "kind": "controller",
+      "lines": 221,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/users.controller.js",
+      "kind": "controller",
+      "lines": 388,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/warnings.controller.js",
+      "kind": "controller",
+      "lines": 161,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/controllers/work-sessions.controller.js",
+      "kind": "controller",
+      "lines": 171,
+      "purpose": "Request handler"
+    },
+    {
+      "rel": "backend/src/lib/browser.js",
+      "kind": "lib",
+      "lines": 58,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/db-tx.js",
+      "kind": "lib",
+      "lines": 97,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/db.js",
+      "kind": "lib",
+      "lines": 63,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/email.js",
+      "kind": "lib",
+      "lines": 492,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/file-storage.js",
+      "kind": "lib",
+      "lines": 99,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/firebase.js",
+      "kind": "lib",
+      "lines": 45,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/hrm-crypto.js",
+      "kind": "lib",
+      "lines": 105,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/html-to-pdf.js",
+      "kind": "lib",
+      "lines": 30,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/http-error.js",
+      "kind": "lib",
+      "lines": 36,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/inventory-crypto.js",
+      "kind": "lib",
+      "lines": 38,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/jwt.js",
+      "kind": "lib",
+      "lines": 24,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/logger.js",
+      "kind": "lib",
+      "lines": 20,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/lookup-cache.js",
+      "kind": "lib",
+      "lines": 20,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/object-storage.js",
+      "kind": "lib",
+      "lines": 179,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/password.js",
+      "kind": "lib",
+      "lines": 35,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/lib/realtime.js",
+      "kind": "lib",
+      "lines": 173,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "backend/src/mappers/alert-format.js",
+      "kind": "mapper",
+      "lines": 60,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/bug-format.js",
+      "kind": "mapper",
+      "lines": 229,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/client-customer-format.js",
+      "kind": "mapper",
+      "lines": 69,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/comment-format.js",
+      "kind": "mapper",
+      "lines": 33,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/company-format.js",
+      "kind": "mapper",
+      "lines": 133,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/index.js",
+      "kind": "mapper",
+      "lines": 32,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/notification-format.js",
+      "kind": "mapper",
+      "lines": 40,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/project-format.js",
+      "kind": "mapper",
+      "lines": 169,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/request-format.js",
+      "kind": "mapper",
+      "lines": 41,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/ticket-format.js",
+      "kind": "mapper",
+      "lines": 53,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/user-format.js",
+      "kind": "mapper",
+      "lines": 36,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/mappers/warning-format.js",
+      "kind": "mapper",
+      "lines": 35,
+      "purpose": "DB to API shaping"
+    },
+    {
+      "rel": "backend/src/middlewares/audit.js",
+      "kind": "middleware",
+      "lines": 67,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/auth.js",
+      "kind": "middleware",
+      "lines": 130,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/compression.js",
+      "kind": "middleware",
+      "lines": 15,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/error-handler.js",
+      "kind": "middleware",
+      "lines": 131,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/hrm-permission.js",
+      "kind": "middleware",
+      "lines": 21,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/index.js",
+      "kind": "middleware",
+      "lines": 16,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/permission.js",
+      "kind": "middleware",
+      "lines": 55,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/require-database.js",
+      "kind": "middleware",
+      "lines": 15,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/serve-frontend.js",
+      "kind": "middleware",
+      "lines": 42,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/middlewares/validate-request.js",
+      "kind": "middleware",
+      "lines": 38,
+      "purpose": "Request pipeline cross-cut"
+    },
+    {
+      "rel": "backend/src/models/index.js",
+      "kind": "other",
+      "lines": 6,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/models/schema/alert-deliveries.js",
+      "kind": "schema",
+      "lines": 16,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/alerts.js",
+      "kind": "schema",
+      "lines": 29,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/apk.js",
+      "kind": "schema",
+      "lines": 41,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/audit.js",
+      "kind": "schema",
+      "lines": 20,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/bugs.js",
+      "kind": "schema",
+      "lines": 96,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/client-team.js",
+      "kind": "schema",
+      "lines": 105,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/clients.js",
+      "kind": "schema",
+      "lines": 82,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/comments.js",
+      "kind": "schema",
+      "lines": 28,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/counter.js",
+      "kind": "schema",
+      "lines": 34,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/direct-conversations.js",
+      "kind": "schema",
+      "lines": 30,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/EmployeeScreenshot.js",
+      "kind": "schema",
+      "lines": 23,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/bank-accounts.js",
+      "kind": "schema",
+      "lines": 20,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/budgets.js",
+      "kind": "schema",
+      "lines": 27,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/cheques.js",
+      "kind": "schema",
+      "lines": 74,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/expenses.js",
+      "kind": "schema",
+      "lines": 94,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/freelancer-engagements.js",
+      "kind": "schema",
+      "lines": 82,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/income.js",
+      "kind": "schema",
+      "lines": 38,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/index.js",
+      "kind": "schema",
+      "lines": 14,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/invoices.js",
+      "kind": "schema",
+      "lines": 57,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/loans.js",
+      "kind": "schema",
+      "lines": 35,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/payments.js",
+      "kind": "schema",
+      "lines": 51,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/subscriptions.js",
+      "kind": "schema",
+      "lines": 48,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/tax-deposits.js",
+      "kind": "schema",
+      "lines": 25,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/vendor-invoices.js",
+      "kind": "schema",
+      "lines": 52,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/finance/vendors.js",
+      "kind": "schema",
+      "lines": 47,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/assets.js",
+      "kind": "schema",
+      "lines": 27,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/attendance.js",
+      "kind": "schema",
+      "lines": 25,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/audit.js",
+      "kind": "schema",
+      "lines": 23,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/daily-attendance.js",
+      "kind": "schema",
+      "lines": 42,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/departments.js",
+      "kind": "schema",
+      "lines": 20,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/documents.js",
+      "kind": "schema",
+      "lines": 21,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/exit.js",
+      "kind": "schema",
+      "lines": 38,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/holidays.js",
+      "kind": "schema",
+      "lines": 18,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/index.js",
+      "kind": "schema",
+      "lines": 18,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/leave.js",
+      "kind": "schema",
+      "lines": 63,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/letters.js",
+      "kind": "schema",
+      "lines": 35,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/manual-payslip.js",
+      "kind": "schema",
+      "lines": 34,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/payroll.js",
+      "kind": "schema",
+      "lines": 97,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/permissions.js",
+      "kind": "schema",
+      "lines": 29,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/policies.js",
+      "kind": "schema",
+      "lines": 28,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/recruitment.js",
+      "kind": "schema",
+      "lines": 65,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/shifts.js",
+      "kind": "schema",
+      "lines": 32,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/hrm/wfh.js",
+      "kind": "schema",
+      "lines": 25,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/index.js",
+      "kind": "schema",
+      "lines": 31,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/inventory.js",
+      "kind": "schema",
+      "lines": 202,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/job-runs.js",
+      "kind": "schema",
+      "lines": 49,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/logs.js",
+      "kind": "schema",
+      "lines": 26,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/accounts.js",
+      "kind": "schema",
+      "lines": 75,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/activity.js",
+      "kind": "schema",
+      "lines": 30,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/analytics.js",
+      "kind": "schema",
+      "lines": 72,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/approvals.js",
+      "kind": "schema",
+      "lines": 38,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/campaigns.js",
+      "kind": "schema",
+      "lines": 64,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/content.js",
+      "kind": "schema",
+      "lines": 43,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/graphics.js",
+      "kind": "schema",
+      "lines": 40,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/index.js",
+      "kind": "schema",
+      "lines": 49,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/media.js",
+      "kind": "schema",
+      "lines": 41,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/posts.js",
+      "kind": "schema",
+      "lines": 55,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/reports.js",
+      "kind": "schema",
+      "lines": 23,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/tasks.js",
+      "kind": "schema",
+      "lines": 52,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/marketing/videos.js",
+      "kind": "schema",
+      "lines": 42,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/MonitoringConsent.js",
+      "kind": "schema",
+      "lines": 28,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/notifications.js",
+      "kind": "schema",
+      "lines": 24,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/project-documents.js",
+      "kind": "schema",
+      "lines": 90,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/projects.js",
+      "kind": "schema",
+      "lines": 84,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/reports.js",
+      "kind": "schema",
+      "lines": 26,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/requests.js",
+      "kind": "schema",
+      "lines": 26,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/bde-targets.js",
+      "kind": "schema",
+      "lines": 28,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/config.js",
+      "kind": "schema",
+      "lines": 22,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/customers.js",
+      "kind": "schema",
+      "lines": 3,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/followups.js",
+      "kind": "schema",
+      "lines": 26,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/index.js",
+      "kind": "schema",
+      "lines": 15,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/installments.js",
+      "kind": "schema",
+      "lines": 31,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/invoices.js",
+      "kind": "schema",
+      "lines": 52,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/lead-activity.js",
+      "kind": "schema",
+      "lines": 35,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/leads.js",
+      "kind": "schema",
+      "lines": 69,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/payments.js",
+      "kind": "schema",
+      "lines": 33,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/preferences.js",
+      "kind": "schema",
+      "lines": 47,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/products.js",
+      "kind": "schema",
+      "lines": 25,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/proposal-comments.js",
+      "kind": "schema",
+      "lines": 22,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/proposal-view-logs.js",
+      "kind": "schema",
+      "lines": 25,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/sales/proposals.js",
+      "kind": "schema",
+      "lines": 65,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/settings.js",
+      "kind": "schema",
+      "lines": 44,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/tasks.js",
+      "kind": "schema",
+      "lines": 35,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/tickets.js",
+      "kind": "schema",
+      "lines": 28,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/users.js",
+      "kind": "schema",
+      "lines": 243,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/warnings.js",
+      "kind": "schema",
+      "lines": 26,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/models/schema/WorkSession.js",
+      "kind": "schema",
+      "lines": 69,
+      "purpose": "Mongoose data model"
+    },
+    {
+      "rel": "backend/src/routes/alerts.routes.js",
+      "kind": "route",
+      "lines": 19,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/analytics.routes.js",
+      "kind": "route",
+      "lines": 27,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/apk.routes.js",
+      "kind": "route",
+      "lines": 12,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/auth.routes.js",
+      "kind": "route",
+      "lines": 27,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/bugs.routes.js",
+      "kind": "route",
+      "lines": 19,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/client-team.routes.js",
+      "kind": "route",
+      "lines": 80,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/clients.routes.js",
+      "kind": "route",
+      "lines": 15,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/comments.routes.js",
+      "kind": "route",
+      "lines": 24,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/companies.routes.js",
+      "kind": "route",
+      "lines": 17,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/direct-conversations.routes.js",
+      "kind": "route",
+      "lines": 25,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/finance.routes.js",
+      "kind": "route",
+      "lines": 250,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/health.routes.js",
+      "kind": "route",
+      "lines": 10,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/hrm.routes.js",
+      "kind": "route",
+      "lines": 169,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/index.js",
+      "kind": "route",
+      "lines": 104,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/inventory.routes.js",
+      "kind": "route",
+      "lines": 30,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/logs.routes.js",
+      "kind": "route",
+      "lines": 16,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/marketing.routes.js",
+      "kind": "route",
+      "lines": 129,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/monitoring.routes.js",
+      "kind": "route",
+      "lines": 22,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/notifications.routes.js",
+      "kind": "route",
+      "lines": 14,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/permissions.routes.js",
+      "kind": "route",
+      "lines": 61,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/presence.routes.js",
+      "kind": "route",
+      "lines": 12,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/project-documents.routes.js",
+      "kind": "route",
+      "lines": 20,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/projects.routes.js",
+      "kind": "route",
+      "lines": 29,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/reports.routes.js",
+      "kind": "route",
+      "lines": 13,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/requests.routes.js",
+      "kind": "route",
+      "lines": 14,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/sales.routes.js",
+      "kind": "route",
+      "lines": 161,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/screenshots.routes.js",
+      "kind": "route",
+      "lines": 46,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/search.routes.js",
+      "kind": "route",
+      "lines": 11,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/settings.routes.js",
+      "kind": "route",
+      "lines": 12,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/tasks.routes.js",
+      "kind": "route",
+      "lines": 15,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/tickets.routes.js",
+      "kind": "route",
+      "lines": 13,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/users.routes.js",
+      "kind": "route",
+      "lines": 20,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/warnings.routes.js",
+      "kind": "route",
+      "lines": 19,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/routes/work-sessions.routes.js",
+      "kind": "route",
+      "lines": 43,
+      "purpose": "HTTP route wiring"
+    },
+    {
+      "rel": "backend/src/services/access/access-helpers.js",
+      "kind": "service",
+      "lines": 37,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/access/company-access.js",
+      "kind": "service",
+      "lines": 122,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/access/index.js",
+      "kind": "service",
+      "lines": 16,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/access/inventory-access.js",
+      "kind": "service",
+      "lines": 18,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/access/list-scope.js",
+      "kind": "service",
+      "lines": 113,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/alerts/alert-scheduler-job.js",
+      "kind": "service",
+      "lines": 95,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/apk-access.js",
+      "kind": "service",
+      "lines": 52,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/bugs/bug-workflow.js",
+      "kind": "service",
+      "lines": 171,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/client-company-provision.js",
+      "kind": "service",
+      "lines": 382,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/client-portal.js",
+      "kind": "service",
+      "lines": 116,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/client-team.js",
+      "kind": "service",
+      "lines": 239,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/comment-chat-resource.js",
+      "kind": "service",
+      "lines": 80,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/comment-mentions.js",
+      "kind": "service",
+      "lines": 115,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/comment-notification-recipients.js",
+      "kind": "service",
+      "lines": 15,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/company-settings.js",
+      "kind": "service",
+      "lines": 96,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/daily-log-compliance.js",
+      "kind": "service",
+      "lines": 403,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/daily-log-virtual-projects.js",
+      "kind": "service",
+      "lines": 25,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/dashboard-activity.js",
+      "kind": "service",
+      "lines": 150,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/direct-conversation-migration.js",
+      "kind": "service",
+      "lines": 81,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/direct-conversations.js",
+      "kind": "service",
+      "lines": 417,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/discussion-previews.js",
+      "kind": "service",
+      "lines": 150,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/discussion-project-access.js",
+      "kind": "service",
+      "lines": 167,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/employeeId.js",
+      "kind": "service",
+      "lines": 24,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/cheque-clearance-reminder-job.js",
+      "kind": "service",
+      "lines": 126,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/expense-cash.service.js",
+      "kind": "service",
+      "lines": 163,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/finance-kpis.service.js",
+      "kind": "service",
+      "lines": 251,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/finance-ledger.service.js",
+      "kind": "service",
+      "lines": 184,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/finance-reports.service.js",
+      "kind": "service",
+      "lines": 280,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/finance-tax.service.js",
+      "kind": "service",
+      "lines": 194,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/payment-ledger.service.js",
+      "kind": "service",
+      "lines": 335,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/sales-payment-sync.service.js",
+      "kind": "service",
+      "lines": 146,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/storage-cleanup-job.js",
+      "kind": "service",
+      "lines": 192,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/unified-ledger.service.js",
+      "kind": "service",
+      "lines": 465,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/finance/vendor-analytics.service.js",
+      "kind": "service",
+      "lines": 142,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/assets.service.js",
+      "kind": "service",
+      "lines": 246,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/attendance-context.js",
+      "kind": "service",
+      "lines": 222,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/attendance-engine.js",
+      "kind": "service",
+      "lines": 235,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/attendance-materialize.service.js",
+      "kind": "service",
+      "lines": 306,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/attendance.service.js",
+      "kind": "service",
+      "lines": 863,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/calendar.service.js",
+      "kind": "service",
+      "lines": 125,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/dashboard.service.js",
+      "kind": "service",
+      "lines": 706,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/departments.service.js",
+      "kind": "service",
+      "lines": 101,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/documents.service.js",
+      "kind": "service",
+      "lines": 220,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/employee-exit-job.js",
+      "kind": "service",
+      "lines": 24,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/employees.service.js",
+      "kind": "service",
+      "lines": 381,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/exit.service.js",
+      "kind": "service",
+      "lines": 510,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/experience-letter-template.js",
+      "kind": "service",
+      "lines": 358,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/holidays.service.js",
+      "kind": "service",
+      "lines": 45,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/hrm-audit.service.js",
+      "kind": "service",
+      "lines": 28,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/hrm-date-utils.js",
+      "kind": "service",
+      "lines": 106,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/leave-accrual.service.js",
+      "kind": "service",
+      "lines": 766,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/leave-approval.js",
+      "kind": "service",
+      "lines": 71,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/leave-attendance-sync.js",
+      "kind": "service",
+      "lines": 38,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/leave.service.js",
+      "kind": "service",
+      "lines": 570,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/letters.service.js",
+      "kind": "service",
+      "lines": 319,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/manual-payslip.service.js",
+      "kind": "service",
+      "lines": 243,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/offer-letter-template.js",
+      "kind": "service",
+      "lines": 96,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/onboarding.service.js",
+      "kind": "service",
+      "lines": 286,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/payroll-compute.js",
+      "kind": "service",
+      "lines": 283,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/payroll.service.js",
+      "kind": "service",
+      "lines": 1352,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/payslip-template.js",
+      "kind": "service",
+      "lines": 1113,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/permissions.service.js",
+      "kind": "service",
+      "lines": 11,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/policies.service.js",
+      "kind": "service",
+      "lines": 65,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/recruitment.service.js",
+      "kind": "service",
+      "lines": 217,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/shifts.service.js",
+      "kind": "service",
+      "lines": 316,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/team-scope.js",
+      "kind": "service",
+      "lines": 127,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/hrm/wfh.service.js",
+      "kind": "service",
+      "lines": 222,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/inventory/expiry-job.js",
+      "kind": "service",
+      "lines": 85,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/inventory/helpers.js",
+      "kind": "service",
+      "lines": 52,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/inventory/index.js",
+      "kind": "service",
+      "lines": 8,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/jobs/withJobLock.js",
+      "kind": "service",
+      "lines": 100,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/marketing/helpers.js",
+      "kind": "service",
+      "lines": 445,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/monitoring-analytics.service.js",
+      "kind": "service",
+      "lines": 301,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/monitoring.service.js",
+      "kind": "service",
+      "lines": 76,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/password-otp.js",
+      "kind": "service",
+      "lines": 163,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/permissions.service.js",
+      "kind": "service",
+      "lines": 932,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/presence.js",
+      "kind": "service",
+      "lines": 261,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/project-documents/project-document-secrets.js",
+      "kind": "service",
+      "lines": 204,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/project-documents/renewal-reminder-job.js",
+      "kind": "service",
+      "lines": 126,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/push-notifications.js",
+      "kind": "service",
+      "lines": 62,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/report-purge-job.js",
+      "kind": "service",
+      "lines": 64,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/reporting.js",
+      "kind": "service",
+      "lines": 233,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/sales/installment-billing.service.js",
+      "kind": "service",
+      "lines": 157,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/sales/payment-ledger.service.js",
+      "kind": "service",
+      "lines": 297,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/sales/sales-kpis.service.js",
+      "kind": "service",
+      "lines": 152,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/screenshot-purge-job.js",
+      "kind": "service",
+      "lines": 156,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/screenshots.service.js",
+      "kind": "service",
+      "lines": 103,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/shift-end-clockout.service.js",
+      "kind": "service",
+      "lines": 108,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/ticket-support.js",
+      "kind": "service",
+      "lines": 120,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/user-access.js",
+      "kind": "service",
+      "lines": 26,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/work-assignments.js",
+      "kind": "service",
+      "lines": 107,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/work-session-notifications.js",
+      "kind": "service",
+      "lines": 174,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/work-session-policy.js",
+      "kind": "service",
+      "lines": 95,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/work-session-sync.js",
+      "kind": "service",
+      "lines": 8,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/work-sessions.service.js",
+      "kind": "service",
+      "lines": 543,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/services/workspace-dashboard.js",
+      "kind": "service",
+      "lines": 368,
+      "purpose": "Business logic"
+    },
+    {
+      "rel": "backend/src/utils/digital-project-fields.js",
+      "kind": "other",
+      "lines": 95,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/finance-totals.js",
+      "kind": "other",
+      "lines": 56,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/index.js",
+      "kind": "other",
+      "lines": 36,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/mongo-duplicate-error.js",
+      "kind": "other",
+      "lines": 199,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/mongo-list.js",
+      "kind": "other",
+      "lines": 20,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/regex.js",
+      "kind": "other",
+      "lines": 5,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/route-errors.js",
+      "kind": "other",
+      "lines": 111,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-admin-guard.js",
+      "kind": "other",
+      "lines": 10,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-bde-customer-scope.js",
+      "kind": "other",
+      "lines": 118,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-customer-financials.js",
+      "kind": "other",
+      "lines": 96,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-dates.js",
+      "kind": "other",
+      "lines": 35,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-document-branding-defaults.js",
+      "kind": "other",
+      "lines": 69,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-invoice-filters.js",
+      "kind": "other",
+      "lines": 35,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-project-labels.js",
+      "kind": "other",
+      "lines": 49,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-proposal-client.js",
+      "kind": "other",
+      "lines": 69,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-proposal-links.js",
+      "kind": "other",
+      "lines": 12,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/sales-totals.js",
+      "kind": "other",
+      "lines": 135,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/user-profile-fields.js",
+      "kind": "other",
+      "lines": 571,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/vendor-fields.js",
+      "kind": "other",
+      "lines": 37,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/utils/vendor-invoice-totals.js",
+      "kind": "other",
+      "lines": 15,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/src/views/api-response.js",
+      "kind": "other",
+      "lines": 11,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "backend/tests/unit/attendance-materialize.test.js",
+      "kind": "test",
+      "lines": 407,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/auth-controller-imports.test.js",
+      "kind": "test",
+      "lines": 28,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/client-company-provision.test.js",
+      "kind": "test",
+      "lines": 55,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/client-customer-format.test.js",
+      "kind": "test",
+      "lines": 75,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/comment-format.test.js",
+      "kind": "test",
+      "lines": 113,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/dashboard.test.js",
+      "kind": "test",
+      "lines": 110,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/digital-project-fields.test.js",
+      "kind": "test",
+      "lines": 52,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/documents.test.js",
+      "kind": "test",
+      "lines": 55,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/employees.test.js",
+      "kind": "test",
+      "lines": 20,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/exit-deactivation.test.js",
+      "kind": "test",
+      "lines": 18,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/finance-unified-ledger.test.js",
+      "kind": "test",
+      "lines": 41,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/hrm-crypto.test.js",
+      "kind": "test",
+      "lines": 96,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/hrm-date-utils.test.js",
+      "kind": "test",
+      "lines": 24,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/hrm-letter-templates.test.js",
+      "kind": "test",
+      "lines": 47,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/leave-accrual.test.js",
+      "kind": "test",
+      "lines": 226,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/leave-attendance-sync.test.js",
+      "kind": "test",
+      "lines": 56,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/leave-form-utils.test.js",
+      "kind": "test",
+      "lines": 24,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/leave-review.test.js",
+      "kind": "test",
+      "lines": 157,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/list-scope-rbac.test.js",
+      "kind": "test",
+      "lines": 113,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/loan-interest.test.js",
+      "kind": "test",
+      "lines": 69,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/mongo-duplicate-error.test.js",
+      "kind": "test",
+      "lines": 54,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/onboarding-eligible.test.js",
+      "kind": "test",
+      "lines": 14,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/onboarding.test.js",
+      "kind": "test",
+      "lines": 52,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/payment-ledger.service.test.js",
+      "kind": "test",
+      "lines": 20,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/payroll-compute.test.js",
+      "kind": "test",
+      "lines": 324,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/payroll-payslip-access.test.js",
+      "kind": "test",
+      "lines": 62,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/payslip-cms-figures.test.js",
+      "kind": "test",
+      "lines": 68,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/profile-page-roles.test.js",
+      "kind": "test",
+      "lines": 125,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/proposal-totals-display.test.js",
+      "kind": "test",
+      "lines": 58,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/role-matrix-completeness.test.js",
+      "kind": "test",
+      "lines": 104,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-bde-customer-scope.test.js",
+      "kind": "test",
+      "lines": 63,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-customer-financials.test.js",
+      "kind": "test",
+      "lines": 29,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-dates.test.js",
+      "kind": "test",
+      "lines": 42,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-document-branding-defaults.test.js",
+      "kind": "test",
+      "lines": 58,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-installment-flow.test.js",
+      "kind": "test",
+      "lines": 56,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-invoice-filters.test.js",
+      "kind": "test",
+      "lines": 45,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-project-labels.test.js",
+      "kind": "test",
+      "lines": 66,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-proposal-client.test.js",
+      "kind": "test",
+      "lines": 80,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-proposal-links.test.js",
+      "kind": "test",
+      "lines": 15,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/sales-totals.test.js",
+      "kind": "test",
+      "lines": 83,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/shift-end-clockout.test.js",
+      "kind": "test",
+      "lines": 218,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/shifts.test.js",
+      "kind": "test",
+      "lines": 40,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/user-profile-fields.test.js",
+      "kind": "test",
+      "lines": 188,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/vendor-invoice-gst.test.js",
+      "kind": "test",
+      "lines": 52,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/wfh-review.test.js",
+      "kind": "test",
+      "lines": 26,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/with-job-lock.test.js",
+      "kind": "test",
+      "lines": 168,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "backend/tests/unit/work-session-duration.test.js",
+      "kind": "test",
+      "lines": 60,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "electron/launch.js",
+      "kind": "electron",
+      "lines": 58,
+      "purpose": "Desktop shell"
+    },
+    {
+      "rel": "electron/main.js",
+      "kind": "electron",
+      "lines": 836,
+      "purpose": "Desktop shell"
+    },
+    {
+      "rel": "electron/preload.js",
+      "kind": "electron",
+      "lines": 54,
+      "purpose": "Desktop shell"
+    },
+    {
+      "rel": "electron/screenshot-blur.js",
+      "kind": "electron",
+      "lines": 205,
+      "purpose": "Desktop shell"
+    },
+    {
+      "rel": "electron/scripts/write-api-config.js",
+      "kind": "script",
+      "lines": 44,
+      "purpose": "Ops, migration, or seed script"
+    },
+    {
+      "rel": "electron/sensitive-apps.js",
+      "kind": "electron",
+      "lines": 211,
+      "purpose": "Desktop shell"
+    },
+    {
+      "rel": "electron/sensitive-apps.test.js",
+      "kind": "test",
+      "lines": 44,
+      "purpose": "Automated test"
+    },
+    {
+      "rel": "frontend/electron.vite.config.ts",
+      "kind": "other",
+      "lines": 60,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/orval.config.ts",
+      "kind": "other",
+      "lines": 71,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/public/firebase-messaging-sw.js",
+      "kind": "other",
+      "lines": 39,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/server.js",
+      "kind": "other",
+      "lines": 20,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/src/api/alerts.ts",
+      "kind": "api-client",
+      "lines": 106,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/bugs-batch.ts",
+      "kind": "api-client",
+      "lines": 70,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/client-team.ts",
+      "kind": "api-client",
+      "lines": 315,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/clients.ts",
+      "kind": "api-client",
+      "lines": 16,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/comments-delete.ts",
+      "kind": "api-client",
+      "lines": 17,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/company-team-mentions.ts",
+      "kind": "api-client",
+      "lines": 27,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/custom-fetch.ts",
+      "kind": "api-client",
+      "lines": 484,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/direct-conversations.ts",
+      "kind": "api-client",
+      "lines": 143,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/discussion-previews.ts",
+      "kind": "api-client",
+      "lines": 35,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/finance.ts",
+      "kind": "api-client",
+      "lines": 1987,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/generated/api.schemas.ts",
+      "kind": "api-client",
+      "lines": 2495,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/generated/api.ts",
+      "kind": "api-client",
+      "lines": 8407,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/hrm-hooks.ts",
+      "kind": "api-client",
+      "lines": 80,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/hrm.ts",
+      "kind": "api-client",
+      "lines": 1694,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/index.ts",
+      "kind": "api-client",
+      "lines": 89,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/marketing.ts",
+      "kind": "api-client",
+      "lines": 1157,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/monitoring-analytics.ts",
+      "kind": "api-client",
+      "lines": 83,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/monitoring.ts",
+      "kind": "api-client",
+      "lines": 160,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/password-auth.ts",
+      "kind": "api-client",
+      "lines": 56,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/permissions.ts",
+      "kind": "api-client",
+      "lines": 152,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/presence.ts",
+      "kind": "api-client",
+      "lines": 40,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/project-client-team.ts",
+      "kind": "api-client",
+      "lines": 34,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/project-documents.ts",
+      "kind": "api-client",
+      "lines": 157,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/project-members-batch.ts",
+      "kind": "api-client",
+      "lines": 24,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/sales.ts",
+      "kind": "api-client",
+      "lines": 2013,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/self-profile.ts",
+      "kind": "api-client",
+      "lines": 18,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/team-employees.ts",
+      "kind": "api-client",
+      "lines": 161,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/warnings.ts",
+      "kind": "api-client",
+      "lines": 110,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/work-sessions.ts",
+      "kind": "api-client",
+      "lines": 203,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/api/workspace-dashboard.ts",
+      "kind": "api-client",
+      "lines": 114,
+      "purpose": "Frontend API client"
+    },
+    {
+      "rel": "frontend/src/App.tsx",
+      "kind": "other",
+      "lines": 116,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/src/components/admin/employee-form-ui.tsx",
+      "kind": "component",
+      "lines": 73,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/admin/EmployeeFormTabs.tsx",
+      "kind": "component",
+      "lines": 1112,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/alerts/alert-audience-field.tsx",
+      "kind": "component",
+      "lines": 260,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/alerts/alert-form-dialog.tsx",
+      "kind": "component",
+      "lines": 224,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/alerts/GlobalAlertModal.tsx",
+      "kind": "component",
+      "lines": 110,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/analytics/log-activity-heatmap.tsx",
+      "kind": "component",
+      "lines": 107,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/apk/apk-audience-field.tsx",
+      "kind": "component",
+      "lines": 55,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/auth/change-password-card.tsx",
+      "kind": "component",
+      "lines": 255,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/auth/LoginBackground.tsx",
+      "kind": "component",
+      "lines": 78,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/auth/LoginLottie.tsx",
+      "kind": "component",
+      "lines": 142,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/brand/AppLogo.tsx",
+      "kind": "component",
+      "lines": 29,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/assignee-avatars.tsx",
+      "kind": "component",
+      "lines": 75,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-add-issues-form.tsx",
+      "kind": "component",
+      "lines": 117,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-attachments.tsx",
+      "kind": "component",
+      "lines": 161,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-batch-create.tsx",
+      "kind": "component",
+      "lines": 197,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-comments.tsx",
+      "kind": "component",
+      "lines": 186,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-detail-sheet.tsx",
+      "kind": "component",
+      "lines": 536,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-form-dialog.tsx",
+      "kind": "component",
+      "lines": 654,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-status-badge.tsx",
+      "kind": "component",
+      "lines": 26,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-table-row.tsx",
+      "kind": "component",
+      "lines": 236,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-table.tsx",
+      "kind": "component",
+      "lines": 244,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/bug-track-status.tsx",
+      "kind": "component",
+      "lines": 162,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/bugs/project-bugs-panel.tsx",
+      "kind": "component",
+      "lines": 290,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/chat-composer.tsx",
+      "kind": "component",
+      "lines": 704,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/comment-body.tsx",
+      "kind": "component",
+      "lines": 165,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/emoji-picker-button.tsx",
+      "kind": "component",
+      "lines": 75,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/linkified-text.tsx",
+      "kind": "component",
+      "lines": 67,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/mention-autocomplete.tsx",
+      "kind": "component",
+      "lines": 49,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/message-content.tsx",
+      "kind": "component",
+      "lines": 54,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/voice-message-player.tsx",
+      "kind": "component",
+      "lines": 171,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/chat/voice-recording-bar.tsx",
+      "kind": "component",
+      "lines": 79,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/client/ClientRecentActivityPanel.tsx",
+      "kind": "component",
+      "lines": 123,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ClockInButton.tsx",
+      "kind": "component",
+      "lines": 151,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/CommandPalette.tsx",
+      "kind": "component",
+      "lines": 287,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/dashboard/admin-dashboard-charts.tsx",
+      "kind": "component",
+      "lines": 452,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/dashboard/dashboard-kit.tsx",
+      "kind": "component",
+      "lines": 605,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/dashboard/dashboard-page-kit.tsx",
+      "kind": "component",
+      "lines": 239,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/dashboard/WorkspaceRecentProjectsList.tsx",
+      "kind": "component",
+      "lines": 78,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/dev/dev-page-kit.tsx",
+      "kind": "component",
+      "lines": 17,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/discussion-chat-list.tsx",
+      "kind": "component",
+      "lines": 477,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/discussion-chat-panel.tsx",
+      "kind": "component",
+      "lines": 375,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/discussion-message-list.tsx",
+      "kind": "component",
+      "lines": 217,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/discussion-section-rail.tsx",
+      "kind": "component",
+      "lines": 164,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/new-conversation-picker.tsx",
+      "kind": "component",
+      "lines": 131,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/discussions/project-discussion-avatar.tsx",
+      "kind": "component",
+      "lines": 28,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ErrorBoundary.tsx",
+      "kind": "component",
+      "lines": 41,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/inventory/ProjectInventoryPanel.tsx",
+      "kind": "component",
+      "lines": 1264,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/AppLayout.tsx",
+      "kind": "component",
+      "lines": 65,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/AuthenticatedShell.tsx",
+      "kind": "component",
+      "lines": 28,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/ImpersonationBanner.tsx",
+      "kind": "component",
+      "lines": 44,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/Navbar.tsx",
+      "kind": "component",
+      "lines": 499,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/PageOutlet.tsx",
+      "kind": "component",
+      "lines": 902,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/PageShell.tsx",
+      "kind": "component",
+      "lines": 42,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/portal-page-kit.tsx",
+      "kind": "component",
+      "lines": 185,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/RoleGate.tsx",
+      "kind": "component",
+      "lines": 163,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/layout/Sidebar.tsx",
+      "kind": "component",
+      "lines": 598,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/loading/AppLoadingScreen.tsx",
+      "kind": "component",
+      "lines": 60,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/loading/index.ts",
+      "kind": "component",
+      "lines": 37,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/loading/LoadingBackground.tsx",
+      "kind": "component",
+      "lines": 60,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/loading/page-skeletons.tsx",
+      "kind": "component",
+      "lines": 647,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/loading/SpinLoader.tsx",
+      "kind": "component",
+      "lines": 28,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/logs/AdminTeamLogsPanel.tsx",
+      "kind": "component",
+      "lines": 665,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/logs/DailyLogDetailDialog.tsx",
+      "kind": "component",
+      "lines": 220,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/logs/LogComplianceCalendar.tsx",
+      "kind": "component",
+      "lines": 374,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/ConsentDialog.tsx",
+      "kind": "component",
+      "lines": 153,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/LiveActiveDuration.tsx",
+      "kind": "component",
+      "lines": 31,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/MonitoringAnalyticsPanel.tsx",
+      "kind": "component",
+      "lines": 476,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/ScreenshotHourBlock.tsx",
+      "kind": "component",
+      "lines": 55,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/ScreenshotMonitoringCard.tsx",
+      "kind": "component",
+      "lines": 402,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/monitoring/ScreenshotSlideViewer.tsx",
+      "kind": "component",
+      "lines": 204,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/AvatarWithPresence.tsx",
+      "kind": "component",
+      "lines": 42,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/ClientProjectTeamCard.tsx",
+      "kind": "component",
+      "lines": 60,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/CommentAuthorPresence.tsx",
+      "kind": "component",
+      "lines": 26,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/PresenceBadge.tsx",
+      "kind": "component",
+      "lines": 41,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/PresenceIndicator.tsx",
+      "kind": "component",
+      "lines": 59,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/PresenceTableCell.tsx",
+      "kind": "component",
+      "lines": 53,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/TeamMemberPresenceRow.tsx",
+      "kind": "component",
+      "lines": 84,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/presence/UserPresenceMeta.tsx",
+      "kind": "component",
+      "lines": 59,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/profile/EmployeeSelfProfileForm.tsx",
+      "kind": "component",
+      "lines": 504,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/DigitalProjectOverview.tsx",
+      "kind": "component",
+      "lines": 547,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/DigitalProjectServiceFields.tsx",
+      "kind": "component",
+      "lines": 136,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/FreelancerEngagementDialog.tsx",
+      "kind": "component",
+      "lines": 497,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectClientTeamPanel.tsx",
+      "kind": "component",
+      "lines": 155,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectDescriptionResourceList.tsx",
+      "kind": "component",
+      "lines": 84,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectDescriptionResourcesField.tsx",
+      "kind": "component",
+      "lines": 100,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectDocumentFormDialog.tsx",
+      "kind": "component",
+      "lines": 609,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectDocumentPanel.tsx",
+      "kind": "component",
+      "lines": 276,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectHubNav.tsx",
+      "kind": "component",
+      "lines": 160,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectPriorityBanner.tsx",
+      "kind": "component",
+      "lines": 49,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectTasksPanel.tsx",
+      "kind": "component",
+      "lines": 195,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectTeamPanel.tsx",
+      "kind": "component",
+      "lines": 501,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/ProjectTicketsPanel.tsx",
+      "kind": "component",
+      "lines": 249,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/project/TeamMemberWorkSheet.tsx",
+      "kind": "component",
+      "lines": 282,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ProtectedRoute.tsx",
+      "kind": "component",
+      "lines": 45,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/team/TeamAnalyticsPanel.tsx",
+      "kind": "component",
+      "lines": 499,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/tickets/ticket-comments.tsx",
+      "kind": "component",
+      "lines": 215,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/tickets/ticket-detail-sheet.tsx",
+      "kind": "component",
+      "lines": 221,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/accordion.tsx",
+      "kind": "component",
+      "lines": 56,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/advanced-table.tsx",
+      "kind": "component",
+      "lines": 500,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/alert-dialog.tsx",
+      "kind": "component",
+      "lines": 143,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/alert.tsx",
+      "kind": "component",
+      "lines": 60,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/aspect-ratio.tsx",
+      "kind": "component",
+      "lines": 6,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/avatar.tsx",
+      "kind": "component",
+      "lines": 51,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/badge.tsx",
+      "kind": "component",
+      "lines": 44,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/breadcrumb.tsx",
+      "kind": "component",
+      "lines": 116,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/button-group.tsx",
+      "kind": "component",
+      "lines": 84,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/button.tsx",
+      "kind": "component",
+      "lines": 66,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/calendar.tsx",
+      "kind": "component",
+      "lines": 214,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/card.tsx",
+      "kind": "component",
+      "lines": 77,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/carousel.tsx",
+      "kind": "component",
+      "lines": 261,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/chart.tsx",
+      "kind": "component",
+      "lines": 368,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/checkbox.tsx",
+      "kind": "component",
+      "lines": 29,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/collapsible.tsx",
+      "kind": "component",
+      "lines": 12,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/command.tsx",
+      "kind": "component",
+      "lines": 154,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/context-menu.tsx",
+      "kind": "component",
+      "lines": 199,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/data-pagination.tsx",
+      "kind": "component",
+      "lines": 377,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/data-view-toggle.tsx",
+      "kind": "component",
+      "lines": 41,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/decimal-input.tsx",
+      "kind": "component",
+      "lines": 102,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/dialog.tsx",
+      "kind": "component",
+      "lines": 148,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/drawer.tsx",
+      "kind": "component",
+      "lines": 117,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/dropdown-menu.tsx",
+      "kind": "component",
+      "lines": 202,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/empty-state.tsx",
+      "kind": "component",
+      "lines": 32,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/empty.tsx",
+      "kind": "component",
+      "lines": 105,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/field.tsx",
+      "kind": "component",
+      "lines": 245,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/file-uploader.tsx",
+      "kind": "component",
+      "lines": 236,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/form.tsx",
+      "kind": "component",
+      "lines": 177,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/formatted-text.tsx",
+      "kind": "component",
+      "lines": 53,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/hover-card.tsx",
+      "kind": "component",
+      "lines": 28,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/input-group.tsx",
+      "kind": "component",
+      "lines": 169,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/input-otp.tsx",
+      "kind": "component",
+      "lines": 70,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/input.tsx",
+      "kind": "component",
+      "lines": 23,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/item.tsx",
+      "kind": "component",
+      "lines": 194,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/kbd.tsx",
+      "kind": "component",
+      "lines": 29,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/label.tsx",
+      "kind": "component",
+      "lines": 27,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/menubar.tsx",
+      "kind": "component",
+      "lines": 255,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/multi-file-uploader.tsx",
+      "kind": "component",
+      "lines": 188,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/navigation-menu.tsx",
+      "kind": "component",
+      "lines": 129,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/page-header.tsx",
+      "kind": "component",
+      "lines": 24,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/pagination.tsx",
+      "kind": "component",
+      "lines": 118,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/password-input.tsx",
+      "kind": "component",
+      "lines": 42,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/phone-input.tsx",
+      "kind": "component",
+      "lines": 36,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/popover.tsx",
+      "kind": "component",
+      "lines": 32,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/progress.tsx",
+      "kind": "component",
+      "lines": 29,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/project-timeline-view.tsx",
+      "kind": "component",
+      "lines": 242,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/radio-group.tsx",
+      "kind": "component",
+      "lines": 43,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/resizable.tsx",
+      "kind": "component",
+      "lines": 46,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/scroll-area.tsx",
+      "kind": "component",
+      "lines": 47,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/select.tsx",
+      "kind": "component",
+      "lines": 161,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/separator.tsx",
+      "kind": "component",
+      "lines": 30,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/sheet.tsx",
+      "kind": "component",
+      "lines": 141,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/sidebar.tsx",
+      "kind": "component",
+      "lines": 742,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/skeleton.tsx",
+      "kind": "component",
+      "lines": 16,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/slider.tsx",
+      "kind": "component",
+      "lines": 27,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/sonner.tsx",
+      "kind": "component",
+      "lines": 34,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/spinner.tsx",
+      "kind": "component",
+      "lines": 17,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/switch.tsx",
+      "kind": "component",
+      "lines": 28,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/table-detail-panel.tsx",
+      "kind": "component",
+      "lines": 58,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/table.tsx",
+      "kind": "component",
+      "lines": 121,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/tabs.tsx",
+      "kind": "component",
+      "lines": 54,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/textarea.tsx",
+      "kind": "component",
+      "lines": 23,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/time-picker-12h.tsx",
+      "kind": "component",
+      "lines": 111,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/toast.tsx",
+      "kind": "component",
+      "lines": 128,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/toaster.tsx",
+      "kind": "component",
+      "lines": 34,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/toggle-group.tsx",
+      "kind": "component",
+      "lines": 62,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/toggle.tsx",
+      "kind": "component",
+      "lines": 44,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/ui/tooltip.tsx",
+      "kind": "component",
+      "lines": 33,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/UpdateNotificationBanner.tsx",
+      "kind": "component",
+      "lines": 33,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/warnings/EmployeeWarningBanner.tsx",
+      "kind": "component",
+      "lines": 53,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/components/warnings/WarnEmployeeDialog.tsx",
+      "kind": "component",
+      "lines": 207,
+      "purpose": "Reusable UI"
+    },
+    {
+      "rel": "frontend/src/contexts/AuthContext.tsx",
+      "kind": "context",
+      "lines": 422,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/contexts/ClientTeamContext.tsx",
+      "kind": "context",
+      "lines": 113,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/contexts/PresenceContext.tsx",
+      "kind": "context",
+      "lines": 177,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/contexts/RealtimeContext.tsx",
+      "kind": "context",
+      "lines": 404,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/contexts/ThemeContext.tsx",
+      "kind": "context",
+      "lines": 163,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/contexts/WorkSessionContext.tsx",
+      "kind": "context",
+      "lines": 282,
+      "purpose": "React global state"
+    },
+    {
+      "rel": "frontend/src/hooks/use-debounced-value.ts",
+      "kind": "hook",
+      "lines": 13,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-list-totals.ts",
+      "kind": "hook",
+      "lines": 17,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-merged-presence.ts",
+      "kind": "hook",
+      "lines": 21,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-mobile-viewport.ts",
+      "kind": "hook",
+      "lines": 21,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-mobile.tsx",
+      "kind": "hook",
+      "lines": 20,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-notification-click.ts",
+      "kind": "hook",
+      "lines": 83,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-presence-refresh.ts",
+      "kind": "hook",
+      "lines": 19,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-thread-comment-realtime.ts",
+      "kind": "hook",
+      "lines": 84,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/hooks/use-toast.ts",
+      "kind": "hook",
+      "lines": 192,
+      "purpose": "React hook"
+    },
+    {
+      "rel": "frontend/src/lib/api-base.ts",
+      "kind": "lib",
+      "lines": 36,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/api-error.ts",
+      "kind": "lib",
+      "lines": 230,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/apk-audience.ts",
+      "kind": "lib",
+      "lines": 126,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/auth-storage.ts",
+      "kind": "lib",
+      "lines": 34,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/brand-colors.ts",
+      "kind": "lib",
+      "lines": 123,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/brand.ts",
+      "kind": "lib",
+      "lines": 22,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/bug-batch.ts",
+      "kind": "lib",
+      "lines": 78,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/bug-report.ts",
+      "kind": "lib",
+      "lines": 347,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/bug-workflow.ts",
+      "kind": "lib",
+      "lines": 161,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/chat-emojis.ts",
+      "kind": "lib",
+      "lines": 21,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/chat-file-upload.ts",
+      "kind": "lib",
+      "lines": 88,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/chat-image-upload.ts",
+      "kind": "lib",
+      "lines": 9,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/chat-mentions.ts",
+      "kind": "lib",
+      "lines": 155,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/chat-voice-recorder.ts",
+      "kind": "lib",
+      "lines": 126,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/client-team.ts",
+      "kind": "lib",
+      "lines": 145,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/comment-thread-query.ts",
+      "kind": "lib",
+      "lines": 428,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/daily-log-format.ts",
+      "kind": "lib",
+      "lines": 34,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/daily-log-project-options.ts",
+      "kind": "lib",
+      "lines": 16,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/data-view.ts",
+      "kind": "lib",
+      "lines": 29,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussion-channels.ts",
+      "kind": "lib",
+      "lines": 334,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussion-chat-format.ts",
+      "kind": "lib",
+      "lines": 74,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussion-comment-preview.ts",
+      "kind": "lib",
+      "lines": 43,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussion-realtime.ts",
+      "kind": "lib",
+      "lines": 97,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussions-navigation.ts",
+      "kind": "lib",
+      "lines": 72,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/discussions-read-state.ts",
+      "kind": "lib",
+      "lines": 321,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/electron-bridge.ts",
+      "kind": "lib",
+      "lines": 96,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/employee-routes.ts",
+      "kind": "lib",
+      "lines": 37,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/file-drag.ts",
+      "kind": "lib",
+      "lines": 7,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/firebase.ts",
+      "kind": "lib",
+      "lines": 126,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/image-compression.ts",
+      "kind": "lib",
+      "lines": 53,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/impersonation-storage.ts",
+      "kind": "lib",
+      "lines": 34,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/inventory-api.ts",
+      "kind": "lib",
+      "lines": 154,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/list-query-options.ts",
+      "kind": "lib",
+      "lines": 29,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/navbar-utils.ts",
+      "kind": "lib",
+      "lines": 22,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/navigation.ts",
+      "kind": "lib",
+      "lines": 713,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/notification-alert.ts",
+      "kind": "lib",
+      "lines": 85,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/notification-navigation.ts",
+      "kind": "lib",
+      "lines": 158,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/pdf-export.ts",
+      "kind": "lib",
+      "lines": 87,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/pdf-service.ts",
+      "kind": "lib",
+      "lines": 122,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/phone-input.ts",
+      "kind": "lib",
+      "lines": 50,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/presence.ts",
+      "kind": "lib",
+      "lines": 67,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/project-routes.ts",
+      "kind": "lib",
+      "lines": 26,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/project-type-fields.ts",
+      "kind": "lib",
+      "lines": 140,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/query-config.ts",
+      "kind": "lib",
+      "lines": 26,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/resolve-file-url.ts",
+      "kind": "lib",
+      "lines": 10,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/route-meta.ts",
+      "kind": "lib",
+      "lines": 482,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/route-permissions.ts",
+      "kind": "lib",
+      "lines": 133,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/screenshot-gallery-utils.ts",
+      "kind": "lib",
+      "lines": 59,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/settings-section.ts",
+      "kind": "lib",
+      "lines": 75,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/table-pagination.ts",
+      "kind": "lib",
+      "lines": 176,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/task-ui.ts",
+      "kind": "lib",
+      "lines": 56,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/ticket-chat-presets.ts",
+      "kind": "lib",
+      "lines": 32,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/upload-file.ts",
+      "kind": "lib",
+      "lines": 381,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/user-preferences.ts",
+      "kind": "lib",
+      "lines": 69,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/user-roles.ts",
+      "kind": "lib",
+      "lines": 195,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/utils.ts",
+      "kind": "lib",
+      "lines": 7,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/web-push-notify.ts",
+      "kind": "lib",
+      "lines": 39,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/lib/work-session-utils.ts",
+      "kind": "lib",
+      "lines": 80,
+      "purpose": "Shared utility or infrastructure"
+    },
+    {
+      "rel": "frontend/src/main.tsx",
+      "kind": "other",
+      "lines": 9,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/src/modules/admin/employee-form-shared.ts",
+      "kind": "module-ui",
+      "lines": 606,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/CAAlertBox.tsx",
+      "kind": "module-ui",
+      "lines": 66,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/CAEmptyState.tsx",
+      "kind": "module-ui",
+      "lines": 30,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/CAFilterBar.tsx",
+      "kind": "module-ui",
+      "lines": 101,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/CAPageHeader.tsx",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/CAScoreWidget.tsx",
+      "kind": "module-ui",
+      "lines": 32,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/ComplianceStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 39,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/index.ts",
+      "kind": "module-ui",
+      "lines": 8,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/components/ReconciliationTable.tsx",
+      "kind": "module-ui",
+      "lines": 59,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/constants.ts",
+      "kind": "module-ui",
+      "lines": 136,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/index.ts",
+      "kind": "module-ui",
+      "lines": 3,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/audit.ts",
+      "kind": "module-ui",
+      "lines": 17,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/bank-reconciliation.ts",
+      "kind": "module-ui",
+      "lines": 25,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/client-payments.ts",
+      "kind": "module-ui",
+      "lines": 21,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/company-itr.ts",
+      "kind": "module-ui",
+      "lines": 21,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/compliance-calendar.ts",
+      "kind": "module-ui",
+      "lines": 17,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/compliance-score.ts",
+      "kind": "module-ui",
+      "lines": 19,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/dashboard.ts",
+      "kind": "module-ui",
+      "lines": 66,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/din-dsc.ts",
+      "kind": "module-ui",
+      "lines": 11,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/director-itr.ts",
+      "kind": "module-ui",
+      "lines": 10,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/documents.ts",
+      "kind": "module-ui",
+      "lines": 13,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/expenses.ts",
+      "kind": "module-ui",
+      "lines": 23,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/gst.ts",
+      "kind": "module-ui",
+      "lines": 29,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/index.ts",
+      "kind": "module-ui",
+      "lines": 19,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/notices.ts",
+      "kind": "module-ui",
+      "lines": 11,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/roc.ts",
+      "kind": "module-ui",
+      "lines": 11,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/suspense.ts",
+      "kind": "module-ui",
+      "lines": 11,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/tasks.ts",
+      "kind": "module-ui",
+      "lines": 13,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/tds.ts",
+      "kind": "module-ui",
+      "lines": 24,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/mock-data/vendors.ts",
+      "kind": "module-ui",
+      "lines": 13,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/ca/types.ts",
+      "kind": "module-ui",
+      "lines": 287,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/ChequeFormModal.tsx",
+      "kind": "module-ui",
+      "lines": 479,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/ExpenseBillDetailSheet.tsx",
+      "kind": "module-ui",
+      "lines": 294,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/ExpenseSettlementModals.tsx",
+      "kind": "module-ui",
+      "lines": 316,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/finance-kit.tsx",
+      "kind": "module-ui",
+      "lines": 199,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceCharts.tsx",
+      "kind": "module-ui",
+      "lines": 182,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceConfirmDialog.tsx",
+      "kind": "module-ui",
+      "lines": 58,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceDonutPanel.tsx",
+      "kind": "module-ui",
+      "lines": 28,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceEmptyState.tsx",
+      "kind": "module-ui",
+      "lines": 62,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceFilterBar.tsx",
+      "kind": "module-ui",
+      "lines": 79,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceFormModals.tsx",
+      "kind": "module-ui",
+      "lines": 2549,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinancePageHeader.tsx",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceSourceBadge.tsx",
+      "kind": "module-ui",
+      "lines": 19,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/FinanceStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 158,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/GstClassificationBadge.tsx",
+      "kind": "module-ui",
+      "lines": 32,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/index.ts",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/PayrollByDepartmentCard.tsx",
+      "kind": "module-ui",
+      "lines": 117,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/components/SubscriptionFormModals.tsx",
+      "kind": "module-ui",
+      "lines": 485,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/constants.ts",
+      "kind": "module-ui",
+      "lines": 176,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/index.ts",
+      "kind": "module-ui",
+      "lines": 4,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/types.ts",
+      "kind": "module-ui",
+      "lines": 26,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/finance/vendor-utils.ts",
+      "kind": "module-ui",
+      "lines": 48,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/ApplyLeaveDialog.tsx",
+      "kind": "module-ui",
+      "lines": 338,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/asset-constants.ts",
+      "kind": "module-ui",
+      "lines": 37,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/attendance-badge.tsx",
+      "kind": "module-ui",
+      "lines": 32,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/attendance-day-stats.ts",
+      "kind": "module-ui",
+      "lines": 94,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/components.tsx",
+      "kind": "module-ui",
+      "lines": 388,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/constants.ts",
+      "kind": "module-ui",
+      "lines": 151,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/dashboard-charts.tsx",
+      "kind": "module-ui",
+      "lines": 139,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/dashboard-sections.tsx",
+      "kind": "module-ui",
+      "lines": 428,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/document-constants.ts",
+      "kind": "module-ui",
+      "lines": 12,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/employee-detail-sections.tsx",
+      "kind": "module-ui",
+      "lines": 863,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/employee-profile-types.ts",
+      "kind": "module-ui",
+      "lines": 252,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/EmployeeCredentialsPanel.tsx",
+      "kind": "module-ui",
+      "lines": 170,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/EmployeeDocumentsPanel.tsx",
+      "kind": "module-ui",
+      "lines": 245,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/EmployeeWorkTab.tsx",
+      "kind": "module-ui",
+      "lines": 623,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/exit-constants.ts",
+      "kind": "module-ui",
+      "lines": 17,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-attendance-grid.tsx",
+      "kind": "module-ui",
+      "lines": 148,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-dashboard-kit.tsx",
+      "kind": "module-ui",
+      "lines": 121,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-id-card-brand.ts",
+      "kind": "module-ui",
+      "lines": 26,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-id-card-fields.ts",
+      "kind": "module-ui",
+      "lines": 74,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-legacy-labels.ts",
+      "kind": "module-ui",
+      "lines": 181,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-reference-kit.tsx",
+      "kind": "module-ui",
+      "lines": 441,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-table-columns.tsx",
+      "kind": "module-ui",
+      "lines": 363,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/hrm-ui-kit.tsx",
+      "kind": "module-ui",
+      "lines": 333,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmCalendarView.tsx",
+      "kind": "module-ui",
+      "lines": 267,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmDocumentsView.tsx",
+      "kind": "module-ui",
+      "lines": 185,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmGate.tsx",
+      "kind": "module-ui",
+      "lines": 21,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmIdCard.tsx",
+      "kind": "module-ui",
+      "lines": 430,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPayslipDocument.tsx",
+      "kind": "module-ui",
+      "lines": 267,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPayslipDownloadButton.tsx",
+      "kind": "module-ui",
+      "lines": 78,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPayslipHtmlFrame.tsx",
+      "kind": "module-ui",
+      "lines": 136,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPayslipPreview.tsx",
+      "kind": "module-ui",
+      "lines": 89,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPayslipPreviewPanel.tsx",
+      "kind": "module-ui",
+      "lines": 66,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmPolicyView.tsx",
+      "kind": "module-ui",
+      "lines": 131,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/HrmRichDashboard.tsx",
+      "kind": "module-ui",
+      "lines": 799,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/leave-cycle-utils.ts",
+      "kind": "module-ui",
+      "lines": 87,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/leave-form-utils.ts",
+      "kind": "module-ui",
+      "lines": 46,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/LeaveCycleResetBanner.tsx",
+      "kind": "module-ui",
+      "lines": 58,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/ManualAttendanceDialog.tsx",
+      "kind": "module-ui",
+      "lines": 192,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/ManualPayslipPreviewPanel.tsx",
+      "kind": "module-ui",
+      "lines": 68,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/page-kpis.tsx",
+      "kind": "module-ui",
+      "lines": 53,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payroll-kit.tsx",
+      "kind": "module-ui",
+      "lines": 328,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payroll-period-utils.ts",
+      "kind": "module-ui",
+      "lines": 73,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payroll-satyakabir-ui.tsx",
+      "kind": "module-ui",
+      "lines": 757,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payslip-download.ts",
+      "kind": "module-ui",
+      "lines": 47,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payslip-utils.ts",
+      "kind": "module-ui",
+      "lines": 81,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/payslip-view-model.ts",
+      "kind": "module-ui",
+      "lines": 167,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/recruitment-constants.ts",
+      "kind": "module-ui",
+      "lines": 33,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/rich-ui-kit.tsx",
+      "kind": "module-ui",
+      "lines": 224,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/self-profile-shared.ts",
+      "kind": "module-ui",
+      "lines": 206,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/StaffProfileAccessGate.tsx",
+      "kind": "module-ui",
+      "lines": 63,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/types.ts",
+      "kind": "module-ui",
+      "lines": 817,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/hrm/useHrmPermission.ts",
+      "kind": "module-ui",
+      "lines": 19,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/CounselAvatar.tsx",
+      "kind": "module-ui",
+      "lines": 21,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/index.ts",
+      "kind": "module-ui",
+      "lines": 6,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/LegalEmptyState.tsx",
+      "kind": "module-ui",
+      "lines": 42,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/LegalFilterBar.tsx",
+      "kind": "module-ui",
+      "lines": 101,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/LegalPageHeader.tsx",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/components/LegalStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 191,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/constants.ts",
+      "kind": "module-ui",
+      "lines": 130,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/index.ts",
+      "kind": "module-ui",
+      "lines": 5,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/agreements.ts",
+      "kind": "module-ui",
+      "lines": 76,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/cases.ts",
+      "kind": "module-ui",
+      "lines": 104,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/client-matters.ts",
+      "kind": "module-ui",
+      "lines": 56,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/compliance.ts",
+      "kind": "module-ui",
+      "lines": 80,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/counsel.ts",
+      "kind": "module-ui",
+      "lines": 10,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/court-cases.ts",
+      "kind": "module-ui",
+      "lines": 60,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/dashboard.ts",
+      "kind": "module-ui",
+      "lines": 65,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/expenses.ts",
+      "kind": "module-ui",
+      "lines": 92,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/index.ts",
+      "kind": "module-ui",
+      "lines": 17,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/nda.ts",
+      "kind": "module-ui",
+      "lines": 80,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/notices.ts",
+      "kind": "module-ui",
+      "lines": 72,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/mock-data/vendor-disputes.ts",
+      "kind": "module-ui",
+      "lines": 61,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/legal/types.ts",
+      "kind": "module-ui",
+      "lines": 143,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/account-query.ts",
+      "kind": "module-ui",
+      "lines": 25,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/ApprovalStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 33,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/DigitalProjectSelect.tsx",
+      "kind": "module-ui",
+      "lines": 67,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/index.ts",
+      "kind": "module-ui",
+      "lines": 17,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingAssigneeSelect.tsx",
+      "kind": "module-ui",
+      "lines": 72,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingCharts.tsx",
+      "kind": "module-ui",
+      "lines": 180,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingChipTabs.tsx",
+      "kind": "module-ui",
+      "lines": 36,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingConfirmDialog.tsx",
+      "kind": "module-ui",
+      "lines": 58,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingDonutPanel.tsx",
+      "kind": "module-ui",
+      "lines": 28,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingEmptyState.tsx",
+      "kind": "module-ui",
+      "lines": 42,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingFilterBar.tsx",
+      "kind": "module-ui",
+      "lines": 95,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingPageHeader.tsx",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingRowActions.tsx",
+      "kind": "module-ui",
+      "lines": 51,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MarketingStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 118,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/MediaDesktopExplorer.tsx",
+      "kind": "module-ui",
+      "lines": 810,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/components/PlatformIconBadge.tsx",
+      "kind": "module-ui",
+      "lines": 49,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/constants.ts",
+      "kind": "module-ui",
+      "lines": 202,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/digital-account-label.ts",
+      "kind": "module-ui",
+      "lines": 11,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/index.ts",
+      "kind": "module-ui",
+      "lines": 5,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/approvals.ts",
+      "kind": "module-ui",
+      "lines": 26,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/campaigns.ts",
+      "kind": "module-ui",
+      "lines": 74,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/clients.ts",
+      "kind": "module-ui",
+      "lines": 27,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/content.ts",
+      "kind": "module-ui",
+      "lines": 46,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/dashboard.ts",
+      "kind": "module-ui",
+      "lines": 83,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/graphics.ts",
+      "kind": "module-ui",
+      "lines": 50,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/index.ts",
+      "kind": "module-ui",
+      "lines": 35,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/media.ts",
+      "kind": "module-ui",
+      "lines": 160,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/performance.ts",
+      "kind": "module-ui",
+      "lines": 24,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/posts.ts",
+      "kind": "module-ui",
+      "lines": 61,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/seo.ts",
+      "kind": "module-ui",
+      "lines": 70,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/social.ts",
+      "kind": "module-ui",
+      "lines": 10,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/tasks.ts",
+      "kind": "module-ui",
+      "lines": 66,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/mock-data/videos.ts",
+      "kind": "module-ui",
+      "lines": 44,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/marketing/types.ts",
+      "kind": "module-ui",
+      "lines": 309,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/permissions/constants.ts",
+      "kind": "module-ui",
+      "lines": 319,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/permissions/PermissionGate.tsx",
+      "kind": "module-ui",
+      "lines": 46,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/permissions/types.ts",
+      "kind": "module-ui",
+      "lines": 5,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/permissions/usePermission.ts",
+      "kind": "module-ui",
+      "lines": 109,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/adapters.ts",
+      "kind": "module-ui",
+      "lines": 114,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/billing-mock-data.ts",
+      "kind": "module-ui",
+      "lines": 252,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/company-branding.ts",
+      "kind": "module-ui",
+      "lines": 116,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/ActivityTimeline.tsx",
+      "kind": "module-ui",
+      "lines": 88,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/customer-detail-sections.tsx",
+      "kind": "module-ui",
+      "lines": 2004,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/CustomersSummaryBar.tsx",
+      "kind": "module-ui",
+      "lines": 263,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/DocumentBrandingSettings.tsx",
+      "kind": "module-ui",
+      "lines": 407,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/DocumentIssuerMeta.tsx",
+      "kind": "module-ui",
+      "lines": 105,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/financial-kit.tsx",
+      "kind": "module-ui",
+      "lines": 604,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/index.ts",
+      "kind": "module-ui",
+      "lines": 75,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/InvoiceDocument.tsx",
+      "kind": "module-ui",
+      "lines": 480,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/InvoiceFormSheet.tsx",
+      "kind": "module-ui",
+      "lines": 566,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/LeadAddableSelect.tsx",
+      "kind": "module-ui",
+      "lines": 187,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/LeadDetailSections.tsx",
+      "kind": "module-ui",
+      "lines": 414,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/LeadFormModal.tsx",
+      "kind": "module-ui",
+      "lines": 529,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/LeadImportDialog.tsx",
+      "kind": "module-ui",
+      "lines": 138,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/PaymentScheduleCard.tsx",
+      "kind": "module-ui",
+      "lines": 468,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/ProposalDocument.tsx",
+      "kind": "module-ui",
+      "lines": 383,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/ProposalFormSheet.tsx",
+      "kind": "module-ui",
+      "lines": 586,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/ReceiptDocument.tsx",
+      "kind": "module-ui",
+      "lines": 223,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/sales-action-dialogs.tsx",
+      "kind": "module-ui",
+      "lines": 2004,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesAlerts.tsx",
+      "kind": "module-ui",
+      "lines": 164,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesCharts.tsx",
+      "kind": "module-ui",
+      "lines": 141,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesDonutPanel.tsx",
+      "kind": "module-ui",
+      "lines": 28,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesEmptyState.tsx",
+      "kind": "module-ui",
+      "lines": 42,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesFilterBar.tsx",
+      "kind": "module-ui",
+      "lines": 98,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesPageHeader.tsx",
+      "kind": "module-ui",
+      "lines": 41,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesPipelineFlow.tsx",
+      "kind": "module-ui",
+      "lines": 84,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/SalesStatusBadge.tsx",
+      "kind": "module-ui",
+      "lines": 157,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/total-amount-adjust.tsx",
+      "kind": "module-ui",
+      "lines": 166,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/components/UserAvatarGroup.tsx",
+      "kind": "module-ui",
+      "lines": 110,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/constants.ts",
+      "kind": "module-ui",
+      "lines": 295,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/customer-statement-ledger.ts",
+      "kind": "module-ui",
+      "lines": 116,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/customer-statement-pdf.ts",
+      "kind": "module-ui",
+      "lines": 231,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/hooks/use-sales-document-branding.ts",
+      "kind": "module-ui",
+      "lines": 14,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/index.ts",
+      "kind": "module-ui",
+      "lines": 5,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/mock-data.ts",
+      "kind": "module-ui",
+      "lines": 596,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/pdf-download.ts",
+      "kind": "module-ui",
+      "lines": 312,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/BdeMemberSheet.tsx",
+      "kind": "module-ui",
+      "lines": 491,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/BdePerformanceTab.tsx",
+      "kind": "module-ui",
+      "lines": 441,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/BdeTargetDialog.tsx",
+      "kind": "module-ui",
+      "lines": 403,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/BdeTeamFormDialog.tsx",
+      "kind": "module-ui",
+      "lines": 369,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/BdeTeamRosterPanel.tsx",
+      "kind": "module-ui",
+      "lines": 575,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/team/index.ts",
+      "kind": "module-ui",
+      "lines": 5,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/types.ts",
+      "kind": "module-ui",
+      "lines": 333,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/use-sales-staff.ts",
+      "kind": "module-ui",
+      "lines": 18,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/modules/sales/utils.ts",
+      "kind": "module-ui",
+      "lines": 204,
+      "purpose": "Feature UI module"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Alerts.tsx",
+      "kind": "page",
+      "lines": 186,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Analytics.tsx",
+      "kind": "page",
+      "lines": 866,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Attendance.tsx",
+      "kind": "page",
+      "lines": 832,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Clients.tsx",
+      "kind": "page",
+      "lines": 1134,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Dashboard.tsx",
+      "kind": "page",
+      "lines": 514,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Discussions.tsx",
+      "kind": "page",
+      "lines": 1678,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Employees.tsx",
+      "kind": "page",
+      "lines": 1408,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/ProjectDetail.tsx",
+      "kind": "page",
+      "lines": 1336,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/ProjectDocuments.tsx",
+      "kind": "page",
+      "lines": 264,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Projects.tsx",
+      "kind": "page",
+      "lines": 1294,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Requests.tsx",
+      "kind": "page",
+      "lines": 313,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/RolesPermissions.tsx",
+      "kind": "page",
+      "lines": 491,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Screenshots.tsx",
+      "kind": "page",
+      "lines": 777,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Settings.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/Tickets.tsx",
+      "kind": "page",
+      "lines": 701,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/admin/WorkAnalytics.tsx",
+      "kind": "page",
+      "lines": 39,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/auth/forgot-password.tsx",
+      "kind": "page",
+      "lines": 243,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Audit.tsx",
+      "kind": "page",
+      "lines": 53,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/BankReconciliation.tsx",
+      "kind": "page",
+      "lines": 57,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/ClientPayments.tsx",
+      "kind": "page",
+      "lines": 86,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/CompanyItr.tsx",
+      "kind": "page",
+      "lines": 58,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/ComplianceCalendar.tsx",
+      "kind": "page",
+      "lines": 68,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/ComplianceScore.tsx",
+      "kind": "page",
+      "lines": 51,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Dashboard.tsx",
+      "kind": "page",
+      "lines": 117,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/DinDsc.tsx",
+      "kind": "page",
+      "lines": 50,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/DirectorItr.tsx",
+      "kind": "page",
+      "lines": 71,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Documents.tsx",
+      "kind": "page",
+      "lines": 59,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Expenses.tsx",
+      "kind": "page",
+      "lines": 76,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Gst.tsx",
+      "kind": "page",
+      "lines": 109,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Notices.tsx",
+      "kind": "page",
+      "lines": 91,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Roc.tsx",
+      "kind": "page",
+      "lines": 67,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Suspense.tsx",
+      "kind": "page",
+      "lines": 76,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Tasks.tsx",
+      "kind": "page",
+      "lines": 95,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Tds.tsx",
+      "kind": "page",
+      "lines": 93,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/ca/Vendors.tsx",
+      "kind": "page",
+      "lines": 72,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/client/Analytics.tsx",
+      "kind": "page",
+      "lines": 261,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/client/Apk.tsx",
+      "kind": "page",
+      "lines": 167,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/client/Portal.tsx",
+      "kind": "page",
+      "lines": 1152,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/client/Team.tsx",
+      "kind": "page",
+      "lines": 1023,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/client/TeamActivity.tsx",
+      "kind": "page",
+      "lines": 331,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Apk.tsx",
+      "kind": "page",
+      "lines": 536,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Bugs.tsx",
+      "kind": "page",
+      "lines": 440,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Logs.tsx",
+      "kind": "page",
+      "lines": 822,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/MyFreelancerPayments.tsx",
+      "kind": "page",
+      "lines": 126,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/MyScreenshots.tsx",
+      "kind": "page",
+      "lines": 230,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Projects.tsx",
+      "kind": "page",
+      "lines": 383,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Reports.tsx",
+      "kind": "page",
+      "lines": 429,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Requests.tsx",
+      "kind": "page",
+      "lines": 351,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/TaskDetail.tsx",
+      "kind": "page",
+      "lines": 553,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Tasks.tsx",
+      "kind": "page",
+      "lines": 501,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/dev/Workspace.tsx",
+      "kind": "page",
+      "lines": 498,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Budgets.tsx",
+      "kind": "page",
+      "lines": 223,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/ChequeDetail.tsx",
+      "kind": "page",
+      "lines": 399,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Cheques.tsx",
+      "kind": "page",
+      "lines": 310,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Dashboard.tsx",
+      "kind": "page",
+      "lines": 444,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Expenses.tsx",
+      "kind": "page",
+      "lines": 539,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/FreelancerEngagements.tsx",
+      "kind": "page",
+      "lines": 540,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Income.tsx",
+      "kind": "page",
+      "lines": 267,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/InvoiceDetail.tsx",
+      "kind": "page",
+      "lines": 212,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Invoices.tsx",
+      "kind": "page",
+      "lines": 250,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Ledgers.tsx",
+      "kind": "page",
+      "lines": 233,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/LoanDetail.tsx",
+      "kind": "page",
+      "lines": 312,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Loans.tsx",
+      "kind": "page",
+      "lines": 257,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Notifications.tsx",
+      "kind": "page",
+      "lines": 182,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/PaymentDetail.tsx",
+      "kind": "page",
+      "lines": 134,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Payments.tsx",
+      "kind": "page",
+      "lines": 333,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Payroll.tsx",
+      "kind": "page",
+      "lines": 154,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/ReportsPnl.tsx",
+      "kind": "page",
+      "lines": 236,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/SubscriptionDetail.tsx",
+      "kind": "page",
+      "lines": 298,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Subscriptions.tsx",
+      "kind": "page",
+      "lines": 262,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Tax.tsx",
+      "kind": "page",
+      "lines": 251,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/VendorAnalytics.tsx",
+      "kind": "page",
+      "lines": 221,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/VendorDetail.tsx",
+      "kind": "page",
+      "lines": 560,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/finance/Vendors.tsx",
+      "kind": "page",
+      "lines": 188,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/freelancer/Dashboard.tsx",
+      "kind": "page",
+      "lines": 527,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Assets.tsx",
+      "kind": "page",
+      "lines": 530,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Attendance.tsx",
+      "kind": "page",
+      "lines": 981,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Audit.tsx",
+      "kind": "page",
+      "lines": 144,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Calendar.tsx",
+      "kind": "page",
+      "lines": 309,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Dashboard.tsx",
+      "kind": "page",
+      "lines": 310,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Departments.tsx",
+      "kind": "page",
+      "lines": 351,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Documents.tsx",
+      "kind": "page",
+      "lines": 197,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/EmployeeDetail.tsx",
+      "kind": "page",
+      "lines": 782,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Employees.tsx",
+      "kind": "page",
+      "lines": 190,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Exit.tsx",
+      "kind": "page",
+      "lines": 689,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/ExperienceLetters.tsx",
+      "kind": "page",
+      "lines": 582,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Holidays.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/HrmRolesEditor.tsx",
+      "kind": "page",
+      "lines": 12,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/IdCards.tsx",
+      "kind": "page",
+      "lines": 338,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Leave.tsx",
+      "kind": "page",
+      "lines": 362,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/ManualPayslips.tsx",
+      "kind": "page",
+      "lines": 390,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/MyAttendance.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/MyHolidays.tsx",
+      "kind": "page",
+      "lines": 71,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/MyLeave.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/MyPayslips.tsx",
+      "kind": "page",
+      "lines": 130,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/MyWfh.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Onboarding.tsx",
+      "kind": "page",
+      "lines": 576,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Payroll.tsx",
+      "kind": "page",
+      "lines": 891,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Policies.tsx",
+      "kind": "page",
+      "lines": 291,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Recruitment.tsx",
+      "kind": "page",
+      "lines": 764,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Roles.tsx",
+      "kind": "page",
+      "lines": 2,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/SalarySlips.tsx",
+      "kind": "page",
+      "lines": 334,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Settings.tsx",
+      "kind": "page",
+      "lines": 652,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Shifts.tsx",
+      "kind": "page",
+      "lines": 493,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/hrm/Wfh.tsx",
+      "kind": "page",
+      "lines": 348,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Agreements.tsx",
+      "kind": "page",
+      "lines": 88,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/CaseDetail.tsx",
+      "kind": "page",
+      "lines": 110,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Cases.tsx",
+      "kind": "page",
+      "lines": 126,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/ClientMatters.tsx",
+      "kind": "page",
+      "lines": 80,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Compliance.tsx",
+      "kind": "page",
+      "lines": 107,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/CourtCases.tsx",
+      "kind": "page",
+      "lines": 84,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Dashboard.tsx",
+      "kind": "page",
+      "lines": 275,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Expenses.tsx",
+      "kind": "page",
+      "lines": 123,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Nda.tsx",
+      "kind": "page",
+      "lines": 95,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/Notices.tsx",
+      "kind": "page",
+      "lines": 98,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/legal/VendorDisputes.tsx",
+      "kind": "page",
+      "lines": 83,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/login.tsx",
+      "kind": "page",
+      "lines": 495,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Approvals.tsx",
+      "kind": "page",
+      "lines": 281,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Calendar.tsx",
+      "kind": "page",
+      "lines": 825,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Content.tsx",
+      "kind": "page",
+      "lines": 415,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Dashboard.tsx",
+      "kind": "page",
+      "lines": 997,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/GoogleAds.tsx",
+      "kind": "page",
+      "lines": 418,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Graphics.tsx",
+      "kind": "page",
+      "lines": 427,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Media.tsx",
+      "kind": "page",
+      "lines": 258,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/MetaAds.tsx",
+      "kind": "page",
+      "lines": 440,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Performance.tsx",
+      "kind": "page",
+      "lines": 137,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/ProjectDetail.tsx",
+      "kind": "page",
+      "lines": 1174,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Projects.tsx",
+      "kind": "page",
+      "lines": 465,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Reports.tsx",
+      "kind": "page",
+      "lines": 364,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Seo.tsx",
+      "kind": "page",
+      "lines": 483,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Social.tsx",
+      "kind": "page",
+      "lines": 344,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Tasks.tsx",
+      "kind": "page",
+      "lines": 448,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Team.tsx",
+      "kind": "page",
+      "lines": 425,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/marketing/Videos.tsx",
+      "kind": "page",
+      "lines": 435,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/not-found.tsx",
+      "kind": "page",
+      "lines": 44,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/Notifications.tsx",
+      "kind": "page",
+      "lines": 222,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/profile/ProfilePage.tsx",
+      "kind": "page",
+      "lines": 481,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/BdeDashboard.tsx",
+      "kind": "page",
+      "lines": 830,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/BdeProjects.tsx",
+      "kind": "page",
+      "lines": 332,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/ClientTeam.tsx",
+      "kind": "page",
+      "lines": 466,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/CustomerDetail.tsx",
+      "kind": "page",
+      "lines": 519,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Customers.tsx",
+      "kind": "page",
+      "lines": 432,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Dashboard.tsx",
+      "kind": "page",
+      "lines": 470,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/FollowUps.tsx",
+      "kind": "page",
+      "lines": 227,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/InstallmentDetail.tsx",
+      "kind": "page",
+      "lines": 351,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Installments.tsx",
+      "kind": "page",
+      "lines": 148,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/InvoiceDetail.tsx",
+      "kind": "page",
+      "lines": 697,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Invoices.tsx",
+      "kind": "page",
+      "lines": 187,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/LeadDetail.tsx",
+      "kind": "page",
+      "lines": 1111,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Leads.tsx",
+      "kind": "page",
+      "lines": 453,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Payments.tsx",
+      "kind": "page",
+      "lines": 196,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Products.tsx",
+      "kind": "page",
+      "lines": 362,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/ProposalCreate.tsx",
+      "kind": "page",
+      "lines": 613,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/ProposalDetail.tsx",
+      "kind": "page",
+      "lines": 1154,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Proposals.tsx",
+      "kind": "page",
+      "lines": 329,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/PublicProposalView.tsx",
+      "kind": "page",
+      "lines": 900,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/ReceiptDetail.tsx",
+      "kind": "page",
+      "lines": 116,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Reports.tsx",
+      "kind": "page",
+      "lines": 427,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/SalesNotifications.tsx",
+      "kind": "page",
+      "lines": 188,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Settings.tsx",
+      "kind": "page",
+      "lines": 374,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/sales/Team.tsx",
+      "kind": "page",
+      "lines": 85,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/pages/settings/SettingsPage.tsx",
+      "kind": "page",
+      "lines": 927,
+      "purpose": "Routed UI screen"
+    },
+    {
+      "rel": "frontend/src/vite-env.d.ts",
+      "kind": "other",
+      "lines": 23,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "frontend/vite.config.ts",
+      "kind": "other",
+      "lines": 120,
+      "purpose": "Support or tooling"
+    },
+    {
+      "rel": "scripts/generate-audit-catalog.mjs",
+      "kind": "other",
+      "lines": 96,
+      "purpose": "Support or tooling"
+    }
+  ]
+}

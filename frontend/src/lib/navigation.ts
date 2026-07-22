@@ -128,7 +128,7 @@ export type NavSection = {
 
 export function getHomeHref(
   role: UserRole,
-  freelancerTracks?: FreelancerNavTracks | null,
+  _freelancerTracks?: FreelancerNavTracks | null,
 ): string {
   if (role === "super_admin") return "/admin";
   if (role === "hr") return "/hrm";
@@ -136,12 +136,7 @@ export function getHomeHref(
   if (role === "finance") return "/finance";
   if (role === "digital") return "/marketing";
   if (role === "client") return "/client";
-  if (role === "freelancer") {
-    if (freelancerTracks?.digital && !freelancerTracks.delivery) return "/marketing";
-    if (freelancerTracks?.delivery) return "/dev";
-    if (freelancerTracks?.digital) return "/marketing";
-    return "/dev/payments";
-  }
+  if (role === "freelancer") return "/freelancer";
   return "/dev";
 }
 
@@ -169,6 +164,32 @@ export function getNavSections(
   opts?: { freelancerTracks?: FreelancerNavTracks | null },
 ): NavSection[] {
   const all: NavSection[] = [
+    // =========================
+    // FREELANCER HOME (first for freelancers)
+    // =========================
+    {
+      label: "Freelancer",
+      railLabel: "Home",
+      icon: LayoutDashboard,
+      roles: ["freelancer"],
+      items: [
+        {
+          title: "Dashboard",
+          href: "/freelancer",
+          icon: LayoutDashboard,
+          roles: ["freelancer"],
+          group: "Overview",
+        },
+        {
+          title: "My payments",
+          href: "/dev/payments",
+          icon: Wallet,
+          roles: ["freelancer"],
+          group: "Overview",
+        },
+      ],
+    },
+
     // =========================
     // MANAGE (FIRST PRIORITY)
     // =========================
@@ -210,7 +231,8 @@ export function getNavSections(
       label: "Monitoring",
       railLabel: "Monitor",
       icon: Monitor,
-      roles: [...HRM_ADMIN_ROLES, ...MONITORABLE_STAFF_ROLES],
+      // Freelancers are project-paid (no attendance clock-in) — keep monitor nav off their rail.
+      roles: [...HRM_ADMIN_ROLES, ...MONITORABLE_STAFF_ROLES.filter((r) => r !== "freelancer")],
       items: [
         {
           title: "Work analytics",
@@ -244,7 +266,7 @@ export function getNavSections(
           title: "My Screenshots",
           href: "/dev/my-screenshots",
           icon: Camera,
-          roles: [...MONITORABLE_STAFF_ROLES],
+          roles: [...MONITORABLE_STAFF_ROLES.filter((r) => r !== "freelancer")],
           group: "Activity",
         },
       ],
@@ -257,30 +279,30 @@ export function getNavSections(
       label: "CRM & Sales",
       railLabel: "Sales",
       icon: TrendingUp,
-      roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"),
+      roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"),
       items: [
         { title: "My Dashboard", href: "/sales/bde", icon: LayoutDashboard, roles: ["bde"], group: "Overview" },
         { title: "My Projects", href: "/sales/bde/projects", icon: FolderKanban, roles: ["bde"], group: "Overview" },
         { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["bde"], group: "Overview" },
-        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde" && r !== "digital"), group: "Overview" },
-        { title: "Lead management", href: "/sales/leads", icon: Target, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
-        { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
-        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
-        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
-        { title: "Client team", href: "/sales/client-team", icon: UsersRound, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Pipeline" },
-        { title: "Installments", href: "/sales/installments", icon: Layers, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
-        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
-        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Billing" },
-        { title: "Products", href: "/sales/products", icon: Package, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Catalog" },
-        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Insights" },
-        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital"), group: "Insights" },
+        { title: "Dashboard", href: "/sales", icon: LayoutDashboard, roles: INTERNAL_STAFF_ROLES.filter(r => r !== "bde" && r !== "digital" && r !== "freelancer"), group: "Overview" },
+        { title: "Lead management", href: "/sales/leads", icon: Target, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Pipeline" },
+        { title: "Follow-ups", href: "/sales/follow-ups", icon: CalendarClock, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Pipeline" },
+        { title: "Proposals", href: "/sales/proposals", icon: FileSpreadsheet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Pipeline" },
+        { title: "Customers", href: "/sales/customers", icon: Handshake, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Pipeline" },
+        { title: "Client team", href: "/sales/client-team", icon: UsersRound, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Pipeline" },
+        { title: "Installments", href: "/sales/installments", icon: Layers, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Billing" },
+        { title: "Invoices", href: "/sales/invoices", icon: Receipt, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Billing" },
+        { title: "Payments", href: "/sales/payments", icon: Wallet, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Billing" },
+        { title: "Products", href: "/sales/products", icon: Package, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Catalog" },
+        { title: "Sales reports", href: "/sales/reports", icon: BarChart3, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Insights" },
+        { title: "Financial alerts", href: "/sales/notifications", icon: Bell, roles: INTERNAL_STAFF_ROLES.filter((r) => r !== "digital" && r !== "freelancer"), group: "Insights" },
         { title: "Sales team", href: "/sales/team", icon: UserPlus, roles: ["super_admin", "hr"], group: "Team" },
         { title: "Automation", href: "/sales/settings", icon: Settings, roles: [...HRM_ADMIN_ROLES], group: "Team" },
       ],
     },
 
     // =========================
-    // DIGITAL MARKETING (UI only — no backend yet)
+    // DIGITAL MARKETING
     // =========================
     {
       label: "Digital",
@@ -288,7 +310,8 @@ export function getNavSections(
       icon: Megaphone,
       roles: [...MARKETING_ACCESS_ROLES],
       items: [
-        { title: "Dashboard", href: "/marketing", icon: LayoutDashboard, roles: [...MARKETING_ACCESS_ROLES], group: "Overview" },
+        // Full marketing suite — staff digital / admin (not freelancers)
+        { title: "Dashboard", href: "/marketing", icon: LayoutDashboard, roles: ["super_admin", "digital"], group: "Overview" },
         { title: "Tasks", href: "/marketing/tasks", icon: CheckSquare, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
         { title: "Projects", href: "/marketing/projects", icon: Briefcase, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
         { title: "Media", href: "/marketing/media", icon: HardDrive, roles: [...MARKETING_ACCESS_ROLES], group: "Operations" },
@@ -296,15 +319,15 @@ export function getNavSections(
         { title: "Graphics", href: "/marketing/graphics", icon: Image, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Videos", href: "/marketing/videos", icon: Video, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Content", href: "/marketing/content", icon: FileText, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
-        { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: [...MARKETING_ACCESS_ROLES], group: "Workflow" },
-        { title: "Social analytics", href: "/marketing/social", icon: Share2, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
-        { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
-        { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: [...MARKETING_ACCESS_ROLES], group: "Ads" },
-        { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: [...MARKETING_ACCESS_ROLES], group: "Analytics" },
+        { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: ["super_admin", "digital"], group: "Workflow" },
+        { title: "Social analytics", href: "/marketing/social", icon: Share2, roles: ["super_admin", "digital"], group: "Analytics" },
+        { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: ["super_admin", "digital"], group: "Ads" },
+        { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: ["super_admin", "digital"], group: "Ads" },
+        { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: ["super_admin", "digital"], group: "Analytics" },
         { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["freelancer"], group: "Operations" },
         { title: "Digital team", href: "/marketing/team", icon: UsersRound, roles: ["super_admin", "hr"], group: "Team" },
-        { title: "Performance", href: "/marketing/performance", icon: Users, roles: [...MARKETING_ACCESS_ROLES], group: "Team" },
-        { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: [...MARKETING_ACCESS_ROLES], group: "Reports" },
+        { title: "Performance", href: "/marketing/performance", icon: Users, roles: ["super_admin", "digital"], group: "Team" },
+        { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: ["super_admin", "digital"], group: "Reports" },
       ],
     },
 
@@ -321,7 +344,8 @@ export function getNavSections(
           title: "Workspace",
           href: "/dev",
           icon: LayoutDashboard,
-          roles: ["developer", "tester", "qa", "freelancer"],
+          // Freelancers use /freelancer home instead of the staff workspace.
+          roles: ["developer", "tester", "qa"],
           group: "Overview",
         },
         {
@@ -357,14 +381,14 @@ export function getNavSections(
           title: "Releases",
           href: "/dev/apk",
           icon: Smartphone,
-          roles: ["super_admin", ...DEV_PORTAL_STAFF_ROLES],
+          roles: ["super_admin", "developer", "tester", "qa"],
           group: "Output",
         },
         {
           title: "Reports",
           href: "/dev/reports",
           icon: FileText,
-          roles: ["super_admin", ...DEVELOPER_STAFF_ROLES],
+          roles: ["super_admin", "developer"],
           group: "Output",
         },
         {
@@ -397,12 +421,6 @@ export function getNavSections(
           href: "/admin/tickets",
           icon: Ticket,
           roles: ["super_admin", "hr", "bde", "finance", "digital", ...DEV_PORTAL_STAFF_ROLES, "client"],
-        },
-        {
-          title: "My payments",
-          href: "/dev/payments",
-          icon: Wallet,
-          roles: ["freelancer"],
         },
       ],
     },
@@ -622,8 +640,11 @@ export function getNavSections(
     .filter((s) => s.items.length > 0)
     .filter((s) => {
       if (role !== "freelancer") return true;
+      // Lean rail: Home + assigned work portals + Collab + Account only.
+      const allowed = new Set(["Freelancer", "Digital", "Delivery", "Collaboration", "Account"]);
+      if (!allowed.has(s.label)) return false;
       const tracks = opts?.freelancerTracks;
-      // Until project membership loads, hide both portals (payments stay under Collab).
+      // Until project membership loads, hide Digital/Delivery (home + payments stay).
       if (!tracks) {
         return s.label !== "Digital" && s.label !== "Delivery";
       }
@@ -649,6 +670,7 @@ export function isNavActive(pathname: string, href: string): boolean {
     if (
       hrefPath === "/admin" ||
       hrefPath === "/dev" ||
+      hrefPath === "/freelancer" ||
       hrefPath === "/client" ||
       hrefPath === "/sales" ||
       hrefPath === "/legal" ||

@@ -12,6 +12,7 @@ import {
   MARKETING_PLATFORMS,
   MARKETING_APPROVAL_STAGES,
   MARKETING_POST_SCHEDULE_STATUSES,
+  MARKETING_POST_CONTENT_FORMATS,
 } from "../../constants/marketing.js";
 import {
   badRequest,
@@ -47,6 +48,7 @@ function formatPost(doc, companyName, assigneeName) {
     clientId: String(doc.accountId),
     clientName: companyName ?? "Unknown",
     platform: doc.platform,
+    contentFormat: doc.contentFormat ?? "post",
     caption: doc.caption ?? "",
     hashtags: doc.hashtags ?? [],
     scheduledAt: toIso(doc.scheduledAt),
@@ -110,6 +112,17 @@ export async function createPost(req, res) {
     badRequest("Valid platform is required.", "platform");
   }
 
+  let contentFormat = optionalString(body.contentFormat) ?? "post";
+  if (!MARKETING_POST_CONTENT_FORMATS.includes(contentFormat)) {
+    badRequest(
+      `contentFormat must be one of: ${MARKETING_POST_CONTENT_FORMATS.join(", ")}.`,
+      "contentFormat",
+    );
+  }
+  if (platform === "instagram" && !body.contentFormat) {
+    contentFormat = "post";
+  }
+
   const account = await marketingAccountsTable
     .findOne({ id: accountId, isDeleted: false })
     .lean();
@@ -121,6 +134,7 @@ export async function createPost(req, res) {
     accountId,
     companyId: account.companyId,
     platform,
+    contentFormat,
     caption: optionalString(body.caption) ?? "",
     hashtags: Array.isArray(body.hashtags) ? body.hashtags.map(String) : [],
     scheduledAt: body.scheduledAt ? new Date(body.scheduledAt) : null,
@@ -172,6 +186,15 @@ export async function updatePost(req, res) {
   if (body.platform != null) {
     if (!MARKETING_PLATFORMS.includes(body.platform)) badRequest("Invalid platform.", "platform");
     doc.platform = body.platform;
+  }
+  if (body.contentFormat !== undefined) {
+    if (!MARKETING_POST_CONTENT_FORMATS.includes(body.contentFormat)) {
+      badRequest(
+        `contentFormat must be one of: ${MARKETING_POST_CONTENT_FORMATS.join(", ")}.`,
+        "contentFormat",
+      );
+    }
+    doc.contentFormat = body.contentFormat;
   }
   if (body.caption !== undefined) doc.caption = optionalString(body.caption) ?? "";
   if (Array.isArray(body.hashtags)) doc.hashtags = body.hashtags.map(String);

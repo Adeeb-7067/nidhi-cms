@@ -3,6 +3,7 @@ import {
   MARKETING_PLATFORMS,
   MARKETING_APPROVAL_STAGES,
   MARKETING_POST_SCHEDULE_STATUSES,
+  MARKETING_POST_CONTENT_FORMATS,
 } from "../../../constants/marketing.js";
 
 const marketingPostSchema = new Schema(
@@ -11,6 +12,14 @@ const marketingPostSchema = new Schema(
     accountId: { type: Number, ref: "MarketingAccounts", required: true, index: true },
     companyId: { type: Number, ref: "Clients", required: true, index: true },
     platform: { type: String, enum: MARKETING_PLATFORMS, required: true, index: true },
+    /** post | long_video | short_video | blog — used especially for Instagram. */
+    contentFormat: {
+      type: String,
+      enum: MARKETING_POST_CONTENT_FORMATS,
+      default: "post",
+      required: true,
+      index: true,
+    },
     caption: { type: String, default: "", trim: true },
     hashtags: { type: [String], default: [] },
     scheduledAt: { type: Date, default: null, index: true },

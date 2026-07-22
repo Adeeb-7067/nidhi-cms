@@ -158,16 +158,20 @@ export async function buildWorkspaceDashboard(user) {
   }
 
   if (isPortalStaff && projectIds.length) {
+    const milestoneStatuses =
+      role === "freelancer"
+        ? ["pending", "ongoing", "delayed"]
+        : ["pending", "delayed"];
     const milestoneFilter = {
       projectId: { $in: projectIds },
       assigneeId: user.id,
-      status: { $in: ["pending", "delayed"] },
+      status: { $in: milestoneStatuses },
     };
     milestonesAssigned = await milestonesTable.countDocuments(milestoneFilter);
     const milestoneDocs = await milestonesTable
       .find(milestoneFilter)
       .sort({ plannedDate: 1 })
-      .limit(5)
+      .limit(role === "freelancer" ? 12 : 5)
       .lean()
       .exec();
     const milestoneProjectIds = [...new Set(milestoneDocs.map((m) => m.projectId))];

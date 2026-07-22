@@ -124,6 +124,7 @@ const FinanceNotifications = React.lazy(() => import("@/pages/finance/Notificati
 const FinancePaymentDetail = React.lazy(() => import("@/pages/finance/PaymentDetail"));
 const FinanceFreelancerEngagements = React.lazy(() => import("@/pages/finance/FreelancerEngagements"));
 const MyFreelancerPayments = React.lazy(() => import("@/pages/dev/MyFreelancerPayments"));
+const FreelancerDashboard = React.lazy(() => import("@/pages/freelancer/Dashboard"));
 
 const MarketingDashboard = React.lazy(() => import("@/pages/marketing/Dashboard"));
 const MarketingTasks = React.lazy(() => import("@/pages/marketing/Tasks"));
@@ -741,6 +742,12 @@ export function PageOutlet() {
       <Route path="/finance">
         <RoleGate>
           <FinanceDashboard />
+        </RoleGate>
+      </Route>
+
+      <Route path="/freelancer">
+        <RoleGate allowedRoles={["freelancer"]}>
+          <FreelancerDashboard />
         </RoleGate>
       </Route>
 

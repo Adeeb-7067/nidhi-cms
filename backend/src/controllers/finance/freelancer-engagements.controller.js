@@ -303,6 +303,8 @@ async function updateEngagement(req, res) {
 
   const body = req.body ?? {};
   const updates = {};
+  const existingInstallments = await FreelancerInstallments.find({ engagementId: id }).lean();
+  const paidInstallments = existingInstallments.filter((i) => i.status === "paid");
 
   if (body.agreedAmount !== undefined) {
     const agreedAmount = Number(body.agreedAmount);
@@ -324,6 +326,71 @@ async function updateEngagement(req, res) {
     updates.status = body.status;
   }
   if (body.notes !== undefined) updates.notes = optionalString(body.notes) ?? null;
+
+  // Replace unpaid schedule when correcting a wrong fee (no paid rows yet).
+  if (Array.isArray(body.installments)) {
+    if (paidInstallments.length > 0) {
+      badRequest("Cannot replace installment schedule after payments are recorded.");
+    }
+    const nextAgreed =
+      updates.agreedAmount !== undefined ? updates.agreedAmount : Number(row.agreedAmount);
+    const scheduleTotal = body.installments.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    if (body.installments.length === 0 && nextAgreed > 0) {
+      badRequest("Provide installments or set agreedAmount to 0.", "installments");
+    }
+    if (body.installments.length > 0 && Math.abs(scheduleTotal - nextAgreed) > 0.5) {
+      badRequest(
+        `Installment amounts (${scheduleTotal}) must equal agreedAmount (${nextAgreed}).`,
+        "installments",
+      );
+    }
+    await FreelancerInstallments.deleteMany({ engagementId: id });
+    for (const item of body.installments) {
+      const amount = Number(item.amount);
+      if (!(amount > 0)) badRequest("Each installment amount must be positive.", "installments");
+      const label = String(item.label || "").trim() || "Installment";
+      const instId = await getNextSequence("freelancer_installments");
+      await FreelancerInstallments.create({
+        id: instId,
+        engagementId: id,
+        label,
+        amount,
+        dueDate: item.dueDate ? new Date(item.dueDate) : null,
+        status: "pending",
+        notes: optionalString(item.notes) ?? null,
+      });
+    }
+    if (updates.paymentMode === undefined) {
+      updates.paymentMode = body.installments.length <= 1 ? "lump_sum" : "installments";
+    }
+  } else if (updates.agreedAmount !== undefined && paidInstallments.length === 0) {
+    // Simple amount correction: keep one pending lump-sum row in sync.
+    const pending = existingInstallments.filter((i) => i.status === "pending");
+    const mode = updates.paymentMode ?? row.paymentMode;
+    if (mode === "lump_sum" && pending.length === 1) {
+      await FreelancerInstallments.updateOne(
+        { id: pending[0].id },
+        { $set: { amount: updates.agreedAmount, label: pending[0].label || "Full payment" } },
+      );
+    } else if (mode === "lump_sum" && pending.length === 0 && updates.agreedAmount > 0) {
+      const instId = await getNextSequence("freelancer_installments");
+      await FreelancerInstallments.create({
+        id: instId,
+        engagementId: id,
+        label: "Full payment",
+        amount: updates.agreedAmount,
+        status: "pending",
+      });
+    }
+  } else if (updates.agreedAmount !== undefined && paidInstallments.length > 0) {
+    const paidTotal = paidInstallments.reduce((s, i) => s + (Number(i.amount) || 0), 0);
+    if (updates.agreedAmount < paidTotal - 0.5) {
+      badRequest(
+        `agreedAmount cannot be less than already paid (${paidTotal}).`,
+        "agreedAmount",
+      );
+    }
+  }
 
   if (Object.keys(updates).length) {
     await FreelancerEngagements.updateOne({ id }, { $set: updates });

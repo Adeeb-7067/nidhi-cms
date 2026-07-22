@@ -118,9 +118,13 @@ export function resolveRoutePermission(path: string): CmsModule | null {
 /** Nav links with no permission module — visible to all authenticated users. */
 const NAV_PUBLIC_HREFS = new Set(["/profile", "/notifications", "/settings"]);
 
+/** Role-gated pages that intentionally have no CMS module mapping. */
+const NAV_ROLE_ONLY_HREFS = new Set(["/freelancer"]);
+
 export function isNavHrefPublic(href: string): boolean {
   const path = href.split("?")[0];
   if (NAV_PUBLIC_HREFS.has(path)) return true;
+  if (NAV_ROLE_ONLY_HREFS.has(path)) return true;
   if (path === "/settings" || path.startsWith("/settings/")) return true;
   return false;
 }

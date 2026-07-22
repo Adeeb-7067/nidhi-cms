@@ -59,6 +59,7 @@ function getHomePath(role: string): string {
   if (role === "bde") return "/sales/bde";
   if (role === "finance") return "/finance";
   if (role === "digital") return "/marketing";
+  if (role === "freelancer") return "/freelancer";
   if (isDevPortalRole(role)) return "/dev";
   if (role === "client") return "/client";
   return "/sales";
@@ -317,10 +318,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       setImpersonation(getImpersonationMeta());
 
+      // Swap tokens first so any in-flight/refetch uses the target user.
       setTokens(body.accessToken, body.refreshToken);
       setAccessToken(body.accessToken);
+
+      // Cancel stale admin /me responses that could overwrite the target user.
+      await queryClient.cancelQueries();
       queryClient.clear();
-      await queryClient.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      // Seed immediately so sidebar/role gates switch before network round-trip.
+      queryClient.setQueryData(getGetMeQueryKey(), body.user);
+      prefetchPermissions(queryClient);
+      void queryClient.invalidateQueries({ queryKey: permissionsQueryKey() });
+
       setLocation(getHomePath(body.user.role));
     },
     [user, isImpersonating, queryClient, setLocation],

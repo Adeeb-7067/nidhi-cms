@@ -7,6 +7,7 @@ import type {
   MarketingPackage,
   MarketingPlatform,
   MetaCampaignObjective,
+  PostContentFormat,
   PostScheduleStatus,
   TaskCategory,
   TaskPriority,
@@ -50,7 +51,22 @@ export const PLATFORM_LABELS: Record<MarketingPlatform, string> = {
   twitter: "X (Twitter)",
   youtube: "YouTube",
   google: "Google",
+  website: "Website",
 };
+
+export const POST_CONTENT_FORMAT_LABELS: Record<PostContentFormat, string> = {
+  post: "Post",
+  long_video: "Long video",
+  short_video: "Short video",
+  blog: "Blog",
+};
+
+export const POST_CONTENT_FORMATS: PostContentFormat[] = [
+  "post",
+  "long_video",
+  "short_video",
+  "blog",
+];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   not_started: "Not Started",

@@ -250,8 +250,15 @@ function useSidebarNavState() {
 
   useEffect(() => {
     const label = findActiveNavGroupLabel(sections, location);
-    if (label) setActiveGroup(label);
-  }, [location, sections]);
+    if (label) {
+      setActiveGroup(label);
+      return;
+    }
+    // Section list can change for freelancers (tracks load / trim) — keep rail valid.
+    if (sections.length > 0 && !sections.some((s) => s.label === activeGroup)) {
+      setActiveGroup(sections[0].label);
+    }
+  }, [location, sections, activeGroup]);
 
   const activeSection = sections.find((s) => s.label === activeGroup) ?? sections[0];
 

@@ -1892,19 +1892,25 @@ export function useCreateFreelancerEngagement() {
   });
 }
 
+export type UpdateFreelancerEngagementPayload = {
+  id: number;
+  agreedAmount?: number;
+  paymentMode?: FreelancerEngagementPaymentMode;
+  status?: FreelancerEngagementStatus;
+  notes?: string | null;
+  /** Replace unpaid schedule (rejected if any installment is already paid). */
+  installments?: Array<{
+    label: string;
+    amount: number;
+    dueDate?: string | null;
+    notes?: string | null;
+  }>;
+};
+
 export function useUpdateFreelancerEngagement() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      ...body
-    }: {
-      id: number;
-      agreedAmount?: number;
-      paymentMode?: FreelancerEngagementPaymentMode;
-      status?: FreelancerEngagementStatus;
-      notes?: string | null;
-    }) =>
+    mutationFn: ({ id, ...body }: UpdateFreelancerEngagementPayload) =>
       customFetch<FreelancerEngagement>(apiUrl(`/api/finance/freelancer-engagements/${id}`), {
         method: "PATCH",
         body: JSON.stringify(body),

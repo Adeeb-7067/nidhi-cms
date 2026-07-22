@@ -1,16 +1,33 @@
-import { useMemo, useState, Fragment } from "react";
-import { format } from "date-fns";
-import { Calendar, CheckCircle2, Clock, Loader2, Plus, Send } from "lucide-react";
+import { useMemo, useState } from "react";
+import {
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isSameDay,
+  isSameMonth,
+  isToday,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from "date-fns";
+import {
+  Calendar,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Hash,
+  Loader2,
+  Pencil,
+  Plus,
+  Send,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -20,6 +37,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -35,16 +53,19 @@ import {
   useDeleteMarketingPost,
   type MarketingPostDto,
 } from "@/api/marketing";
-import { POST_SCHEDULE_STATUS_LABELS, PLATFORM_LABELS } from "@/modules/marketing/constants";
-import type { MarketingPlatform, PostScheduleStatus } from "@/modules/marketing/types";
+import {
+  POST_SCHEDULE_STATUS_LABELS,
+  PLATFORM_LABELS,
+  POST_CONTENT_FORMAT_LABELS,
+  POST_CONTENT_FORMATS,
+} from "@/modules/marketing/constants";
+import type { MarketingPlatform, PostContentFormat, PostScheduleStatus } from "@/modules/marketing/types";
 import {
   MarketingPageHeader,
   MarketingFilterBar,
   MarketingEmptyState,
   PlatformIconBadge,
   ApprovalStatusBadge,
-  MarketingStatusBadge,
-  MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
   MarketingAssigneeSelect,
@@ -56,8 +77,15 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { cn } from "@/lib/utils";
 
-const scheduleTabs: (PostScheduleStatus | "all")[] = ["all", "scheduled", "pending", "published", "rejected"];
+const scheduleTabs: (PostScheduleStatus | "all")[] = [
+  "all",
+  "scheduled",
+  "pending",
+  "published",
+  "rejected",
+];
 
 const CALENDAR_PLATFORMS: MarketingPlatform[] = [
   "instagram",
@@ -65,11 +93,29 @@ const CALENDAR_PLATFORMS: MarketingPlatform[] = [
   "linkedin",
   "youtube",
   "twitter",
+  "website",
 ];
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const STATUS_ACCENT: Record<PostScheduleStatus, string> = {
+  scheduled: "bg-violet-500",
+  pending: "bg-amber-500",
+  published: "bg-emerald-500",
+  rejected: "bg-destructive",
+};
+
+const STATUS_RING: Record<PostScheduleStatus, string> = {
+  scheduled: "ring-violet-500/30",
+  pending: "ring-amber-500/30",
+  published: "ring-emerald-500/30",
+  rejected: "ring-destructive/30",
+};
 
 const emptyForm = {
   accountId: "",
   platform: "instagram" as MarketingPlatform,
+  contentFormat: "post" as PostContentFormat,
   caption: "",
   scheduledAt: "",
   scheduleStatus: "pending" as PostScheduleStatus,
@@ -89,6 +135,10 @@ function toIsoScheduledAt(value: string): string | null {
   return value;
 }
 
+function dayKey(date: Date): string {
+  return format(date, "yyyy-MM-dd");
+}
+
 export default function MarketingCalendar() {
   const { can } = usePermissions();
   const canCreate = can("marketing_calendar", "create");
@@ -99,6 +149,8 @@ export default function MarketingCalendar() {
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useAccountProjectFilter();
   const [statusTab, setStatusTab] = useState<string>("all");
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()));
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MarketingPostDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MarketingPostDto | null>(null);
@@ -126,6 +178,39 @@ export default function MarketingCalendar() {
     });
   }, [posts, search, statusTab]);
 
+  const postsByDay = useMemo(() => {
+    const map = new Map<string, MarketingPostDto[]>();
+    for (const p of filtered) {
+      if (!p.scheduledAt) continue;
+      const key = format(new Date(p.scheduledAt), "yyyy-MM-dd");
+      const list = map.get(key) ?? [];
+      list.push(p);
+      map.set(key, list);
+    }
+    for (const list of map.values()) {
+      list.sort((a, b) => {
+        const ta = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+        const tb = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+        return ta - tb;
+      });
+    }
+    return map;
+  }, [filtered]);
+
+  const unscheduled = useMemo(
+    () => filtered.filter((p) => !p.scheduledAt),
+    [filtered],
+  );
+
+  const monthDays = useMemo(() => {
+    const start = startOfWeek(startOfMonth(monthCursor));
+    const end = endOfWeek(endOfMonth(monthCursor));
+    return eachDayOfInterval({ start, end });
+  }, [monthCursor]);
+
+  const selectedKey = dayKey(selectedDay);
+  const selectedPosts = postsByDay.get(selectedKey) ?? [];
+
   const statusChipItems = useMemo(
     () =>
       scheduleTabs.map((s) => ({
@@ -135,25 +220,6 @@ export default function MarketingCalendar() {
       })),
     [posts],
   );
-
-  const groupedByDay = useMemo(() => {
-    const groups = new Map<string, MarketingPostDto[]>();
-    for (const p of filtered) {
-      const key = p.scheduledAt
-        ? format(new Date(p.scheduledAt), "yyyy-MM-dd")
-        : "unscheduled";
-      const list = groups.get(key) ?? [];
-      list.push(p);
-      groups.set(key, list);
-    }
-    return [...groups.entries()].sort((a, b) => {
-      if (a[0] === "unscheduled") return 1;
-      if (b[0] === "unscheduled") return -1;
-      return a[0].localeCompare(b[0]);
-    });
-  }, [filtered]);
-
-  const tableColSpan = showActions ? 8 : 7;
 
   const kpis = useMemo(
     () => ({
@@ -165,12 +231,15 @@ export default function MarketingCalendar() {
     [posts],
   );
 
-  const openCreate = () => {
+  const openCreate = (prefillDay?: Date) => {
     setEditing(null);
+    const day = prefillDay ?? selectedDay;
+    const stamp = `${format(day, "yyyy-MM-dd")}T10:00`;
     setForm({
       ...emptyForm,
       scheduleStatus: "pending",
       accountId: projectFilter || "",
+      scheduledAt: stamp,
     });
     setDialogOpen(true);
   };
@@ -180,6 +249,7 @@ export default function MarketingCalendar() {
     setForm({
       accountId: String(p.accountId),
       platform: p.platform,
+      contentFormat: (p.contentFormat ?? "post") as PostContentFormat,
       caption: p.caption ?? "",
       scheduleStatus: p.scheduleStatus,
       scheduledAt: p.scheduledAt?.slice(0, 16) ?? "",
@@ -197,6 +267,7 @@ export default function MarketingCalendar() {
           accountId: editing.accountId,
           data: {
             platform: form.platform,
+            contentFormat: form.contentFormat,
             caption: form.caption.trim(),
             scheduledAt: toIsoScheduledAt(form.scheduledAt),
             hashtags: parseHashtags(form.hashtags),
@@ -212,6 +283,7 @@ export default function MarketingCalendar() {
         await createPost.mutateAsync({
           accountId: Number(form.accountId),
           platform: form.platform,
+          contentFormat: form.contentFormat,
           caption: form.caption.trim(),
           scheduledAt: toIsoScheduledAt(form.scheduledAt),
           hashtags: parseHashtags(form.hashtags),
@@ -240,13 +312,13 @@ export default function MarketingCalendar() {
     <PortalPageShell>
       <MarketingPageHeader
         title="Content calendar"
-        description="Scheduled posts — platform, caption, hashtags, and approval status"
+        description="Plan the week visually — pick a day, then schedule posts by platform"
         breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Calendar" }]}
         actions={
           canCreate ? (
-            <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+            <Button size="sm" className="h-8 gap-1.5" onClick={() => openCreate()}>
               <Plus className="h-3.5 w-3.5" />
-              New post
+              Schedule post
             </Button>
           ) : undefined
         }
@@ -264,8 +336,13 @@ export default function MarketingCalendar() {
         ]}
       />
 
-      <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search posts, projects…">
-        <DigitalProjectSelect allowAll value={projectFilter} onValueChange={setProjectFilter} className="h-8 w-[220px] text-xs" />
+      <MarketingFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search captions, projects…">
+        <DigitalProjectSelect
+          allowAll
+          value={projectFilter}
+          onValueChange={setProjectFilter}
+          className="h-8 w-[220px] text-xs"
+        />
       </MarketingFilterBar>
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
@@ -273,75 +350,351 @@ export default function MarketingCalendar() {
       {isLoading ? (
         <MarketingListPageSkeleton kpiCount={4} showTabs />
       ) : isError ? (
-        <MarketingEmptyState icon={Calendar} title="Couldn't load posts" description="Check API permissions and try again." />
-      ) : filtered.length === 0 ? (
         <MarketingEmptyState
           icon={Calendar}
-          title="No posts found"
-          description="Adjust filters or schedule a new post."
-          actionLabel={canCreate ? "New post" : undefined}
-          onAction={canCreate ? openCreate : undefined}
+          title="Couldn't load posts"
+          description="Check API permissions and try again."
         />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Scheduled</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Platform</TableHead>
-                <TableHead className="text-xs">Caption</TableHead>
-                <TableHead className="text-xs">Hashtags</TableHead>
-                <TableHead className="text-xs">Approval</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groupedByDay.map(([dayKey, dayPosts]) => (
-                <Fragment key={dayKey}>
-                  <TableRow className="hover:bg-transparent border-0">
-                    <TableCell colSpan={tableColSpan} className="p-0">
-                      <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted/40 border-b sticky top-0 z-10">
-                        {dayKey === "unscheduled"
-                          ? "Unscheduled"
-                          : format(new Date(`${dayKey}T12:00:00`), "EEEE, MMM d")}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {dayPosts.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {p.scheduledAt ? format(new Date(p.scheduledAt), "MMM d, h:mm a") : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs">{p.clientName}</TableCell>
-                      <TableCell><PlatformIconBadge platform={p.platform} showLabel={false} /></TableCell>
-                      <TableCell className="text-xs max-w-[200px] truncate">{p.caption}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {(p.hashtags ?? []).map((h) => (
-                            <Badge key={h} variant="secondary" className="text-[9px] px-1 py-0">{h}</Badge>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell><ApprovalStatusBadge stage={p.approvalStage} /></TableCell>
-                      <TableCell><MarketingStatusBadge variant="postSchedule" status={p.scheduleStatus} /></TableCell>
-                      {showActions && (
-                        <TableCell className="text-right">
-                          <MarketingRowActions
-                            canEdit={canEdit}
-                            canDelete={canDelete}
-                            onEdit={() => openEdit(p)}
-                            onDelete={() => setDeleteTarget(p)}
-                          />
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </Fragment>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.9fr)]">
+          {/* Month board */}
+          <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+            <div className="flex items-center justify-between gap-3 border-b border-border/70 bg-gradient-to-br from-primary/[0.07] via-background to-background px-4 py-3 sm:px-5">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                  Publishing board
+                </p>
+                <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
+                  {format(monthCursor, "MMMM yyyy")}
+                </h2>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setMonthCursor((m) => subMonths(m, 1))}
+                  aria-label="Previous month"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-xs"
+                  onClick={() => {
+                    const today = new Date();
+                    setMonthCursor(startOfMonth(today));
+                    setSelectedDay(today);
+                  }}
+                >
+                  Today
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setMonthCursor((m) => addMonths(m, 1))}
+                  aria-label="Next month"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-px border-b border-border/60 bg-border/40 px-2 pt-2 sm:px-3">
+              {WEEKDAYS.map((d) => (
+                <div
+                  key={d}
+                  className="pb-2 text-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
+                >
+                  {d}
+                </div>
               ))}
-            </TableBody>
-          </Table>
+            </div>
+
+            <div className="grid grid-cols-7 gap-px bg-border/30 p-2 sm:p-3">
+              {monthDays.map((day) => {
+                const key = dayKey(day);
+                const dayPosts = postsByDay.get(key) ?? [];
+                const inMonth = isSameMonth(day, monthCursor);
+                const selected = isSameDay(day, selectedDay);
+                const today = isToday(day);
+
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => {
+                      setSelectedDay(day);
+                      if (!isSameMonth(day, monthCursor)) {
+                        setMonthCursor(startOfMonth(day));
+                      }
+                    }}
+                    onDoubleClick={() => {
+                      if (canCreate) openCreate(day);
+                    }}
+                    className={cn(
+                      "group relative flex min-h-[72px] flex-col rounded-xl border p-1.5 text-left transition-all duration-200 sm:min-h-[88px] sm:p-2",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      inMonth
+                        ? "border-transparent bg-background/80 hover:border-primary/25 hover:bg-primary/[0.04]"
+                        : "border-transparent bg-muted/20 text-muted-foreground/70",
+                      selected && "border-primary/40 bg-primary/[0.08] shadow-sm ring-1 ring-primary/25",
+                      today && !selected && "border-primary/20",
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "mb-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums",
+                        today && "bg-primary text-primary-foreground",
+                        selected && !today && "bg-primary/15 text-primary",
+                      )}
+                    >
+                      {format(day, "d")}
+                    </span>
+                    <div className="mt-auto flex flex-wrap gap-0.5">
+                      {dayPosts.slice(0, 4).map((p) => (
+                        <span
+                          key={p.id}
+                          title={p.caption || PLATFORM_LABELS[p.platform]}
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2",
+                            STATUS_ACCENT[p.scheduleStatus],
+                          )}
+                        />
+                      ))}
+                      {dayPosts.length > 4 ? (
+                        <span className="text-[9px] font-medium text-muted-foreground">
+                          +{dayPosts.length - 4}
+                        </span>
+                      ) : null}
+                    </div>
+                    {dayPosts.length > 0 ? (
+                      <span className="pointer-events-none absolute right-1.5 top-1.5 hidden rounded-md bg-muted/80 px-1 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground sm:group-hover:inline">
+                        {dayPosts.length}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-border/60 px-4 py-2.5 text-[10px] text-muted-foreground sm:px-5">
+              {(
+                [
+                  ["scheduled", "Scheduled"],
+                  ["pending", "Pending"],
+                  ["published", "Published"],
+                  ["rejected", "Rejected"],
+                ] as const
+              ).map(([key, label]) => (
+                <span key={key} className="inline-flex items-center gap-1.5">
+                  <span className={cn("h-2 w-2 rounded-full", STATUS_ACCENT[key])} />
+                  {label}
+                </span>
+              ))}
+              <span className="ml-auto hidden sm:inline">Double-click a day to schedule</span>
+            </div>
+          </section>
+
+          {/* Day timeline */}
+          <section className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm">
+            <div className="border-b border-border/70 px-4 py-3 sm:px-5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Day agenda
+              </p>
+              <div className="mt-0.5 flex items-start justify-between gap-2">
+                <h2 className="text-base font-semibold tracking-tight sm:text-lg">
+                  {format(selectedDay, "EEEE, MMM d")}
+                </h2>
+                {canCreate ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="h-7 shrink-0 gap-1 text-xs"
+                    onClick={() => openCreate(selectedDay)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add
+                  </Button>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {selectedPosts.length === 0
+                  ? "Nothing scheduled — free day to plan."
+                  : `${selectedPosts.length} post${selectedPosts.length === 1 ? "" : "s"} lined up`}
+              </p>
+            </div>
+
+            <div className="flex-1 space-y-3 overflow-y-auto p-3 sm:p-4">
+              {filtered.length === 0 ? (
+                <MarketingEmptyState
+                  icon={Calendar}
+                  title="No posts match"
+                  description="Try clearing filters or schedule something new."
+                  actionLabel={canCreate ? "Schedule post" : undefined}
+                  onAction={canCreate ? () => openCreate() : undefined}
+                />
+              ) : selectedPosts.length === 0 ? (
+                <div className="flex h-full min-h-[240px] flex-col items-center justify-center rounded-xl border border-dashed border-border/80 bg-muted/20 px-4 text-center">
+                  <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Calendar className="h-5 w-5" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">Open day</p>
+                  <p className="mt-1 max-w-[220px] text-xs text-muted-foreground">
+                    No posts on this date. Schedule Instagram, website, or social content here.
+                  </p>
+                  {canCreate ? (
+                    <Button
+                      size="sm"
+                      className="mt-4 h-8 gap-1.5"
+                      onClick={() => openCreate(selectedDay)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Schedule for this day
+                    </Button>
+                  ) : null}
+                </div>
+              ) : (
+                <ol className="relative space-y-3 before:absolute before:bottom-2 before:left-[15px] before:top-2 before:w-px before:bg-border/80">
+                  {selectedPosts.map((p, index) => (
+                    <li
+                      key={p.id}
+                      className={cn(
+                        "relative pl-9 transition-transform duration-200 hover:-translate-y-0.5",
+                        "motion-reduce:transition-none motion-reduce:hover:translate-y-0",
+                      )}
+                      style={{ animationDelay: `${index * 40}ms` }}
+                    >
+                      <span
+                        className={cn(
+                          "absolute left-2 top-4 h-3.5 w-3.5 rounded-full ring-4 ring-card",
+                          STATUS_ACCENT[p.scheduleStatus],
+                        )}
+                      />
+                      <article
+                        className={cn(
+                          "rounded-xl border border-border/70 bg-background/90 p-3 shadow-sm ring-1",
+                          STATUS_RING[p.scheduleStatus],
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <PlatformIconBadge platform={p.platform} />
+                              {p.platform === "instagram" ? (
+                                <Badge variant="secondary" className="text-[10px] font-normal">
+                                  {POST_CONTENT_FORMAT_LABELS[
+                                    (p.contentFormat ?? "post") as PostContentFormat
+                                  ]}
+                                </Badge>
+                              ) : null}
+                              <Badge variant="outline" className="text-[10px] font-normal capitalize">
+                                {POST_SCHEDULE_STATUS_LABELS[p.scheduleStatus]}
+                              </Badge>
+                            </div>
+                            <p className="mt-2 line-clamp-3 text-sm leading-relaxed text-foreground">
+                              {p.caption?.trim() || (
+                                <span className="italic text-muted-foreground">No caption yet</span>
+                              )}
+                            </p>
+                          </div>
+                          <time className="shrink-0 rounded-md bg-muted/70 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-foreground">
+                            {p.scheduledAt ? format(new Date(p.scheduledAt), "h:mm a") : "—"}
+                          </time>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+                          <span className="truncate font-medium text-foreground/80">{p.clientName}</span>
+                          {p.assignee ? (
+                            <span className="inline-flex items-center gap-1">
+                              <UserRound className="h-3 w-3" />
+                              {p.assignee}
+                            </span>
+                          ) : null}
+                          <ApprovalStatusBadge stage={p.approvalStage} />
+                        </div>
+
+                        {(p.hashtags?.length ?? 0) > 0 ? (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {p.hashtags.slice(0, 6).map((h) => (
+                              <span
+                                key={h}
+                                className="inline-flex items-center gap-0.5 rounded-md bg-muted/60 px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                              >
+                                <Hash className="h-2.5 w-2.5" />
+                                {h}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        {showActions ? (
+                          <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
+                            {canEdit ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs"
+                                onClick={() => openEdit(p)}
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Edit
+                              </Button>
+                            ) : null}
+                            {canDelete ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+                                onClick={() => setDeleteTarget(p)}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </Button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </article>
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              {unscheduled.length > 0 ? (
+                <div className="mt-4 rounded-xl border border-dashed border-border/80 bg-muted/15 p-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Unscheduled drafts · {unscheduled.length}
+                  </p>
+                  <div className="mt-2 space-y-2">
+                    {unscheduled.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => openEdit(p)}
+                        className="flex w-full items-start gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/[0.03]"
+                      >
+                        <PlatformIconBadge platform={p.platform} showLabel={false} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-medium">{p.clientName}</span>
+                          <span className="line-clamp-1 text-[11px] text-muted-foreground">
+                            {p.caption || "No caption"}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
         </div>
       )}
 
@@ -365,22 +718,57 @@ export default function MarketingCalendar() {
               <Label className="text-xs">Platform</Label>
               <Select
                 value={form.platform}
-                onValueChange={(v) => setForm((f) => ({ ...f, platform: v as MarketingPlatform }))}
+                onValueChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    platform: v as MarketingPlatform,
+                    contentFormat:
+                      v === "instagram" ? f.contentFormat || "post" : f.contentFormat,
+                  }))
+                }
               >
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   {CALENDAR_PLATFORMS.map((p) => (
-                    <SelectItem key={p} value={p}>{PLATFORM_LABELS[p]}</SelectItem>
+                    <SelectItem key={p} value={p}>
+                      {PLATFORM_LABELS[p]}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            {form.platform === "instagram" ? (
+              <div className="space-y-1.5">
+                <Label className="text-xs">What are you scheduling?</Label>
+                <Select
+                  value={form.contentFormat}
+                  onValueChange={(v) =>
+                    setForm((f) => ({ ...f, contentFormat: v as PostContentFormat }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POST_CONTENT_FORMATS.map((fmt) => (
+                      <SelectItem key={fmt} value={fmt}>
+                        {POST_CONTENT_FORMAT_LABELS[fmt]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
             <div className="space-y-1.5">
               <Label className="text-xs">Caption</Label>
-              <Input
+              <Textarea
                 value={form.caption}
                 onChange={(e) => setForm((f) => ({ ...f, caption: e.target.value }))}
-                className="h-8 text-xs"
+                rows={4}
+                className="min-h-[88px] resize-y text-xs"
+                placeholder="Write the post caption…"
               />
             </div>
             <div className="space-y-1.5">
@@ -410,7 +798,9 @@ export default function MarketingCalendar() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </Button>
             <Button size="sm" disabled={saving} onClick={() => void handleSave()}>
               {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
               {editing ? "Save" : "Create"}
@@ -421,7 +811,9 @@ export default function MarketingCalendar() {
 
       <MarketingConfirmDialog
         open={deleteTarget != null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
         title="Delete post?"
         description={deleteTarget ? "This scheduled post will be removed." : undefined}
         loading={deletePost.isPending}

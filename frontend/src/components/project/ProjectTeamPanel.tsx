@@ -102,6 +102,8 @@ export function ProjectTeamPanel({
   const { can } = usePermissions();
   const canManagePay = can("finance_freelancers", "create") || can("finance_freelancers", "edit");
   const [payMember, setPayMember] = useState<{ userId: number; name: string } | null>(null);
+  /** Freelancers just added — fee dialogs open one after another for expense tracking. */
+  const [payQueue, setPayQueue] = useState<{ userId: number; name: string }[]>([]);
 
   const assignedIds = new Set((members ?? []).map((m) => m.userId));
   const userById = useMemo(() => {
@@ -138,7 +140,26 @@ export function ProjectTeamPanel({
       const next = new Set(prev);
       if (checked) next.add(id);
       else next.delete(id);
-      return [...next];
+      const ids = [...next];
+      // Default project role to Freelancer when every selected person is a freelancer.
+      if (ids.length > 0 && ids.every((uid) => userById.get(Number(uid))?.role === "freelancer")) {
+        setSubType("Freelancer");
+      }
+      return ids;
+    });
+  };
+
+  const openFeeDialogsFor = (people: { userId: number; name: string }[]) => {
+    if (!canManagePay || people.length === 0) return;
+    setPayQueue(people);
+    setPayMember(people[0] ?? null);
+  };
+
+  const advanceFeeQueue = () => {
+    setPayQueue((queue) => {
+      const rest = queue.slice(1);
+      setPayMember(rest[0] ?? null);
+      return rest;
     });
   };
 
@@ -160,6 +181,20 @@ export function ProjectTeamPanel({
         invalidate();
         setOpen(false);
         resetAddDialog();
+        // Capture project fee right after hire so finance can track expenses.
+        const freelancersToPay = result.added
+          .filter((m) => userById.get(m.userId)?.role === "freelancer")
+          .map((m) => ({ userId: m.userId, name: m.name }));
+        if (freelancersToPay.length > 0) {
+          openFeeDialogsFor(freelancersToPay);
+          if (canManagePay) {
+            toast.message(
+              freelancersToPay.length === 1
+                ? "Set the project fee for this freelancer"
+                : `Set project fees for ${freelancersToPay.length} freelancers`,
+            );
+          }
+        }
       }
       if (result.skippedCount > 0) {
         toast.error(
@@ -217,6 +252,9 @@ export function ProjectTeamPanel({
                   {variant === "digital"
                     ? "Select digital specialists or freelancers to assign to this project."
                     : "Select developers, QA, or freelancers to assign to this project."}
+                  {canManagePay
+                    ? " Freelancers will be asked for their project fee next (expense tracking)."
+                    : ""}
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
@@ -401,7 +439,9 @@ export function ProjectTeamPanel({
                       className="h-7 text-[10px] px-2"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setPayMember({ userId: member.userId, name: member.name });
+                        const person = { userId: member.userId, name: member.name };
+                        setPayQueue([person]);
+                        setPayMember(person);
                       }}
                     >
                       <Wallet className="h-3 w-3 mr-1" />
@@ -444,11 +484,15 @@ export function ProjectTeamPanel({
         <FreelancerEngagementDialog
           open={!!payMember}
           onOpenChange={(next) => {
-            if (!next) setPayMember(null);
+            if (!next) advanceFeeQueue();
           }}
           projectId={projectId}
           userId={payMember.userId}
           freelancerName={payMember.name}
+          intent="hire"
+          queueHint={
+            payQueue.length > 1 ? `${payQueue.length} freelancers left` : undefined
+          }
         />
       ) : null}
     </Card>

@@ -4,7 +4,11 @@ export type MarketingPlatform =
   | "linkedin"
   | "twitter"
   | "youtube"
-  | "google";
+  | "google"
+  | "website";
+
+/** What is being scheduled on a calendar entry (esp. Instagram). */
+export type PostContentFormat = "post" | "long_video" | "short_video" | "blog";
 
 export type MarketingPackage = "basic" | "standard" | "premium" | "enterprise";
 
@@ -128,6 +132,7 @@ export interface CalendarPost {
   clientId: string;
   clientName: string;
   platform: MarketingPlatform;
+  contentFormat?: PostContentFormat;
   caption: string;
   hashtags: string[];
   scheduledAt: string;

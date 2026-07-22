@@ -9,6 +9,7 @@ import type {
   TaskStatus,
   ApprovalStage,
   PostScheduleStatus,
+  PostContentFormat,
   MediaItemKind,
 } from "@/modules/marketing/types";
 
@@ -156,6 +157,7 @@ export interface MarketingPostDto {
   accountId: number;
   clientName: string;
   platform: MarketingPlatform;
+  contentFormat?: PostContentFormat;
   caption: string;
   hashtags: string[];
   scheduledAt: string | null;

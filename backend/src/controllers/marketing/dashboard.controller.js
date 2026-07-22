@@ -336,7 +336,7 @@ export async function getDashboard(req, res) {
   const digitalMembers = await usersTable
     .find(
       { role: "digital", isDeleted: { $ne: true } },
-      { id: 1, name: 1, email: 1, designation: 1, avatarUrl: 1, lastLoginAt: 1, lastSeenAt: 1, status: 1 },
+      { id: 1, name: 1, email: 1, designation: 1, avatarUrl: 1, image: 1, lastLoginAt: 1, lastSeenAt: 1, status: 1 },
     )
     .lean();
 
@@ -359,7 +359,7 @@ export async function getDashboard(req, res) {
         name: u.name,
         email: u.email,
         designation: u.designation || "Digital Specialist",
-        avatarUrl: u.avatarUrl || null,
+        avatarUrl: u.avatarUrl || u.image || null,
         status: u.status || "active",
         openTasksCount,
         doneTasksCount,

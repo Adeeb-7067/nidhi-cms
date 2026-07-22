@@ -85,6 +85,22 @@ export function RoleGate({
     }
   }
 
+  if (user.role === "freelancer") {
+    // Staff hubs → freelancer home. Keep Collab tickets + work deep-links.
+    const keepPath =
+      pathOnly === "/admin/tickets" ||
+      pathOnly.startsWith("/dev/") ||
+      pathOnly.startsWith("/marketing/") ||
+      pathOnly.startsWith("/discussions") ||
+      pathOnly.startsWith("/freelancer") ||
+      pathOnly.startsWith("/profile") ||
+      pathOnly.startsWith("/notifications") ||
+      pathOnly.startsWith("/settings");
+    if (!keepPath) {
+      return <Redirect to="/freelancer" replace />;
+    }
+  }
+
   if (permModule) {
     if (isLoading) {
       return (

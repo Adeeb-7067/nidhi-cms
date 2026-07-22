@@ -77,12 +77,12 @@ async function getProjectAccess(req, projectId) {
   if (role === "super_admin") {
     return { allowed: true, canManage: true, isClient: false, companyId };
   }
-  if (role === "digital") {
+  if (role === "digital" || role === "freelancer") {
     const access = await getScopedDigitalUserAccess(req.user);
-    const allowed = access.projectIds.includes(Number(projectId));
+    const allowed = (access.projectIds ?? []).includes(Number(projectId));
     return {
       allowed,
-      canManage: allowed,
+      canManage: allowed && role === "digital",
       isClient: false,
       companyId
     };

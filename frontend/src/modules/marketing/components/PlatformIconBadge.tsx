@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { MarketingPlatform } from "../types";
 import { PLATFORM_LABELS } from "../constants";
-import { Facebook, Instagram, Linkedin, Twitter, Youtube, Globe } from "lucide-react";
+import { Facebook, Instagram, Linkedin, Twitter, Youtube, Globe, Link2 } from "lucide-react";
 
 const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
   facebook: Facebook,
@@ -10,6 +10,7 @@ const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
   twitter: Twitter,
   youtube: Youtube,
   google: Globe,
+  website: Link2,
 };
 
 const platformColors: Record<MarketingPlatform, string> = {
@@ -19,6 +20,7 @@ const platformColors: Record<MarketingPlatform, string> = {
   twitter: "bg-gray-500/10 text-gray-700 border-gray-500/25",
   youtube: "bg-red-500/10 text-red-600 border-red-500/25",
   google: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
+  website: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
 };
 
 export function PlatformIconBadge({
@@ -30,17 +32,17 @@ export function PlatformIconBadge({
   showLabel?: boolean;
   className?: string;
 }) {
-  const Icon = platformIcons[platform];
+  const Icon = platformIcons[platform] ?? Globe;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium",
-        platformColors[platform],
+        platformColors[platform] ?? "bg-muted text-muted-foreground border-border",
         className,
       )}
     >
       <Icon className="h-3 w-3" />
-      {showLabel && PLATFORM_LABELS[platform]}
+      {showLabel && (PLATFORM_LABELS[platform] ?? platform)}
     </span>
   );
 }

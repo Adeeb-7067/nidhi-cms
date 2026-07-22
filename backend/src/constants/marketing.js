@@ -8,6 +8,15 @@ export const MARKETING_PLATFORMS = [
   "twitter",
   "youtube",
   "google",
+  "website",
+];
+
+/** What is being scheduled (esp. Instagram): feed post, long video, short/reel, blog. */
+export const MARKETING_POST_CONTENT_FORMATS = [
+  "post",
+  "long_video",
+  "short_video",
+  "blog",
 ];
 export const MARKETING_ACCOUNT_STATUSES = ["active", "paused", "ended"];
 

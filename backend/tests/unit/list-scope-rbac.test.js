@@ -84,12 +84,29 @@ describe("RBAC P0 hardening contracts", () => {
     assert.ok(src.includes("getAccessibleCompanyIds"));
   });
 
-  test("screenshots admin check uses super_admin|hr not phantom admin", () => {
-    const svc = readFileSync(
-      join(__dirname, "../../src/services/screenshots.service.js"),
+  test("digital scope is membership-only (no accountManager / createdBy / task side-channels)", () => {
+    const src = readFileSync(
+      join(__dirname, "../../src/services/marketing/helpers.js"),
       "utf8",
     );
-    assert.ok(svc.includes('["super_admin", "hr"]'));
-    assert.ok(!svc.includes('"admin"'));
+    const fnStart = src.indexOf("export async function getScopedDigitalUserAccess");
+    assert.ok(fnStart >= 0, "getScopedDigitalUserAccess must exist");
+    const fnBody = src.slice(fnStart, src.indexOf("export function", fnStart + 10) > 0
+      ? src.indexOf("\nexport ", fnStart + 1)
+      : fnStart + 3500);
+    assert.ok(fnBody.includes("projectMembersTable"), "must use project membership");
+    assert.ok(fnBody.includes("pmId"), "PM assignment is allowed");
+    assert.ok(
+      !fnBody.includes("accountManagerId"),
+      "accountManagerId alone must not grant project list access",
+    );
+    assert.ok(
+      !fnBody.includes("createdBy"),
+      "createdBy must not expand digital project access",
+    );
+    assert.ok(
+      !fnBody.includes("marketingTasksTable"),
+      "task assignee must not expand project access",
+    );
   });
 });
