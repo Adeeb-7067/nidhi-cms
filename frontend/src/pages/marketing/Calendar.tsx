@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Eye,
   Hash,
   Loader2,
   Pencil,
@@ -172,6 +173,7 @@ export default function MarketingCalendar() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MarketingPostDto | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<MarketingPostDto | null>(null);
+  const [previewTarget, setPreviewTarget] = useState<MarketingPostDto | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
@@ -668,34 +670,42 @@ export default function MarketingCalendar() {
                           </div>
                         ) : null}
 
-                        {showActions ? (
-                          <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
-                            {canEdit ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 gap-1 px-2 text-xs"
-                                onClick={() => openEdit(p)}
-                              >
-                                <Pencil className="h-3 w-3" />
-                                Edit
-                              </Button>
-                            ) : null}
-                            {canDelete ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
-                                onClick={() => setDeleteTarget(p)}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                                Delete
-                              </Button>
-                            ) : null}
-                          </div>
-                        ) : null}
+                        <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 gap-1 px-2 text-xs"
+                            onClick={() => setPreviewTarget(p)}
+                          >
+                            <Eye className="h-3 w-3" />
+                            Preview
+                          </Button>
+                          {canEdit ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 gap-1 px-2 text-xs"
+                              onClick={() => openEdit(p)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                              Edit
+                            </Button>
+                          ) : null}
+                          {canDelete ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+                              onClick={() => setDeleteTarget(p)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Delete
+                            </Button>
+                          ) : null}
+                        </div>
                       </article>
                     </li>
                   ))}
@@ -709,20 +719,34 @@ export default function MarketingCalendar() {
                   </p>
                   <div className="mt-2 space-y-2">
                     {unscheduled.map((p) => (
-                      <button
+                      <div
                         key={p.id}
-                        type="button"
-                        onClick={() => openEdit(p)}
-                        className="flex w-full items-start gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-2 text-left transition-colors hover:border-primary/30 hover:bg-primary/[0.03]"
+                        className="flex w-full items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/80 px-2.5 py-2 text-left transition-colors hover:border-primary/30"
                       >
-                        <PlatformIconBadge platform={p.platform} showLabel={false} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium">{p.clientName}</span>
-                          <span className="line-clamp-1 text-[11px] text-muted-foreground">
-                            {p.caption || "No caption"}
+                        <button
+                          type="button"
+                          onClick={() => openEdit(p)}
+                          className="flex min-w-0 flex-1 items-start gap-2 text-left"
+                        >
+                          <PlatformIconBadge platform={p.platform} showLabel={false} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-medium">{p.clientName}</span>
+                            <span className="line-clamp-1 text-[11px] text-muted-foreground">
+                              {p.caption || "No caption"}
+                            </span>
                           </span>
-                        </span>
-                      </button>
+                        </button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 shrink-0 gap-1 px-2 text-xs"
+                          onClick={() => setPreviewTarget(p)}
+                        >
+                          <Eye className="h-3 w-3" />
+                          Preview
+                        </Button>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -864,6 +888,145 @@ export default function MarketingCalendar() {
         loading={deletePost.isPending}
         onConfirm={() => void handleDelete()}
       />
+
+      {/* Content Preview Dialog */}
+      <Dialog open={previewTarget != null} onOpenChange={(open) => !open && setPreviewTarget(null)}>
+        <DialogContent className="max-w-md p-0 overflow-hidden sm:rounded-2xl border-border/80 shadow-2xl">
+          {previewTarget ? (
+            <div className="flex flex-col bg-background">
+              {/* Header Bar */}
+              <div className="flex items-center justify-between border-b border-border/60 bg-muted/40 px-5 py-3.5">
+                <div className="flex items-center gap-2.5">
+                  <PlatformIconBadge platform={previewTarget.platform} />
+                  <div>
+                    <h3 className="text-sm font-semibold text-foreground leading-none">
+                      {previewTarget.clientName || "Digital Post"}
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      {previewTarget.scheduledAt
+                        ? format(new Date(previewTarget.scheduledAt), "EEEE, MMM d, yyyy 'at' h:mm a")
+                        : "Unscheduled Draft"}
+                    </p>
+                  </div>
+                </div>
+                <Badge variant="secondary" className="text-[11px] font-normal">
+                  {POST_CONTENT_FORMAT_LABELS[(previewTarget.contentFormat ?? "graphic") as PostContentFormat]}
+                </Badge>
+              </div>
+
+              {/* Social Media Post Feed Card */}
+              <div className="p-5 space-y-4">
+                <div className="rounded-xl border border-border/70 bg-card p-4 shadow-sm space-y-3">
+                  <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
+                        {previewTarget.clientName?.charAt(0).toUpperCase() || "P"}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground leading-tight">
+                          {previewTarget.clientName}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {PLATFORM_LABELS[previewTarget.platform]}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="text-[10px] font-normal capitalize">
+                        {POST_SCHEDULE_STATUS_LABELS[previewTarget.scheduleStatus]}
+                      </Badge>
+                      <ApprovalStatusBadge stage={previewTarget.approvalStage} />
+                    </div>
+                  </div>
+
+                  {/* Caption */}
+                  <div className="text-xs text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                    {previewTarget.caption?.trim() || (
+                      <span className="italic text-muted-foreground">No caption content written yet.</span>
+                    )}
+                  </div>
+
+                  {/* Hashtags */}
+                  {previewTarget.hashtags && previewTarget.hashtags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {previewTarget.hashtags.map((h) => (
+                        <span
+                          key={h}
+                          className="inline-flex items-center gap-0.5 rounded-md bg-muted/70 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+                        >
+                          <Hash className="h-2.5 w-2.5" />
+                          {h}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-2.5 rounded-lg border border-border/50 bg-muted/20 p-3 text-xs">
+                  <div>
+                    <span className="block text-[10px] font-medium text-muted-foreground">Content Format</span>
+                    <span className="font-medium text-foreground">
+                      {POST_CONTENT_FORMAT_LABELS[(previewTarget.contentFormat ?? "graphic") as PostContentFormat]}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-medium text-muted-foreground">Scheduled Time</span>
+                    <span className="font-medium text-foreground">
+                      {previewTarget.scheduledAt
+                        ? format(new Date(previewTarget.scheduledAt), "h:mm a (MMM d)")
+                        : "Not set"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-medium text-muted-foreground">Assignee</span>
+                    <span className="font-medium text-foreground inline-flex items-center gap-1">
+                      <UserRound className="h-3 w-3 text-muted-foreground" />
+                      {previewTarget.assignee || "Unassigned"}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] font-medium text-muted-foreground">Approval Stage</span>
+                    <span className="font-medium text-foreground capitalize">
+                      {previewTarget.approvalStage ? previewTarget.approvalStage.replace("_", " ") : "Internal review"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 gap-1.5 text-xs"
+                    onClick={() => {
+                      const target = previewTarget;
+                      setPreviewTarget(null);
+                      openEdit(target);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit Content
+                  </Button>
+                ) : (
+                  <div />
+                )}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setPreviewTarget(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </PortalPageShell>
   );
 }
