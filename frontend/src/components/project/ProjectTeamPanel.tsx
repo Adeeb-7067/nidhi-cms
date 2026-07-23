@@ -58,6 +58,8 @@ const DIGITAL_SUB_TYPES = [
   "Account Manager",
   "Designer",
   "Ads Manager",
+  "Video Editor",
+  "SEO Expert",
   "Freelancer",
 ] as const;
 

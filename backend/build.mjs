@@ -93,7 +93,7 @@ async function buildAll() {
       "tinypool",
       "usb",
       "workerd",
-      "wrangler",
+      "wrangler", 
       "zeromq",
       "zeromq-prebuilt",
       "playwright",

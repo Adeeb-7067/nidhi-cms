@@ -15,12 +15,19 @@ export const MARKETING_PLATFORMS = [
   "whatsapp",
 ];
 
-/** What is being scheduled: feed post, long video, short/reel, blog — any platform. */
+/** What is being scheduled: graphic, reel, long video, short video, comment, sharing, story upload, blog, seo optimization, festival story. */
 export const MARKETING_POST_CONTENT_FORMATS = [
-  "post",
+  "graphic",
+  "reel",
   "long_video",
   "short_video",
+  "comment",
+  "sharing",
+  "story_upload",
   "blog",
+  "seo_optimization",
+  "festival_story",
+  "post",
 ];
 export const MARKETING_ACCOUNT_STATUSES = ["active", "paused", "ended"];
 

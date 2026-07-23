@@ -56,7 +56,7 @@ process.on("uncaughtException", (err) => {
 const port = getRequiredPort();
 const server = createServer(app);
 initRealtime(server);
-initFirebaseAdmin();
+initFirebaseAdmin(); 
 void verifyMailer();
 const runInventoryExpiryCheck = startInventoryExpiryJob();
 const runAlertSchedulerTick = startAlertSchedulerJob();

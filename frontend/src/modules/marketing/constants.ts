@@ -62,17 +62,30 @@ export const PLATFORM_LABELS: Record<MarketingPlatform, string> = {
 export const ALL_MARKETING_PLATFORMS = Object.keys(PLATFORM_LABELS) as MarketingPlatform[];
 
 export const POST_CONTENT_FORMAT_LABELS: Record<PostContentFormat, string> = {
-  post: "Post",
+  graphic: "Graphic",
+  reel: "Reel",
   long_video: "Long video",
   short_video: "Short video",
+  comment: "Comment",
+  sharing: "Sharing",
+  story_upload: "Story Upload",
   blog: "Blog",
+  seo_optimization: "SEO Optimization",
+  festival_story: "Festival Story",
+  post: "Post",
 };
 
 export const POST_CONTENT_FORMATS: PostContentFormat[] = [
-  "post",
+  "graphic",
+  "reel",
   "long_video",
   "short_video",
+  "comment",
+  "sharing",
+  "story_upload",
   "blog",
+  "seo_optimization",
+  "festival_story",
 ];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

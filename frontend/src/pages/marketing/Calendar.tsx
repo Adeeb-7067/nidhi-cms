@@ -133,7 +133,7 @@ const STATUS_RING: Record<PostScheduleStatus, string> = {
 const emptyForm = {
   accountId: "",
   platform: "instagram" as MarketingPlatform,
-  contentFormat: "post" as PostContentFormat,
+  contentFormat: "graphic" as PostContentFormat,
   caption: "",
   scheduledAt: "",
   scheduleStatus: "pending" as PostScheduleStatus,
@@ -764,7 +764,7 @@ export default function MarketingCalendar() {
                   setForm((f) => ({
                     ...f,
                     platform: v as MarketingPlatform,
-                    contentFormat: f.contentFormat || "post",
+                    contentFormat: f.contentFormat || "graphic",
                   }))
                 }
               >

@@ -11,8 +11,19 @@ export type MarketingPlatform =
   | "snapchat"
   | "whatsapp";
 
-/** What is being scheduled on a calendar entry (post, long/short video, blog). */
-export type PostContentFormat = "post" | "long_video" | "short_video" | "blog";
+/** What is being scheduled on a calendar entry. */
+export type PostContentFormat =
+  | "graphic"
+  | "reel"
+  | "long_video"
+  | "short_video"
+  | "comment"
+  | "sharing"
+  | "story_upload"
+  | "blog"
+  | "seo_optimization"
+  | "festival_story"
+  | "post";
 
 export type MarketingPackage = "basic" | "standard" | "premium" | "enterprise";
 
