@@ -57,9 +57,11 @@ export const cmsModuleGroups = [
       "marketing_approvals",
       "marketing_ads",
       "marketing_analytics",
+      "marketing_seo",
       "marketing_reports",
     ],
   },
+
   {
     label: "Finance",
     modules: [
@@ -120,6 +122,7 @@ export const cmsModuleGroups = [
       "hrm_onboarding",
       "hrm_documents",
       "hrm_policies",
+      "hrm_hr_kit",
       "hrm_id_cards",
       "hrm_letters",
       "hrm_assets",
@@ -166,10 +169,12 @@ export const legacyModuleMap = {
   onboarding: "hrm_onboarding",
   documents: "hrm_documents",
   policies: "hrm_policies",
+  hr_kit: "hrm_hr_kit",
   id_cards: "hrm_id_cards",
   letters: "hrm_letters",
   assets: "hrm_assets",
   exit: "hrm_exit",
+
   my_attendance: "hrm_my_attendance",
   my_leave: "hrm_my_leave",
   my_wfh: "hrm_my_wfh",

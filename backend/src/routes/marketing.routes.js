@@ -2,6 +2,7 @@ import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { requireAuth } from "../middlewares/auth.js";
 import { requirePermission, requireAnyPermission } from "../middlewares/permission.js";
+import { requireDigitalModuleAccess } from "../middlewares/digital-access.js";
 import * as dashboardCtrl from "../controllers/marketing/dashboard.controller.js";
 import * as accountsCtrl from "../controllers/marketing/accounts.controller.js";
 import * as tasksCtrl from "../controllers/marketing/tasks.controller.js";
@@ -12,7 +13,17 @@ import * as insightsCtrl from "../controllers/marketing/insights.controller.js";
 
 const router = Router();
 const wrap = (fn) => asyncHandler(fn);
-const p = (module, action = "view") => [requireAuth, requirePermission(module, action)];
+/**
+ * Permission + Digital sub-role access gate.
+ * 1. requireAuth         — user must be logged in
+ * 2. requirePermission   — role template must grant module:action
+ * 3. requireDigitalModuleAccess — digital sub-role must allow the module
+ */
+const p = (module, action = "view") => [
+  requireAuth,
+  requirePermission(module, action),
+  requireDigitalModuleAccess(module),
+];
 
 // ── Dashboard ────────────────────────────────────────────────────────────
 router.get("/marketing/dashboard", ...p("marketing_dashboard"), wrap(dashboardCtrl.getDashboard));
@@ -97,6 +108,7 @@ router.post(
     ["marketing_analytics", "create"],
     ["marketing_analytics", "edit"],
   ),
+  requireDigitalModuleAccess("marketing_analytics"),
   wrap(insightsCtrl.upsertSocialMetric),
 );
 router.delete(

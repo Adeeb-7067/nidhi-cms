@@ -46,6 +46,7 @@ import {
 } from "@/modules/marketing/components";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/modules/permissions/usePermission";
 import { BdeTeamFormDialog } from "@/modules/sales/team/BdeTeamFormDialog";
 import { useDeleteUser, type User } from "@/api";
 import { toast } from "sonner";
@@ -54,7 +55,10 @@ import { toastApiError } from "@/lib/api-error";
 export default function DigitalTeam() {
   const queryClient = useQueryClient();
   const { user: viewer, impersonate, isImpersonating } = useAuth();
+  const { can } = usePermissions();
   const isAdmin = viewer?.role === "super_admin" || viewer?.role === "hr";
+  const canEditTeam = can("admin_team", "edit") || isAdmin;
+  const canDeleteTeam = can("admin_team", "delete") || isAdmin;
 
   const [activeTab, setActiveTab] = useState("roster");
   const [search, setSearch] = useState("");
@@ -168,7 +172,7 @@ export default function DigitalTeam() {
                 <PortalTabsTrigger value="performance">Performance</PortalTabsTrigger>
               </PortalTabsList>
             </Tabs>
-            {isAdmin && (
+            {canEditTeam && (
               <Button size="sm" onClick={handleCreate} className="h-9 gap-1.5 font-medium shadow-sm">
                 <Plus className="h-4 w-4" /> Add Specialist
               </Button>
@@ -215,7 +219,7 @@ export default function DigitalTeam() {
                   ? "Try matching name, email, or designation."
                   : "Add users with the Digital Specialist role to see them here."
               }
-              actionLabel={isAdmin ? "Add Specialist" : undefined}
+              actionLabel={canEditTeam ? "Add Specialist" : undefined}
               onAction={handleCreate}
             />
           ) : (
@@ -306,7 +310,7 @@ export default function DigitalTeam() {
                           )}
 
                           {/* Edit Button */}
-                          {isAdmin && (
+                          {canEditTeam && (
                             <Button
                               size="sm"
                               variant="outline"
@@ -318,7 +322,7 @@ export default function DigitalTeam() {
                           )}
 
                           {/* Delete Button */}
-                          {isAdmin && (
+                          {canDeleteTeam && (
                             <Button
                               size="sm"
                               variant="outline"

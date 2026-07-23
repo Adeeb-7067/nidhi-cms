@@ -20,11 +20,13 @@ import {
 } from "../../constants/marketing.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
@@ -209,11 +211,22 @@ export async function deleteCampaign(req, res) {
   const doc = await marketingCampaignsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Campaign");
   assertDocAccount(doc, accountId);
+
+  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const subRoleLower = (req.user.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+
+  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+    forbidden("Only campaign creators, account managers, or admins can delete ad campaigns.");
+  }
+
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
   res.json({ ok: true });
 }
+
 
 // ── Social ───────────────────────────────────────────────────────────────
 
@@ -646,8 +659,19 @@ export async function deleteReport(req, res) {
     badRequest("This report is not linked to a digital project. Recreate it under a project.", "accountId");
   }
   assertDocAccount(doc, accountId);
+
+  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const subRoleLower = (req.user.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+
+  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+    forbidden("Only report creators, account managers, or admins can delete reports.");
+  }
+
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
   res.json({ ok: true });
 }
+

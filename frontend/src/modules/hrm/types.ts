@@ -722,6 +722,18 @@ export type HrmPolicy = {
   createdAt?: string;
 };
 
+export type HrmHrKit = {
+  id: number;
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  fileUrl?: string | null;
+  version: string;
+  isActive: boolean;
+  createdAt?: string;
+};
+
+
 export type HrmPolicyAcknowledgement = {
   id: number;
   policyId: number;

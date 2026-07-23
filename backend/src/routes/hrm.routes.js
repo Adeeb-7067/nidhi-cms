@@ -132,6 +132,12 @@ router.delete("/hrm/policies/:id", perm("hrm_policies", "delete"), asyncHandler(
 router.post("/hrm/policies/:id/acknowledge", asyncHandler(hrm.postPolicyAck));
 router.get("/hrm/policies/my-acknowledgements", asyncHandler(hrm.getMyPolicyAcks));
 
+router.get("/hrm/hr-kit", asyncHandler(hrm.getHrKits));
+router.post("/hrm/hr-kit", perm("hrm_hr_kit", "create"), asyncHandler(hrm.postHrKit));
+router.patch("/hrm/hr-kit/:id", perm("hrm_hr_kit", "edit"), asyncHandler(hrm.patchHrKit));
+router.delete("/hrm/hr-kit/:id", perm("hrm_hr_kit", "delete"), asyncHandler(hrm.deleteHrKit));
+
+
 router.get("/hrm/settings", perm("hrm_settings", "view"), asyncHandler(hrm.getHrmSettings));
 router.patch("/hrm/settings", perm("hrm_settings", "edit"), asyncHandler(hrm.patchHrmSettings));
 router.get("/hrm/employees", asyncHandler(hrm.getHrmEmployees));

@@ -16,11 +16,13 @@ import {
 } from "../../constants/marketing.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
@@ -408,10 +410,20 @@ export async function updateContent(req, res) {
   res.json({ id: String(doc.id), status: doc.status });
 }
 
-async function softDeleteQueueItem(model, id, label, accountId, refType = null) {
+async function softDeleteQueueItem(model, id, label, accountId, reqUser, refType = null) {
   const doc = await model.findOne({ id, isDeleted: false });
   if (!doc) notFound(label);
   assertDocAccount(doc, accountId);
+
+  const isSuperAdminOrHr = reqUser.role === "super_admin" || reqUser.role === "hr" || reqUser.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(reqUser.id);
+  const subRoleLower = (reqUser.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+
+  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+    forbidden(`Only item creators, account managers, or admins can delete ${label.toLowerCase()}s.`);
+  }
+
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
@@ -427,6 +439,7 @@ export async function deleteGraphic(req, res) {
       parseIdParam(req.params.id),
       "Graphic request",
       accountId,
+      req.user,
       "graphic",
     ),
   );
@@ -440,6 +453,7 @@ export async function deleteVideo(req, res) {
       parseIdParam(req.params.id),
       "Video request",
       accountId,
+      req.user,
     ),
   );
 }
@@ -452,7 +466,9 @@ export async function deleteContent(req, res) {
       parseIdParam(req.params.id),
       "Content item",
       accountId,
+      req.user,
       "content",
     ),
   );
 }
+

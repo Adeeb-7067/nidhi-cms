@@ -122,9 +122,14 @@ const FinanceTax = React.lazy(() => import("@/pages/finance/Tax"));
 const FinanceReportsPnl = React.lazy(() => import("@/pages/finance/ReportsPnl"));
 const FinanceNotifications = React.lazy(() => import("@/pages/finance/Notifications"));
 const FinancePaymentDetail = React.lazy(() => import("@/pages/finance/PaymentDetail"));
+const FinanceFreelancerDashboard = React.lazy(() => import("@/pages/finance/FreelancerDashboardPage"));
+const FinanceFreelancerDirectory = React.lazy(() => import("@/pages/finance/FreelancerDirectoryPage"));
 const FinanceFreelancerEngagements = React.lazy(() => import("@/pages/finance/FreelancerEngagements"));
+const FinanceFreelancerReceipts = React.lazy(() => import("@/pages/finance/FreelancerReceiptsPage"));
+
 const MyFreelancerPayments = React.lazy(() => import("@/pages/dev/MyFreelancerPayments"));
 const FreelancerDashboard = React.lazy(() => import("@/pages/freelancer/Dashboard"));
+
 
 const MarketingDashboard = React.lazy(() => import("@/pages/marketing/Dashboard"));
 const MarketingTasks = React.lazy(() => import("@/pages/marketing/Tasks"));
@@ -166,6 +171,8 @@ const HrmSettings = React.lazy(() => import("@/pages/hrm/Settings"));
 const HrmRecruitment = React.lazy(() => import("@/pages/hrm/Recruitment"));
 const HrmDocuments = React.lazy(() => import("@/pages/hrm/Documents"));
 const HrmPolicies = React.lazy(() => import("@/pages/hrm/Policies"));
+const HrmHrKit = React.lazy(() => import("@/pages/hrm/HrKit"));
+
 const HrmAudit = React.lazy(() => import("@/pages/hrm/Audit"));
 const HrmOnboarding = React.lazy(() => import("@/pages/hrm/Onboarding"));
 const HrmRoles = React.lazy(() => import("@/pages/hrm/Roles"));
@@ -689,11 +696,38 @@ export function PageOutlet() {
           <FinanceSubscriptions />
         </RoleGate>
       </Route>
-      <Route path="/finance/freelancers">
+      <Route path="/freelancers/dashboard">
+        <RoleGate>
+          <FinanceFreelancerDashboard />
+        </RoleGate>
+      </Route>
+      <Route path="/freelancers/directory">
+        <RoleGate>
+          <FinanceFreelancerDirectory />
+        </RoleGate>
+      </Route>
+      <Route path="/freelancers/payments">
         <RoleGate>
           <FinanceFreelancerEngagements />
         </RoleGate>
       </Route>
+      <Route path="/freelancers/receipts">
+        <RoleGate>
+          <FinanceFreelancerReceipts />
+        </RoleGate>
+      </Route>
+      <Route path="/freelancers">
+        <RoleGate>
+          <FinanceFreelancerDashboard />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/freelancers">
+        <RoleGate>
+          <FinanceFreelancerDashboard />
+        </RoleGate>
+      </Route>
+
+
       <Route path="/finance/ledgers">
         <RoleGate>
           <FinanceLedgers />
@@ -884,6 +918,8 @@ export function PageOutlet() {
       <Route path="/hrm/onboarding"><RoleGate><HrmOnboarding /></RoleGate></Route>
       <Route path="/hrm/documents"><RoleGate><HrmDocuments /></RoleGate></Route>
       <Route path="/hrm/policies"><RoleGate><HrmPolicies /></RoleGate></Route>
+      <Route path="/hrm/hr-kit"><RoleGate><HrmHrKit /></RoleGate></Route>
+
       <Route path="/hrm/assets"><RoleGate><HrmAssets /></RoleGate></Route>
       <Route path="/hrm/exit"><RoleGate><HrmExit /></RoleGate></Route>
       <Route path="/hrm/id-cards"><RoleGate><HrmIdCards /></RoleGate></Route>

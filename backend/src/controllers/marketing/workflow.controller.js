@@ -16,11 +16,13 @@ import {
 } from "../../constants/marketing.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
@@ -235,6 +237,16 @@ export async function deletePost(req, res) {
   const doc = await marketingPostsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Post");
   assertDocAccount(doc, accountId);
+
+  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const subRoleLower = (req.user.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+
+  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+    forbidden("Only post creators, account managers, or admins can delete calendar posts.");
+  }
+
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
@@ -244,6 +256,7 @@ export async function deletePost(req, res) {
   );
   res.json({ ok: true });
 }
+
 
 export async function listApprovals(req, res) {
   const pagination = parsePagination(req.query);

@@ -5,6 +5,7 @@ import {
   getNextSequence,
   getNextSequenceRange,
 } from "../models/schema/index.js";
+import { getDigitalSubRoleModules } from "../middlewares/digital-access.js";
 import {
   cmsActions,
   cmsModules,
@@ -131,8 +132,13 @@ const DEFAULT_TEMPLATES = [
       { module: "monitor_policy", action: "view" },
       { module: "admin_discussions", action: "view" },
       { module: "admin_tickets", action: "view" },
+      { module: "finance_freelancers", action: "view" },
+      { module: "finance_freelancers", action: "create" },
+      { module: "finance_freelancers", action: "edit" },
+      { module: "finance_freelancers", action: "delete" },
     ],
   },
+
   {
     code: "manager",
     name: "Manager",
@@ -228,8 +234,10 @@ const DEFAULT_TEMPLATES = [
       { module: "admin_discussions", action: "create" },
       { module: "admin_tickets", action: "view" },
       { module: "admin_tickets", action: "create" },
+      { module: "finance_freelancers", action: "view" },
     ],
   },
+
   {
     code: "freelancer",
     name: "Freelancer",
@@ -629,7 +637,7 @@ async function loadUserPermissionEntry(userId) {
   if (cached && cached.expiresAt > now) return cached;
 
   const user = await usersTable
-    .findOne({ id: userId }, { role: 1, roleTemplateId: 1, hrmRoleTemplateId: 1 })
+    .findOne({ id: userId }, { role: 1, subType: 1, roleTemplateId: 1, hrmRoleTemplateId: 1 })
     .lean();
   if (!user) return null;
 
@@ -657,11 +665,25 @@ async function loadUserPermissionEntry(userId) {
   const set = new Set(rows.map((r) => permissionEntryKey(r.module, r.action)));
   expandLegacySalesPermissionSet(set);
   expandLegacyMarketingPermissionSet(set);
+
+  if (user.role === "digital") {
+    const allowedModules = new Set(getDigitalSubRoleModules(user));
+    for (const key of set) {
+      if (key.startsWith("marketing_")) {
+        const mod = key.split(":")[0];
+        if (!allowedModules.has(mod)) {
+          set.delete(key);
+        }
+      }
+    }
+  }
+
   const entry = {
     set,
     templateId,
     expiresAt: now + PERM_CACHE_TTL_MS,
   };
+
   if (_permCache.size >= PERM_CACHE_MAX) _permCache.delete(_permCache.keys().next().value);
   _permCache.set(userId, entry);
   return entry;

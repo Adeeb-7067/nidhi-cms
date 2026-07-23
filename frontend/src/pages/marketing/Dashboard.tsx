@@ -64,6 +64,7 @@ import type {
 } from "@/modules/marketing/types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/modules/permissions/usePermission";
 import { ClockInButton } from "@/components/ClockInButton";
 
 function labelOf<T extends string>(map: Record<T, string>, key: string): string {
@@ -102,12 +103,18 @@ function DashboardSkeleton() {
 
 export default function MarketingDashboard() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
-  const isAdmin = user?.role === "super_admin" || user?.role === "hr";
+  const subTypeLower = (user?.subType ?? "").toLowerCase();
+  const isAdmin =
+    user?.role === "super_admin" ||
+    user?.role === "hr" ||
+    can("marketing_dashboard", "edit");
   const canViewClientBudget = canViewMarketingClientBudget(user?.role);
 
   const kpis = data?.kpis;
   const openTasks = kpis?.openTasks ?? kpis?.todaysTasks ?? 0;
+
 
   const labeled = useMemo(() => {
     const mapRows = (
@@ -148,11 +155,96 @@ export default function MarketingDashboard() {
     [data?.activityTrend],
   );
 
+  const kpiItems = useMemo(() => {
+    const isDesigner = subTypeLower.includes("designer") || subTypeLower.includes("graphic");
+    const isVideoEditor = subTypeLower.includes("video");
+    const isSeo = subTypeLower.includes("seo");
+    const isAds = subTypeLower.includes("ad");
+    const isGeneric = !isDesigner && !isVideoEditor && !isSeo && !isAds;
+
+    return [
+      {
+        title: "My Open Tasks",
+        value: openTasks,
+        hint: "Assigned active tasks",
+        icon: CheckSquare,
+        accent: "blue" as const,
+        href: "/marketing/tasks",
+        delay: 0,
+        show: true,
+      },
+      {
+        title: "Overdue Tasks",
+        value: kpis?.overdueTasks ?? 0,
+        hint: "Requires attention",
+        icon: AlertTriangle,
+        accent: "amber" as const,
+        alert: (kpis?.overdueTasks ?? 0) > 0,
+        href: "/marketing/tasks",
+        delay: 1,
+        show: true,
+      },
+      {
+        title: "Done This Week",
+        value: kpis?.completedThisWeek ?? 0,
+        hint: "My completed tasks",
+        icon: Target,
+        accent: "green" as const,
+        href: "/marketing/tasks",
+        delay: 2,
+        show: true,
+      },
+      {
+        title: "Graphics Queue",
+        value: kpis?.graphicsCount ?? 0,
+        hint: "Assigned design requests",
+        icon: Palette,
+        accent: "violet" as const,
+        href: "/marketing/graphics",
+        delay: 3,
+        show: isDesigner || isGeneric,
+      },
+      {
+        title: "Videos in Editing",
+        value: kpis?.videosInFlight ?? 0,
+        hint: "Reels / video renders",
+        icon: Film,
+        accent: "amber" as const,
+        href: "/marketing/videos",
+        delay: 4,
+        show: isVideoEditor || isGeneric,
+      },
+      {
+        title: "Scheduled Posts",
+        value: kpis?.postsScheduled ?? 0,
+        hint: "Content calendar",
+        icon: Calendar,
+        accent: "blue" as const,
+        href: "/marketing/calendar",
+        delay: 5,
+        show: !isSeo && !isAds,
+      },
+      {
+        title: "Assigned Projects",
+        value: kpis?.clientCount ?? 0,
+        hint: "Active client workspaces",
+        icon: Building2,
+        accent: "violet" as const,
+        href: "/marketing/projects",
+        delay: 6,
+        show: true,
+      },
+    ]
+      .filter((item) => item.show)
+      .map(({ show: _show, ...item }) => item);
+  }, [openTasks, kpis, subTypeLower]);
+
   const topAccounts = data?.topAccounts ?? [];
   const upcomingDeadlines = data?.upcomingDeadlines ?? [];
   const digitalTeam = data?.digitalTeam ?? [];
   const activity = data?.activity ?? [];
   const maxScore = Math.max(100, ...topAccounts.map((a) => a.performanceScore), 1);
+
 
   if (!isAdmin) {
     return (
@@ -196,83 +288,11 @@ export default function MarketingDashboard() {
               </p>
               <PortalKpiGrid
                 columns={4}
-                count={8}
-                items={[
-                  {
-                    title: "My Open Tasks",
-                    value: openTasks,
-                    hint: "Assigned active tasks",
-                    icon: CheckSquare,
-                    accent: "blue",
-                    href: "/marketing/tasks",
-                    delay: 0,
-                  },
-                  {
-                    title: "Overdue Tasks",
-                    value: kpis?.overdueTasks ?? 0,
-                    hint: "Requires attention",
-                    icon: AlertTriangle,
-                    accent: "amber",
-                    alert: (kpis?.overdueTasks ?? 0) > 0,
-                    href: "/marketing/tasks",
-                    delay: 1,
-                  },
-                  {
-                    title: "Done This Week",
-                    value: kpis?.completedThisWeek ?? 0,
-                    hint: "My completed tasks",
-                    icon: Target,
-                    accent: "green",
-                    href: "/marketing/tasks",
-                    delay: 2,
-                  },
-                  {
-                    title: "Pending Approvals",
-                    value: kpis?.pendingApprovals ?? 0,
-                    hint: "Deliverables in review",
-                    icon: Clock,
-                    accent: "amber",
-                    href: "/marketing/approvals",
-                    delay: 3,
-                  },
-                  {
-                    title: "Graphics Queue",
-                    value: kpis?.graphicsCount ?? 0,
-                    hint: "Assigned design requests",
-                    icon: Palette,
-                    accent: "violet",
-                    href: "/marketing/graphics",
-                    delay: 4,
-                  },
-                  {
-                    title: "Videos in Editing",
-                    value: kpis?.videosInFlight ?? 0,
-                    hint: "Reels / video renders",
-                    icon: Film,
-                    accent: "amber",
-                    href: "/marketing/videos",
-                    delay: 5,
-                  },
-                  {
-                    title: "Scheduled Posts",
-                    value: kpis?.postsScheduled ?? 0,
-                    hint: "Content calendar",
-                    icon: Calendar,
-                    accent: "blue",
-                    href: "/marketing/calendar",
-                    delay: 6,
-                  },
-                  {
-                    title: "Assigned Projects",
-                    value: kpis?.clientCount ?? 0,
-                    hint: "Active client workspaces",
-                    icon: Building2,
-                    accent: "violet",
-                    href: "/marketing/projects",
-                    delay: 7,
-                  },
-                ]}
+                count={kpiItems.length}
+                items={kpiItems}
               />
+
+
             </div>
 
             {/* Employee Work Center */}

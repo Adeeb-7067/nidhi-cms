@@ -188,8 +188,6 @@ export default function MarketingProjectDetail() {
   const canEditWorkspace = can("marketing_clients", "edit");
   const canEditServices =
     user?.role === "super_admin" ||
-    user?.role === "digital" ||
-    user?.role === "bde" ||
     canEditWorkspace;
   const updateAccount = useUpdateMarketingAccount();
   const updateProject = useUpdateProject();

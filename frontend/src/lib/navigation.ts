@@ -101,8 +101,9 @@ export function syncSettingsSectionFromNavHref(href: string): void {
 /** Navigate via wouter; settings tabs use /settings/:section paths (not query strings). */
 export function navigateNavHref(href: string, setLocation: (to: string) => void): void {
   syncSettingsSectionFromNavHref(href);
-  setLocation(navPathOnly(href));
+  setLocation(href);
 }
+
 
 export type { UserRole };
 export { isDevPortalRole, isQaStaffRole, isDeveloperRole, DEV_PORTAL_STAFF_ROLES, DEVELOPER_STAFF_ROLES };
@@ -206,6 +207,8 @@ export function getNavSections(
         { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
         { title: "All team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
+
+
         {
           title: "Requests",
           href: "/admin/requests",
@@ -326,7 +329,9 @@ export function getNavSections(
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: ["super_admin", "digital"], group: "Analytics" },
         { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["freelancer"], group: "Operations" },
         { title: "Digital team", href: "/marketing/team", icon: UsersRound, roles: ["super_admin", "hr"], group: "Team" },
+        { title: "Freelancers", href: "/finance/freelancers", icon: UsersRound, roles: ["super_admin", "digital"], group: "Team" },
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: ["super_admin", "digital"], group: "Team" },
+
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: ["super_admin", "digital"], group: "Reports" },
       ],
     },
@@ -485,6 +490,8 @@ export function getNavSections(
         { title: "Departments", href: "/hrm/departments", icon: Building2, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
         { title: "Employees", href: "/hrm/employees", icon: Users, roles: [...HRM_ADMIN_ROLES, "manager"], group: "Organization" },
         { title: "Recruitment", href: "/hrm/recruitment", icon: UserPlus, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
+
+
         { title: "Onboarding", href: "/hrm/onboarding", icon: Rocket, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
         { title: "Roles & permissions", href: "/hrm/roles", icon: Shield, roles: [...HRM_ADMIN_ROLES], group: "Organization" },
 
@@ -497,7 +504,9 @@ export function getNavSections(
         { title: "Salary slips", href: "/hrm/salary-slips", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
         { title: "Manual payslips", href: "/hrm/manual-payslips", icon: Receipt, roles: [...HRM_ADMIN_ROLES], group: "Payroll" },
         { title: "Documents", href: "/hrm/documents", icon: FolderOpen, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
-        { title: "Policies", href: "/hrm/policies", icon: FileText, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
+        { title: "Policies", href: "/hrm/policies", icon: FileText, roles: [...HRM_ADMIN_ROLES, ...HRM_EMPLOYEE_ROLES], group: "Extended" },
+        { title: "HR Kit", href: "/hrm/hr-kit", icon: BookOpen, roles: [...HRM_ADMIN_ROLES, ...HRM_EMPLOYEE_ROLES], group: "Extended" },
+
         { title: "Assets", href: "/hrm/assets", icon: Laptop, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "Exit workflow", href: "/hrm/exit", icon: LogOut, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
         { title: "ID Cards", href: "/hrm/id-cards", icon: IdCard, roles: [...HRM_ADMIN_ROLES], group: "Extended" },
@@ -585,8 +594,8 @@ export function getNavSections(
         { title: "Budgets", href: "/finance/budgets", icon: PiggyBank, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Loans", href: "/finance/loans", icon: HandCoins, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Subscriptions", href: "/finance/subscriptions", icon: KeyRound, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
-        { title: "Freelancers", href: "/finance/freelancers", icon: UsersRound, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Ledgers", href: "/finance/ledgers", icon: BookOpen, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
+
         { title: "Tax", href: "/finance/tax", icon: Percent, roles: [...FINANCE_ACCESS_ROLES], group: "Planning" },
         { title: "Reports (P&L)", href: "/finance/reports/pnl", icon: BarChart3, roles: [...FINANCE_ACCESS_ROLES], group: "Reports" },
         {
@@ -600,7 +609,27 @@ export function getNavSections(
     },
 
     // =========================
+    // FREELANCERS (MANAGEMENT RAIL)
+    // =========================
+    {
+      label: "Freelancers",
+      railLabel: "Freelancers",
+      icon: UsersRound,
+      roles: ["super_admin", "hr", "finance", "digital", "bde"],
+      items: [
+        { title: "Dashboard", href: "/freelancers/dashboard", icon: LayoutDashboard, roles: ["super_admin", "hr", "finance", "digital", "bde"], group: "Overview" },
+        { title: "All Freelancers", href: "/freelancers/directory", icon: Users, roles: ["super_admin", "hr", "finance", "digital", "bde"], group: "Directory" },
+        { title: "Payments", href: "/freelancers/payments", icon: Wallet, roles: ["super_admin", "hr", "finance", "digital", "bde"], group: "Financials" },
+        { title: "Payment Receipts", href: "/freelancers/receipts", icon: Receipt, roles: ["super_admin", "hr", "finance", "digital", "bde"], group: "Financials" },
+
+
+      ],
+    },
+
+
+    // =========================
     // ACCOUNT (LAST)
+
     // =========================
     {
       label: "Account",
@@ -655,6 +684,25 @@ export function getNavSections(
 }
 
 export function isNavActive(pathname: string, href: string): boolean {
+  if (href.includes("?")) {
+    const currentSearch = typeof window !== "undefined" ? window.location.search : "";
+    const currentFull = pathname + currentSearch;
+    if (currentFull === href) return true;
+    const path = navPathOnly(pathname);
+    const hrefPath = navPathOnly(href);
+    if (path === hrefPath) {
+      const hrefQuery = href.slice(href.indexOf("?"));
+      const hrefParams = new URLSearchParams(hrefQuery);
+      const currentParams = new URLSearchParams(currentSearch);
+      let match = true;
+      hrefParams.forEach((val, key) => {
+        if (currentParams.get(key) !== val) match = false;
+      });
+      return match;
+    }
+    return false;
+  }
+
   const path = navPathOnly(pathname);
   const hrefPath = navPathOnly(href);
 
@@ -676,7 +724,9 @@ export function isNavActive(pathname: string, href: string): boolean {
       hrefPath === "/legal" ||
       hrefPath === "/ca" ||
       hrefPath === "/finance" ||
+      hrefPath === "/freelancers" ||
       hrefPath === "/hrm" ||
+
       hrefPath === "/marketing" ||
       hrefPath === "/admin/roles" ||
       hrefPath === "/discussions"
@@ -688,6 +738,7 @@ export function isNavActive(pathname: string, href: string): boolean {
 
   return true;
 }
+
 
 export function isPathInSection(pathname: string, section: NavSection): boolean {
   return section.items.some((item) => isNavActive(pathname, item.href));

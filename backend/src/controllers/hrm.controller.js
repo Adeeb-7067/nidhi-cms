@@ -26,6 +26,8 @@ import * as recruitmentService from "../services/hrm/recruitment.service.js";
 import * as onboardingService from "../services/hrm/onboarding.service.js";
 import * as documentsService from "../services/hrm/documents.service.js";
 import * as policiesService from "../services/hrm/policies.service.js";
+import * as hrKitService from "../services/hrm/hr-kit.service.js";
+
 import * as assetsService from "../services/hrm/assets.service.js";
 import * as exitService from "../services/hrm/exit.service.js";
 import * as lettersService from "../services/hrm/letters.service.js";
@@ -632,6 +634,26 @@ async function getMyPolicyAcks(req, res) {
   res.json({ acknowledgements: await policiesService.listAcknowledgements(req.user.id) });
 }
 
+async function getHrKits(_req, res) {
+  res.json({ kits: await hrKitService.listHrKits() });
+}
+
+async function postHrKit(req, res) {
+  res.status(201).json(await hrKitService.createHrKit(req.body));
+}
+
+async function patchHrKit(req, res) {
+  const id = parseIdParam(req.params.id, "hr kit id");
+  res.json(await hrKitService.updateHrKit(id, req.body));
+}
+
+async function deleteHrKit(req, res) {
+  const id = parseIdParam(req.params.id, "hr kit id");
+  await hrKitService.deleteHrKit(id);
+  res.status(204).send();
+}
+
+
 async function getHrmSettings(_req, res) {
   const settings = await getOrCreateSettings();
   res.json(formatSettings(settings));
@@ -1042,6 +1064,11 @@ export {
   deletePolicy,
   postPolicyAck,
   getMyPolicyAcks,
+  getHrKits,
+  postHrKit,
+  patchHrKit,
+  deleteHrKit,
+
   getHrmSettings,
   patchHrmSettings,
   patchUserHrmProfile,

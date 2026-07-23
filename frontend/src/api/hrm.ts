@@ -37,11 +37,13 @@ import type {
   HrmOnboardingTaskItem,
   HrmEmployeeDocument,
   HrmPolicy,
+  HrmHrKit,
   HrmPolicyAcknowledgement,
   HrmAsset,
   HrmExitRequest,
   HrmExperienceLetter,
 } from "@/modules/hrm/types";
+
 import type { HrmProfilePatchPayload } from "@/modules/hrm/employee-profile-types";
 import type { HrmAction, HrmModule } from "@/modules/hrm/constants";
 export { useHrmMutation, useHrmQuery, mergeHrmQueryStates } from "./hrm-hooks";
@@ -1352,6 +1354,67 @@ export function useDeletePolicy() {
     meta: { errorMessage: "Could not delete policy" },
   });
 }
+
+export function useHrmHrKits() {
+  return useHrmQuery({
+    queryKey: ["hrm", "hr-kit"],
+    queryFn: () => customFetch<{ kits: HrmHrKit[] }>(apiUrl("/api/hrm/hr-kit")),
+    meta: { errorMessage: "Could not load HR Kit items" },
+  });
+}
+
+export function useCreateHrKit() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (body: {
+      title: string;
+      fileUrl?: string;
+      description?: string;
+      version?: string;
+      category?: string;
+    }) =>
+      customFetch<HrmHrKit>(apiUrl("/api/hrm/hr-kit"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "hr-kit"] }),
+    meta: { errorMessage: "Could not add HR Kit item" },
+  });
+}
+
+export function useUpdateHrKit() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: number;
+      title?: string;
+      fileUrl?: string | null;
+      description?: string | null;
+      version?: string;
+      category?: string;
+    }) =>
+      customFetch<HrmHrKit>(apiUrl(`/api/hrm/hr-kit/${id}`), {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "hr-kit"] }),
+    meta: { errorMessage: "Could not update HR Kit item" },
+  });
+}
+
+export function useDeleteHrKit() {
+  const qc = useQueryClient();
+  return useHrmMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/hrm/hr-kit/${id}`), { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["hrm", "hr-kit"] }),
+    meta: { errorMessage: "Could not delete HR Kit item" },
+  });
+}
+
 
 export function useAcknowledgePolicy() {
   const qc = useQueryClient();

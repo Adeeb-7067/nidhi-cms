@@ -16,6 +16,7 @@ type Props = {
   placeholder?: string;
   className?: string;
   allowUnassigned?: boolean;
+  disabled?: boolean;
 };
 
 /** Assignee picker for Digital forms (Tasks, Graphics, Videos, Content, Posts).
@@ -27,6 +28,7 @@ export function MarketingAssigneeSelect({
   placeholder = "Select assignee",
   className = "h-8 w-full text-xs",
   allowUnassigned = true,
+  disabled = false,
 }: Props) {
   const staffParams = { staff: "true" as const, limit: 300 };
   const { data, isLoading } = useListUsers(staffParams, {
@@ -56,8 +58,10 @@ export function MarketingAssigneeSelect({
   return (
     <Select
       value={selectValue}
+      disabled={disabled}
       onValueChange={(v) => onValueChange(v === "__none__" ? "" : v)}
     >
+
       <SelectTrigger className={className}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>

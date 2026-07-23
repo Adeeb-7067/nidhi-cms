@@ -58,6 +58,7 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/modules/permissions/usePermission";
 
 const STATUS_LABELS: Record<string, string> = {
   scoping: "Scoping",
@@ -106,8 +107,8 @@ const emptyForm: CreateProjectForm = {
 export default function MarketingProjects() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  // POST /projects is role-gated (super_admin | bde | digital)
-  const canCreate = user?.role === "super_admin" || user?.role === "bde" || user?.role === "digital";
+  const { can } = usePermissions();
+  const canCreate = can("marketing_clients", "create");
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");

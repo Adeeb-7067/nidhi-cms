@@ -26,19 +26,12 @@ export function getActiveSessionElapsedMs(session: WorkSession, nowMs = Date.now
 }
 
 /**
- * Live active duration for the clock-in button — aligned with backend `durationMs`
- * (active time, pauses excluded). Uses server snapshot + time since last heartbeat.
+ * Live active duration for active sessions — aligned with backend `durationMs`
+ * (active time, pauses excluded).
  */
 export function getLiveActiveDurationMs(session: WorkSession, nowMs = Date.now()): number {
   if (!session.isActive) {
     return session.durationMs ?? getActiveSessionElapsedMs(session, nowMs);
-  }
-
-  const serverActiveMs = session.durationMs;
-  const anchorMs = new Date(session.lastHeartbeatAt ?? session.startedAt).getTime();
-
-  if (serverActiveMs != null && Number.isFinite(anchorMs)) {
-    return Math.max(0, serverActiveMs + (nowMs - anchorMs));
   }
 
   return getActiveSessionElapsedMs(session, nowMs);

@@ -59,6 +59,8 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
+
 
 const emptyForm = {
   title: "",
@@ -73,16 +75,27 @@ const emptyForm = {
 };
 
 export default function MarketingTasks() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canEdit = can("marketing_tasks", "edit");
   const canDelete = can("marketing_tasks", "delete");
   const showActions = canEdit || canDelete;
 
+  const subRoleLower = (user?.subType ?? "").toLowerCase();
+  const isManagerOrAdmin =
+    user?.role === "super_admin" ||
+    user?.role === "hr" ||
+    user?.role === "manager" ||
+    subRoleLower.includes("account_manager");
+
   const [search, setSearch] = useState("");
+
   const [projectFilter, setProjectFilter] = useAccountProjectFilter();
   const [statusTab, setStatusTab] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MarketingTaskDto | null>(null);
+  const isFullEditAllowed = !editing || isManagerOrAdmin || (editing as any).createdBy === user?.id;
+
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<MarketingTaskDto | null>(null);
 
@@ -302,12 +315,13 @@ export default function MarketingTasks() {
                     <TableCell className="text-right">
                       <MarketingRowActions
                         canEdit={canEdit}
-                        canDelete={canDelete}
+                        canDelete={canDelete && (isManagerOrAdmin || (t as any).createdBy === user?.id)}
                         onEdit={() => openEdit(t)}
                         onDelete={() => setDeleteTarget(t)}
                       />
                     </TableCell>
                   )}
+
                 </TableRow>
               ))}
             </TableBody>
@@ -318,13 +332,25 @@ export default function MarketingTasks() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit task" : "New digital task"}</DialogTitle>
+            <DialogTitle>
+              {editing
+                ? isFullEditAllowed
+                  ? "Edit task"
+                  : "Update task status"
+                : "New digital task"}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            {!isFullEditAllowed && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-800 dark:text-amber-300">
+                You are assigned to this task. You can update its progress status below.
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label className="text-xs">Title</Label>
               <Input
                 value={form.title}
+                disabled={!isFullEditAllowed}
                 onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
                 className="h-8 text-xs"
               />
@@ -344,6 +370,7 @@ export default function MarketingTasks() {
                 <Label className="text-xs">Category</Label>
                 <Select
                   value={form.category}
+                  disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, category: v as TaskCategory }))}
                 >
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -358,6 +385,7 @@ export default function MarketingTasks() {
                 <Label className="text-xs">Priority</Label>
                 <Select
                   value={form.priority}
+                  disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, priority: v as TaskPriority }))}
                 >
                   <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
@@ -389,6 +417,7 @@ export default function MarketingTasks() {
                 <Input
                   type="date"
                   value={form.deadline}
+                  disabled={!isFullEditAllowed}
                   onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
                   className="h-8 text-xs"
                 />
@@ -399,6 +428,7 @@ export default function MarketingTasks() {
                 <Label className="text-xs">Assignee</Label>
                 <MarketingAssigneeSelect
                   value={form.assigneeId}
+                  disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}
                 />
               </div>
@@ -409,6 +439,7 @@ export default function MarketingTasks() {
                   min={0}
                   step="0.5"
                   value={form.estimatedHours}
+                  disabled={!isFullEditAllowed}
                   onChange={(e) => setForm((f) => ({ ...f, estimatedHours: e.target.value }))}
                   className="h-8 text-xs"
                 />
@@ -419,11 +450,13 @@ export default function MarketingTasks() {
               <Textarea
                 rows={2}
                 value={form.description}
+                disabled={!isFullEditAllowed}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                 className="text-xs resize-none"
               />
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button size="sm" disabled={saving} onClick={() => void handleSave()}>

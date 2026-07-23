@@ -91,9 +91,10 @@ export function usePermissions() {
       if (isPrivileged) return true;
       const perm = resolveRoutePermission(path);
       if (!perm) return isNavHrefPublic(path);
-      if (isLoading && !data) return false;
+      if (isLoading && !data) return true;
       return permissionMatches(data?.permissions ?? [], permissionSet, perm, "view");
     },
+
     [isPrivileged, isLoading, data, permissionSet],
   );
 

@@ -133,7 +133,7 @@ const STATUS_RING: Record<PostScheduleStatus, string> = {
 
 const emptyForm = {
   accountId: "",
-  platform: "instagram" as MarketingPlatform,
+  platforms: ["instagram"] as MarketingPlatform[],
   contentFormat: "graphic" as PostContentFormat,
   caption: "",
   scheduledAt: "",
@@ -141,6 +141,7 @@ const emptyForm = {
   hashtags: "",
   assigneeId: "",
 };
+
 
 function parseHashtags(raw: string): string[] {
   return raw.split(",").map((h) => h.trim()).filter(Boolean);
@@ -276,7 +277,7 @@ export default function MarketingCalendar() {
       ...emptyForm,
       scheduleStatus: "pending",
       accountId,
-      platform: pickPlatformForAccount(account?.platforms),
+      platforms: [pickPlatformForAccount(account?.platforms)],
       scheduledAt: stamp,
     });
     setDialogOpen(true);
@@ -286,7 +287,7 @@ export default function MarketingCalendar() {
     setEditing(p);
     setForm({
       accountId: String(p.accountId),
-      platform: p.platform,
+      platforms: [p.platform],
       contentFormat: (p.contentFormat ?? "post") as PostContentFormat,
       caption: p.caption ?? "",
       scheduleStatus: p.scheduleStatus,
@@ -304,7 +305,7 @@ export default function MarketingCalendar() {
           id: editing.id,
           accountId: editing.accountId,
           data: {
-            platform: form.platform,
+            platform: form.platforms[0] ?? editing.platform,
             contentFormat: form.contentFormat,
             caption: form.caption.trim(),
             scheduledAt: toIsoScheduledAt(form.scheduledAt),
@@ -318,22 +319,32 @@ export default function MarketingCalendar() {
           toast.error("Digital project is required");
           return;
         }
-        await createPost.mutateAsync({
-          accountId: Number(form.accountId),
-          platform: form.platform,
-          contentFormat: form.contentFormat,
-          caption: form.caption.trim(),
-          scheduledAt: toIsoScheduledAt(form.scheduledAt),
-          hashtags: parseHashtags(form.hashtags),
-          assigneeId: parseAssigneeId(form.assigneeId),
-        });
-        toast.success("Post created");
+        const selectedPlatforms = form.platforms.length > 0 ? form.platforms : [pickPlatformForAccount(undefined)];
+        await Promise.all(
+          selectedPlatforms.map((plat) =>
+            createPost.mutateAsync({
+              accountId: Number(form.accountId),
+              platform: plat,
+              contentFormat: form.contentFormat,
+              caption: form.caption.trim(),
+              scheduledAt: toIsoScheduledAt(form.scheduledAt),
+              hashtags: parseHashtags(form.hashtags),
+              assigneeId: parseAssigneeId(form.assigneeId),
+            })
+          )
+        );
+        toast.success(
+          selectedPlatforms.length > 1
+            ? `Posts scheduled across ${selectedPlatforms.length} platforms`
+            : "Post created"
+        );
       }
       setDialogOpen(false);
     } catch (err) {
       toastApiError(err, editing ? "Failed to update post" : "Failed to create post");
     }
   };
+
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -772,7 +783,8 @@ export default function MarketingCalendar() {
                     setForm((f) => ({
                       ...f,
                       accountId: v,
-                      platform: pickPlatformForAccount(account?.platforms, f.platform),
+                      platforms: [pickPlatformForAccount(account?.platforms, f.platforms?.[0])],
+
                     }));
                   }}
                   className="h-8 w-full text-xs"
@@ -780,36 +792,47 @@ export default function MarketingCalendar() {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-xs">Platform</Label>
-              <Select
-                value={form.platform}
-                disabled={!editing && !form.accountId}
-                onValueChange={(v) =>
-                  setForm((f) => ({
-                    ...f,
-                    platform: v as MarketingPlatform,
-                    contentFormat: f.contentFormat || "graphic",
-                  }))
-                }
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue
-                    placeholder={
-                      !editing && !form.accountId
-                        ? "Select a digital project first"
-                        : "Select platform"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent>
-                  {schedulePlatformOptions.map((p) => (
-                    <SelectItem key={p} value={p}>
-                      {PLATFORM_LABELS[p]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs font-medium">Platforms (Select one or multiple)</Label>
+              {!editing && !form.accountId ? (
+                <p className="text-xs text-muted-foreground italic py-1">Select a digital project first</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {schedulePlatformOptions.map((p) => {
+                    const selected = (form.platforms ?? []).includes(p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setForm((f) => {
+                            const current = f.platforms ?? [];
+                            const exists = current.includes(p);
+                            let next: MarketingPlatform[];
+                            if (exists) {
+                              next = current.filter((item) => item !== p);
+                              if (next.length === 0) next = [p];
+                            } else {
+                              next = [...current, p];
+                            }
+                            return { ...f, platforms: next };
+                          });
+                        }}
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-all",
+                          selected
+                            ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20"
+                            : "border-border/60 bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+                        )}
+                      >
+                        <PlatformIconBadge platform={p} />
+                        <span>{PLATFORM_LABELS[p]}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs">What are you scheduling?</Label>
               <Select

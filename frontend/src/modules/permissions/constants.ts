@@ -54,9 +54,11 @@ export const CMS_MODULE_GROUPS = [
       "marketing_approvals",
       "marketing_ads",
       "marketing_analytics",
+      "marketing_seo",
       "marketing_reports",
     ],
   },
+
   {
     label: "Finance",
     modules: [
@@ -111,6 +113,7 @@ export const CMS_MODULE_GROUPS = [
       "hrm_onboarding",
       "hrm_documents",
       "hrm_policies",
+      "hrm_hr_kit",
       "hrm_id_cards",
       "hrm_letters",
       "hrm_assets",
@@ -168,6 +171,7 @@ export const LEGACY_MODULE_MAP: Record<string, CmsModule> = {
   onboarding: "hrm_onboarding",
   documents: "hrm_documents",
   policies: "hrm_policies",
+  hr_kit: "hrm_hr_kit",
   id_cards: "hrm_id_cards",
   letters: "hrm_letters",
   assets: "hrm_assets",
@@ -224,7 +228,9 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   marketing_approvals: "Approvals",
   marketing_ads: "Ads (Meta / Google)",
   marketing_analytics: "Social & SEO analytics",
+  marketing_seo: "SEO analytics",
   marketing_reports: "Digital reports",
+
   marketing: "Digital (legacy)",
   finance_dashboard: "Finance dashboard",
   finance_expenses: "Expenses",
@@ -267,6 +273,8 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   hrm_onboarding: "Onboarding",
   hrm_documents: "Employee documents",
   hrm_policies: "Policies",
+  hrm_hr_kit: "HR Kit",
+
   hrm_id_cards: "ID cards",
   hrm_letters: "Experience letters",
   hrm_assets: "Assets",

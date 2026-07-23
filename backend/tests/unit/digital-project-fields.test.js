@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
 import {
   deriveDigitalPlatforms,
   deriveMarketingPlatformEnums,
@@ -9,7 +10,7 @@ import {
 
 describe("digital-project-fields", () => {
   it("normalizes service flags", () => {
-    expect(normalizeDigitalServices({ seo: true, metaAds: 1, googleAds: false })).toEqual({
+    assert.deepEqual(normalizeDigitalServices({ seo: true, metaAds: 1, googleAds: false }), {
       seo: true,
       metaAds: true,
       googleAds: false,
@@ -22,47 +23,47 @@ describe("digital-project-fields", () => {
       { facebook: "https://facebook.com/acme", youtube: "https://youtube.com/@acme" },
       ["Email Marketing"],
     );
-    expect(platforms).toEqual(
-      expect.arrayContaining([
-        "SEO & SEM",
-        "Meta Ads",
-        "Facebook",
-        "Instagram",
-        "YouTube",
-        "Email Marketing",
-      ]),
-    );
+    assert.ok(platforms.includes("SEO & SEM"));
+    assert.ok(platforms.includes("Meta Ads"));
+    assert.ok(platforms.includes("Facebook"));
+    assert.ok(platforms.includes("Instagram"));
+    assert.ok(platforms.includes("YouTube"));
+    assert.ok(platforms.includes("Email Marketing"));
   });
 
   it("derives marketing account platform enums", () => {
-    expect(
-      deriveMarketingPlatformEnums(
-        { seo: true, metaAds: true, googleAds: true },
-        { linkedin: "https://linkedin.com/company/x" },
-      ),
-    ).toEqual(expect.arrayContaining(["facebook", "instagram", "linkedin", "google", "youtube"]));
+    const enums = deriveMarketingPlatformEnums(
+      { seo: true, metaAds: true, googleAds: true },
+      { linkedin: "https://linkedin.com/company/x" },
+    );
+    assert.ok(enums.includes("facebook"));
+    assert.ok(enums.includes("instagram"));
+    assert.ok(enums.includes("linkedin"));
+    assert.ok(enums.includes("google"));
+    assert.ok(enums.includes("youtube"));
   });
 
   it("includes techStack labels and enums in marketing platforms", () => {
-    expect(
-      deriveMarketingPlatformEnums(
-        { seo: false, metaAds: false, googleAds: false },
-        { instagram: "https://instagram.com/acme" },
-        ["LinkedIn", "youtube", "Email Marketing"],
-      ),
-    ).toEqual(expect.arrayContaining(["instagram", "linkedin", "youtube"]));
+    const enums = deriveMarketingPlatformEnums(
+      { seo: false, metaAds: false, googleAds: false },
+      { instagram: "https://instagram.com/acme" },
+      ["LinkedIn", "youtube", "Email Marketing"],
+    );
+    assert.ok(enums.includes("instagram"));
+    assert.ok(enums.includes("linkedin"));
+    assert.ok(enums.includes("youtube"));
   });
 
   it("merges platform lists without dropping bound channels", () => {
-    expect(
+    assert.deepEqual(
       mergeMarketingPlatformEnums(["facebook", "linkedin"], ["instagram"], ["linkedin", "bogus"]),
-    ).toEqual(["facebook", "linkedin", "instagram"]);
+      ["facebook", "linkedin", "instagram"],
+    );
   });
 
   it("trims social link values", () => {
-    expect(normalizeSocialLinks({ facebook: "  https://fb.com/a  ", instagram: null })).toMatchObject({
-      facebook: "https://fb.com/a",
-      instagram: "",
-    });
+    const res = normalizeSocialLinks({ facebook: "  https://fb.com/a  ", instagram: null });
+    assert.equal(res.facebook, "https://fb.com/a");
+    assert.equal(res.instagram, "");
   });
 });

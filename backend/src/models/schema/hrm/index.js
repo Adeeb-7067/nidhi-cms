@@ -15,3 +15,5 @@ export * from "./policies.js";
 export * from "./assets.js";
 export * from "./exit.js";
 export * from "./letters.js";
+export * from "./hr-kit.js";
+

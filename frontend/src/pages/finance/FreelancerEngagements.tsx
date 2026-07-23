@@ -206,16 +206,16 @@ export default function FreelancerEngagementsPage() {
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="Freelancer payments"
-        description="Project-wise fees, installments, and payment status"
+        title="Freelancer Payments & Fee Contracts"
+        description="Project-wise fees, milestone installments, and payout status"
       />
 
       <PortalKpiGrid
         items={[
           { title: "Engagements", value: String(kpis.count), icon: Wallet },
-          { title: "Agreed", value: formatCurrency(kpis.agreed), icon: IndianRupee },
-          { title: "Paid", value: formatCurrency(kpis.paid), icon: CheckCircle2 },
-          { title: "Remaining", value: formatCurrency(kpis.remaining), icon: IndianRupee },
+          { title: "Agreed Total", value: formatCurrency(kpis.agreed), icon: IndianRupee },
+          { title: "Paid Out", value: formatCurrency(kpis.paid), icon: CheckCircle2 },
+          { title: "Remaining Balance", value: formatCurrency(kpis.remaining), icon: IndianRupee },
         ]}
       />
 
@@ -223,7 +223,7 @@ export default function FreelancerEngagementsPage() {
 
       <Tabs value={statusTab} onValueChange={setStatusTab} className="mb-4">
         <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
+          <TabsTrigger value="all">All Contracts</TabsTrigger>
           <TabsTrigger value="active">Active</TabsTrigger>
           <TabsTrigger value="unpaid">Outstanding</TabsTrigger>
           <TabsTrigger value="completed">Completed</TabsTrigger>
@@ -259,7 +259,7 @@ export default function FreelancerEngagementsPage() {
                     <TableCell>
                       <Link
                         href={getProjectDetailHref(e.projectId, undefined, e.projectType)}
-                        className="hover:text-primary"
+                        className="hover:text-primary font-medium"
                       >
                         {e.projectName ?? `Project #${e.projectId}`}
                       </Link>
@@ -268,8 +268,8 @@ export default function FreelancerEngagementsPage() {
                       ) : null}
                     </TableCell>
                     <TableCell>{formatCurrency(e.agreedAmount)}</TableCell>
-                    <TableCell>{formatCurrency(e.paidAmount)}</TableCell>
-                    <TableCell>{formatCurrency(e.remainingAmount)}</TableCell>
+                    <TableCell className="text-emerald-600 font-medium">{formatCurrency(e.paidAmount)}</TableCell>
+                    <TableCell className="text-amber-600">{formatCurrency(e.remainingAmount)}</TableCell>
                     <TableCell>
                       <Badge variant="secondary">{PAYMENT_STATUS_LABEL[e.paymentStatus] ?? e.paymentStatus}</Badge>
                     </TableCell>
@@ -315,9 +315,6 @@ export default function FreelancerEngagementsPage() {
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         ) : null}
-                        {!canEdit && !canDelete ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : null}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -328,6 +325,7 @@ export default function FreelancerEngagementsPage() {
         </div>
       )}
 
+      {/* RECORD PAYMENT DIALOG */}
       <Dialog open={!!payTarget} onOpenChange={(open) => !open && setPayTarget(null)}>
         <DialogContent>
           <DialogHeader>
@@ -349,12 +347,12 @@ export default function FreelancerEngagementsPage() {
                 ) : null;
               })()}
               <div className="space-y-1.5">
-                <Label htmlFor="pay-ref">Payment reference (optional)</Label>
+                <Label htmlFor="pay-ref">Payment reference / UTR (optional)</Label>
                 <Input
                   id="pay-ref"
                   value={payReference}
                   onChange={(ev) => setPayReference(ev.target.value)}
-                  placeholder="UTR / cheque / note"
+                  placeholder="UTR / cheque / transaction ref"
                 />
               </div>
             </div>
@@ -370,6 +368,7 @@ export default function FreelancerEngagementsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* EDIT FEE DIALOG */}
       <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -385,7 +384,7 @@ export default function FreelancerEngagementsPage() {
               {hasPaidRows(editTarget) ? (
                 <p className="text-xs text-muted-foreground rounded-md border bg-muted/40 px-3 py-2">
                   Payments already recorded — you can raise the agreed amount, but schedule rows
-                  stay locked. Delete is blocked until paid rows are reversed.
+                  stay locked.
                 </p>
               ) : null}
               <div className="space-y-1.5">

@@ -13,11 +13,13 @@ import {
 } from "../../constants/marketing.js";
 import {
   badRequest,
+  forbidden,
   notFound,
   parseIdParam,
   parsePagination,
   optionalString,
 } from "../../utils/route-errors.js";
+
 import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
@@ -180,6 +182,26 @@ export async function updateTask(req, res) {
   assertDocAccount(doc, accountId);
 
   const body = req.body ?? {};
+  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const subRoleLower = (req.user.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+  const isFullEditAllowed = isSuperAdminOrHr || isCreator || isAccountManager;
+
+  // Non-creator, non-manager assignees can ONLY update task status
+  if (!isFullEditAllowed) {
+    if (
+      body.title !== undefined ||
+      body.category !== undefined ||
+      body.priority !== undefined ||
+      (body.assigneeId !== undefined && Number(body.assigneeId) !== Number(doc.assigneeId)) ||
+      body.deadline !== undefined ||
+      body.estimatedHours !== undefined
+    ) {
+      forbidden("Assigned members can only update task status. Task details can only be edited by creator or manager.");
+    }
+  }
+
   if (body.title != null) {
     const title = optionalString(body.title);
     if (!title) badRequest("title is required.", "title");
@@ -201,14 +223,14 @@ export async function updateTask(req, res) {
     }
     doc.priority = body.priority;
   }
-  if (body.assigneeId !== undefined) {
+  if (body.assigneeId !== undefined && isFullEditAllowed) {
     doc.assigneeId = body.assigneeId == null ? null : Number(body.assigneeId);
   }
-  if (body.deadline !== undefined) {
+  if (body.deadline !== undefined && isFullEditAllowed) {
     doc.deadline = body.deadline ? new Date(body.deadline) : null;
   }
-  if (body.estimatedHours !== undefined) doc.estimatedHours = Number(body.estimatedHours);
-  if (body.description !== undefined) doc.description = optionalString(body.description);
+  if (body.estimatedHours !== undefined && isFullEditAllowed) doc.estimatedHours = Number(body.estimatedHours);
+  if (body.description !== undefined && isFullEditAllowed) doc.description = optionalString(body.description);
 
   await doc.save();
 
@@ -226,8 +248,19 @@ export async function deleteTask(req, res) {
   const doc = await marketingTasksTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Task");
   assertDocAccount(doc, accountId);
+
+  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
+  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const subRoleLower = (req.user.subType ?? "").toLowerCase();
+  const isAccountManager = subRoleLower.includes("account_manager");
+
+  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+    forbidden("Only task creators, account managers, or admins can delete tasks.");
+  }
+
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
   res.json({ ok: true });
 }
+
