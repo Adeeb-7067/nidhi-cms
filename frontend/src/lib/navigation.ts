@@ -352,8 +352,8 @@ export function getNavSections(
           title: "Workspace",
           href: "/dev",
           icon: LayoutDashboard,
-          // Freelancers use /freelancer home instead of the staff workspace.
-          roles: ["developer", "tester", "qa"],
+          // Staff workspace home for Delivery; freelancers use /freelancer.
+          roles: ["super_admin", "developer", "tester", "qa"],
           group: "Overview",
         },
         {
@@ -753,14 +753,38 @@ export function getSectionDefaultHref(section: NavSection): string | null {
 
 /** Which primary nav group contains the current route */
 export function findActiveNavGroupLabel(sections: NavSection[], pathname: string): string | null {
-  for (const section of sections) {
-    if (section.items.some((item) => isNavActive(pathname, item.href))) {
-      return section.label;
+  const matches = sections.filter((section) =>
+    section.items.some((item) => isNavActive(pathname, item.href)),
+  );
+
+  if (matches.length === 0) {
+    if (pathname === "/profile" || pathname.startsWith("/profile/")) {
+      const account = sections.find((s) => s.label === "Account");
+      if (account) return account.label;
+    }
+    return sections[0]?.label ?? null;
+  }
+
+  if (matches.length === 1) return matches[0].label;
+
+  // Overlapping hrefs (e.g. /dev/logs in Digital + Delivery) — prefer the portal that owns the path.
+  const path = navPathOnly(pathname);
+  const preferredByPrefix: Array<{ prefix: string; label: string }> = [
+    { prefix: "/marketing", label: "Digital" },
+    { prefix: "/dev", label: "Delivery" },
+    { prefix: "/freelancers", label: "Freelancers" },
+    { prefix: "/sales", label: "CRM & Sales" },
+    { prefix: "/finance", label: "Finance" },
+    { prefix: "/hrm", label: "HRM" },
+    { prefix: "/admin", label: "Manage" },
+    { prefix: "/discussions", label: "Collaboration" },
+  ];
+  for (const { prefix, label } of preferredByPrefix) {
+    if (path === prefix || path.startsWith(`${prefix}/`)) {
+      const hit = matches.find((s) => s.label === label);
+      if (hit) return hit.label;
     }
   }
-  if (pathname === "/profile" || pathname.startsWith("/profile/")) {
-    const account = sections.find((s) => s.label === "Account");
-    if (account) return account.label;
-  }
-  return sections[0]?.label ?? null;
+
+  return matches[0].label;
 }

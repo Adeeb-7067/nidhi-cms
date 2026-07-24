@@ -249,6 +249,13 @@ function useSidebarNavState() {
   );
 
   useEffect(() => {
+    // Keep the rail the user chose when that section still owns the current path
+    // (e.g. Digital and Delivery both list /dev/logs).
+    const current = sections.find((s) => s.label === activeGroup);
+    if (current && isPathInSection(location, current)) {
+      return;
+    }
+
     const label = findActiveNavGroupLabel(sections, location);
     if (label) {
       setActiveGroup(label);
