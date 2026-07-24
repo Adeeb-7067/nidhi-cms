@@ -108,6 +108,7 @@ export default function MarketingDashboard() {
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
   const isAdmin = isDigitalElevatedLead(user);
   const canViewClientBudget = canViewMarketingClientBudget(user);
+  const subTypeLower = (user?.subType ?? "").toLowerCase();
 
   const kpis = data?.kpis;
   const openTasks = kpis?.openTasks ?? kpis?.todaysTasks ?? 0;
