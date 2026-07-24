@@ -8,6 +8,7 @@ export const MARKETING_PLATFORMS = [
   "twitter",
   "youtube",
   "google",
+  "google_my_business",
   "website",
   "tiktok",
   "pinterest",

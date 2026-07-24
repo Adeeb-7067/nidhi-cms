@@ -7,6 +7,7 @@ import { isDevPortalStaffRole, isDeveloperRole } from "../../constants/user-role
 import { findClientCompanyForUser } from "../client-team.js";
 import { getScopedDigitalUserAccess } from "../marketing/helpers.js";
 import { bdeOwnsCustomer } from "../../utils/sales-bde-customer-scope.js";
+import { canManageCmsProjects } from "../../middlewares/digital-access.js";
 
 function projectCompanyId(project) {
   return project.companyId ?? project.clientId;
@@ -82,7 +83,7 @@ async function getProjectAccess(req, projectId) {
     const allowed = (access.projectIds ?? []).includes(Number(projectId));
     return {
       allowed,
-      canManage: allowed && role === "digital",
+      canManage: allowed && canManageCmsProjects(req.user),
       isClient: false,
       companyId
     };
@@ -105,11 +106,27 @@ async function getProjectAccess(req, projectId) {
       companyId,
     };
   }
-  if (isDevPortalStaffRole(role) || role === "bde" || role === "freelancer") {
+  if (role === "bde") {
+    const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
+    if (member) {
+      return { allowed: true, canManage: true, isClient: false, companyId };
+    }
+    if (companyId != null) {
+      const client = await clientsTable
+        .findOne({ id: companyId })
+        .select({ id: 1, assignedAdminId: 1, createdBy: 1 })
+        .lean();
+      if (bdeOwnsCustomer(client, req.user.id)) {
+        return { allowed: true, canManage: true, isClient: false, companyId };
+      }
+    }
+    return { allowed: false, canManage: false, isClient: false, companyId };
+  }
+  if (isDevPortalStaffRole(role) || role === "freelancer") {
     const member = await projectMembersTable.findOne({ projectId, userId: req.user.id });
     return {
       allowed: !!member,
-      canManage: isDeveloperRole(role) || role === "bde",
+      canManage: isDeveloperRole(role),
       isClient: false,
       companyId
     };

@@ -54,7 +54,6 @@ import {
   PACKAGE_LABELS,
   POST_SCHEDULE_STATUS_LABELS,
   formatCompactCurrency,
-  canViewMarketingClientBudget,
 } from "@/modules/marketing/constants";
 import type {
   TaskStatus,
@@ -64,8 +63,11 @@ import type {
 } from "@/modules/marketing/types";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
-import { usePermissions } from "@/modules/permissions/usePermission";
 import { ClockInButton } from "@/components/ClockInButton";
+import {
+  canViewMarketingClientBudget,
+  isDigitalElevatedLead,
+} from "@/lib/cms-project-manage";
 
 function labelOf<T extends string>(map: Record<T, string>, key: string): string {
   return (map as Record<string, string>)[key] ?? key.replace(/_/g, " ");
@@ -103,14 +105,9 @@ function DashboardSkeleton() {
 
 export default function MarketingDashboard() {
   const { user } = useAuth();
-  const { can } = usePermissions();
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
-  const subTypeLower = (user?.subType ?? "").toLowerCase();
-  const isAdmin =
-    user?.role === "super_admin" ||
-    user?.role === "hr" ||
-    can("marketing_dashboard", "edit");
-  const canViewClientBudget = canViewMarketingClientBudget(user?.role);
+  const isAdmin = isDigitalElevatedLead(user);
+  const canViewClientBudget = canViewMarketingClientBudget(user);
 
   const kpis = data?.kpis;
   const openTasks = kpis?.openTasks ?? kpis?.todaysTasks ?? 0;

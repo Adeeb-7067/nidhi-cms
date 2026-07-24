@@ -20,7 +20,12 @@ import {
   assertDocAccount,
   ensureAccountMediaVault,
   getScopedDigitalUserAccess,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
+import path from "path";
+import { createReadStream } from "fs";
+import { access } from "fs/promises";
+import { GetObjectCommand, getS3Client, isObjectStorageEnabled } from "../../lib/object-storage.js";
 
 function formatMedia(doc) {
   return {
@@ -45,9 +50,10 @@ async function requireAccount(accountId, user) {
     .lean();
   if (!account) notFound("Digital account");
 
+  // Always enforce membership scope when a user is present (never skip).
   if (user) {
     const access = await getScopedDigitalUserAccess(user);
-    if (access.isScoped && !access.accountIds.includes(Number(accountId))) {
+    if (access.isScoped && !(access.accountIds ?? []).includes(Number(accountId))) {
       forbidden("You do not have access to this digital project's media vault.");
     }
   }
@@ -90,7 +96,7 @@ export async function listMedia(req, res) {
 export async function listMediaTree(req, res) {
   const accountId = Number(req.query.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
-  const account = await requireAccount(accountId);
+  const account = await requireAccount(accountId, req.user);
 
   let projectName = "This PC";
   if (account.projectId != null) {
@@ -118,7 +124,7 @@ export async function createFolder(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
-  const account = await requireAccount(accountId);
+  const account = await requireAccount(accountId, req.user);
 
   const name = optionalString(body.name);
   if (!name) badRequest("name is required.", "name");
@@ -154,7 +160,7 @@ export async function registerFile(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
-  const account = await requireAccount(accountId);
+  const account = await requireAccount(accountId, req.user);
 
   const name = optionalString(body.name);
   const url = optionalString(body.url);
@@ -227,6 +233,7 @@ export async function registerFile(req, res) {
 export async function renameMedia(req, res) {
   const id = parseIdParam(req.params.id);
   const accountId = resolveScopedAccountId(req, { required: true });
+  await assertScopedAccountAccess(req.user, accountId);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -241,6 +248,7 @@ export async function renameMedia(req, res) {
 export async function moveMedia(req, res) {
   const id = parseIdParam(req.params.id);
   const accountId = resolveScopedAccountId(req, { required: true });
+  await assertScopedAccountAccess(req.user, accountId);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -271,6 +279,7 @@ export async function moveMedia(req, res) {
 export async function deleteMedia(req, res) {
   const id = parseIdParam(req.params.id);
   const accountId = resolveScopedAccountId(req, { required: true });
+  await assertScopedAccountAccess(req.user, accountId);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -311,4 +320,100 @@ export async function deleteMedia(req, res) {
   }
 
   res.json({ ok: true });
+}
+
+function attachmentDisposition(filename) {
+  const safe = String(filename || "download")
+    .replace(/[\r\n"]/g, "_")
+    .slice(0, 180);
+  const encoded = encodeURIComponent(safe);
+  return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+}
+
+function objectKeyFromMedia(doc) {
+  if (doc.storageKey) return String(doc.storageKey);
+  const fileUrl = String(doc.url || "");
+  if (!/^https?:\/\//i.test(fileUrl)) return null;
+  try {
+    return decodeURIComponent(new URL(fileUrl).pathname.replace(/^\//, ""));
+  } catch {
+    return null;
+  }
+}
+
+/** Authenticated download — forces save-as (not browser navigation/preview). */
+export async function downloadMedia(req, res) {
+  const id = parseIdParam(req.params.id);
+  const accountId = resolveScopedAccountId(req, { required: true });
+  const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false }).lean();
+  if (!doc) notFound("Media item");
+  assertDocAccount(doc, accountId);
+  await requireAccount(doc.accountId, req.user);
+
+  if (doc.kind === "folder") {
+    badRequest("Folders cannot be downloaded.", "id");
+  }
+
+  const filename = doc.name || `media-${doc.id}`;
+  res.setHeader("Content-Disposition", attachmentDisposition(filename));
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  const fileUrl = String(doc.url || "");
+
+  if (/^https?:\/\//i.test(fileUrl) && isObjectStorageEnabled()) {
+    const key = objectKeyFromMedia(doc);
+    const bucket = process.env.LINODE_OBJECT_BUCKET;
+    if (!key || !bucket) notFound("Media file");
+    try {
+      const result = await getS3Client().send(
+        new GetObjectCommand({ Bucket: bucket, Key: key }),
+      );
+      res.setHeader(
+        "Content-Type",
+        doc.mimetype || result.ContentType || "application/octet-stream",
+      );
+      if (result.ContentLength != null) {
+        res.setHeader("Content-Length", String(result.ContentLength));
+      }
+      result.Body.pipe(res);
+      return;
+    } catch (err) {
+      if (err?.name === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404) {
+        notFound("Media file");
+      }
+      throw err;
+    }
+  }
+
+  if (fileUrl.startsWith("/uploads/")) {
+    const relPath = fileUrl.slice("/uploads/".length);
+    const filePath = path.join(process.cwd(), "uploads", relPath);
+    try {
+      await access(filePath);
+    } catch {
+      notFound("Media file");
+    }
+    res.setHeader("Content-Type", doc.mimetype || "application/octet-stream");
+    createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  // Last resort: proxy a remote public URL through the API so the browser
+  // still receives Content-Disposition: attachment from our origin.
+  if (/^https?:\/\//i.test(fileUrl)) {
+    const upstream = await fetch(fileUrl);
+    if (!upstream.ok || !upstream.body) notFound("Media file");
+    res.setHeader(
+      "Content-Type",
+      doc.mimetype || upstream.headers.get("content-type") || "application/octet-stream",
+    );
+    const len = upstream.headers.get("content-length");
+    if (len) res.setHeader("Content-Length", len);
+    const { Readable } = await import("stream");
+    Readable.fromWeb(upstream.body).pipe(res);
+    return;
+  }
+
+  notFound("Media file");
 }

@@ -52,6 +52,10 @@ import {
   formatDailyLogUpdatedLabel,
   formatDailyLogWorkDate,
 } from "@/lib/daily-log-format";
+import {
+  allDailyLogWorkCategoryIds,
+  formatDailyLogCategory,
+} from "@/lib/daily-log-work-categories";
 import { toast } from "sonner";
 import {
   Briefcase,
@@ -67,10 +71,6 @@ import {
 } from "lucide-react";
 
 const ADMIN_STATS_LIMIT = 1000;
-
-function formatCategory(cat: string) {
-  return cat.replace(/_/g, " ");
-}
 
 function matchesSearch(log: DailyLog, query: string) {
   const q = query.trim().toLowerCase();
@@ -386,19 +386,9 @@ export function AdminTeamLogsPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All categories</SelectItem>
-                {[
-                  "development",
-                  "design",
-                  "testing",
-                  "bug_fixing",
-                  "code_review",
-                  "deployment",
-                  "documentation",
-                  "meeting",
-                  "research",
-                ].map((id) => (
+                {allDailyLogWorkCategoryIds().map((id) => (
                   <SelectItem key={id} value={id}>
-                    {formatCategory(id)}
+                    {formatDailyLogCategory(id)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -419,7 +409,7 @@ export function AdminTeamLogsPanel() {
             <p className="text-[11px] text-muted-foreground">
               Showing filtered results
               {search.trim() ? ` matching “${search.trim()}”` : ""}
-              {categoryFilter ? ` · ${formatCategory(categoryFilter)}` : ""}.
+              {categoryFilter ? ` · ${formatDailyLogCategory(categoryFilter)}` : ""}.
               {kpiStats.apiTotal > ADMIN_STATS_LIMIT &&
                 ` Stats use first ${ADMIN_STATS_LIMIT} API rows; narrow filters for exact totals.`}
             </p>
@@ -596,7 +586,7 @@ export function AdminTeamLogsPanel() {
                           <div className="flex flex-wrap gap-1">
                             {(log.workCategories ?? []).slice(0, 2).map((cat) => (
                               <Badge key={cat} variant="secondary" className="text-[9px] h-5 px-1.5">
-                                {formatCategory(cat)}
+                                {formatDailyLogCategory(cat)}
                               </Badge>
                             ))}
                             {(log.workCategories?.length ?? 0) > 2 && (

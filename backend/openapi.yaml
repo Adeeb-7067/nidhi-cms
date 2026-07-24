@@ -2685,6 +2685,9 @@ components:
               type: string
             whatsapp:
               type: string
+            google_my_business:
+              type: string
+              description: Google My Business / Business Profile URL
             other:
               type: string
         figmaUrl:
@@ -2771,6 +2774,9 @@ components:
               type: string
             whatsapp:
               type: string
+            google_my_business:
+              type: string
+              description: Google My Business / Business Profile URL
             other:
               type: string
         figmaUrl:
@@ -2845,6 +2851,9 @@ components:
               type: string
             whatsapp:
               type: string
+            google_my_business:
+              type: string
+              description: Google My Business / Business Profile URL
             other:
               type: string
         figmaUrl:

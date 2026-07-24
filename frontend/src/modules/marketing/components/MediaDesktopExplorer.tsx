@@ -22,6 +22,7 @@ import {
   Search,
   Trash2,
   Upload,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -51,8 +52,70 @@ import { formatMediaSize } from "@/modules/marketing/mock-data/media";
 import { MarketingConfirmDialog } from "@/modules/marketing/components/MarketingConfirmDialog";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { resolveFileUrl } from "@/lib/resolve-file-url";
+import { apiUrl } from "@/lib/api-base";
 
 type ViewMode = "icons" | "list";
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem("accessToken");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function filenameFromDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  const utf = /filename\*=UTF-8''([^;]+)/i.exec(header);
+  if (utf?.[1]) {
+    try {
+      return decodeURIComponent(utf[1].trim());
+    } catch {
+      /* ignore */
+    }
+  }
+  const plain = /filename="?([^";]+)"?/i.exec(header);
+  return plain?.[1]?.trim() || fallback;
+}
+
+/** Download via authenticated API proxy so the file saves locally (not a redirect/preview). */
+async function downloadMediaFile(item: MarketingMediaDto, accountId: number) {
+  if (!item?.id || item.kind === "folder") {
+    toast.error("Nothing to download");
+    return;
+  }
+  const filenameFallback = item.name?.trim() || "download";
+  const url = apiUrl(
+    `/api/marketing/media/${encodeURIComponent(String(item.id))}/download?accountId=${accountId}`,
+  );
+  const res = await fetch(url, {
+    method: "GET",
+    headers: authHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) {
+    let message = "Download failed";
+    try {
+      const body = (await res.json()) as { message?: string };
+      if (body?.message) message = body.message;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  const filename = filenameFromDisposition(
+    res.headers.get("Content-Disposition"),
+    filenameFallback,
+  );
+  const objectUrl = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = objectUrl;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(objectUrl);
+  toast.success(`Saved ${filename}`);
+}
 
 function kindIcon(kind: MediaItemKind, className?: string) {
   const cls = cn("h-5 w-5 shrink-0", className);
@@ -197,6 +260,7 @@ export function MediaDesktopExplorer({
   const [moveTargetParentId, setMoveTargetParentId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [previewItem, setPreviewItem] = useState<MarketingMediaDto | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -376,6 +440,20 @@ export function MediaDesktopExplorer({
 
   const canDeleteSelected = selected != null && selected.parentId != null;
   const canMoveSelected = selected != null && selected.parentId != null && canEdit;
+  const canDownloadSelected =
+    selected != null && selected.kind !== "folder";
+
+  const handleDownload = async (item: MarketingMediaDto | null | undefined) => {
+    if (!item || item.kind === "folder") return;
+    setDownloading(true);
+    try {
+      await downloadMediaFile(item, accountId);
+    } catch (err) {
+      toastApiError(err, "Download failed");
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   const folderTree = useMemo(
     () => items.filter((i) => i.kind === "folder"),
@@ -526,6 +604,23 @@ export function MediaDesktopExplorer({
           <Button type="button" size="sm" className="h-7 gap-1 text-[11px]" onClick={() => fileInputRef.current?.click()}>
             <Upload className="h-3 w-3" />
             Upload
+          </Button>
+        )}
+        {canDownloadSelected && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1 text-[11px]"
+            disabled={downloading}
+            onClick={() => void handleDownload(selected)}
+          >
+            {downloading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            Download
           </Button>
         )}
         {selected && canEdit && (
@@ -692,7 +787,7 @@ export function MediaDesktopExplorer({
           {children.length} item{children.length === 1 ? "" : "s"}
           {selected ? ` · Selected: ${selected.name}` : ""}
         </span>
-        <span className="hidden sm:inline">Account #{accountId} · Double-click to open</span>
+        <span className="hidden sm:inline">Account #{accountId} · Double-click to open · Select a file to download</span>
       </div>
 
       <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
@@ -790,15 +885,33 @@ export function MediaDesktopExplorer({
               />
             </div>
           ) : null}
-          <DialogFooter>
-            {previewItem?.url ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => window.open(resolveFileUrl(previewItem.url!), "_blank", "noopener,noreferrer")}
-              >
-                Open original
-              </Button>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {previewItem ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  disabled={downloading}
+                  onClick={() => void handleDownload(previewItem)}
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Download
+                </Button>
+                {previewItem.url ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(resolveFileUrl(previewItem.url!), "_blank", "noopener,noreferrer")}
+                  >
+                    Open original
+                  </Button>
+                ) : null}
+              </>
             ) : null}
             <Button size="sm" onClick={() => setPreviewItem(null)}>Close</Button>
           </DialogFooter>

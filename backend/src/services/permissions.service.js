@@ -5,7 +5,7 @@ import {
   getNextSequence,
   getNextSequenceRange,
 } from "../models/schema/index.js";
-import { getDigitalSubRoleModules } from "../middlewares/digital-access.js";
+import { filterDigitalPermissionSet } from "../middlewares/digital-access.js";
 import {
   cmsActions,
   cmsModules,
@@ -84,6 +84,12 @@ const FINANCE_FULL_ACCESS = new Set([
 const MARKETING_OPERATIONAL_GRANTS = marketingModules.flatMap((module) =>
   ["view", "create", "edit"].map((action) => ({ module, action })),
 );
+
+/** BDE: read-only Digital hub so they can open digital project detail pages. */
+const BDE_DIGITAL_PROJECT_VIEW = marketingModules.map((module) => ({
+  module,
+  action: "view",
+}));
 
 const FINANCE_GRANTS = FINANCE_MODULES.flatMap((module) => {
   const grants = [{ module, action: "view" }];
@@ -175,6 +181,7 @@ const DEFAULT_TEMPLATES = [
     isSystem: true,
     grants: [
       ...SALES_BDE_GRANTS,
+      ...BDE_DIGITAL_PROJECT_VIEW,
       { module: "hrm_dashboard", action: "view" },
       { module: "hrm_my_attendance", action: "view" },
       { module: "hrm_my_leave", action: "view" },
@@ -666,16 +673,8 @@ async function loadUserPermissionEntry(userId) {
   expandLegacySalesPermissionSet(set);
   expandLegacyMarketingPermissionSet(set);
 
-  if (user.role === "digital") {
-    const allowedModules = new Set(getDigitalSubRoleModules(user));
-    for (const key of set) {
-      if (key.startsWith("marketing_")) {
-        const mod = key.split(":")[0];
-        if (!allowedModules.has(mod)) {
-          set.delete(key);
-        }
-      }
-    }
+  if (user.role === "digital" || user.role === "freelancer") {
+    filterDigitalPermissionSet(user, set);
   }
 
   const entry = {

@@ -201,7 +201,7 @@ export async function getDashboard(req, res) {
           activeAccounts.length,
       )
     : 0;
-  const includeClientBudget = canViewMarketingClientBudget(req.user?.role);
+  const includeClientBudget = canViewMarketingClientBudget(req.user);
   const totalMonthlyBudget = includeClientBudget
     ? accounts.reduce((s, a) => s + Number(a.monthlyBudgetInr || 0), 0)
     : null;

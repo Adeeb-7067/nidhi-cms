@@ -49,6 +49,7 @@ router.delete("/marketing/tasks/:id", ...p("marketing_tasks", "delete"), wrap(ta
 // ── Media vault ──────────────────────────────────────────────────────────
 router.get("/marketing/media", ...p("marketing_media"), wrap(mediaCtrl.listMedia));
 router.get("/marketing/media/tree", ...p("marketing_media"), wrap(mediaCtrl.listMediaTree));
+router.get("/marketing/media/:id/download", ...p("marketing_media"), wrap(mediaCtrl.downloadMedia));
 router.post("/marketing/media/folders", ...p("marketing_media", "create"), wrap(mediaCtrl.createFolder));
 router.post("/marketing/media/files", ...p("marketing_media", "create"), wrap(mediaCtrl.registerFile));
 router.patch("/marketing/media/:id", ...p("marketing_media", "edit"), wrap(mediaCtrl.renameMedia));
@@ -117,16 +118,16 @@ router.delete(
   wrap(insightsCtrl.deleteSocialMetric),
 );
 
-router.get("/marketing/seo", ...p("marketing_analytics"), wrap(insightsCtrl.getSeoPanel));
-router.post("/marketing/seo/keywords", ...p("marketing_analytics", "create"), wrap(insightsCtrl.createSeoKeyword));
+router.get("/marketing/seo", ...p("marketing_seo"), wrap(insightsCtrl.getSeoPanel));
+router.post("/marketing/seo/keywords", ...p("marketing_seo", "create"), wrap(insightsCtrl.createSeoKeyword));
 router.patch(
   "/marketing/seo/keywords/:id",
-  ...p("marketing_analytics", "edit"),
+  ...p("marketing_seo", "edit"),
   wrap(insightsCtrl.updateSeoKeyword),
 );
 router.delete(
   "/marketing/seo/keywords/:id",
-  ...p("marketing_analytics", "delete"),
+  ...p("marketing_seo", "delete"),
   wrap(insightsCtrl.deleteSeoKeyword),
 );
 

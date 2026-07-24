@@ -29,7 +29,8 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
-  getScopedDigitalUserAccess,
+  applyScopedAccountQuery,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -89,13 +90,8 @@ async function enrichWithNames(items) {
 
 export async function listGraphics(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.status) query.status = String(req.query.status);
 
   const { items, total, page, limit } = await paginateModel(
@@ -134,6 +130,7 @@ export async function createGraphic(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId ?? body.clientId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const title = optionalString(body.title);
   if (!title) badRequest("title is required.", "title");
 
@@ -203,13 +200,8 @@ export async function updateGraphic(req, res) {
 
 export async function listVideos(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.renderStatus) query.renderStatus = String(req.query.renderStatus);
 
   const { items, total, page, limit } = await paginateModel(
@@ -249,6 +241,7 @@ export async function createVideo(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId ?? body.clientId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const title = optionalString(body.title);
   if (!title) badRequest("title is required.", "title");
 
@@ -305,13 +298,8 @@ export async function updateVideo(req, res) {
 
 export async function listContent(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.type) query.type = String(req.query.type);
   if (req.query.status) query.status = String(req.query.status);
 
@@ -350,6 +338,7 @@ export async function createContent(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId ?? body.clientId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const title = optionalString(body.title);
   if (!title) badRequest("title is required.", "title");
 

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/modules/finance/constants";
+import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import type { LedgerType } from "@/modules/finance/types";
 import {
   FinancePageHeader,
@@ -197,8 +197,12 @@ export default function LedgersPage() {
                                   <span className="font-mono text-muted-foreground">{e.reference}</span>
                                 )}
                               </TableCell>
-                              <TableCell className="text-xs text-right tabular-nums">{e.debit > 0 ? formatCurrency(e.debit) : "—"}</TableCell>
-                              <TableCell className="text-xs text-right tabular-nums">{e.credit > 0 ? formatCurrency(e.credit) : "—"}</TableCell>
+                              <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
+                                {e.debit > 0 ? formatCurrency(e.debit) : "—"}
+                              </TableCell>
+                              <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_IN_CLASS}`}>
+                                {e.credit > 0 ? formatCurrency(e.credit) : "—"}
+                              </TableCell>
                               <TableCell className="text-xs text-right tabular-nums font-medium">{formatCurrency(e.balance)}</TableCell>
                             </TableRow>
                           ))}

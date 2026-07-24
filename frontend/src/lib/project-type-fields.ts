@@ -33,6 +33,7 @@ export const DIGITAL_PLATFORM_OPTIONS = [
   "TikTok",
   "Pinterest",
   "Google Analytics",
+  "Google My Business",
   "SEO & SEM",
   "Email Marketing",
   "WhatsApp Business",
@@ -84,6 +85,11 @@ export const DIGITAL_SOCIAL_LINK_FIELDS = [
   { key: "tiktok", label: "TikTok", placeholder: "https://tiktok.com/@..." },
   { key: "pinterest", label: "Pinterest", placeholder: "https://pinterest.com/..." },
   { key: "whatsapp", label: "WhatsApp", placeholder: "https://wa.me/..." },
+  {
+    key: "google_my_business",
+    label: "Google My Business",
+    placeholder: "https://business.google.com/...",
+  },
   { key: "other", label: "Other", placeholder: "https://..." },
 ] as const;
 
@@ -100,6 +106,7 @@ export const EMPTY_SOCIAL_LINKS: SocialLinksForm = {
   tiktok: "",
   pinterest: "",
   whatsapp: "",
+  google_my_business: "",
   other: "",
 };
 

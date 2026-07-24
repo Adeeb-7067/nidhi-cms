@@ -60,6 +60,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
+import { isDigitalElevatedLead } from "@/lib/cms-project-manage";
 
 
 const emptyForm = {
@@ -81,12 +82,7 @@ export default function MarketingTasks() {
   const canDelete = can("marketing_tasks", "delete");
   const showActions = canEdit || canDelete;
 
-  const subRoleLower = (user?.subType ?? "").toLowerCase();
-  const isManagerOrAdmin =
-    user?.role === "super_admin" ||
-    user?.role === "hr" ||
-    user?.role === "manager" ||
-    subRoleLower.includes("account_manager");
+  const isManagerOrAdmin = isDigitalElevatedLead(user);
 
   const [search, setSearch] = useState("");
 

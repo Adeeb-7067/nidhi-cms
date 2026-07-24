@@ -75,9 +75,14 @@ export function RoleGate({
     if (pathOnly.startsWith("/admin/") && pathOnly !== "/admin/tickets") {
       return <Redirect to="/marketing" replace />;
     }
+    const financeFreelancersPath =
+      pathOnly === "/finance/freelancers" ||
+      pathOnly.startsWith("/finance/freelancers/") ||
+      pathOnly === "/freelancers" ||
+      pathOnly.startsWith("/freelancers/");
     if (
       pathOnly.startsWith("/sales") ||
-      pathOnly.startsWith("/finance") ||
+      (pathOnly.startsWith("/finance") && !financeFreelancersPath) ||
       pathOnly.startsWith("/ca") ||
       (pathOnly.startsWith("/dev/") && pathOnly !== "/dev/logs" && pathOnly !== "/dev/my-screenshots")
     ) {

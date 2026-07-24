@@ -133,6 +133,22 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
+/** Prefer color over +/- signs for cash-flow / ledger amounts. */
+export const MONEY_IN_CLASS = "text-emerald-700 dark:text-emerald-400";
+export const MONEY_OUT_CLASS = "text-red-700 dark:text-red-400";
+
+/** Incoming / credit → green; outgoing / debit → red. */
+export function moneyFlowClass(isInflow: boolean): string {
+  return isInflow ? MONEY_IN_CLASS : MONEY_OUT_CLASS;
+}
+
+/** Positive → green; negative → red; zero → muted. */
+export function moneySignClass(value: number): string {
+  if (value > 0) return MONEY_IN_CLASS;
+  if (value < 0) return MONEY_OUT_CLASS;
+  return "text-muted-foreground";
+}
+
 export function formatCompactCurrency(amount: number): string {
   if (amount >= 10000000) return `₹ ${(amount / 10000000).toFixed(2)}Cr`;
   if (amount >= 100000) return `₹ ${(amount / 100000).toFixed(2)}L`;

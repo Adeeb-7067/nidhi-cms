@@ -17,6 +17,7 @@ import {
   deriveMarketingPlatformEnums,
   mergeMarketingPlatformEnums,
 } from "../../utils/digital-project-fields.js";
+import { normalizeSubRole } from "../../middlewares/digital-access.js";
 
 export async function recordMarketingActivity({
   accountId = null,
@@ -53,6 +54,39 @@ export function resolveScopedAccountId(req, { required = false } = {}) {
   const accountId = Number(raw);
   if (!Number.isFinite(accountId)) badRequest("Invalid accountId.", "accountId");
   return accountId;
+}
+
+/** Membership-scoped users cannot touch accounts outside their digital projects. */
+export async function assertScopedAccountAccess(user, accountId) {
+  if (accountId == null || !Number.isFinite(Number(accountId))) {
+    badRequest("accountId is required.", "accountId");
+  }
+  const access = await getScopedDigitalUserAccess(user);
+  if (access.isScoped && !(access.accountIds ?? []).includes(Number(accountId))) {
+    forbidden("You do not have access to this digital account.");
+  }
+  return access;
+}
+
+/**
+ * Apply digital account scope to a Mongo query.
+ * Requested accountId must be inside the user's scope when scoped.
+ */
+export async function applyScopedAccountQuery(query, user, requestedAccountId) {
+  const access = await getScopedDigitalUserAccess(user);
+  if (requestedAccountId != null && requestedAccountId !== "") {
+    const aid = Number(requestedAccountId);
+    if (!Number.isFinite(aid)) badRequest("Invalid accountId.", "accountId");
+    if (access.isScoped && !(access.accountIds ?? []).includes(aid)) {
+      forbidden("You do not have access to this digital account.");
+    }
+    query.accountId = aid;
+    return access;
+  }
+  if (access.isScoped) {
+    query.accountId = { $in: access.accountIds?.length ? access.accountIds : [-1] };
+  }
+  return access;
 }
 
 /** Ensure a marketing document belongs to the scoped digital account. */
@@ -291,7 +325,7 @@ export function formatAccount(doc, company, manager, project = null, options = {
     platforms: doc.platforms ?? [],
     digitalServices: doc.digitalServices ?? {},
     socialLinks: doc.socialLinks ?? {},
-    /** Client retainer — only for super_admin (omit otherwise). */
+    /** Client retainer — only for super_admin / Account Manager (omit otherwise). */
     monthlyBudgetInr: includeClientBudget ? Number(doc.monthlyBudgetInr ?? 0) : null,
     renewalDate: toIso(doc.renewalDate)?.slice(0, 10) ?? null,
     status: doc.status,
@@ -302,14 +336,29 @@ export function formatAccount(doc, company, manager, project = null, options = {
   };
 }
 
-/** Client monthly retainer / commercial package — super_admin only. */
-export function canViewMarketingClientBudget(role) {
-  return role === "super_admin";
+/**
+ * Accepts auth user `{ role, subType }` or legacy role string.
+ * Commercial package / retainer: super_admin or digital Account Manager.
+ */
+function resolveCommercialUser(userOrRole) {
+  if (userOrRole == null) return null;
+  if (typeof userOrRole === "string") return { role: userOrRole };
+  return userOrRole;
 }
 
-/** Alias: commercial client terms (retainer, package tier edits). */
-export function canManageMarketingClientCommercial(role) {
-  return role === "super_admin";
+/** Client monthly retainer / commercial package — super_admin or Account Manager. */
+export function canManageMarketingClientCommercial(userOrRole) {
+  const user = resolveCommercialUser(userOrRole);
+  if (!user?.role) return false;
+  if (user.role === "super_admin") return true;
+  if (user.role === "digital") {
+    return normalizeSubRole(user.subType) === "account_manager";
+  }
+  return false;
+}
+
+export function canViewMarketingClientBudget(userOrRole) {
+  return canManageMarketingClientCommercial(userOrRole);
 }
 
 export async function loadCompany(companyId) {
@@ -387,10 +436,10 @@ export function inferMediaKind(filename, mimetype) {
 }
 
 /**
- * Scoped marketing access for digital specialists and freelancers on assigned work.
- * Project visibility is membership-only: PM or ProjectMembers row.
- * Marketing accounts / companies are derived from those projects — never from
- * account createdBy, accountManagerId alone, or task assignee side-channels.
+ * Scoped marketing access for digital specialists, freelancers, and BDEs on assigned work.
+ * Project visibility is membership (PM or ProjectMembers) plus, for BDEs, digital projects
+ * on customers they own — so sales can open the marketing hub for their deals.
+ * Marketing accounts / companies are derived from those projects.
  */
 export async function getScopedDigitalUserAccess(user) {
   // Only super_admin is unscoped for marketing. HR uses org pickers elsewhere but
@@ -399,19 +448,21 @@ export async function getScopedDigitalUserAccess(user) {
     return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
   }
 
-  const needsScope = user?.role === "digital" || user?.role === "freelancer";
+  const needsScope =
+    user?.role === "digital" || user?.role === "freelancer" || user?.role === "bde";
   if (!needsScope) {
     return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
   }
 
   const userId = Number(user.id);
+  const digitalOnly = user.role === "digital" || user.role === "bde";
 
   const pmProjects = await projectsTable
     .find(
       {
         pmId: userId,
         isDeleted: { $ne: true },
-        ...(user.role === "digital" ? { type: "digital" } : {}),
+        ...(digitalOnly ? { type: "digital" } : {}),
       },
       { id: 1, companyId: 1, clientId: 1 },
     )
@@ -424,15 +475,42 @@ export async function getScopedDigitalUserAccess(user) {
           {
             id: { $in: memberProjectIds },
             isDeleted: { $ne: true },
-            ...(user.role === "digital" ? { type: "digital" } : {}),
+            ...(digitalOnly ? { type: "digital" } : {}),
           },
           { id: 1, companyId: 1, clientId: 1 },
         )
         .lean()
     : [];
 
+  let ownedCustomerProjects = [];
+  if (user.role === "bde") {
+    const { findBdeOwnedCustomerIds } = await import(
+      "../../utils/sales-bde-customer-scope.js"
+    );
+    const ownedCompanyIds = await findBdeOwnedCustomerIds(clientsTable, userId);
+    if (ownedCompanyIds.length) {
+      ownedCustomerProjects = await projectsTable
+        .find(
+          {
+            type: "digital",
+            isDeleted: { $ne: true },
+            $or: [
+              { companyId: { $in: ownedCompanyIds } },
+              { clientId: { $in: ownedCompanyIds } },
+            ],
+          },
+          { id: 1, companyId: 1, clientId: 1 },
+        )
+        .lean();
+    }
+  }
+
   const projectIds = [
-    ...new Set([...pmProjects.map((p) => p.id), ...memberProjects.map((p) => p.id)]),
+    ...new Set([
+      ...pmProjects.map((p) => p.id),
+      ...memberProjects.map((p) => p.id),
+      ...ownedCustomerProjects.map((p) => p.id),
+    ]),
   ];
 
   const projectAccounts = projectIds.length
@@ -448,6 +526,7 @@ export async function getScopedDigitalUserAccess(user) {
       [
         ...pmProjects.map((p) => p.companyId || p.clientId),
         ...memberProjects.map((p) => p.companyId || p.clientId),
+        ...ownedCustomerProjects.map((p) => p.companyId || p.clientId),
         ...projectAccounts.map((a) => a.companyId),
       ].filter(Boolean),
     ),

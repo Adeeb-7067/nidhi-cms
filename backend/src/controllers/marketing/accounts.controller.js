@@ -44,7 +44,7 @@ async function formatAccountRow(doc, req) {
     loadProject(doc.projectId),
   ]);
   return formatAccount(doc, company, manager, project, {
-    includeClientBudget: canViewMarketingClientBudget(req?.user?.role),
+    includeClientBudget: canViewMarketingClientBudget(req?.user),
   });
 }
 
@@ -146,7 +146,7 @@ export async function listAccounts(req, res) {
         companies.get(a.companyId),
         users.get(a.accountManagerId),
         projects.get(a.projectId),
-        { includeClientBudget: canViewMarketingClientBudget(req.user?.role) },
+        { includeClientBudget: canViewMarketingClientBudget(req.user) },
       ),
     ),
     total,
@@ -223,10 +223,10 @@ export async function createAccount(req, res) {
   if (!MARKETING_PACKAGES.includes(pkg)) badRequest("Invalid package.", "package");
   if (
     body.package != null &&
-    !canManageMarketingClientCommercial(req.user?.role) &&
+    !canManageMarketingClientCommercial(req.user) &&
     pkg !== "standard"
   ) {
-    forbidden("Only super admin can set a non-default client package.");
+    forbidden("Only super admin or account manager can set a non-default client package.");
   }
 
   const platforms = Array.isArray(body.platforms)
@@ -234,7 +234,7 @@ export async function createAccount(req, res) {
     : [];
 
   const id = await getNextSequence("marketing_accounts");
-  const monthlyBudgetInr = canManageMarketingClientCommercial(req.user?.role)
+  const monthlyBudgetInr = canManageMarketingClientCommercial(req.user)
     ? Number(body.monthlyBudgetInr ?? 0)
     : 0;
   const doc = await marketingAccountsTable.create({
@@ -275,8 +275,8 @@ export async function updateAccount(req, res) {
 
   const body = req.body ?? {};
   if (body.package != null) {
-    if (!canManageMarketingClientCommercial(req.user?.role)) {
-      forbidden("Only super admin can change the client package.");
+    if (!canManageMarketingClientCommercial(req.user)) {
+      forbidden("Only super admin or account manager can change the client package.");
     }
     if (!MARKETING_PACKAGES.includes(body.package)) badRequest("Invalid package.", "package");
     doc.package = body.package;
@@ -295,8 +295,8 @@ export async function updateAccount(req, res) {
       : doc.platforms;
   }
   if (body.monthlyBudgetInr != null) {
-    if (!canManageMarketingClientCommercial(req.user?.role)) {
-      forbidden("Only super admin can view or change client monthly budget.");
+    if (!canManageMarketingClientCommercial(req.user)) {
+      forbidden("Only super admin or account manager can view or change client monthly budget.");
     }
     doc.monthlyBudgetInr = Number(body.monthlyBudgetInr);
   }

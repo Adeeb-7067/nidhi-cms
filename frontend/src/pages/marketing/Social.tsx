@@ -48,6 +48,7 @@ const SOCIAL_PLATFORMS: MarketingPlatform[] = [
   "linkedin",
   "twitter",
   "youtube",
+  "google_my_business",
 ];
 
 const emptyForm = {

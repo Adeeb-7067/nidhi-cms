@@ -4,7 +4,14 @@ import {
   checkDigitalModuleAccess,
   checkDigitalResourceOwnership,
   getDigitalSubRoleModules,
+  canManageCmsProjects,
+  canAccessDigitalFreelancerDirectory,
+  isDigitalElevatedLead,
+  normalizeSubRole,
+  filterDigitalPermissionSet,
+  requireDigitalModuleAccess,
 } from "../../src/middlewares/digital-access.js";
+import { canManageMarketingClientCommercial } from "../../src/services/marketing/helpers.js";
 
 describe("Digital Department RBAC & Sub-Role Access Control", () => {
   it("Super Admin has unscoped access to all modules and resources", () => {
@@ -14,16 +21,33 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(checkDigitalResourceOwnership(admin, { projectId: 999 }), true);
   });
 
-  it("Designer cannot see Dashboard or Meta Ads", () => {
+  it("Designer can open Digital home but cannot see Meta Ads or Reports", () => {
     const designer = { role: "digital", subType: "Designer", id: 2 };
     const modules = getDigitalSubRoleModules(designer);
     assert.ok(modules.includes("marketing_content"));
     assert.ok(modules.includes("marketing_media"));
+    assert.ok(modules.includes("marketing_dashboard"));
     assert.ok(!modules.includes("marketing_ads"));
-    assert.ok(!modules.includes("marketing_dashboard"));
+    assert.ok(!modules.includes("marketing_reports"));
+    assert.ok(!modules.includes("marketing_approvals"));
   });
 
-  it("Video Editor cannot see Meta Ads or Budgets", () => {
+  it("missing subType defaults to designer — not Account Manager", () => {
+    const bare = { role: "digital", subType: null, id: 9 };
+    const modules = getDigitalSubRoleModules(bare);
+    assert.ok(modules.includes("marketing_content"));
+    assert.ok(!modules.includes("marketing_ads"));
+    assert.ok(!modules.includes("marketing_reports"));
+    assert.equal(canManageCmsProjects(bare), false);
+  });
+
+  it("unknown subType does not inherit Account Manager", () => {
+    const odd = { role: "digital", subType: "Senior Creative", id: 10 };
+    assert.ok(!getDigitalSubRoleModules(odd).includes("marketing_reports"));
+    assert.equal(canManageCmsProjects(odd), false);
+  });
+
+  it("Video Editor cannot see Meta Ads or Reports", () => {
     const videoEditor = { role: "digital", subType: "Video Editor", id: 3 };
     const modules = getDigitalSubRoleModules(videoEditor);
     assert.ok(modules.includes("marketing_content"));
@@ -32,7 +56,7 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!modules.includes("marketing_reports"));
   });
 
-  it("SEO Expert cannot see Budgets or Approvals", () => {
+  it("SEO Expert cannot see Content or Approvals", () => {
     const seo = { role: "digital", subType: "SEO Expert", id: 4 };
     const modules = getDigitalSubRoleModules(seo);
     assert.ok(modules.includes("marketing_seo"));
@@ -41,23 +65,114 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!modules.includes("marketing_approvals"));
   });
 
-  it("Account Manager can approve content and view assigned budgets", () => {
+  it("Account Manager can approve content and view reports", () => {
     const am = { role: "digital", subType: "Account Manager", id: 5 };
     const modules = getDigitalSubRoleModules(am);
     assert.ok(modules.includes("marketing_approvals"));
     assert.ok(modules.includes("marketing_reports"));
     assert.ok(modules.includes("marketing_dashboard"));
+    assert.equal(canAccessDigitalFreelancerDirectory(am), true);
+  });
+
+  it("Content Creator can open Approvals but not Ads/Reports", () => {
+    const cc = { role: "digital", subType: "Content Creator", id: 12 };
+    const modules = getDigitalSubRoleModules(cc);
+    assert.ok(modules.includes("marketing_approvals"));
+    assert.ok(modules.includes("marketing_calendar"));
+    assert.ok(!modules.includes("marketing_ads"));
+    assert.ok(!modules.includes("marketing_reports"));
+  });
+
+  it("Digital specialist is elevated lead but not commercial/freelancer dir", () => {
+    const spec = { role: "digital", subType: "Digital Specialist", id: 11 };
+    assert.ok(!getDigitalSubRoleModules(spec).includes("marketing_reports"));
+    assert.equal(canAccessDigitalFreelancerDirectory(spec), false);
+    assert.equal(canManageCmsProjects(spec), true);
+    assert.equal(isDigitalElevatedLead(spec), true);
   });
 
   it("Freelancer is strictly scoped to assigned tasks and project files", () => {
-    const freelancer = { role: "digital", subType: "Freelancer", id: 6, scopedAccess: { projectIds: [10] } };
-    assert.equal(checkDigitalResourceOwnership(freelancer, { projectId: 10, assigneeId: 6 }), true);
-    assert.equal(checkDigitalResourceOwnership(freelancer, { projectId: 10, assigneeId: 99 }), false);
+    const freelancer = {
+      role: "digital",
+      subType: "Freelancer",
+      id: 6,
+      scopedAccess: { projectIds: [10] },
+    };
+    assert.equal(
+      checkDigitalResourceOwnership(freelancer, { projectId: 10, assigneeId: 6 }),
+      true,
+    );
+    assert.equal(
+      checkDigitalResourceOwnership(freelancer, { projectId: 10, assigneeId: 99 }),
+      false,
+    );
   });
 
   it("Users cannot access cross-project resources", () => {
-    const user = { role: "digital", subType: "Designer", id: 7, scopedAccess: { projectIds: [10] } };
+    const user = {
+      role: "digital",
+      subType: "Designer",
+      id: 7,
+      scopedAccess: { projectIds: [10] },
+    };
     assert.equal(checkDigitalResourceOwnership(user, { projectId: 10 }), true);
     assert.equal(checkDigitalResourceOwnership(user, { projectId: 20 }), false);
+  });
+
+  it("normalizes Account Manager spacing and gates project manage role", () => {
+    assert.equal(normalizeSubRole("Account Manager"), "account_manager");
+    assert.equal(canManageCmsProjects({ role: "digital", subType: "Account Manager" }), true);
+    assert.equal(canManageCmsProjects({ role: "digital", subType: "Designer" }), false);
+    assert.equal(canManageCmsProjects({ role: "digital", subType: "Freelancer" }), false);
+    assert.equal(canManageCmsProjects({ role: "bde" }), true);
+    assert.equal(canManageCmsProjects({ role: "freelancer", subType: "Freelancer" }), false);
+  });
+
+  it("Account Manager can manage commercial package/budget; specialist cannot", () => {
+    const am = { role: "digital", subType: "Account Manager" };
+    const spec = { role: "digital", subType: "Digital Specialist" };
+    assert.equal(canManageMarketingClientCommercial(am), true);
+    assert.equal(canManageMarketingClientCommercial(spec), false);
+    assert.equal(canManageMarketingClientCommercial("super_admin"), true);
+    assert.equal(canManageMarketingClientCommercial("digital"), false);
+  });
+
+  it("filterDigitalPermissionSet strips dashboard edit for designers", () => {
+    const designer = { role: "digital", subType: "Designer", id: 2 };
+    const set = new Set([
+      "marketing_dashboard:view",
+      "marketing_dashboard:edit",
+      "marketing_content:view",
+      "marketing_content:create",
+      "marketing_content:delete",
+      "marketing_ads:view",
+      "marketing_reports:view",
+      "marketing_clients:edit",
+      "finance_freelancers:view",
+    ]);
+    filterDigitalPermissionSet(designer, set);
+    assert.ok(set.has("marketing_dashboard:view"));
+    assert.ok(!set.has("marketing_dashboard:edit"));
+    assert.ok(set.has("marketing_content:view"));
+    assert.ok(set.has("marketing_content:create"));
+    assert.ok(!set.has("marketing_content:delete"));
+    assert.ok(!set.has("marketing_ads:view"));
+    assert.ok(!set.has("marketing_reports:view"));
+    assert.ok(!set.has("marketing_clients:edit"));
+    assert.ok(!set.has("finance_freelancers:view"));
+  });
+
+  it("requireDigitalModuleAccess rejects designer on ads", () => {
+    const mw = requireDigitalModuleAccess("marketing_ads");
+    let status = "next";
+    const req = { user: { role: "digital", subType: "Designer" } };
+    try {
+      mw(req, {}, () => {
+        status = "allowed";
+      });
+    } catch (err) {
+      status = err?.statusCode ?? err?.status ?? "forbidden";
+    }
+    assert.notEqual(status, "allowed");
   });
 });

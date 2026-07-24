@@ -3,17 +3,12 @@ import asyncHandler from "express-async-handler";
 import { requireAuth, requireRole } from "../middlewares/auth.js";
 import * as projectsController from "../controllers/projects.controller.js";
 import { forbidden } from "../utils/route-errors.js";
+import { canManageCmsProjects } from "../middlewares/digital-access.js";
 
-function requireProjectManageRole(req, res, next) {
-  if (req.user?.role === "super_admin" || req.user?.role === "bde" || req.user?.role === "manager") {
-    return next();
-  }
-  if (req.user?.role === "digital") {
-    const subType = (req.user?.subType ?? "").toLowerCase().trim();
-    if (subType === "account_manager" || subType === "digital_specialist" || !subType) {
-      return next();
-    }
-  }
+export { canManageCmsProjects };
+
+function requireProjectManageRole(req, _res, next) {
+  if (canManageCmsProjects(req.user)) return next();
   return forbidden("Only Account Managers and Admins can perform project management actions.");
 }
 

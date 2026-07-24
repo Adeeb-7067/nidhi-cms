@@ -13,6 +13,7 @@ import {
   Pin,
   Ghost,
   MessageCircle,
+  Store,
 } from "lucide-react";
 
 const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
@@ -22,6 +23,7 @@ const platformIcons: Record<MarketingPlatform, typeof Facebook> = {
   twitter: Twitter,
   youtube: Youtube,
   google: Globe,
+  google_my_business: Store,
   website: Link2,
   tiktok: Music2,
   pinterest: Pin,
@@ -36,6 +38,7 @@ const platformColors: Record<MarketingPlatform, string> = {
   twitter: "bg-gray-500/10 text-gray-700 border-gray-500/25",
   youtube: "bg-red-500/10 text-red-600 border-red-500/25",
   google: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
+  google_my_business: "bg-amber-500/10 text-amber-800 border-amber-500/25",
   website: "bg-indigo-500/10 text-indigo-700 border-indigo-500/25",
   tiktok: "bg-zinc-800/10 text-zinc-800 border-zinc-800/25",
   pinterest: "bg-rose-500/10 text-rose-700 border-rose-500/25",

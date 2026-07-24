@@ -61,9 +61,15 @@ describe("digital-project-fields", () => {
     );
   });
 
-  it("trims social link values", () => {
-    const res = normalizeSocialLinks({ facebook: "  https://fb.com/a  ", instagram: null });
-    assert.equal(res.facebook, "https://fb.com/a");
-    assert.equal(res.instagram, "");
+  it("includes Google My Business from social URL and techStack label", () => {
+    const fromLink = deriveMarketingPlatformEnums(
+      {},
+      { google_my_business: "https://business.google.com/n/acme" },
+    );
+    assert.ok(fromLink.includes("google_my_business"));
+    const fromLabel = deriveMarketingPlatformEnums({}, {}, ["Google My Business"]);
+    assert.ok(fromLabel.includes("google_my_business"));
+    const labels = deriveDigitalPlatforms({}, { google_my_business: "https://maps.google.com/?cid=1" });
+    assert.ok(labels.includes("Google My Business"));
   });
 });

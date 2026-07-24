@@ -55,7 +55,13 @@ import {
   formatDailyLogUpdatedLabel,
   formatDailyLogWorkDate,
 } from "@/lib/daily-log-format";
-import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
+import { DAILY_LOG_VIRTUAL_PROJECTS, isVirtualDailyLogProjectId } from "@/lib/daily-log-project-options";
+import {
+  dailyLogFormCopyForRole,
+  formatDailyLogCategory,
+  usesDigitalDailyLogForm,
+  workCategoriesForForm,
+} from "@/lib/daily-log-work-categories";
 import { cn } from "@/lib/utils";
 
 function localIsoDate(d = new Date()) {
@@ -80,34 +86,6 @@ const logSchema = z.object({
 });
 
 type LogFormValues = z.infer<typeof logSchema>;
-
-const DEV_WORK_CATEGORIES = [
-  { id: "development", label: "Development" },
-  { id: "design", label: "Design" },
-  { id: "testing", label: "Testing" },
-  { id: "bug_fixing", label: "Bug Fixing" },
-  { id: "code_review", label: "Code Review" },
-  { id: "deployment", label: "Deployment" },
-  { id: "documentation", label: "Documentation" },
-  { id: "meeting", label: "Meeting" },
-  { id: "research", label: "Research" },
-];
-
-const BDE_WORK_CATEGORIES = [
-  { id: "lead_generation", label: "Lead generation" },
-  { id: "follow_up", label: "Follow-up" },
-  { id: "proposal", label: "Proposal" },
-  { id: "client_meeting", label: "Client meeting" },
-  { id: "negotiation", label: "Negotiation" },
-  { id: "demo", label: "Product demo" },
-  { id: "documentation", label: "Documentation" },
-  { id: "meeting", label: "Internal meeting" },
-  { id: "research", label: "Research" },
-];
-
-function workCategoriesForRole(role: string | undefined) {
-  return role === "bde" ? BDE_WORK_CATEGORIES : DEV_WORK_CATEGORIES;
-}
 
 export default function DevLogs() {
   const { user } = useAuth();
@@ -169,7 +147,53 @@ function DeveloperLogsView() {
   const updateLog = useUpdateLog();
   const isEditMode = editingLog != null;
   const isSaving = createLog.isPending || updateLog.isPending;
-  const workCategories = useMemo(() => workCategoriesForRole(user?.role), [user?.role]);
+
+  const form = useForm<LogFormValues>({
+    resolver: zodResolver(logSchema),
+    defaultValues: {
+      projectId: "",
+      logDate: localIsoDate(),
+      taskTitle: "",
+      workCategories: [],
+      hoursSpent: 1,
+      completionPct: 0,
+      taskDescription: "",
+      blockers: "",
+      nextDayPlan: "",
+    },
+  });
+
+  const formCopy = useMemo(() => dailyLogFormCopyForRole(user?.role), [user?.role]);
+  const watchedCategories = form.watch("workCategories");
+  const workCategories = useMemo(
+    () => workCategoriesForForm(user?.role, watchedCategories),
+    [user?.role, watchedCategories],
+  );
+  const selectableProjects = useMemo(() => {
+    const projects = projectsData?.projects ?? [];
+    // Only digital specialists are limited to digital projects.
+    // Delivery roles (developer/qa/tester/manager/freelancer) keep the full membership list.
+    let list = usesDigitalDailyLogForm(user?.role)
+      ? projects.filter((p) => p.type === "digital")
+      : projects;
+
+    // Edit safety: keep the saved project visible even if filters would hide it.
+    if (editingLog && !isVirtualDailyLogProjectId(editingLog.projectId)) {
+      const hasCurrent = list.some((p) => p.id === editingLog.projectId);
+      if (!hasCurrent) {
+        const fromApi = projects.find((p) => p.id === editingLog.projectId);
+        list = [
+          ...list,
+          fromApi ?? {
+            id: editingLog.projectId,
+            name: editingLog.projectName || `Project #${editingLog.projectId}`,
+            type: "development" as const,
+          },
+        ];
+      }
+    }
+    return list;
+  }, [projectsData?.projects, user?.role, editingLog]);
 
   const canEditLogEntry = (log: DailyLog) =>
     String(log.logDate).slice(0, 10) === todayIso;
@@ -214,27 +238,12 @@ function DeveloperLogsView() {
       return;
     }
     const userObj = JSON.parse(localStorage.getItem("cms_user") || sessionStorage.getItem("cms_user") || "{}");
-    const staffName = userObj?.name || (user?.role === "bde" ? "BDE" : "Enterprise Developer");
+    const staffName = userObj?.name || formCopy.exportStaffFallback;
     const monthStr = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
     PDFService.generateDeveloperLogsPDF(staffName, monthStr, allMonthLogs);
     toast.success("Exporting timesheet...");
   };
-
-  const form = useForm<LogFormValues>({
-    resolver: zodResolver(logSchema),
-    defaultValues: {
-      projectId: "",
-      logDate: localIsoDate(),
-      taskTitle: "",
-      workCategories: [],
-      hoursSpent: 1,
-      completionPct: 0,
-      taskDescription: "",
-      blockers: "",
-      nextDayPlan: "",
-    },
-  });
 
   const logStats = useMemo(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -379,7 +388,9 @@ function DeveloperLogsView() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-[600px] bg-card border-border">
               <DialogHeader>
-                <DialogTitle>{isEditMode ? "Edit Daily Log Entry" : "Add Daily Log Entry"}</DialogTitle>
+                <DialogTitle>
+                  {isEditMode ? formCopy.dialogTitleEdit : formCopy.dialogTitleCreate}
+                </DialogTitle>
                 {isEditMode && (
                   <p className="text-xs text-muted-foreground">
                     You can edit today&apos;s logs only. The log date cannot be changed.
@@ -394,14 +405,14 @@ function DeveloperLogsView() {
                       name="projectId"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Project / activity</FormLabel>
+                          <FormLabel>{formCopy.projectLabel}</FormLabel>
                           <Select
                             onValueChange={field.onChange}
                             value={field.value}
                           >
                             <FormControl>
                               <SelectTrigger>
-                                <SelectValue placeholder="Select project or activity" />
+                                <SelectValue placeholder={formCopy.projectPlaceholder} />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
@@ -413,10 +424,10 @@ function DeveloperLogsView() {
                                   </SelectItem>
                                 ))}
                               </SelectGroup>
-                              {(projectsData?.projects?.length ?? 0) > 0 ? (
+                              {selectableProjects.length > 0 ? (
                                 <SelectGroup>
-                                  <SelectLabel>Projects</SelectLabel>
-                                  {projectsData!.projects.map((project) => (
+                                  <SelectLabel>{formCopy.projectsGroupLabel}</SelectLabel>
+                                  {selectableProjects.map((project) => (
                                     <SelectItem key={project.id} value={project.id.toString()}>
                                       {project.name}
                                     </SelectItem>
@@ -426,7 +437,7 @@ function DeveloperLogsView() {
                             </SelectContent>
                           </Select>
                           <FormDescription>
-                            Use Meeting or Others when the time is not tied to a specific project.
+                            {formCopy.projectHint}
                           </FormDescription>
                           <FormMessage />
                         </FormItem>
@@ -452,9 +463,9 @@ function DeveloperLogsView() {
                     name="taskTitle"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Task Title</FormLabel>
+                        <FormLabel>{formCopy.taskTitleLabel}</FormLabel>
                         <FormControl>
-                          <Input placeholder="What did you work on?" {...field} />
+                          <Input placeholder={formCopy.taskTitlePlaceholder} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -466,7 +477,7 @@ function DeveloperLogsView() {
                     name="workCategories"
                     render={() => (
                       <FormItem>
-                        <FormLabel>Categories</FormLabel>
+                        <FormLabel>{formCopy.categoriesLabel}</FormLabel>
                         <div className="grid grid-cols-3 gap-2">
                           {workCategories.map((category) => (
                             <FormField
@@ -551,9 +562,9 @@ function DeveloperLogsView() {
                     name="taskDescription"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Description (Optional)</FormLabel>
+                        <FormLabel>{formCopy.descriptionLabel}</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Details of the task..." {...field} />
+                          <Textarea placeholder={formCopy.descriptionPlaceholder} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -565,9 +576,9 @@ function DeveloperLogsView() {
                     name="blockers"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Blockers (Optional)</FormLabel>
+                        <FormLabel>{formCopy.blockersLabel}</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Any blockers or impediments?" {...field} />
+                          <Textarea placeholder={formCopy.blockersPlaceholder} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -579,9 +590,9 @@ function DeveloperLogsView() {
                     name="nextDayPlan"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Next Day Plan (Optional)</FormLabel>
+                        <FormLabel>{formCopy.nextDayPlanLabel}</FormLabel>
                         <FormControl>
-                          <Textarea placeholder="Plan for tomorrow?" {...field} />
+                          <Textarea placeholder={formCopy.nextDayPlanPlaceholder} {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -748,7 +759,7 @@ function DeveloperLogsView() {
                     {log.taskDescription && <p className="text-xs text-muted-foreground max-w-3xl">{log.taskDescription}</p>}
                     <div className="flex flex-wrap gap-2 pt-2">
                       {log.workCategories.map(cat => (
-                        <Badge key={cat} variant="secondary" className="text-[10px]">{cat.replace('_', ' ')}</Badge>
+                        <Badge key={cat} variant="secondary" className="text-[10px]">{formatDailyLogCategory(cat)}</Badge>
                       ))}
                     </div>
                   </div>

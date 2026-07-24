@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatDailyLogCategory } from "@/lib/daily-log-work-categories";
 import { formatDistanceToNow } from "date-fns";
 import {
   Briefcase,
@@ -21,10 +22,6 @@ import {
   AlertTriangle,
   ArrowRight,
 } from "lucide-react";
-
-function formatCategory(cat: string) {
-  return cat.replace(/_/g, " ");
-}
 
 function formatLogDateLong(logDate: string) {
   const iso = String(logDate).slice(0, 10);
@@ -135,7 +132,7 @@ export function DailyLogDetailDialog({
           <div className="flex flex-wrap gap-1.5 pt-1">
             {(log.workCategories ?? []).map((cat) => (
               <Badge key={cat} variant="secondary" className="text-[10px] capitalize">
-                {formatCategory(cat)}
+                {formatDailyLogCategory(cat)}
               </Badge>
             ))}
           </div>

@@ -12,6 +12,7 @@ import { isDevPortalStaffRole } from "../../constants/user-roles.js";
 import { findClientCompanyForUser } from "../client-team.js";
 import { getScopedDigitalUserAccess } from "../marketing/helpers.js";
 import { bdeCustomerOwnershipFilter } from "../../utils/sales-bde-customer-scope.js";
+import { canManageCmsProjects } from "../../middlewares/digital-access.js";
 
 /** Roles that may list all companies (pickers / ops). Digital is project-scoped. */
 export function canListAllCompanies(role) {
@@ -61,6 +62,9 @@ export async function getAccessibleCompanyIds(user) {
   if (canListAllCompanies(role)) return null;
 
   if (role === "digital") {
+    // Account managers / specialists need the full company list to create the first
+    // digital project (membership scope is empty until they have one).
+    if (canManageCmsProjects(user)) return null;
     const access = await getScopedDigitalUserAccess(user);
     return access.companyIds?.length ? access.companyIds : [];
   }

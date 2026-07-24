@@ -206,6 +206,8 @@ export function getNavSections(
         { title: "All projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
         { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
         { title: "All team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
+        { title: "All freelancers", href: "/freelancers/directory", icon: UsersRound, roles: ["super_admin"], group: "Organization" },
+        { title: "All vendors", href: "/finance/vendors", icon: Handshake, roles: ["super_admin"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
 
 
@@ -327,11 +329,12 @@ export function getNavSections(
         { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: ["super_admin", "digital"], group: "Ads" },
         { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: ["super_admin", "digital"], group: "Ads" },
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: ["super_admin", "digital"], group: "Analytics" },
-        { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["freelancer"], group: "Operations" },
+        { title: "Daily logs", href: "/dev/logs", icon: Clock, roles: ["super_admin", "digital", "freelancer"], group: "Operations" },
         { title: "Digital team", href: "/marketing/team", icon: UsersRound, roles: ["super_admin", "hr"], group: "Team" },
-        { title: "Freelancers", href: "/finance/freelancers", icon: UsersRound, roles: ["super_admin", "digital"], group: "Team" },
+        // Permission-gated via canViewHref (finance_freelancers stripped for non-AM).
+        { title: "Freelancers", href: "/freelancers/directory", icon: UsersRound, roles: ["super_admin", "digital"], group: "Team" },
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: ["super_admin", "digital"], group: "Team" },
-
+        // Reports: only account_manager sub-role retains marketing_reports after filter.
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: ["super_admin", "digital"], group: "Reports" },
       ],
     },

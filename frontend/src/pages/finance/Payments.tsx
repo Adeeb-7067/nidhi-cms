@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
+import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -274,8 +274,8 @@ export default function PaymentsPage() {
                   <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
                     {(p.gstAmount ?? 0) > 0 ? formatCurrency(p.gstAmount ?? 0) : "—"}
                   </TableCell>
-                  <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                    {p.direction === "incoming" ? "+" : "−"}{formatCurrency(p.amount)}
+                  <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? MONEY_IN_CLASS : MONEY_OUT_CLASS}`}>
+                    {formatCurrency(p.amount)}
                   </TableCell>
                   {showActions && (
                     <TableCell className="text-right">

@@ -353,6 +353,12 @@ async function updateExpense(req, res) {
   }
   if (body.notes !== undefined) updates.notes = optionalString(body.notes) ?? null;
   if (body.attachments !== undefined) updates.attachments = body.attachments;
+  if (body.gstEnabled !== undefined) {
+    updates.gstEnabled = Boolean(body.gstEnabled);
+    updates.gstAmount = body.gstEnabled ? Math.round(Number(body.gstAmount) || 0) : 0;
+  } else if (body.gstAmount !== undefined && expense.gstEnabled) {
+    updates.gstAmount = Math.round(Number(body.gstAmount) || 0);
+  }
 
   const updated = await FinanceExpenses.findOneAndUpdate({ id }, { $set: updates }, { new: true }).lean();
   const [enriched] = await enrichExpenses([updated]);

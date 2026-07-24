@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { formatCurrency, calcBudgetConsumption } from "@/modules/finance/constants";
+import { formatCurrency, calcBudgetConsumption, moneySignClass } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -176,8 +176,8 @@ export default function BudgetsPage() {
                     </TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{formatCurrency(b.allocated)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{formatCurrency(b.spent)}</TableCell>
-                    <TableCell className={cn("text-xs text-right tabular-nums font-medium", variance < 0 ? "text-red-700" : "text-emerald-700")}>
-                      {variance < 0 ? "−" : "+"}{formatCurrency(Math.abs(variance))}
+                    <TableCell className={cn("text-xs text-right tabular-nums font-medium", moneySignClass(variance))}>
+                      {formatCurrency(Math.abs(variance))}
                     </TableCell>
                     {(canEdit || canDelete) && (
                       <TableCell className="text-right">

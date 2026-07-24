@@ -96,8 +96,70 @@ describe("CMS role matrix completeness", () => {
   });
 
   test("digital project detail mounts team panel (assignment UI)", () => {
+    const overview = readFrontend("src/components/project/DigitalProjectOverview.tsx");
+    assert.ok(overview.includes("ProjectTeamPanel"), "Digital overview must mount ProjectTeamPanel");
+    assert.ok(overview.includes('variant="digital"'), 'ProjectTeamPanel must use variant="digital"');
     const page = readFrontend("src/pages/marketing/ProjectDetail.tsx");
-    assert.ok(page.includes("ProjectTeamPanel"), "Digital project detail must mount ProjectTeamPanel");
-    assert.ok(page.includes('variant="digital"'), 'ProjectTeamPanel must use variant="digital"');
+    assert.ok(
+      page.includes("DigitalProjectOverview"),
+      "Marketing project detail must render DigitalProjectOverview (team panel)",
+    );
+  });
+
+  test("BDE opens digital projects on the Digital detail hub", () => {
+    const routes = readFrontend("src/lib/project-routes.ts");
+    assert.match(
+      routes,
+      /if \(type === "digital"\) return `\/marketing\/projects\/\$\{projectId\}`/,
+      "getProjectDetailHref must send digital projects to /marketing/projects/:id",
+    );
+    const adminDetail = readFrontend("src/pages/admin/ProjectDetail.tsx");
+    assert.ok(
+      adminDetail.includes('project?.type === "digital"'),
+      "Admin ProjectDetail must redirect digital projects to marketing hub",
+    );
+    assert.ok(
+      !adminDetail.includes('user?.role !== "bde"'),
+      "Admin ProjectDetail must redirect BDE digital projects too",
+    );
+    const bdeList = readFrontend("src/pages/sales/BdeProjects.tsx");
+    assert.ok(
+      bdeList.includes('getProjectDetailHref(project.id, "bde", project.type)'),
+      "BDE project cards must pass project.type into detail href",
+    );
+    const perms = readBackend("src/services/permissions.service.js");
+    assert.ok(
+      perms.includes("BDE_DIGITAL_PROJECT_VIEW"),
+      "BDE template must include Digital view grants for project detail APIs",
+    );
+  });
+
+  test("digital daily log form uses marketing categories (not engineering)", () => {
+    const cats = readFrontend("src/lib/daily-log-work-categories.ts");
+    assert.ok(cats.includes("DIGITAL_WORK_CATEGORIES"), "digital category catalog missing");
+    assert.ok(cats.includes("usesDigitalDailyLogForm"), "digital form gate missing");
+    assert.ok(cats.includes("{ id: \"seo\""), "digital logs should include SEO work type");
+    assert.ok(cats.includes("{ id: \"ads\""), "digital logs should include Ads work type");
+    assert.ok(
+      cats.includes("developer | qa | tester | manager | freelancer"),
+      "delivery roles must stay on engineering categories",
+    );
+    const logsPage = readFrontend("src/pages/dev/Logs.tsx");
+    assert.ok(
+      logsPage.includes("dailyLogFormCopyForRole"),
+      "Logs page must use role-specific form copy",
+    );
+    assert.ok(
+      logsPage.includes("usesDigitalDailyLogForm"),
+      "project filter must gate on digital role only",
+    );
+    assert.ok(
+      logsPage.includes("workCategoriesForForm"),
+      "edit form must preserve legacy categories safely",
+    );
+    assert.ok(
+      logsPage.includes("isVirtualDailyLogProjectId"),
+      "edit form must keep saved project visible when filtered",
+    );
   });
 });

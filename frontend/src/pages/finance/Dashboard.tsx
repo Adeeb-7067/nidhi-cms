@@ -22,7 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCompactCurrency, formatCurrency } from "@/modules/finance/constants";
+import { formatCompactCurrency, formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -302,12 +302,9 @@ export default function FinanceDashboard() {
                   <span
                     className={cn(
                       "text-xs font-medium tabular-nums shrink-0",
-                      tx.direction === "outgoing"
-                        ? "text-red-700 dark:text-red-400"
-                        : "text-emerald-700 dark:text-emerald-400",
+                      tx.direction === "outgoing" ? MONEY_OUT_CLASS : MONEY_IN_CLASS,
                     )}
                   >
-                    {tx.direction === "outgoing" ? "−" : "+"}
                     {formatCurrency(tx.amount)}
                   </span>
                 </Link>

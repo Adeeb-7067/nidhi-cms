@@ -80,9 +80,9 @@ const emptyForm = {
 
 export default function MarketingSeo() {
   const { can } = usePermissions();
-  const canCreate = can("marketing_analytics", "create");
-  const canEdit = can("marketing_analytics", "edit");
-  const canDelete = can("marketing_analytics", "delete");
+  const canCreate = can("marketing_seo", "create");
+  const canEdit = can("marketing_seo", "edit");
+  const canDelete = can("marketing_seo", "delete");
   const showActions = canEdit || canDelete;
 
   const [search, setSearch] = useState("");

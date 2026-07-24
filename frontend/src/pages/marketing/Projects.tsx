@@ -48,6 +48,7 @@ import {
   ProjectInputPriority,
 } from "@/api";
 import { QUERY_STALE } from "@/lib/query-config";
+import { canManageCmsProjects } from "@/lib/cms-project-manage";
 import {
   MarketingPageHeader,
   MarketingFilterBar,
@@ -108,7 +109,7 @@ export default function MarketingProjects() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
   const { can } = usePermissions();
-  const canCreate = can("marketing_clients", "create");
+  const canCreate = canManageCmsProjects(user) && can("marketing_clients", "create");
   const queryClient = useQueryClient();
 
   const [search, setSearch] = useState("");

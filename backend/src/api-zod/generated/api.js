@@ -900,6 +900,7 @@ export const CreateProjectBody = zod.object({
   "tiktok": zod.string().optional(),
   "pinterest": zod.string().optional(),
   "whatsapp": zod.string().optional(),
+  "google_my_business": zod.string().optional(),
   "other": zod.string().optional()
 }).optional(),
   "figmaUrl": zod.string().optional(),
@@ -982,6 +983,7 @@ export const UpdateProjectBody = zod.object({
   "tiktok": zod.string().optional(),
   "pinterest": zod.string().optional(),
   "whatsapp": zod.string().optional(),
+  "google_my_business": zod.string().optional(),
   "other": zod.string().optional()
 }).optional(),
   "figmaUrl": zod.string().optional(),

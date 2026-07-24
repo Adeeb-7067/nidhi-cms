@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/modules/finance/constants";
+import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceEmptyState,
@@ -500,10 +500,10 @@ export default function VendorDetailPage() {
                           <span className="font-mono text-muted-foreground">{entry.reference}</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">
+                      <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
                         {entry.debit ? formatCurrency(entry.debit) : "—"}
                       </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">
+                      <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_IN_CLASS}`}>
                         {entry.credit ? formatCurrency(entry.credit) : "—"}
                       </TableCell>
                       <TableCell className="text-xs text-right tabular-nums font-medium">

@@ -26,8 +26,10 @@ import {
   recordMarketingActivity,
   resolveScopedAccountId,
   assertDocAccount,
-  getScopedDigitalUserAccess,
+  applyScopedAccountQuery,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
+import { isDigitalElevatedLead } from "../../middlewares/digital-access.js";
 
 function formatTask(doc, displayName, assigneeName) {
   return {
@@ -66,13 +68,8 @@ async function resolveTaskDisplayName(accountId, companyId) {
 
 export async function listTasks(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.status) query.status = String(req.query.status);
   if (req.query.category) query.category = String(req.query.category);
   if (req.query.assigneeId) query.assigneeId = Number(req.query.assigneeId);
@@ -125,6 +122,7 @@ export async function createTask(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId ?? body.clientId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const title = optionalString(body.title);
   if (!title) badRequest("title is required.", "title");
   const category = optionalString(body.category);
@@ -182,11 +180,8 @@ export async function updateTask(req, res) {
   assertDocAccount(doc, accountId);
 
   const body = req.body ?? {};
-  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
   const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const subRoleLower = (req.user.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
-  const isFullEditAllowed = isSuperAdminOrHr || isCreator || isAccountManager;
+  const isFullEditAllowed = isCreator || isDigitalElevatedLead(req.user);
 
   // Non-creator, non-manager assignees can ONLY update task status
   if (!isFullEditAllowed) {
@@ -249,13 +244,10 @@ export async function deleteTask(req, res) {
   if (!doc) notFound("Task");
   assertDocAccount(doc, accountId);
 
-  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
   const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const subRoleLower = (req.user.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
 
-  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
-    forbidden("Only task creators, account managers, or admins can delete tasks.");
+  if (!isCreator && !isDigitalElevatedLead(req.user)) {
+    forbidden("Only task creators, account managers, specialists, or admins can delete tasks.");
   }
 
   doc.isDeleted = true;

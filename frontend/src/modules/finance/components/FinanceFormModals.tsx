@@ -109,6 +109,16 @@ const positiveRateString = z
 
 // ─── Expense ────────────────────────────────────────────────────────────
 
+const GST_RATE_OPTIONS = ["0", "5", "12", "18", "28"] as const;
+
+function inferExpenseGstRate(taxable: number, gstAmount: number): string {
+  if (!(taxable > 0) || !(gstAmount > 0)) return "18";
+  const pct = Math.round((gstAmount / taxable) * 100);
+  return GST_RATE_OPTIONS.includes(String(pct) as (typeof GST_RATE_OPTIONS)[number])
+    ? String(pct)
+    : "18";
+}
+
 const expenseSchema = z.object({
   date: z.string().min(1, "Date is required"),
   category: z.string(),
@@ -119,6 +129,8 @@ const expenseSchema = z.object({
   vendorId: z.string().optional(),
   loanId: z.string().optional(),
   notes: z.string().optional(),
+  gstEnabled: z.boolean(),
+  gstRate: z.string(),
 });
 type ExpenseFormValues = z.infer<typeof expenseSchema>;
 
@@ -149,6 +161,8 @@ export function ExpenseFormModal({
     vendorId: "",
     loanId: "",
     notes: "",
+    gstEnabled: false,
+    gstRate: "18",
   };
 
   const form = useForm<ExpenseFormValues>({
@@ -157,6 +171,19 @@ export function ExpenseFormModal({
   });
 
   const watchedLoanId = form.watch("loanId");
+  const watchedVendorId = form.watch("vendorId");
+  const watchedGstEnabled = form.watch("gstEnabled");
+  const watchedAmount = form.watch("amount");
+  const watchedGstRate = form.watch("gstRate");
+  const gstTotals = useMemo(
+    () =>
+      calcVendorInvoiceAmounts(
+        Number(watchedAmount) || 0,
+        Number(watchedGstRate) || 0,
+        watchedGstEnabled,
+      ),
+    [watchedAmount, watchedGstRate, watchedGstEnabled],
+  );
   const activeLoans = loansData?.loans ?? [];
   // Keep a closed loan visible when editing an expense already linked to it.
   const loanOptions = useMemo(() => {
@@ -185,21 +212,27 @@ export function ExpenseFormModal({
 
   useEffect(() => {
     if (!open) return;
-    form.reset(
-      expense
-        ? {
-            date: expense.date.slice(0, 10),
-            category: expense.category,
-            amount: String(expense.amount),
-            paymentMode: expense.paymentMode,
-            projectId: expense.projectId ? String(expense.projectId) : "",
-            employeeId: expense.employeeId ? String(expense.employeeId) : "",
-            vendorId: expense.vendorId ? String(expense.vendorId) : "",
-            loanId: expense.loanId ? String(expense.loanId) : "",
-            notes: expense.notes ?? "",
-          }
-        : blankDefaults,
-    );
+    if (expense) {
+      const gstOn = Boolean(expense.gstEnabled);
+      const gstAmt = Number(expense.gstAmount) || 0;
+      const bill = Number(expense.amount) || 0;
+      const taxable = gstOn && gstAmt > 0 ? Math.max(0, bill - gstAmt) : bill;
+      form.reset({
+        date: expense.date.slice(0, 10),
+        category: expense.category,
+        amount: String(taxable || bill || ""),
+        paymentMode: expense.paymentMode,
+        projectId: expense.projectId ? String(expense.projectId) : "",
+        employeeId: expense.employeeId ? String(expense.employeeId) : "",
+        vendorId: expense.vendorId ? String(expense.vendorId) : "",
+        loanId: expense.loanId ? String(expense.loanId) : "",
+        notes: expense.notes ?? "",
+        gstEnabled: gstOn,
+        gstRate: inferExpenseGstRate(taxable, gstAmt),
+      });
+    } else {
+      form.reset(blankDefaults);
+    }
     setAttachments(expense?.attachments?.map((a) => ({ name: a.name, url: a.url })) ?? []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, expense, form]);
@@ -207,10 +240,15 @@ export function ExpenseFormModal({
   const onSubmit = async (values: ExpenseFormValues) => {
     try {
       const loanId = optionalSelectId(values.loanId);
+      const totals = calcVendorInvoiceAmounts(
+        Number(values.amount),
+        Number(values.gstRate) || 0,
+        values.gstEnabled,
+      );
       const payload = {
         date: values.date,
         category: (loanId ? "loan" : values.category) as ExpenseCategory,
-        amount: Number(values.amount),
+        amount: totals.totalAmount,
         paymentMode: values.paymentMode as FinancePaymentMode,
         projectId: optionalSelectId(values.projectId),
         employeeId: optionalSelectId(values.employeeId),
@@ -218,13 +256,15 @@ export function ExpenseFormModal({
         loanId,
         notes: values.notes || undefined,
         attachments,
+        gstEnabled: values.gstEnabled,
+        gstAmount: totals.gstAmount,
       };
       if (isEdit && expense) {
         await updateExpense.mutateAsync({ id: expense.id, ...payload });
         toast.success("Expense updated");
       } else {
         await createExpense.mutateAsync(payload);
-        toast.success(`Expense of ${formatCurrency(Number(values.amount))} submitted for approval`);
+        toast.success(`Expense of ${formatCurrency(totals.totalAmount)} submitted for approval`);
       }
       onOpenChange(false);
       onSuccess?.();
@@ -303,8 +343,61 @@ export function ExpenseFormModal({
                 </FormItem>
               )} />
               <FormField control={form.control} name="amount" render={({ field }) => (
-                <FormItem><FormLabel>Amount (₹)</FormLabel><FormControl><Input type="number" min={0} placeholder="0" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>{watchedGstEnabled ? "Taxable amount (₹)" : "Amount (₹)"}</FormLabel>
+                  <FormControl><Input type="number" min={0} placeholder="0" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField control={form.control} name="gstEnabled" render={({ field }) => (
+                  <FormItem className="flex flex-col justify-end">
+                    <FormLabel className="mb-2">GST applicable</FormLabel>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                    <p className="text-[11px] text-muted-foreground mt-1.5">
+                      {field.value ? "GST expense — tax tracked for Input GST" : "Non-GST expense"}
+                    </p>
+                  </FormItem>
+                )} />
+                <FormField control={form.control} name="gstRate" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>GST rate (%)</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value} disabled={!watchedGstEnabled}>
+                      <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        {GST_RATE_OPTIONS.map((r) => (
+                          <SelectItem key={r} value={r}>{r}%</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )} />
+              </div>
+              {watchedGstEnabled ? (
+                <div className="rounded-lg border bg-muted/20 p-3 grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <p className="text-muted-foreground">Taxable</p>
+                    <p className="font-semibold tabular-nums">{formatCurrency(gstTotals.taxableAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Input GST</p>
+                    <p className="font-semibold tabular-nums">{formatCurrency(gstTotals.gstAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Bill total</p>
+                    <p className="font-bold tabular-nums">{formatCurrency(gstTotals.totalAmount)}</p>
+                  </div>
+                </div>
+              ) : null}
+              {watchedGstEnabled && watchedVendorId ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-snug">
+                  This expense is linked to a vendor. Prefer a vendor purchase invoice for Input GST —
+                  Tax summary ignores expense GST when a vendor is set (avoids double-counting).
+                </p>
+              ) : null}
               <FormField control={form.control} name="paymentMode" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Payment mode</FormLabel>

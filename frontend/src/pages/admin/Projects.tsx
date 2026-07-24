@@ -170,6 +170,7 @@ const projectSchema = z
         tiktok: z.string().optional(),
         pinterest: z.string().optional(),
         whatsapp: z.string().optional(),
+        google_my_business: z.string().optional(),
         other: z.string().optional(),
       })
       .optional(),

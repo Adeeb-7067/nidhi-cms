@@ -29,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { formatUserRole } from "@/lib/bug-workflow";
 import { isStaffEmployeeRole } from "@/lib/user-roles";
@@ -50,6 +51,33 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
 import { addProjectMembersBatch, getListProjectsQueryKey } from "@/api";
+
+function employeeInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]!.charAt(0)}${parts[1]!.charAt(0)}`.toUpperCase();
+  }
+  return (parts[0]?.charAt(0) ?? "?").toUpperCase();
+}
+
+function EmployeeAvatar({
+  name,
+  avatarUrl,
+  className,
+}: {
+  name: string;
+  avatarUrl?: string | null;
+  className?: string;
+}) {
+  return (
+    <Avatar className={cn("h-8 w-8 shrink-0", className)}>
+      {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} /> : null}
+      <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-semibold">
+        {employeeInitials(name)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
 
 const DEV_SUB_TYPES = ["Developer", "QA", "Project Manager", "Designer", "DevOps", "Freelancer"] as const;
 const DIGITAL_SUB_TYPES = [
@@ -109,7 +137,7 @@ export function ProjectTeamPanel({
 
   const assignedIds = new Set((members ?? []).map((m) => m.userId));
   const userById = useMemo(() => {
-    const map = new Map<number, { id: number; role?: string; name: string }>();
+    const map = new Map<number, { id: number; role?: string; name: string; avatarUrl?: string | null }>();
     for (const u of usersData?.users ?? []) map.set(u.id, u);
     return map;
   }, [usersData?.users]);
@@ -291,11 +319,16 @@ export function ProjectTeamPanel({
                             return (
                               <label
                                 key={u.id}
-                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
+                                className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted cursor-pointer"
                               >
                                 <Checkbox
                                   checked={checked}
                                   onCheckedChange={(c) => toggleUser(id, c === true)}
+                                />
+                                <EmployeeAvatar
+                                  name={u.name}
+                                  avatarUrl={u.avatarUrl}
+                                  className="h-7 w-7"
                                 />
                                 <span className="flex-1 text-xs font-medium truncate">{u.name}</span>
                                 <span className="text-[10px] text-muted-foreground shrink-0">
@@ -317,8 +350,13 @@ export function ProjectTeamPanel({
                           <Badge
                             key={id}
                             variant="secondary"
-                            className="text-[10px] font-normal gap-1 pr-1"
+                            className="text-[10px] font-normal gap-1.5 pl-1 pr-1"
                           >
+                            <EmployeeAvatar
+                              name={u.name}
+                              avatarUrl={u.avatarUrl}
+                              className="h-4 w-4"
+                            />
                             {u.name}
                             <button
                               type="button"
@@ -390,9 +428,12 @@ export function ProjectTeamPanel({
                   onClick={() => openMemberWork(member, "tasks")}
                   aria-label={`View tasks and logs for ${member.name}`}
                 >
-                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs shrink-0">
-                    {member.name.charAt(0)}
-                  </div>
+                  <EmployeeAvatar
+                    name={member.name}
+                    avatarUrl={
+                      member.avatarUrl ?? userById.get(member.userId)?.avatarUrl ?? null
+                    }
+                  />
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{member.name}</p>
                     <p className="text-[10px] text-muted-foreground truncate">

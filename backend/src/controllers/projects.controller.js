@@ -28,7 +28,8 @@ import { resolveCompanyIdFromBody, getProjectAccess } from "../services/access/c
 import { assertProjectAccess } from "../services/access/access-helpers.js";
 import { getAccessibleProjectIds, applyIdScope } from "../services/access/list-scope.js";
 import { assertClientPermission, findClientCompanyForUser } from "../services/client-team.js";
-import { bdeOwnsCustomer } from "../utils/sales-bde-customer-scope.js";
+import { bdeOwnsCustomer, findBdeOwnedCustomerIds } from "../utils/sales-bde-customer-scope.js";
+import { canManageCmsProjects } from "../middlewares/digital-access.js";
 import { paginateModel } from "../utils/mongo-list.js";
 import { resolveLogProjectName } from "../services/daily-log-virtual-projects.js";
 import {
@@ -89,7 +90,29 @@ async function getProjects(req, res) {
         return;
       }
       query.id = { $in: access.projectIds };
-    } else if (isDevPortalStaffRole(req.user.role) || req.user.role === "bde") {
+    } else if (req.user.role === "bde") {
+      const memberRows = await projectMembersTable.find({ userId: req.user.id }).select({ projectId: 1 }).lean();
+      const memberIds = memberRows.map((m) => m.projectId);
+      const ownedCompanyIds = await findBdeOwnedCustomerIds(clientsTable, req.user.id);
+      const ownedProjects = ownedCompanyIds.length
+        ? await projectsTable
+            .find({
+              isDeleted: { $ne: true },
+              $or: [
+                { companyId: { $in: ownedCompanyIds } },
+                { clientId: { $in: ownedCompanyIds } },
+              ],
+            })
+            .select({ id: 1 })
+            .lean()
+        : [];
+      const projectIds = [...new Set([...memberIds, ...ownedProjects.map((p) => p.id)])];
+      if (!projectIds.length) {
+        res.json({ projects: [], total: 0, page: pagination.page, limit: pagination.limit });
+        return;
+      }
+      query.id = { $in: projectIds };
+    } else if (isDevPortalStaffRole(req.user.role)) {
       const memberRows = await projectMembersTable.find({ userId: req.user.id });
       const projectIds = memberRows.map((m) => m.projectId);
       if (!projectIds.length) {
@@ -393,6 +416,8 @@ async function deleteProjectsById(req, res) {
 }
 async function getProjectsByIdMembers(req, res) {
   const projectId = parseInt(req.params["id"], 10);
+  const access = await getProjectAccess(req, projectId);
+  if (!access.allowed) forbidden();
   await assertClientPermission(req, "developers", "view");
   const members = await projectMembersTable.find({ projectId }).lean().exec();
   if (!members.length) {
@@ -478,18 +503,38 @@ function formatMemberResponse(m, user, lastLogDate = null) {
   };
 }
 
-/** super_admin/hr: any project; digital: digital projects only. */
+/** super_admin/hr/manager: any; digital AM: digital + membership; bde: owned/member projects. */
 async function assertCanManageProjectMembers(req, projectId) {
   const role = req.user?.role;
   if (role === "super_admin" || role === "hr") return;
+  if (!canManageCmsProjects(req.user)) {
+    forbidden("You cannot manage project members.");
+  }
+  if (role === "manager") return;
+
+  const project = await projectsTable
+    .findOne({ id: projectId })
+    .select({ type: 1, companyId: 1, clientId: 1 })
+    .lean();
+  if (!project) notFound("Project");
+
   if (role === "digital") {
-    const project = await projectsTable.findOne({ id: projectId }).select({ type: 1 }).lean();
-    if (!project) notFound("Project");
     if (project.type !== "digital") {
       forbidden("Digital specialists can only manage team on digital projects.");
     }
+    const access = await getScopedDigitalUserAccess(req.user);
+    if (!(access.projectIds ?? []).includes(Number(projectId))) {
+      forbidden("You can only manage team on digital projects you are assigned to.");
+    }
     return;
   }
+
+  if (role === "bde") {
+    const access = await getProjectAccess(req, projectId);
+    if (!access.allowed) forbidden("You cannot manage project members.");
+    return;
+  }
+
   forbidden("You cannot manage project members.");
 }
 

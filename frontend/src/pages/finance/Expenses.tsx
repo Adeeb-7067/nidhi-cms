@@ -38,6 +38,7 @@ import {
   ApproveExpenseModal,
   PayExpenseRemainingModal,
   ExpenseBillDetailSheet,
+  GstClassificationBadge,
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import {
@@ -317,6 +318,7 @@ export default function ExpensesPage() {
                 <TableHead className="text-xs">Vendor</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
                 <TableHead className="text-xs">Settlement</TableHead>
+                <TableHead className="text-xs">GST</TableHead>
                 <TableHead className="text-xs text-right">Bill</TableHead>
                 <TableHead className="text-xs text-right">Paid</TableHead>
                 <TableHead className="text-xs text-right">Due</TableHead>
@@ -360,6 +362,14 @@ export default function ExpensesPage() {
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
+                    </TableCell>
+                    <TableCell onClick={(ev) => ev.stopPropagation()}>
+                      <GstClassificationBadge gstEnabled={e.gstEnabled} />
+                      {e.gstEnabled && (e.gstAmount ?? 0) > 0 ? (
+                        <div className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+                          {formatCurrency(e.gstAmount)}
+                        </div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="text-xs text-right font-medium tabular-nums">
                       {formatCurrency(e.amount)}

@@ -84,7 +84,7 @@ const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/marketing/social", "marketing_analytics"],
   ["/marketing/seo", "marketing_seo"],
   ["/marketing/performance", "marketing_analytics"],
-  ["/marketing/team", "marketing_analytics"],
+  ["/marketing/team", "admin_team"],
   ["/marketing/reports", "marketing_reports"],
   ["/marketing/", "marketing_dashboard"],
   ["/finance/vendors/analytics", "finance_vendors"],

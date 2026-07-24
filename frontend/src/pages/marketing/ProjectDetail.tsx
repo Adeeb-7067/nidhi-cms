@@ -63,6 +63,11 @@ import {
   type SocialLinksForm,
 } from "@/lib/project-type-fields";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  canManageCmsProjects,
+  canManageMarketingClientCommercial,
+  canViewMarketingClientBudget,
+} from "@/lib/cms-project-manage";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useMarketingAccounts,
@@ -94,8 +99,6 @@ import {
   TASK_CATEGORY_LABELS,
   CONTENT_TYPE_LABELS,
   formatCompactCurrency,
-  canManageMarketingClientCommercial,
-  canViewMarketingClientBudget,
 } from "@/modules/marketing/constants";
 import type {
   MarketingPackage,
@@ -113,6 +116,7 @@ import { usePermissions } from "@/modules/permissions/usePermission";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
+import { getProjectsListHref } from "@/lib/project-routes";
 
 const STATUS_LABELS: Record<string, string> = {
   scoping: "Scoping",
@@ -185,10 +189,12 @@ export default function MarketingProjectDetail() {
   });
 
   const { can } = usePermissions();
-  const canEditWorkspace = can("marketing_clients", "edit");
+  const canEditWorkspace =
+    can("marketing_clients", "edit") || canManageCmsProjects(user);
   const canEditServices =
     user?.role === "super_admin" ||
     canEditWorkspace;
+  const projectsListHref = getProjectsListHref(user?.role);
   const updateAccount = useUpdateMarketingAccount();
   const updateProject = useUpdateProject();
 
@@ -344,7 +350,7 @@ export default function MarketingProjectDetail() {
 
   const handleSaveWorkspace = async () => {
     if (!account) return;
-    const canManageCommercial = canManageMarketingClientCommercial(user?.role);
+    const canManageCommercial = canManageMarketingClientCommercial(user);
     try {
       await updateAccount.mutateAsync({
         id: account.id,
@@ -380,7 +386,7 @@ export default function MarketingProjectDetail() {
           title="Invalid project"
           description="That project link is not valid."
           actionLabel="Back to projects"
-          onAction={() => navigate("/marketing/projects")}
+          onAction={() => navigate(projectsListHref)}
         />
       </PortalPageShell>
     );
@@ -394,7 +400,7 @@ export default function MarketingProjectDetail() {
           title="Project not found"
           description="Only Digital-type projects appear here. Create or edit type under Manage → Projects."
           actionLabel="Back to projects"
-          onAction={() => navigate("/marketing/projects")}
+          onAction={() => navigate(projectsListHref)}
         />
       </PortalPageShell>
     );
@@ -420,11 +426,19 @@ export default function MarketingProjectDetail() {
       <MarketingPageHeader
         title={project?.name ?? "Project"}
         description={headerDescription}
-        breadcrumbs={[
-          { label: "Digital", href: "/marketing" },
-          { label: "Projects", href: "/marketing/projects" },
-          { label: project?.name ?? "…" },
-        ]}
+        breadcrumbs={
+          user?.role === "bde"
+            ? [
+                { label: "Sales", href: "/sales/bde" },
+                { label: "My Projects", href: projectsListHref },
+                { label: project?.name ?? "…" },
+              ]
+            : [
+                { label: "Digital", href: "/marketing" },
+                { label: "Projects", href: "/marketing/projects" },
+                { label: project?.name ?? "…" },
+              ]
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {canEditServices && project ? (
@@ -461,7 +475,7 @@ export default function MarketingProjectDetail() {
               </>
             )}
             <Button variant="outline" size="sm" className="h-8 gap-1.5" asChild>
-              <Link href="/marketing/projects">
+              <Link href={projectsListHref}>
                 <ArrowLeft className="h-3.5 w-3.5" />
                 All projects
               </Link>
@@ -563,11 +577,11 @@ export default function MarketingProjectDetail() {
               accountQuery={q}
               canEditServices={canEditServices}
               canEditWorkspace={canEditWorkspace}
-              canViewClientBudget={canViewMarketingClientBudget(user?.role)}
+              canViewClientBudget={canViewMarketingClientBudget(user)}
               canManageTeam={
                 user?.role === "super_admin" ||
                 user?.role === "hr" ||
-                user?.role === "digital"
+                canManageCmsProjects(user)
               }
               onEditServices={openEditServices}
               onEditWorkspace={openEditWorkspace}
@@ -998,7 +1012,7 @@ export default function MarketingProjectDetail() {
             <DialogTitle>Edit digital workspace</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {canManageMarketingClientCommercial(user?.role) ? (
+            {canManageMarketingClientCommercial(user) ? (
               <div className="space-y-1.5">
                 <Label className="text-xs">Package</Label>
                 <Select
@@ -1027,7 +1041,7 @@ export default function MarketingProjectDetail() {
                 </p>
               </div>
             )}
-            {canViewMarketingClientBudget(user?.role) ? (
+            {canViewMarketingClientBudget(user) ? (
               <div className="space-y-1.5">
                 <Label className="text-xs">Monthly budget (INR)</Label>
                 <Input

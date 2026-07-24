@@ -9,6 +9,7 @@ export const DIGITAL_SOCIAL_LINK_KEYS = [
   "tiktok",
   "pinterest",
   "whatsapp",
+  "google_my_business",
   "other",
 ];
 
@@ -68,6 +69,7 @@ export function deriveDigitalPlatforms(services, socialLinks, existingTechStack 
     tiktok: "TikTok",
     pinterest: "Pinterest",
     whatsapp: "WhatsApp Business",
+    google_my_business: "Google My Business",
   };
   for (const [key, label] of Object.entries(linkToPlatform)) {
     if (links[key]) set.add(label);
@@ -83,6 +85,7 @@ const MARKETING_PLATFORM_ENUMS = new Set([
   "twitter",
   "youtube",
   "google",
+  "google_my_business",
   "website",
   "tiktok",
   "pinterest",
@@ -102,6 +105,9 @@ const TECH_STACK_LABEL_TO_PLATFORM = {
   Google: "google",
   "Google Ads": "google",
   "SEO & SEM": "google",
+  "Google My Business": "google_my_business",
+  "Google Business Profile": "google_my_business",
+  GMB: "google_my_business",
   TikTok: "tiktok",
   Pinterest: "pinterest",
   Snapchat: "snapchat",
@@ -126,6 +132,7 @@ export function deriveMarketingPlatformEnums(services, socialLinks, techStack = 
   if (links.tiktok) out.add("tiktok");
   if (links.pinterest) out.add("pinterest");
   if (links.whatsapp) out.add("whatsapp");
+  if (links.google_my_business) out.add("google_my_business");
 
   if (Array.isArray(techStack)) {
     for (const raw of techStack) {

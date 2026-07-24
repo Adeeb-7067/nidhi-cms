@@ -4,7 +4,7 @@ import { ArrowDownLeft, ArrowUpRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
+import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceStatusBadge,
@@ -79,8 +79,7 @@ export default function FinancePaymentDetail() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Amount</p>
-            <p className={`text-xl font-bold tabular-nums ${payment.direction === "incoming" ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-              {payment.direction === "incoming" ? "+" : "−"}
+            <p className={`text-xl font-bold tabular-nums ${payment.direction === "incoming" ? MONEY_IN_CLASS : MONEY_OUT_CLASS}`}>
               {formatCurrency(payment.amount)}
             </p>
           </div>

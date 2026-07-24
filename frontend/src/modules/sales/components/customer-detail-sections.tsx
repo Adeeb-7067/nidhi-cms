@@ -1793,10 +1793,10 @@ export function CustomerStatementSection({
                         row.details
                       )}
                     </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums py-2 align-top">
+                    <TableCell className="text-xs text-right tabular-nums py-2 align-top text-red-700 dark:text-red-400">
                       {row.amount > 0 ? formatStatementTableAmount(row.amount) : ""}
                     </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums py-2 align-top">
+                    <TableCell className="text-xs text-right tabular-nums py-2 align-top text-emerald-700 dark:text-emerald-400">
                       {row.payment > 0 ? formatStatementTableAmount(row.payment) : ""}
                     </TableCell>
                     <TableCell

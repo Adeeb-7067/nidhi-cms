@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FinanceStatusBadge } from "./FinanceStatusBadge";
+import { GstClassificationBadge } from "./GstClassificationBadge";
 import {
   EXPENSE_CATEGORY_LABELS,
   PAYMENT_MODE_LABELS,
@@ -103,10 +104,12 @@ export function ExpenseBillDetailSheet({
                   <FinanceStatusBadge variant="expensePayment" value={data.paymentStatus} />
                 ) : null}
                 <FinanceStatusBadge variant="expenseCategory" value={data.category} />
+                <GstClassificationBadge gstEnabled={data.gstEnabled} />
               </div>
 
               <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
                 {moneyLine("Bill", bill, "bill")}
+                {data.gstEnabled ? moneyLine("Input GST", Number(data.gstAmount) || 0) : null}
                 {moneyLine("Paid (in P&L / budgets)", paid, "paid")}
                 {moneyLine("Due", due, "due")}
                 <p className="pt-1 text-[11px] text-muted-foreground leading-snug">

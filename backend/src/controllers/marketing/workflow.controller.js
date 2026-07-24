@@ -30,7 +30,8 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
-  getScopedDigitalUserAccess,
+  applyScopedAccountQuery,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
 
 /** Allowed approval stage transitions (server-side workflow invariant). */
@@ -65,13 +66,8 @@ function formatPost(doc, companyName, assigneeName) {
 
 export async function listPosts(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.scheduleStatus) query.scheduleStatus = String(req.query.scheduleStatus);
 
   const { items, total, page, limit } = await paginateModel(
@@ -109,6 +105,7 @@ export async function createPost(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const platform = optionalString(body.platform);
   if (!platform || !MARKETING_PLATFORMS.includes(platform)) {
     badRequest("Valid platform is required.", "platform");
@@ -260,14 +257,9 @@ export async function deletePost(req, res) {
 
 export async function listApprovals(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.stage) query.stage = String(req.query.stage);
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
 
   const { items, total, page, limit } = await paginateModel(
     marketingApprovalsTable,

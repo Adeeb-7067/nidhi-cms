@@ -5,6 +5,7 @@ export type MarketingPlatform =
   | "twitter"
   | "youtube"
   | "google"
+  | "google_my_business"
   | "website"
   | "tiktok"
   | "pinterest"

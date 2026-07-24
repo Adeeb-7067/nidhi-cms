@@ -181,7 +181,7 @@ async function postAlertsDismiss(req, res) {
     { alertId: id, userId: req.user.id },
     { $set: { dismissedAt: new Date() } }
   );
-  res.json({ message: "Alert dismissed" });
+  res.json({ message: "Alert dismissed" }); 
 }
 
 export {

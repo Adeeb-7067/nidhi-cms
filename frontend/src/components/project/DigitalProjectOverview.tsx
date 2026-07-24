@@ -18,6 +18,7 @@ import {
   Youtube,
   Globe2,
   MessageCircle,
+  Store,
 } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
@@ -64,6 +65,7 @@ const SOCIAL_ICONS: Record<SocialLinkKey, LucideIcon> = {
   tiktok: Share2,
   pinterest: Globe2,
   whatsapp: MessageCircle,
+  google_my_business: Store,
   other: ExternalLink,
 };
 
@@ -76,6 +78,7 @@ const SOCIAL_TINT: Record<SocialLinkKey, string> = {
   tiktok: "border-violet-500/25 bg-violet-500/8 text-violet-700 hover:border-violet-500/50",
   pinterest: "border-rose-500/25 bg-rose-500/8 text-rose-700 hover:border-rose-500/50",
   whatsapp: "border-emerald-500/25 bg-emerald-500/8 text-emerald-700 hover:border-emerald-500/50",
+  google_my_business: "border-amber-500/25 bg-amber-500/8 text-amber-800 hover:border-amber-500/50",
   other: "border-border bg-muted/30 text-foreground hover:border-primary/40",
 };
 

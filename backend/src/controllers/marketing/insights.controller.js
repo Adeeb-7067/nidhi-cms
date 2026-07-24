@@ -33,7 +33,8 @@ import {
   resolveScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
-  getScopedDigitalUserAccess,
+  applyScopedAccountQuery,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -83,13 +84,8 @@ function formatCampaign(doc, companyName) {
 
 export async function listCampaigns(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.network) query.network = String(req.query.network);
   if (req.query.status) query.status = String(req.query.status);
 
@@ -123,6 +119,7 @@ export async function createCampaign(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId ?? body.clientId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const name = optionalString(body.name);
   if (!name) badRequest("name is required.", "name");
   const network = body.network === "google" ? "google" : body.network === "meta" ? "meta" : null;
@@ -231,13 +228,8 @@ export async function deleteCampaign(req, res) {
 // ── Social ───────────────────────────────────────────────────────────────
 
 export async function listSocialMetrics(req, res) {
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
 
   const items = await marketingSocialMetricsTable
     .find(query)
@@ -266,6 +258,7 @@ export async function upsertSocialMetric(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const platform = optionalString(body.platform);
   if (!platform || !MARKETING_PLATFORMS.includes(platform)) {
     badRequest("Valid platform is required.", "platform");
@@ -328,12 +321,8 @@ export async function upsertSocialMetric(req, res) {
 // ── SEO ──────────────────────────────────────────────────────────────────
 
 export async function getSeoPanel(req, res) {
-  const access = await getScopedDigitalUserAccess(req.user);
   const accountFilter = { isDeleted: false };
-  if (access.isScoped) {
-    accountFilter.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
-  if (req.query.accountId) accountFilter.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(accountFilter, req.user, req.query.accountId);
 
   const [keywords, audits] = await Promise.all([
     marketingSeoKeywordsTable.find(accountFilter).sort({ currentRank: 1 }).limit(100).lean(),
@@ -415,6 +404,7 @@ export async function createSeoKeyword(req, res) {
   const body = req.body ?? {};
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const keyword = optionalString(body.keyword);
   if (!keyword) badRequest("keyword is required.", "keyword");
 
@@ -485,7 +475,7 @@ export async function deleteSocialMetric(req, res) {
 
 export async function getTeamPerformance(req, res) {
   const match = { isDeleted: false, assigneeId: { $ne: null } };
-  if (req.query.accountId) match.accountId = Number(req.query.accountId);
+  await applyScopedAccountQuery(match, req.user, req.query.accountId);
 
   const tasks = await marketingTasksTable.find(match).lean();
   const byAssignee = new Map();
@@ -550,16 +540,11 @@ export async function getTeamPerformance(req, res) {
 
 export async function listReports(req, res) {
   const pagination = parsePagination(req.query);
-  const access = await getScopedDigitalUserAccess(req.user);
   const query = { isDeleted: false };
-
-  if (access.isScoped) {
-    query.accountId = { $in: access.accountIds.length ? access.accountIds : [-1] };
-  }
+  await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.period && MARKETING_REPORT_PERIODS.includes(req.query.period)) {
     query.period = req.query.period;
   }
-  if (req.query.accountId) query.accountId = Number(req.query.accountId);
 
   const { items, total, page, limit } = await paginateModel(
     marketingReportsTable,
@@ -603,6 +588,7 @@ export async function createReport(req, res) {
 
   const accountId = Number(body.accountId);
   if (!Number.isFinite(accountId)) badRequest("accountId is required.", "accountId");
+  await assertScopedAccountAccess(req.user, accountId);
   const account = await resolveAccount(accountId);
   const companyId = account.companyId;
 

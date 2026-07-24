@@ -494,6 +494,7 @@ export default function AdminProjectDetail() {
                             ["tiktok", "TikTok"],
                             ["pinterest", "Pinterest"],
                             ["whatsapp", "WhatsApp"],
+                            ["google_my_business", "Google My Business"],
                             ["other", "Other"],
                           ] as const
                         )

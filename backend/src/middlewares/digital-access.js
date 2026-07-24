@@ -3,6 +3,9 @@ import { forbidden } from "../utils/route-errors.js";
 /**
  * Granular module permissions for Digital sub-roles.
  * Super Admin retains 100% unscoped access regardless of these definitions.
+ *
+ * Keep this tighter than the system "digital" template (which seeds full marketing_*).
+ * Effective grants = template ∩ sub-role modules (+ action demotion in permissions.service).
  */
 export const DIGITAL_ROLE_PERMISSIONS = {
   account_manager: [
@@ -18,6 +21,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_seo",
     "marketing_reports",
   ],
+  /** Ops lead — almost AM, but no commercial reports / freelancer directory. */
   digital_specialist: [
     "marketing_dashboard",
     "marketing_clients",
@@ -29,53 +33,63 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_ads",
     "marketing_analytics",
     "marketing_seo",
-    "marketing_reports",
   ],
   designer: [
-    "marketing_clients",
-    "marketing_tasks",
-    "marketing_media",
-    "marketing_content",
-  ],
-  graphic_designer: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
     "marketing_content",
   ],
   video_editor: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
     "marketing_content",
   ],
   content_creator: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
     "marketing_calendar",
     "marketing_content",
+    "marketing_approvals",
   ],
   seo_expert: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_seo",
     "marketing_analytics",
   ],
   ads_manager: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_ads",
     "marketing_analytics",
   ],
+  /** Digital freelancer sub-type (role may still be digital). */
   freelancer: [
+    "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
   ],
 };
 
-function normalizeSubRole(rawSubRole) {
+/** Sub-roles that may mutate project/workspace settings (not just view). */
+const DIGITAL_PROJECT_MANAGE_SUBROLES = new Set(["account_manager", "digital_specialist"]);
+
+/** Sub-roles that may delete / approve / export on digital modules. */
+const DIGITAL_ELEVATED_ACTION_SUBROLES = new Set(["account_manager", "digital_specialist"]);
+
+/** Sub-roles that may open the freelancer directory from Digital. */
+const DIGITAL_FREELANCER_DIR_SUBROLES = new Set(["account_manager"]);
+
+export function normalizeSubRole(rawSubRole) {
   if (!rawSubRole) return null;
   const s = String(rawSubRole).toLowerCase().trim().replace(/[\s-]+/g, "_");
   if (s === "graphic_designer" || s === "designer") return "designer";
@@ -89,24 +103,122 @@ function normalizeSubRole(rawSubRole) {
   return s;
 }
 
+/**
+ * Modules this digital/freelancer user may access.
+ * Unknown / missing subType → designer (minimal), never Account Manager.
+ */
 export function getDigitalSubRoleModules(user) {
   if (!user) return [];
   if (user.role === "super_admin") {
-    return Object.values(DIGITAL_ROLE_PERMISSIONS).flat();
+    return [...new Set(Object.values(DIGITAL_ROLE_PERMISSIONS).flat())];
   }
   const subRoleKey = normalizeSubRole(user.subType);
   if (subRoleKey && DIGITAL_ROLE_PERMISSIONS[subRoleKey]) {
     return DIGITAL_ROLE_PERMISSIONS[subRoleKey];
   }
-  // Default fallback for digital staff without explicit subType
-  return DIGITAL_ROLE_PERMISSIONS.account_manager;
+  // role=freelancer without a known specialty → freelancer pack
+  if (user.role === "freelancer") {
+    return DIGITAL_ROLE_PERMISSIONS.freelancer;
+  }
+  return DIGITAL_ROLE_PERMISSIONS.designer;
 }
 
 export function checkDigitalModuleAccess(user, requiredModule) {
   if (!user) return false;
   if (user.role === "super_admin") return true;
+  if (user.role !== "digital" && user.role !== "freelancer") return true;
   const allowed = getDigitalSubRoleModules(user);
   return allowed.includes(requiredModule);
+}
+
+/** Who may create/update CMS projects and manage members (matches project routes). */
+export function canManageCmsProjects(user) {
+  if (!user) return false;
+  if (user.role === "super_admin" || user.role === "bde" || user.role === "manager") {
+    return true;
+  }
+  if (user.role === "digital") {
+    const subType = normalizeSubRole(user.subType);
+    return DIGITAL_PROJECT_MANAGE_SUBROLES.has(subType);
+  }
+  return false;
+}
+
+export function canAccessDigitalFreelancerDirectory(user) {
+  if (!user) return false;
+  if (user.role === "super_admin" || user.role === "hr" || user.role === "finance") {
+    return true;
+  }
+  if (user.role === "digital") {
+    return DIGITAL_FREELANCER_DIR_SUBROLES.has(normalizeSubRole(user.subType));
+  }
+  return false;
+}
+
+/** Ops lead — AM or digital specialist (full task edit, elevated dashboard). */
+export function isDigitalElevatedLead(user) {
+  if (!user) return false;
+  if (user.role === "super_admin" || user.role === "hr" || user.role === "manager") {
+    return true;
+  }
+  if (user.role === "digital") {
+    return DIGITAL_ELEVATED_ACTION_SUBROLES.has(normalizeSubRole(user.subType));
+  }
+  return false;
+}
+
+/**
+ * Demote template actions for digital specialists who should not act like super admin.
+ * View stays for allowed modules; create/edit kept for craft roles; delete/approve/export
+ * reserved for AM / specialist.
+ */
+export function filterDigitalPermissionSet(user, permissionSet) {
+  if (!user || (user.role !== "digital" && user.role !== "freelancer")) {
+    return permissionSet;
+  }
+
+  const allowedModules = new Set(getDigitalSubRoleModules(user));
+  const sub = normalizeSubRole(user.subType);
+  const elevated = DIGITAL_ELEVATED_ACTION_SUBROLES.has(sub);
+  const canManageProjects = canManageCmsProjects(user);
+  const canFreelancerDir = canAccessDigitalFreelancerDirectory(user);
+
+  for (const key of [...permissionSet]) {
+    const sep = key.lastIndexOf(":");
+    if (sep < 0) continue;
+    const mod = key.slice(0, sep);
+    const action = key.slice(sep + 1);
+
+    if (mod.startsWith("marketing_")) {
+      if (!allowedModules.has(mod)) {
+        permissionSet.delete(key);
+        continue;
+      }
+      if (!elevated && (action === "delete" || action === "approve" || action === "export")) {
+        permissionSet.delete(key);
+        continue;
+      }
+      // Craft roles: dashboard is view-only (avoids admin ops shell via :edit).
+      if (!elevated && mod === "marketing_dashboard" && action !== "view") {
+        permissionSet.delete(key);
+        continue;
+      }
+      if (
+        mod === "marketing_clients" &&
+        !canManageProjects &&
+        (action === "create" || action === "edit" || action === "delete")
+      ) {
+        permissionSet.delete(key);
+      }
+      continue;
+    }
+
+    if (mod === "finance_freelancers" && !canFreelancerDir) {
+      permissionSet.delete(key);
+    }
+  }
+
+  return permissionSet;
 }
 
 export function checkDigitalResourceOwnership(user, resource) {
@@ -114,7 +226,7 @@ export function checkDigitalResourceOwnership(user, resource) {
   if (user.role === "super_admin") return true;
 
   const subRole = normalizeSubRole(user.subType);
-  if (subRole === "freelancer") {
+  if (subRole === "freelancer" || user.role === "freelancer") {
     if (resource.assigneeId && Number(resource.assigneeId) !== Number(user.id)) {
       return false;
     }
@@ -142,21 +254,15 @@ export function requireDigitalSubRole(...allowedSubRoles) {
 }
 
 /**
- * Express middleware: enforces that the current user's digital sub-role
- * (from user.subType) is allowed to access `requiredModule`.
- * Super Admins and non-digital roles bypass the check entirely.
+ * Express middleware: digital / freelancer must be allowed `requiredModule` by sub-role.
+ * Super Admin and non-digital roles bypass.
  */
 export function requireDigitalModuleAccess(requiredModule) {
   return (req, _res, next) => {
     if (!req.user) return next();
-    // Super admin bypasses all checks
     if (req.user.role === "super_admin") return next();
-    // Only enforce for digital/freelancer roles that have subType
-    const subRoleKey = normalizeSubRole(req.user.subType);
-    if (!subRoleKey || !DIGITAL_ROLE_PERMISSIONS[subRoleKey]) return next();
-    // Check if the sub-role is allowed this module
-    const allowed = DIGITAL_ROLE_PERMISSIONS[subRoleKey];
-    if (!allowed.includes(requiredModule)) {
+    if (req.user.role !== "digital" && req.user.role !== "freelancer") return next();
+    if (!checkDigitalModuleAccess(req.user, requiredModule)) {
       return forbidden("Your role does not have access to this module.");
     }
     next();

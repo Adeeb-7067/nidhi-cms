@@ -274,6 +274,7 @@ export interface ProjectSocialLinks {
   tiktok?: string;
   pinterest?: string;
   whatsapp?: string;
+  google_my_business?: string;
   other?: string;
 }
 
