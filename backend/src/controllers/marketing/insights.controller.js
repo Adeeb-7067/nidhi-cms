@@ -31,10 +31,12 @@ import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
   resolveScopedAccountId,
+  requireScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
+  canDeleteMarketingOwnedItem,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -167,7 +169,7 @@ export async function createCampaign(req, res) {
 
 export async function updateCampaign(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingCampaignsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Campaign");
   assertDocAccount(doc, accountId);
@@ -204,17 +206,12 @@ export async function updateCampaign(req, res) {
 
 export async function deleteCampaign(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingCampaignsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Campaign");
   assertDocAccount(doc, accountId);
 
-  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const subRoleLower = (req.user.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
-
-  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
     forbidden("Only campaign creators, account managers, or admins can delete ad campaigns.");
   }
 
@@ -428,7 +425,7 @@ export async function createSeoKeyword(req, res) {
 
 export async function updateSeoKeyword(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingSeoKeywordsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("SEO keyword");
   assertDocAccount(doc, accountId);
@@ -449,7 +446,7 @@ export async function updateSeoKeyword(req, res) {
 
 export async function deleteSeoKeyword(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingSeoKeywordsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("SEO keyword");
   assertDocAccount(doc, accountId);
@@ -461,7 +458,7 @@ export async function deleteSeoKeyword(req, res) {
 
 export async function deleteSocialMetric(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingSocialMetricsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Social metric");
   assertDocAccount(doc, accountId);
@@ -613,7 +610,7 @@ export async function createReport(req, res) {
 
 export async function updateReport(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingReportsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Report");
   if (doc.accountId == null) {
@@ -638,7 +635,7 @@ export async function updateReport(req, res) {
 
 export async function deleteReport(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingReportsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Report");
   if (doc.accountId == null) {
@@ -646,12 +643,7 @@ export async function deleteReport(req, res) {
   }
   assertDocAccount(doc, accountId);
 
-  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const subRoleLower = (req.user.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
-
-  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
     forbidden("Only report creators, account managers, or admins can delete reports.");
   }
 

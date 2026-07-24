@@ -10,6 +10,8 @@ import {
   normalizeSubRole,
   filterDigitalPermissionSet,
   requireDigitalModuleAccess,
+  shouldRestrictToOwnDigitalTasks,
+  resolveDigitalTaskAssigneeId,
 } from "../../src/middlewares/digital-access.js";
 import { canManageMarketingClientCommercial } from "../../src/services/marketing/helpers.js";
 
@@ -27,6 +29,7 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(modules.includes("marketing_content"));
     assert.ok(modules.includes("marketing_media"));
     assert.ok(modules.includes("marketing_dashboard"));
+    assert.ok(modules.includes("marketing_calendar"));
     assert.ok(!modules.includes("marketing_ads"));
     assert.ok(!modules.includes("marketing_reports"));
     assert.ok(!modules.includes("marketing_approvals"));
@@ -137,6 +140,56 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(canManageMarketingClientCommercial("digital"), false);
   });
 
+  it("craft digital roles only see own tasks; leads see team tasks", () => {
+    assert.equal(
+      shouldRestrictToOwnDigitalTasks({ role: "digital", subType: "Designer" }),
+      true,
+    );
+    assert.equal(
+      shouldRestrictToOwnDigitalTasks({ role: "digital", subType: "Content Creator" }),
+      true,
+    );
+    assert.equal(
+      shouldRestrictToOwnDigitalTasks({ role: "freelancer", subType: "Freelancer" }),
+      true,
+    );
+    assert.equal(
+      shouldRestrictToOwnDigitalTasks({ role: "digital", subType: "Account Manager" }),
+      false,
+    );
+    assert.equal(
+      shouldRestrictToOwnDigitalTasks({ role: "digital", subType: "Digital Specialist" }),
+      false,
+    );
+    assert.equal(shouldRestrictToOwnDigitalTasks({ role: "super_admin" }), false);
+  });
+
+  it("craft staff can only assign tasks to themselves", () => {
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    assert.equal(resolveDigitalTaskAssigneeId(designer, 99), 42);
+    assert.equal(resolveDigitalTaskAssigneeId(designer, null), 42);
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    assert.equal(resolveDigitalTaskAssigneeId(am, 99), 99);
+    assert.equal(resolveDigitalTaskAssigneeId(am, null), null);
+  });
+
+  it("project Account Manager roster role may assign others", () => {
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    assert.equal(
+      resolveDigitalTaskAssigneeId(designer, 99, { allowAssignOthers: true }),
+      99,
+    );
+  });
+
+  it("account_manager sub-role includes marketing_calendar", () => {
+    const modules = getDigitalSubRoleModules({
+      role: "digital",
+      subType: "Account Manager",
+      id: 5,
+    });
+    assert.ok(modules.includes("marketing_calendar"));
+  });
+
   it("filterDigitalPermissionSet strips dashboard edit for designers", () => {
     const designer = { role: "digital", subType: "Designer", id: 2 };
     const set = new Set([
@@ -160,6 +213,19 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!set.has("marketing_reports:view"));
     assert.ok(!set.has("marketing_clients:edit"));
     assert.ok(!set.has("finance_freelancers:view"));
+  });
+
+  it("craft assignee resolution always returns self unless allowAssignOthers", () => {
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    assert.equal(resolveDigitalTaskAssigneeId(designer, 99), 42);
+    assert.equal(resolveDigitalTaskAssigneeId(designer, 99, { allowAssignOthers: true }), 99);
+    assert.equal(resolveDigitalTaskAssigneeId(designer, null, { allowAssignOthers: true }), null);
+  });
+
+  it("elevated leads are not craft-restricted on assignee resolution", () => {
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    assert.equal(shouldRestrictToOwnDigitalTasks(am), false);
+    assert.equal(resolveDigitalTaskAssigneeId(am, 88), 88);
   });
 
   it("requireDigitalModuleAccess rejects designer on ads", () => {

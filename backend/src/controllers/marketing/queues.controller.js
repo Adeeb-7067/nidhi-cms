@@ -27,10 +27,14 @@ import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
   resolveScopedAccountId,
+  requireScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
+  canDeleteMarketingOwnedItem,
+  resolveMarketingAssigneeForAccount,
+  applyCraftAssigneeVisibility,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -92,6 +96,7 @@ export async function listGraphics(req, res) {
   const pagination = parsePagination(req.query);
   const query = { isDeleted: false };
   await applyScopedAccountQuery(query, req.user, req.query.accountId);
+  await applyCraftAssigneeVisibility(query, req.user);
   if (req.query.status) query.status = String(req.query.status);
 
   const { items, total, page, limit } = await paginateModel(
@@ -140,6 +145,8 @@ export async function createGraphic(req, res) {
     ? body.fileTypes.filter((f) => MARKETING_GRAPHIC_FILE_TYPES.includes(f))
     : [];
 
+  const assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+
   const id = await getNextSequence("marketing_graphics");
   const doc = await marketingGraphicsTable.create({
     id,
@@ -150,7 +157,7 @@ export async function createGraphic(req, res) {
     revisionCount: Number(body.revisionCount ?? 0),
     brandGuidelineUrl: optionalString(body.brandGuidelineUrl),
     fileTypes,
-    assigneeId: body.assigneeId != null ? Number(body.assigneeId) : null,
+    assigneeId,
     dueDate: body.dueDate ? new Date(body.dueDate) : null,
     createdBy: req.user.id,
   });
@@ -171,7 +178,7 @@ export async function createGraphic(req, res) {
 
 export async function updateGraphic(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingGraphicsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Graphic request");
   assertDocAccount(doc, accountId);
@@ -189,8 +196,10 @@ export async function updateGraphic(req, res) {
   if (Array.isArray(body.fileTypes)) {
     doc.fileTypes = body.fileTypes.filter((f) => MARKETING_GRAPHIC_FILE_TYPES.includes(f));
   }
-  if (body.assigneeId !== undefined)
-    doc.assigneeId = body.assigneeId != null ? Number(body.assigneeId) : null;
+  if (body.assigneeId !== undefined) {
+    const account = await resolveAccount(doc.accountId);
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+  }
   if (body.dueDate !== undefined) doc.dueDate = body.dueDate ? new Date(body.dueDate) : null;
   await doc.save();
   res.json({ id: String(doc.id), status: doc.status });
@@ -202,6 +211,7 @@ export async function listVideos(req, res) {
   const pagination = parsePagination(req.query);
   const query = { isDeleted: false };
   await applyScopedAccountQuery(query, req.user, req.query.accountId);
+  await applyCraftAssigneeVisibility(query, req.user);
   if (req.query.renderStatus) query.renderStatus = String(req.query.renderStatus);
 
   const { items, total, page, limit } = await paginateModel(
@@ -253,6 +263,8 @@ export async function createVideo(req, res) {
     ? body.exportTarget
     : "reel";
 
+  const assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+
   const id = await getNextSequence("marketing_videos");
   const doc = await marketingVideosTable.create({
     id,
@@ -264,7 +276,7 @@ export async function createVideo(req, res) {
     hasSubtitles: Boolean(body.hasSubtitles),
     hasThumbnail: Boolean(body.hasThumbnail),
     exportTarget,
-    assigneeId: body.assigneeId != null ? Number(body.assigneeId) : null,
+    assigneeId,
     dueDate: body.dueDate ? new Date(body.dueDate) : null,
     createdBy: req.user.id,
   });
@@ -274,7 +286,7 @@ export async function createVideo(req, res) {
 
 export async function updateVideo(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingVideosTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Video request");
   assertDocAccount(doc, accountId);
@@ -287,8 +299,10 @@ export async function updateVideo(req, res) {
   if (body.hasVoiceover !== undefined) doc.hasVoiceover = Boolean(body.hasVoiceover);
   if (body.hasSubtitles !== undefined) doc.hasSubtitles = Boolean(body.hasSubtitles);
   if (body.hasThumbnail !== undefined) doc.hasThumbnail = Boolean(body.hasThumbnail);
-  if (body.assigneeId !== undefined)
-    doc.assigneeId = body.assigneeId != null ? Number(body.assigneeId) : null;
+  if (body.assigneeId !== undefined) {
+    const account = await resolveAccount(doc.accountId);
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+  }
   if (body.dueDate !== undefined) doc.dueDate = body.dueDate ? new Date(body.dueDate) : null;
   await doc.save();
   res.json({ id: String(doc.id), renderStatus: doc.renderStatus });
@@ -300,6 +314,7 @@ export async function listContent(req, res) {
   const pagination = parsePagination(req.query);
   const query = { isDeleted: false };
   await applyScopedAccountQuery(query, req.user, req.query.accountId);
+  await applyCraftAssigneeVisibility(query, req.user);
   if (req.query.type) query.type = String(req.query.type);
   if (req.query.status) query.status = String(req.query.status);
 
@@ -345,6 +360,7 @@ export async function createContent(req, res) {
   const account = await resolveAccount(accountId);
   const type = MARKETING_CONTENT_TYPES.includes(body.type) ? body.type : "blog";
   const status = "internal_review";
+  const assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
 
   const id = await getNextSequence("marketing_content");
   const doc = await marketingContentTable.create({
@@ -356,7 +372,7 @@ export async function createContent(req, res) {
     status,
     seoScore: Number(body.seoScore ?? 0),
     wordCount: Number(body.wordCount ?? 0),
-    assigneeId: body.assigneeId != null ? Number(body.assigneeId) : null,
+    assigneeId,
     dueDate: body.dueDate ? new Date(body.dueDate) : null,
     createdBy: req.user.id,
   });
@@ -377,7 +393,7 @@ export async function createContent(req, res) {
 
 export async function updateContent(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingContentTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Content item");
   assertDocAccount(doc, accountId);
@@ -392,8 +408,10 @@ export async function updateContent(req, res) {
   }
   if (body.seoScore != null) doc.seoScore = Number(body.seoScore);
   if (body.wordCount != null) doc.wordCount = Number(body.wordCount);
-  if (body.assigneeId !== undefined)
-    doc.assigneeId = body.assigneeId != null ? Number(body.assigneeId) : null;
+  if (body.assigneeId !== undefined) {
+    const account = await resolveAccount(doc.accountId);
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+  }
   if (body.dueDate !== undefined) doc.dueDate = body.dueDate ? new Date(body.dueDate) : null;
   await doc.save();
   res.json({ id: String(doc.id), status: doc.status });
@@ -404,12 +422,7 @@ async function softDeleteQueueItem(model, id, label, accountId, reqUser, refType
   if (!doc) notFound(label);
   assertDocAccount(doc, accountId);
 
-  const isSuperAdminOrHr = reqUser.role === "super_admin" || reqUser.role === "hr" || reqUser.role === "manager";
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(reqUser.id);
-  const subRoleLower = (reqUser.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
-
-  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+  if (!(await canDeleteMarketingOwnedItem(reqUser, doc))) {
     forbidden(`Only item creators, account managers, or admins can delete ${label.toLowerCase()}s.`);
   }
 
@@ -421,7 +434,7 @@ async function softDeleteQueueItem(model, id, label, accountId, reqUser, refType
 }
 
 export async function deleteGraphic(req, res) {
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   res.json(
     await softDeleteQueueItem(
       marketingGraphicsTable,
@@ -435,7 +448,7 @@ export async function deleteGraphic(req, res) {
 }
 
 export async function deleteVideo(req, res) {
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   res.json(
     await softDeleteQueueItem(
       marketingVideosTable,
@@ -448,7 +461,7 @@ export async function deleteVideo(req, res) {
 }
 
 export async function deleteContent(req, res) {
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   res.json(
     await softDeleteQueueItem(
       marketingContentTable,

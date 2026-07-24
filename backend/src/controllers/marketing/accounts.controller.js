@@ -30,6 +30,7 @@ import {
   loadWorkspaceLabelsByAccountIds,
   recordMarketingActivity,
   getScopedDigitalUserAccess,
+  assertScopedAccountAccess,
 } from "../../services/marketing/helpers.js";
 import {
   MARKETING_PACKAGES,
@@ -157,6 +158,7 @@ export async function listAccounts(req, res) {
 
 export async function getAccountById(req, res) {
   const id = parseIdParam(req.params.id);
+  await assertScopedAccountAccess(req.user, id);
   const doc = await marketingAccountsTable.findOne({ id, isDeleted: false }).lean();
   if (!doc) notFound("Digital account");
 
@@ -270,6 +272,7 @@ export async function createAccount(req, res) {
 
 export async function updateAccount(req, res) {
   const id = parseIdParam(req.params.id);
+  await assertScopedAccountAccess(req.user, id);
   const doc = await marketingAccountsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Digital account");
 
@@ -342,6 +345,7 @@ export async function updateAccount(req, res) {
 
 export async function deleteAccount(req, res) {
   const id = parseIdParam(req.params.id);
+  await assertScopedAccountAccess(req.user, id);
   const doc = await marketingAccountsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Digital account");
   doc.isDeleted = true;
@@ -354,6 +358,7 @@ export async function deleteAccount(req, res) {
 /** Campaigns for one digital workspace (used by project/account detail). */
 export async function listAccountCampaigns(req, res) {
   const accountId = parseIdParam(req.params.id);
+  await assertScopedAccountAccess(req.user, accountId);
   const account = await marketingAccountsTable
     .findOne({ id: accountId, isDeleted: false })
     .lean();

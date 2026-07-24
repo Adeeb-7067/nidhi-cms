@@ -44,11 +44,12 @@ import {
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   MarketingChipTabs,
-  parseAssigneeId,
+  resolveFormAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import type { ApprovalStage, ContentType } from "@/modules/marketing/types";
 import { toast } from "sonner";
@@ -82,6 +83,8 @@ export default function MarketingContent() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
+  const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
+  const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
   const { data, isLoading, isError } = useMarketingContent(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -132,7 +135,11 @@ export default function MarketingContent() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...emptyForm, accountId: projectFilter || "" });
+    setForm({
+      ...emptyForm,
+      accountId: projectFilter || "",
+      assigneeId: canAssignOthers ? "" : user?.id != null ? String(user.id) : "",
+    });
     setDialogOpen(true);
   };
 
@@ -172,7 +179,7 @@ export default function MarketingContent() {
       seoScore,
       wordCount,
       dueDate: form.dueDate || null,
-      assigneeId: parseAssigneeId(form.assigneeId),
+      assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
     };
     try {
       if (editing) {
@@ -385,7 +392,8 @@ export default function MarketingContent() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Assignee</Label>
-              <MarketingAssigneeSelect
+              <MarketingAssigneeField
+                accountId={formAccountId}
                 value={form.assigneeId}
                 onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}
               />

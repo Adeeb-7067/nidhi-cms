@@ -71,11 +71,12 @@ import {
   ApprovalStatusBadge,
   MarketingConfirmDialog,
   DigitalProjectSelect,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   MarketingChipTabs,
-  parseAssigneeId,
+  resolveFormAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -178,6 +179,8 @@ export default function MarketingCalendar() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
+  const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
+  const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
   const { data, isLoading, isError } = useMarketingPosts(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -279,6 +282,7 @@ export default function MarketingCalendar() {
       accountId,
       platforms: [pickPlatformForAccount(account?.platforms)],
       scheduledAt: stamp,
+      assigneeId: canAssignOthers ? "" : user?.id != null ? String(user.id) : "",
     });
     setDialogOpen(true);
   };
@@ -310,7 +314,7 @@ export default function MarketingCalendar() {
             caption: form.caption.trim(),
             scheduledAt: toIsoScheduledAt(form.scheduledAt),
             hashtags: parseHashtags(form.hashtags),
-            assigneeId: parseAssigneeId(form.assigneeId),
+            assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
           },
         });
         toast.success("Post updated");
@@ -329,7 +333,7 @@ export default function MarketingCalendar() {
               caption: form.caption.trim(),
               scheduledAt: toIsoScheduledAt(form.scheduledAt),
               hashtags: parseHashtags(form.hashtags),
-              assigneeId: parseAssigneeId(form.assigneeId),
+              assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
             })
           )
         );
@@ -874,7 +878,8 @@ export default function MarketingCalendar() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Assignee</Label>
-              <MarketingAssigneeSelect
+              <MarketingAssigneeField
+                accountId={formAccountId}
                 value={form.assigneeId}
                 onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}
               />

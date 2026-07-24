@@ -39,6 +39,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
+    "marketing_calendar",
     "marketing_content",
   ],
   video_editor: [
@@ -46,6 +47,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
+    "marketing_calendar",
     "marketing_content",
   ],
   content_creator: [
@@ -61,6 +63,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
+    "marketing_calendar",
     "marketing_seo",
     "marketing_analytics",
   ],
@@ -68,6 +71,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_dashboard",
     "marketing_clients",
     "marketing_tasks",
+    "marketing_calendar",
     "marketing_ads",
     "marketing_analytics",
   ],
@@ -77,6 +81,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_clients",
     "marketing_tasks",
     "marketing_media",
+    "marketing_calendar",
   ],
 };
 
@@ -165,6 +170,29 @@ export function isDigitalElevatedLead(user) {
     return DIGITAL_ELEVATED_ACTION_SUBROLES.has(normalizeSubRole(user.subType));
   }
   return false;
+}
+
+/**
+ * Craft digital / freelancers may only list tasks assigned to them.
+ * Elevated leads (and non-digital staff) keep team-wide visibility within account scope.
+ */
+export function shouldRestrictToOwnDigitalTasks(user) {
+  if (!user) return false;
+  if (isDigitalElevatedLead(user)) return false;
+  return user.role === "digital" || user.role === "freelancer";
+}
+
+/**
+ * Craft staff cannot assign work to others — always self.
+ * Pass `allowAssignOthers` when user is project Account Manager (or global lead already skips restrict).
+ */
+export function resolveDigitalTaskAssigneeId(user, requestedAssigneeId, { allowAssignOthers = false } = {}) {
+  if (!allowAssignOthers && shouldRestrictToOwnDigitalTasks(user)) {
+    return Number(user.id);
+  }
+  if (requestedAssigneeId == null || requestedAssigneeId === "") return null;
+  const n = Number(requestedAssigneeId);
+  return Number.isFinite(n) ? n : null;
 }
 
 /**

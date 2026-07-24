@@ -58,6 +58,7 @@ export interface MarketingTaskDto {
   deadline: string | null;
   estimatedHours: number;
   description?: string | null;
+  createdBy?: number | null;
   createdAt?: string;
 }
 

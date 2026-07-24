@@ -3,6 +3,12 @@
  * Keep aligned with `backend/src/middlewares/digital-access.js`.
  */
 
+type CmsUserLike = {
+  id?: number | null;
+  role?: string | null;
+  subType?: string | null;
+} | null | undefined;
+
 function normalizeSubRole(rawSubRole?: string | null): string | null {
   if (!rawSubRole) return null;
   const s = String(rawSubRole).toLowerCase().trim().replace(/[\s-]+/g, "_");
@@ -16,11 +22,6 @@ function normalizeSubRole(rawSubRole?: string | null): string | null {
   if (s === "freelancer") return "freelancer";
   return s;
 }
-
-type CmsUserLike = {
-  role?: string | null;
-  subType?: string | null;
-} | null | undefined;
 
 export function canManageCmsProjects(user?: CmsUserLike): boolean {
   if (!user?.role) return false;
@@ -70,4 +71,23 @@ export function canManageMarketingClientCommercial(user?: CmsUserLike): boolean 
 
 export function canViewMarketingClientBudget(user?: CmsUserLike): boolean {
   return canManageMarketingClientCommercial(user);
+}
+
+/** Only AM / specialist / admin, or project roster Account Manager / workspace AM. */
+export function canAssignDigitalTasksToOthers(
+  user?: CmsUserLike,
+  opts?: {
+    projectMemberSubType?: string | null;
+    accountManagerId?: number | null;
+  },
+): boolean {
+  if (isDigitalElevatedLead(user)) return true;
+  if (
+    opts?.accountManagerId != null &&
+    user?.id != null &&
+    Number(opts.accountManagerId) === Number(user.id)
+  ) {
+    return true;
+  }
+  return normalizeSubRole(opts?.projectMemberSubType) === "account_manager";
 }

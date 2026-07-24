@@ -17,6 +17,7 @@ import {
   inferMediaKind,
   recordMarketingActivity,
   resolveScopedAccountId,
+  requireScopedAccountId,
   assertDocAccount,
   ensureAccountMediaVault,
   getScopedDigitalUserAccess,
@@ -232,8 +233,7 @@ export async function registerFile(req, res) {
 
 export async function renameMedia(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
-  await assertScopedAccountAccess(req.user, accountId);
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -247,8 +247,7 @@ export async function renameMedia(req, res) {
 
 export async function moveMedia(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
-  await assertScopedAccountAccess(req.user, accountId);
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -278,8 +277,7 @@ export async function moveMedia(req, res) {
 
 export async function deleteMedia(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
-  await assertScopedAccountAccess(req.user, accountId);
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
@@ -344,7 +342,7 @@ function objectKeyFromMedia(doc) {
 /** Authenticated download — forces save-as (not browser navigation/preview). */
 export async function downloadMedia(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false }).lean();
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);

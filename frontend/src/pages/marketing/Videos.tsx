@@ -43,11 +43,12 @@ import {
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   MarketingChipTabs,
-  parseAssigneeId,
+  resolveFormAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { cn } from "@/lib/utils";
 import type { VideoExportTarget, VideoRenderStatus } from "@/modules/marketing/types";
@@ -91,6 +92,8 @@ export default function MarketingVideos() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
+  const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
+  const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
   const { data, isLoading, isError } = useMarketingVideos(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -136,7 +139,11 @@ export default function MarketingVideos() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...emptyForm, accountId: projectFilter || "" });
+    setForm({
+      ...emptyForm,
+      accountId: projectFilter || "",
+      assigneeId: canAssignOthers ? "" : user?.id != null ? String(user.id) : "",
+    });
     setDialogOpen(true);
   };
 
@@ -169,7 +176,7 @@ export default function MarketingVideos() {
       hasThumbnail: form.hasThumbnail === "true",
       exportTarget: form.exportTarget,
       dueDate: form.dueDate || null,
-      assigneeId: parseAssigneeId(form.assigneeId),
+      assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
     };
     try {
       if (editing) {
@@ -396,7 +403,8 @@ export default function MarketingVideos() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Assignee</Label>
-              <MarketingAssigneeSelect
+              <MarketingAssigneeField
+                accountId={formAccountId}
                 value={form.assigneeId}
                 onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}
               />

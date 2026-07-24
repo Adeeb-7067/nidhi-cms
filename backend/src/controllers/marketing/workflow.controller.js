@@ -28,10 +28,13 @@ import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
   recordMarketingActivity,
   resolveScopedAccountId,
+  requireScopedAccountId,
   assertDocAccount,
   loadWorkspaceLabelsByAccountIds,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
+  canDeleteMarketingOwnedItem,
+  resolveMarketingAssigneeForAccount,
 } from "../../services/marketing/helpers.js";
 
 /** Allowed approval stage transitions (server-side workflow invariant). */
@@ -124,6 +127,8 @@ export async function createPost(req, res) {
     .lean();
   if (!account) notFound("Digital account");
 
+  const assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+
   const id = await getNextSequence("marketing_posts");
   const doc = await marketingPostsTable.create({
     id,
@@ -137,7 +142,7 @@ export async function createPost(req, res) {
     // New posts always start in review — clients cannot skip the workflow.
     approvalStage: "internal_review",
     scheduleStatus: "pending",
-    assigneeId: body.assigneeId != null ? Number(body.assigneeId) : null,
+    assigneeId,
     mediaIds: Array.isArray(body.mediaIds) ? body.mediaIds.map(Number) : [],
     createdBy: req.user.id,
   });
@@ -173,7 +178,7 @@ export async function createPost(req, res) {
 
 export async function updatePost(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingPostsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Post");
   assertDocAccount(doc, accountId);
@@ -218,7 +223,11 @@ export async function updatePost(req, res) {
     doc.scheduleStatus = body.scheduleStatus;
   }
   if (body.assigneeId !== undefined) {
-    doc.assigneeId = body.assigneeId == null ? null : Number(body.assigneeId);
+    const account = await marketingAccountsTable
+      .findOne({ id: doc.accountId, isDeleted: false })
+      .lean();
+    if (!account) notFound("Digital account");
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
   }
   if (Array.isArray(body.mediaIds)) doc.mediaIds = body.mediaIds.map(Number);
 
@@ -230,17 +239,12 @@ export async function updatePost(req, res) {
 
 export async function deletePost(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingPostsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Post");
   assertDocAccount(doc, accountId);
 
-  const isSuperAdminOrHr = req.user.role === "super_admin" || req.user.role === "hr" || req.user.role === "manager";
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const subRoleLower = (req.user.subType ?? "").toLowerCase();
-  const isAccountManager = subRoleLower.includes("account_manager");
-
-  if (!isSuperAdminOrHr && !isCreator && !isAccountManager) {
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
     forbidden("Only post creators, account managers, or admins can delete calendar posts.");
   }
 
@@ -300,7 +304,7 @@ export async function listApprovals(req, res) {
 
 export async function updateApprovalStage(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingApprovalsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Approval");
   assertDocAccount(doc, accountId);
@@ -346,17 +350,18 @@ export async function updateApprovalStage(req, res) {
 
 export async function updateApproval(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingApprovalsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Approval");
   assertDocAccount(doc, accountId);
 
   const body = req.body ?? {};
   if (body.assigneeId !== undefined) {
-    doc.assigneeId = body.assigneeId == null || body.assigneeId === "" ? null : Number(body.assigneeId);
-    if (doc.assigneeId != null && !Number.isFinite(doc.assigneeId)) {
-      badRequest("assigneeId must be a valid user id.", "assigneeId");
-    }
+    const account = await marketingAccountsTable
+      .findOne({ id: doc.accountId, isDeleted: false })
+      .lean();
+    if (!account) notFound("Digital account");
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
   }
   if (body.title != null) {
     const title = optionalString(body.title);
@@ -381,7 +386,7 @@ export async function updateApproval(req, res) {
 
 export async function deleteApproval(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingApprovalsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Approval");
   assertDocAccount(doc, accountId);

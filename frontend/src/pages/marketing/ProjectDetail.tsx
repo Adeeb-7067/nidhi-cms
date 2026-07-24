@@ -90,7 +90,7 @@ import {
   MarketingStatusBadge,
   ApprovalStatusBadge,
   PlatformIconBadge,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   parseAssigneeId,
 } from "@/modules/marketing/components";
 import {
@@ -1057,7 +1057,9 @@ export default function MarketingProjectDetail() {
             ) : null}
             <div className="space-y-1.5">
               <Label className="text-xs">Account manager</Label>
-              <MarketingAssigneeSelect
+              <MarketingAssigneeField
+                projectId={projectId}
+                forcePicker
                 value={workspaceForm.accountManagerId}
                 onValueChange={(v) => setWorkspaceForm((f) => ({ ...f, accountManagerId: v }))}
                 placeholder="Select manager"

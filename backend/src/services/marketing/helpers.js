@@ -17,7 +17,8 @@ import {
   deriveMarketingPlatformEnums,
   mergeMarketingPlatformEnums,
 } from "../../utils/digital-project-fields.js";
-import { normalizeSubRole } from "../../middlewares/digital-access.js";
+import { normalizeSubRole, isDigitalElevatedLead, shouldRestrictToOwnDigitalTasks, resolveDigitalTaskAssigneeId } from "../../middlewares/digital-access.js";
+import { assertProjectMember } from "../work-assignments.js";
 
 export async function recordMarketingActivity({
   accountId = null,
@@ -66,6 +67,18 @@ export async function assertScopedAccountAccess(user, accountId) {
     forbidden("You do not have access to this digital account.");
   }
   return access;
+}
+
+/**
+ * Resolve accountId from the request and enforce membership scope.
+ * Prefer this on every mutate-by-id path (prevents cross-account IDOR).
+ */
+export async function requireScopedAccountId(req, { required = true } = {}) {
+  const accountId = resolveScopedAccountId(req, { required });
+  if (accountId != null) {
+    await assertScopedAccountAccess(req.user, accountId);
+  }
+  return accountId;
 }
 
 /**
@@ -361,6 +374,99 @@ export function canViewMarketingClientBudget(userOrRole) {
   return canManageMarketingClientCommercial(userOrRole);
 }
 
+/** True when project-member subType is Account Manager (roster role on that project). */
+export function isProjectAccountManagerSubType(subType) {
+  return normalizeSubRole(subType) === "account_manager";
+}
+
+/**
+ * Can assign / manage team tasks on this digital workspace:
+ * global digital lead, marketing accountManagerId, or project roster "Account Manager".
+ */
+export async function canManageDigitalTasksForAccount(user, account) {
+  if (!user) return false;
+  if (isDigitalElevatedLead(user)) return true;
+  if (
+    account?.accountManagerId != null &&
+    Number(account.accountManagerId) === Number(user.id)
+  ) {
+    return true;
+  }
+  if (account?.projectId == null || user.id == null) return false;
+  const member = await projectMembersTable
+    .findOne({ projectId: Number(account.projectId), userId: Number(user.id) })
+    .lean();
+  return isProjectAccountManagerSubType(member?.subType);
+}
+
+/** Account ids where this user is project/workspace Account Manager (not global lead). */
+export async function getAccountIdsWhereUserIsProjectAccountManager(user) {
+  if (!user?.id || isDigitalElevatedLead(user)) return [];
+  const uid = Number(user.id);
+  const [rosterAm, managedAccounts] = await Promise.all([
+    projectMembersTable.find({ userId: uid }).select({ projectId: 1, subType: 1 }).lean(),
+    marketingAccountsTable
+      .find({ accountManagerId: uid, isDeleted: false })
+      .select({ id: 1 })
+      .lean(),
+  ]);
+  const amProjectIds = rosterAm
+    .filter((m) => isProjectAccountManagerSubType(m.subType))
+    .map((m) => m.projectId)
+    .filter((id) => id != null);
+  const fromRoster = amProjectIds.length
+    ? await marketingAccountsTable
+        .find({ projectId: { $in: amProjectIds }, isDeleted: false })
+        .select({ id: 1 })
+        .lean()
+    : [];
+  return [...new Set([...managedAccounts, ...fromRoster].map((a) => a.id))];
+}
+
+/**
+ * Craft digital / freelancers: own assignments only, except full board on AM accounts.
+ * Mutates `query` in place (same pattern as listTasks).
+ */
+export async function applyCraftAssigneeVisibility(query, user) {
+  if (!shouldRestrictToOwnDigitalTasks(user)) return;
+  const amAccountIds = await getAccountIdsWhereUserIsProjectAccountManager(user);
+  if (amAccountIds.length === 0) {
+    query.assigneeId = Number(user.id);
+    return;
+  }
+  query.$or = [
+    { assigneeId: Number(user.id) },
+    { accountId: { $in: amAccountIds } },
+  ];
+}
+
+/**
+ * Soft-delete gate: elevated lead, item creator, or project/workspace Account Manager.
+ */
+export async function canDeleteMarketingOwnedItem(user, doc) {
+  if (!user || !doc) return false;
+  if (isDigitalElevatedLead(user)) return true;
+  if (doc.createdBy != null && Number(doc.createdBy) === Number(user.id)) return true;
+  const account = await marketingAccountsTable
+    .findOne({ id: doc.accountId, isDeleted: false })
+    .lean();
+  return canManageDigitalTasksForAccount(user, account);
+}
+
+/**
+ * Resolve assignee for queue/calendar items: craft → self; leads/AM → optional id + project member.
+ */
+export async function resolveMarketingAssigneeForAccount(user, account, requestedAssigneeId) {
+  const allowAssignOthers = await canManageDigitalTasksForAccount(user, account);
+  const assigneeId = resolveDigitalTaskAssigneeId(user, requestedAssigneeId, {
+    allowAssignOthers,
+  });
+  if (assigneeId != null && allowAssignOthers && account?.projectId != null) {
+    await assertProjectMember(assigneeId, account.projectId);
+  }
+  return assigneeId;
+}
+
 export async function loadCompany(companyId) {
   return clientsTable.findOne({ id: companyId }).lean();
 }
@@ -449,13 +555,17 @@ export async function getScopedDigitalUserAccess(user) {
   }
 
   const needsScope =
-    user?.role === "digital" || user?.role === "freelancer" || user?.role === "bde";
+    user?.role === "digital" ||
+    user?.role === "freelancer" ||
+    user?.role === "bde" ||
+    user?.role === "hr";
   if (!needsScope) {
     return { isScoped: false, accountIds: null, projectIds: null, companyIds: null };
   }
 
   const userId = Number(user.id);
-  const digitalOnly = user.role === "digital" || user.role === "bde";
+  const digitalOnly =
+    user.role === "digital" || user.role === "bde" || user.role === "hr";
 
   const pmProjects = await projectsTable
     .find(

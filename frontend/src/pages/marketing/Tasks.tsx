@@ -50,17 +50,16 @@ import {
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   MarketingChipTabs,
-  parseAssigneeId,
+  resolveFormAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
-import { useAuth } from "@/contexts/AuthContext";
-import { isDigitalElevatedLead } from "@/lib/cms-project-manage";
 
 
 const emptyForm = {
@@ -76,13 +75,10 @@ const emptyForm = {
 };
 
 export default function MarketingTasks() {
-  const { user } = useAuth();
   const { can } = usePermissions();
   const canEdit = can("marketing_tasks", "edit");
   const canDelete = can("marketing_tasks", "delete");
   const showActions = canEdit || canDelete;
-
-  const isManagerOrAdmin = isDigitalElevatedLead(user);
 
   const [search, setSearch] = useState("");
 
@@ -90,12 +86,20 @@ export default function MarketingTasks() {
   const [statusTab, setStatusTab] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MarketingTaskDto | null>(null);
-  const isFullEditAllowed = !editing || isManagerOrAdmin || (editing as any).createdBy === user?.id;
 
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<MarketingTaskDto | null>(null);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
+  const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
+  const { user, canAssignOthers, isElevatedLead } = useDigitalAssigneeGate(formAccountId);
+  const isManagerOrAdmin = isElevatedLead;
+  const isFullEditAllowed =
+    !editing ||
+    isManagerOrAdmin ||
+    canAssignOthers ||
+    (editing.createdBy != null && Number(editing.createdBy) === Number(user?.id));
+
   const { data, isLoading, isError } = useMarketingTasks(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -150,7 +154,11 @@ export default function MarketingTasks() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...emptyForm, accountId: projectFilter || "" });
+    setForm({
+      ...emptyForm,
+      accountId: projectFilter || "",
+      assigneeId: canAssignOthers ? "" : user?.id != null ? String(user.id) : "",
+    });
     setDialogOpen(true);
   };
 
@@ -176,6 +184,7 @@ export default function MarketingTasks() {
       return;
     }
     try {
+      const assigneeId = resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id);
       if (editing) {
         await updateTask.mutateAsync({
           id: editing.id,
@@ -186,7 +195,7 @@ export default function MarketingTasks() {
             priority: form.priority,
             status: form.status,
             deadline: form.deadline,
-            assigneeId: parseAssigneeId(form.assigneeId),
+            assigneeId,
             estimatedHours: Number(form.estimatedHours) || 0,
             description: form.description.trim() || null,
           },
@@ -204,7 +213,7 @@ export default function MarketingTasks() {
           priority: form.priority,
           deadline: form.deadline,
           status: form.status,
-          assigneeId: parseAssigneeId(form.assigneeId),
+          assigneeId,
           estimatedHours: Number(form.estimatedHours) || 0,
           description: form.description.trim() || undefined,
         });
@@ -230,8 +239,12 @@ export default function MarketingTasks() {
   return (
     <PortalPageShell>
       <MarketingPageHeader
-        title="Daily tasks"
-        description="Task management — status, priority, deadlines, and estimated hours"
+        title={isManagerOrAdmin || canAssignOthers ? "Daily tasks" : "My tasks"}
+        description={
+          isManagerOrAdmin || canAssignOthers
+            ? "Team task board — status, priority, deadlines, and estimated hours"
+            : "Tasks assigned to you — status, priority, deadlines, and estimated hours"
+        }
         breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Tasks" }]}
         actions={
           can("marketing_tasks", "create") ? (
@@ -311,7 +324,11 @@ export default function MarketingTasks() {
                     <TableCell className="text-right">
                       <MarketingRowActions
                         canEdit={canEdit}
-                        canDelete={canDelete && (isManagerOrAdmin || (t as any).createdBy === user?.id)}
+                        canDelete={
+                          canDelete &&
+                          (isManagerOrAdmin ||
+                            (t.createdBy != null && Number(t.createdBy) === Number(user?.id)))
+                        }
                         onEdit={() => openEdit(t)}
                         onDelete={() => setDeleteTarget(t)}
                       />
@@ -422,7 +439,8 @@ export default function MarketingTasks() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-xs">Assignee</Label>
-                <MarketingAssigneeSelect
+                <MarketingAssigneeField
+                  accountId={formAccountId}
                   value={form.assigneeId}
                   disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, assigneeId: v }))}

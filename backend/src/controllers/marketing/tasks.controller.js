@@ -24,12 +24,16 @@ import { paginateModel, toIso } from "../../utils/mongo-list.js";
 import { IdLookupCache } from "../../lib/lookup-cache.js";
 import {
   recordMarketingActivity,
-  resolveScopedAccountId,
   assertDocAccount,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
+  canManageDigitalTasksForAccount,
+  requireScopedAccountId,
+  applyCraftAssigneeVisibility,
+  resolveMarketingAssigneeForAccount,
+  canDeleteMarketingOwnedItem,
 } from "../../services/marketing/helpers.js";
-import { isDigitalElevatedLead } from "../../middlewares/digital-access.js";
+import { shouldRestrictToOwnDigitalTasks } from "../../middlewares/digital-access.js";
 
 function formatTask(doc, displayName, assigneeName) {
   return {
@@ -47,6 +51,7 @@ function formatTask(doc, displayName, assigneeName) {
     deadline: toIso(doc.deadline)?.slice(0, 10) ?? null,
     estimatedHours: Number(doc.estimatedHours ?? 0),
     description: doc.description ?? null,
+    createdBy: doc.createdBy ?? null,
     createdAt: toIso(doc.createdAt),
     updatedAt: toIso(doc.updatedAt),
   };
@@ -72,8 +77,14 @@ export async function listTasks(req, res) {
   await applyScopedAccountQuery(query, req.user, req.query.accountId);
   if (req.query.status) query.status = String(req.query.status);
   if (req.query.category) query.category = String(req.query.category);
-  if (req.query.assigneeId) query.assigneeId = Number(req.query.assigneeId);
   if (req.query.priority) query.priority = String(req.query.priority);
+
+  // Craft roles: own tasks only, except full board on accounts where they are project AM.
+  if (req.query.assigneeId && !shouldRestrictToOwnDigitalTasks(req.user)) {
+    query.assigneeId = Number(req.query.assigneeId);
+  } else {
+    await applyCraftAssigneeVisibility(query, req.user);
+  }
 
   const { items, total, page, limit } = await paginateModel(
     marketingTasksTable,
@@ -138,6 +149,8 @@ export async function createTask(req, res) {
   const status = MARKETING_TASK_STATUSES.includes(body.status) ? body.status : "not_started";
   const priority = MARKETING_TASK_PRIORITIES.includes(body.priority) ? body.priority : "medium";
 
+  const assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
+
   const id = await getNextSequence("marketing_tasks");
   const doc = await marketingTasksTable.create({
     id,
@@ -147,7 +160,7 @@ export async function createTask(req, res) {
     category,
     status,
     priority,
-    assigneeId: body.assigneeId != null ? Number(body.assigneeId) : null,
+    assigneeId,
     deadline: body.deadline ? new Date(body.deadline) : null,
     estimatedHours: Number(body.estimatedHours ?? 0),
     description: optionalString(body.description),
@@ -174,17 +187,23 @@ export async function createTask(req, res) {
 
 export async function updateTask(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingTasksTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Task");
   assertDocAccount(doc, accountId);
 
   const body = req.body ?? {};
   const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-  const isFullEditAllowed = isCreator || isDigitalElevatedLead(req.user);
+  const account = await marketingAccountsTable.findOne({ id: doc.accountId }).lean();
+  const canManageAccount = await canManageDigitalTasksForAccount(req.user, account);
+  const isFullEditAllowed = isCreator || canManageAccount;
+  const canAssignOthers = canManageAccount;
 
-  // Non-creator, non-manager assignees can ONLY update task status
+  // Assignees (non-managers) may only update status on their own tasks.
   if (!isFullEditAllowed) {
+    if (Number(doc.assigneeId) !== Number(req.user.id)) {
+      forbidden("You can only update tasks assigned to you.");
+    }
     if (
       body.title !== undefined ||
       body.category !== undefined ||
@@ -195,6 +214,15 @@ export async function updateTask(req, res) {
     ) {
       forbidden("Assigned members can only update task status. Task details can only be edited by creator or manager.");
     }
+  }
+
+  if (
+    body.assigneeId !== undefined &&
+    !canAssignOthers &&
+    body.assigneeId != null &&
+    Number(body.assigneeId) !== Number(req.user.id)
+  ) {
+    forbidden("Only account managers and digital leads can assign tasks to other members.");
   }
 
   if (body.title != null) {
@@ -219,7 +247,7 @@ export async function updateTask(req, res) {
     doc.priority = body.priority;
   }
   if (body.assigneeId !== undefined && isFullEditAllowed) {
-    doc.assigneeId = body.assigneeId == null ? null : Number(body.assigneeId);
+    doc.assigneeId = await resolveMarketingAssigneeForAccount(req.user, account, body.assigneeId);
   }
   if (body.deadline !== undefined && isFullEditAllowed) {
     doc.deadline = body.deadline ? new Date(body.deadline) : null;
@@ -239,14 +267,12 @@ export async function updateTask(req, res) {
 
 export async function deleteTask(req, res) {
   const id = parseIdParam(req.params.id);
-  const accountId = resolveScopedAccountId(req, { required: true });
+  const accountId = await requireScopedAccountId(req);
   const doc = await marketingTasksTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Task");
   assertDocAccount(doc, accountId);
 
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
-
-  if (!isCreator && !isDigitalElevatedLead(req.user)) {
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
     forbidden("Only task creators, account managers, specialists, or admins can delete tasks.");
   }
 

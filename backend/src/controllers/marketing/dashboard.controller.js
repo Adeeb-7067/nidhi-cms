@@ -10,6 +10,7 @@ import {
   marketingContentTable,
   marketingMediaItemsTable,
   projectsTable,
+  projectMembersTable,
   usersTable,
   clientsTable,
 } from "../../models/schema/index.js";
@@ -17,7 +18,9 @@ import { toIso } from "../../utils/mongo-list.js";
 import {
   canViewMarketingClientBudget,
   getScopedDigitalUserAccess,
+  getAccountIdsWhereUserIsProjectAccountManager,
 } from "../../services/marketing/helpers.js";
+import { shouldRestrictToOwnDigitalTasks } from "../../middlewares/digital-access.js";
 
 function startOfDay(d = new Date()) {
   const x = new Date(d);
@@ -59,6 +62,21 @@ export async function getDashboard(req, res) {
     ? { id: { $in: access.projectIds.length ? access.projectIds : [-1] } }
     : {};
 
+  const craftOwn = shouldRestrictToOwnDigitalTasks(req.user);
+  const amAccountIds = craftOwn
+    ? await getAccountIdsWhereUserIsProjectAccountManager(req.user)
+    : [];
+  const craftTaskVisibility = craftOwn
+    ? amAccountIds.length === 0
+      ? { assigneeId: Number(req.user.id) }
+      : {
+          $or: [
+            { assigneeId: Number(req.user.id) },
+            { accountId: { $in: amAccountIds } },
+          ],
+        }
+    : {};
+
   const [
     digitalProjectCount,
     openTasks,
@@ -85,18 +103,21 @@ export async function getDashboard(req, res) {
       isDeleted: false,
       status: { $in: ["not_started", "in_progress", "waiting_client_approval", "revision"] },
       ...accountFilter,
+      ...craftTaskVisibility,
     }),
     marketingTasksTable.countDocuments({
       isDeleted: false,
       status: { $nin: ["completed", "cancelled"] },
       deadline: { $ne: null, $lt: todayStart },
       ...accountFilter,
+      ...craftTaskVisibility,
     }),
     marketingTasksTable.countDocuments({
       isDeleted: false,
       status: "completed",
       updatedAt: { $gte: weekAgo },
       ...accountFilter,
+      ...craftTaskVisibility,
     }),
     marketingApprovalsTable.countDocuments({
       isDeleted: false,
@@ -124,16 +145,22 @@ export async function getDashboard(req, res) {
       kind: { $ne: "folder" },
       ...accountFilter,
     }),
-    marketingGraphicsTable.countDocuments({ isDeleted: false, ...accountFilter }),
+    marketingGraphicsTable.countDocuments({
+      isDeleted: false,
+      ...accountFilter,
+      ...craftTaskVisibility,
+    }),
     marketingVideosTable.countDocuments({
       isDeleted: false,
       renderStatus: { $in: ["editing", "voiceover_pending", "rendering"] },
       ...accountFilter,
+      ...craftTaskVisibility,
     }),
     marketingContentTable.countDocuments({
       isDeleted: false,
       status: { $in: ["internal_review", "client_review", "revision"] },
       ...accountFilter,
+      ...craftTaskVisibility,
     }),
     marketingAccountsTable
       .find({
@@ -170,7 +197,7 @@ export async function getDashboard(req, res) {
       .limit(16)
       .lean(),
     marketingTasksTable
-      .find({ isDeleted: false, ...accountFilter })
+      .find({ isDeleted: false, ...accountFilter, ...craftTaskVisibility })
       .select({ status: 1, category: 1, priority: 1, createdAt: 1, updatedAt: 1, deadline: 1 })
       .lean(),
     marketingApprovalsTable
@@ -187,6 +214,7 @@ export async function getDashboard(req, res) {
         status: { $nin: ["completed", "cancelled"] },
         deadline: { $ne: null },
         ...accountFilter,
+        ...craftTaskVisibility,
       })
       .sort({ deadline: 1 })
       .limit(8)
@@ -264,7 +292,10 @@ export async function getDashboard(req, res) {
   }
 
   const recentActivityForTrend = await marketingActivityTable
-    .find({ createdAt: { $gte: fourteenAgo } })
+    .find({
+      createdAt: { $gte: fourteenAgo },
+      ...accountFilter,
+    })
     .select({ createdAt: 1 })
     .lean();
   for (const a of recentActivityForTrend) {
@@ -332,12 +363,34 @@ export async function getDashboard(req, res) {
     : [];
   const actorName = new Map(actors.map((u) => [u.id, u.name]));
 
-  // Digital team (users with role === 'digital')
+  // Digital team — membership-scoped; craft users only see themselves.
+  let digitalUserFilter = { role: "digital", isDeleted: { $ne: true } };
+  if (craftOwn) {
+    digitalUserFilter = { ...digitalUserFilter, id: Number(req.user.id) };
+  } else if (access.isScoped) {
+    const memberIds = access.projectIds?.length
+      ? await projectMembersTable.distinct("userId", {
+          projectId: { $in: access.projectIds },
+        })
+      : [];
+    digitalUserFilter = {
+      ...digitalUserFilter,
+      id: { $in: memberIds.length ? memberIds : [-1] },
+    };
+  }
+
   const digitalMembers = await usersTable
-    .find(
-      { role: "digital", isDeleted: { $ne: true } },
-      { id: 1, name: 1, email: 1, designation: 1, avatarUrl: 1, image: 1, lastLoginAt: 1, lastSeenAt: 1, status: 1 },
-    )
+    .find(digitalUserFilter, {
+      id: 1,
+      name: 1,
+      email: 1,
+      designation: 1,
+      avatarUrl: 1,
+      image: 1,
+      lastLoginAt: 1,
+      lastSeenAt: 1,
+      status: 1,
+    })
     .lean();
 
   const digitalTeam = await Promise.all(
@@ -347,11 +400,13 @@ export async function getDashboard(req, res) {
           assigneeId: u.id,
           isDeleted: false,
           status: { $nin: ["completed", "cancelled"] },
+          ...accountFilter,
         }),
         marketingTasksTable.countDocuments({
           assigneeId: u.id,
           isDeleted: false,
           status: "completed",
+          ...accountFilter,
         }),
       ]);
       return {

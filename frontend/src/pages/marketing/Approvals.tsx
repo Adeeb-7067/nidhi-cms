@@ -21,7 +21,7 @@ import {
   MarketingEmptyState,
   MarketingConfirmDialog,
   DigitalProjectSelect,
-  MarketingAssigneeSelect,
+  MarketingAssigneeField,
   parseAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
@@ -214,7 +214,8 @@ export default function MarketingApprovals() {
                         <span>{item.updatedAt ? format(new Date(item.updatedAt), "MMM d") : "—"}</span>
                       </div>
                       {canEdit ? (
-                        <MarketingAssigneeSelect
+                        <MarketingAssigneeField
+                          accountId={item.accountId}
                           value={item.assigneeId != null ? String(item.assigneeId) : ""}
                           onValueChange={(v) => void handleAssigneeChange(item.id, item.accountId, v)}
                           className="h-7 w-full text-[10px]"
