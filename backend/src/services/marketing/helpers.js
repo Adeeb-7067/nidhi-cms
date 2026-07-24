@@ -441,16 +441,25 @@ export async function applyCraftAssigneeVisibility(query, user) {
 }
 
 /**
- * Soft-delete gate: elevated lead, item creator, or project/workspace Account Manager.
+ * Org admins may edit/delete any digital item. Everyone else may only fully
+ * edit/delete what they created (admin-created work stays locked for AMs).
+ */
+export function isMarketingOrgAdmin(user) {
+  if (!user?.role) return false;
+  return user.role === "super_admin" || user.role === "manager" || user.role === "hr";
+}
+
+export function canFullyEditMarketingOwnedItem(user, doc) {
+  if (!user || !doc) return false;
+  if (isMarketingOrgAdmin(user)) return true;
+  return doc.createdBy != null && Number(doc.createdBy) === Number(user.id);
+}
+
+/**
+ * Soft-delete gate: org admin or item creator.
  */
 export async function canDeleteMarketingOwnedItem(user, doc) {
-  if (!user || !doc) return false;
-  if (isDigitalElevatedLead(user)) return true;
-  if (doc.createdBy != null && Number(doc.createdBy) === Number(user.id)) return true;
-  const account = await marketingAccountsTable
-    .findOne({ id: doc.accountId, isDeleted: false })
-    .lean();
-  return canManageDigitalTasksForAccount(user, account);
+  return canFullyEditMarketingOwnedItem(user, doc);
 }
 
 /**

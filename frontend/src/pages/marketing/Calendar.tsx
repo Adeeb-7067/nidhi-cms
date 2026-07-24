@@ -77,6 +77,7 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -303,6 +304,10 @@ export default function MarketingCalendar() {
   };
 
   const handleSave = async () => {
+    if (editing && !canFullyEditMarketingItem(user, editing.createdBy)) {
+      toast.error("Only the creator or an org admin can edit this post");
+      return;
+    }
     try {
       if (editing) {
         await updatePost.mutateAsync({
@@ -696,7 +701,7 @@ export default function MarketingCalendar() {
                             <Eye className="h-3 w-3" />
                             Preview
                           </Button>
-                          {canEdit ? (
+                          {canEdit && canFullyEditMarketingItem(user, p.createdBy) ? (
                             <Button
                               type="button"
                               size="sm"
@@ -708,7 +713,7 @@ export default function MarketingCalendar() {
                               Edit
                             </Button>
                           ) : null}
-                          {canDelete ? (
+                          {canDelete && canFullyEditMarketingItem(user, p.createdBy) ? (
                             <Button
                               type="button"
                               size="sm"
@@ -740,7 +745,13 @@ export default function MarketingCalendar() {
                       >
                         <button
                           type="button"
-                          onClick={() => openEdit(p)}
+                          onClick={() => {
+                            if (canEdit && canFullyEditMarketingItem(user, p.createdBy)) {
+                              openEdit(p);
+                            } else {
+                              setPreviewTarget(p);
+                            }
+                          }}
                           className="flex min-w-0 flex-1 items-start gap-2 text-left"
                         >
                           <PlatformIconBadge platform={p.platform} showLabel={false} />
@@ -1024,7 +1035,7 @@ export default function MarketingCalendar() {
 
               {/* Modal Footer */}
               <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
-                {canEdit ? (
+                {canEdit && canFullyEditMarketingItem(user, previewTarget.createdBy) ? (
                   <Button
                     type="button"
                     size="sm"

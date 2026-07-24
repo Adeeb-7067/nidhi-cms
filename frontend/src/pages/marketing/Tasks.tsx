@@ -56,6 +56,7 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -95,10 +96,7 @@ export default function MarketingTasks() {
   const { user, canAssignOthers, isElevatedLead } = useDigitalAssigneeGate(formAccountId);
   const isManagerOrAdmin = isElevatedLead;
   const isFullEditAllowed =
-    !editing ||
-    isManagerOrAdmin ||
-    canAssignOthers ||
-    (editing.createdBy != null && Number(editing.createdBy) === Number(user?.id));
+    !editing || canFullyEditMarketingItem(user, editing.createdBy);
 
   const { data, isLoading, isError } = useMarketingTasks(
     accountFilterId ? { accountId: accountFilterId } : undefined,
@@ -179,6 +177,20 @@ export default function MarketingTasks() {
   };
 
   const handleSave = async () => {
+    if (editing && !isFullEditAllowed) {
+      try {
+        await updateTask.mutateAsync({
+          id: editing.id,
+          accountId: editing.accountId,
+          data: { status: form.status },
+        });
+        toast.success("Task status updated");
+        setDialogOpen(false);
+      } catch (err) {
+        toastApiError(err, "Failed to update task");
+      }
+      return;
+    }
     if (!form.title.trim() || !form.deadline) {
       toast.error("Title and deadline are required");
       return;
@@ -323,12 +335,12 @@ export default function MarketingTasks() {
                   {showActions && (
                     <TableCell className="text-right">
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={
-                          canDelete &&
-                          (isManagerOrAdmin ||
-                            (t.createdBy != null && Number(t.createdBy) === Number(user?.id)))
+                        canEdit={
+                          canEdit &&
+                          (canFullyEditMarketingItem(user, t.createdBy) ||
+                            (t.assigneeId != null && Number(t.assigneeId) === Number(user?.id)))
                         }
+                        canDelete={canDelete && canFullyEditMarketingItem(user, t.createdBy)}
                         onEdit={() => openEdit(t)}
                         onDelete={() => setDeleteTarget(t)}
                       />
@@ -356,7 +368,11 @@ export default function MarketingTasks() {
           <div className="space-y-3">
             {!isFullEditAllowed && (
               <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-2.5 text-xs text-amber-800 dark:text-amber-300">
-                You are assigned to this task. You can update its progress status below.
+                {editing?.createdBy != null &&
+                user?.id != null &&
+                String(editing.createdBy) !== String(user.id)
+                  ? "This item was created by someone else. Only the creator or an org admin can change details."
+                  : "You are assigned to this task. You can update its progress status below."}
               </div>
             )}
             <div className="space-y-1.5">
@@ -386,7 +402,9 @@ export default function MarketingTasks() {
                   disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, category: v as TaskCategory }))}
                 >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs" disabled={!isFullEditAllowed}>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {Object.entries(TASK_CATEGORY_LABELS).map(([k, label]) => (
                       <SelectItem key={k} value={k}>{label}</SelectItem>
@@ -401,7 +419,9 @@ export default function MarketingTasks() {
                   disabled={!isFullEditAllowed}
                   onValueChange={(v) => setForm((f) => ({ ...f, priority: v as TaskPriority }))}
                 >
-                  <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-8 text-xs" disabled={!isFullEditAllowed}>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     {Object.entries(TASK_PRIORITY_LABELS).map(([k, label]) => (
                       <SelectItem key={k} value={k}>{label}</SelectItem>

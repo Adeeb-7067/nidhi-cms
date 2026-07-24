@@ -91,3 +91,27 @@ export function canAssignDigitalTasksToOthers(
   }
   return normalizeSubRole(opts?.projectMemberSubType) === "account_manager";
 }
+
+/** Org admins may edit any digital item; AM/craft only edit what they created. */
+export function isMarketingOrgAdmin(user?: CmsUserLike): boolean {
+  if (!user?.role) return false;
+  return user.role === "super_admin" || user.role === "manager" || user.role === "hr";
+}
+
+export function canFullyEditMarketingItem(
+  user?: CmsUserLike,
+  createdBy?: number | string | null,
+): boolean {
+  if (!user) return false;
+  if (isMarketingOrgAdmin(user)) return true;
+  if (createdBy == null || user.id == null) return false;
+  return String(createdBy) === String(user.id);
+}
+
+/** Same ownership rule as edit — creator or org admin. */
+export function canDeleteMarketingItem(
+  user?: CmsUserLike,
+  createdBy?: number | string | null,
+): boolean {
+  return canFullyEditMarketingItem(user, createdBy);
+}

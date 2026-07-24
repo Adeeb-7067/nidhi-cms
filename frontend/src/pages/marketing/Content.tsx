@@ -50,6 +50,7 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import type { ApprovalStage, ContentType } from "@/modules/marketing/types";
 import { toast } from "sonner";
@@ -159,6 +160,10 @@ export default function MarketingContent() {
   };
 
   const handleSave = async () => {
+    if (editing && !canFullyEditMarketingItem(user, editing.createdBy)) {
+      toast.error("Only the creator or an org admin can edit this content");
+      return;
+    }
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -304,8 +309,8 @@ export default function MarketingContent() {
                   {showActions && (
                     <TableCell className="text-right">
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={canDelete}
+                        canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)}
+                        canDelete={canDelete && canFullyEditMarketingItem(user, c.createdBy)}
                         onEdit={() => openEdit(c)}
                         onDelete={() => setDeleteTarget(c)}
                       />

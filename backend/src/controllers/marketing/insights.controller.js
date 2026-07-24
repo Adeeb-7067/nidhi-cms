@@ -37,6 +37,7 @@ import {
   applyScopedAccountQuery,
   assertScopedAccountAccess,
   canDeleteMarketingOwnedItem,
+  canFullyEditMarketingOwnedItem,
 } from "../../services/marketing/helpers.js";
 
 async function resolveAccount(accountId) {
@@ -60,6 +61,7 @@ function formatCampaign(doc, companyName) {
     status: doc.status,
     budgetInr: doc.budgetInr ?? 0,
     roas: doc.roas ?? 0,
+    createdBy: doc.createdBy ?? null,
   };
   if (doc.network === "meta") {
     return {
@@ -173,6 +175,9 @@ export async function updateCampaign(req, res) {
   const doc = await marketingCampaignsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Campaign");
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this campaign.");
+  }
   const body = req.body ?? {};
   if (body.name != null) {
     const name = optionalString(body.name);
@@ -212,7 +217,7 @@ export async function deleteCampaign(req, res) {
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only campaign creators, account managers, or admins can delete ad campaigns.");
+    forbidden("Only the campaign creator or an org admin can delete ad campaigns.");
   }
 
   doc.isDeleted = true;
@@ -247,6 +252,7 @@ export async function listSocialMetrics(req, res) {
       engagementRate: m.engagementRate ?? 0,
       bestPostTitle: m.bestPostTitle ?? "",
       worstPostTitle: m.worstPostTitle ?? "",
+      createdBy: m.createdBy ?? null,
     })),
   });
 }
@@ -278,6 +284,9 @@ export async function upsertSocialMetric(req, res) {
   };
 
   if (existing) {
+    if (!canFullyEditMarketingOwnedItem(req.user, existing)) {
+      forbidden("Only the creator or an org admin can edit this social metric.");
+    }
     Object.assign(existing, fields);
     await existing.save();
     return res.json({ id: existing.id, platform: existing.platform });
@@ -290,6 +299,9 @@ export async function upsertSocialMetric(req, res) {
     isDeleted: true,
   });
   if (softDeleted) {
+    if (!canFullyEditMarketingOwnedItem(req.user, softDeleted)) {
+      forbidden("Only the creator or an org admin can restore this social metric.");
+    }
     softDeleted.isDeleted = false;
     Object.assign(softDeleted, fields);
     await softDeleted.save();
@@ -378,6 +390,7 @@ export async function getSeoPanel(req, res) {
       trend: k.trend ?? "stable",
       searchVolume: k.searchVolume ?? 0,
       url: k.url ?? "",
+      createdBy: k.createdBy ?? null,
     })),
     audits: audits.map((a) => ({
       id: String(a.id),
@@ -429,6 +442,9 @@ export async function updateSeoKeyword(req, res) {
   const doc = await marketingSeoKeywordsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("SEO keyword");
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this SEO keyword.");
+  }
   const body = req.body ?? {};
   if (body.keyword != null) {
     const keyword = optionalString(body.keyword);
@@ -450,6 +466,9 @@ export async function deleteSeoKeyword(req, res) {
   const doc = await marketingSeoKeywordsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("SEO keyword");
   assertDocAccount(doc, accountId);
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
+    forbidden("Only the creator or an org admin can delete this SEO keyword.");
+  }
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
@@ -462,6 +481,9 @@ export async function deleteSocialMetric(req, res) {
   const doc = await marketingSocialMetricsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Social metric");
   assertDocAccount(doc, accountId);
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
+    forbidden("Only the creator or an org admin can delete this social metric.");
+  }
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
@@ -570,6 +592,7 @@ export async function listReports(req, res) {
           ? companies.get(r.companyId)?.companyName
           : undefined,
       accountId: r.accountId ?? null,
+      createdBy: r.createdBy ?? null,
     })),
     total,
     page,
@@ -617,6 +640,9 @@ export async function updateReport(req, res) {
     badRequest("This report is not linked to a digital project. Recreate it under a project.", "accountId");
   }
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this report.");
+  }
   const body = req.body ?? {};
   if (body.title != null) {
     const title = optionalString(body.title);
@@ -644,7 +670,7 @@ export async function deleteReport(req, res) {
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only report creators, account managers, or admins can delete reports.");
+    forbidden("Only the report creator or an org admin can delete reports.");
   }
 
   doc.isDeleted = true;

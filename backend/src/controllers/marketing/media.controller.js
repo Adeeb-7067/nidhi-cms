@@ -22,6 +22,7 @@ import {
   ensureAccountMediaVault,
   getScopedDigitalUserAccess,
   assertScopedAccountAccess,
+  canDeleteMarketingOwnedItem,
 } from "../../services/marketing/helpers.js";
 import path from "path";
 import { createReadStream } from "fs";
@@ -281,6 +282,10 @@ export async function deleteMedia(req, res) {
   const doc = await marketingMediaItemsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
+
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
+    forbidden("Only the creator or an org admin can delete this media item.");
+  }
 
   if (doc.kind === "folder" && doc.parentId == null) {
     forbidden("Cannot delete the account root folder.");

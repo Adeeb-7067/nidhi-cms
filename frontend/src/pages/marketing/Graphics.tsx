@@ -43,6 +43,7 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { cn } from "@/lib/utils";
 import type { ApprovalStage, GraphicFileType } from "@/modules/marketing/types";
@@ -160,6 +161,10 @@ export default function MarketingGraphics() {
   };
 
   const handleSave = async () => {
+    if (editing && !canFullyEditMarketingItem(user, editing.createdBy)) {
+      toast.error("Only the creator or an org admin can edit this graphic");
+      return;
+    }
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -314,8 +319,8 @@ export default function MarketingGraphics() {
                   {showActions && (
                     <TableCell className="text-right">
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={canDelete}
+                        canEdit={canEdit && canFullyEditMarketingItem(user, g.createdBy)}
+                        canDelete={canDelete && canFullyEditMarketingItem(user, g.createdBy)}
                         onEdit={() => openEdit(g)}
                         onDelete={() => setDeleteTarget(g)}
                       />

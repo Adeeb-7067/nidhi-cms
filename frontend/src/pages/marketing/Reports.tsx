@@ -38,6 +38,8 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
+import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 
 const periodLabels = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" } as const;
 type ReportPeriod = keyof typeof periodLabels;
@@ -58,6 +60,7 @@ const emptyForm = {
 };
 
 export default function MarketingReports() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canCreate = can("marketing_reports", "create");
   const canEdit = can("marketing_reports", "edit");
@@ -267,7 +270,7 @@ export default function MarketingReports() {
                         </div>
                         {showActions && (
                           <div className="flex gap-2">
-                            {canEdit && (
+                            {canEdit && canFullyEditMarketingItem(user, report.createdBy) && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -278,7 +281,7 @@ export default function MarketingReports() {
                                 Edit
                               </Button>
                             )}
-                            {canDelete && (
+                            {canDelete && canDeleteMarketingItem(user, report.createdBy) && (
                               <Button
                                 size="sm"
                                 variant="outline"

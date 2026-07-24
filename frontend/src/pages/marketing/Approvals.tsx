@@ -25,10 +25,12 @@ import {
   parseAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
 
 const NEXT_STAGE: Partial<Record<ApprovalStage, ApprovalStage>> = {
   internal_review: "client_review",
@@ -42,6 +44,7 @@ const REVISION_FROM: ApprovalStage[] = ["internal_review", "client_review", "app
 
 export default function MarketingApprovals() {
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canEdit = can("marketing_approvals", "edit");
   const canDelete = can("marketing_approvals", "delete");
@@ -195,7 +198,7 @@ export default function MarketingApprovals() {
                     <CardContent className="space-y-1.5 p-3">
                       <div className="flex items-start justify-between gap-1">
                         <p className="flex-1 text-xs font-medium leading-snug">{item.title}</p>
-                        {canDelete && (
+                        {canDelete && canFullyEditMarketingItem(user, item.createdBy) && (
                           <Button
                             type="button"
                             variant="ghost"
@@ -213,7 +216,7 @@ export default function MarketingApprovals() {
                         <span>{item.type}</span>
                         <span>{item.updatedAt ? format(new Date(item.updatedAt), "MMM d") : "—"}</span>
                       </div>
-                      {canEdit ? (
+                      {canEdit && canFullyEditMarketingItem(user, item.createdBy) ? (
                         <MarketingAssigneeField
                           accountId={item.accountId}
                           value={item.assigneeId != null ? String(item.assigneeId) : ""}

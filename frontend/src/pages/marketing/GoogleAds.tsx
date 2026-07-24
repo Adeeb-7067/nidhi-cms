@@ -50,6 +50,8 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
+import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import type { CampaignStatus, GoogleCampaignType } from "@/modules/marketing/types";
 
 const CREATE_GOOGLE_TYPES: GoogleCampaignType[] = ["search", "display", "shopping", "performance_max", "youtube"];
@@ -68,6 +70,7 @@ const emptyForm = {
 };
 
 export default function MarketingGoogleAds() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canCreate = can("marketing_ads", "create");
   const canEdit = can("marketing_ads", "edit");
@@ -307,8 +310,8 @@ export default function MarketingGoogleAds() {
                   {showActions && (
                     <TableCell className="text-right">
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={canDelete}
+                        canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)}
+                        canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)}
                         onEdit={() => openEdit(c)}
                         onDelete={() => setDeleteTarget(c)}
                       />

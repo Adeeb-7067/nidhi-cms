@@ -49,6 +49,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
+import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 
 function TrendIcon({ trend }: { trend: "up" | "down" | "stable" }) {
   if (trend === "up") return <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />;
@@ -79,6 +81,7 @@ const emptyForm = {
 };
 
 export default function MarketingSeo() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canCreate = can("marketing_seo", "create");
   const canEdit = can("marketing_seo", "edit");
@@ -391,8 +394,8 @@ export default function MarketingSeo() {
                     {showActions && (
                       <TableCell className="text-right">
                         <MarketingRowActions
-                          canEdit={canEdit}
-                          canDelete={canDelete}
+                          canEdit={canEdit && canFullyEditMarketingItem(user, k.createdBy)}
+                          canDelete={canDelete && canDeleteMarketingItem(user, k.createdBy)}
                           onEdit={() => openEdit(k)}
                           onDelete={() => setDeleteTarget(k)}
                         />

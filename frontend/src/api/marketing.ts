@@ -166,6 +166,7 @@ export interface MarketingPostDto {
   scheduleStatus: PostScheduleStatus;
   assigneeId?: number | null;
   assignee: string | null;
+  createdBy?: number | null;
 }
 
 export interface MarketingApprovalDto {
@@ -177,6 +178,7 @@ export interface MarketingApprovalDto {
   stage: ApprovalStage;
   assigneeId?: number | null;
   assignee: string | null;
+  createdBy?: number | null;
   updatedAt: string | null;
 }
 
@@ -565,6 +567,7 @@ export interface MarketingGraphicDto {
   assigneeId?: number | null;
   assignee: string;
   dueDate: string | null;
+  createdBy?: number | null;
 }
 
 export interface MarketingVideoDto {
@@ -581,6 +584,7 @@ export interface MarketingVideoDto {
   assigneeId?: number | null;
   assignee: string;
   dueDate: string | null;
+  createdBy?: number | null;
 }
 
 export interface MarketingContentDto {
@@ -595,6 +599,7 @@ export interface MarketingContentDto {
   assigneeId?: number | null;
   assignee: string;
   dueDate: string | null;
+  createdBy?: number | null;
 }
 
 export function useMarketingGraphics(
@@ -667,6 +672,7 @@ export interface MarketingMetaCampaignDto {
   cpm: number;
   leads: number;
   roas: number;
+  createdBy?: number | null;
 }
 
 export interface MarketingGoogleCampaignDto {
@@ -683,6 +689,7 @@ export interface MarketingGoogleCampaignDto {
   cpa: number;
   roas: number;
   conversions: number;
+  createdBy?: number | null;
 }
 
 export function useMarketingCampaigns(
@@ -714,6 +721,7 @@ export interface MarketingSocialMetricDto {
   engagementRate: number;
   bestPostTitle: string;
   worstPostTitle: string;
+  createdBy?: number | null;
 }
 
 export function useMarketingSocial(params?: { accountId?: number }) {
@@ -747,6 +755,7 @@ export function useMarketingSeo(params?: { accountId?: number }) {
           trend: "up" | "down" | "stable";
           searchVolume: number;
           url: string;
+          createdBy?: number | null;
         }[];
         audits: {
           id: string;
@@ -810,6 +819,7 @@ export function useMarketingReports(params?: { accountId?: number }) {
           generatedAt: string;
           accountId?: number | null;
           clientName?: string;
+          createdBy?: number | null;
         }[];
         total: number;
       }>(apiUrl(`/api/marketing/reports?${qs}`)),

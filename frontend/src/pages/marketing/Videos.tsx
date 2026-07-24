@@ -49,6 +49,7 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
+import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { cn } from "@/lib/utils";
 import type { VideoExportTarget, VideoRenderStatus } from "@/modules/marketing/types";
@@ -164,6 +165,10 @@ export default function MarketingVideos() {
   };
 
   const handleSave = async () => {
+    if (editing && !canFullyEditMarketingItem(user, editing.createdBy)) {
+      toast.error("Only the creator or an org admin can edit this video");
+      return;
+    }
     if (!form.title.trim()) {
       toast.error("Title is required");
       return;
@@ -301,8 +306,8 @@ export default function MarketingVideos() {
                   {showActions && (
                     <TableCell className="text-right">
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={canDelete}
+                        canEdit={canEdit && canFullyEditMarketingItem(user, v.createdBy)}
+                        canDelete={canDelete && canFullyEditMarketingItem(user, v.createdBy)}
                         onEdit={() => openEdit(v)}
                         onDelete={() => setDeleteTarget(v)}
                       />

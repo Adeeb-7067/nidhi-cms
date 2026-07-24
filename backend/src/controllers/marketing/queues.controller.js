@@ -33,6 +33,7 @@ import {
   applyScopedAccountQuery,
   assertScopedAccountAccess,
   canDeleteMarketingOwnedItem,
+  canFullyEditMarketingOwnedItem,
   resolveMarketingAssigneeForAccount,
   applyCraftAssigneeVisibility,
 } from "../../services/marketing/helpers.js";
@@ -123,6 +124,7 @@ export async function listGraphics(req, res) {
         assigneeId: g.assigneeId ?? null,
         assignee: users.get(g.assigneeId)?.name ?? "Unassigned",
         dueDate: toIso(g.dueDate)?.slice(0, 10) ?? null,
+        createdBy: g.createdBy ?? null,
       };
     }),
     total,
@@ -182,6 +184,9 @@ export async function updateGraphic(req, res) {
   const doc = await marketingGraphicsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Graphic request");
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this graphic request.");
+  }
   const body = req.body ?? {};
   if (body.title != null) doc.title = optionalString(body.title) || doc.title;
   if (body.status != null) {
@@ -239,6 +244,7 @@ export async function listVideos(req, res) {
         assigneeId: v.assigneeId ?? null,
         assignee: users.get(v.assigneeId)?.name ?? "Unassigned",
         dueDate: toIso(v.dueDate)?.slice(0, 10) ?? null,
+        createdBy: v.createdBy ?? null,
       };
     }),
     total,
@@ -290,6 +296,9 @@ export async function updateVideo(req, res) {
   const doc = await marketingVideosTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Video request");
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this video request.");
+  }
   const body = req.body ?? {};
   if (body.title != null) doc.title = optionalString(body.title) || doc.title;
   if (MARKETING_VIDEO_RENDER_STATUSES.includes(body.renderStatus))
@@ -341,6 +350,7 @@ export async function listContent(req, res) {
         assigneeId: c.assigneeId ?? null,
         assignee: users.get(c.assigneeId)?.name ?? "Unassigned",
         dueDate: toIso(c.dueDate)?.slice(0, 10) ?? null,
+        createdBy: c.createdBy ?? null,
       };
     }),
     total,
@@ -397,6 +407,9 @@ export async function updateContent(req, res) {
   const doc = await marketingContentTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Content item");
   assertDocAccount(doc, accountId);
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this content item.");
+  }
   const body = req.body ?? {};
   if (body.title != null) doc.title = optionalString(body.title) || doc.title;
   if (MARKETING_CONTENT_TYPES.includes(body.type)) doc.type = body.type;
@@ -423,7 +436,7 @@ async function softDeleteQueueItem(model, id, label, accountId, reqUser, refType
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(reqUser, doc))) {
-    forbidden(`Only item creators, account managers, or admins can delete ${label.toLowerCase()}s.`);
+    forbidden(`Only the creator or an org admin can delete ${label.toLowerCase()}s.`);
   }
 
   doc.isDeleted = true;

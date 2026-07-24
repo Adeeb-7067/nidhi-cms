@@ -27,11 +27,12 @@ import {
   assertDocAccount,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
-  canManageDigitalTasksForAccount,
   requireScopedAccountId,
   applyCraftAssigneeVisibility,
-  resolveMarketingAssigneeForAccount,
+  canManageDigitalTasksForAccount,
+  canFullyEditMarketingOwnedItem,
   canDeleteMarketingOwnedItem,
+  resolveMarketingAssigneeForAccount,
 } from "../../services/marketing/helpers.js";
 import { shouldRestrictToOwnDigitalTasks } from "../../middlewares/digital-access.js";
 
@@ -193,26 +194,33 @@ export async function updateTask(req, res) {
   assertDocAccount(doc, accountId);
 
   const body = req.body ?? {};
-  const isCreator = doc.createdBy != null && Number(doc.createdBy) === Number(req.user.id);
+  const isFullEditAllowed = canFullyEditMarketingOwnedItem(req.user, doc);
   const account = await marketingAccountsTable.findOne({ id: doc.accountId }).lean();
-  const canManageAccount = await canManageDigitalTasksForAccount(req.user, account);
-  const isFullEditAllowed = isCreator || canManageAccount;
-  const canAssignOthers = canManageAccount;
+  const canAssignOthers = await canManageDigitalTasksForAccount(req.user, account);
 
-  // Assignees (non-managers) may only update status on their own tasks.
+  // Non-creators: assignees may only update status. Admin-created work is locked for AMs.
   if (!isFullEditAllowed) {
     if (Number(doc.assigneeId) !== Number(req.user.id)) {
-      forbidden("You can only update tasks assigned to you.");
+      forbidden("Only the creator or an org admin can fully edit this task.");
     }
-    if (
-      body.title !== undefined ||
-      body.category !== undefined ||
-      body.priority !== undefined ||
-      (body.assigneeId !== undefined && Number(body.assigneeId) !== Number(doc.assigneeId)) ||
-      body.deadline !== undefined ||
-      body.estimatedHours !== undefined
-    ) {
-      forbidden("Assigned members can only update task status. Task details can only be edited by creator or manager.");
+    const tryingRestrictedChange =
+      (body.title != null && optionalString(body.title) !== doc.title) ||
+      (body.category != null && body.category !== doc.category) ||
+      (body.priority != null && body.priority !== doc.priority) ||
+      (body.assigneeId !== undefined &&
+        body.assigneeId != null &&
+        Number(body.assigneeId) !== Number(doc.assigneeId)) ||
+      (body.deadline !== undefined &&
+        String(body.deadline ? new Date(body.deadline).toISOString().slice(0, 10) : "") !==
+          String(doc.deadline ? new Date(doc.deadline).toISOString().slice(0, 10) : "")) ||
+      (body.estimatedHours !== undefined &&
+        Number(body.estimatedHours) !== Number(doc.estimatedHours ?? 0)) ||
+      (body.description !== undefined &&
+        (optionalString(body.description) ?? null) !== (doc.description ?? null));
+    if (tryingRestrictedChange) {
+      forbidden(
+        "Assigned members can only update task status. Full edits are limited to the creator or an org admin.",
+      );
     }
   }
 
@@ -273,7 +281,7 @@ export async function deleteTask(req, res) {
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only task creators, account managers, specialists, or admins can delete tasks.");
+    forbidden("Only the task creator or an org admin can delete this task.");
   }
 
   doc.isDeleted = true;

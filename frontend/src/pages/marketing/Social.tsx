@@ -41,6 +41,8 @@ import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { useAuth } from "@/contexts/AuthContext";
+import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 
 const SOCIAL_PLATFORMS: MarketingPlatform[] = [
   "instagram",
@@ -63,6 +65,7 @@ const emptyForm = {
 };
 
 export default function MarketingSocial() {
+  const { user } = useAuth();
   const { can } = usePermissions();
   const canCreate = can("marketing_analytics", "create");
   const canEdit = can("marketing_analytics", "edit");
@@ -217,8 +220,8 @@ export default function MarketingSocial() {
                     <span className="text-xs text-muted-foreground">{m.engagementRate}% engagement rate</span>
                     {showActions && (
                       <MarketingRowActions
-                        canEdit={canEdit}
-                        canDelete={canDelete}
+                        canEdit={canEdit && canFullyEditMarketingItem(user, m.createdBy)}
+                        canDelete={canDelete && canDeleteMarketingItem(user, m.createdBy)}
                         onEdit={() => openEdit(m)}
                         onDelete={() => setDeleteTarget(m)}
                       />

@@ -228,6 +228,19 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(resolveDigitalTaskAssigneeId(am, 88), 88);
   });
 
+  it("AM fully edits own items but not admin-created ones", async () => {
+    const { canFullyEditMarketingOwnedItem, isMarketingOrgAdmin } = await import(
+      "../../src/services/marketing/helpers.js"
+    );
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    const admin = { role: "super_admin", id: 1 };
+    assert.equal(isMarketingOrgAdmin(admin), true);
+    assert.equal(isMarketingOrgAdmin(am), false);
+    assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 5 }), true);
+    assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 1 }), false);
+    assert.equal(canFullyEditMarketingOwnedItem(admin, { createdBy: 5 }), true);
+  });
+
   it("requireDigitalModuleAccess rejects designer on ads", () => {
     const mw = requireDigitalModuleAccess("marketing_ads");
     let status = "next";

@@ -34,6 +34,7 @@ import {
   applyScopedAccountQuery,
   assertScopedAccountAccess,
   canDeleteMarketingOwnedItem,
+  canFullyEditMarketingOwnedItem,
   resolveMarketingAssigneeForAccount,
 } from "../../services/marketing/helpers.js";
 
@@ -63,6 +64,7 @@ function formatPost(doc, companyName, assigneeName) {
     assigneeId: doc.assigneeId ?? null,
     assignee: assigneeName ?? null,
     mediaIds: doc.mediaIds ?? [],
+    createdBy: doc.createdBy ?? null,
     createdAt: toIso(doc.createdAt),
   };
 }
@@ -183,6 +185,10 @@ export async function updatePost(req, res) {
   if (!doc) notFound("Post");
   assertDocAccount(doc, accountId);
 
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this calendar post.");
+  }
+
   const body = req.body ?? {};
   if (body.platform != null) {
     if (!MARKETING_PLATFORMS.includes(body.platform)) badRequest("Invalid platform.", "platform");
@@ -245,7 +251,7 @@ export async function deletePost(req, res) {
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only post creators, account managers, or admins can delete calendar posts.");
+    forbidden("Only the post creator or an org admin can delete calendar posts.");
   }
 
   doc.isDeleted = true;
@@ -293,6 +299,7 @@ export async function listApprovals(req, res) {
         stage: a.stage,
         assigneeId: a.assigneeId ?? null,
         assignee: users.get(a.assigneeId)?.name ?? null,
+        createdBy: a.createdBy ?? null,
         updatedAt: toIso(a.updatedAt),
       };
     }),
@@ -355,6 +362,10 @@ export async function updateApproval(req, res) {
   if (!doc) notFound("Approval");
   assertDocAccount(doc, accountId);
 
+  if (!canFullyEditMarketingOwnedItem(req.user, doc)) {
+    forbidden("Only the creator or an org admin can edit this approval.");
+  }
+
   const body = req.body ?? {};
   if (body.assigneeId !== undefined) {
     const account = await marketingAccountsTable
@@ -390,6 +401,9 @@ export async function deleteApproval(req, res) {
   const doc = await marketingApprovalsTable.findOne({ id, isDeleted: false });
   if (!doc) notFound("Approval");
   assertDocAccount(doc, accountId);
+  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
+    forbidden("Only the creator or an org admin can delete this approval.");
+  }
   doc.isDeleted = true;
   doc.deletedAt = new Date();
   await doc.save();
