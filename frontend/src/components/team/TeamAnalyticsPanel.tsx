@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useGetTeamAnalytics,
   getGetTeamAnalyticsQueryKey,
@@ -17,14 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { PortalKpiGrid, PortalContentCard } from "@/components/layout/portal-page-kit";
 import {
   BarChart,
@@ -47,7 +40,6 @@ import {
   Users,
 } from "lucide-react";
 import { LogActivityHeatmap } from "@/components/analytics/log-activity-heatmap";
-import { cn } from "@/lib/utils";
 
 const CHART_COLORS = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444"];
 
@@ -72,45 +64,7 @@ function formatLogDateShort(iso?: string | null) {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function DeveloperLeaderboardRow({ dev, rank }: { dev: DeveloperStats; rank: number }) {
-  return (
-    <TableRow className="text-xs hover:bg-muted/30">
-      <TableCell className="py-2.5 w-8 text-muted-foreground font-mono">{rank}</TableCell>
-      <TableCell className="py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar className="h-7 w-7 shrink-0">
-            <AvatarImage src={dev.avatarUrl ?? undefined} />
-            <AvatarFallback className="text-[10px]">
-              {dev.name?.charAt(0) ?? "?"}
-            </AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="font-medium truncate">{dev.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {dev.employeeId ?? dev.subType ?? "Staff"}
-            </p>
-          </div>
-        </div>
-      </TableCell>
-      <TableCell className="py-2.5 text-right font-semibold tabular-nums">
-        {dev.totalHoursThisMonth}h
-      </TableCell>
-      <TableCell className="py-2.5 min-w-[120px]">
-        <div className="flex items-center gap-2">
-          <Progress value={dev.utilisationPct} className="h-1.5 flex-1" />
-          <span className="text-[10px] tabular-nums w-8 text-right">{dev.utilisationPct}%</span>
-        </div>
-      </TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{dev.logEntriesCount}</TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{dev.activeProjects}</TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{dev.bugsResolvedCount}</TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{dev.avgCompletionPct}%</TableCell>
-      <TableCell className="py-2.5 text-right text-muted-foreground whitespace-nowrap">
-        {formatLogDateShort(dev.lastLogDate)}
-      </TableCell>
-    </TableRow>
-  );
-}
+type DeveloperLeaderboardRow = DeveloperStats & { rank: number };
 
 export function TeamAnalyticsPanel({ variant = "team" }: { variant?: "team" | "monitoring" }) {
   const now = new Date();
@@ -189,6 +143,90 @@ export function TeamAnalyticsPanel({ variant = "team" }: { variant?: "team" | "m
           leaderboardHint: "Sorted by hours logged — click row metrics to compare workload",
           activeStaffHint: "Developers, QA & testers with accounts",
         };
+
+  const leaderboardRows = useMemo(
+    (): DeveloperLeaderboardRow[] => developers.map((dev, i) => ({ ...dev, rank: i + 1 })),
+    [developers],
+  );
+
+  const leaderboardColumns = useMemo((): CmsColumn<DeveloperLeaderboardRow>[] => [
+    {
+      id: "rank",
+      header: "#",
+      className: "w-8 font-mono text-muted-foreground",
+      cell: (dev) => dev.rank,
+    },
+    {
+      id: "member",
+      header: "Member",
+      className: "min-w-[140px]",
+      cell: (dev) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarImage src={dev.avatarUrl ?? undefined} />
+            <AvatarFallback className="text-[10px]">{dev.name?.charAt(0) ?? "?"}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="font-medium truncate">{dev.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {dev.employeeId ?? dev.subType ?? "Staff"}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "hours",
+      header: "Hours",
+      align: "right",
+      cell: (dev) => <span className="font-semibold tabular-nums">{dev.totalHoursThisMonth}h</span>,
+    },
+    {
+      id: "utilisation",
+      header: "Utilisation",
+      className: "min-w-[120px]",
+      cell: (dev) => (
+        <div className="flex items-center gap-2">
+          <Progress value={dev.utilisationPct} className="h-1.5 flex-1" />
+          <span className="text-[10px] tabular-nums w-8 text-right">{dev.utilisationPct}%</span>
+        </div>
+      ),
+    },
+    {
+      id: "logs",
+      header: "Logs",
+      align: "center",
+      cell: (dev) => <span className="tabular-nums">{dev.logEntriesCount}</span>,
+    },
+    {
+      id: "projects",
+      header: "Projects",
+      align: "center",
+      cell: (dev) => <span className="tabular-nums">{dev.activeProjects}</span>,
+    },
+    {
+      id: "bugs",
+      header: "Bugs closed",
+      align: "center",
+      cell: (dev) => <span className="tabular-nums">{dev.bugsResolvedCount}</span>,
+    },
+    {
+      id: "completion",
+      header: "Avg done %",
+      align: "center",
+      cell: (dev) => <span className="tabular-nums">{dev.avgCompletionPct}%</span>,
+    },
+    {
+      id: "lastLog",
+      header: "Last log",
+      align: "right",
+      cell: (dev) => (
+        <span className="text-muted-foreground whitespace-nowrap">
+          {formatLogDateShort(dev.lastLogDate)}
+        </span>
+      ),
+    },
+  ], []);
 
   if (isLoading) {
     return (
@@ -454,35 +492,14 @@ export function TeamAnalyticsPanel({ variant = "team" }: { variant?: "team" | "m
           <h3 className="text-sm font-semibold">{copy.leaderboardTitle}</h3>
           <p className="text-xs text-muted-foreground mt-0.5">{copy.leaderboardHint}</p>
         </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-8 text-[10px]">#</TableHead>
-                <TableHead className="text-[10px] min-w-[140px]">Member</TableHead>
-                <TableHead className="text-[10px] text-right">Hours</TableHead>
-                <TableHead className="text-[10px] min-w-[120px]">Utilisation</TableHead>
-                <TableHead className="text-[10px] text-center">Logs</TableHead>
-                <TableHead className="text-[10px] text-center">Projects</TableHead>
-                <TableHead className="text-[10px] text-center">Bugs closed</TableHead>
-                <TableHead className="text-[10px] text-center">Avg done %</TableHead>
-                <TableHead className="text-[10px] text-right">Last log</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {developers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="h-24 text-center text-xs text-muted-foreground">
-                    No team activity for {formatMonthLabel(month, year)}.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                developers.map((dev, i) => (
-                  <DeveloperLeaderboardRow key={dev.userId} dev={dev} rank={i + 1} />
-                ))
-              )}
-            </TableBody>
-          </Table>
+        <div className="p-4 pt-0">
+          <CmsDataTable
+            columns={leaderboardColumns}
+            rows={leaderboardRows}
+            rowKey={(dev) => dev.userId}
+            embedded
+            empty={{ title: `No team activity for ${formatMonthLabel(month, year)}.` }}
+          />
         </div>
       </PortalContentCard>
     </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ShieldCheck } from "lucide-react";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { mockComplianceItems, complianceScore } from "@/modules/legal/mock-data";
@@ -12,9 +12,9 @@ import {
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { ComplianceItem } from "@/modules/legal/types";
 
 export default function Compliance() {
   const [search, setSearch] = useState("");
@@ -30,6 +30,19 @@ export default function Compliance() {
   }, [search]);
 
   const compliantCount = mockComplianceItems.filter((c) => c.status === "compliant").length;
+
+  const columns = useMemo<CmsColumn<ComplianceItem>[]>(
+    () => [
+      { id: "framework", header: "Framework", cell: (c) => <span className="font-medium">{c.framework}</span> },
+      { id: "requirement", header: "Requirement", cell: (c) => <span className="max-w-[240px] block">{c.requirement}</span> },
+      { id: "status", header: "Status", chip: true, cell: (c) => <LegalStatusBadge variant="compliance" value={c.status} /> },
+      { id: "risk", header: "Risk", chip: true, cell: (c) => <LegalRiskBadge level={c.risk} /> },
+      { id: "lastReview", header: "Last review", cell: (c) => <span className="text-muted-foreground">{format(new Date(c.lastReview), "MMM d, yyyy")}</span> },
+      { id: "nextReview", header: "Next review", cell: (c) => format(new Date(c.nextReview), "MMM d, yyyy") },
+      { id: "owner", header: "Owner", cell: (c) => <CounselAvatar name={c.owner.name} /> },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -69,38 +82,12 @@ export default function Compliance() {
 
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search frameworks, requirements…" />
 
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={ShieldCheck} title="No compliance items found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Framework</TableHead>
-                <TableHead className="text-xs">Requirement</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Last review</TableHead>
-                <TableHead className="text-xs">Next review</TableHead>
-                <TableHead className="text-xs">Owner</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">{c.framework}</TableCell>
-                  <TableCell className="text-xs max-w-[240px]">{c.requirement}</TableCell>
-                  <TableCell><LegalStatusBadge variant="compliance" value={c.status} /></TableCell>
-                  <TableCell><LegalRiskBadge level={c.risk} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(c.lastReview), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs">{format(new Date(c.nextReview), "MMM d, yyyy")}</TableCell>
-                  <TableCell><CounselAvatar name={c.owner.name} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(c) => c.id}
+        empty={{ icon: ShieldCheck, title: "No compliance items found" }}
+      />
     </PortalPageShell>
   );
 }

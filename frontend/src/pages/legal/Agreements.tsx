@@ -3,16 +3,16 @@ import { format, differenceInDays } from "date-fns";
 import { Plus, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockAgreements } from "@/modules/legal/mock-data";
 import {
   LegalPageHeader,
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { AgreementRecord } from "@/modules/legal/types";
 
 export default function Agreements() {
   const [search, setSearch] = useState("");
@@ -26,6 +26,41 @@ export default function Agreements() {
         a.counterparty.toLowerCase().includes(q),
     );
   }, [search]);
+
+  const columns = useMemo<CmsColumn<AgreementRecord>[]>(
+    () => [
+      { id: "title", header: "Title", cell: (a) => <span className="font-medium">{a.title}</span> },
+      { id: "counterparty", header: "Counterparty", cell: (a) => a.counterparty },
+      { id: "type", header: "Type", cell: (a) => <span className="uppercase">{a.type}</span> },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (a) => <LegalStatusBadge variant="agreement" value={a.status} />,
+      },
+      {
+        id: "effective",
+        header: "Effective",
+        cell: (a) => <span className="text-muted-foreground">{format(new Date(a.effectiveFrom), "MMM d, yyyy")}</span>,
+      },
+      { id: "renewal", header: "Renewal", cell: (a) => format(new Date(a.renewalDate), "MMM d, yyyy") },
+      {
+        id: "renewalIn",
+        header: "Renewal in",
+        cell: (a) => {
+          const daysToRenewal = differenceInDays(new Date(a.renewalDate), new Date());
+          return (
+            <span className={`tabular-nums ${daysToRenewal < 60 ? "text-amber-600 font-medium" : ""}`}>
+              {daysToRenewal > 0 ? `${daysToRenewal}d` : "Overdue"}
+            </span>
+          );
+        },
+      },
+      { id: "risk", header: "Risk", chip: true, cell: (a) => <LegalRiskBadge level={a.risk} /> },
+      { id: "counsel", header: "Counsel", cell: (a) => <CounselAvatar name={a.assignedTo.name} /> },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -41,47 +76,12 @@ export default function Agreements() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search agreements…" />
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={FileText} title="No agreements found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Counterparty</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Effective</TableHead>
-                <TableHead className="text-xs">Renewal</TableHead>
-                <TableHead className="text-xs">Renewal in</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((a) => {
-                const daysToRenewal = differenceInDays(new Date(a.renewalDate), new Date());
-                return (
-                  <TableRow key={a.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs font-medium">{a.title}</TableCell>
-                    <TableCell className="text-xs">{a.counterparty}</TableCell>
-                    <TableCell className="text-xs uppercase">{a.type}</TableCell>
-                    <TableCell><LegalStatusBadge variant="agreement" value={a.status} /></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{format(new Date(a.effectiveFrom), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-xs">{format(new Date(a.renewalDate), "MMM d, yyyy")}</TableCell>
-                    <TableCell className={`text-xs tabular-nums ${daysToRenewal < 60 ? "text-amber-600 font-medium" : ""}`}>
-                      {daysToRenewal > 0 ? `${daysToRenewal}d` : "Overdue"}
-                    </TableCell>
-                    <TableCell><LegalRiskBadge level={a.risk} /></TableCell>
-                    <TableCell><CounselAvatar name={a.assignedTo.name} /></TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(a) => a.id}
+        empty={{ icon: FileText, title: "No agreements found" }}
+      />
     </PortalPageShell>
   );
 }

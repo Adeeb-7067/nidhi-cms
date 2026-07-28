@@ -21,3 +21,17 @@ export async function addProjectMembersBatch(
     body: JSON.stringify({ userIds, subType }),
   });
 }
+
+export async function updateProjectMember(
+  projectId: number,
+  userId: number,
+  data: { subType: string | null },
+  options?: RequestInit,
+): Promise<ProjectMember> {
+  return customFetch<ProjectMember>(`/api/projects/${projectId}/members/${userId}`, {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(data),
+  });
+}

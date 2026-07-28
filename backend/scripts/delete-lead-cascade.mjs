@@ -44,7 +44,7 @@ import {
   clientTeamActivityTable,
 } from "../src/models/schema/index.js";
 import { customerProposalOwnershipFilter } from "../src/utils/sales-proposal-links.js";
-import { deleteClientCompany } from "../src/services/client-company-provision.js";
+import { deleteClientCompany } from "../src/modules/identity/services/client-company-provision.js";
 
 const args = process.argv.slice(2);
 const confirm = args.includes("--confirm");

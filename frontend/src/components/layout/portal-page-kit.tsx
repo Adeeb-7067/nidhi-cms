@@ -3,12 +3,8 @@ import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DashboardHero,
-  ExecutiveStatCard,
-  PageKpiSkeleton,
-  type StatCardProps,
-} from "@/components/dashboard/dashboard-kit";
+import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { CmsKpiGrid, type CmsKpiItem } from "@/components/cms/cms-kpi";
 import { PageTableSkeleton } from "@/components/loading";
 
 /** Shared page wrapper for all portal roles (admin, dev, client, etc.). */
@@ -27,33 +23,30 @@ export function PortalPageHero(props: React.ComponentProps<typeof DashboardHero>
   return <DashboardHero {...props} />;
 }
 
-export type PortalKpiItem = StatCardProps;
+export type PortalKpiItem = CmsKpiItem;
 
-/** Executive KPI row used across portal pages. */
+/** Executive KPI row used across portal pages — shared CMS kit. */
 export function PortalKpiGrid({
   loading,
   count = 4,
   columns = 4,
   items,
+  className,
 }: {
   loading?: boolean;
   count?: number;
-  columns?: 2 | 3 | 4;
+  columns?: 2 | 3 | 4 | 6;
   items: PortalKpiItem[];
+  className?: string;
 }) {
-  if (loading) return <PageKpiSkeleton count={count} columns={columns} />;
-  const colClass =
-    columns === 2
-      ? "sm:grid-cols-2 xl:grid-cols-2"
-      : columns === 3
-        ? "sm:grid-cols-2 xl:grid-cols-3"
-        : "sm:grid-cols-2 xl:grid-cols-4";
   return (
-    <div className={cn("grid grid-cols-1 gap-3", colClass)}>
-      {items.map((item, i) => (
-        <ExecutiveStatCard key={item.title || `kpi-${i}`} {...item} delay={item.delay ?? i} />
-      ))}
-    </div>
+    <CmsKpiGrid
+      items={items}
+      loading={loading}
+      count={count}
+      columns={columns}
+      className={className}
+    />
   );
 }
 
@@ -113,20 +106,27 @@ export function PortalContentCard({
   );
 }
 
-/** Team / Admin list tab: PortalContentCard + skeleton or AdvancedTable. */
+/** Team / Admin / HRM list tab: tight card around AdvancedTable (matches denser CMS lists). */
 export function PortalTablePanel({
   isLoading,
   loadingRows = 8,
   loadingColumns = 6,
   children,
+  className,
+  contentClassName,
 }: {
   isLoading?: boolean;
   loadingRows?: number;
   loadingColumns?: number;
   children: React.ReactNode;
+  className?: string;
+  contentClassName?: string;
 }) {
   return (
-    <PortalContentCard>
+    <PortalContentCard
+      className={className}
+      contentClassName={cn("p-2 sm:p-2.5", contentClassName)}
+    >
       {isLoading ? (
         <PageTableSkeleton rows={loadingRows} columns={loadingColumns} showToolbar />
       ) : (

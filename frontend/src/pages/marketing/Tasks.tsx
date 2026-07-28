@@ -1,16 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
-import { Plus, CheckSquare, Clock, Loader2, ListChecks, PlayCircle } from "lucide-react";
+import { Plus, CheckSquare, Clock, Eye, Loader2, ListChecks, PlayCircle, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +38,6 @@ import {
   MarketingPageHeader,
   MarketingFilterBar,
   MarketingStatusBadge,
-  MarketingEmptyState,
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
@@ -54,10 +45,10 @@ import {
   MarketingChipTabs,
   resolveFormAssigneeId,
 } from "@/modules/marketing/components";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
 import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
@@ -75,11 +66,19 @@ const emptyForm = {
   description: "",
 };
 
+function DetailField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="text-sm text-foreground">{children}</div>
+    </div>
+  );
+}
+
 export default function MarketingTasks() {
   const { can } = usePermissions();
   const canEdit = can("marketing_tasks", "edit");
   const canDelete = can("marketing_tasks", "delete");
-  const showActions = canEdit || canDelete;
 
   const [search, setSearch] = useState("");
 
@@ -87,6 +86,7 @@ export default function MarketingTasks() {
   const [statusTab, setStatusTab] = useState("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<MarketingTaskDto | null>(null);
+  const [viewTarget, setViewTarget] = useState<MarketingTaskDto | null>(null);
 
   const [form, setForm] = useState(emptyForm);
   const [deleteTarget, setDeleteTarget] = useState<MarketingTaskDto | null>(null);
@@ -98,7 +98,7 @@ export default function MarketingTasks() {
   const isFullEditAllowed =
     !editing || canFullyEditMarketingItem(user, editing.createdBy);
 
-  const { data, isLoading, isError } = useMarketingTasks(
+  const { data, isLoading, isError, refetch } = useMarketingTasks(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const createTask = useCreateMarketingTask();
@@ -150,6 +150,11 @@ export default function MarketingTasks() {
     [statusCounts],
   );
 
+  const canEditTask = (t: MarketingTaskDto) =>
+    canEdit &&
+    (canFullyEditMarketingItem(user, t.createdBy) ||
+      (t.assigneeId != null && Number(t.assigneeId) === Number(user?.id)));
+
   const openCreate = () => {
     setEditing(null);
     setForm({
@@ -161,6 +166,7 @@ export default function MarketingTasks() {
   };
 
   const openEdit = (t: MarketingTaskDto) => {
+    setViewTarget(null);
     setEditing(t);
     setForm({
       title: t.title,
@@ -175,6 +181,81 @@ export default function MarketingTasks() {
     });
     setDialogOpen(true);
   };
+
+  const openView = (t: MarketingTaskDto) => {
+    setViewTarget(t);
+  };
+
+  const columns = useMemo<CmsColumn<MarketingTaskDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingTaskDto>[] = [
+        {
+          id: "title",
+          header: "Task",
+          cell: (t) => (
+            <button
+              type="button"
+              className="max-w-[200px] truncate text-left font-medium text-foreground hover:text-primary hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                openView(t);
+              }}
+              title="View task details"
+            >
+              {t.title}
+            </button>
+          ),
+        },
+        {
+          id: "category",
+          header: "Category",
+          cell: (t) => TASK_CATEGORY_LABELS[t.category],
+        },
+        { id: "project", header: "Project", cell: (t) => t.clientName },
+        { id: "assignee", header: "Assignee", cell: (t) => t.assignee || "—" },
+        {
+          id: "status",
+          header: "Status",
+          chip: true,
+          cell: (t) => <MarketingStatusBadge variant="task" status={t.status} />,
+        },
+        {
+          id: "priority",
+          header: "Priority",
+          chip: true,
+          cell: (t) => <MarketingStatusBadge variant="priority" status={t.priority} />,
+        },
+        {
+          id: "deadline",
+          header: "Deadline",
+          cell: (t) => (t.deadline ? format(new Date(t.deadline), "MMM d, yyyy") : "—"),
+        },
+        {
+          id: "hours",
+          header: "Est. hours",
+          align: "right",
+          cell: (t) => `${t.estimatedHours}h`,
+        },
+        {
+          id: "actions",
+          header: "Actions",
+          align: "right",
+          className: "w-[110px]",
+          cell: (t) => (
+            <MarketingRowActions
+              onView={() => openView(t)}
+              canEdit={canEditTask(t)}
+              canDelete={canDelete && canFullyEditMarketingItem(user, t.createdBy)}
+              onEdit={() => openEdit(t)}
+              onDelete={() => setDeleteTarget(t)}
+            />
+          ),
+        },
+      ];
+      return cols;
+    },
+    [canEdit, canDelete, user],
+  );
 
   const handleSave = async () => {
     if (editing && !isFullEditAllowed) {
@@ -291,68 +372,103 @@ export default function MarketingTasks() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={CheckSquare} title="Couldn’t load tasks" description="Check API permissions and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={CheckSquare}
-          title="No tasks found"
-          description="Adjust filters or create a new task."
-          onAction={can("marketing_tasks", "create") ? openCreate : undefined}
-          actionLabel="Add task"
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Task</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Assignee</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Priority</TableHead>
-                <TableHead className="text-xs">Deadline</TableHead>
-                <TableHead className="text-xs text-right">Est. hours</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((t) => (
-                <TableRow key={t.id}>
-                  <TableCell className="text-xs font-medium max-w-[200px] truncate">{t.title}</TableCell>
-                  <TableCell className="text-xs">{TASK_CATEGORY_LABELS[t.category]}</TableCell>
-                  <TableCell className="text-xs">{t.clientName}</TableCell>
-                  <TableCell className="text-xs">{t.assignee || "—"}</TableCell>
-                  <TableCell><MarketingStatusBadge variant="task" status={t.status} /></TableCell>
-                  <TableCell><MarketingStatusBadge variant="priority" status={t.priority} /></TableCell>
-                  <TableCell className="text-xs">
-                    {t.deadline ? format(new Date(t.deadline), "MMM d, yyyy") : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs text-right">{t.estimatedHours}h</TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={
-                          canEdit &&
-                          (canFullyEditMarketingItem(user, t.createdBy) ||
-                            (t.assigneeId != null && Number(t.assigneeId) === Number(user?.id)))
-                        }
-                        canDelete={canDelete && canFullyEditMarketingItem(user, t.createdBy)}
-                        onEdit={() => openEdit(t)}
-                        onDelete={() => setDeleteTarget(t)}
-                      />
-                    </TableCell>
-                  )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(t) => t.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        onRowClick={(t) => openView(t)}
+        empty={{
+          icon: CheckSquare,
+          title: "No tasks found",
+          description: "Adjust filters or create a new task.",
+          actionLabel: can("marketing_tasks", "create") ? "Add task" : undefined,
+          onAction: can("marketing_tasks", "create") ? openCreate : undefined,
+        }}
+        errorMessage="Check API permissions and try again."
+      />
 
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <Dialog open={viewTarget != null} onOpenChange={(open) => { if (!open) setViewTarget(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          {viewTarget ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-start gap-3 pr-6">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
+                    <Eye className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 space-y-1 text-left">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                      Task details
+                    </p>
+                    <DialogTitle className="text-base leading-snug">{viewTarget.title}</DialogTitle>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <MarketingStatusBadge variant="task" status={viewTarget.status} />
+                  <MarketingStatusBadge variant="priority" status={viewTarget.priority} />
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    {TASK_CATEGORY_LABELS[viewTarget.category]}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 rounded-xl border border-border/70 bg-muted/20 p-3.5">
+                  <DetailField label="Project">{viewTarget.clientName || "—"}</DetailField>
+                  <DetailField label="Assignee">{viewTarget.assignee || "Unassigned"}</DetailField>
+                  <DetailField label="Deadline">
+                    {viewTarget.deadline
+                      ? format(new Date(viewTarget.deadline), "EEEE, MMM d, yyyy")
+                      : "—"}
+                  </DetailField>
+                  <DetailField label="Estimated hours">{viewTarget.estimatedHours ?? 0}h</DetailField>
+                  {viewTarget.createdAt ? (
+                    <DetailField label="Created">
+                      {format(new Date(viewTarget.createdAt), "MMM d, yyyy")}
+                    </DetailField>
+                  ) : null}
+                </div>
+
+                <DetailField label="Description">
+                  {viewTarget.description?.trim() ? (
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">
+                      {viewTarget.description}
+                    </p>
+                  ) : (
+                    <p className="text-sm italic text-muted-foreground">No description provided.</p>
+                  )}
+                </DetailField>
+              </div>
+
+              <DialogFooter className="gap-2 sm:justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setViewTarget(null)}
+                >
+                  Close
+                </Button>
+                {canEditTask(viewTarget) ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => openEdit(viewTarget)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    Edit task
+                  </Button>
+                ) : null}
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

@@ -4,14 +4,6 @@ import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -38,19 +30,18 @@ import {
   MarketingPageHeader,
   MarketingFilterBar,
   MarketingDualLineChart,
-  MarketingEmptyState,
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 function TrendIcon({ trend }: { trend: "up" | "down" | "stable" }) {
   if (trend === "up") return <TrendingUp className="h-3.5 w-3.5 text-emerald-600" />;
@@ -63,6 +54,7 @@ type SeoKeywordRow = {
   keyword: string;
   clientName: string;
   accountId: number;
+  createdBy?: number | null;
   currentRank: number;
   previousRank: number;
   trend: "up" | "down" | "stable";
@@ -96,7 +88,7 @@ export default function MarketingSeo() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
-  const { data, isLoading, isError } = useMarketingSeo(
+  const { data, isLoading, isError, refetch } = useMarketingSeo(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const createKeyword = useCreateMarketingSeoKeyword();
@@ -140,6 +132,31 @@ export default function MarketingSeo() {
       auditCount: audits.length,
     };
   }, [keywords, audits]);
+
+  const auditColumns = useMemo<CmsColumn<(typeof audits)[number]>[]>(
+    () => [
+      { id: "project", header: "Project", cell: (a) => a.clientName },
+      { id: "score", header: "Score", align: "center", cell: (a) => `${a.score}/100` },
+      { id: "issues", header: "Issues", align: "center", cell: (a) => a.issues },
+      { id: "lastAudit", header: "Last audit", cell: (a) => a.lastAuditDate ? new Date(a.lastAuditDate).toLocaleDateString("en-IN") : "—" },
+    ],
+    [],
+  );
+  const keywordColumns = useMemo<CmsColumn<SeoKeywordRow>[]>(
+    () => {
+      const cols: CmsColumn<SeoKeywordRow>[] = [
+        { id: "keyword", header: "Keyword", cell: (k) => <span className="font-medium">{k.keyword}</span> },
+        { id: "project", header: "Project", cell: (k) => k.clientName },
+        { id: "rank", header: "Rank", align: "center", cell: (k) => <span className="font-semibold">#{k.currentRank}</span> },
+        { id: "trend", header: "Trend", align: "center", chip: true, cell: (k) => <div className="inline-flex items-center gap-1"><TrendIcon trend={k.trend} /><span className="text-[10px] text-muted-foreground">{k.previousRank !== k.currentRank ? `was #${k.previousRank}` : "—"}</span></div> },
+        { id: "volume", header: "Volume", align: "right", cell: (k) => k.searchVolume.toLocaleString("en-IN") },
+        { id: "url", header: "URL", cell: (k) => <span className="text-primary truncate max-w-[140px] block">{k.url}</span> },
+      ];
+      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (k) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, k.createdBy)} canDelete={canDelete && canDeleteMarketingItem(user, k.createdBy)} onEdit={() => openEdit(k)} onDelete={() => setDeleteTarget(k)} /> });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -255,11 +272,7 @@ export default function MarketingSeo() {
         <DigitalProjectSelect allowAll value={projectFilter} onValueChange={setProjectFilter} className="h-8 w-[220px] text-xs" />
       </MarketingFilterBar>
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs={false} />
-      ) : isError ? (
-        <MarketingEmptyState icon={Search} title="Could not load SEO data" description="Check your connection and try again." />
-      ) : (
+      {!isLoading && !isError ? (
         <>
           <div className="grid gap-4 sm:grid-cols-4">
             <Card>
@@ -325,90 +338,22 @@ export default function MarketingSeo() {
           <Card>
             <CardHeader><CardTitle className="text-sm">Recent audits</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Project</TableHead>
-                    <TableHead className="text-xs text-center">Score</TableHead>
-                    <TableHead className="text-xs text-center">Issues</TableHead>
-                    <TableHead className="text-xs">Last audit</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {audits.slice(0, 6).map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="text-xs">{a.clientName}</TableCell>
-                      <TableCell className="text-xs text-center font-medium">{a.score}/100</TableCell>
-                      <TableCell className="text-xs text-center">{a.issues}</TableCell>
-                      <TableCell className="text-xs">
-                        {a.lastAuditDate
-                          ? new Date(a.lastAuditDate).toLocaleDateString("en-IN")
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <CmsDataTable columns={auditColumns} rows={audits.slice(0, 6)} rowKey={(a) => a.id} empty={{ icon: Search, title: "No recent audits" }} />
             </CardContent>
           </Card>
-
-          <div className="rounded-xl border bg-card overflow-hidden">
-            {filtered.length === 0 ? (
-              <MarketingEmptyState
-                icon={Search}
-                title="No keywords tracked"
-                description="Add keywords to monitor rankings for your digital projects."
-                actionLabel={canCreate ? "Add keyword" : undefined}
-                onAction={canCreate ? openCreate : undefined}
-                className="border-0 rounded-none"
-              />
-            ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Keyword</TableHead>
-                  <TableHead className="text-xs">Project</TableHead>
-                  <TableHead className="text-xs text-center">Rank</TableHead>
-                  <TableHead className="text-xs text-center">Trend</TableHead>
-                  <TableHead className="text-xs text-right">Volume</TableHead>
-                  <TableHead className="text-xs">URL</TableHead>
-                  {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((k) => (
-                  <TableRow key={k.id}>
-                    <TableCell className="text-xs font-medium">{k.keyword}</TableCell>
-                    <TableCell className="text-xs">{k.clientName}</TableCell>
-                    <TableCell className="text-xs text-center font-semibold">#{k.currentRank}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="inline-flex items-center gap-1">
-                        <TrendIcon trend={k.trend} />
-                        <span className="text-[10px] text-muted-foreground">
-                          {k.previousRank !== k.currentRank ? `was #${k.previousRank}` : "—"}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-right">{k.searchVolume.toLocaleString("en-IN")}</TableCell>
-                    <TableCell className="text-xs text-primary truncate max-w-[140px]">{k.url}</TableCell>
-                    {showActions && (
-                      <TableCell className="text-right">
-                        <MarketingRowActions
-                          canEdit={canEdit && canFullyEditMarketingItem(user, k.createdBy)}
-                          canDelete={canDelete && canDeleteMarketingItem(user, k.createdBy)}
-                          onEdit={() => openEdit(k)}
-                          onDelete={() => setDeleteTarget(k)}
-                        />
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            )}
-          </div>
         </>
-      )}
+      ) : null}
+
+      <CmsDataTable
+        columns={keywordColumns}
+        rows={filtered}
+        rowKey={(k) => k.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{ icon: Search, title: "No keywords tracked", description: "Add keywords to monitor rankings for your digital projects.", actionLabel: canCreate ? "Add keyword" : undefined, onAction: canCreate ? openCreate : undefined }}
+        errorMessage="Check your connection and try again."
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

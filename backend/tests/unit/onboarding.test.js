@@ -4,7 +4,7 @@ import {
   buildDefaultOnboardingTasks,
   buildDefaultOnboardingTasksFromTitles,
   computeOnboardingProgress,
-} from "../../src/services/hrm/onboarding.service.js";
+} from "../../src/modules/hrm/services/onboarding.service.js";
 import { DEFAULT_ONBOARDING_TASKS } from "../../src/constants/hrm-workflow.js";
 
 describe("buildDefaultOnboardingTasks", () => {

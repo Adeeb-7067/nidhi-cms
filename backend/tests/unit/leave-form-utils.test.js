@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { workDayKeyForDate } from "../../src/services/hrm/hrm-date-utils.js";
+import { workDayKeyForDate } from "../../src/modules/hrm/services/hrm-date-utils.js";
 
 describe("leave past-date guard", () => {
   test("start date before today is rejected by comparison", () => {

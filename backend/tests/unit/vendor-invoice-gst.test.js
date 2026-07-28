@@ -33,15 +33,18 @@ describe("vendor invoice GST math", () => {
 describe("GST paid sources (no silent double-count contract)", () => {
   test("finance-tax gstPaidInRange separates vendor invoices from vendor-linked expenses", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/services/finance/finance-tax.service.js"),
+      join(__dirname, "../../src/modules/finance/services/finance-tax.service.js"),
       "utf8",
     );
     assert.ok(src.includes("async function gstPaidInRange"), "gstPaidInRange must exist");
     assert.ok(src.includes("FinanceExpenses"), "input GST from expenses");
-    assert.ok(src.includes("FinanceVendorInvoices"), "input GST from vendor invoices");
     assert.ok(
-      src.includes('status: { $ne: "cancelled" }') || src.includes('$ne: "cancelled"'),
-      "cancelled vendor invoices must be excluded from GST paid",
+      src.includes("recognizedVendorInvoiceGstShare") || src.includes("FinanceVendorInvoices"),
+      "input GST from vendor invoices",
+    );
+    assert.ok(
+      src.includes("FinancePayments") && src.includes("vendorInvoiceId"),
+      "vendor ITC must come from cash settlements, not unpaid bill gstAmount",
     );
     assert.ok(
       src.includes("vendorId: null") || src.includes("vendorId: { $exists: false }"),

@@ -4,15 +4,7 @@ import { Link } from "wouter";
 import { Banknote, Plus, Eye, CheckCircle2, AlertTriangle, Shield, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   formatCurrency,
   CHEQUE_PURPOSE_LABELS,
@@ -88,6 +80,19 @@ export default function ChequesPage() {
       </PortalPageShell>
     );
   }
+
+  const chipItems = (["all", "issued", "cleared", "cancelled", "bounced"] as const).map((value) => ({ value, label: value === "all" ? "All" : value, count: value === "all" ? cheques.length : cheques.filter((c) => c.status === value).length }));
+  const columns: CmsColumn<FinanceCheque>[] = [
+    { id: "payee", header: "Payee", cell: (c) => <Link href={`/finance/cheques/${c.id}`} className="hover:text-primary"><div className="font-medium">{c.payeeName}</div><div className="text-[10px] text-muted-foreground">{CHEQUE_PAYEE_TYPE_LABELS[c.payeeType]} · {c.reference}</div></Link> },
+    { id: "purpose", header: "Purpose", cell: (c) => <span className="text-muted-foreground">{CHEQUE_PURPOSE_LABELS[c.purpose]}</span> },
+    { id: "cheque", header: "Cheque #", cell: (c) => <span className="font-mono">{c.chequeNumber}</span> },
+    { id: "issue", header: "Issue", cell: (c) => <span className="text-muted-foreground">{format(new Date(c.issueDate), "MMM d, yyyy")}</span> },
+    { id: "clears", header: "Clears", cell: (c) => <span className="text-muted-foreground">{format(new Date(c.clearanceDate), "MMM d, yyyy")}</span> },
+    { id: "status", header: "Status", chip: true, cell: (c) => <FinanceStatusBadge variant="cheque" value={c.status} /> },
+    { id: "amount", header: "Amount", align: "right", cell: (c) => <span className="font-medium tabular-nums">{formatCurrency(c.amount)}</span> },
+    { id: "expense", header: "Expense", cell: (c) => c.expenseReference ? <Link href={`/finance/expenses?search=${encodeURIComponent(c.expenseReference)}`} className="font-mono text-primary hover:underline">{c.expenseReference}</Link> : "—" },
+    { id: "actions", header: "Actions", align: "right", cell: (c) => <div className="flex justify-end gap-1"><Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View"><Link href={`/finance/cheques/${c.id}`}><Eye className="h-3.5 w-3.5" /></Link></Button>{canEdit && c.status === "issued" && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Edit" onClick={() => { setEditCheque(c); setDrawerOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>}</div> },
+  ];
 
   return (
     <PortalPageShell>
@@ -194,109 +199,9 @@ export default function ChequesPage() {
         searchPlaceholder="Search payee, cheque #, reference…"
       />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "issued", "cleared", "cancelled", "bounced"] as const).map((t) => (
-            <TabsTrigger key={t} value={t} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {t === "all" ? "All" : t} (
-              {t === "all" ? cheques.length : cheques.filter((c) => c.status === (t as ChequeStatus)).length})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs value={statusTab} onValueChange={setStatusTab} items={chipItems} />
 
-      {filtered.length === 0 ? (
-        <FinanceEmptyState
-          icon={Banknote}
-          title="No cheques found"
-          description="Issue a bank cheque to create a linked unpaid expense."
-          actionLabel={canCreate ? "Issue cheque" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Payee</TableHead>
-                <TableHead className="text-xs">Purpose</TableHead>
-                <TableHead className="text-xs">Cheque #</TableHead>
-                <TableHead className="text-xs">Issue</TableHead>
-                <TableHead className="text-xs">Clears</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Expense</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="text-xs">
-                    <Link href={`/finance/cheques/${c.id}`} className="hover:text-primary">
-                      <div className="font-medium">{c.payeeName}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {CHEQUE_PAYEE_TYPE_LABELS[c.payeeType]} · {c.reference}
-                      </div>
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {CHEQUE_PURPOSE_LABELS[c.purpose]}
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">{c.chequeNumber}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {format(new Date(c.issueDate), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {format(new Date(c.clearanceDate), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell>
-                    <FinanceStatusBadge variant="cheque" value={c.status} />
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium">
-                    {formatCurrency(c.amount)}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {c.expenseReference ? (
-                      <Link
-                        href={`/finance/expenses?search=${encodeURIComponent(c.expenseReference)}`}
-                        className="font-mono text-primary hover:underline"
-                      >
-                        {c.expenseReference}
-                      </Link>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
-                        <Link href={`/finance/cheques/${c.id}`}>
-                          <Eye className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
-                      {canEdit && c.status === "issued" && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          title="Edit"
-                          onClick={() => {
-                            setEditCheque(c);
-                            setDrawerOpen(true);
-                          }}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(c) => c.id} empty={{ icon: Banknote, title: "No cheques found", description: "Issue a bank cheque to create a linked unpaid expense.", actionLabel: canCreate ? "Issue cheque" : undefined, onAction: canCreate ? openCreate : undefined }} />
 
       <ChequeFormModal
         open={drawerOpen}

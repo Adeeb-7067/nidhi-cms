@@ -7,7 +7,6 @@ import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevContentCard,
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
@@ -317,9 +316,7 @@ export default function DevRequests() {
       />
 
       {isLoading ? (
-        <DevContentCard>
-          <PageTableSkeleton rows={8} columns={6} showToolbar />
-        </DevContentCard>
+        <PageTableSkeleton rows={8} columns={6} showToolbar />
       ) : !data?.requests?.length ? (
         <DevEmptyState
           icon={Inbox}
@@ -327,23 +324,21 @@ export default function DevRequests() {
           description="Submit a new request when you need tools, hardware, or access."
         />
       ) : (
-        <DevContentCard>
-            <AdvancedTable
-              data={data.requests}
-              columns={columns}
-              searchKey="title"
-              searchPlaceholder="Search requests..."
-              filename="DevRequestsExport"
-              viewStorageKey="dev-requests"
-              pagination={{
-                page: data.page ?? page,
-                total: data.total ?? 0,
-                limit,
-                onPageChange: setPage,
-                onLimitChange: setLimit,
-              }}
-            />
-        </DevContentCard>
+        <AdvancedTable
+          data={data.requests}
+          columns={columns}
+          searchKey="title"
+          searchPlaceholder="Search requests..."
+          filename="DevRequestsExport"
+          viewStorageKey="dev-requests"
+          pagination={{
+            page: data.page ?? page,
+            total: data.total ?? 0,
+            limit,
+            onPageChange: setPage,
+            onLimitChange: setLimit,
+          }}
+        />
       )}
     </DevPageShell>
   );

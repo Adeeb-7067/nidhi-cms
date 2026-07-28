@@ -61,22 +61,20 @@ import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
 import { ProjectDocumentPanel } from "@/components/project/ProjectDocumentPanel";
 import { PermissionGate } from "@/modules/permissions/PermissionGate";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ProjectHubNav, type ProjectHubTab } from "@/components/project/ProjectHubNav";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { KpiSimpleCard } from "@/components/dashboard/dashboard-kit";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProjectDetailPageSkeleton } from "@/components/loading";
 import { FormattedText } from "@/components/ui/formatted-text";
 import { getApkAudienceLabel, resolveApkDisplayName } from "@/lib/apk-audience";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, CmsKpiGrid, type CmsColumn } from "@/components/cms";
 import { 
   ArrowLeft, Users, Github, Layout, Globe, Calendar, Clock, Download, Bug, MessageSquare, 
-  Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson, Package 
+  Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson, Package, Percent, Timer
 } from "lucide-react";
 import { toast } from "sonner";
-import { DataPagination } from "@/components/ui/data-pagination";
 import { useClientPagination } from "@/lib/table-pagination";
 import { toastApiError } from "@/lib/api-error";
 import { 
@@ -372,6 +370,248 @@ export default function AdminProjectDetail() {
     [requests?.requests],
   );
 
+  type ProjectRequest = NonNullable<RequestListResult["requests"]>[number];
+
+  const apkColumns: CmsColumn<ApkRelease>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (apk) => <span className="font-medium">{resolveApkDisplayName(apk)}</span>,
+    },
+    {
+      id: "version",
+      header: "Version",
+      cell: (apk) => (
+        <span className="text-muted-foreground">
+          v{apk.version} ({apk.buildNumber})
+        </span>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      chip: true,
+      cell: (apk) => (
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+          {apk.releaseType}
+        </Badge>
+      ),
+    },
+    {
+      id: "platform",
+      header: "Platform",
+      cell: (apk) => <span className="capitalize">{apk.platform}</span>,
+    },
+    {
+      id: "audience",
+      header: "Audience",
+      chip: true,
+      cell: (apk) => (
+        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
+          {getApkAudienceLabel(apk.audience)}
+        </Badge>
+      ),
+    },
+    {
+      id: "uploader",
+      header: "Uploaded By",
+      cell: (apk) => <span className="text-muted-foreground">{apk.uploaderName}</span>,
+    },
+    {
+      id: "date",
+      header: "Date",
+      cell: (apk) => (
+        <span className="text-muted-foreground">
+          {new Date(apk.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+    {
+      id: "action",
+      header: "Action",
+      align: "right",
+      cell: (apk) => (
+        <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
+          <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
+            <Download className="h-3 w-3 mr-1.5" /> Download
+          </a>
+        </Button>
+      ),
+    },
+  ];
+
+  const requestColumns: CmsColumn<ProjectRequest>[] = [
+    {
+      id: "type",
+      header: "Type",
+      cell: (req) => <span className="capitalize">{req.type.replace("_", " ")}</span>,
+    },
+    {
+      id: "title",
+      header: "Title",
+      cell: (req) => <span className="font-medium">{req.title}</span>,
+    },
+    {
+      id: "requester",
+      header: "Requester",
+      cell: (req) => <span className="text-muted-foreground">{req.developerName}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (req) => (
+        <Badge
+          variant="outline"
+          className={`${
+            req.status === "pending"
+              ? "text-blue-500 border-blue-500/20 bg-blue-500/10"
+              : req.status === "approved"
+                ? "text-green-500 border-green-500/20 bg-green-500/10"
+                : "text-red-500 border-red-500/20 bg-red-500/10"
+          } text-[10px] px-1.5 py-0 h-4`}
+        >
+          {req.status.toUpperCase()}
+        </Badge>
+      ),
+    },
+    {
+      id: "date",
+      header: "Date",
+      cell: (req) => (
+        <span className="text-muted-foreground">
+          {new Date(req.createdAt).toLocaleDateString()}
+        </span>
+      ),
+    },
+  ];
+
+  const milestoneColumns: CmsColumn<Milestone>[] = [
+    {
+      id: "title",
+      header: "Phase / Milestone",
+      cell: (m) => (
+        <div className="flex items-center gap-1.5 font-medium">
+          <MapPin className="h-3 w-3 shrink-0 text-primary/70" />
+          <div>{m.title}</div>
+        </div>
+      ),
+    },
+    {
+      id: "dueDate",
+      header: "Due Date",
+      cell: (m) => new Date(m.plannedDate).toLocaleDateString(),
+    },
+    {
+      id: "assignee",
+      header: "Assigned To",
+      cell: (m) =>
+        m.assigneeName ? (
+          <div className="flex items-center gap-1.5">
+            <Avatar className="h-5 w-5 shrink-0">
+              {m.assigneeAvatarUrl && <AvatarImage src={m.assigneeAvatarUrl} />}
+              <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
+                {m.assigneeName.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="truncate">{m.assigneeName}</p>
+              {m.assigneeRole && (
+                <p className="truncate text-[9px] text-muted-foreground">{m.assigneeRole}</p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (m) => (
+        <Badge
+          variant="outline"
+          className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
+            m.status === "completed"
+              ? "text-green-500 border-green-500/20 bg-green-500/10"
+              : m.status === "ongoing"
+                ? "text-amber-500 border-amber-500/20 bg-amber-500/10"
+                : m.status === "delayed"
+                  ? "text-rose-500 border-rose-500/20 bg-rose-500/10"
+                  : "text-blue-500 border-blue-500/20 bg-blue-500/10"
+          }`}
+        >
+          {m.status.toUpperCase()}
+        </Badge>
+      ),
+    },
+    ...(canManageMilestones
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            headerClassName: "w-[72px]",
+            cell: (m: Milestone) => (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                title="Edit milestone"
+                onClick={() => openEditMilestone(m)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            ),
+          } satisfies CmsColumn<Milestone>,
+        ]
+      : []),
+  ];
+
+  const historyColumns: CmsColumn<AuditLog>[] = [
+    {
+      id: "action",
+      header: "Action",
+      chip: true,
+      className: "align-top",
+      cell: (h) => (
+        <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 uppercase">
+          {h.action}
+        </Badge>
+      ),
+    },
+    {
+      id: "changes",
+      header: "Changes",
+      className: "align-top",
+      cell: (h) =>
+        h.action === "update" ? (
+          <div className="space-y-1">
+            {Object.keys(h.newVal || {}).map((key) => (
+              <div key={key}>
+                <span className="font-semibold text-primary">{key}:</span>{" "}
+                <span className="text-muted-foreground line-through">
+                  {(h.oldVal as Record<string, unknown>)?.[key] as React.ReactNode}
+                </span>{" "}
+                <span>{(h.newVal as Record<string, unknown>)?.[key] as React.ReactNode}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-muted-foreground">Entity {h.action}d</div>
+        ),
+    },
+    {
+      id: "date",
+      header: "Date",
+      className: "align-top",
+      cell: (h) => (
+        <span className="text-muted-foreground">{new Date(h.createdAt).toLocaleString()}</span>
+      ),
+    },
+  ];
+
   if (!validProjectId) {
     return <div className="py-16 text-center text-sm text-muted-foreground">Invalid project link.</div>;
   }
@@ -627,12 +867,36 @@ export default function AdminProjectDetail() {
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-4 space-y-4">
-          <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
-            <KpiSimpleCard label="Completion" value={`${analytics?.averageCompletionPct ?? project.completionPct}%`} />
-            <KpiSimpleCard label="Hours logged" value={analytics?.totalHoursLogged ?? 0} />
-            <KpiSimpleCard label="Open bugs" value={bugs?.bugs?.length ?? bugs?.total ?? 0} />
-            <KpiSimpleCard label="Team size" value={members?.length ?? 0} />
-          </div>
+          <CmsKpiGrid
+            columns={4}
+            items={[
+              {
+                title: "Completion",
+                value: `${analytics?.averageCompletionPct ?? project.completionPct}%`,
+                icon: Percent,
+                accent: "blue",
+              },
+              {
+                title: "Hours logged",
+                value: analytics?.totalHoursLogged ?? 0,
+                icon: Timer,
+                accent: "violet",
+              },
+              {
+                title: "Open bugs",
+                value: bugs?.bugs?.length ?? bugs?.total ?? 0,
+                icon: Bug,
+                accent: "amber",
+                alert: (bugs?.bugs?.length ?? bugs?.total ?? 0) > 0,
+              },
+              {
+                title: "Team size",
+                value: members?.length ?? 0,
+                icon: Users,
+                accent: "green",
+              },
+            ]}
+          />
           <div className="grid gap-4 lg:grid-cols-2">
             <Card className="bg-card">
               <CardHeader className="p-3"><CardTitle className="text-sm">Completion over time</CardTitle></CardHeader>
@@ -661,53 +925,14 @@ export default function AdminProjectDetail() {
               <CardTitle className="text-sm">APK Releases</CardTitle>
             </CardHeader>
             <CardContent className="p-0 space-y-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Name</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Version</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Type</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Platform</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Audience</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Uploaded By</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
-                    <TableHead className="text-right text-[10px] font-semibold uppercase tracking-wider">Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {apkRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground h-20 text-xs">No APK releases yet</TableCell>
-                    </TableRow>
-                  ) : (
-                    apkRows.map((apk) => (
-                      <TableRow key={apk.id} className="text-xs">
-                        <TableCell className="font-medium">{resolveApkDisplayName(apk)}</TableCell>
-                        <TableCell className="text-muted-foreground">v{apk.version} ({apk.buildNumber})</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">{apk.releaseType}</Badge>
-                        </TableCell>
-                        <TableCell className="capitalize">{apk.platform}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 capitalize">
-                            {getApkAudienceLabel(apk.audience)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{apk.uploaderName}</TableCell>
-                        <TableCell className="text-muted-foreground">{new Date(apk.createdAt).toLocaleDateString()}</TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
-                            <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
-                              <Download className="h-3 w-3 mr-1.5" /> Download
-                            </a>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              <DataPagination {...apkPagination} />
+              <CmsDataTable
+                columns={apkColumns}
+                rows={apkRows}
+                rowKey={(apk) => apk.id}
+                embedded
+                empty={{ title: "No APK releases yet" }}
+                pagination={apkPagination}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -896,43 +1121,14 @@ export default function AdminProjectDetail() {
               <CardTitle className="text-sm">Resource Requests</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Type</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Title</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Requester</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {requestRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center text-muted-foreground h-20 text-xs">No requests found</TableCell>
-                    </TableRow>
-                  ) : (
-                    requestRows.map((req) => (
-                      <TableRow key={req.id} className="text-xs">
-                        <TableCell className="capitalize">{req.type.replace('_', ' ')}</TableCell>
-                        <TableCell className="font-medium">{req.title}</TableCell>
-                        <TableCell className="text-muted-foreground">{req.developerName}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`${
-                            req.status === 'pending' ? 'text-blue-500 border-blue-500/20 bg-blue-500/10' : 
-                            req.status === 'approved' ? 'text-green-500 border-green-500/20 bg-green-500/10' : 
-                            'text-red-500 border-red-500/20 bg-red-500/10'
-                          } text-[10px] px-1.5 py-0 h-4`}>
-                            {req.status.toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{new Date(req.createdAt).toLocaleDateString()}</TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              <DataPagination {...requestsPagination} />
+              <CmsDataTable
+                columns={requestColumns}
+                rows={requestRows}
+                rowKey={(req) => req.id}
+                embedded
+                empty={{ title: "No requests found" }}
+                pagination={requestsPagination}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1110,83 +1306,14 @@ export default function AdminProjectDetail() {
               <CardTitle className="text-xs">Chronological Inventory</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Phase / Milestone</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Due Date</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Assigned To</TableHead>
-                    <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Status</TableHead>
-                    {canManageMilestones && (
-                      <TableHead className="text-[10px] font-semibold uppercase tracking-wider w-[72px]">Actions</TableHead>
-                    )}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {milestoneRows.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={canManageMilestones ? 5 : 4} className="text-center text-muted-foreground h-16 text-[11px]">No timeline milestones recorded.</TableCell>
-                    </TableRow>
-                  ) : (
-                    milestoneRows.map((m: Milestone) => (
-                      <TableRow key={m.id} className="text-[11px]">
-                        <TableCell className="font-medium flex items-center gap-1.5 py-2.5">
-                          <MapPin className="h-3 w-3 text-primary/70" />
-                          <div>
-                            <div>{m.title}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2.5">{new Date(m.plannedDate).toLocaleDateString()}</TableCell>
-                        <TableCell className="py-2.5">
-                          {m.assigneeName ? (
-                            <div className="flex items-center gap-1.5">
-                              <Avatar className="h-5 w-5 shrink-0">
-                                {m.assigneeAvatarUrl && <AvatarImage src={m.assigneeAvatarUrl} />}
-                                <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
-                                  {m.assigneeName.charAt(0)}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className="truncate">{m.assigneeName}</p>
-                                {m.assigneeRole && (
-                                  <p className="text-[9px] text-muted-foreground truncate">{m.assigneeRole}</p>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="py-2.5">
-                          <Badge variant="outline" className={`text-[9px] px-1.5 py-0 h-4 font-semibold ${
-                            m.status === 'completed' ? 'text-green-500 border-green-500/20 bg-green-500/10' :
-                            m.status === 'ongoing' ? 'text-amber-500 border-amber-500/20 bg-amber-500/10' :
-                            m.status === 'delayed' ? 'text-rose-500 border-rose-500/20 bg-rose-500/10' :
-                            'text-blue-500 border-blue-500/20 bg-blue-500/10'
-                          }`}>
-                            {m.status.toUpperCase()}
-                          </Badge>
-                        </TableCell>
-                        {canManageMilestones && (
-                          <TableCell className="py-2.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Edit milestone"
-                              onClick={() => openEditMilestone(m)}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-              <DataPagination {...milestonesPagination} />
+              <CmsDataTable
+                columns={milestoneColumns}
+                rows={milestoneRows}
+                rowKey={(m) => m.id}
+                embedded
+                empty={{ title: "No timeline milestones recorded." }}
+                pagination={milestonesPagination}
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -1198,50 +1325,15 @@ export default function AdminProjectDetail() {
             </CardHeader>
             <CardContent className="p-0">
               <div className="max-h-[500px] overflow-y-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Action</TableHead>
-                      <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Changes</TableHead>
-                      <TableHead className="text-[10px] font-semibold uppercase tracking-wider">Date</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {historyRows.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={3} className="text-center text-muted-foreground h-16 text-xs">No history recorded.</TableCell>
-                      </TableRow>
-                    ) : (
-                      historyRows.map((h) => (
-                        <TableRow key={h.id} className="text-[11px]">
-                          <TableCell className="font-medium align-top py-2.5">
-                            <Badge variant="outline" className="text-[9px] px-1.5 py-0 h-4 uppercase">{h.action}</Badge>
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            {h.action === "update" ? (
-                              <div className="space-y-1">
-                                {Object.keys(h.newVal || {}).map(key => (
-                                  <div key={key}>
-                                    <span className="font-semibold text-primary">{key}:</span>{" "}
-                                    <span className="text-muted-foreground line-through">{(h.oldVal as any)?.[key]}</span>{" "}
-                                    <span>{(h.newVal as any)?.[key]}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-muted-foreground">Entity {h.action}d</div>
-                            )}
-                          </TableCell>
-                          <TableCell className="py-2.5 text-muted-foreground align-top">
-                            {new Date(h.createdAt).toLocaleString()}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
+                <CmsDataTable
+                  columns={historyColumns}
+                  rows={historyRows}
+                  rowKey={(h) => h.id}
+                  embedded
+                  empty={{ title: "No history recorded." }}
+                  pagination={historyPagination}
+                />
               </div>
-              <DataPagination {...historyPagination} />
             </CardContent>
           </Card>
         </TabsContent>

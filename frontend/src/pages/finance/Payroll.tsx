@@ -2,14 +2,7 @@ import { Link } from "wouter";
 import { Users, IndianRupee, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/modules/finance/constants";
 import { FinancePageHeader, FinanceErrorState } from "@/modules/finance/components";
@@ -66,6 +59,20 @@ export default function PayrollPage() {
     .sort((a, b) => b.year - a.year || b.month - a.month)
     .slice(0, 6);
   const recentSlips = (payslips.data?.slips ?? []).slice(0, 8);
+  const payrollRunColumns: CmsColumn<(typeof recentRuns)[number]>[] = [
+    { id: "period", header: "Period", cell: (run) => <span className="font-medium">{MONTH_NAMES[run.month]} {run.year}</span> },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (run) => <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${RUN_STATUS_STYLES[run.status] ?? "bg-secondary text-secondary-foreground"}`}>{RUN_STATUS_LABELS[run.status] ?? run.status}</span>,
+    },
+  ];
+  const salarySlipColumns: CmsColumn<(typeof recentSlips)[number]>[] = [
+    { id: "employee", header: "Employee", cell: (slip) => <span className="font-medium">{slip.employeeName}</span> },
+    { id: "period", header: "Period", cell: (slip) => <span className="text-muted-foreground">{MONTH_NAMES[slip.month]} {slip.year}</span> },
+    { id: "net", header: "Net", align: "right", cell: (slip) => <span className="tabular-nums text-emerald-700">{formatCurrency(slip.net ?? 0)}</span> },
+  ];
 
   return (
     <PortalPageShell>
@@ -95,28 +102,7 @@ export default function PayrollPage() {
           <CardContent>
             {recentRuns.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">No payroll runs yet.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Period</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentRuns.map((run) => (
-                    <TableRow key={run.id}>
-                      <TableCell className="text-xs font-medium">{MONTH_NAMES[run.month]} {run.year}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${RUN_STATUS_STYLES[run.status] ?? "bg-secondary text-secondary-foreground"}`}>
-                          {RUN_STATUS_LABELS[run.status] ?? run.status}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+            ) : <CmsDataTable columns={payrollRunColumns} rows={recentRuns} rowKey={(run) => run.id} />}
           </CardContent>
         </Card>
 
@@ -125,26 +111,7 @@ export default function PayrollPage() {
           <CardContent>
             {recentSlips.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-8">No salary slips yet.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Employee</TableHead>
-                    <TableHead className="text-xs">Period</TableHead>
-                    <TableHead className="text-xs text-right">Net</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentSlips.map((slip) => (
-                    <TableRow key={slip.id}>
-                      <TableCell className="text-xs font-medium">{slip.employeeName}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{MONTH_NAMES[slip.month]} {slip.year}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(slip.net ?? 0)}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+            ) : <CmsDataTable columns={salarySlipColumns} rows={recentSlips} rowKey={(slip) => slip.id} />}
           </CardContent>
         </Card>
       </div>

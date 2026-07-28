@@ -19,15 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +27,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { PortalPageShell, PortalKpiGrid, PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useMarketingDashboard, useMarketingPerformance } from "@/api/marketing";
 import {
@@ -44,7 +36,6 @@ import {
   MarketingFilterBar,
   MarketingConfirmDialog,
 } from "@/modules/marketing/components";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { BdeTeamFormDialog } from "@/modules/sales/team/BdeTeamFormDialog";
@@ -68,8 +59,8 @@ export default function DigitalTeam() {
   const [deleteName, setDeleteName] = useState<string>("");
   const [impersonatingId, setImpersonatingId] = useState<number | null>(null);
 
-  const { data: dashboardData, isLoading: dashLoading, refetch } = useMarketingDashboard();
-  const { data: perfData, isLoading: perfLoading } = useMarketingPerformance();
+  const { data: dashboardData, isLoading: dashLoading, isError: dashError, refetch: refetchDash } = useMarketingDashboard();
+  const { data: perfData, isLoading: perfLoading, isError: perfError, refetch: refetchPerf } = useMarketingPerformance();
   const deleteUserMutation = useDeleteUser();
 
   const digitalTeam = dashboardData?.digitalTeam ?? [];
@@ -149,7 +140,7 @@ export default function DigitalTeam() {
       toast.success(`Digital Specialist "${deleteName}" deactivated`);
       setDeleteId(null);
       setDeleteName("");
-      void refetch();
+      void refetchDash();
       queryClient.invalidateQueries({ queryKey: ["marketing-dashboard"] });
     } catch (err: unknown) {
       toastApiError(err, "Failed to delete specialist");
@@ -158,6 +149,129 @@ export default function DigitalTeam() {
 
   const isLoading = dashLoading || perfLoading;
 
+
+  const teamColumns: CmsColumn<(typeof filteredTeam)[number]>[] = [
+    {
+      id: "specialist",
+      header: "Specialist",
+      cell: (m) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9 border border-border/60">
+            {m.avatarUrl ? <AvatarImage src={m.avatarUrl} alt={m.name} className="object-cover" /> : null}
+            <AvatarFallback className="bg-teal-500/10 text-teal-700 text-[10px] font-semibold dark:bg-teal-500/20 dark:text-teal-400">
+              {m.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <p className="font-semibold text-xs text-foreground leading-snug">{m.name}</p>
+            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+              <Mail className="h-3 w-3" /> {m.email}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role / Designation",
+      cell: (m) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs font-medium text-foreground">{m.designation}</span>
+          <span className="inline-flex items-center w-fit rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-400">
+            Digital Specialist
+          </span>
+        </div>
+      ),
+    },
+    {
+      id: "active",
+      header: "Active Tasks",
+      chip: true,
+      cell: (m) => (
+        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-900/50">
+          {m.openTasksCount} active
+        </Badge>
+      ),
+    },
+    {
+      id: "done",
+      header: "Completed",
+      align: "right",
+      cell: (m) => (
+        <span className="tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
+          {m.doneTasksCount} done
+        </span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      align: "center",
+      chip: true,
+      cell: () => <CmsStatusChip label="Active" tone="success" dot />,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (m) => (
+        <div className="flex items-center justify-end gap-1.5">
+          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild>
+            <Link href={`/marketing/tasks?assigneeId=${m.id}`}>
+              <CheckSquare className="h-3.5 w-3.5 text-blue-500" /> Tasks
+            </Link>
+          </Button>
+          {isAdmin && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10 border-amber-200 dark:text-amber-400 dark:border-amber-900/50"
+              disabled={impersonatingId === m.id || isImpersonating}
+              onClick={() => void handleViewAs(m)}
+            >
+              {impersonatingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+              View as
+            </Button>
+          )}
+          {canEditTeam && (
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleEdit(m)}>
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Edit
+            </Button>
+          )}
+          {canDeleteTeam && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-500/10 border-red-200 dark:text-red-400 dark:border-red-900/50"
+              onClick={() => confirmDelete(m)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const perfColumns: CmsColumn<(typeof perfMembers)[number]>[] = [
+    { id: "name", header: "Digital Specialist", cell: (m) => <span className="font-semibold">{m.name}</span> },
+    { id: "role", header: "Role", cell: () => <span className="text-muted-foreground">Digital Specialist</span> },
+    { id: "done", header: "Tasks Completed", align: "right", cell: (m) => <span className="tabular-nums font-semibold">{m.tasksCompleted}</span> },
+    { id: "avg", header: "Avg Delivery Time", align: "right", cell: (m) => <span className="tabular-nums text-muted-foreground">{m.avgDeliveryDays} days</span> },
+    { id: "quality", header: "Quality Score", align: "center", cell: (m) => <span className="font-semibold text-amber-600 dark:text-amber-400">{m.clientRating.toFixed(1)} / 5.0</span> },
+    {
+      id: "prod",
+      header: "Productivity",
+      cell: (m) => (
+        <div className="flex items-center gap-2">
+          <Progress value={m.productivityPct} className="h-1.5 flex-1" />
+          <span className="tabular-nums font-semibold">{m.productivityPct}%</span>
+        </div>
+      ),
+    },
+    { id: "late", header: "Late %", align: "right", cell: (m) => <span className="tabular-nums font-medium text-amber-700 dark:text-amber-400">{m.lateDeliveryPct}%</span> },
+  ];
+
   return (
     <PortalPageShell>
       <MarketingPageHeader
@@ -165,19 +279,11 @@ export default function DigitalTeam() {
         description="Manage Digital Specialists, view specialist workspaces, track assigned workload, and evaluate performance."
         breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Digital Team" }]}
         actions={
-          <div className="flex items-center gap-3">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
-              <PortalTabsList>
-                <PortalTabsTrigger value="roster">Roster ({digitalTeam.length})</PortalTabsTrigger>
-                <PortalTabsTrigger value="performance">Performance</PortalTabsTrigger>
-              </PortalTabsList>
-            </Tabs>
-            {canEditTeam && (
-              <Button size="sm" onClick={handleCreate} className="h-9 gap-1.5 font-medium shadow-sm">
-                <Plus className="h-4 w-4" /> Add Specialist
-              </Button>
-            )}
-          </div>
+          canEditTeam ? (
+            <Button size="sm" onClick={handleCreate} className="h-9 gap-1.5 font-medium shadow-sm">
+              <Plus className="h-4 w-4" /> Add Specialist
+            </Button>
+          ) : undefined
         }
       />
 
@@ -193,9 +299,17 @@ export default function DigitalTeam() {
         ]}
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        {/* ROSTER TAB */}
-        <TabsContent value="roster" className="mt-4 space-y-4">
+      <CmsChipTabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        items={[
+          { value: "roster", label: "Roster", count: digitalTeam.length },
+          { value: "performance", label: "Performance" },
+        ]}
+      />
+
+      {activeTab === "roster" ? (
+        <div className="space-y-4">
           <MarketingFilterBar>
             <div className="relative flex-1 max-w-sm">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -208,9 +322,7 @@ export default function DigitalTeam() {
             </div>
           </MarketingFilterBar>
 
-          {isLoading ? (
-            <MarketingListPageSkeleton kpiCount={4} showTabs={false} />
-          ) : filteredTeam.length === 0 ? (
+          {!dashLoading && filteredTeam.length === 0 ? (
             <MarketingEmptyState
               icon={Users}
               title="No Digital Specialists found"
@@ -223,176 +335,32 @@ export default function DigitalTeam() {
               onAction={handleCreate}
             />
           ) : (
-            <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-xs">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Specialist</TableHead>
-                    <TableHead className="text-xs">Role / Designation</TableHead>
-                    <TableHead className="text-xs">Active Tasks</TableHead>
-                    <TableHead className="text-xs text-right">Completed</TableHead>
-                    <TableHead className="text-xs text-center">Status</TableHead>
-                    <TableHead className="text-xs text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTeam.map((m) => (
-                    <TableRow key={m.id} className="hover:bg-muted/40 transition-colors">
-                      <TableCell className="py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9 border border-border/60">
-                            {m.avatarUrl ? (
-                              <AvatarImage src={m.avatarUrl} alt={m.name} className="object-cover" />
-                            ) : null}
-                            <AvatarFallback className="bg-teal-500/10 text-teal-700 text-[10px] font-semibold dark:bg-teal-500/20 dark:text-teal-400">
-                              {m.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .slice(0, 2)
-                                .toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-semibold text-xs text-foreground leading-snug">{m.name}</p>
-                            <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                              <Mail className="h-3 w-3" /> {m.email}
-                            </p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-xs font-medium text-foreground">{m.designation}</span>
-                          <span className="inline-flex items-center w-fit rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-medium text-teal-700 dark:text-teal-400">
-                            Digital Specialist
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3">
-                        <Badge variant="outline" className="bg-blue-500/10 text-blue-700 border-blue-200 dark:text-blue-400 dark:border-blue-900/50">
-                          {m.openTasksCount} active
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="py-3 text-right tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 text-xs">
-                        {m.doneTasksCount} done
-                      </TableCell>
-                      <TableCell className="py-3 text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Active
-                        </span>
-                      </TableCell>
-                      <TableCell className="py-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* View Tasks Shortcut */}
-                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild>
-                            <Link href={`/marketing/tasks?assigneeId=${m.id}`}>
-                              <CheckSquare className="h-3.5 w-3.5 text-blue-500" /> Tasks
-                            </Link>
-                          </Button>
-
-                          {/* View As (Impersonate) Button */}
-                          {isAdmin && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10 border-amber-200 dark:text-amber-400 dark:border-amber-900/50"
-                              disabled={impersonatingId === m.id || isImpersonating}
-                              onClick={() => void handleViewAs(m)}
-                            >
-                              {impersonatingId === m.id ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : (
-                                <LogIn className="h-3.5 w-3.5" />
-                              )}
-                              View as
-                            </Button>
-                          )}
-
-                          {/* Edit Button */}
-                          {canEditTeam && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs gap-1"
-                              onClick={() => handleEdit(m)}
-                            >
-                              <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Edit
-                            </Button>
-                          )}
-
-                          {/* Delete Button */}
-                          {canDeleteTeam && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-500/10 border-red-200 dark:text-red-400 dark:border-red-900/50"
-                              onClick={() => confirmDelete(m)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* PERFORMANCE TAB */}
-        <TabsContent value="performance" className="mt-4">
-          {perfMembers.length === 0 ? (
-            <MarketingEmptyState
-              icon={Users}
-              title="No team performance metrics yet"
-              description="Assign tasks to Digital Specialists to see efficiency & delivery metrics."
+            <CmsDataTable
+              columns={teamColumns}
+              rows={filteredTeam}
+              rowKey={(m) => m.id}
+              isLoading={dashLoading}
+              error={dashError}
+              onRetry={() => refetchDash()}
             />
-          ) : (
-            <div className="rounded-xl border border-border/60 bg-card overflow-hidden shadow-xs">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Digital Specialist</TableHead>
-                    <TableHead className="text-xs">Role</TableHead>
-                    <TableHead className="text-xs text-right">Tasks Completed</TableHead>
-                    <TableHead className="text-xs text-right">Avg Delivery Time</TableHead>
-                    <TableHead className="text-xs text-center">Quality Score</TableHead>
-                    <TableHead className="text-xs">Productivity</TableHead>
-                    <TableHead className="text-xs text-right">Late %</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {perfMembers.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="py-3 font-semibold text-xs">{m.name}</TableCell>
-                      <TableCell className="py-3 text-xs text-muted-foreground">Digital Specialist</TableCell>
-                      <TableCell className="py-3 text-right tabular-nums text-xs font-semibold">{m.tasksCompleted}</TableCell>
-                      <TableCell className="py-3 text-right tabular-nums text-xs text-muted-foreground">
-                        {m.avgDeliveryDays} days
-                      </TableCell>
-                      <TableCell className="py-3 text-center text-xs font-semibold text-amber-600 dark:text-amber-400">
-                        {m.clientRating.toFixed(1)} / 5.0
-                      </TableCell>
-                      <TableCell className="py-3">
-                        <div className="flex items-center gap-2">
-                          <Progress value={m.productivityPct} className="h-1.5 flex-1" />
-                          <span className="text-xs tabular-nums font-semibold">{m.productivityPct}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="py-3 text-right tabular-nums text-xs font-medium text-amber-700 dark:text-amber-400">
-                        {m.lateDeliveryPct}%
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </div>
+      ) : !perfLoading && perfMembers.length === 0 ? (
+        <MarketingEmptyState
+          icon={Users}
+          title="No team performance metrics yet"
+          description="Assign tasks to Digital Specialists to see efficiency & delivery metrics."
+        />
+      ) : (
+        <CmsDataTable
+          columns={perfColumns}
+          rows={perfMembers}
+          rowKey={(m) => m.id}
+          isLoading={perfLoading}
+          error={perfError}
+          onRetry={() => refetchPerf()}
+        />
+      )}
 
       {/* Add / Edit Specialist Modal */}
       {formOpen && (
@@ -402,7 +370,7 @@ export default function DigitalTeam() {
           editUser={editUser}
           fixedRole="digital"
           onSaved={() => {
-            void refetch();
+            void refetchDash();
             queryClient.invalidateQueries({ queryKey: ["marketing-dashboard"] });
           }}
         />

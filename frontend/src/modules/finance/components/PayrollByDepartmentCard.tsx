@@ -1,21 +1,60 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Building2, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import { useDepartmentPayroll } from "@/api/finance";
 
 const MONTH_NAMES = [
   "", "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
+];
+
+type PayrollDeptRow = {
+  department: string;
+  employees: number;
+  net: number;
+  cost: number;
+  isTotal?: boolean;
+};
+
+const payrollColumns: CmsColumn<PayrollDeptRow>[] = [
+  {
+    id: "department",
+    header: "Department",
+    cell: (d) => <span className="font-medium">{d.department}</span>,
+  },
+  {
+    id: "employees",
+    header: "Employees",
+    align: "right",
+    cell: (d) =>
+      d.isTotal ? (
+        <span className="tabular-nums">{d.employees}</span>
+      ) : (
+        <span className="inline-flex items-center gap-1 justify-end tabular-nums text-muted-foreground">
+          <Users className="h-3 w-3" />
+          {d.employees}
+        </span>
+      ),
+  },
+  {
+    id: "net",
+    header: "Net paid",
+    align: "right",
+    cell: (d) => <span className="tabular-nums">{formatCurrency(d.net)}</span>,
+  },
+  {
+    id: "cost",
+    header: "Cost to company",
+    align: "right",
+    cell: (d) => (
+      <span className={d.isTotal ? "tabular-nums" : "font-medium tabular-nums"}>
+        {formatCurrency(d.cost)}
+      </span>
+    ),
+  },
 ];
 
 const RUN_STATUS_HINT: Record<string, string> = {
@@ -44,6 +83,14 @@ export function PayrollByDepartmentCard() {
   const totals = data?.totals ?? { employees: 0, net: 0, cost: 0 };
   const hasPaid = departments.length > 0;
   const statusHint = data?.runStatus ? RUN_STATUS_HINT[data.runStatus] : null;
+
+  const payrollRows = useMemo<PayrollDeptRow[]>(
+    () => [
+      ...departments.map((d) => ({ ...d, isTotal: false as const })),
+      { department: "Total", employees: totals.employees, net: totals.net, cost: totals.cost, isTotal: true },
+    ],
+    [departments, totals],
+  );
 
   return (
     <Card>
@@ -77,38 +124,15 @@ export function PayrollByDepartmentCard() {
             {statusHint ?? `No paid payroll for ${MONTH_NAMES[month]} ${year}.`}
           </p>
         ) : (
-          <div className="overflow-hidden rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Department</TableHead>
-                  <TableHead className="text-xs text-right">Employees</TableHead>
-                  <TableHead className="text-xs text-right">Net paid</TableHead>
-                  <TableHead className="text-xs text-right">Cost to company</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {departments.map((d) => (
-                  <TableRow key={d.department} className="hover:bg-muted/30">
-                    <TableCell className="text-xs font-medium">{d.department}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
-                      <span className="inline-flex items-center gap-1 justify-end">
-                        <Users className="h-3 w-3" />{d.employees}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.net)}</TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(d.cost)}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="border-t-2 bg-muted/20 font-semibold">
-                  <TableCell className="text-xs">Total</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">{totals.employees}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">{formatCurrency(totals.net)}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">{formatCurrency(totals.cost)}</TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          </div>
+          <CmsDataTable
+            embedded
+            columns={payrollColumns}
+            rows={payrollRows}
+            rowKey={(d) => (d.isTotal ? "__total" : d.department)}
+            getRowClassName={(d) =>
+              d.isTotal ? "border-t-2 bg-muted/20 font-semibold hover:bg-muted/20" : undefined
+            }
+          />
         )}
       </CardContent>
     </Card>

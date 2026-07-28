@@ -17,7 +17,8 @@ import {
 import { Download, TrendingUp, Users, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { CmsChipTabs } from "@/components/cms";
 import {
   ChartPanel,
   ChartGridCell,
@@ -178,32 +179,22 @@ export default function Reports() {
         </div>
       ) : null}
 
-      <Tabs value={reportType} onValueChange={setReportType}>
-        <TabsList className="h-9">
-          <TabsTrigger value="conversion" className="text-xs">
-            Conversion
-          </TabsTrigger>
-          <TabsTrigger value="performance" className="text-xs">
-            Performance
-          </TabsTrigger>
-          <TabsTrigger value="revenue" className="text-xs">
-            Revenue
-          </TabsTrigger>
-          <TabsTrigger value="sources" className="text-xs">
-            Lead sources
-          </TabsTrigger>
-          <TabsTrigger value="financial" className="text-xs">
-            Financial
-          </TabsTrigger>
-          <TabsTrigger value="modules" className="text-xs">
-            Admin modules
-          </TabsTrigger>
-          <TabsTrigger value="coverage" className="text-xs">
-            Feature coverage
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conversion" className="mt-4">
+      <div className="space-y-4">
+        <CmsChipTabs
+          value={reportType}
+          onValueChange={setReportType}
+          items={[
+            { value: "conversion", label: "Conversion" },
+            { value: "performance", label: "Performance" },
+            { value: "revenue", label: "Revenue" },
+            { value: "sources", label: "Lead sources" },
+            { value: "financial", label: "Financial" },
+            { value: "modules", label: "Admin modules" },
+            { value: "coverage", label: "Feature coverage" },
+          ]}
+        />
+        <Tabs value={reportType} onValueChange={setReportType}>
+        <TabsContent value="conversion" className="mt-0">
           {loading ? (
             <Skeleton className="h-[320px] w-full rounded-xl" />
           ) : (
@@ -421,6 +412,7 @@ export default function Reports() {
           <SalesFeatureCoverage features={[...SALES_FEATURE_COVERAGE]} />
         </TabsContent>
       </Tabs>
+      </div>
     </PortalPageShell>
   );
 }

@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { CmsKpiGrid } from "@/components/cms/cms-kpi";
 import {
   useGetProposal, useGetProposalLogs, useSendProposal,
   useApproveProposal, useDeclineProposal, useCounterProposal, useReviseProposal,
@@ -71,23 +72,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
     <p className="text-[10px] font-black uppercase tracking-widest mb-3 text-primary">
       {children}
     </p>
-  );
-}
-
-function StatCard({ icon, label, value, sub, accentClass = "text-primary" }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; accentClass?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-1.5">
-      <div className="flex items-center gap-2">
-        <span className={cn("h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-current/10", accentClass)}>
-          {icon}
-        </span>
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <p className="text-xl font-black tabular-nums text-foreground">{value}</p>
-      {sub && <p className="text-[10px] text-muted-foreground/70">{sub}</p>}
-    </div>
   );
 }
 
@@ -419,33 +403,36 @@ export default function ProposalDetail() {
       )}
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          icon={<TrendingUp className="h-3.5 w-3.5" />}
-          label="Proposal total"
-          value={formatCurrency(finalTotal)}
-          accentClass="text-primary"
-        />
-        <StatCard
-          icon={<Eye className="h-3.5 w-3.5" />}
-          label="Client opens"
-          value={String(uniqueViews)}
-          sub={uniqueViews > 0 ? `${uniqueIps} unique ${uniqueIps === 1 ? "IP" : "IPs"}` : "Not yet opened"}
-          accentClass="text-violet-600 dark:text-violet-400"
-        />
-        <StatCard
-          icon={<FileText className="h-3.5 w-3.5" />}
-          label="Items"
-          value={String(proposal.items.length)}
-          accentClass="text-muted-foreground"
-        />
-        <StatCard
-          icon={<History className="h-3.5 w-3.5" />}
-          label="Revision"
-          value={`v${proposal.revision}`}
-          accentClass="text-orange-600 dark:text-orange-400"
-        />
-      </div>
+      <CmsKpiGrid
+        columns={4}
+        items={[
+          {
+            title: "Proposal total",
+            value: formatCurrency(finalTotal),
+            icon: TrendingUp,
+            accent: "default",
+          },
+          {
+            title: "Client opens",
+            value: String(uniqueViews),
+            hint: uniqueViews > 0 ? `${uniqueIps} unique ${uniqueIps === 1 ? "IP" : "IPs"}` : "Not yet opened",
+            icon: Eye,
+            accent: "violet",
+          },
+          {
+            title: "Items",
+            value: String(proposal.items.length),
+            icon: FileText,
+            accent: "default",
+          },
+          {
+            title: "Revision",
+            value: `v${proposal.revision}`,
+            icon: History,
+            accent: "amber",
+          },
+        ]}
+      />
 
       {proposal.status === "approved" && !proposal.customerId && (
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3.5 flex gap-3">

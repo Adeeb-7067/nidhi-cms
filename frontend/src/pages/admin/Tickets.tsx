@@ -8,45 +8,31 @@ import {
   useListUsers,
   getListProjectsQueryKey,
   getListUsersQueryKey,
+  useTicketsSummary,
   type Ticket,
   type TicketAudience,
 } from "@/api";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { DataPagination } from "@/components/ui/data-pagination";
 import {
-  Search,
   Plus,
-  Filter,
   MessageSquare,
   Clock,
   AlertCircle,
   CheckCircle2,
   XCircle,
   Ticket as TicketIcon,
-  Headphones,
-  Wrench,
-  LayoutGrid,
 } from "lucide-react";
 import {
   PortalPageShell,
   PortalPageHero,
   PortalKpiGrid,
-  PortalToolbar,
-  PortalTabsList,
-  PortalTabsTrigger,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
 import { cn } from "@/lib/utils";
-import { DataViewToggle } from "@/components/ui/data-view-toggle";
-import { useDataViewMode } from "@/lib/data-view";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PageCardSkeleton, PageTableSkeleton } from "@/components/loading";
+import { CmsChipTabs, CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
 import { useQueryClient } from "@tanstack/react-query";
 import { listQueryOptions } from "@/lib/list-query-options";
-import { QUERY_STALE } from "@/lib/query-config";
-import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import {
@@ -73,7 +59,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -137,10 +123,6 @@ export default function AdminTickets() {
   const [audienceTab, setAudienceTab] = useState<AdminAudienceTab>("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [viewMode, setViewMode] = useDataViewMode(
-    isAdmin ? "admin-tickets" : "staff-tickets",
-    isStaffUser ? "table" : "grid",
-  );
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [location] = useLocation();
@@ -161,89 +143,30 @@ export default function AdminTickets() {
 
   const listQueryKey = getListTicketsQueryKey(listParams);
 
-  const { data, isLoading, isFetching } = useListTickets(listParams, {
+  const { data, isLoading, isError, refetch, isFetching } = useListTickets(listParams, {
     query: listQueryOptions({ queryKey: listQueryKey }),
   });
 
-  const statsAudience =
-    isAdmin && audienceTab !== "all" ? { audience: audienceTab as TicketAudience } : {};
-  const countQueryBase = {
-    staleTime: QUERY_STALE.reference,
-    select: selectListTotal,
-  };
-  const { data: ticketTotal = 0, isLoading: totalStatsLoading } = useListTickets(
-    { ...LIST_COUNT_PARAMS, ...statsAudience },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListTicketsQueryKey({ ...LIST_COUNT_PARAMS, ...statsAudience }),
-      },
-    },
-  );
-  const { data: openCount = 0, isLoading: openStatsLoading } = useListTickets(
-    { ...LIST_COUNT_PARAMS, status: "open", ...statsAudience },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListTicketsQueryKey({ ...LIST_COUNT_PARAMS, status: "open", ...statsAudience }),
-      },
-    },
-  );
-  const { data: pendingCount = 0, isLoading: pendingStatsLoading } = useListTickets(
-    { ...LIST_COUNT_PARAMS, status: "pending", ...statsAudience },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListTicketsQueryKey({
-          ...LIST_COUNT_PARAMS,
-          status: "pending",
-          ...statsAudience,
-        }),
-      },
-    },
-  );
-  const { data: urgentCount = 0, isLoading: urgentStatsLoading } = useListTickets(
-    { ...LIST_COUNT_PARAMS, priority: "urgent", ...statsAudience },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListTicketsQueryKey({
-          ...LIST_COUNT_PARAMS,
-          priority: "urgent",
-          ...statsAudience,
-        }),
-      },
-    },
-  );
-  const { data: highCount = 0, isLoading: highStatsLoading } = useListTickets(
-    { ...LIST_COUNT_PARAMS, priority: "high", ...statsAudience },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListTicketsQueryKey({
-          ...LIST_COUNT_PARAMS,
-          priority: "high",
-          ...statsAudience,
-        }),
-      },
-    },
+  const summaryAudience =
+    isAdmin && audienceTab !== "all" ? (audienceTab as TicketAudience) : undefined;
+  const {
+    data: ticketSummary,
+    isLoading: statsLoading,
+  } = useTicketsSummary(summaryAudience ?? "all");
+
+  const ticketStats = useMemo(
+    () => ({
+      total: ticketSummary?.total ?? 0,
+      open: ticketSummary?.open ?? 0,
+      pending: ticketSummary?.pending ?? 0,
+      urgent: (ticketSummary?.urgent ?? 0) + (ticketSummary?.high ?? 0),
+    }),
+    [ticketSummary],
   );
 
   useEffect(() => {
     resetPage();
   }, [search, statusFilter, audienceTab, resetPage]);
-
-  const ticketStats = useMemo(
-    () => ({
-      total: ticketTotal,
-      open: openCount,
-      pending: pendingCount,
-      urgent: urgentCount + highCount,
-    }),
-    [ticketTotal, openCount, pendingCount, urgentCount, highCount],
-  );
-  const statsLoading =
-    totalStatsLoading || openStatsLoading || pendingStatsLoading || urgentStatsLoading || highStatsLoading;
 
   const projectsParams = { limit: 100 };
   const { data: projectsData } = useListProjects(projectsParams, {
@@ -329,6 +252,8 @@ export default function AdminTickets() {
       setIsCreateOpen(false);
       form.reset();
       await queryClient.invalidateQueries({ queryKey: ["/api/tickets"] });
+      await queryClient.invalidateQueries({ queryKey: ["tickets-summary"] });
+      await queryClient.invalidateQueries({ queryKey: ["nav-badges"] });
     } catch (err) {
       toastApiError(err, "Failed to create ticket");
     }
@@ -352,6 +277,55 @@ export default function AdminTickets() {
     : isStaffUser
       ? "Tickets you have raised appear here — chat with support until resolved"
       : "Raise issues and chat with support until resolved";
+
+  const ticketColumns: CmsColumn<Ticket>[] = [
+    {
+      id: "title",
+      header: "Title",
+      className: "font-medium whitespace-normal max-w-[280px]",
+      cell: (ticket) => (
+        <span className="flex items-center gap-2">
+          {statusIcon(ticket.status)}
+          {ticket.title}
+        </span>
+      ),
+    },
+    {
+      id: "priority",
+      header: "Priority",
+      chip: true,
+      cell: (ticket) => (
+        <Badge className={priorityClass(ticket.priority)} variant="secondary">
+          {ticket.priority}
+        </Badge>
+      ),
+    },
+    {
+      id: "raisedBy",
+      header: "Raised by",
+      cell: (ticket) => <span className="text-muted-foreground">{creatorLabel(ticket)}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      cell: (ticket) => <span className="text-muted-foreground">{ticket.projectName || "—"}</span>,
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (ticket) => (
+        <span className="text-muted-foreground">{new Date(ticket.createdAt).toLocaleDateString()}</span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      align: "right",
+      cell: (ticket) => (
+        <span className="capitalize">{ticket.status === "pending" ? "In progress" : ticket.status}</span>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -487,26 +461,15 @@ export default function AdminTickets() {
       />
 
       {isAdmin && (
-        <Tabs
+        <CmsChipTabs
           value={audienceTab}
           onValueChange={(v) => setAudienceTab(v as AdminAudienceTab)}
-          className="w-full"
-        >
-          <PortalTabsList className="grid w-full max-w-xl grid-cols-3 h-auto p-1">
-            <PortalTabsTrigger value="all" className="gap-2 h-8">
-              <LayoutGrid className="h-4 w-4" />
-              All tickets
-            </PortalTabsTrigger>
-            <PortalTabsTrigger value="client" className="gap-2 h-8">
-              <Headphones className="h-4 w-4" />
-              Client requests
-            </PortalTabsTrigger>
-            <PortalTabsTrigger value="staff" className="gap-2 h-8">
-              <Wrench className="h-4 w-4" />
-              Dev / QA requests
-            </PortalTabsTrigger>
-          </PortalTabsList>
-        </Tabs>
+          items={[
+            { value: "all", label: "All tickets" },
+            { value: "client", label: "Client requests" },
+            { value: "staff", label: "Dev / QA requests" },
+          ]}
+        />
       )}
 
       <PortalKpiGrid
@@ -531,157 +494,85 @@ export default function AdminTickets() {
         ]}
       />
 
-      <PortalToolbar>
-      <div className="flex flex-col sm:flex-row gap-4 items-center flex-1 w-full">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tickets…"
-            className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <DataViewToggle value={viewMode} onChange={setViewMode} />
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
-            <Filter className="mr-2 h-4 w-4" />
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All status</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="pending">In progress</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      </PortalToolbar>
+      <CmsFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search tickets…"
+      />
 
-      {viewMode === "table" ? (
-        isLoading ? (
-          <PageTableSkeleton rows={6} columns={6} />
-        ) : (
-        <div
-          key={isAdmin ? `tickets-${audienceTab}` : "tickets-mine"}
-          className="rounded-md border bg-card overflow-hidden"
-        >
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Raised by</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!data?.tickets?.length ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    className="h-24 text-center text-muted-foreground text-sm"
-                  >
-                    {isStaffUser
-                      ? "No tickets yet — use New ticket to raise a support request"
-                      : "No tickets found"}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.tickets.map((ticket) => (
-                  <TableRow
-                    key={ticket.id}
-                    className="cursor-pointer hover:bg-muted/40"
-                    onClick={() => openTicket(ticket)}
-                  >
-                    <TableCell className="font-medium whitespace-normal max-w-[280px]">
-                      <span className="flex items-center gap-2">
-                        {statusIcon(ticket.status)}
-                        {ticket.title}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className={priorityClass(ticket.priority)} variant="secondary">
-                        {ticket.priority}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {creatorLabel(ticket)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {ticket.projectName || "—"}
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      {new Date(ticket.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="text-right capitalize text-sm">
-                      {ticket.status === "pending" ? "In progress" : ticket.status}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        )
-      ) : (
-        <div className="grid gap-4">
-          {isLoading ? (
-            [...Array(3)].map((_, i) => <PageCardSkeleton key={i} lines={3} />)
-          ) : !data?.tickets?.length ? (
-            <p className="text-center text-sm text-muted-foreground py-12">No tickets found</p>
-          ) : (
-            data.tickets.map((ticket) => (
-              <button
-                key={ticket.id}
-                type="button"
-                onClick={() => openTicket(ticket)}
-                className="text-left rounded-lg border bg-card p-5 hover:border-primary/50 transition-colors w-full"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {statusIcon(ticket.status)}
-                      <h3 className="font-semibold leading-none truncate">{ticket.title}</h3>
-                      <Badge className={priorityClass(ticket.priority)} variant="secondary">
-                        {ticket.priority}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2">
-                      {ticket.description?.trim() || "No description."}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-2">
-                      <span>#{ticket.id}</span>
-                      {ticket.projectName && (
-                        <Badge variant="outline" className="text-[10px]">
-                          {ticket.projectName}
-                        </Badge>
-                      )}
-                      <span>{creatorLabel(ticket)}</span>
-                      <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
-                      <span className="capitalize">
-                        {ticket.status === "pending" ? "In progress" : ticket.status}
-                      </span>
-                    </div>
-                  </div>
-                  <MessageSquare className="h-5 w-5 text-muted-foreground shrink-0" />
+      <CmsChipTabs
+        value={statusFilter}
+        onValueChange={setStatusFilter}
+        items={[
+          { value: "all", label: "All status" },
+          { value: "open", label: "Open" },
+          { value: "pending", label: "In progress" },
+          { value: "resolved", label: "Resolved" },
+          { value: "closed", label: "Closed" },
+        ]}
+      />
+
+      <CmsDataTable
+        key={isAdmin ? `tickets-${audienceTab}` : "tickets-mine"}
+        columns={ticketColumns}
+        rows={data?.tickets ?? []}
+        rowKey={(ticket) => ticket.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        loadingRows={6}
+        onRowClick={(ticket) => openTicket(ticket)}
+        viewStorageKey={isAdmin ? "admin-tickets" : "staff-tickets"}
+        empty={{
+          title: isStaffUser
+            ? "No tickets yet — use New ticket to raise a support request"
+            : "No tickets found",
+        }}
+        renderGridCard={(ticket) => (
+          <button
+            type="button"
+            onClick={() => openTicket(ticket)}
+            className="text-left rounded-lg border bg-card p-5 hover:border-primary/50 transition-colors w-full"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  {statusIcon(ticket.status)}
+                  <h3 className="font-semibold leading-none truncate">{ticket.title}</h3>
+                  <Badge className={priorityClass(ticket.priority)} variant="secondary">
+                    {ticket.priority}
+                  </Badge>
                 </div>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-
-      <DataPagination
-        page={data?.page ?? page}
-        total={data?.total ?? 0}
-        limit={limit}
-        loadedRowCount={data?.tickets?.length ?? 0}
-        onPageChange={setPage}
-        onLimitChange={setLimit}
+                <p className="text-sm text-muted-foreground line-clamp-2">
+                  {ticket.description?.trim() || "No description."}
+                </p>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground pt-2">
+                  <span>#{ticket.id}</span>
+                  {ticket.projectName ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      {ticket.projectName}
+                    </Badge>
+                  ) : null}
+                  <span>{creatorLabel(ticket)}</span>
+                  <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                  <span className="capitalize">
+                    {ticket.status === "pending" ? "In progress" : ticket.status}
+                  </span>
+                </div>
+              </div>
+              <MessageSquare className="h-5 w-5 text-muted-foreground shrink-0" />
+            </div>
+          </button>
+        )}
+        gridClassName="grid gap-4"
+        pagination={{
+          page: data?.page ?? page,
+          total: data?.total ?? 0,
+          limit,
+          loadedRowCount: data?.tickets?.length ?? 0,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
       />
 
       <TicketDetailSheet

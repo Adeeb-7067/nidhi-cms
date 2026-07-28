@@ -1,13 +1,6 @@
-import React, { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { Bug } from "@/api";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,10 +10,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PRIORITY_LABELS, BUG_STATUSES } from "@/lib/bug-workflow";
-import { cn } from "@/lib/utils";
 import { ArrowUpDown } from "lucide-react";
-import { BugTableRow } from "./bug-table-row";
-import { DataPagination } from "@/components/ui/data-pagination";
+import {
+  AssigneeAvatars,
+} from "./assignee-avatars";
+import { BugAttachmentThumb } from "./bug-attachments";
+import {
+  BugDisplayRow,
+  BugExpandCellFull,
+  BugFullActionsCell,
+  BugFullProjectCell,
+  BugFullTitleCell,
+  BugLatestCommentCell,
+  BugPriorityCell,
+  BugStatusCell,
+  BugUpdatedCell,
+  bugDisplayRowClassName,
+  bugDisplayRowKey,
+  flattenBugRows,
+} from "./bug-table-row";
 import type { TablePaginationProps } from "@/lib/table-pagination";
 
 type SortKey =
@@ -83,6 +91,11 @@ export function BugTable({
     return list;
   }, [bugs, sortKey, sortDir]);
 
+  const displayRows = useMemo(
+    () => flattenBugRows(sortedRows, expanded),
+    [sortedRows, expanded],
+  );
+
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
@@ -102,6 +115,99 @@ export function BugTable({
     </button>
   );
 
+  const toggleExpand = (bugId: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(bugId)) next.delete(bugId);
+      else next.add(bugId);
+      return next;
+    });
+  };
+
+  const columns = useMemo((): CmsColumn<BugDisplayRow>[] => {
+    return [
+      {
+        id: "expand",
+        header: "",
+        className: "w-8",
+        cell: (row) => (
+          <BugExpandCellFull
+            row={row}
+            expanded={expanded.has(row.id)}
+            onToggleExpand={row.isChild ? undefined : () => toggleExpand(row.id)}
+          />
+        ),
+      },
+      {
+        id: "project",
+        header: <SortHead label="Project" col="projectName" />,
+        className: "w-[140px]",
+        cell: (row) => <BugFullProjectCell row={row} />,
+      },
+      {
+        id: "developers",
+        header: "Developers",
+        className: "min-w-[120px]",
+        cell: (row) => (
+          <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+            <AssigneeAvatars assignees={row.assignees} />
+          </div>
+        ),
+      },
+      {
+        id: "title",
+        header: <SortHead label="Description" col="title" />,
+        className: "min-w-[160px]",
+        cell: (row) => <BugFullTitleCell row={row} />,
+      },
+      {
+        id: "priority",
+        header: <SortHead label="Priority" col="priority" />,
+        chip: true,
+        cell: (row) => <BugPriorityCell row={row} />,
+      },
+      {
+        id: "comment",
+        header: "Latest comment",
+        className: "min-w-[140px]",
+        cell: (row) => <BugLatestCommentCell row={row} />,
+      },
+      {
+        id: "status",
+        header: "QA · Dev · Final",
+        chip: true,
+        className: "min-w-[140px]",
+        cell: (row) => <BugStatusCell row={row} />,
+      },
+      {
+        id: "files",
+        header: "Files",
+        className: "w-[72px]",
+        cell: (row) => <BugAttachmentThumb attachments={row.attachments} />,
+      },
+      {
+        id: "updated",
+        header: <SortHead label="Updated" col="updatedAt" />,
+        cell: (row) => <BugUpdatedCell row={row} />,
+      },
+      {
+        id: "actions",
+        header: "",
+        className: "w-[80px]",
+        align: "right",
+        cell: (row) => (
+          <BugFullActionsCell
+            row={row}
+            onRowClick={onRowClick}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            canEdit={canEdit}
+          />
+        ),
+      },
+    ];
+  }, [sortKey, sortDir, expanded, onRowClick, onEdit, onDelete, canEdit]);
+
   return (
     <div className="space-y-3">
       <div className="flex flex-col sm:flex-row gap-2">
@@ -111,10 +217,7 @@ export function BugTable({
           onChange={(e) => onSearchChange(e.target.value)}
           className="h-9 text-xs bg-muted/30 border-border/60 max-w-md"
         />
-        <Select
-          value={statusFilter}
-          onValueChange={onStatusFilterChange}
-        >
+        <Select value={statusFilter} onValueChange={onStatusFilterChange}>
           <SelectTrigger className="h-9 w-[160px] text-xs">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -128,10 +231,7 @@ export function BugTable({
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={priorityFilter}
-          onValueChange={onPriorityFilterChange}
-        >
+        <Select value={priorityFilter} onValueChange={onPriorityFilterChange}>
           <SelectTrigger className="h-9 w-[140px] text-xs">
             <SelectValue placeholder="Priority" />
           </SelectTrigger>
@@ -146,97 +246,23 @@ export function BugTable({
         </Select>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm shadow-sm overflow-hidden flex flex-col">
-        <div className="overflow-x-auto max-h-[min(70vh,720px)] overflow-y-auto flex-1 min-h-0">
-          <Table>
-            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-sm">
-              <TableRow className="hover:bg-transparent border-border/60">
-                <TableHead className="w-8" />
-                <TableHead className="w-[140px]">
-                  <SortHead label="Project" col="projectName" />
-                </TableHead>
-                <TableHead className="min-w-[120px]">
-                  <span className="text-[10px] font-semibold uppercase">Developers</span>
-                </TableHead>
-                <TableHead className="min-w-[160px]">
-                  <SortHead label="Description" col="title" />
-                </TableHead>
-                <TableHead>
-                  <SortHead label="Priority" col="priority" />
-                </TableHead>
-                <TableHead className="min-w-[140px]">Latest comment</TableHead>
-                <TableHead className="min-w-[140px]">
-                  <span className="text-[10px] font-semibold uppercase">QA · Dev · Final</span>
-                </TableHead>
-                <TableHead className="w-[72px]">Files</TableHead>
-                <TableHead>
-                  <SortHead label="Updated" col="updatedAt" />
-                </TableHead>
-                <TableHead className="w-[80px]" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedRows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-xs text-muted-foreground">
-                    No bugs match your filters
-                  </TableCell>
-                </TableRow>
-              ) : (
-                sortedRows.flatMap((bug) => {
-                  const childCount = bug.childCount ?? bug.children?.length ?? 0;
-                  const isOpen = expanded.has(bug.id);
-                  const rows = [
-                    <BugTableRow
-                      key={bug.id}
-                      bug={bug}
-                      childCount={childCount}
-                      expanded={isOpen}
-                      onToggleExpand={() => {
-                        setExpanded((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(bug.id)) next.delete(bug.id);
-                          else next.add(bug.id);
-                          return next;
-                        });
-                      }}
-                      onRowClick={onRowClick}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      canEdit={canEdit}
-                    />,
-                  ];
-                  if (isOpen && bug.children?.length) {
-                    for (const child of bug.children) {
-                      rows.push(
-                        <BugTableRow
-                          key={child.issueKey ?? `${bug.id}-${child.title}`}
-                          bug={child}
-                          isChild
-                          onRowClick={(row) => onRowClick(row)}
-                          onEdit={onEdit}
-                          canEdit={canEdit}
-                        />,
-                      );
-                    }
-                  }
-                  return rows;
-                })
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      <DataPagination
-        page={pagination.page}
-        total={pagination.total}
-        limit={pagination.limit}
-        loadedRowCount={bugs.length}
-        onPageChange={pagination.onPageChange}
-        onLimitChange={pagination.onLimitChange}
-        pageSizeOptions={pagination.pageSizeOptions}
-        className="rounded-b-xl border-border/60"
+      <CmsDataTable
+        columns={columns}
+        rows={displayRows}
+        rowKey={bugDisplayRowKey}
+        embedded
+        empty={{ title: "No bugs match your filters" }}
+        onRowClick={onRowClick}
+        getRowClassName={bugDisplayRowClassName}
+        pagination={{
+          page: pagination.page,
+          total: pagination.total,
+          limit: pagination.limit,
+          loadedRowCount: bugs.length,
+          onPageChange: pagination.onPageChange,
+          onLimitChange: pagination.onLimitChange,
+          pageSizeOptions: pagination.pageSizeOptions,
+        }}
       />
     </div>
   );

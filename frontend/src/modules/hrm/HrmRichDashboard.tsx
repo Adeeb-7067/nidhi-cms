@@ -33,14 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
 import { SalesPageHeader } from "@/modules/sales/components/SalesPageHeader";
@@ -225,6 +218,46 @@ export function HrmRichDashboard({ data, view, trendDays, onTrendDaysChange }: P
   });
 
   const maxEarnerNet = topEarners[0]?.net ?? 1;
+
+  const pendingLeaveColumns = useMemo((): CmsColumn<(typeof filteredPendingLeave)[number]>[] => [
+    {
+      id: "employee",
+      header: "Employee",
+      cell: (r) => (
+        <div className="flex items-center gap-2">
+          <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-6 w-6" />
+          <p className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</p>
+        </div>
+      ),
+    },
+    {
+      id: "dates",
+      header: "Dates",
+      cell: (r) => (
+        <span className="text-muted-foreground">
+          {r.startDate} → {r.endDate}
+        </span>
+      ),
+    },
+    {
+      id: "type",
+      header: "Type",
+      cell: (r) => r.leaveTypeName ?? "Leave",
+    },
+    {
+      id: "action",
+      header: "Action",
+      align: "right",
+      cell: (r) => (
+        <HrmApprovalActions
+          compact
+          disabled={reviewLeave.isPending}
+          onApprove={() => void reviewLeaveRequest(r.id, "approved")}
+          onReject={() => void reviewLeaveRequest(r.id, "rejected")}
+        />
+      ),
+    },
+  ], [reviewLeave.isPending]);
 
   const exportDashboardSummary = () => {
     downloadDashboardCsv(`hrm-dashboard-summary-${todayKey}.csv`, [
@@ -710,40 +743,12 @@ export function HrmRichDashboard({ data, view, trendDays, onTrendDaysChange }: P
           {filteredPendingLeave.length === 0 ? (
             <HrmChartEmptyState message="No pending leave requests." icon={ClipboardList} />
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Employee</TableHead>
-                  <TableHead className="text-xs">Dates</TableHead>
-                  <TableHead className="text-xs">Type</TableHead>
-                  <TableHead className="text-xs text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredPendingLeave.slice(0, 8).map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <HrmEmployeeAvatar name={r.userName ?? `#${r.userId}`} avatarUrl={r.avatarUrl} className="h-6 w-6" />
-                        <p className="text-xs font-medium">{r.userName ?? `#${r.userId}`}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.startDate} → {r.endDate}
-                    </TableCell>
-                    <TableCell className="text-xs">{r.leaveTypeName ?? "Leave"}</TableCell>
-                    <TableCell className="text-right">
-                      <HrmApprovalActions
-                        compact
-                        disabled={reviewLeave.isPending}
-                        onApprove={() => void reviewLeaveRequest(r.id, "approved")}
-                        onReject={() => void reviewLeaveRequest(r.id, "rejected")}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <CmsDataTable
+              columns={pendingLeaveColumns}
+              rows={filteredPendingLeave.slice(0, 8)}
+              rowKey={(r) => r.id}
+              embedded
+            />
           )}
         </ChartPanel>
       ) : null}

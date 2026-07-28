@@ -1,12 +1,6 @@
 import { useMemo, useState } from "react";
 import { deleteBug, type Bug } from "@/api";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,8 +20,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { BugTableRow } from "./bug-table-row";
-import { DataPagination } from "@/components/ui/data-pagination";
+import {
+  BugDisplayRow,
+  BugExpandCell,
+  BugProjectActionsCell,
+  BugProjectIdCell,
+  BugProjectTitleCell,
+  BugStatusCell,
+  bugDisplayRowClassName,
+  bugDisplayRowKey,
+  flattenBugRows,
+} from "./bug-table-row";
 import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
 import { Search, X } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -87,6 +90,7 @@ export function ProjectBugsPanel({
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isFiltered = search.trim() !== "" || trackFilter !== "all" || priorityFilter !== "all";
+  const showActions = Boolean(onEditBug || canDelete);
 
   const clearFilters = () => {
     setSearch("");
@@ -120,6 +124,11 @@ export function ProjectBugsPanel({
   const { pageItems, pagination } = useClientPagination(rows, DEFAULT_TABLE_PAGE_SIZE);
   const totalBugs = bugs.filter((b) => !b.parentBugId).length;
 
+  const displayRows = useMemo(
+    () => flattenBugRows(pageItems, expanded),
+    [pageItems, expanded],
+  );
+
   const handleDelete = (bug: Bug) => {
     const ok = typeof canDelete === "function" ? canDelete(bug) : canDelete;
     if (ok) setDeleteTarget(bug);
@@ -140,9 +149,72 @@ export function ProjectBugsPanel({
     }
   };
 
+  const toggleExpand = (bugId: number) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(bugId)) next.delete(bugId);
+      else next.add(bugId);
+      return next;
+    });
+  };
+
+  const columns = useMemo((): CmsColumn<BugDisplayRow>[] => {
+    const cols: CmsColumn<BugDisplayRow>[] = [
+      {
+        id: "expand",
+        header: "",
+        className: "w-8",
+        cell: (row) => (
+          <BugExpandCell
+            row={row}
+            expanded={expanded.has(row.id)}
+            onToggleExpand={row.isChild ? undefined : () => toggleExpand(row.id)}
+          />
+        ),
+      },
+      {
+        id: "id",
+        header: "ID",
+        cell: (row) => <BugProjectIdCell row={row} />,
+      },
+      {
+        id: "title",
+        header: "Title",
+        cell: (row) => <BugProjectTitleCell row={row} />,
+      },
+      {
+        id: "status",
+        header: "QA · Dev · Final",
+        chip: true,
+        cell: (row) => <BugStatusCell row={row} />,
+      },
+      {
+        id: "reporter",
+        header: "Reporter",
+        cell: (row) => <span className="text-muted-foreground">{row.reporterName}</span>,
+      },
+    ];
+    if (showActions) {
+      cols.push({
+        id: "actions",
+        header: "",
+        className: "w-10",
+        align: "right",
+        cell: (row) => (
+          <BugProjectActionsCell
+            row={row}
+            onEdit={onEditBug}
+            onDelete={canDelete ? handleDelete : undefined}
+            canEdit={canEdit}
+          />
+        ),
+      });
+    }
+    return cols;
+  }, [expanded, onEditBug, canEdit, canDelete, showActions]);
+
   return (
     <div className="space-y-0">
-      {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-border">
         <div className="relative flex-1 min-w-[160px]">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -195,72 +267,19 @@ export function ProjectBugsPanel({
         </span>
       </div>
 
-      {rows.length === 0 ? (
-        <p className="text-center text-muted-foreground py-10 text-xs">
-          {isFiltered ? "No bugs match the current filters." : emptyMessage}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8" />
-                  <TableHead className="text-[10px] font-semibold uppercase">ID</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase">Title</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase">QA · Dev · Final</TableHead>
-                  <TableHead className="text-[10px] font-semibold uppercase">Reporter</TableHead>
-                  {onEditBug && <TableHead className="w-10" />}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pageItems.flatMap((bug) => {
-                  const childCount = bug.childCount ?? bug.children?.length ?? 0;
-                  const isOpen = expanded.has(bug.id);
-                  const out = [
-                    <BugTableRow
-                      key={bug.id}
-                      bug={bug}
-                      variant="project"
-                      childCount={childCount}
-                      expanded={isOpen}
-                      onToggleExpand={() => {
-                        setExpanded((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(bug.id)) next.delete(bug.id);
-                          else next.add(bug.id);
-                          return next;
-                        });
-                      }}
-                      onRowClick={onOpenBug}
-                      onEdit={onEditBug}
-                      onDelete={canDelete ? handleDelete : undefined}
-                      canEdit={canEdit}
-                    />,
-                  ];
-                  if (isOpen && bug.children?.length) {
-                    for (const child of bug.children) {
-                      out.push(
-                        <BugTableRow
-                          key={child.issueKey ?? `${bug.id}-${child.title}`}
-                          bug={child}
-                          variant="project"
-                          isChild
-                          onRowClick={onOpenBug}
-                          onEdit={onEditBug}
-                          canEdit={canEdit}
-                        />,
-                      );
-                    }
-                  }
-                  return out;
-                })}
-              </TableBody>
-            </Table>
-          </div>
-          <DataPagination {...pagination} />
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={displayRows}
+        rowKey={bugDisplayRowKey}
+        embedded
+        empty={{
+          title: isFiltered ? "No bugs match the current filters." : emptyMessage,
+        }}
+        onRowClick={onOpenBug}
+        getRowClassName={bugDisplayRowClassName}
+        pagination={pagination}
+        className="px-3 pb-3 pt-2"
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => { if (!o) setDeleteTarget(null); }}>
         <AlertDialogContent>

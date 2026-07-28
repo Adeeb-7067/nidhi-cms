@@ -1,23 +1,9 @@
 import { useMemo, useState } from "react";
-import { Receipt, Printer, CheckCircle2 } from "lucide-react";
+import { useLocation } from "wouter";
+import { CheckCircle2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -31,6 +17,7 @@ import {
   type FreelancerEngagement,
   type FreelancerInstallment,
 } from "@/api/finance";
+import { FreelancerNavTabs } from "@/components/freelancers/FreelancerNavTabs";
 
 type PaidReceiptItem = {
   engagement: FreelancerEngagement;
@@ -39,8 +26,7 @@ type PaidReceiptItem = {
 
 export default function FreelancerReceiptsPage() {
   const [search, setSearch] = useState("");
-  const [receiptTarget, setReceiptTarget] = useState<PaidReceiptItem | null>(null);
-
+  const [, setLocation] = useLocation();
   const { data, isLoading, isError, refetch } = useListFreelancerEngagements();
 
   const paidReceiptsList = useMemo(() => {
@@ -58,17 +44,17 @@ export default function FreelancerReceiptsPage() {
       (r) =>
         (r.engagement.freelancerName ?? "").toLowerCase().includes(q) ||
         (r.engagement.projectName ?? "").toLowerCase().includes(q) ||
-        (r.installment.reference ?? "").toLowerCase().includes(q)
+        (r.installment.receiptNumber ?? "").toLowerCase().includes(q) ||
+        (r.installment.reference ?? "").toLowerCase().includes(q),
     );
   }, [data?.engagements, search]);
 
   const kpis = useMemo(() => {
-    const list = paidReceiptsList;
-    const totalPaidAmount = list.reduce((s, r) => s + r.installment.amount, 0);
-    return { count: list.length, totalPaidAmount };
+    const totalPaidAmount = paidReceiptsList.reduce((s, r) => s + r.installment.amount, 0);
+    return { count: paidReceiptsList.length, totalPaidAmount };
   }, [paidReceiptsList]);
 
-  if (isLoading) return <FinanceListPageSkeleton />;
+  if (isLoading) return <FinanceListPageSkeleton kpiCount={2} />;
   if (isError) {
     return (
       <PortalPageShell>
@@ -77,140 +63,75 @@ export default function FreelancerReceiptsPage() {
     );
   }
 
+  const openReceipt = (item: PaidReceiptItem) =>
+    setLocation(`/freelancers/receipts/${item.engagement.id}/${item.installment.id}`);
+  const columns: CmsColumn<PaidReceiptItem>[] = [
+    {
+      id: "receipt",
+      header: "Receipt #",
+      cell: (item) => {
+        const receiptNo = item.installment.receiptNumber || `FL-REC-${item.installment.id}`;
+        return <button type="button" className="font-mono text-primary hover:underline underline-offset-2 whitespace-nowrap" onClick={() => openReceipt(item)}>{receiptNo}</button>;
+      },
+    },
+    { id: "freelancer", header: "Freelancer", cell: (item) => <span className="font-medium">{item.engagement.freelancerName ?? "—"}</span> },
+    { id: "project", header: "Project", className: "max-w-[200px]", cell: (item) => <span className="truncate">{item.engagement.projectName ?? "—"}</span> },
+    { id: "milestone", header: "Milestone", cell: (item) => <span className="text-muted-foreground">{item.installment.label}</span> },
+    { id: "amount", header: "Amount", align: "right", cell: (item) => <span className="font-medium tabular-nums text-emerald-600">{formatCurrency(item.installment.amount)}</span> },
+    { id: "paid-date", header: "Paid date", cell: (item) => <span className="text-muted-foreground whitespace-nowrap">{item.installment.paidAt ? item.installment.paidAt.slice(0, 10) : "—"}</span> },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (item) => <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => openReceipt(item)}><Receipt className="h-3.5 w-3.5" />View</Button>,
+    },
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="Freelancer Payment Receipts"
-        description="Official payment receipt vouchers for all completed freelancer payouts and installments"
-      />
-
-      <PortalKpiGrid
-        items={[
-          { title: "Total Paid Vouchers", value: String(kpis.count), icon: Receipt, accent: "blue" },
-          { title: "Total Amount Disbursed", value: formatCurrency(kpis.totalPaidAmount), icon: CheckCircle2, accent: "green" },
+        title="Payment receipts"
+        description="Branded payout vouchers — same document format as Sales receipts."
+        breadcrumbs={[
+          { label: "Freelancers", href: "/freelancers" },
+          { label: "Receipts" },
         ]}
       />
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search receipt ref, freelancer, or project…" />
+      <FreelancerNavTabs activeTab="receipts" />
 
-      <div className="space-y-4">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Payment Receipt Vouchers ({paidReceiptsList.length})
-        </h3>
+      <PortalKpiGrid
+        columns={2}
+        items={[
+          {
+            title: "Receipts",
+            value: String(kpis.count),
+            icon: Receipt,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Amount disbursed",
+            value: formatCurrency(kpis.totalPaidAmount),
+            icon: CheckCircle2,
+            accent: "green",
+            delay: 1,
+          },
+        ]}
+      />
 
-        {paidReceiptsList.length === 0 ? (
-          <FinanceEmptyState
-            title="No payment receipts available"
-            description="Record a freelancer payment on the Payments page to generate payment receipt vouchers."
-          />
-        ) : (
-          <div className="rounded-xl border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Receipt Reference</TableHead>
-                  <TableHead>Freelancer</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Payment Milestone</TableHead>
-                  <TableHead>Amount Paid</TableHead>
-                  <TableHead>Payment Date</TableHead>
-                  <TableHead className="text-right">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paidReceiptsList.map((item, idx) => (
-                  <TableRow key={`${item.engagement.id}-${item.installment.id}-${idx}`}>
-                    <TableCell className="font-mono text-xs font-semibold text-primary">
-                      {item.installment.reference || `REC-FL-${item.installment.id}`}
-                    </TableCell>
-                    <TableCell className="font-medium">{item.engagement.freelancerName}</TableCell>
-                    <TableCell>{item.engagement.projectName}</TableCell>
-                    <TableCell>{item.installment.label}</TableCell>
-                    <TableCell className="font-medium text-emerald-600">
-                      {formatCurrency(item.installment.amount)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {item.installment.paidAt ? item.installment.paidAt.slice(0, 10) : "Paid"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5"
-                        onClick={() => setReceiptTarget(item)}
-                      >
-                        <Receipt className="h-3.5 w-3.5" /> View Receipt
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
+      <FinanceFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search receipt #, UTR, freelancer, or project…"
+      />
 
-      {/* PRINTABLE PAYMENT RECEIPT VOUCHER DIALOG */}
-      <Dialog open={!!receiptTarget} onOpenChange={(open) => !open && setReceiptTarget(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-emerald-600" /> Payment Receipt Voucher
-            </DialogTitle>
-          </DialogHeader>
-
-          {receiptTarget ? (
-            <div className="space-y-4 border rounded-xl p-4 bg-card shadow-sm">
-              <div className="flex justify-between items-start border-b pb-3">
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase font-semibold">Voucher Reference</p>
-                  <p className="font-mono text-sm font-bold text-primary">
-                    {receiptTarget.installment.reference || `REC-FL-${receiptTarget.installment.id}`}
-                  </p>
-                </div>
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-                  PAID
-                </Badge>
-              </div>
-
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Freelancer:</span>
-                  <span className="font-medium">{receiptTarget.engagement.freelancerName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Project:</span>
-                  <span className="font-medium">{receiptTarget.engagement.projectName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Payment Milestone:</span>
-                  <span className="font-medium">{receiptTarget.installment.label}</span>
-                </div>
-                <div className="flex justify-between border-t pt-2 mt-2">
-                  <span className="font-semibold">Paid Amount:</span>
-                  <span className="font-bold text-base text-emerald-600">
-                    {formatCurrency(receiptTarget.installment.amount)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          <DialogFooter className="flex gap-2">
-            <Button variant="outline" onClick={() => setReceiptTarget(null)}>
-              Close
-            </Button>
-            <Button
-              className="gap-2"
-              onClick={() => {
-                window.print();
-              }}
-            >
-              <Printer className="h-4 w-4" /> Print Receipt
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CmsDataTable
+        columns={columns}
+        rows={paidReceiptsList}
+        rowKey={(item) => `${item.engagement.id}-${item.installment.id}`}
+        empty={{ icon: Receipt, title: "No payment receipts", description: "Record a freelancer payment to generate a branded receipt voucher." }}
+      />
     </PortalPageShell>
   );
 }

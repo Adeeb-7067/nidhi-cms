@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
-import { CalendarClock, Layers, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "wouter";
+import { format } from "date-fns";
+import {
+  AlertCircle,
+  CalendarClock,
+  Clock,
+  IndianRupee,
+  Layers,
+  Plus,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -9,22 +17,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useListInstallments, useListCustomers } from "@/api/sales";
+import { useListInstallments, useListCustomers, type Installment } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { readSearchParam } from "@/modules/sales/utils";
+import { formatInstallmentSequence, formatSalesDateTime, readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
-  SalesEmptyState,
-  InstallmentCard,
-  FinancialSummaryCard,
+  SalesStatusBadge,
   CreateInstallmentDialog,
 } from "@/modules/sales/components";
-import { installmentCardData } from "@/modules/sales/adapters";
 
 type StatusTab = "all" | "pending" | "partial" | "paid" | "overdue";
 
@@ -41,7 +45,9 @@ export default function InstallmentsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
 
-  useEffect(() => { resetPage(); }, [search, statusTab, customerId, resetPage]);
+  useEffect(() => {
+    resetPage();
+  }, [search, statusTab, customerId, resetPage]);
 
   const { data: customersData } = useListCustomers({ limit: 300 });
   const customers = customersData?.customers ?? [];
@@ -58,7 +64,106 @@ export default function InstallmentsPage() {
   const { data, isLoading, isError, refetch } = useListInstallments(listParams);
   const installments = data?.installments ?? [];
   const total = data?.total ?? 0;
-  const summary = data?.summary ?? { total: 0, pending: 0, partial: 0, paid: 0, overdue: 0, outstanding: 0 };
+  const summary = data?.summary ?? {
+    total: 0,
+    pending: 0,
+    partial: 0,
+    paid: 0,
+    overdue: 0,
+    outstanding: 0,
+  };
+
+  const columns = useMemo<CmsColumn<Installment>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Milestone",
+        cell: (inst) => (
+          <div className="min-w-0">
+            <Link
+              href={`/sales/installments/${inst.id}`}
+              className="font-medium hover:text-primary"
+            >
+              {inst.name}
+            </Link>
+            {formatInstallmentSequence(inst.sequenceNumber, inst.sequenceTotal) ? (
+              <p className="text-[10px] text-muted-foreground">
+                {formatInstallmentSequence(inst.sequenceNumber, inst.sequenceTotal)}
+              </p>
+            ) : null}
+          </div>
+        ),
+      },
+      {
+        id: "customer",
+        header: "Customer",
+        className: "max-w-[180px] truncate",
+        cell: (inst) => inst.customerName ?? `Customer #${inst.customerId}`,
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (inst) => <SalesStatusBadge variant="installment" value={inst.status} />,
+      },
+      {
+        id: "due",
+        header: "Due",
+        align: "right",
+        cell: (inst) => (
+          <span className="font-medium tabular-nums">{formatCurrency(inst.dueAmount)}</span>
+        ),
+      },
+      {
+        id: "paid",
+        header: "Paid",
+        align: "right",
+        cell: (inst) => (
+          <span className="tabular-nums text-emerald-700">{formatCurrency(inst.paidAmount)}</span>
+        ),
+      },
+      {
+        id: "remaining",
+        header: "Remaining",
+        align: "right",
+        cell: (inst) => (
+          <span className="tabular-nums">
+            {formatCurrency(Math.max(0, inst.dueAmount - inst.paidAmount))}
+          </span>
+        ),
+      },
+      {
+        id: "dueDate",
+        header: "Due date",
+        cell: (inst) => (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {format(new Date(inst.dueDate), "MMM d, yyyy")}
+          </span>
+        ),
+      },
+      {
+        id: "created",
+        header: "Created",
+        cell: (inst) => (
+          <span className="text-muted-foreground whitespace-nowrap text-[11px]">
+            {formatSalesDateTime(inst.createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        align: "right",
+        hideable: false,
+        cell: (inst) => (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+            <Link href={`/sales/installments/${inst.id}`}>View</Link>
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -78,16 +183,36 @@ export default function InstallmentsPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FinancialSummaryCard title="Installments" value={summary.total} icon={CalendarClock} accent="blue" />
-        <FinancialSummaryCard title="Partial" value={summary.partial} icon={CalendarClock} accent="amber" />
-        <FinancialSummaryCard title="Overdue" value={summary.overdue} icon={CalendarClock} accent="red" alert={summary.overdue > 0} />
-        <FinancialSummaryCard title="Outstanding" value={formatCurrency(summary.outstanding)} icon={CalendarClock} accent="violet" hint={summary.overdue ? `${summary.overdue} overdue` : undefined} />
-      </div>
+      <PortalKpiGrid
+        items={[
+          { title: "Installments", value: summary.total, icon: CalendarClock, accent: "blue", delay: 0 },
+          { title: "Partial", value: summary.partial, icon: Clock, accent: "amber", delay: 1 },
+          {
+            title: "Overdue",
+            value: summary.overdue,
+            icon: AlertCircle,
+            accent: "red",
+            alert: summary.overdue > 0,
+            delay: 2,
+          },
+          {
+            title: "Outstanding",
+            value: formatCurrency(summary.outstanding),
+            hint: summary.overdue ? `${summary.overdue} overdue` : undefined,
+            icon: IndianRupee,
+            accent: "violet",
+            delay: 3,
+          },
+        ]}
+      />
 
-      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search installment or client…">
+      <SalesFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search installment or client…"
+      >
         <Select value={customerId} onValueChange={setCustomerId}>
-          <SelectTrigger className="w-full sm:w-[220px] h-9">
+          <SelectTrigger className="h-9 w-full sm:w-[220px]">
             <SelectValue placeholder="All clients" />
           </SelectTrigger>
           <SelectContent>
@@ -101,46 +226,41 @@ export default function InstallmentsPage() {
         </Select>
       </SalesFilterBar>
 
-      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "pending", "partial", "paid", "overdue"] as StatusTab[]).map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s} ({s === "all" ? summary.total : summary[s]})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={(v) => setStatusTab(v as StatusTab)}
+        items={(["all", "pending", "partial", "paid", "overdue"] as StatusTab[]).map((s) => ({
+          value: s,
+          label: s === "all" ? "All" : s,
+          count: s === "all" ? summary.total : summary[s],
+        }))}
+      />
 
-      {isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState icon={Layers} title="Failed to load installments" description="Could not fetch installments." actionLabel="Retry" onAction={() => refetch()} />
-      ) : installments.length === 0 ? (
-        <SalesEmptyState icon={Layers} title="No installments found" description="Create an installment plan from an approved proposal or change the client filter." />
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {installments.map((inst) => (
-              <InstallmentCard
-                key={inst.id}
-                installment={installmentCardData(inst)}
-                href={`/sales/installments/${inst.id}`}
-                editable
-              />
-            ))}
-          </div>
-          <DataPagination
-            page={page}
-            total={total}
-            limit={limit}
-            loadedRowCount={installments.length}
-            onPageChange={setPage}
-            onLimitChange={setLimit}
-          />
-        </>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={installments}
+        rowKey={(inst) => inst.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => void refetch()}
+        viewStorageKey="sales-installments"
+        empty={{
+          icon: Layers,
+          title: "No installments found",
+          description: "Create an installment plan from an approved proposal or change the client filter.",
+          actionLabel: "New plan",
+          onAction: () => setCreateOpen(true),
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: installments.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
+
       <CreateInstallmentDialog open={createOpen} onOpenChange={setCreateOpen} />
     </PortalPageShell>
   );

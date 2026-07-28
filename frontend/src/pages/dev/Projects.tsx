@@ -10,9 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { PageCardGridSkeleton } from "@/components/loading";
-import { Tabs } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import {
   Briefcase,
@@ -24,7 +22,6 @@ import {
   ExternalLink,
   TrendingUp,
   AlertTriangle,
-  Search,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -33,12 +30,10 @@ import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevToolbar,
-  DevTabsList,
-  DevTabsTrigger,
   DevSectionMeta,
   DevEmptyState,
 } from "@/components/dev/dev-page-kit";
+import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
 import { PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
 import { isDeveloperRole, isQaStaffRole } from "@/lib/navigation";
 
@@ -321,25 +316,21 @@ export default function DevProjects() {
         />
       )}
 
-      <DevToolbar>
-        <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-          <DevTabsList>
-            <DevTabsTrigger value="ongoing">Ongoing</DevTabsTrigger>
-            <DevTabsTrigger value="maintenance">Maintenance</DevTabsTrigger>
-            <DevTabsTrigger value="all">All assigned</DevTabsTrigger>
-          </DevTabsList>
-        </Tabs>
+      <CmsChipTabs
+        value={tab}
+        onValueChange={(v) => setTab(v as typeof tab)}
+        items={[
+          { value: "ongoing", label: "Ongoing" },
+          { value: "maintenance", label: "Maintenance" },
+          { value: "all", label: "All assigned" },
+        ]}
+      />
 
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search projects..."
-            className="h-9 bg-muted/30 pl-8 text-xs"
-          />
-        </div>
-      </DevToolbar>
+      <CmsFilterBar
+        search={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search projects…"
+      />
 
       <DevSectionMeta
         label={`Showing ${tabLabel.toLowerCase()} projects`}

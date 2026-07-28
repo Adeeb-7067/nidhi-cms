@@ -22,12 +22,11 @@ import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHeader,
   HrmPageShell,
-  HrmTabsList,
-  HrmTabsTrigger,
   HrmField,
   HrmQueryErrorPanel,
   hrmActionButtonClass,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import { buildWfhRequestColumns } from "@/modules/hrm/hrm-table-columns";
 import { HrmPageKpiRow, countByStatus } from "@/modules/hrm/page-kpis";
 import { useApplyWfhRequest, mergeHrmQueryStates, useHrmWfhRequests, useReviewWfhRequest, useCancelWfhRequest } from "@/api/hrm";
@@ -153,12 +152,17 @@ export default function HrmWfhPage() {
 
         <HrmPageKpiRow items={kpiItems} loading={isLoading || (canAdminView && allLoading)} />
 
-        <Tabs value={wfhTab} onValueChange={setWfhTab} className="space-y-4">
-          <HrmTabsList>
-            <HrmTabsTrigger value="history">{canAdminView ? "All requests" : "My requests"}</HrmTabsTrigger>
-            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Approvals</HrmTabsTrigger>}
-            <HrmTabsTrigger value="rejected">Rejected</HrmTabsTrigger>
-          </HrmTabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={wfhTab}
+            onValueChange={setWfhTab}
+            items={[
+              { value: "history", label: canAdminView ? "All requests" : "My requests" },
+              ...((canAdminView || canApprove) ? [{ value: "queue", label: "Approvals" }] : []),
+              { value: "rejected", label: "Rejected" },
+            ]}
+          />
+          <Tabs value={wfhTab} onValueChange={setWfhTab}>
 
           <TabsContent value="history" className="space-y-4 m-0">
             {allState.isError ? (
@@ -259,6 +263,7 @@ export default function HrmWfhPage() {
             )}
           </TabsContent>
         </Tabs>
+        </div>
 
         <Dialog open={applyOpen} onOpenChange={setApplyOpen}>
           <DialogContent>

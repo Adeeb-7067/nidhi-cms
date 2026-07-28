@@ -20,13 +20,6 @@ import {
   projectStackOptions,
 } from "@/lib/project-type-fields";
 import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -34,17 +27,10 @@ import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import {
-  Search,
   Plus,
-  Calendar,
-  Clock,
   Briefcase,
-  Users,
   Edit,
   Trash2,
-  MoreVertical,
-  Filter,
-  X,
   Mail,
   Building2,
   BarChart3,
@@ -57,6 +43,7 @@ import {
   PortalKpiGrid,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
@@ -92,13 +79,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -118,6 +98,7 @@ import { toastApiError } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
 import { useQueryClient } from "@tanstack/react-query";
 import { Project } from "@/api";
+import { cn } from "@/lib/utils";
 
 type ProjectTeamPreview = {
   userId: number;
@@ -1228,57 +1209,123 @@ export default function AdminProjects() {
         ]}
       />
 
-      <Tabs
-        defaultValue="development"
+      <CmsChipTabs
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as any)}
-        className="w-full"
-      >
-        <TabsList className="grid grid-cols-3 w-full max-w-[480px] h-9 bg-muted/50 p-1 border border-border/40">
-          <TabsTrigger
-            value="development"
-            className="text-xs font-semibold transition-all"
-          >
-            Development
-          </TabsTrigger>
-          <TabsTrigger
-            value="maintenance"
-            className="text-xs font-semibold transition-all"
-          >
-            Maintenance
-          </TabsTrigger>
-          <TabsTrigger
-            value="digital"
-            className="text-xs font-semibold transition-all"
-          >
-            Digital
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+        onValueChange={(v) => setActiveTab(v as ListProjectsType)}
+        items={[
+          { value: ListProjectsType.development, label: "Development" },
+          { value: ListProjectsType.maintenance, label: "Maintenance" },
+          { value: ListProjectsType.digital, label: "Digital" },
+        ]}
+      />
 
-      <div className="mt-4 bg-card rounded-md border border-border">
+      <CmsFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search projects…"
+        filters={[
+          {
+            key: "status",
+            value: statusFilter || "all",
+            onChange: (v) => setStatusFilter(v === "all" ? "" : v),
+            placeholder: "Status",
+            allOption: { value: "all", label: "All statuses" },
+            options: [
+              { value: "scoping", label: "Scoping" },
+              { value: "in_progress", label: "In progress" },
+              { value: "on_hold", label: "On hold" },
+              { value: "uat", label: "UAT" },
+              { value: "completed", label: "Completed" },
+              { value: "maintenance", label: "Maintenance" },
+            ],
+          },
+          {
+            key: "priority",
+            value: priorityFilter || "all",
+            onChange: (v) =>
+              setPriorityFilter(v === "all" ? "" : (v as ListProjectsPriority)),
+            placeholder: "Priority",
+            allOption: { value: "all", label: "All priorities" },
+            options: [
+              { value: "low", label: "Low" },
+              { value: "medium", label: "Medium" },
+              { value: "high", label: "High" },
+              { value: "critical", label: "Critical" },
+            ],
+          },
+        ]}
+      />
+
+      <div className="mt-1">
         {isLoading ? (
-          <div className="p-4">
+          <div className="p-4 rounded-md border border-border bg-card">
             <PageTableSkeleton rows={8} columns={7} showToolbar />
           </div>
         ) : (
-          <div className="p-4">
-            <AdvancedTable
-              data={list}
-              columns={columns}
-              searchKey="name"
-              searchPlaceholder="Filter projects..."
-              filename="ProjectsExport"
-              viewStorageKey="projects"
-              getRowClassName={(project) =>
-                project.priority === "critical"
-                  ? "bg-red-500/[0.04] border-l-2 border-l-red-500"
-                  : project.priority === "high"
-                    ? "bg-orange-500/[0.04] border-l-2 border-l-orange-500"
-                    : undefined
-              }
-            />
-          </div>
+          <AdvancedTable
+            data={list}
+            columns={columns}
+            filename="ProjectsExport"
+            viewStorageKey="admin-projects"
+            defaultViewMode="table"
+            showViewToggle
+            renderGridCard={(project) => {
+              const href =
+                project.type === "digital"
+                  ? `/marketing/projects/${project.id}`
+                  : `/admin/projects/${project.id}`;
+              return (
+                <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card p-4 shadow-sm transition-colors hover:border-primary/30">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="h-10 w-10 shrink-0 rounded-md border border-border/60">
+                      {project.logoUrl ? (
+                        <AvatarImage src={project.logoUrl} alt={project.name} className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className="rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                        {project.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <Link href={href} className="text-sm font-semibold hover:text-primary line-clamp-2">
+                        {project.name}
+                      </Link>
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                        {project.companyName ?? project.clientName ?? "—"}
+                      </p>
+                    </div>
+                    <Badge variant="secondary" className={cn("text-[10px] capitalize shrink-0", getStatusColor(project.status))}>
+                      {project.status.replace(/_/g, " ")}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>Progress</span>
+                      <span className="font-semibold text-foreground">{project.completionPct ?? 0}%</span>
+                    </div>
+                    <Progress value={project.completionPct ?? 0} className="h-1.5" />
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-2 pt-3">
+                    <span className="text-[10px] capitalize text-muted-foreground">{project.priority} priority</span>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditProject(project)}>
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setDeleteId(project.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+            getRowClassName={(project) =>
+              project.priority === "critical"
+                ? "bg-red-500/[0.04] border-l-2 border-l-red-500"
+                : project.priority === "high"
+                  ? "bg-orange-500/[0.04] border-l-2 border-l-orange-500"
+                  : undefined
+            }
+          />
         )}
       </div>
       <DataPagination

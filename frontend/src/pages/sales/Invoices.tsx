@@ -3,20 +3,10 @@ import { Link } from "wouter";
 import { format } from "date-fns";
 import { Plus, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useListInvoices, useSalesDashboard } from "@/api/sales";
+import { useListInvoices, useSalesDashboard, type SalesInvoice } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import { formatProjectLabel, formatSalesDateTime } from "@/modules/sales/utils";
 import { readSearchParam } from "@/modules/sales/utils";
@@ -24,7 +14,6 @@ import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
-  SalesEmptyState,
   InvoiceFormSheet,
 } from "@/modules/sales/components";
 
@@ -41,7 +30,9 @@ export default function Invoices() {
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [createOpen, setCreateOpen] = useState(false);
 
-  useEffect(() => { resetPage(); }, [search, statusTab, resetPage]);
+  useEffect(() => {
+    resetPage();
+  }, [search, statusTab, resetPage]);
 
   const listParams = {
     search: search || undefined,
@@ -73,6 +64,87 @@ export default function Invoices() {
   const paidCount = dashData?.invoiceByStatus?.paid?.count ?? statusCounts.paid ?? 0;
   const unpaidCount = dashData?.invoiceByStatus?.unpaid?.count ?? statusCounts.unpaid ?? 0;
 
+  const columns: CmsColumn<SalesInvoice>[] = [
+    {
+      id: "number",
+      header: "Invoice #",
+      cell: (inv) => (
+        <Link href={`/sales/invoices/${inv.id}`} className="font-mono hover:text-primary">
+          {inv.number}
+        </Link>
+      ),
+    },
+    {
+      id: "customer",
+      header: "Customer",
+      className: "max-w-[180px] truncate font-medium",
+      cell: (inv) => inv.customerName ?? `Customer #${inv.customerId}`,
+    },
+    {
+      id: "project",
+      header: "Project",
+      className: "max-w-[160px] truncate",
+      cell: (inv) => (
+        <span title={formatProjectLabel(inv.projectId, inv.projectName)}>
+          {formatProjectLabel(inv.projectId, inv.projectName)}
+        </span>
+      ),
+    },
+    {
+      id: "installment",
+      header: "Installment",
+      className: "max-w-[140px] truncate text-muted-foreground",
+      cell: (inv) =>
+        inv.installmentName ?? (inv.installmentId ? `Installment #${inv.installmentId}` : "—"),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (inv) => <SalesStatusBadge variant="invoice" value={inv.status} />,
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (inv) => <span className="font-medium tabular-nums">{formatCurrency(inv.amount)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      cell: (inv) => (
+        <span className="tabular-nums text-emerald-700">{formatCurrency(inv.paidAmount)}</span>
+      ),
+    },
+    {
+      id: "due",
+      header: "Due date",
+      cell: (inv) => (
+        <span className="text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (inv) => (
+        <span className="text-muted-foreground whitespace-nowrap">
+          {formatSalesDateTime(inv.createdAt)}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (inv) => (
+        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+          <Link href={`/sales/invoices/${inv.id}`}>View</Link>
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -95,90 +167,56 @@ export default function Invoices() {
           { title: "Total invoices", value: statusCounts.all || total, icon: Receipt, accent: "blue", delay: 0 },
           { title: "Paid", value: paidCount, icon: Receipt, accent: "green", delay: 1 },
           { title: "Unpaid", value: unpaidCount, icon: Receipt, accent: "amber", delay: 2 },
-          { title: "Outstanding", value: formatCurrency(dashData?.outstanding ?? totalDue), icon: Receipt, accent: "red", alert: true, delay: 3 },
+          {
+            title: "Outstanding",
+            value: formatCurrency(dashData?.outstanding ?? totalDue),
+            icon: Receipt,
+            accent: "red",
+            alert: true,
+            delay: 3,
+          },
         ]}
       />
 
-      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search invoice # or customer…" />
+      <SalesFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search invoice # or customer…"
+      />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {STATUS_TABS.map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s === "all" ? "All" : s} ({statusCounts[s] ?? 0})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={setStatusTab}
+        items={STATUS_TABS.map((s) => ({
+          value: s,
+          label: s === "all" ? "All" : s,
+          count: statusCounts[s] ?? 0,
+        }))}
+      />
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState icon={Receipt} title="Failed to load invoices" description="Could not fetch invoices." actionLabel="Retry" onAction={() => refetch()} />
-      ) : total === 0 ? (
-        <SalesEmptyState icon={Receipt} title="No invoices found" description="Adjust filters or create a new invoice." actionLabel="New invoice" onAction={() => setCreateOpen(true)} />
-      ) : (
-        <>
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Invoice #</TableHead>
-                <TableHead className="text-xs">Customer</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Installment</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs text-right">Paid</TableHead>
-                <TableHead className="text-xs">Due date</TableHead>
-                <TableHead className="text-xs">Created</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {invoices.map((inv) => (
-                <TableRow key={inv.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono">
-                    <Link href={`/sales/invoices/${inv.id}`} className="hover:text-primary">{inv.number}</Link>
-                  </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[180px] truncate">
-                    {inv.customerName ?? `Customer #${inv.customerId}`}
-                  </TableCell>
-                  <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(inv.projectId, inv.projectName)}>
-                    {formatProjectLabel(inv.projectId, inv.projectName)}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
-                    {inv.installmentName ?? (inv.installmentId ? `Installment #${inv.installmentId}` : "—")}
-                  </TableCell>
-                  <TableCell>
-                    <SalesStatusBadge variant="invoice" value={inv.status} />
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(inv.amount)}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(inv.paidAmount)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(inv.dueDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(inv.createdAt)}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/invoices/${inv.id}`}>View</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <DataPagination
-          page={page}
-          total={total}
-          limit={limit}
-          loadedRowCount={invoices.length}
-          onPageChange={setPage}
-          onLimitChange={setLimit}
-        />
-        </>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={invoices}
+        rowKey={(inv) => inv.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: Receipt,
+          title: "No invoices found",
+          description: "Adjust filters or create a new invoice.",
+          actionLabel: "New invoice",
+          onAction: () => setCreateOpen(true),
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: invoices.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
 
       <InvoiceFormSheet open={createOpen} onOpenChange={setCreateOpen} />
     </PortalPageShell>

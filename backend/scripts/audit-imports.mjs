@@ -7,9 +7,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "../src");
-const SCAN_DIRS = ["controllers", "services", "middlewares", "mappers"];
+const SCAN_DIRS = ["middlewares", "mappers", "modules", "routes"];
 
-const EXPORT_ROOTS = ["lib", "utils", "constants", "services", "mappers"];
+const EXPORT_ROOTS = ["lib", "utils", "constants", "mappers", "modules"];
 
 const BUILTINS = new Set([
   "Array",
@@ -244,8 +244,11 @@ function walkJsFiles(dir, out = []) {
   if (!fs.existsSync(dir)) return out;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) walkJsFiles(full, out);
-    else if (entry.name.endsWith(".js")) out.push(full);
+    // Schema files were never in SCAN_DIRS historically; skip to avoid mongoose ref: "Model" false positives.
+    if (entry.isDirectory()) {
+      if (entry.name === "schema") continue;
+      walkJsFiles(full, out);
+    } else if (entry.name.endsWith(".js")) out.push(full);
   }
   return out;
 }

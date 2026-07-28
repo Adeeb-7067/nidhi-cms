@@ -18,12 +18,14 @@ const WorkAnalytics = React.lazy(() => import("@/pages/admin/WorkAnalytics"));
 const SettingsPage = React.lazy(() => import("@/pages/settings/SettingsPage"));
 const AdminProjects = React.lazy(() => import("@/pages/admin/Projects"));
 const AdminProjectDocuments = React.lazy(() => import("@/pages/admin/ProjectDocuments"));
+const AdminMedia = React.lazy(() => import("@/pages/admin/Media"));
 const AdminProjectDetail = React.lazy(() => import("@/pages/admin/ProjectDetail"));
 const AdminEmployees = React.lazy(() => import("@/pages/admin/Employees"));
 const AdminRolesPermissions = React.lazy(() => import("@/pages/admin/RolesPermissions"));
 const AdminClients = React.lazy(() => import("@/pages/admin/Clients"));
 const AdminTickets = React.lazy(() => import("@/pages/admin/Tickets"));
 const AdminAnalytics = React.lazy(() => import("@/pages/admin/Analytics"));
+const AdminActivity = React.lazy(() => import("@/pages/admin/Activity"));
 const AdminRequests = React.lazy(() => import("@/pages/admin/Requests"));
 const AdminAlerts = React.lazy(() => import("@/pages/admin/Alerts"));
 const DiscussionsPage = React.lazy(() => import("@/pages/admin/Discussions"));
@@ -126,6 +128,9 @@ const FinanceFreelancerDashboard = React.lazy(() => import("@/pages/finance/Free
 const FinanceFreelancerDirectory = React.lazy(() => import("@/pages/finance/FreelancerDirectoryPage"));
 const FinanceFreelancerEngagements = React.lazy(() => import("@/pages/finance/FreelancerEngagements"));
 const FinanceFreelancerReceipts = React.lazy(() => import("@/pages/finance/FreelancerReceiptsPage"));
+const FinanceFreelancerReceiptDetail = React.lazy(
+  () => import("@/pages/finance/FreelancerReceiptDetail"),
+);
 
 const MyFreelancerPayments = React.lazy(() => import("@/pages/dev/MyFreelancerPayments"));
 const FreelancerDashboard = React.lazy(() => import("@/pages/freelancer/Dashboard"));
@@ -197,6 +202,11 @@ export function PageOutlet() {
       <Route path="/admin/project-documents">
         <RoleGate>
           <AdminProjectDocuments />
+        </RoleGate>
+      </Route>
+      <Route path="/admin/media">
+        <RoleGate>
+          <AdminMedia />
         </RoleGate>
       </Route>
       <Route path="/admin/projects/:id">
@@ -271,6 +281,11 @@ export function PageOutlet() {
       <Route path="/admin/analytics">
         <RoleGate>
           <AdminAnalytics />
+        </RoleGate>
+      </Route>
+      <Route path="/admin/activity">
+        <RoleGate>
+          <AdminActivity />
         </RoleGate>
       </Route>
       <Route path="/admin/requests">
@@ -711,9 +726,34 @@ export function PageOutlet() {
           <FinanceFreelancerEngagements />
         </RoleGate>
       </Route>
+      <Route path="/freelancers/receipts/:engagementId/:installmentId">
+        <RoleGate>
+          <FinanceFreelancerReceiptDetail />
+        </RoleGate>
+      </Route>
       <Route path="/freelancers/receipts">
         <RoleGate>
           <FinanceFreelancerReceipts />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/freelancers/receipts/:engagementId/:installmentId">
+        <RoleGate>
+          <FinanceFreelancerReceiptDetail />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/freelancers/receipts">
+        <RoleGate>
+          <FinanceFreelancerReceipts />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/freelancers/dashboard">
+        <RoleGate>
+          <FinanceFreelancerDashboard />
+        </RoleGate>
+      </Route>
+      <Route path="/finance/freelancers/directory">
+        <RoleGate>
+          <FinanceFreelancerDirectory />
         </RoleGate>
       </Route>
       <Route path="/freelancers">
@@ -723,7 +763,7 @@ export function PageOutlet() {
       </Route>
       <Route path="/finance/freelancers">
         <RoleGate>
-          <FinanceFreelancerDashboard />
+          <FinanceFreelancerEngagements />
         </RoleGate>
       </Route>
 

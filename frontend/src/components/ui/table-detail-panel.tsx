@@ -37,17 +37,17 @@ export function TableDetailPanel<T>({ item, columns, className }: TableDetailPan
   return (
     <div
       className={cn(
-        "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-4 px-4 py-4",
-        "bg-muted/25 border-t border-border/60",
+        "grid grid-cols-1 gap-x-6 gap-y-2.5 px-3 py-2.5 sm:grid-cols-2 xl:grid-cols-3",
+        "border-t border-border/50 bg-muted/20",
         className,
       )}
     >
       {detailCols.map((col) => (
-        <div key={col.id} className="min-w-0 space-y-1">
+        <div key={col.id} className="min-w-0 space-y-0.5">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
             {col.header}
           </p>
-          <div className="text-sm text-foreground leading-relaxed">
+          <div className="text-xs leading-snug text-foreground">
             {getColumnDetailContent(col, item)}
           </div>
         </div>

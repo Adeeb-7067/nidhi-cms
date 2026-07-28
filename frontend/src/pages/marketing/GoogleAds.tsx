@@ -2,14 +2,6 @@ import { useMemo, useState } from "react";
 import { Search, Loader2, Plus, PauseCircle, FileEdit, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -53,6 +45,7 @@ import { usePermissions } from "@/modules/permissions/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import type { CampaignStatus, GoogleCampaignType } from "@/modules/marketing/types";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 const CREATE_GOOGLE_TYPES: GoogleCampaignType[] = ["search", "display", "shopping", "performance_max", "youtube"];
 
@@ -86,7 +79,7 @@ export default function MarketingGoogleAds() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
-  const { data, isLoading, isError } = useMarketingCampaigns(
+  const { data, isLoading, isError, refetch } = useMarketingCampaigns(
     "google",
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -129,6 +122,26 @@ export default function MarketingGoogleAds() {
       draft: campaigns.filter((c) => c.status === "draft").length,
     }),
     [campaigns],
+  );
+
+  const columns = useMemo<CmsColumn<MarketingGoogleCampaignDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingGoogleCampaignDto>[] = [
+        { id: "campaign", header: "Campaign", cell: (c) => <span className="font-medium max-w-[140px] block truncate">{c.name}</span> },
+        { id: "project", header: "Project", cell: (c) => c.clientName },
+        { id: "type", header: "Type", cell: (c) => GOOGLE_CAMPAIGN_TYPE_LABELS[c.type as GoogleCampaignType] ?? c.type },
+        { id: "status", header: "Status", chip: true, cell: (c) => <MarketingStatusBadge variant="campaign" status={c.status as CampaignStatus} /> },
+        { id: "budget", header: "Budget", align: "right", cell: (c) => formatCompactCurrency(c.budgetInr) },
+        { id: "keywords", header: "Keywords", chip: true, cell: (c) => <div className="flex flex-wrap gap-1 max-w-[160px]">{c.keywords.map((k) => <Badge key={k} variant="secondary" className="text-[9px] px-1 py-0 truncate max-w-[80px]">{k}</Badge>)}</div> },
+        { id: "qualityScore", header: "QS", align: "center", cell: (c) => `${c.qualityScore}/10` },
+        { id: "cpa", header: "CPA", align: "right", cell: (c) => `₹${c.cpa}` },
+        { id: "roas", header: "ROAS", align: "right", cell: (c) => `${c.roas.toFixed(1)}x` },
+        { id: "conversions", header: "Conv.", align: "right", cell: (c) => c.conversions },
+      ];
+      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (c) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)} canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)} onEdit={() => openEdit(c)} onDelete={() => setDeleteTarget(c)} /> });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
   );
 
   const openCreate = () => {
@@ -252,77 +265,7 @@ export default function MarketingGoogleAds() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={Search} title="Could not load campaigns" description="Check your connection and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={Search}
-          title="No campaigns found"
-          description="Adjust your search filters."
-          actionLabel={canCreate ? "New campaign" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Campaign</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Budget</TableHead>
-                <TableHead className="text-xs">Keywords</TableHead>
-                <TableHead className="text-xs text-center">QS</TableHead>
-                <TableHead className="text-xs text-right">CPA</TableHead>
-                <TableHead className="text-xs text-right">ROAS</TableHead>
-                <TableHead className="text-xs text-right">Conv.</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="text-xs font-medium max-w-[140px] truncate">{c.name}</TableCell>
-                  <TableCell className="text-xs">{c.clientName}</TableCell>
-                  <TableCell className="text-xs">
-                    {GOOGLE_CAMPAIGN_TYPE_LABELS[c.type as GoogleCampaignType] ?? c.type}
-                  </TableCell>
-                  <TableCell>
-                    <MarketingStatusBadge variant="campaign" status={c.status as CampaignStatus} />
-                  </TableCell>
-                  <TableCell className="text-xs text-right">{formatCompactCurrency(c.budgetInr)}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1 max-w-[160px]">
-                      {c.keywords.map((k) => (
-                        <Badge key={k} variant="secondary" className="text-[9px] px-1 py-0 truncate max-w-[80px]">
-                          {k}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-center font-medium">{c.qualityScore}/10</TableCell>
-                  <TableCell className="text-xs text-right">₹{c.cpa}</TableCell>
-                  <TableCell className="text-xs text-right">{c.roas.toFixed(1)}x</TableCell>
-                  <TableCell className="text-xs text-right">{c.conversions}</TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)}
-                        canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)}
-                        onEdit={() => openEdit(c)}
-                        onDelete={() => setDeleteTarget(c)}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(c) => c.id} isLoading={isLoading} error={isError} onRetry={() => refetch()} empty={{ icon: Search, title: "No campaigns found", description: "Adjust your search filters.", actionLabel: canCreate ? "New campaign" : undefined, onAction: canCreate ? openCreate : undefined }} errorMessage="Check your connection and try again." />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">

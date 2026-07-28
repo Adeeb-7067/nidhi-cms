@@ -36,7 +36,6 @@ import {
   dashboardTrendPeriodLabel,
 } from "@/components/dashboard/dashboard-page-kit";
 import {
-  OverviewTile,
   DashboardSkeleton,
 } from "@/components/dashboard/dashboard-kit";
 import { toast } from "sonner";
@@ -330,7 +329,7 @@ export default function AdminDashboard() {
             icon={ActivityIcon}
             accent="emerald"
             badge={stats.recentActivity.length}
-            viewAllHref="/discussions"
+            viewAllHref="/admin/activity"
           >
             <div className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto dialog-scroll -mx-0.5 px-0.5">
               {stats.recentActivity.length === 0 ? (
@@ -462,50 +461,63 @@ export default function AdminDashboard() {
 
       <section>
         <DashboardSectionLabel title="Quick overview" className="mb-3" />
-        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
-          <OverviewTile
-            label="All projects"
-            value={stats.activeProjects}
-            sublabel="Active"
-            icon={Briefcase}
-            href="/admin/projects"
-          />
-          <OverviewTile
-            label="All companies"
-            value={stats.totalClients}
-            sublabel="Partners"
-            icon={Building2}
-            href="/admin/clients"
-          />
-          <OverviewTile
-            label="All team"
-            value={stats.teamMembersActive ?? stats.teamMembersOnline ?? 0}
-            sublabel="Active"
-            icon={Users}
-            href="/admin/employees"
-          />
-          <OverviewTile
-            label="Bugs"
-            value={stats.openBugs}
-            sublabel="Open"
-            icon={Activity}
-            href="/dev/bugs"
-          />
-          <OverviewTile
-            label="Requests"
-            value={stats.openRequests}
-            sublabel="Pending"
-            icon={Inbox}
-            href="/admin/requests"
-          />
-          <OverviewTile
-            label="Tickets"
-            value={openTickets}
-            sublabel="Open"
-            icon={Ticket}
-            href="/admin/tickets"
-          />
-        </div>
+        <PortalKpiGrid
+          columns={6}
+          count={6}
+          items={[
+            {
+              title: "All projects",
+              value: stats.activeProjects,
+              hint: "Active",
+              icon: Briefcase,
+              href: "/admin/projects",
+              accent: "blue",
+            },
+            {
+              title: "All companies",
+              value: stats.totalClients,
+              hint: "Partners",
+              icon: Building2,
+              href: "/admin/clients",
+              accent: "violet",
+            },
+            {
+              title: "All team",
+              value: stats.teamMembersActive ?? stats.teamMembersOnline ?? 0,
+              hint: "Active",
+              icon: Users,
+              href: "/admin/employees",
+              accent: "green",
+            },
+            {
+              title: "Bugs",
+              value: stats.openBugs,
+              hint: "Open",
+              icon: Activity,
+              href: "/dev/bugs",
+              accent: "amber",
+              alert: stats.openBugs > 0,
+            },
+            {
+              title: "Requests",
+              value: stats.openRequests,
+              hint: "Pending",
+              icon: Inbox,
+              href: "/admin/requests",
+              accent: "sky",
+              alert: stats.openRequests > 0,
+            },
+            {
+              title: "Tickets",
+              value: openTickets,
+              hint: "Open",
+              icon: Ticket,
+              href: "/admin/tickets",
+              accent: "red",
+              alert: openTickets > 0,
+            },
+          ]}
+        />
       </section>
       </motion.div>
     </PortalPageShell>

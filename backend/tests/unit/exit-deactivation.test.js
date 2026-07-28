@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isExitDeactivationDue } from "../../src/services/hrm/exit.service.js";
+import { isExitDeactivationDue } from "../../src/modules/hrm/services/exit.service.js";
 
 const lwd = new Date("2026-07-10T15:30:00.000Z");
 

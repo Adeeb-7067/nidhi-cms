@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import {
   computeShiftEndUtc,
   shouldAutoClockOutAtShiftEnd,
-} from "../../src/services/shift-end-clockout.service.js";
+} from "../../src/modules/monitoring/services/shift-end-clockout.service.js";
 import {
   isPausedSessionResumableToday,
   resolveActiveSegmentStart,
-} from "../../src/services/work-session-policy.js";
+} from "../../src/modules/monitoring/services/work-session-policy.js";
 
 const TZ = "Asia/Kolkata";
 const SHIFT = { startTime: "09:30", endTime: "18:00" };

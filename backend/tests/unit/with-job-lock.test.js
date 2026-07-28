@@ -64,7 +64,9 @@ mock.module("../../src/lib/logger.js", {
   },
 });
 
-const { withJobLock, hasJobRun } = await import("../../src/services/jobs/withJobLock.js");
+const { withJobLock, hasJobRun } = await import(
+  "../../src/modules/jobs/services/withJobLock.js"
+);
 
 // `findOne(...).lean()` is the production pattern; emulate it on the mock.
 const realFindOne = (await import("../../src/models/schema/index.js")).jobRunsTable.findOne;

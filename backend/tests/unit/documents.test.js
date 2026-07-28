@@ -4,7 +4,7 @@ import {
   collectProfileDocuments,
   isProfileDocumentId,
   PROFILE_DOCUMENT_ID_BASE,
-} from "../../src/services/hrm/documents.service.js";
+} from "../../src/modules/hrm/services/documents.service.js";
 
 describe("collectProfileDocuments", () => {
   test("includes resume, proofs, certificates, and profileDocuments", () => {

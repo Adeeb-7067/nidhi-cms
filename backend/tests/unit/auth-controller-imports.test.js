@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 
 const authControllerPath = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
-  "../../src/controllers/auth.controller.js",
+  "../../src/modules/identity/controllers/auth.controller.js",
 );
 
 describe("auth.controller imports", () => {
@@ -14,14 +14,14 @@ describe("auth.controller imports", () => {
     const src = fs.readFileSync(authControllerPath, "utf8");
     assert.match(
       src,
-      /import\s*\{[^}]*\bvalidateStoredFileUrl\b[^}]*\}\s*from\s*["']\.\.\/lib\/file-storage\.js["']/,
+      /import\s*\{[^}]*\bvalidateStoredFileUrl\b[^}]*\}\s*from\s*["'](?:\.\.\/)+lib\/file-storage\.js["']/,
       "validateStoredFileUrl must be imported from file-storage.js",
     );
     assert.match(src, /\bvalidateStoredFileUrl\s*\(/, "patchAuthMe uses validateStoredFileUrl");
   });
 
   test("auth.controller module loads without ReferenceError", async () => {
-    const mod = await import("../../src/controllers/auth.controller.js");
+    const mod = await import("../../src/modules/identity/controllers/auth.controller.js");
     assert.equal(typeof mod.patchAuthMe, "function");
   });
 });

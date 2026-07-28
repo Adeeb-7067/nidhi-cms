@@ -13,14 +13,7 @@ import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { formatCurrency, PAYMENT_MODE_LABELS, LOAN_SOURCE_LABELS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -70,6 +63,94 @@ export default function LoanDetailPage() {
   const remaining = loan.remainingPrincipal ?? loan.remainingAmount ?? 0;
   const progress = pct(principalPaid, loan.principal);
   const payments = loan.payments ?? [];
+
+  const paymentColumns: CmsColumn<(typeof payments)[number]>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (p) => format(new Date(p.date), "MMM d, yyyy"),
+    },
+    {
+      id: "expense",
+      header: "Expense",
+      cell: (p) => (
+        <>
+          <Link href="/finance/expenses" className="font-mono hover:text-primary">
+            {p.reference}
+          </Link>
+          {p.notes ? (
+            <div className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={p.notes}>
+              {p.notes}
+            </div>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (p) => <span className="font-medium tabular-nums">{formatCurrency(p.amount)}</span>,
+    },
+    {
+      id: "principal",
+      header: "Principal",
+      align: "right",
+      cell: (p) =>
+        p.principalPortion != null ? (
+          p.loanAllocation === "interest" ||
+          (p.principalPortion === 0 && p.interestPortion != null && p.interestPortion > 0) ? (
+            <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-medium">
+              Interest only
+            </span>
+          ) : (
+            <span className="tabular-nums text-emerald-700">{formatCurrency(p.principalPortion)}</span>
+          )
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "interest",
+      header: "Interest",
+      align: "right",
+      cell: (p) =>
+        p.interestPortion != null ? (
+          p.loanAllocation === "principal" ||
+          (p.interestPortion === 0 && p.principalPortion != null && p.principalPortion > 0) ? (
+            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-medium">
+              Principal only
+            </span>
+          ) : (
+            <span className="tabular-nums text-amber-700">{formatCurrency(p.interestPortion)}</span>
+          )
+        ) : (
+          "—"
+        ),
+    },
+    {
+      id: "balance",
+      header: "Balance after",
+      align: "right",
+      cell: (p) => (
+        <span
+          className={cn(
+            "tabular-nums",
+            p.outstandingAfter === 0 ? "text-emerald-700" : "text-muted-foreground",
+          )}
+        >
+          {p.outstandingAfter != null ? formatCurrency(p.outstandingAfter) : "—"}
+        </span>
+      ),
+    },
+    { id: "mode", header: "Mode", cell: (p) => PAYMENT_MODE_LABELS[p.paymentMode] },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) => <FinanceStatusBadge variant="expense" value={p.status} />,
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -219,82 +300,12 @@ export default function LoanDetailPage() {
                 onAction={canPay && loan.status === "active" ? () => setPayOpen(true) : undefined}
               />
             ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Date</TableHead>
-                      <TableHead className="text-xs">Expense</TableHead>
-                      <TableHead className="text-xs text-right">Amount</TableHead>
-                      <TableHead className="text-xs text-right">Principal</TableHead>
-                      <TableHead className="text-xs text-right">Interest</TableHead>
-                      <TableHead className="text-xs text-right">Balance after</TableHead>
-                      <TableHead className="text-xs">Mode</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="text-xs">{format(new Date(p.date), "MMM d, yyyy")}</TableCell>
-                        <TableCell className="text-xs">
-                          <Link href="/finance/expenses" className="font-mono hover:text-primary">
-                            {p.reference}
-                          </Link>
-                          {p.notes && (
-                            <div className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={p.notes}>
-                              {p.notes}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-medium tabular-nums">
-                          {formatCurrency(p.amount)}
-                        </TableCell>
-                        <TableCell className="text-xs text-right tabular-nums text-emerald-700">
-                          {p.principalPortion != null ? (
-                            p.loanAllocation === "interest" ||
-                            (p.principalPortion === 0 && p.interestPortion != null && p.interestPortion > 0) ? (
-                              <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded font-medium">
-                                Interest only
-                              </span>
-                            ) : (
-                              formatCurrency(p.principalPortion)
-                            )
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-xs text-right tabular-nums text-amber-700">
-                          {p.interestPortion != null ? (
-                            p.loanAllocation === "principal" ||
-                            (p.interestPortion === 0 && p.principalPortion != null && p.principalPortion > 0) ? (
-                              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded font-medium">
-                                Principal only
-                              </span>
-                            ) : (
-                              formatCurrency(p.interestPortion)
-                            )
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-xs text-right tabular-nums",
-                            p.outstandingAfter === 0 ? "text-emerald-700" : "text-muted-foreground",
-                          )}
-                        >
-                          {p.outstandingAfter != null ? formatCurrency(p.outstandingAfter) : "—"}
-                        </TableCell>
-                        <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.paymentMode]}</TableCell>
-                        <TableCell>
-                          <FinanceStatusBadge variant="expense" value={p.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <CmsDataTable
+                columns={paymentColumns}
+                rows={payments}
+                rowKey={(p) => p.id}
+                embedded
+              />
             )}
           </CardContent>
         </Card>

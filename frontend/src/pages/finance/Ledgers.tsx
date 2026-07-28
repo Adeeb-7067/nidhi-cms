@@ -4,15 +4,7 @@ import { format } from "date-fns";
 import { BookOpen, Plus, ArrowRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import type { LedgerType } from "@/modules/finance/types";
@@ -44,6 +36,58 @@ const LEDGER_TABS: { value: LedgerType; label: string }[] = [
   { value: "bank", label: "Bank & cash" },
 ];
 
+type LedgerEntry = LedgerAccount["entries"][number];
+
+const entryColumns: CmsColumn<LedgerEntry>[] = [
+  {
+    id: "date",
+    header: "Date",
+    cell: (e) => format(new Date(e.date), "MMM d, yyyy"),
+  },
+  { id: "description", header: "Description", cell: (e) => e.description },
+  {
+    id: "reference",
+    header: "Reference",
+    cell: (e) =>
+      e.referenceHref ? (
+        <Link
+          href={e.referenceHref}
+          className="font-mono text-primary hover:underline inline-flex items-center gap-0.5"
+        >
+          {e.reference} <ArrowRight className="h-3 w-3" />
+        </Link>
+      ) : (
+        <span className="font-mono text-muted-foreground">{e.reference}</span>
+      ),
+  },
+  {
+    id: "debit",
+    header: "Debit",
+    align: "right",
+    cell: (e) => (
+      <span className={`tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
+        {e.debit > 0 ? formatCurrency(e.debit) : "—"}
+      </span>
+    ),
+  },
+  {
+    id: "credit",
+    header: "Credit",
+    align: "right",
+    cell: (e) => (
+      <span className={`tabular-nums font-medium ${MONEY_IN_CLASS}`}>
+        {e.credit > 0 ? formatCurrency(e.credit) : "—"}
+      </span>
+    ),
+  },
+  {
+    id: "balance",
+    header: "Balance",
+    align: "right",
+    cell: (e) => <span className="tabular-nums font-medium">{formatCurrency(e.balance)}</span>,
+  },
+];
+
 function ledgerToBankAccount(account: LedgerAccount): FinanceBankAccount {
   return {
     id: Number(account.id),
@@ -71,11 +115,21 @@ export default function LedgersPage() {
   const expenseLedgers = useExpenseCategoryLedgers(activeTab === "expense");
   const bankLedgers = useBankLedgers(null, activeTab === "bank");
 
-  const activeQuery = { client: clientLedgers, vendor: vendorLedgers, expense: expenseLedgers, bank: bankLedgers }[activeTab];
+  const activeQuery = {
+    client: clientLedgers,
+    vendor: vendorLedgers,
+    expense: expenseLedgers,
+    bank: bankLedgers,
+  }[activeTab];
   const accounts = activeQuery.data?.accounts ?? [];
-  const filteredAccounts = accounts.filter((a) => !search || a.name.toLowerCase().includes(search.toLowerCase()));
+  const filteredAccounts = accounts.filter(
+    (a) => !search || a.name.toLowerCase().includes(search.toLowerCase()),
+  );
 
-  const openCreateBank = () => { setEditAccount(null); setBankModalOpen(true); };
+  const openCreateBank = () => {
+    setEditAccount(null);
+    setBankModalOpen(true);
+  };
   const openEditBank = (account: LedgerAccount) => {
     setEditAccount(ledgerToBankAccount(account));
     setBankModalOpen(true);
@@ -117,117 +171,119 @@ export default function LedgersPage() {
               Add bank account
             </Button>
           ) : (
-            <button type="button" className="text-xs text-primary hover:underline" onClick={() => toast.success("Ledger export started")}>
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={() => toast.success("Ledger export started")}
+            >
               Export ledger
             </button>
           )
         }
       />
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search account name…" onExport={() => toast.success("Export started")} />
+      <FinanceFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search account name…"
+        onExport={() => toast.success("Export started")}
+      />
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LedgerType)}>
-        <TabsList className="h-9">
-          {LEDGER_TABS.map((t) => (
-            <TabsTrigger key={t.value} value={t.value} className="text-xs">{t.label}</TabsTrigger>
-          ))}
-        </TabsList>
+      <CmsChipTabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as LedgerType)}
+        items={LEDGER_TABS.map((t) => ({ value: t.value, label: t.label }))}
+      />
 
-        <TabsContent value={activeTab} className="mt-4 space-y-4">
-          {filteredAccounts.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-8">No accounts in this ledger.</p>
-          ) : (
-            filteredAccounts.map((account) => (
-              <Card key={account.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <BookOpen className="h-4 w-4 text-primary" />
-                      {account.name}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
-                      <div className="flex gap-4 text-xs">
-                        <span><span className="text-muted-foreground">Opening:</span> <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong></span>
-                        <span><span className="text-muted-foreground">Closing:</span> <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong></span>
+      <div className="mt-1 space-y-4">
+        {filteredAccounts.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-8">No accounts in this ledger.</p>
+        ) : (
+          filteredAccounts.map((account) => (
+            <Card key={account.id}>
+              <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <BookOpen className="h-4 w-4 text-primary" />
+                    {account.name}
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-4 text-xs">
+                      <span>
+                        <span className="text-muted-foreground">Opening:</span>{" "}
+                        <strong className="tabular-nums">{formatCurrency(account.openingBalance)}</strong>
+                      </span>
+                      <span>
+                        <span className="text-muted-foreground">Closing:</span>{" "}
+                        <strong className="tabular-nums">{formatCurrency(account.closingBalance)}</strong>
+                      </span>
+                    </div>
+                    {activeTab === "bank" && (canEditBank || canDeleteBank) && (
+                      <div className="flex gap-1">
+                        {canEditBank && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0"
+                            onClick={() => openEditBank(account)}
+                            title="Edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {canDeleteBank && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 w-7 p-0 text-destructive"
+                            onClick={() => setDeleteTarget(account)}
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
-                      {activeTab === "bank" && (canEditBank || canDeleteBank) && (
-                        <div className="flex gap-1">
-                          {canEditBank && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEditBank(account)} title="Edit">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {canDeleteBank && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(account)} title="Delete">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
-                </CardHeader>
-                <CardContent>
-                  {account.entries.length === 0 ? (
-                    <p className="text-xs text-muted-foreground text-center py-4">No activity yet.</p>
-                  ) : (
-                    <div className="rounded-lg border overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/30">
-                            <TableHead className="text-xs">Date</TableHead>
-                            <TableHead className="text-xs">Description</TableHead>
-                            <TableHead className="text-xs">Reference</TableHead>
-                            <TableHead className="text-xs text-right">Debit</TableHead>
-                            <TableHead className="text-xs text-right">Credit</TableHead>
-                            <TableHead className="text-xs text-right">Balance</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {account.entries.map((e) => (
-                            <TableRow key={e.id}>
-                              <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                              <TableCell className="text-xs">{e.description}</TableCell>
-                              <TableCell className="text-xs">
-                                {e.referenceHref ? (
-                                  <Link href={e.referenceHref} className="font-mono text-primary hover:underline inline-flex items-center gap-0.5">
-                                    {e.reference} <ArrowRight className="h-3 w-3" />
-                                  </Link>
-                                ) : (
-                                  <span className="font-mono text-muted-foreground">{e.reference}</span>
-                                )}
-                              </TableCell>
-                              <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
-                                {e.debit > 0 ? formatCurrency(e.debit) : "—"}
-                              </TableCell>
-                              <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_IN_CLASS}`}>
-                                {e.credit > 0 ? formatCurrency(e.credit) : "—"}
-                              </TableCell>
-                              <TableCell className="text-xs text-right tabular-nums font-medium">{formatCurrency(e.balance)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </TabsContent>
-      </Tabs>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <CmsDataTable
+                  columns={entryColumns}
+                  rows={account.entries}
+                  rowKey={(e) => e.id}
+                  embedded
+                  empty={{ title: "No activity yet." }}
+                />
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
 
       <BankAccountFormModal
         open={bankModalOpen}
-        onOpenChange={(open) => { setBankModalOpen(open); if (!open) setEditAccount(null); }}
+        onOpenChange={(open) => {
+          setBankModalOpen(open);
+          if (!open) setEditAccount(null);
+        }}
         account={editAccount}
-        onSuccess={() => { bankLedgers.refetch(); setEditAccount(null); }}
+        onSuccess={() => {
+          bankLedgers.refetch();
+          setEditAccount(null);
+        }}
       />
       <FinanceConfirmDialog
         open={deleteTarget != null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
         title="Delete bank account?"
-        description={deleteTarget ? `"${deleteTarget.name}" will be removed. Accounts with linked payments can't be deleted.` : undefined}
+        description={
+          deleteTarget
+            ? `"${deleteTarget.name}" will be removed. Accounts with linked payments can't be deleted.`
+            : undefined
+        }
         loading={deleteBankAccount.isPending}
         onConfirm={handleDeleteBank}
       />

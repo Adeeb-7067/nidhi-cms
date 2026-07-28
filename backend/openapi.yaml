@@ -879,6 +879,40 @@ paths:
                 $ref: "#/components/schemas/ProjectMember"
 
   /projects/{id}/members/{userId}:
+    patch:
+      operationId: updateProjectMember
+      tags: [projects]
+      summary: Update project member (role on project)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [subType]
+              properties:
+                subType:
+                  type: string
+                  nullable: true
+                  description: Role on this project (e.g. Developer, Freelancer, Account Manager)
+      responses:
+        "200":
+          description: Member updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
     delete:
       operationId: removeProjectMember
       tags: [projects]

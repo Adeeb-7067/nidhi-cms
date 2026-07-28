@@ -1,11 +1,56 @@
 import { format } from "date-fns";
-import { KeyRound } from "lucide-react";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockDinDscRecords, dinDscAlertThresholds } from "@/modules/ca/mock-data";
+import type { DinDscRecord } from "@/modules/ca/types";
 import { CAPageHeader, ComplianceStatusBadge } from "@/modules/ca/components";
+import { useMemo } from "react";
 
 export default function DinDsc() {
+  const columns = useMemo<CmsColumn<DinDscRecord>[]>(
+    () => [
+      {
+        id: "director",
+        header: "Director",
+        cell: (d) => <span className="font-medium">{d.directorName}</span>,
+      },
+      {
+        id: "din",
+        header: "DIN",
+        cell: (d) => <span className="font-mono">{d.din}</span>,
+      },
+      {
+        id: "expiry",
+        header: "DSC expiry",
+        cell: (d) => format(new Date(d.dscExpiry), "MMM d, yyyy"),
+      },
+      {
+        id: "days",
+        header: "Days to expiry",
+        cell: (d) => (
+          <span
+            className={`tabular-nums font-medium ${
+              d.daysToExpiry <= 30
+                ? "text-red-600"
+                : d.daysToExpiry <= 60
+                  ? "text-amber-700"
+                  : ""
+            }`}
+          >
+            {d.daysToExpiry}d
+          </span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (d) => <ComplianceStatusBadge status={d.dscStatus} />,
+      },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <CAPageHeader
@@ -15,35 +60,12 @@ export default function DinDsc() {
       />
       <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
         {dinDscAlertThresholds.map((t) => (
-          <span key={t} className="rounded-full border px-2 py-1 bg-muted/50">Alert at {t} days</span>
+          <span key={t} className="rounded-full border px-2 py-1 bg-muted/50">
+            Alert at {t} days
+          </span>
         ))}
       </div>
-      <div className="rounded-xl border bg-card overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30">
-              <TableHead className="text-xs">Director</TableHead>
-              <TableHead className="text-xs">DIN</TableHead>
-              <TableHead className="text-xs">DSC expiry</TableHead>
-              <TableHead className="text-xs">Days to expiry</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {mockDinDscRecords.map((d) => (
-              <TableRow key={d.id} className="hover:bg-muted/30">
-                <TableCell className="text-xs font-medium">{d.directorName}</TableCell>
-                <TableCell className="text-xs font-mono">{d.din}</TableCell>
-                <TableCell className="text-xs">{format(new Date(d.dscExpiry), "MMM d, yyyy")}</TableCell>
-                <TableCell className={`text-xs tabular-nums font-medium ${d.daysToExpiry <= 30 ? "text-red-600" : d.daysToExpiry <= 60 ? "text-amber-700" : ""}`}>
-                  {d.daysToExpiry}d
-                </TableCell>
-                <TableCell><ComplianceStatusBadge status={d.dscStatus} /></TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <CmsDataTable columns={columns} rows={mockDinDscRecords} rowKey={(d) => d.id} />
     </PortalPageShell>
   );
 }

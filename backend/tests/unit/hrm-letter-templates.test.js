@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { generateOfferLetterHtml } from "../../src/services/hrm/offer-letter-template.js";
-import { generateExperienceLetterHtml } from "../../src/services/hrm/experience-letter-template.js";
+import { generateOfferLetterHtml } from "../../src/modules/hrm/services/offer-letter-template.js";
+import { generateExperienceLetterHtml } from "../../src/modules/hrm/services/experience-letter-template.js";
 
 describe("hrm letter templates", () => {
   const company = {

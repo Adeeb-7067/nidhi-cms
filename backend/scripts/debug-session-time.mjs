@@ -1,9 +1,9 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { workSessionsTable, usersTable } from "../src/models/schema/index.js";
-import { computeSessionDurations, listDailySessionTotals } from "../src/services/work-sessions.service.js";
-import { workDayKey, resolveWorkDayTimezone } from "../src/services/work-session-policy.js";
-import { getOrCreateSettings } from "../src/services/company-settings.js";
+import { computeSessionDurations, listDailySessionTotals } from "../src/modules/monitoring/services/work-sessions.service.js";
+import { workDayKey, resolveWorkDayTimezone } from "../src/modules/monitoring/services/work-session-policy.js";
+import { getOrCreateSettings } from "../src/modules/settings/services/company-settings.js";
 
 const uri = process.env.MONGODB_URI || process.env.DATABASE_URL;
 await mongoose.connect(uri);

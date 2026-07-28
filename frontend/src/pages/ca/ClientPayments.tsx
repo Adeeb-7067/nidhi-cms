@@ -2,13 +2,12 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Download, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { mockClientPayments, clientPaymentSummary } from "@/modules/ca/mock-data";
 import { formatCompactCurrency, formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/ca/constants";
-import type { PeriodFilter } from "@/modules/ca/types";
-import { CAPageHeader, CAFilterBar, CAEmptyState } from "@/modules/ca/components";
+import type { ClientPayment, PeriodFilter } from "@/modules/ca/types";
+import { CAPageHeader, CAFilterBar } from "@/modules/ca/components";
 import { toast } from "sonner";
 
 export default function ClientPayments() {
@@ -23,6 +22,57 @@ export default function ClientPayments() {
     );
   }, [search]);
 
+  const columns = useMemo<CmsColumn<ClientPayment>[]>(
+    () => [
+      {
+        id: "client",
+        header: "Client",
+        cell: (p) => <span className="font-medium">{p.clientName}</span>,
+      },
+      {
+        id: "invoice",
+        header: "Invoice",
+        cell: (p) => <span className="font-mono">{p.invoiceRef}</span>,
+      },
+      {
+        id: "classification",
+        header: "Classification",
+        chip: true,
+        cell: (p) => (
+          <CmsStatusChip
+            label={p.gstClassification === "gst" ? "GST" : "Non-GST"}
+            tone={p.gstClassification === "gst" ? "info" : "neutral"}
+          />
+        ),
+      },
+      {
+        id: "amount",
+        header: "Amount",
+        align: "right",
+        cell: (p) => <span className="tabular-nums">{formatCurrency(p.amount)}</span>,
+      },
+      {
+        id: "gst",
+        header: "GST",
+        align: "right",
+        cell: (p) => (
+          <span className="tabular-nums text-muted-foreground">{formatCurrency(p.gstAmount)}</span>
+        ),
+      },
+      { id: "mode", header: "Mode", cell: (p) => PAYMENT_MODE_LABELS[p.mode] },
+      {
+        id: "received",
+        header: "Received",
+        cell: (p) => (
+          <span className="text-muted-foreground">
+            {format(new Date(p.receivedAt), "MMM d, yyyy")}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <CAPageHeader
@@ -30,12 +80,23 @@ export default function ClientPayments() {
         description="Incoming payments with GST / Non-GST classification"
         breadcrumbs={[{ label: "CA", href: "/ca" }, { label: "Client payments" }]}
         actions={
-          <Button size="sm" variant="outline" className="h-8 gap-1.5" onClick={() => toast.success("Export started (demo)")}>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 gap-1.5"
+            onClick={() => toast.success("Export started (demo)")}
+          >
             <Download className="h-3.5 w-3.5" /> Export
           </Button>
         }
       />
-      <CAFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search clients, invoices…" period={period} onPeriodChange={setPeriod} />
+      <CAFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search clients, invoices…"
+        period={period}
+        onPeriodChange={setPeriod}
+      />
       <PortalKpiGrid
         columns={3}
         items={[
@@ -44,42 +105,12 @@ export default function ClientPayments() {
           { title: "Total received", value: formatCompactCurrency(summary.total), icon: CreditCard, accent: "green", delay: 2 },
         ]}
       />
-      {filtered.length === 0 ? (
-        <CAEmptyState icon={CreditCard} title="No payments found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Client</TableHead>
-                <TableHead className="text-xs">Invoice</TableHead>
-                <TableHead className="text-xs">Classification</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs text-right">GST</TableHead>
-                <TableHead className="text-xs">Mode</TableHead>
-                <TableHead className="text-xs">Received</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((p) => (
-                <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">{p.clientName}</TableCell>
-                  <TableCell className="text-xs font-mono">{p.invoiceRef}</TableCell>
-                  <TableCell>
-                    <Badge variant={p.gstClassification === "gst" ? "default" : "secondary"} className="text-[10px] uppercase">
-                      {p.gstClassification === "gst" ? "GST" : "Non-GST"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">{formatCurrency(p.amount)}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{formatCurrency(p.gstAmount)}</TableCell>
-                  <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.mode]}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(p.receivedAt), "MMM d, yyyy")}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(p) => p.id}
+        empty={{ icon: CreditCard, title: "No payments found" }}
+      />
     </PortalPageShell>
   );
 }

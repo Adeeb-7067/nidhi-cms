@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { ArrowRight, Download, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs } from "@/components/cms";
 import { cn } from "@/lib/utils";
 
 const ATTENDANCE_STAGE_COLORS: Record<string, string> = {
@@ -103,18 +103,14 @@ export function HrmDashboardPeriodTabs({
   onChange: (v: "today" | "week" | "month") => void;
 }) {
   return (
-    <Tabs value={value} onValueChange={(v) => onChange(v as typeof value)}>
-      <TabsList className="h-7">
-        <TabsTrigger value="today" className="text-[10px] px-2 h-6">
-          Today
-        </TabsTrigger>
-        <TabsTrigger value="week" className="text-[10px] px-2 h-6">
-          Week
-        </TabsTrigger>
-        <TabsTrigger value="month" className="text-[10px] px-2 h-6">
-          Month
-        </TabsTrigger>
-      </TabsList>
-    </Tabs>
+    <CmsChipTabs
+      value={value}
+      onValueChange={(v) => onChange(v as typeof value)}
+      items={[
+        { value: "today", label: "Today" },
+        { value: "week", label: "Week" },
+        { value: "month", label: "Month" },
+      ]}
+    />
   );
 }

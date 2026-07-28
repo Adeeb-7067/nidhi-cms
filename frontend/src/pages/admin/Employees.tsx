@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
-import { Search, Plus, Mail, Clock, Edit, BarChart3, Users as UsersIcon, Award, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Plus, Mail, Clock, Edit, BarChart3, Users as UsersIcon, Award, Zap, Eye, EyeOff, Key, ShieldCheck, Building, Phone, Calendar, Briefcase, Linkedin, ExternalLink, LogIn, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { WarnEmployeeDialog } from "@/components/warnings/WarnEmployeeDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePresence } from "@/contexts/PresenceContext";
@@ -36,7 +36,7 @@ import { getAccessToken } from "@/lib/auth-storage";
 import { apiUrl } from "@/lib/api-base";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsChipTabs, CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -44,9 +44,6 @@ import {
   PortalPageShell,
   PortalPageHero,
   PortalKpiGrid,
-  PortalTabsList,
-  PortalTabsTrigger,
-  PortalContentCard,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
 import { PageTableSkeleton } from "@/components/loading";
@@ -80,7 +77,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useForm, type FieldErrors } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
@@ -213,7 +210,7 @@ export default function AdminEmployees() {
     page,
     limit: apiLimit,
   } as Parameters<typeof useListUsers>[0];
-  const { data, isLoading } = useListUsers(listParams, {
+  const { data, isLoading, isError, refetch } = useListUsers(listParams, {
     query: listQueryOptions({
       queryKey: getListUsersQueryKey(listParams),
     }),
@@ -344,6 +341,7 @@ export default function AdminEmployees() {
   }, [editUser, payrollStructuresData?.structures]);
 
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [sheetTab, setSheetTab] = useState("overview");
 
   const selectedWithPresence = useMemo(() => {
     if (!selectedUser) return null;
@@ -740,7 +738,7 @@ export default function AdminEmployees() {
           >
             {employeeRoleLabel(user.role)}
           </Badge>
-          <span className="text-[9px] text-muted-foreground">{user.designation || "General"}</span>
+          <span className="text-[11px] text-muted-foreground">{user.designation || "General"}</span>
         </div>
       )
     },
@@ -910,12 +908,6 @@ export default function AdminEmployees() {
         subtitle="All agency team members and roles"
         actions={
         <div className="flex items-center gap-2">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-auto">
-            <PortalTabsList>
-              <PortalTabsTrigger value="list">All team</PortalTabsTrigger>
-              <PortalTabsTrigger value="analytics">Analytics</PortalTabsTrigger>
-            </PortalTabsList>
-          </Tabs>
           <Dialog
             open={isDialogOpen || !!editUser}
             onOpenChange={(open) => {
@@ -1095,40 +1087,46 @@ export default function AdminEmployees() {
         ]}
       />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsContent value="list" className="space-y-4 m-0">
-          <PortalContentCard>
-              <div className="flex flex-col gap-2 px-1 pb-3 sm:flex-row sm:items-center">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search employees..."
-                  className="h-8 w-full text-xs sm:w-72"
-                />
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="h-8 w-36 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All employees</SelectItem>
-                    <SelectItem value="active">Active only</SelectItem>
-                    <SelectItem value="inactive">Inactive only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {isLoading ? (
-                <PageTableSkeleton rows={8} columns={6} showToolbar />
-              ) : (
-                <AdvancedTable
-                  data={data?.users || []}
-                  columns={columns}
-                  filename="EmployeesExport"
-                  exportData={exportUsers}
-                  viewStorageKey="employees"
-                  onRowClick={(user) => setLocation(getStaffProfileHref(user.id, user.role, viewer?.role))}
-                />
-              )}
-          </PortalContentCard>
+      <CmsChipTabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        items={[
+          { value: "list", label: "All team", count: teamStats.total },
+          { value: "analytics", label: "Analytics" },
+        ]}
+      />
+
+      {activeTab === "list" ? (
+        <div className="space-y-4">
+          <CmsFilterBar
+            search={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search employees…"
+            filters={[
+              {
+                key: "status",
+                value: statusFilter,
+                onChange: setStatusFilter,
+                placeholder: "Status",
+                options: [
+                  { value: "all", label: "All employees" },
+                  { value: "active", label: "Active only" },
+                  { value: "inactive", label: "Inactive only" },
+                ],
+              },
+            ]}
+          />
+          <AdvancedTable
+            data={data?.users || []}
+            columns={columns}
+            filename="EmployeesExport"
+            exportData={exportUsers}
+            viewStorageKey="admin-employees"
+            isLoading={isLoading}
+            error={isError}
+            onRetry={() => refetch()}
+            onRowClick={(user) => setLocation(getStaffProfileHref(user.id, user.role, viewer?.role))}
+          />
           <DataPagination
             page={data?.page ?? page}
             total={data?.total ?? 0}
@@ -1137,14 +1135,20 @@ export default function AdminEmployees() {
             onPageChange={setPage}
             onLimitChange={setLimit}
           />
-        </TabsContent>
-
-        <TabsContent value="analytics" className="m-0">
-          <TeamAnalyticsPanel />
-        </TabsContent>
-      </Tabs>
-      <Sheet open={!!selectedUser} onOpenChange={(open) => !open && setSelectedUser(null)}>
-        <SheetContent className="w-[400px] sm:w-[580px] sm:max-w-[580px] overflow-y-auto">
+        </div>
+      ) : (
+        <TeamAnalyticsPanel />
+      )}
+      <Sheet
+        open={!!selectedUser}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedUser(null);
+            setSheetTab("overview");
+          }
+        }}
+      >
+        <SheetContent className="w-full max-w-full sm:w-[580px] sm:max-w-[580px] overflow-y-auto">
           <SheetHeader className="space-y-3">
             <div className="flex items-center gap-4">
               {selectedWithPresence ? (
@@ -1179,23 +1183,18 @@ export default function AdminEmployees() {
             </div>
           </SheetHeader>
 
-          <Tabs defaultValue="overview" className="mt-6">
-            <TabsList
-              className={cn(
-                "grid w-full h-8",
-                showLogCompliance ? "grid-cols-3" : "grid-cols-2",
-              )}
-            >
-              <TabsTrigger value="overview" className="text-[10px] py-1">Overview</TabsTrigger>
-              {showLogCompliance && (
-                <TabsTrigger value="compliance" className="text-[10px] py-1 flex items-center">
-                  <Clock className="h-3 w-3 mr-1" /> Daily logs
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="credentials" className="text-[10px] py-1 flex items-center"><Key className="h-3 w-3 mr-1.5" /> Credential Vault</TabsTrigger>
-            </TabsList>
+          <Tabs value={sheetTab} onValueChange={setSheetTab} className="mt-6 space-y-3">
+            <CmsChipTabs
+              value={sheetTab}
+              onValueChange={setSheetTab}
+              items={[
+                { value: "overview", label: "Overview" },
+                ...(showLogCompliance ? [{ value: "compliance", label: "Daily logs" }] : []),
+                { value: "credentials", label: "Credential Vault" },
+              ]}
+            />
             
-            <TabsContent value="overview" className="space-y-4 pt-3">
+            <TabsContent value="overview" className="space-y-4 mt-0">
               {selectedWithPresence && (
                 <UserPresenceMeta
                   presenceStatus={selectedWithPresence.presenceStatus}
@@ -1205,31 +1204,31 @@ export default function AdminEmployees() {
               )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Department</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Department</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Building className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {(selectedUser as any)?.department || "Engineering"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Designation</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Designation</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Award className="h-3.5 w-3.5 text-primary shrink-0" /> {selectedUser?.designation || "Developer"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {(selectedUser as any)?.phoneNumber || "Not shared"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Joined Date</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Joined Date</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Calendar className="h-3.5 w-3.5 text-rose-500 shrink-0" /> {(selectedUser as any)?.joiningDate ? new Date((selectedUser as any).joiningDate).toLocaleDateString() : "Not recorded"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Email Address</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Email Address</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all"><Mail className="h-3.5 w-3.5 text-sky-500 shrink-0" /> {selectedUser?.email}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Specialty/Type</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Specialty/Type</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Briefcase className="h-3.5 w-3.5 text-amber-500 shrink-0" /> {selectedUser?.subType || "Standard Fulltime"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Last Login</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Last Login</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Clock className="h-3.5 w-3.5 text-purple-500 shrink-0" /> {formatLastLogin(selectedWithPresence?.lastLoginAt)}</p>
                 </div>
               </div>
@@ -1246,7 +1245,7 @@ export default function AdminEmployees() {
                       <div className="bg-blue-500/10 p-2 rounded-md text-blue-600 group-hover:scale-105 transition-transform"><Linkedin className="h-4 w-4" /></div>
                       <div>
                         <p className="text-xs font-bold text-foreground group-hover:text-blue-600 transition-colors">LinkedIn Professional Profile</p>
-                        <p className="text-[9px] text-muted-foreground">Click to view corporate synced career network</p>
+                        <p className="text-[11px] text-muted-foreground">Click to view corporate synced career network</p>
                       </div>
                     </div>
                     <ExternalLink className="h-3.5 w-3.5 text-blue-500 opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -1343,59 +1342,76 @@ export default function AdminEmployees() {
                   <p className="text-[10px] font-medium text-primary">Audit-Tracked Access History</p>
                 </div>
                 <div className="p-0">
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow className="hover:bg-transparent text-[9px] font-semibold text-muted-foreground">
-                        <TableHead className="h-7 py-1 pl-3 text-center w-[50px]">Ver.</TableHead>
-                        <TableHead className="h-7 py-1">Created By</TableHead>
-                        <TableHead className="h-7 py-1">Date Set</TableHead>
-                        <TableHead className="h-7 py-1 pr-3 text-right w-[120px]">Password</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isLoadingCredentials ? (
-                        [...Array(3)].map((_, i) => (
-                          <TableRow key={i}>
-                            {[...Array(4)].map((_, j) => (
-                              <TableCell key={j} className="py-2">
-                                <Skeleton className="h-3.5 w-full" />
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))
-                      ) : credentialRows.length === 0 ? (
-                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No historical logs recorded.</TableCell></TableRow>
-                      ) : (
-                        credentialRows.map((cred: any) => (
-                          <TableRow key={cred.id} className="text-[10px] group/row hover:bg-muted/20 border-border/30">
-                            <TableCell className="py-1 pl-3 text-center font-mono text-muted-foreground bg-muted/10 font-medium">#{cred.entryNumber}</TableCell>
-                            <TableCell className="py-1 font-medium">{cred.setBy}</TableCell>
-                            <TableCell className="py-1 text-muted-foreground">{new Date(cred.setAt).toLocaleDateString()}</TableCell>
-                            <TableCell className="py-1 pr-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <span className={`font-mono select-all px-1.5 py-0.5 rounded ${revealedPasswords[cred.id] ? 'text-primary bg-primary/10 font-semibold text-[10px]' : 'text-muted-foreground/60 tracking-widest text-[8px]'}`}>
-                                  {revealedPasswords[cred.id] || '????????'}
-                                </span>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-6 w-6 opacity-60 group-hover/row:opacity-100 hover:text-primary hover:bg-primary/10 transition-all"
-                                  onClick={(e) => { e.stopPropagation(); handleReveal(cred.id); }}
-                                  disabled={revealMutation.isPending}
-                                >
-                                  {revealedPasswords[cred.id] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                  <DataPagination {...credentialsPagination} />
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "ver",
+                        header: "Ver.",
+                        headerClassName: "w-[50px] text-center",
+                        className: "text-center font-mono text-muted-foreground bg-muted/10 font-medium",
+                        cell: (cred: any) => `#${cred.entryNumber}`,
+                      },
+                      {
+                        id: "by",
+                        header: "Created By",
+                        cell: (cred: any) => <span className="font-medium">{cred.setBy}</span>,
+                      },
+                      {
+                        id: "date",
+                        header: "Date Set",
+                        cell: (cred: any) => (
+                          <span className="text-muted-foreground">
+                            {new Date(cred.setAt).toLocaleDateString()}
+                          </span>
+                        ),
+                      },
+                      {
+                        id: "password",
+                        header: "Password",
+                        align: "right",
+                        headerClassName: "w-[120px]",
+                        cell: (cred: any) => (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span
+                              className={`font-mono select-all px-1.5 py-0.5 rounded ${
+                                revealedPasswords[cred.id]
+                                  ? "text-primary bg-primary/10 font-semibold text-[10px]"
+                                  : "text-muted-foreground/60 tracking-widest text-[8px]"
+                              }`}
+                            >
+                              {revealedPasswords[cred.id] || "????????"}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-60 hover:text-primary hover:bg-primary/10 transition-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReveal(cred.id);
+                              }}
+                              disabled={revealMutation.isPending}
+                            >
+                              {revealedPasswords[cred.id] ? (
+                                <EyeOff className="h-3 w-3" />
+                              ) : (
+                                <Eye className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        ),
+                      },
+                    ] satisfies CmsColumn<any>[]}
+                    rows={credentialRows}
+                    rowKey={(cred: any) => cred.id}
+                    isLoading={isLoadingCredentials}
+                    loadingRows={3}
+                    embedded
+                    empty={{ title: "No historical logs recorded." }}
+                    pagination={credentialsPagination}
+                  />
                 </div>
               </div>
-              <p className="text-[9px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
+              <p className="text-[11px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
                 <span>??</span> Decrypted passwords remain visible for 10 seconds. Each decryption generates an immutable access trace log in the security backend.
               </p>
             </TabsContent>

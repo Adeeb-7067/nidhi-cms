@@ -13,7 +13,7 @@ import {
   shouldRestrictToOwnDigitalTasks,
   resolveDigitalTaskAssigneeId,
 } from "../../src/middlewares/digital-access.js";
-import { canManageMarketingClientCommercial } from "../../src/services/marketing/helpers.js";
+import { canManageMarketingClientCommercial } from "../../src/modules/marketing/services/helpers.js";
 
 describe("Digital Department RBAC & Sub-Role Access Control", () => {
   it("Super Admin has unscoped access to all modules and resources", () => {
@@ -30,9 +30,9 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(modules.includes("marketing_media"));
     assert.ok(modules.includes("marketing_dashboard"));
     assert.ok(modules.includes("marketing_calendar"));
+    assert.ok(modules.includes("marketing_approvals"));
     assert.ok(!modules.includes("marketing_ads"));
     assert.ok(!modules.includes("marketing_reports"));
-    assert.ok(!modules.includes("marketing_approvals"));
   });
 
   it("missing subType defaults to designer — not Account Manager", () => {
@@ -50,6 +50,25 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(canManageCmsProjects(odd), false);
   });
 
+  it("every digital sub-role can open Approvals (list is assignee-scoped for craft)", () => {
+    for (const subType of [
+      "Account Manager",
+      "Digital Specialist",
+      "Designer",
+      "Video Editor",
+      "Content Creator",
+      "SEO Expert",
+      "Ads Manager",
+      "Freelancer",
+    ]) {
+      const modules = getDigitalSubRoleModules({ role: "digital", subType, id: 1 });
+      assert.ok(
+        modules.includes("marketing_approvals"),
+        `${subType} should include marketing_approvals`,
+      );
+    }
+  });
+
   it("Video Editor cannot see Meta Ads or Reports", () => {
     const videoEditor = { role: "digital", subType: "Video Editor", id: 3 };
     const modules = getDigitalSubRoleModules(videoEditor);
@@ -59,13 +78,14 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!modules.includes("marketing_reports"));
   });
 
-  it("SEO Expert cannot see Content or Approvals", () => {
+  it("SEO Expert cannot see Content or Reports", () => {
     const seo = { role: "digital", subType: "SEO Expert", id: 4 };
     const modules = getDigitalSubRoleModules(seo);
     assert.ok(modules.includes("marketing_seo"));
     assert.ok(modules.includes("marketing_analytics"));
+    assert.ok(modules.includes("marketing_approvals"));
     assert.ok(!modules.includes("marketing_content"));
-    assert.ok(!modules.includes("marketing_approvals"));
+    assert.ok(!modules.includes("marketing_reports"));
   });
 
   it("Account Manager can approve content and view reports", () => {
@@ -230,7 +250,7 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
 
   it("AM fully edits own items but not admin-created ones", async () => {
     const { canFullyEditMarketingOwnedItem, isMarketingOrgAdmin } = await import(
-      "../../src/services/marketing/helpers.js"
+      "../../src/modules/marketing/services/helpers.js"
     );
     const am = { role: "digital", subType: "Account Manager", id: 5 };
     const admin = { role: "super_admin", id: 1 };
@@ -239,6 +259,39 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 5 }), true);
     assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 1 }), false);
     assert.equal(canFullyEditMarketingOwnedItem(admin, { createdBy: 5 }), true);
+  });
+
+  it("approval stage: assignee/creator/elevated lead may advance; peer craft may not", async () => {
+    const { canAdvanceMarketingApprovalStage } = await import(
+      "../../src/modules/marketing/services/helpers.js"
+    );
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    const peer = { role: "digital", subType: "Designer", id: 43 };
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    const admin = { role: "super_admin", id: 1 };
+    // accountId null avoids DB when denying peers (no lead/account lookup).
+    const doc = { createdBy: 42, assigneeId: 42, accountId: null };
+    assert.equal(await canAdvanceMarketingApprovalStage(designer, doc), true);
+    assert.equal(await canAdvanceMarketingApprovalStage(peer, doc), false);
+    assert.equal(await canAdvanceMarketingApprovalStage(am, doc), true);
+    assert.equal(await canAdvanceMarketingApprovalStage(admin, doc), true);
+    assert.equal(
+      await canAdvanceMarketingApprovalStage(peer, { ...doc, assigneeId: 43 }),
+      true,
+    );
+  });
+
+  it("media mutate: creator and org admin may rename; peer craft may not without lead", async () => {
+    const { canMutateMarketingMediaItem } = await import(
+      "../../src/modules/marketing/services/helpers.js"
+    );
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    const peer = { role: "digital", subType: "Designer", id: 43 };
+    const admin = { role: "super_admin", id: 1 };
+    const doc = { createdBy: 42, accountId: null };
+    assert.equal(await canMutateMarketingMediaItem(designer, doc), true);
+    assert.equal(await canMutateMarketingMediaItem(peer, doc), false);
+    assert.equal(await canMutateMarketingMediaItem(admin, doc), true);
   });
 
   it("requireDigitalModuleAccess rejects designer on ads", () => {

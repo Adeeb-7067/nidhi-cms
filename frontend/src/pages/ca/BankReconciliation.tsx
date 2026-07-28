@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Landmark } from "lucide-react";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs } from "@/components/cms";
 import { mockBankTransactions, bankReconciliationSummary } from "@/modules/ca/mock-data";
 import { formatCompactCurrency } from "@/modules/ca/constants";
 import { CAPageHeader, CAFilterBar, CAEmptyState, ReconciliationTable } from "@/modules/ca/components";
@@ -38,14 +38,16 @@ export default function BankReconciliation() {
           { title: "Outgoing", value: formatCompactCurrency(summary.outgoingTotal), icon: Landmark, accent: "red", delay: 3 },
         ]}
       />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-auto flex-wrap gap-1 bg-transparent p-0">
-          <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">All</TabsTrigger>
-          <TabsTrigger value="matched" className="text-xs data-[state=active]:bg-primary/10">Matched</TabsTrigger>
-          <TabsTrigger value="unmatched" className="text-xs data-[state=active]:bg-primary/10">Unmatched</TabsTrigger>
-          <TabsTrigger value="partial" className="text-xs data-[state=active]:bg-primary/10">Partial</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={tab}
+        onValueChange={setTab}
+        items={[
+          { value: "all", label: "All" },
+          { value: "matched", label: "Matched" },
+          { value: "unmatched", label: "Unmatched" },
+          { value: "partial", label: "Partial" },
+        ]}
+      />
       {filtered.length === 0 ? (
         <CAEmptyState icon={Landmark} title="No transactions found" />
       ) : (

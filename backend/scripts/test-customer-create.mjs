@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { config } from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createClientCompanyRecord, deleteClientCompany } from "../src/services/client-company-provision.js";
+import { createClientCompanyRecord, deleteClientCompany } from "../src/modules/identity/services/client-company-provision.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 config({ path: path.join(__dirname, "../.env") });

@@ -1,20 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Building2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Building2, FileText, Globe, Pencil, Phone, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   FinancePageHeader,
   FinanceFilterBar,
-  FinanceEmptyState,
   FinanceErrorState,
   VendorFormModal,
   FinanceConfirmDialog,
@@ -40,6 +32,9 @@ export default function FinanceVendorsPage() {
   );
 
   const vendors = useMemo(() => data?.vendors ?? [], [data?.vendors]);
+  const withGst = useMemo(() => vendors.filter((v) => Boolean(v.gstin)).length, [vendors]);
+  const withWebsite = useMemo(() => vendors.filter((v) => Boolean(v.website)).length, [vendors]);
+  const withPhone = useMemo(() => vendors.filter((v) => Boolean(v.phone)).length, [vendors]);
 
   const openCreate = () => {
     setEditVendor(null);
@@ -63,7 +58,7 @@ export default function FinanceVendorsPage() {
     }
   };
 
-  if (isLoading) return <FinanceListPageSkeleton kpiCount={0} />;
+  if (isLoading) return <FinanceListPageSkeleton kpiCount={4} />;
   if (isError) {
     return (
       <PortalPageShell>
@@ -71,6 +66,69 @@ export default function FinanceVendorsPage() {
       </PortalPageShell>
     );
   }
+
+  const columns: CmsColumn<FinanceVendor>[] = [
+    {
+      id: "vendor",
+      header: "Vendor",
+      cell: (vendor) => (
+        <Link href={`/finance/vendors/${vendor.id}`} className="font-medium whitespace-nowrap hover:text-primary hover:underline">
+          {vendor.name}
+        </Link>
+      ),
+    },
+    {
+      id: "contact",
+      header: "Contact",
+      cell: (vendor) => (
+        <div className="text-muted-foreground">
+          <div>{vendor.email}</div>
+          {vendor.phone ? <div className="text-[10px]">{vendor.phone}</div> : null}
+        </div>
+      ),
+    },
+    {
+      id: "service-details",
+      header: "Service details",
+      className: "max-w-[280px]",
+      cell: (vendor) => (
+        <p className="truncate text-muted-foreground" title={formatVendorFieldsSummary(vendor.fields, vendor.notes, 4)}>
+          {formatVendorFieldsSummary(vendor.fields, vendor.notes)}
+        </p>
+      ),
+    },
+    { id: "gstin", header: "GSTIN", cell: (vendor) => <span className="font-mono">{vendor.gstin ?? "—"}</span> },
+    {
+      id: "website",
+      header: "Website",
+      cell: (vendor) =>
+        vendor.website ? (
+          <a href={ensureHttpUrl(vendor.website) ?? "#"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block max-w-[160px]">
+            {vendor.website.replace(/^https?:\/\//, "")}
+          </a>
+        ) : "—",
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (vendor) => (
+        <div className="flex justify-end gap-1">
+          {canEdit && (
+            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openEdit(vendor)}>
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Button>
+          )}
+          {canDelete && (
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(vendor)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -86,81 +144,34 @@ export default function FinanceVendorsPage() {
         }
       />
 
+      <PortalKpiGrid
+        items={[
+          { title: "Vendors", value: vendors.length, icon: Building2, accent: "blue", delay: 0 },
+          { title: "With GSTIN", value: withGst, icon: FileText, accent: "violet", delay: 1 },
+          { title: "With website", value: withWebsite, icon: Globe, accent: "sky", delay: 2 },
+          { title: "With phone", value: withPhone, icon: Phone, accent: "green", delay: 3 },
+        ]}
+      />
+
       <FinanceFilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name, email, GSTIN, service details…"
       />
 
-      {vendors.length === 0 ? (
-        <FinanceEmptyState
-          icon={Building2}
-          title="No vendors yet"
-          description="Add AWS, your hosting provider, or any service you pay on a recurring basis."
-          actionLabel="Add vendor"
-          onAction={openCreate}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto">
-          <Table className="min-w-[900px]">
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs whitespace-nowrap min-w-[160px]">Vendor</TableHead>
-                <TableHead className="text-xs">Contact</TableHead>
-                <TableHead className="text-xs">Service details</TableHead>
-                <TableHead className="text-xs">GSTIN</TableHead>
-                <TableHead className="text-xs">Website</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vendors.map((vendor) => (
-                <TableRow key={vendor.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium whitespace-nowrap">
-                    <Link href={`/finance/vendors/${vendor.id}`} className="hover:text-primary hover:underline">
-                      {vendor.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    <div>{vendor.email}</div>
-                    {vendor.phone ? <div className="text-[10px]">{vendor.phone}</div> : null}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[280px]">
-                    <p className="truncate" title={formatVendorFieldsSummary(vendor.fields, vendor.notes, 4)}>
-                      {formatVendorFieldsSummary(vendor.fields, vendor.notes)}
-                    </p>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono">{vendor.gstin ?? "—"}</TableCell>
-                  <TableCell className="text-xs">
-                    {vendor.website ? (
-                      <a href={ensureHttpUrl(vendor.website) ?? "#"} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline truncate block max-w-[160px]">
-                        {vendor.website.replace(/^https?:\/\//, "")}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {canEdit && (
-                        <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openEdit(vendor)}>
-                          <Pencil className="h-3.5 w-3.5" />
-                          Edit
-                        </Button>
-                      )}
-                      {canDelete && (
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(vendor)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={vendors}
+        rowKey={(vendor) => vendor.id}
+        viewStorageKey="finance-vendors"
+        empty={{
+          icon: Building2,
+          title: "No vendors yet",
+          description: "Add AWS, your hosting provider, or any service you pay on a recurring basis.",
+          actionLabel: "Add vendor",
+          onAction: openCreate,
+        }}
+      />
 
       <VendorFormModal
         open={modalOpen}

@@ -30,7 +30,6 @@ import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevContentCard,
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
@@ -402,9 +401,7 @@ export default function DevReports() {
       />
 
       {reportsLoading ? (
-        <DevContentCard>
-          <PageTableSkeleton rows={6} columns={5} showToolbar />
-        </DevContentCard>
+        <PageTableSkeleton rows={6} columns={5} showToolbar />
       ) : !reportsData?.length ? (
         <DevEmptyState
           icon={FileText}
@@ -412,16 +409,14 @@ export default function DevReports() {
           description="Use Generate Report to create a timesheet, project summary, or bug export."
         />
       ) : (
-        <DevContentCard>
-            <AdvancedTable
-              data={reportsData}
-              columns={columns}
-              filename="ReportsExport"
-              viewStorageKey="dev-reports"
-              showViewToggle
-              clientPagination={clientPagination}
-            />
-        </DevContentCard>
+        <AdvancedTable
+          data={reportsData}
+          columns={columns}
+          filename="ReportsExport"
+          viewStorageKey="dev-reports"
+          showViewToggle
+          clientPagination={clientPagination}
+        />
       )}
     </DevPageShell>
   );

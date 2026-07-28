@@ -12,6 +12,7 @@ export const CMS_MODULE_GROUPS = [
       "admin_companies",
       "admin_projects",
       "admin_project_documents",
+      "admin_media",
       "admin_team",
       "admin_requests",
       "admin_tickets",
@@ -196,6 +197,7 @@ export const CMS_MODULE_LABELS: Record<string, string> = {
   admin_companies: "Companies / clients",
   admin_projects: "Projects",
   admin_project_documents: "Project documents",
+  admin_media: "Company media storage",
   admin_team: "Team / employees",
   admin_requests: "Requests",
   admin_tickets: "Tickets",
@@ -324,5 +326,6 @@ export const NAV_HREF_PERMISSION: Record<string, CmsModule> = {
   "/admin/roles": "roles_permissions",
   "/hrm/roles": "roles_permissions",
   "/admin/project-documents": "admin_project_documents",
+  "/admin/media": "admin_media",
   "/hrm/letters": "hrm_letters",
 };

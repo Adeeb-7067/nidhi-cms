@@ -77,7 +77,10 @@ import {
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
 import { useDigitalAssigneeGate } from "@/modules/marketing/use-digital-assignee-gate";
-import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
+import {
+  canDeleteMarketingItem,
+  canFullyEditMarketingItem,
+} from "@/lib/cms-project-manage";
 import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -115,6 +118,11 @@ function pickPlatformForAccount(
     ALL_MARKETING_PLATFORMS.includes(p as MarketingPlatform),
   );
   return bound[0] ?? options[0] ?? "instagram";
+}
+
+function postPlatforms(p: MarketingPostDto): MarketingPlatform[] {
+  if (Array.isArray(p.platforms) && p.platforms.length > 0) return p.platforms;
+  return p.platform ? [p.platform] : [];
 }
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -165,8 +173,9 @@ export default function MarketingCalendar() {
   const { can } = usePermissions();
   const canCreate = can("marketing_calendar", "create");
   const canEdit = can("marketing_calendar", "edit");
-  const canDelete = can("marketing_calendar", "delete");
-  const showActions = canEdit || canDelete;
+  const canDeleteModule = can("marketing_calendar", "delete");
+  /** Own posts: create/edit is enough (AM/craft often lack module delete). */
+  const canDeleteOwn = canDeleteModule || canCreate || canEdit;
 
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useAccountProjectFilter();
@@ -182,15 +191,28 @@ export default function MarketingCalendar() {
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
   const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
   const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
-  const { data, isLoading, isError } = useMarketingPosts(
-    accountFilterId ? { accountId: accountFilterId } : undefined,
-  );
+
+  /** Visible month grid (± week padding) — fetch by window, not a flat 200-row page. */
+  const postsQuery = useMemo(() => {
+    const from = startOfWeek(startOfMonth(monthCursor));
+    const to = endOfWeek(endOfMonth(monthCursor));
+    return {
+      ...(accountFilterId ? { accountId: accountFilterId } : {}),
+      scheduledFrom: from.toISOString(),
+      scheduledTo: to.toISOString(),
+      includeUnscheduled: true,
+      limit: 1000,
+    };
+  }, [monthCursor, accountFilterId]);
+
+  const { data, isLoading, isError } = useMarketingPosts(postsQuery);
   const { data: accountsData } = useMarketingAccounts();
   const accounts = accountsData?.accounts ?? [];
   const createPost = useCreateMarketingPost();
   const updatePost = useUpdateMarketingPost();
   const deletePost = useDeleteMarketingPost();
   const posts = data?.posts ?? [];
+  const windowTotal = data?.total ?? posts.length;
   const saving = createPost.isPending || updatePost.isPending;
 
   const scheduleAccount = useMemo(() => {
@@ -254,19 +276,22 @@ export default function MarketingCalendar() {
       scheduleTabs.map((s) => ({
         value: s,
         label: s === "all" ? "All" : POST_SCHEDULE_STATUS_LABELS[s],
-        count: s === "all" ? posts.length : posts.filter((p) => p.scheduleStatus === s).length,
+        count:
+          s === "all"
+            ? windowTotal
+            : posts.filter((p) => p.scheduleStatus === s).length,
       })),
-    [posts],
+    [posts, windowTotal],
   );
 
   const kpis = useMemo(
     () => ({
-      total: posts.length,
+      total: windowTotal,
       scheduled: posts.filter((p) => p.scheduleStatus === "scheduled").length,
       pending: posts.filter((p) => p.scheduleStatus === "pending").length,
       published: posts.filter((p) => p.scheduleStatus === "published").length,
     }),
-    [posts],
+    [posts, windowTotal],
   );
 
   const openCreate = (prefillDay?: Date) => {
@@ -292,7 +317,7 @@ export default function MarketingCalendar() {
     setEditing(p);
     setForm({
       accountId: String(p.accountId),
-      platforms: [p.platform],
+      platforms: postPlatforms(p),
       contentFormat: (p.contentFormat ?? "post") as PostContentFormat,
       caption: p.caption ?? "",
       scheduleStatus: p.scheduleStatus,
@@ -303,21 +328,34 @@ export default function MarketingCalendar() {
     setDialogOpen(true);
   };
 
+  const focusCalendarOnScheduledAt = (isoOrLocal: string | null | undefined) => {
+    if (!isoOrLocal) return;
+    const when = new Date(isoOrLocal);
+    if (Number.isNaN(when.getTime())) return;
+    setSelectedDay(when);
+    setMonthCursor(startOfMonth(when));
+    setStatusTab("all");
+  };
+
   const handleSave = async () => {
     if (editing && !canFullyEditMarketingItem(user, editing.createdBy)) {
       toast.error("Only the creator or an org admin can edit this post");
       return;
     }
     try {
+      const selectedPlatforms =
+        form.platforms.length > 0 ? form.platforms : [pickPlatformForAccount(undefined)];
+      const scheduledIso = toIsoScheduledAt(form.scheduledAt);
       if (editing) {
         await updatePost.mutateAsync({
           id: editing.id,
           accountId: editing.accountId,
           data: {
-            platform: form.platforms[0] ?? editing.platform,
+            platforms: selectedPlatforms,
+            platform: selectedPlatforms[0],
             contentFormat: form.contentFormat,
             caption: form.caption.trim(),
-            scheduledAt: toIsoScheduledAt(form.scheduledAt),
+            scheduledAt: scheduledIso,
             hashtags: parseHashtags(form.hashtags),
             assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
           },
@@ -328,26 +366,27 @@ export default function MarketingCalendar() {
           toast.error("Digital project is required");
           return;
         }
-        const selectedPlatforms = form.platforms.length > 0 ? form.platforms : [pickPlatformForAccount(undefined)];
-        await Promise.all(
-          selectedPlatforms.map((plat) =>
-            createPost.mutateAsync({
-              accountId: Number(form.accountId),
-              platform: plat,
-              contentFormat: form.contentFormat,
-              caption: form.caption.trim(),
-              scheduledAt: toIsoScheduledAt(form.scheduledAt),
-              hashtags: parseHashtags(form.hashtags),
-              assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
-            })
-          )
-        );
+        await createPost.mutateAsync({
+          accountId: Number(form.accountId),
+          platforms: selectedPlatforms,
+          platform: selectedPlatforms[0],
+          contentFormat: form.contentFormat,
+          caption: form.caption.trim(),
+          scheduledAt: scheduledIso,
+          hashtags: parseHashtags(form.hashtags),
+          assigneeId: resolveFormAssigneeId(canAssignOthers, form.assigneeId, user?.id),
+        });
+        // Keep list filter aligned with the account we just wrote to.
+        if (projectFilter && projectFilter !== form.accountId) {
+          setProjectFilter(form.accountId);
+        }
         toast.success(
-          selectedPlatforms.length > 1
-            ? `Posts scheduled across ${selectedPlatforms.length} platforms`
-            : "Post created"
+          scheduledIso
+            ? `Post scheduled for ${format(new Date(scheduledIso), "MMM d, yyyy 'at' h:mm a")}`
+            : "Post created",
         );
       }
+      focusCalendarOnScheduledAt(scheduledIso);
       setDialogOpen(false);
     } catch (err) {
       toastApiError(err, editing ? "Failed to update post" : "Failed to create post");
@@ -387,7 +426,7 @@ export default function MarketingCalendar() {
         columns={4}
         count={4}
         items={[
-          { title: "Total posts", value: kpis.total, icon: Calendar, accent: "blue", delay: 0 },
+          { title: "Posts this board", value: kpis.total, icon: Calendar, accent: "blue", delay: 0 },
           { title: "Scheduled", value: kpis.scheduled, icon: Send, accent: "violet", delay: 1 },
           { title: "Pending", value: kpis.pending, icon: Clock, accent: "amber", delay: 2 },
           { title: "Published", value: kpis.published, icon: CheckCircle2, accent: "green", delay: 3 },
@@ -518,7 +557,12 @@ export default function MarketingCalendar() {
                       {dayPosts.slice(0, 4).map((p) => (
                         <span
                           key={p.id}
-                          title={p.caption || PLATFORM_LABELS[p.platform]}
+                          title={
+                            p.caption ||
+                            postPlatforms(p)
+                              .map((plat) => PLATFORM_LABELS[plat])
+                              .join(", ")
+                          }
                           className={cn(
                             "h-1.5 w-1.5 rounded-full sm:h-2 sm:w-2",
                             STATUS_ACCENT[p.scheduleStatus],
@@ -644,7 +688,9 @@ export default function MarketingCalendar() {
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <PlatformIconBadge platform={p.platform} />
+                              {postPlatforms(p).map((plat) => (
+                                <PlatformIconBadge key={plat} platform={plat} />
+                              ))}
                               <Badge variant="secondary" className="text-[10px] font-normal">
                                 {POST_CONTENT_FORMAT_LABELS[
                                   (p.contentFormat ?? "post") as PostContentFormat
@@ -713,7 +759,7 @@ export default function MarketingCalendar() {
                               Edit
                             </Button>
                           ) : null}
-                          {canDelete && canFullyEditMarketingItem(user, p.createdBy) ? (
+                          {canDeleteOwn && canDeleteMarketingItem(user, p.createdBy) ? (
                             <Button
                               type="button"
                               size="sm"
@@ -754,7 +800,11 @@ export default function MarketingCalendar() {
                           }}
                           className="flex min-w-0 flex-1 items-start gap-2 text-left"
                         >
-                          <PlatformIconBadge platform={p.platform} showLabel={false} />
+                          <span className="flex shrink-0 items-center gap-0.5">
+                            {postPlatforms(p).slice(0, 3).map((plat) => (
+                              <PlatformIconBadge key={plat} platform={plat} showLabel={false} />
+                            ))}
+                          </span>
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-xs font-medium">{p.clientName}</span>
                             <span className="line-clamp-1 text-[11px] text-muted-foreground">
@@ -772,6 +822,18 @@ export default function MarketingCalendar() {
                           <Eye className="h-3 w-3" />
                           Preview
                         </Button>
+                        {canDeleteOwn && canDeleteMarketingItem(user, p.createdBy) ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="h-7 shrink-0 gap-1 px-2 text-xs text-destructive hover:text-destructive"
+                            onClick={() => setDeleteTarget(p)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            Delete
+                          </Button>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -966,7 +1028,9 @@ export default function MarketingCalendar() {
                           {previewTarget.clientName}
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          {PLATFORM_LABELS[previewTarget.platform]}
+                          {postPlatforms(previewTarget)
+                            .map((plat) => PLATFORM_LABELS[plat])
+                            .join(" · ")}
                         </p>
                       </div>
                     </div>
@@ -1035,24 +1099,40 @@ export default function MarketingCalendar() {
 
               {/* Modal Footer */}
               <div className="flex items-center justify-between border-t border-border/60 bg-muted/20 px-5 py-3">
-                {canEdit && canFullyEditMarketingItem(user, previewTarget.createdBy) ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 gap-1.5 text-xs"
-                    onClick={() => {
-                      const target = previewTarget;
-                      setPreviewTarget(null);
-                      openEdit(target);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                    Edit Content
-                  </Button>
-                ) : (
-                  <div />
-                )}
+                <div className="flex items-center gap-2">
+                  {canEdit && canFullyEditMarketingItem(user, previewTarget.createdBy) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs"
+                      onClick={() => {
+                        const target = previewTarget;
+                        setPreviewTarget(null);
+                        openEdit(target);
+                      }}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit Content
+                    </Button>
+                  ) : null}
+                  {canDeleteOwn && canDeleteMarketingItem(user, previewTarget.createdBy) ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => {
+                        const target = previewTarget;
+                        setPreviewTarget(null);
+                        setDeleteTarget(target);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Delete
+                    </Button>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   size="sm"

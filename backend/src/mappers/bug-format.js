@@ -8,7 +8,7 @@ import {
   normalizeFinalStatus,
   normalizeTrackStatus,
   rollupFromIssues,
-} from "../services/bugs/bug-workflow.js";
+} from "../modules/work/services/bug-workflow.js";
 
 function collectAssigneeIds(bug) {
   const ids = new Set();

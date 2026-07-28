@@ -2,26 +2,21 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { Plus, IndianRupee, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { useListPayments, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
-import { formatProjectLabel, formatSalesDateTime, formatSalesPaymentDate, paymentDocumentInvoiceId } from "@/modules/sales/utils";
+import {
+  formatProjectLabel,
+  formatSalesDateTime,
+  formatSalesPaymentDate,
+  paymentDocumentInvoiceId,
+} from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
   SalesStatusBadge,
-  SalesEmptyState,
   RecordPaymentDialog,
   ExecutiveAvatar,
 } from "@/modules/sales/components";
@@ -34,12 +29,16 @@ const METHOD_LABELS: Record<string, string> = {
   card: "Card",
 };
 
+type PaymentRow = NonNullable<ReturnType<typeof useListPayments>["data"]>["payments"][number];
+
 export default function Payments() {
   const [search, setSearch] = useState("");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
   const [recordOpen, setRecordOpen] = useState(false);
 
-  useEffect(() => { resetPage(); }, [search, resetPage]);
+  useEffect(() => {
+    resetPage();
+  }, [search, resetPage]);
 
   const listParams = {
     search: search || undefined,
@@ -53,6 +52,126 @@ export default function Payments() {
   const total = data?.total ?? 0;
 
   const collected = dashData?.totalRevenue ?? payments.reduce((s, p) => s + p.amount, 0);
+
+  const columns: CmsColumn<PaymentRow>[] = [
+    {
+      id: "receipt",
+      header: "Receipt #",
+      headerClassName: "whitespace-nowrap min-w-[132px]",
+      cell: (p) => (
+        <Link
+          href={`/sales/receipts/${p.id}`}
+          className="font-mono whitespace-nowrap text-primary hover:underline underline-offset-2"
+        >
+          {p.receiptNumber}
+        </Link>
+      ),
+    },
+    {
+      id: "invoice",
+      header: "Invoice",
+      headerClassName: "whitespace-nowrap min-w-[120px]",
+      cell: (p) => {
+        const docInvoiceId = paymentDocumentInvoiceId(p);
+        return (
+          <Link
+            href={`/sales/invoices/${docInvoiceId}`}
+            className="font-mono whitespace-nowrap text-primary hover:underline underline-offset-2"
+          >
+            {p.invoiceNumber ?? `INV-${docInvoiceId}`}
+          </Link>
+        );
+      },
+    },
+    {
+      id: "project",
+      header: "Project",
+      className: "max-w-[160px] truncate",
+      cell: (p) => (
+        <span title={formatProjectLabel(p.projectId, p.projectName)}>
+          {formatProjectLabel(p.projectId, p.projectName)}
+        </span>
+      ),
+    },
+    {
+      id: "installment",
+      header: "Installment",
+      className: "max-w-[140px] truncate text-muted-foreground",
+      cell: (p) => p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—"),
+    },
+    {
+      id: "mode",
+      header: "Mode",
+      cell: (p) => METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod,
+    },
+    {
+      id: "txn",
+      header: "Transaction ID",
+      className: "font-mono text-muted-foreground max-w-[120px] truncate",
+      cell: (p) => <span title={p.transactionId ?? undefined}>{p.transactionId ?? "—"}</span>,
+    },
+    {
+      id: "status",
+      header: "Invoice status",
+      chip: true,
+      cell: (p) => (
+        <SalesStatusBadge
+          variant="invoice"
+          value={p.invoiceStatus as "paid" | "partial" | "unpaid" | "overdue"}
+        />
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (p) => <span className="font-medium tabular-nums">{formatCurrency(p.amount)}</span>,
+    },
+    {
+      id: "paymentDate",
+      header: "Payment date",
+      cell: (p) => (
+        <span className="text-muted-foreground whitespace-nowrap">
+          {formatSalesPaymentDate(p.paymentDate)}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created at",
+      cell: (p) => (
+        <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
+      ),
+    },
+    {
+      id: "createdBy",
+      header: "Created by",
+      cell: (p) =>
+        p.recordedByName ? (
+          <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (p) => {
+        const docInvoiceId = paymentDocumentInvoiceId(p);
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+              <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+              <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
+            </Button>
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -75,113 +194,53 @@ export default function Payments() {
         items={[
           { title: "Collected", value: formatCurrency(collected), icon: IndianRupee, accent: "green", delay: 0 },
           { title: "Payments logged", value: total, icon: Receipt, accent: "blue", delay: 1 },
-          { title: "Outstanding", value: formatCurrency(dashData?.outstanding ?? 0), icon: IndianRupee, accent: "red", alert: true, delay: 2 },
-          { title: "Pending invoices", value: dashData?.pendingInvoices ?? "—", icon: Receipt, accent: "amber", delay: 3 },
+          {
+            title: "Outstanding",
+            value: formatCurrency(dashData?.outstanding ?? 0),
+            icon: IndianRupee,
+            accent: "red",
+            alert: true,
+            delay: 2,
+          },
+          {
+            title: "Pending invoices",
+            value: dashData?.pendingInvoices ?? "—",
+            icon: Receipt,
+            accent: "amber",
+            delay: 3,
+          },
         ]}
       />
 
-      <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search receipt #, transaction ID, or mode…" />
+      <SalesFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search receipt #, transaction ID, or mode…"
+      />
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState icon={IndianRupee} title="Failed to load payments" description="Could not fetch payment records." actionLabel="Retry" onAction={() => refetch()} />
-      ) : total === 0 ? (
-        <SalesEmptyState icon={IndianRupee} title="No payments found" description="Record a payment against an invoice." actionLabel="Record payment" onAction={() => setRecordOpen(true)} />
-      ) : (
-        <>
-        <div className="rounded-xl border bg-card overflow-x-auto">
-          <Table className="min-w-[1200px]">
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs whitespace-nowrap min-w-[132px]">Receipt #</TableHead>
-                <TableHead className="text-xs whitespace-nowrap min-w-[120px]">Invoice</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Installment</TableHead>
-                <TableHead className="text-xs">Mode</TableHead>
-                <TableHead className="text-xs">Transaction ID</TableHead>
-                <TableHead className="text-xs">Invoice status</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Payment date</TableHead>
-                <TableHead className="text-xs">Created at</TableHead>
-                <TableHead className="text-xs">Created by</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((p) => {
-                const docInvoiceId = paymentDocumentInvoiceId(p);
-                return (
-                <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono whitespace-nowrap">
-                    <Link
-                      href={`/sales/receipts/${p.id}`}
-                      className="text-primary hover:underline underline-offset-2"
-                    >
-                      {p.receiptNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs font-mono whitespace-nowrap">
-                    <Link
-                      href={`/sales/invoices/${docInvoiceId}`}
-                      className="text-primary hover:underline underline-offset-2"
-                    >
-                      {p.invoiceNumber ?? `INV-${docInvoiceId}`}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs max-w-[160px] truncate" title={formatProjectLabel(p.projectId, p.projectName)}>
-                    {formatProjectLabel(p.projectId, p.projectName)}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
-                    {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
-                  </TableCell>
-                  <TableCell className="text-xs">{METHOD_LABELS[p.paymentMethod] ?? p.paymentMethod}</TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate" title={p.transactionId ?? undefined}>
-                    {p.transactionId ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    <SalesStatusBadge variant="invoice" value={p.invoiceStatus as "paid" | "partial" | "unpaid" | "overdue"} />
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatSalesPaymentDate(p.paymentDate)}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</TableCell>
-                  <TableCell>
-                    {p.recordedByName ? (
-                      <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} />
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                        <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                        <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-        <DataPagination
-          page={page}
-          total={total}
-          limit={limit}
-          loadedRowCount={payments.length}
-          onPageChange={setPage}
-          onLimitChange={setLimit}
-        />
-        </>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={payments}
+        rowKey={(p) => p.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: IndianRupee,
+          title: "No payments found",
+          description: "Record a payment against an invoice.",
+          actionLabel: "Record payment",
+          onAction: () => setRecordOpen(true),
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: payments.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
 
       <RecordPaymentDialog
         open={recordOpen}

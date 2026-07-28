@@ -10,11 +10,10 @@ import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHeader,
   HrmPageShell,
-  HrmTabsList,
-  HrmTabsTrigger,
   HrmQueryErrorPanel,
   hrmActionButtonClass,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import { ApplyLeaveDialog } from "@/modules/hrm/ApplyLeaveDialog";
 import { buildLeaveBalanceColumns, buildLeaveRequestColumns } from "@/modules/hrm/hrm-table-columns";
 import {
@@ -218,13 +217,18 @@ export default function HrmLeavePage() {
           paidLeavesPerMonth={hrmSettings?.hrmPaidLeavesPerMonth ?? 1}
         />
 
-        <Tabs value={leaveTab} onValueChange={setLeaveTab} className="space-y-4">
-          <HrmTabsList>
-            <HrmTabsTrigger value="history">{canAdminView ? "All requests" : "My requests"}</HrmTabsTrigger>
-            {(canAdminView || canApprove) && <HrmTabsTrigger value="queue">Approvals</HrmTabsTrigger>}
-            <HrmTabsTrigger value="rejected">Rejected</HrmTabsTrigger>
-            {!canAdminView && <HrmTabsTrigger value="balances">Balances</HrmTabsTrigger>}
-          </HrmTabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={leaveTab}
+            onValueChange={setLeaveTab}
+            items={[
+              { value: "history", label: canAdminView ? "All requests" : "My requests" },
+              ...((canAdminView || canApprove) ? [{ value: "queue", label: "Approvals" }] : []),
+              { value: "rejected", label: "Rejected" },
+              ...(!canAdminView ? [{ value: "balances", label: "Balances" }] : []),
+            ]}
+          />
+          <Tabs value={leaveTab} onValueChange={setLeaveTab}>
 
           <TabsContent value="history" className="space-y-4 m-0">
             {historyQueryState.isError ? (
@@ -346,6 +350,7 @@ export default function HrmLeavePage() {
             </TabsContent>
           )}
         </Tabs>
+        </div>
 
         <ApplyLeaveDialog
           open={applyOpen}

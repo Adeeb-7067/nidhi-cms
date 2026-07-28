@@ -38,19 +38,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PortalPageShell, PortalKpiGrid, PortalTabsList, PortalTabsTrigger } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ProjectDetailPageSkeleton } from "@/components/loading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useGetProject, useUpdateProject, getGetProjectQueryKey, getListProjectsQueryKey } from "@/api";
 import { DigitalProjectOverview, digitalOverviewModuleIcons } from "@/components/project/DigitalProjectOverview";
 import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
@@ -216,7 +209,7 @@ export default function MarketingProjectDetail() {
     { enabled: accountEnabled },
   );
   const { data: postsData, isLoading: postsLoading } = useMarketingPosts(
-    accountEnabled ? { accountId } : undefined,
+    accountEnabled ? { accountId, limit: 1000 } : undefined,
     { enabled: accountEnabled },
   );
   const { data: metaAdsData } = useMarketingCampaigns(
@@ -539,25 +532,21 @@ export default function MarketingProjectDetail() {
       {isLoading || !project ? (
         <ProjectDetailPageSkeleton />
       ) : (
-        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-          <PortalTabsList>
-            {(
-              [
-                ["overview", "Overview"],
-                ["tasks", "Tasks"],
-                ["approvals", "Approvals"],
-                ["calendar", "Calendar"],
-                ["ads", "Ads"],
-                ["production", "Production"],
-                ["media", "Media"],
-              ] as const
-            ).map(([value, label]) => (
-              <PortalTabsTrigger key={value} value={value}>
-                {label}
-              </PortalTabsTrigger>
-            ))}
-          </PortalTabsList>
-
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={tab}
+            onValueChange={setTab}
+            items={[
+              { value: "overview", label: "Overview" },
+              { value: "tasks", label: "Tasks" },
+              { value: "approvals", label: "Approvals" },
+              { value: "calendar", label: "Calendar" },
+              { value: "ads", label: "Ads" },
+              { value: "production", label: "Production" },
+              { value: "media", label: "Media" },
+            ]}
+          />
+          <Tabs value={tab} onValueChange={setTab}>
           <TabsContent value="overview" className="mt-0 space-y-4">
             {!account && !accountsLoading ? (
               <MarketingEmptyState
@@ -648,45 +637,63 @@ export default function MarketingProjectDetail() {
                 ) : tasks.length === 0 ? (
                   <SectionEmpty message="No tasks yet for this digital project." />
                 ) : (
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-xs">Task</TableHead>
-                          <TableHead className="text-xs">Category</TableHead>
-                          <TableHead className="text-xs">Status</TableHead>
-                          <TableHead className="text-xs">Priority</TableHead>
-                          <TableHead className="text-xs">Assignee</TableHead>
-                          <TableHead className="text-xs text-right">Deadline</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {tasks.slice(0, 25).map((t) => (
-                          <TableRow key={t.id}>
-                            <TableCell className="text-xs font-medium">{t.title}</TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {TASK_CATEGORY_LABELS[t.category as TaskCategory] ?? t.category}
-                            </TableCell>
-                            <TableCell>
-                              <MarketingStatusBadge variant="task" value={t.status as TaskStatus} />
-                            </TableCell>
-                            <TableCell>
-                              <MarketingStatusBadge
-                                variant="priority"
-                                value={t.priority as TaskPriority}
-                              />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {t.assignee ?? "—"}
-                            </TableCell>
-                            <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                              {t.deadline ? format(new Date(t.deadline), "MMM d") : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "title",
+                        header: "Task",
+                        cell: (t) => <span className="font-medium">{t.title}</span>,
+                      },
+                      {
+                        id: "category",
+                        header: "Category",
+                        cell: (t) => (
+                          <span className="text-muted-foreground">
+                            {TASK_CATEGORY_LABELS[t.category as TaskCategory] ?? t.category}
+                          </span>
+                        ),
+                      },
+                      {
+                        id: "status",
+                        header: "Status",
+                        chip: true,
+                        cell: (t) => (
+                          <MarketingStatusBadge variant="task" value={t.status as TaskStatus} />
+                        ),
+                      },
+                      {
+                        id: "priority",
+                        header: "Priority",
+                        chip: true,
+                        cell: (t) => (
+                          <MarketingStatusBadge
+                            variant="priority"
+                            value={t.priority as TaskPriority}
+                          />
+                        ),
+                      },
+                      {
+                        id: "assignee",
+                        header: "Assignee",
+                        cell: (t) => (
+                          <span className="text-muted-foreground">{t.assignee ?? "—"}</span>
+                        ),
+                      },
+                      {
+                        id: "deadline",
+                        header: "Deadline",
+                        align: "right",
+                        cell: (t) => (
+                          <span className="tabular-nums text-muted-foreground">
+                            {t.deadline ? format(new Date(t.deadline), "MMM d") : "—"}
+                          </span>
+                        ),
+                      },
+                    ] satisfies CmsColumn<(typeof tasks)[number]>[]}
+                    rows={tasks.slice(0, 25)}
+                    rowKey={(t) => t.id}
+                    embedded
+                  />
                 )}
               </CardContent>
             </Card>
@@ -708,38 +715,46 @@ export default function MarketingProjectDetail() {
                 ) : approvals.length === 0 ? (
                   <SectionEmpty message="No approval items for this project." />
                 ) : (
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-xs">Title</TableHead>
-                          <TableHead className="text-xs">Type</TableHead>
-                          <TableHead className="text-xs">Stage</TableHead>
-                          <TableHead className="text-xs">Assignee</TableHead>
-                          <TableHead className="text-xs text-right">Updated</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {approvals.slice(0, 25).map((a) => (
-                          <TableRow key={a.id}>
-                            <TableCell className="text-xs font-medium">{a.title}</TableCell>
-                            <TableCell className="text-xs capitalize text-muted-foreground">
-                              {a.type}
-                            </TableCell>
-                            <TableCell>
-                              <ApprovalStatusBadge stage={a.stage as ApprovalStage} />
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">
-                              {a.assignee ?? "—"}
-                            </TableCell>
-                            <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                              {a.updatedAt ? format(new Date(a.updatedAt), "MMM d") : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "title",
+                        header: "Title",
+                        cell: (a) => <span className="font-medium">{a.title}</span>,
+                      },
+                      {
+                        id: "type",
+                        header: "Type",
+                        cell: (a) => <span className="capitalize text-muted-foreground">{a.type}</span>,
+                      },
+                      {
+                        id: "stage",
+                        header: "Stage",
+                        chip: true,
+                        cell: (a) => <ApprovalStatusBadge stage={a.stage as ApprovalStage} />,
+                      },
+                      {
+                        id: "assignee",
+                        header: "Assignee",
+                        cell: (a) => (
+                          <span className="text-muted-foreground">{a.assignee ?? "—"}</span>
+                        ),
+                      },
+                      {
+                        id: "updated",
+                        header: "Updated",
+                        align: "right",
+                        cell: (a) => (
+                          <span className="tabular-nums text-muted-foreground">
+                            {a.updatedAt ? format(new Date(a.updatedAt), "MMM d") : "—"}
+                          </span>
+                        ),
+                      },
+                    ] satisfies CmsColumn<(typeof approvals)[number]>[]}
+                    rows={approvals.slice(0, 25)}
+                    rowKey={(a) => a.id}
+                    embedded
+                  />
                 )}
               </CardContent>
             </Card>
@@ -761,45 +776,56 @@ export default function MarketingProjectDetail() {
                 ) : posts.length === 0 ? (
                   <SectionEmpty message="No posts for this project yet." />
                 ) : (
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-xs">Caption</TableHead>
-                          <TableHead className="text-xs">Platform</TableHead>
-                          <TableHead className="text-xs">Schedule</TableHead>
-                          <TableHead className="text-xs">Approval</TableHead>
-                          <TableHead className="text-xs text-right">When</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {posts.slice(0, 25).map((p) => (
-                          <TableRow key={p.id}>
-                            <TableCell className="max-w-[240px] truncate text-xs font-medium">
-                              {p.caption || "—"}
-                            </TableCell>
-                            <TableCell className="text-xs">
-                              <PlatformIconBadge platform={p.platform} />
-                            </TableCell>
-                            <TableCell>
-                              <MarketingStatusBadge
-                                variant="postSchedule"
-                                value={p.scheduleStatus as PostScheduleStatus}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <ApprovalStatusBadge stage={p.approvalStage as ApprovalStage} />
-                            </TableCell>
-                            <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                              {p.scheduledAt
-                                ? format(new Date(p.scheduledAt), "MMM d, h:mm a")
-                                : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "caption",
+                        header: "Caption",
+                        className: "max-w-[240px] truncate",
+                        cell: (p) => <span className="font-medium">{p.caption || "—"}</span>,
+                      },
+                      {
+                        id: "platform",
+                        header: "Platform",
+                        chip: true,
+                        cell: (p) => <PlatformIconBadge platform={p.platform} />,
+                      },
+                      {
+                        id: "schedule",
+                        header: "Schedule",
+                        chip: true,
+                        cell: (p) => (
+                          <MarketingStatusBadge
+                            variant="postSchedule"
+                            value={p.scheduleStatus as PostScheduleStatus}
+                          />
+                        ),
+                      },
+                      {
+                        id: "approval",
+                        header: "Approval",
+                        chip: true,
+                        cell: (p) => (
+                          <ApprovalStatusBadge stage={p.approvalStage as ApprovalStage} />
+                        ),
+                      },
+                      {
+                        id: "when",
+                        header: "When",
+                        align: "right",
+                        cell: (p) => (
+                          <span className="tabular-nums text-muted-foreground">
+                            {p.scheduledAt
+                              ? format(new Date(p.scheduledAt), "MMM d, h:mm a")
+                              : "—"}
+                          </span>
+                        ),
+                      },
+                    ] satisfies CmsColumn<(typeof posts)[number]>[]}
+                    rows={posts.slice(0, 25)}
+                    rowKey={(p) => p.id}
+                    embedded
+                  />
                 )}
               </CardContent>
             </Card>
@@ -818,37 +844,50 @@ export default function MarketingProjectDetail() {
                 {campaigns.length === 0 ? (
                   <SectionEmpty message="No Meta or Google campaigns for this project." />
                 ) : (
-                  <div className="overflow-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-xs">Campaign</TableHead>
-                          <TableHead className="text-xs">Network</TableHead>
-                          <TableHead className="text-xs">Status</TableHead>
-                          <TableHead className="text-xs text-right">Budget</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {campaigns.slice(0, 25).map((c) => (
-                          <TableRow key={`${c.network ?? ("objective" in c ? "meta" : "google")}-${c.id}`}>
-                            <TableCell className="text-xs font-medium">{c.name}</TableCell>
-                            <TableCell className="text-xs capitalize text-muted-foreground">
-                              {c.network === "google" ? "Google" : "Meta"}
-                            </TableCell>
-                            <TableCell>
-                              <MarketingStatusBadge
-                                variant="campaign"
-                                value={c.status as CampaignStatus}
-                              />
-                            </TableCell>
-                            <TableCell className="text-right text-xs tabular-nums">
-                              {formatCompactCurrency(c.budgetInr ?? 0)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "name",
+                        header: "Campaign",
+                        cell: (c) => <span className="font-medium">{c.name}</span>,
+                      },
+                      {
+                        id: "network",
+                        header: "Network",
+                        cell: (c) => (
+                          <span className="capitalize text-muted-foreground">
+                            {c.network === "google" ? "Google" : "Meta"}
+                          </span>
+                        ),
+                      },
+                      {
+                        id: "status",
+                        header: "Status",
+                        chip: true,
+                        cell: (c) => (
+                          <MarketingStatusBadge
+                            variant="campaign"
+                            value={c.status as CampaignStatus}
+                          />
+                        ),
+                      },
+                      {
+                        id: "budget",
+                        header: "Budget",
+                        align: "right",
+                        cell: (c) => (
+                          <span className="tabular-nums">
+                            {formatCompactCurrency(c.budgetInr ?? 0)}
+                          </span>
+                        ),
+                      },
+                    ] satisfies CmsColumn<(typeof campaigns)[number]>[]}
+                    rows={campaigns.slice(0, 25)}
+                    rowKey={(c) =>
+                      `${c.network ?? ("objective" in c ? "meta" : "google")}-${c.id}`
+                    }
+                    embedded
+                  />
                 )}
               </CardContent>
             </Card>
@@ -971,7 +1010,8 @@ export default function MarketingProjectDetail() {
               </CardContent>
             </Card>
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </div>
       )}
 
       <Dialog open={servicesDialogOpen} onOpenChange={setServicesDialogOpen}>

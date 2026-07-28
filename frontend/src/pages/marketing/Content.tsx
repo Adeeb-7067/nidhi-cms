@@ -3,14 +3,6 @@ import { format } from "date-fns";
 import { FileText, Loader2, Plus, CheckCircle2, Eye, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
@@ -56,6 +48,7 @@ import type { ApprovalStage, ContentType } from "@/modules/marketing/types";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 const emptyForm = {
   accountId: "",
@@ -86,7 +79,7 @@ export default function MarketingContent() {
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
   const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
   const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
-  const { data, isLoading, isError } = useMarketingContent(
+  const { data, isLoading, isError, refetch } = useMarketingContent(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const createContent = useCreateMarketingContent();
@@ -133,6 +126,31 @@ export default function MarketingContent() {
       avgSeo,
     };
   }, [items]);
+
+  const columns = useMemo<CmsColumn<MarketingContentDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingContentDto>[] = [
+        { id: "title", header: "Title", cell: (c) => <span className="font-medium max-w-[200px] block truncate">{c.title}</span> },
+        { id: "type", header: "Type", cell: (c) => CONTENT_TYPE_LABELS[c.type as ContentType] ?? c.type },
+        { id: "project", header: "Project", cell: (c) => c.clientName },
+        { id: "status", header: "Status", chip: true, cell: (c) => <ApprovalStatusBadge stage={c.status as ApprovalStage} /> },
+        {
+          id: "seoScore",
+          header: "SEO score",
+          cell: (c) => <div className="flex items-center gap-2 min-w-[100px]"><Progress value={c.seoScore} className="h-1.5 flex-1" /><span className="text-[10px] text-muted-foreground w-8">{c.seoScore}</span></div>,
+        },
+        { id: "words", header: "Words", align: "right", cell: (c) => c.wordCount },
+        { id: "assignee", header: "Assignee", cell: (c) => c.assignee },
+        { id: "due", header: "Due", cell: (c) => c.dueDate ? format(new Date(c.dueDate), "MMM d") : "—" },
+      ];
+      if (showActions) cols.push({
+        id: "actions", header: "Actions", align: "right", className: "w-[80px]",
+        cell: (c) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)} canDelete={canDelete && canFullyEditMarketingItem(user, c.createdBy)} onEdit={() => openEdit(c)} onDelete={() => setDeleteTarget(c)} />,
+      });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
+  );
 
   const openCreate = () => {
     setEditing(null);
@@ -256,72 +274,16 @@ export default function MarketingContent() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={FileText} title="Could not load content" description="Check your connection and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={FileText}
-          title="No content items"
-          description="The queue is empty for current filters."
-          actionLabel={canCreate ? "New content" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">SEO score</TableHead>
-                <TableHead className="text-xs text-right">Words</TableHead>
-                <TableHead className="text-xs">Assignee</TableHead>
-                <TableHead className="text-xs">Due</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="text-xs font-medium max-w-[200px] truncate">{c.title}</TableCell>
-                  <TableCell className="text-xs">
-                    {CONTENT_TYPE_LABELS[c.type as ContentType] ?? c.type}
-                  </TableCell>
-                  <TableCell className="text-xs">{c.clientName}</TableCell>
-                  <TableCell>
-                    <ApprovalStatusBadge stage={c.status as ApprovalStage} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 min-w-[100px]">
-                      <Progress value={c.seoScore} className="h-1.5 flex-1" />
-                      <span className="text-[10px] text-muted-foreground w-8">{c.seoScore}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-right">{c.wordCount}</TableCell>
-                  <TableCell className="text-xs">{c.assignee}</TableCell>
-                  <TableCell className="text-xs">
-                    {c.dueDate ? format(new Date(c.dueDate), "MMM d") : "—"}
-                  </TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)}
-                        canDelete={canDelete && canFullyEditMarketingItem(user, c.createdBy)}
-                        onEdit={() => openEdit(c)}
-                        onDelete={() => setDeleteTarget(c)}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(c) => c.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{ icon: FileText, title: "No content items", description: "The queue is empty for current filters.", actionLabel: canCreate ? "New content" : undefined, onAction: canCreate ? openCreate : undefined }}
+        errorMessage="Check your connection and try again."
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

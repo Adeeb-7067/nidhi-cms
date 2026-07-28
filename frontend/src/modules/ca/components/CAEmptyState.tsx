@@ -1,8 +1,9 @@
 import type { LucideIcon } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { CmsEmptyState } from "@/components/cms";
 
+/** CA empty state — icon required for parity with existing call sites. */
 export function CAEmptyState({
-  icon: Icon,
+  icon,
   title,
   description,
   className,
@@ -13,17 +14,11 @@ export function CAEmptyState({
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "flex flex-col items-center justify-center rounded-xl border border-dashed bg-muted/20 py-16 px-6 text-center",
-        className,
-      )}
-    >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted mb-3">
-        <Icon className="h-6 w-6 text-muted-foreground" />
-      </div>
-      <p className="text-sm font-medium">{title}</p>
-      {description && <p className="text-xs text-muted-foreground mt-1 max-w-sm">{description}</p>}
-    </div>
+    <CmsEmptyState
+      icon={icon}
+      title={title}
+      description={description}
+      className={className}
+    />
   );
 }

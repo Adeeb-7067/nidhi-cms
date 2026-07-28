@@ -32,15 +32,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -339,6 +332,222 @@ export default function BdeDashboard() {
 
   const monthLabel = periodStats ? MONTH_NAMES[periodStats.month - 1] : MONTH_NAMES[now.getMonth()];
 
+
+  type LeaderboardRow = (typeof rankedTeam)[number] & { rank: number; pct: number };
+
+  const leaderboardColumns: CmsColumn<LeaderboardRow>[] = [
+    {
+      id: "rank",
+      header: "Rank",
+      headerClassName: "w-10",
+      align: "center",
+      cell: (m) => <RankMedal rank={m.rank} />,
+    },
+    {
+      id: "executive",
+      header: "Executive",
+      cell: (m) => {
+        const isMe = m.id === userId;
+        return (
+          <div className="flex items-center gap-2">
+            <Avatar className="h-7 w-7 shrink-0">
+              <AvatarFallback className={cn("text-[10px] font-bold", isMe && "bg-primary/20 text-primary")}>
+                {String(m.name).charAt(0).toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className={cn("text-xs truncate", isMe && "text-primary font-semibold")}>
+                {String(m.name)}{isMe ? " (You)" : ""}
+              </p>
+              {m.designation ? (
+                <p className="text-[10px] text-muted-foreground">{m.designation}</p>
+              ) : null}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      id: "revenue",
+      header: "Revenue",
+      align: "right",
+      cell: (m) => <span className="tabular-nums font-medium">{formatCompactCurrency(m.revenue)}</span>,
+    },
+    {
+      id: "deals",
+      header: "Deals",
+      align: "right",
+      cell: (m) => <span className="tabular-nums">{m.dealsClosed}</span>,
+    },
+    {
+      id: "followups",
+      header: "Follow-ups",
+      align: "right",
+      headerClassName: "hidden sm:table-cell",
+      className: "hidden sm:table-cell",
+      cell: (m) => (
+        <span className={cn("tabular-nums", m.pendingFollowUps > 0 && "text-amber-600 font-medium")}>
+          {m.pendingFollowUps}
+        </span>
+      ),
+    },
+    {
+      id: "progress",
+      header: "Progress",
+      headerClassName: "hidden sm:table-cell w-28",
+      className: "hidden sm:table-cell w-28",
+      cell: (m) => {
+        const isMe = m.id === userId;
+        return (
+          <div className="flex items-center gap-1.5">
+            <Progress value={m.pct} className={cn("h-1.5 flex-1", isMe && "accent-primary")} />
+            <span className="text-[10px] text-muted-foreground w-7 shrink-0">{m.pct}%</span>
+          </div>
+        );
+      },
+    },
+  ];
+
+  const recentLeadColumns: CmsColumn<(typeof recentLeads)[number]>[] = [
+    {
+      id: "lead",
+      header: "Lead",
+      cell: (lead) => (
+        <>
+          <p className="font-medium">{lead.name}</p>
+          {lead.company ? <p className="text-[10px] text-muted-foreground">{lead.company}</p> : null}
+        </>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (lead) => <SalesStatusBadge variant="lead" value={lead.status} />,
+    },
+    {
+      id: "value",
+      header: "Expected value",
+      align: "right",
+      cell: (lead) => (
+        <span className="tabular-nums">
+          {lead.expectedValue > 0 ? formatCompactCurrency(lead.expectedValue) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (lead) => <span className="text-muted-foreground">{formatSalesDateTime(lead.createdAt)}</span>,
+    },
+    {
+      id: "action",
+      header: "",
+      align: "right",
+      cell: (lead) => (
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
+          <Link href={`/sales/leads/${lead.id}`}>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Button>
+      ),
+    },
+  ];
+
+  const recentProposalColumns: CmsColumn<(typeof recentProposals)[number]>[] = [
+    {
+      id: "title",
+      header: "Title",
+      cell: (p) => <div className="max-w-[160px] truncate font-medium">{p.title}</div>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) => <SalesStatusBadge variant="proposal" value={p.status} />,
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (p) => (
+        <span className="tabular-nums font-medium">{formatCompactCurrency(p.totalAmount ?? 0)}</span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (p) => <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>,
+    },
+    {
+      id: "action",
+      header: "",
+      align: "right",
+      cell: (p) => (
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
+          <Link href={`/sales/proposals/${p.id}`}>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Button>
+      ),
+    },
+  ];
+
+  const followUpColumns: CmsColumn<(typeof upcomingFollowUps)[number]>[] = [
+    {
+      id: "lead",
+      header: "Lead",
+      cell: (fu) => <span className="font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</span>,
+    },
+    {
+      id: "type",
+      header: "Type",
+      cell: (fu) => <span className="capitalize">{fu.type}</span>,
+    },
+    {
+      id: "scheduled",
+      header: "Scheduled",
+      cell: (fu) => {
+        const scheduled = fu.scheduledAt ? new Date(fu.scheduledAt) : null;
+        const isOverdue = fu.status === "overdue" || (scheduled && isPast(scheduled) && !isToday(scheduled));
+        if (!scheduled) return "—";
+        return (
+          <span className={cn(isOverdue && "text-destructive font-medium")}>
+            {isToday(scheduled) ? "Today" : format(scheduled, "MMM d")}
+            {" · "}
+            {format(scheduled, "h:mm a")}
+          </span>
+        );
+      },
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (fu) => {
+        const scheduled = fu.scheduledAt ? new Date(fu.scheduledAt) : null;
+        const isOverdue = fu.status === "overdue" || (scheduled && isPast(scheduled) && !isToday(scheduled));
+        return (
+          <Badge variant={isOverdue ? "destructive" : "secondary"} className="text-[10px] capitalize">
+            {fu.status}
+          </Badge>
+        );
+      },
+    },
+    {
+      id: "action",
+      header: "",
+      align: "right",
+      cell: (fu) => (
+        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
+          <Link href={`/sales/leads/${fu.leadId}`}>
+            <ArrowRight className="h-3 w-3" />
+          </Link>
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -487,76 +696,19 @@ export default function BdeDashboard() {
               ) : rankedTeam.length === 0 ? (
                 <p className="text-xs text-center text-muted-foreground py-8">No team data available</p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs w-10">Rank</TableHead>
-                      <TableHead className="text-xs">Executive</TableHead>
-                      <TableHead className="text-xs text-right">Revenue</TableHead>
-                      <TableHead className="text-xs text-right">Deals</TableHead>
-                      <TableHead className="text-xs text-right hidden sm:table-cell">Follow-ups</TableHead>
-                      <TableHead className="text-xs hidden sm:table-cell">Progress</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {rankedTeam.map((m, i) => {
-                      const rank = i + 1;
-                      const isMe = m.id === userId;
-                      const pct = topRevenue > 0 ? Math.round((m.revenue / topRevenue) * 100) : 0;
-                      return (
-                        <TableRow
-                          key={m.id}
-                          className={cn(
-                            isMe && "bg-primary/5 border-l-2 border-l-primary font-medium",
-                          )}
-                        >
-                          <TableCell className="text-center">
-                            <RankMedal rank={rank} />
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <Avatar className="h-7 w-7 shrink-0">
-                                <AvatarFallback className={cn("text-[10px] font-bold", isMe && "bg-primary/20 text-primary")}>
-                                  {String(m.name).charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="min-w-0">
-                                <p className={cn("text-xs truncate", isMe && "text-primary font-semibold")}>
-                                  {String(m.name)}{isMe ? " (You)" : ""}
-                                </p>
-                                {m.designation ? (
-                                  <p className="text-[10px] text-muted-foreground">{m.designation}</p>
-                                ) : null}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums font-medium">
-                            {formatCompactCurrency(m.revenue)}
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">
-                            {m.dealsClosed}
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums hidden sm:table-cell">
-                            <span className={cn(m.pendingFollowUps > 0 && "text-amber-600 font-medium")}>
-                              {m.pendingFollowUps}
-                            </span>
-                          </TableCell>
-                          <TableCell className="hidden sm:table-cell w-28">
-                            <div className="flex items-center gap-1.5">
-                              <Progress
-                                value={pct}
-                                className={cn("h-1.5 flex-1", isMe && "accent-primary")}
-                              />
-                              <span className="text-[10px] text-muted-foreground w-7 shrink-0">
-                                {pct}%
-                              </span>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
+                <CmsDataTable
+                  embedded
+                  columns={leaderboardColumns}
+                  rows={rankedTeam.map((m, i) => ({
+                    ...m,
+                    rank: i + 1,
+                    pct: topRevenue > 0 ? Math.round((m.revenue / topRevenue) * 100) : 0,
+                  }))}
+                  rowKey={(m) => m.id}
+                  getRowClassName={(m) =>
+                    m.id === userId ? "bg-primary/5 border-l-2 border-l-primary font-medium" : undefined
+                  }
+                />
               )}
             </CardContent>
           </Card>
@@ -618,17 +770,15 @@ export default function BdeDashboard() {
           <CardContent className="p-0 pt-0">
             <Tabs value={activityTab} onValueChange={setActivityTab}>
               <div className="px-4">
-                <TabsList className="h-8">
-                  <TabsTrigger value="leads" className="text-xs h-7">
-                    Recent leads ({recentLeads.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="proposals" className="text-xs h-7">
-                    Proposals ({recentProposals.length})
-                  </TabsTrigger>
-                  <TabsTrigger value="followups" className="text-xs h-7">
-                    Follow-ups ({upcomingFollowUps.length})
-                  </TabsTrigger>
-                </TabsList>
+                <CmsChipTabs
+                  value={activityTab}
+                  onValueChange={setActivityTab}
+                  items={[
+                    { value: "leads", label: "Recent leads", count: recentLeads.length || undefined },
+                    { value: "proposals", label: "Proposals", count: recentProposals.length || undefined },
+                    { value: "followups", label: "Follow-ups", count: upcomingFollowUps.length || undefined },
+                  ]}
+                />
               </div>
 
               <TabsContent value="leads" className="mt-0">
@@ -639,43 +789,7 @@ export default function BdeDashboard() {
                 ) : recentLeads.length === 0 ? (
                   <p className="text-xs text-center text-muted-foreground py-8">No leads assigned yet.</p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Lead</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs text-right">Expected value</TableHead>
-                        <TableHead className="text-xs">Created</TableHead>
-                        <TableHead className="text-xs text-right"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentLeads.map((lead) => (
-                        <TableRow key={lead.id}>
-                          <TableCell className="text-xs">
-                            <p className="font-medium">{lead.name}</p>
-                            {lead.company ? <p className="text-[10px] text-muted-foreground">{lead.company}</p> : null}
-                          </TableCell>
-                          <TableCell>
-                            <SalesStatusBadge variant="lead" value={lead.status} />
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">
-                            {lead.expectedValue > 0 ? formatCompactCurrency(lead.expectedValue) : "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {formatSalesDateTime(lead.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
-                              <Link href={`/sales/leads/${lead.id}`}>
-                                <ArrowRight className="h-3 w-3" />
-                              </Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <CmsDataTable embedded columns={recentLeadColumns} rows={recentLeads} rowKey={(lead) => lead.id} />
                 )}
                 <div className="px-4 py-2 border-t">
                   <Button variant="ghost" size="sm" className="h-7 text-xs w-full" asChild>
@@ -692,42 +806,7 @@ export default function BdeDashboard() {
                 ) : recentProposals.length === 0 ? (
                   <p className="text-xs text-center text-muted-foreground py-8">No proposals yet.</p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Title</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs text-right">Amount</TableHead>
-                        <TableHead className="text-xs">Created</TableHead>
-                        <TableHead className="text-xs text-right"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {recentProposals.map((p) => (
-                        <TableRow key={p.id}>
-                          <TableCell className="text-xs font-medium max-w-[160px]">
-                            <div className="truncate">{p.title}</div>
-                          </TableCell>
-                          <TableCell>
-                            <SalesStatusBadge variant="proposal" value={p.status} />
-                          </TableCell>
-                          <TableCell className="text-xs text-right tabular-nums font-medium">
-                            {formatCompactCurrency(p.totalAmount ?? 0)}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground">
-                            {formatSalesDateTime(p.createdAt)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
-                              <Link href={`/sales/proposals/${p.id}`}>
-                                <ArrowRight className="h-3 w-3" />
-                              </Link>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <CmsDataTable embedded columns={recentProposalColumns} rows={recentProposals} rowKey={(p) => p.id} />
                 )}
                 <div className="px-4 py-2 border-t">
                   <Button variant="ghost" size="sm" className="h-7 text-xs w-full" asChild>
@@ -744,53 +823,17 @@ export default function BdeDashboard() {
                 ) : upcomingFollowUps.length === 0 ? (
                   <p className="text-xs text-center text-muted-foreground py-8">No pending follow-ups.</p>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Lead</TableHead>
-                        <TableHead className="text-xs">Type</TableHead>
-                        <TableHead className="text-xs">Scheduled</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs text-right"></TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {upcomingFollowUps.map((fu) => {
-                        const scheduled = fu.scheduledAt ? new Date(fu.scheduledAt) : null;
-                        const isOverdue = fu.status === "overdue" || (scheduled && isPast(scheduled) && !isToday(scheduled));
-                        return (
-                          <TableRow key={fu.id} className={cn(isOverdue && "bg-destructive/5")}>
-                            <TableCell className="text-xs font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</TableCell>
-                            <TableCell className="text-xs capitalize">{fu.type}</TableCell>
-                            <TableCell className="text-xs">
-                              {scheduled ? (
-                                <span className={cn(isOverdue && "text-destructive font-medium")}>
-                                  {isToday(scheduled) ? "Today" : format(scheduled, "MMM d")}
-                                  {" · "}
-                                  {format(scheduled, "h:mm a")}
-                                </span>
-                              ) : "—"}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={isOverdue ? "destructive" : "secondary"}
-                                className="text-[10px] capitalize"
-                              >
-                                {fu.status}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button variant="ghost" size="sm" className="h-6 w-6 p-0" asChild>
-                                <Link href={`/sales/leads/${fu.leadId}`}>
-                                  <ArrowRight className="h-3 w-3" />
-                                </Link>
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <CmsDataTable
+                    embedded
+                    columns={followUpColumns}
+                    rows={upcomingFollowUps}
+                    rowKey={(fu) => fu.id}
+                    getRowClassName={(fu) => {
+                      const scheduled = fu.scheduledAt ? new Date(fu.scheduledAt) : null;
+                      const isOverdue = fu.status === "overdue" || (scheduled && isPast(scheduled) && !isToday(scheduled));
+                      return isOverdue ? "bg-destructive/5" : undefined;
+                    }}
+                  />
                 )}
                 <div className="px-4 py-2 border-t">
                   <Button variant="ghost" size="sm" className="h-7 text-xs w-full" asChild>

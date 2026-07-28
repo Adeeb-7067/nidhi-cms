@@ -4,28 +4,15 @@
  */
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
-import { RefreshCw } from "lucide-react";
+import { BarChart3, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CmsKpiGrid, type CmsKpiAccent, type CmsKpiItem } from "@/components/cms/cms-kpi";
 
 export type HrmRefKpiTone = "primary" | "info" | "success" | "warning" | "danger" | "purple";
-
-const kpiSurface: Record<HrmRefKpiTone, string> = {
-  primary:
-    "border-primary/25 bg-gradient-to-br from-primary/18 via-primary/8 to-card dark:from-primary/22 dark:via-primary/10",
-  info: "border-info/25 bg-gradient-to-br from-info/18 via-info/8 to-card dark:from-info/22 dark:via-info/10",
-  success:
-    "border-success/25 bg-gradient-to-br from-success/18 via-success/8 to-card dark:from-success/22 dark:via-success/10",
-  warning:
-    "border-warning/30 bg-gradient-to-br from-warning/22 via-warning/10 to-card dark:from-warning/26 dark:via-warning/12",
-  danger:
-    "border-destructive/25 bg-gradient-to-br from-destructive/18 via-destructive/8 to-card dark:from-destructive/22 dark:via-destructive/10",
-  purple:
-    "border-purple-500/25 bg-gradient-to-br from-purple-500/18 via-purple-500/8 to-card dark:from-purple-500/22 dark:via-purple-500/10",
-};
 
 const defaultTones: HrmRefKpiTone[] = ["primary", "info", "success", "warning", "purple"];
 
@@ -106,7 +93,16 @@ export type HrmRefStatItem = {
   valueClassName?: string;
 };
 
-/** Satyakabir StatStrip — gradient stat chips above tables/lists. */
+function toneToCmsAccent(tone: HrmRefKpiTone): CmsKpiAccent {
+  if (tone === "info") return "blue";
+  if (tone === "success") return "green";
+  if (tone === "warning") return "amber";
+  if (tone === "danger") return "red";
+  if (tone === "purple") return "violet";
+  return "default";
+}
+
+/** Satyakabir StatStrip — shared CMS KPI kit for visual parity across the product. */
 export function HrmRefStatStrip({
   stats,
   loading,
@@ -118,47 +114,25 @@ export function HrmRefStatStrip({
   columns?: 2 | 3 | 4 | 5;
   className?: string;
 }) {
-  const colClass =
-    columns === 2
-      ? "sm:grid-cols-2"
-      : columns === 3
-        ? "sm:grid-cols-3"
-        : columns === 5
-          ? "sm:grid-cols-3 xl:grid-cols-5"
-          : "sm:grid-cols-2 xl:grid-cols-4";
-
-  if (loading) {
-    return (
-      <div className={cn("grid grid-cols-2 gap-3", colClass, className)}>
-        {Array.from({ length: columns }).map((_, i) => (
-          <Skeleton key={i} className="h-[4.5rem] rounded-xl" />
-        ))}
-      </div>
-    );
-  }
-
+  const gridCols = (columns === 5 ? 4 : columns) as 2 | 3 | 4;
+  const items: CmsKpiItem[] = stats.map((s, i) => {
+    const tone = s.tone ?? defaultTones[i % defaultTones.length];
+    return {
+      title: s.label,
+      value: s.value,
+      icon: BarChart3,
+      accent: toneToCmsAccent(tone),
+      alert: tone === "danger",
+    };
+  });
   return (
-    <div className={cn("grid grid-cols-2 gap-3", colClass, className)}>
-      {stats.map((s, i) => {
-        const tone = s.tone ?? defaultTones[i % defaultTones.length];
-        return (
-          <div
-            key={s.label}
-            className={cn(
-              "relative overflow-hidden rounded-xl border px-3.5 py-3 shadow-sm transition-shadow hover:shadow-md",
-              kpiSurface[tone],
-            )}
-          >
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {s.label}
-            </p>
-            <p className={cn("mt-1 text-xl font-bold tabular-nums tracking-tight", s.valueClassName ?? "text-foreground")}>
-              {s.value}
-            </p>
-          </div>
-        );
-      })}
-    </div>
+    <CmsKpiGrid
+      items={items}
+      loading={loading}
+      columns={gridCols}
+      count={Math.max(stats.length, gridCols)}
+      className={className}
+    />
   );
 }
 

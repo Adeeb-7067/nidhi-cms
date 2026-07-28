@@ -1,21 +1,12 @@
 import { useMemo, useState } from "react";
-import { Plus, Package, Pencil, Trash2 } from "lucide-react";
+import { Plus, Package, PackageCheck, Pencil, Trash2, IndianRupee } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +34,8 @@ import {
 } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
-import { SalesPageHeader, SalesEmptyState } from "@/modules/sales/components";
+import { SalesPageHeader } from "@/modules/sales/components";
+import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { usePermissions } from "@/modules/permissions/usePermission";
 
 type ProductForm = {
@@ -78,6 +70,11 @@ export default function Products() {
   const [deleteTarget, setDeleteTarget] = useState<SalesProduct | null>(null);
 
   const activeCount = useMemo(() => products.filter((p) => p.status === "active").length, [products]);
+  const inactiveCount = products.length - activeCount;
+  const avgPrice = useMemo(() => {
+    if (!products.length) return 0;
+    return Math.round(products.reduce((s, p) => s + p.price, 0) / products.length);
+  }, [products]);
 
   const addProduct = async () => {
     if (!form.name.trim() || !form.price) {
@@ -156,6 +153,88 @@ export default function Products() {
     }
   };
 
+  const columns: CmsColumn<SalesProduct>[] = [
+    {
+      id: "name",
+      header: "Name",
+      cell: (p) => (
+        <>
+          <p className="font-medium">{p.name}</p>
+          {p.description ? <p className="text-[10px] text-muted-foreground">{p.description}</p> : null}
+        </>
+      ),
+    },
+    { id: "category", header: "Category", cell: (p) => p.category ?? "—" },
+    {
+      id: "price",
+      header: "Price",
+      align: "right",
+      cell: (p) => <span className="tabular-nums">{formatCurrency(p.price)}</span>,
+    },
+    {
+      id: "tax",
+      header: "Tax",
+      align: "right",
+      cell: (p) => `${p.taxPercent}%`,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) =>
+        canManageCatalog ? (
+          <Switch
+            checked={p.status === "active"}
+            onCheckedChange={() => toggleStatus(p.id, p.status)}
+            disabled={updateProduct.isPending}
+          />
+        ) : (
+          <CmsStatusChip label={p.status} tone={p.status === "active" ? "success" : "muted"} />
+        ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (p) => (
+        <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
+      ),
+    },
+    ...(canManageCatalog
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            align: "right" as const,
+            headerClassName: "w-[100px]",
+            cell: (p: SalesProduct) => (
+              <div className="flex items-center justify-end gap-0.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  title="Edit product"
+                  onClick={() => openEdit(p)}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-destructive hover:text-destructive"
+                  title="Delete product"
+                  onClick={() => setDeleteTarget(p)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ),
+          } satisfies CmsColumn<SalesProduct>,
+        ]
+      : []),
+  ];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -164,6 +243,21 @@ export default function Products() {
         breadcrumbs={[
           { label: "Sales", href: "/sales" },
           { label: "Products & services" },
+        ]}
+      />
+
+      <PortalKpiGrid
+        items={[
+          { title: "Catalog size", value: products.length, icon: Package, accent: "blue", delay: 0 },
+          { title: "Active", value: activeCount, icon: PackageCheck, accent: "green", delay: 1 },
+          { title: "Inactive", value: inactiveCount, icon: Package, accent: "amber", delay: 2 },
+          {
+            title: "Avg price",
+            value: formatCurrency(avgPrice),
+            icon: IndianRupee,
+            accent: "violet",
+            delay: 3,
+          },
         ]}
       />
 
@@ -207,87 +301,19 @@ export default function Products() {
         ) : null}
 
         <div className={canManageCatalog ? "lg:col-span-8 space-y-3" : "lg:col-span-12 space-y-3"}>
-          <p className="text-xs text-muted-foreground">{activeCount} active · {products.length} total in catalog</p>
-          {isLoading ? (
-            <div className="space-y-2">
-              {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-            </div>
-          ) : isError ? (
-            <SalesEmptyState icon={Package} title="Failed to load products" actionLabel="Retry" onAction={() => refetch()} />
-          ) : products.length === 0 ? (
-            <SalesEmptyState icon={Package} title="No products" description="Add your first product or service." />
-          ) : (
-            <div className="rounded-xl border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Name</TableHead>
-                    <TableHead className="text-xs">Category</TableHead>
-                    <TableHead className="text-xs text-right">Price</TableHead>
-                    <TableHead className="text-xs text-right">Tax</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    <TableHead className="text-xs">Created</TableHead>
-                    {canManageCatalog ? (
-                      <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
-                    ) : null}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {products.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell>
-                        <p className="text-xs font-medium">{p.name}</p>
-                        {p.description && <p className="text-[10px] text-muted-foreground">{p.description}</p>}
-                      </TableCell>
-                      <TableCell className="text-xs">{p.category ?? "—"}</TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">{formatCurrency(p.price)}</TableCell>
-                      <TableCell className="text-xs text-right">{p.taxPercent}%</TableCell>
-                      <TableCell>
-                        {canManageCatalog ? (
-                          <Switch
-                            checked={p.status === "active"}
-                            onCheckedChange={() => toggleStatus(p.id, p.status)}
-                            disabled={updateProduct.isPending}
-                          />
-                        ) : (
-                          <span className="text-xs capitalize text-muted-foreground">{p.status}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatSalesDateTime(p.createdAt)}
-                      </TableCell>
-                      {canManageCatalog ? (
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-0.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            title="Edit product"
-                            onClick={() => openEdit(p)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                            title="Delete product"
-                            onClick={() => setDeleteTarget(p)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                      ) : null}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
+          <CmsDataTable
+            columns={columns}
+            rows={products}
+            rowKey={(p) => p.id}
+            isLoading={isLoading}
+            error={isError}
+            onRetry={() => refetch()}
+            empty={{
+              icon: Package,
+              title: "No products",
+              description: "Add your first product or service.",
+            }}
+          />
         </div>
       </div>
 

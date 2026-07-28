@@ -6,7 +6,7 @@ import {
   registerSocket,
   unregisterSocket,
   touchPresence,
-} from "../services/presence.js";
+} from "../modules/monitoring/services/presence.js";
 
 let io;
 
@@ -93,8 +93,8 @@ import { usersTable } from "../models/schema/index.js";
 import {
   isUserAccountActive,
   REALTIME_EVENTS_WHEN_INACTIVE,
-} from "../services/user-access.js";
-import { sendHighPriorityFcmToTokens } from "../services/push-notifications.js";
+} from "../modules/identity/services/user-access.js";
+import { sendHighPriorityFcmToTokens } from "../modules/collab/services/push-notifications.js";
 
 async function notifyUser(userId, event, data) {
   const user = await usersTable

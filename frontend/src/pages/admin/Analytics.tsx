@@ -24,15 +24,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   PortalPageShell,
   PortalKpiGrid,
@@ -311,26 +304,20 @@ export default function AdminAnalytics() {
         </div>
       )}
 
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <DashboardSectionLabel
-          title="Analysis views"
-          trailing={
-            <TabsList className="h-8 bg-muted/50 p-0.5">
-              <TabsTrigger value="workforce" className="text-[10px] gap-1 px-2.5 h-7">
-                <Users className="h-3 w-3" />
-                Workforce
-              </TabsTrigger>
-              <TabsTrigger value="defects" className="text-[10px] gap-1 px-2.5 h-7">
-                <Bug className="h-3 w-3" />
-                Defects
-              </TabsTrigger>
-              <TabsTrigger value="clients" className="text-[10px] gap-1 px-2.5 h-7">
-                <Building2 className="h-3 w-3" />
-                Client risk
-              </TabsTrigger>
-            </TabsList>
-          }
-        />
+      <div className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <DashboardSectionLabel title="Analysis views" />
+          <CmsChipTabs
+            value={tab}
+            onValueChange={setTab}
+            items={[
+              { value: "workforce", label: "Workforce" },
+              { value: "defects", label: "Defects" },
+              { value: "clients", label: "Client risk" },
+            ]}
+          />
+        </div>
+        <Tabs value={tab} onValueChange={setTab}>
 
         {/* —— Workforce —— */}
         <TabsContent value="workforce" className="space-y-4 m-0">
@@ -653,63 +640,13 @@ export default function AdminAnalytics() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead className="text-[10px]">Rank</TableHead>
-                          <TableHead className="text-[10px]">Company</TableHead>
-                          <TableHead className="text-[10px] text-center">Risk</TableHead>
-                          <TableHead className="text-[10px] text-center">Delayed</TableHead>
-                          <TableHead className="text-[10px] text-center">Tickets</TableHead>
-                          <TableHead className="text-[10px] text-center">Active proj.</TableHead>
-                          <TableHead className="text-[10px] text-center">Requests</TableHead>
-                          <TableHead className="text-[10px] text-center">Devs</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {rankedClients.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={8} className="h-20 text-center text-xs text-muted-foreground">
-                              No client data
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          rankedClients.map((c, i) => {
-                            const risk = riskLabel(c.risk);
-                            return (
-                              <TableRow key={c.companyId} className="text-xs">
-                                <TableCell className="font-mono text-muted-foreground">{i + 1}</TableCell>
-                                <TableCell>
-                                  <Link
-                                    href="/admin/clients"
-                                    className="font-medium hover:text-primary"
-                                  >
-                                    {c.companyName}
-                                  </Link>
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Badge variant="outline" className={cn("text-[10px]", risk.className)}>
-                                    {risk.label} · {c.risk}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-center tabular-nums">
-                                  {c.delayedProjects ?? 0}
-                                  <span className="text-muted-foreground">
-                                    /{c.totalProjects}
-                                  </span>
-                                </TableCell>
-                                <TableCell className="text-center tabular-nums">{c.openTickets ?? 0}</TableCell>
-                                <TableCell className="text-center tabular-nums">{c.activeProjects}</TableCell>
-                                <TableCell className="text-center tabular-nums">{c.pendingRequests ?? 0}</TableCell>
-                                <TableCell className="text-center tabular-nums">{c.developerCount ?? 0}</TableCell>
-                              </TableRow>
-                            );
-                          })
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    embedded
+                    columns={clientRiskColumns}
+                    rows={rankedClients.map((c, i) => ({ ...c, rank: i + 1 }))}
+                    rowKey={(c) => c.companyId}
+                    empty={{ title: "No client data" }}
+                  />
                 </CardContent>
               </Card>
 
@@ -757,6 +694,7 @@ export default function AdminAnalytics() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
     </PortalPageShell>
   );
 }
@@ -805,6 +743,137 @@ function DistributionList({
   );
 }
 
+type RankedClientRow = CompanyAnalyticsCard & { risk: number; rank: number };
+
+const clientRiskColumns = [
+  {
+    id: "rank",
+    header: "Rank",
+    headerClassName: "w-12",
+    cell: (c: RankedClientRow) => (
+      <span className="font-mono text-muted-foreground">{c.rank}</span>
+    ),
+  },
+  {
+    id: "company",
+    header: "Company",
+    cell: (c: RankedClientRow) => (
+      <Link href="/admin/clients" className="font-medium hover:text-primary">
+        {c.companyName}
+      </Link>
+    ),
+  },
+  {
+    id: "risk",
+    header: "Risk",
+    align: "center",
+    chip: true,
+    cell: (c: RankedClientRow) => {
+      const risk = riskLabel(c.risk);
+      return (
+        <Badge variant="outline" className={cn("text-[10px]", risk.className)}>
+          {risk.label} · {c.risk}
+        </Badge>
+      );
+    },
+  },
+  {
+    id: "delayed",
+    header: "Delayed",
+    align: "center",
+    cell: (c: RankedClientRow) => (
+      <span className="tabular-nums">
+        {c.delayedProjects ?? 0}
+        <span className="text-muted-foreground">/{c.totalProjects}</span>
+      </span>
+    ),
+  },
+  {
+    id: "tickets",
+    header: "Tickets",
+    align: "center",
+    cell: (c: RankedClientRow) => (
+      <span className="tabular-nums">{c.openTickets ?? 0}</span>
+    ),
+  },
+  {
+    id: "activeProjects",
+    header: "Active proj.",
+    align: "center",
+    cell: (c: RankedClientRow) => (
+      <span className="tabular-nums">{c.activeProjects}</span>
+    ),
+  },
+  {
+    id: "requests",
+    header: "Requests",
+    align: "center",
+    cell: (c: RankedClientRow) => (
+      <span className="tabular-nums">{c.pendingRequests ?? 0}</span>
+    ),
+  },
+  {
+    id: "devs",
+    header: "Devs",
+    align: "center",
+    cell: (c: RankedClientRow) => (
+      <span className="tabular-nums">{c.developerCount ?? 0}</span>
+    ),
+  },
+] satisfies CmsColumn<RankedClientRow>[];
+
+const workforceColumns = [
+  {
+    id: "member",
+    header: "Member",
+    cell: (d: DeveloperStats) => <span className="font-medium">{d.name}</span>,
+  },
+  {
+    id: "hours",
+    header: "Hours",
+    align: "right",
+    cell: (d: DeveloperStats) => (
+      <span className="tabular-nums">{d.totalHoursThisMonth}h</span>
+    ),
+  },
+  {
+    id: "gap",
+    header: "Gap",
+    align: "right",
+    cell: (d: DeveloperStats) => {
+      const gap = Math.max(0, MONTHLY_CAPACITY_HOURS - d.totalHoursThisMonth);
+      return (
+        <span
+          className={cn(
+            "tabular-nums",
+            gap > 40 ? "text-amber-600 font-medium" : "text-muted-foreground",
+          )}
+        >
+          {gap > 0 ? `−${gap}h` : "✓"}
+        </span>
+      );
+    },
+  },
+  {
+    id: "utilisation",
+    header: "Utilisation",
+    className: "min-w-[100px]",
+    cell: (d: DeveloperStats) => <Progress value={d.utilisationPct} className="h-1.5" />,
+  },
+  {
+    id: "projects",
+    header: "Projects",
+    align: "center",
+    cell: (d: DeveloperStats) => <span className="tabular-nums">{d.activeProjects}</span>,
+  },
+  {
+    id: "avgDone",
+    header: "Avg done %",
+    align: "center",
+    cell: (d: DeveloperStats) => <span className="tabular-nums">{d.avgCompletionPct}%</span>,
+  },
+] satisfies CmsColumn<DeveloperStats>[];
+
 function WorkforceTable({ developers }: { developers: DeveloperStats[] }) {
   return (
     <PortalContentCard>
@@ -814,52 +883,13 @@ function WorkforceTable({ developers }: { developers: DeveloperStats[] }) {
           Gap = hours still needed to hit {MONTHLY_CAPACITY_HOURS}h target
         </p>
       </div>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="text-[10px]">Member</TableHead>
-              <TableHead className="text-[10px] text-right">Hours</TableHead>
-              <TableHead className="text-[10px] text-right">Gap</TableHead>
-              <TableHead className="text-[10px] min-w-[100px]">Utilisation</TableHead>
-              <TableHead className="text-[10px] text-center">Projects</TableHead>
-              <TableHead className="text-[10px] text-center">Avg done %</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {developers.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center text-xs text-muted-foreground h-16">
-                  No data
-                </TableCell>
-              </TableRow>
-            ) : (
-              developers.map((d) => {
-                const gap = Math.max(0, MONTHLY_CAPACITY_HOURS - d.totalHoursThisMonth);
-                return (
-                  <TableRow key={d.userId} className="text-xs">
-                    <TableCell className="font-medium">{d.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{d.totalHoursThisMonth}h</TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-right tabular-nums",
-                        gap > 40 ? "text-amber-600 font-medium" : "text-muted-foreground",
-                      )}
-                    >
-                      {gap > 0 ? `−${gap}h` : "✓"}
-                    </TableCell>
-                    <TableCell>
-                      <Progress value={d.utilisationPct} className="h-1.5" />
-                    </TableCell>
-                    <TableCell className="text-center tabular-nums">{d.activeProjects}</TableCell>
-                    <TableCell className="text-center tabular-nums">{d.avgCompletionPct}%</TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <CmsDataTable
+        embedded
+        columns={workforceColumns}
+        rows={developers}
+        rowKey={(d) => d.userId}
+        empty={{ title: "No data" }}
+      />
     </PortalContentCard>
   );
 }

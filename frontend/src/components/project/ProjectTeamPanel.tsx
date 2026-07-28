@@ -45,12 +45,13 @@ import {
   ChevronDown,
   X,
   Wallet,
+  Pencil,
 } from "lucide-react";
 import { TeamMemberWorkSheet, type MemberWorkTab } from "@/components/project/TeamMemberWorkSheet";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useQueryClient } from "@tanstack/react-query";
-import { addProjectMembersBatch, getListProjectsQueryKey } from "@/api";
+import { addProjectMembersBatch, updateProjectMember, getListProjectsQueryKey } from "@/api";
 
 function employeeInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -112,6 +113,9 @@ export function ProjectTeamPanel({
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const subTypes = variant === "digital" ? DIGITAL_SUB_TYPES : DEV_SUB_TYPES;
   const [subType, setSubType] = useState<string>(subTypes[0]);
+  const [editMember, setEditMember] = useState<ProjectMember | null>(null);
+  const [editSubType, setEditSubType] = useState<string>(subTypes[0]);
+  const [editing, setEditing] = useState(false);
   const [workSheetOpen, setWorkSheetOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<ProjectMember | null>(null);
   const [workSheetTab, setWorkSheetTab] = useState<MemberWorkTab>("tasks");
@@ -253,6 +257,29 @@ export function ProjectTeamPanel({
       invalidate();
     } catch (err: unknown) {
       toastApiError(err, "Failed to remove member");
+    }
+  };
+
+  const openEditMember = (member: ProjectMember) => {
+    const current = member.subType && (subTypes as readonly string[]).includes(member.subType)
+      ? member.subType
+      : subTypes[0];
+    setEditSubType(current);
+    setEditMember(member);
+  };
+
+  const handleEditMember = async () => {
+    if (!editMember) return;
+    setEditing(true);
+    try {
+      await updateProjectMember(projectId, editMember.userId, { subType: editSubType });
+      toast.success(`Updated ${editMember.name}'s role on this project`);
+      setEditMember(null);
+      invalidate();
+    } catch (err: unknown) {
+      toastApiError(err, "Failed to update member");
+    } finally {
+      setEditing(false);
     }
   };
 
@@ -494,6 +521,21 @@ export function ProjectTeamPanel({
                   {canManage ? (
                   <Button
                     type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={`Edit ${member.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditMember(member);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  ) : null}
+                  {canManage ? (
+                  <Button
+                    type="button"
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
@@ -538,6 +580,69 @@ export function ProjectTeamPanel({
           }
         />
       ) : null}
+
+      <Dialog
+        open={!!editMember}
+        onOpenChange={(next) => {
+          if (!next) setEditMember(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[400px] bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Edit team member</DialogTitle>
+            <DialogDescription className="text-xs">
+              Update {editMember?.name ?? "member"}&apos;s role on this project.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-3 rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+              <EmployeeAvatar
+                name={editMember?.name ?? ""}
+                avatarUrl={
+                  editMember?.avatarUrl ??
+                  (editMember ? userById.get(editMember.userId)?.avatarUrl : null) ??
+                  null
+                }
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-medium truncate">{editMember?.name}</p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {editMember?.employeeId || "—"}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Role on project</Label>
+              <Select value={editSubType} onValueChange={setEditSubType}>
+                <SelectTrigger className="h-9 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {subTypes.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => setEditMember(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void handleEditMember()}
+              disabled={editing || !editMember}
+            >
+              {editing && <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

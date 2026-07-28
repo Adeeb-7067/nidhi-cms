@@ -3,15 +3,7 @@ import { PiggyBank, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency, calcBudgetConsumption, moneySignClass } from "@/modules/finance/constants";
 import {
@@ -91,6 +83,23 @@ export default function BudgetsPage() {
     );
   }
 
+  const chipItems = (["all", "annual", "project"] as const).map((value) => ({
+    value,
+    label: value === "all" ? "All" : value,
+    count: value === "all" ? budgets.length : budgets.filter((b) => b.type === value).length,
+  }));
+  const columns: CmsColumn<Budget>[] = [
+    { id: "budget", header: "Budget", cell: (b) => <span className="font-medium">{b.name}</span> },
+    { id: "type", header: "Type", chip: true, cell: (b) => <span className="capitalize">{b.type}</span> },
+    { id: "fy", header: "FY", cell: (b) => <span className="text-muted-foreground">{b.fiscalYear}</span> },
+    { id: "status", header: "Status", chip: true, cell: (b) => <FinanceStatusBadge variant="budget" value={b.status} /> },
+    { id: "consumption", header: "Consumption", className: "min-w-[120px]", cell: (b) => { const pct = calcBudgetConsumption(b.spent, b.allocated); return <><Progress value={pct} className={cn("h-1.5", b.status === "exceeded" && "[&>div]:bg-red-500")} /><span className="text-[10px] text-muted-foreground">{pct}%</span></>; } },
+    { id: "allocated", header: "Allocated", align: "right", cell: (b) => <span className="tabular-nums">{formatCurrency(b.allocated)}</span> },
+    { id: "spent", header: "Spent", align: "right", cell: (b) => <span className="tabular-nums">{formatCurrency(b.spent)}</span> },
+    { id: "variance", header: "Variance", align: "right", cell: (b) => <span className={cn("font-medium tabular-nums", moneySignClass(b.allocated - b.spent))}>{formatCurrency(Math.abs(b.allocated - b.spent))}</span> },
+    ...(canEdit || canDelete ? [{ id: "actions", header: "Actions", align: "right" as const, cell: (b: Budget) => <div className="flex justify-end gap-1">{canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(b)}><Pencil className="h-3.5 w-3.5" /></Button>}{canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(b)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div> }] : []),
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
@@ -115,15 +124,7 @@ export default function BudgetsPage() {
 
       <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search budget name…" onExport={() => toast.success("Budget export started")} />
 
-      <Tabs value={typeTab} onValueChange={setTypeTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "annual", "project"] as const).map((t) => (
-            <TabsTrigger key={t} value={t} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {t === "all" ? "All" : t} ({t === "all" ? budgets.length : budgets.filter((b) => b.type === t).length})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs value={typeTab} onValueChange={setTypeTab} items={chipItems} />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <ChartGridCell colSpan={8}>
@@ -142,66 +143,13 @@ export default function BudgetsPage() {
         </ChartGridCell>
       </div>
 
-      {filtered.length === 0 ? (
-        <FinanceEmptyState icon={PiggyBank} title="No budgets found" description="Adjust filters or create a new budget." actionLabel="Add budget" onAction={() => setDrawerOpen(true)} />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Budget</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">FY</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Consumption</TableHead>
-                <TableHead className="text-xs text-right">Allocated</TableHead>
-                <TableHead className="text-xs text-right">Spent</TableHead>
-                <TableHead className="text-xs text-right">Variance</TableHead>
-                {(canEdit || canDelete) && <TableHead className="text-xs text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((b) => {
-                const pct = calcBudgetConsumption(b.spent, b.allocated);
-                const variance = b.allocated - b.spent;
-                return (
-                  <TableRow key={b.id} className={cn(b.status === "exceeded" && "bg-red-500/5")}>
-                    <TableCell className="text-xs font-medium">{b.name}</TableCell>
-                    <TableCell className="text-xs capitalize">{b.type}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{b.fiscalYear}</TableCell>
-                    <TableCell><FinanceStatusBadge variant="budget" value={b.status} /></TableCell>
-                    <TableCell className="min-w-[120px]">
-                      <Progress value={pct} className={cn("h-1.5", b.status === "exceeded" && "[&>div]:bg-red-500")} />
-                      <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(b.allocated)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(b.spent)}</TableCell>
-                    <TableCell className={cn("text-xs text-right tabular-nums font-medium", moneySignClass(variance))}>
-                      {formatCurrency(Math.abs(variance))}
-                    </TableCell>
-                    {(canEdit || canDelete) && (
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          {canEdit && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(b)}>
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(b)}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(b) => b.id}
+        getRowClassName={(b) => cn(b.status === "exceeded" && "bg-red-500/5")}
+        empty={{ icon: PiggyBank, title: "No budgets found", description: "Adjust filters or create a new budget.", actionLabel: "Add budget", onAction: () => setDrawerOpen(true) }}
+      />
 
       <BudgetFormModal
         open={drawerOpen}

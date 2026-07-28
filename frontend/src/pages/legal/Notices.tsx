@@ -4,17 +4,16 @@ import { Plus, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockNotices } from "@/modules/legal/mock-data";
 import {
   LegalPageHeader,
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { LegalNotice } from "@/modules/legal/types";
 
 export default function Notices() {
   const [search, setSearch] = useState("");
@@ -33,6 +32,29 @@ export default function Notices() {
     });
   }, [search, direction]);
 
+  const columns = useMemo<CmsColumn<LegalNotice>[]>(
+    () => [
+      { id: "reference", header: "Reference", cell: (n) => <span className="font-mono">{n.reference}</span> },
+      {
+        id: "direction",
+        header: "Direction",
+        chip: true,
+        cell: (n) => (
+          <Badge variant={n.direction === "incoming" ? "secondary" : "outline"} className="text-[10px] capitalize">
+            {n.direction}
+          </Badge>
+        ),
+      },
+      { id: "subject", header: "Subject", cell: (n) => <span className="font-medium max-w-[200px] block truncate">{n.subject}</span> },
+      { id: "counterparty", header: "Counterparty", cell: (n) => n.counterparty },
+      { id: "status", header: "Status", chip: true, cell: (n) => <LegalStatusBadge variant="notice" value={n.status} /> },
+      { id: "dueDate", header: "Due date", cell: (n) => format(new Date(n.dueDate), "MMM d, yyyy") },
+      { id: "risk", header: "Risk", chip: true, cell: (n) => <LegalRiskBadge level={n.risk} /> },
+      { id: "counsel", header: "Counsel", cell: (n) => <CounselAvatar name={n.assignedTo.name} /> },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <LegalPageHeader
@@ -47,51 +69,21 @@ export default function Notices() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search notices…" />
-      <Tabs value={direction} onValueChange={setDirection}>
-        <TabsList className="h-auto flex-wrap gap-1 bg-transparent p-0">
-          <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">All</TabsTrigger>
-          <TabsTrigger value="incoming" className="text-xs data-[state=active]:bg-primary/10">Incoming</TabsTrigger>
-          <TabsTrigger value="outgoing" className="text-xs data-[state=active]:bg-primary/10">Outgoing</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={Mail} title="No notices found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Reference</TableHead>
-                <TableHead className="text-xs">Direction</TableHead>
-                <TableHead className="text-xs">Subject</TableHead>
-                <TableHead className="text-xs">Counterparty</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Due date</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((n) => (
-                <TableRow key={n.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono">{n.reference}</TableCell>
-                  <TableCell>
-                    <Badge variant={n.direction === "incoming" ? "secondary" : "outline"} className="text-[10px] capitalize">
-                      {n.direction}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[200px] truncate">{n.subject}</TableCell>
-                  <TableCell className="text-xs">{n.counterparty}</TableCell>
-                  <TableCell><LegalStatusBadge variant="notice" value={n.status} /></TableCell>
-                  <TableCell className="text-xs">{format(new Date(n.dueDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell><LegalRiskBadge level={n.risk} /></TableCell>
-                  <TableCell><CounselAvatar name={n.assignedTo.name} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsChipTabs
+        value={direction}
+        onValueChange={setDirection}
+        items={[
+          { value: "all", label: "All" },
+          { value: "incoming", label: "Incoming" },
+          { value: "outgoing", label: "Outgoing" },
+        ]}
+      />
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(n) => n.id}
+        empty={{ icon: Mail, title: "No notices found" }}
+      />
     </PortalPageShell>
   );
 }

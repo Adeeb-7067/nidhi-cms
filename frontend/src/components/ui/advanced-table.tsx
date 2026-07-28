@@ -28,6 +28,8 @@ import { useDataViewMode, type DataViewMode } from "@/lib/data-view";
 import { useMobileViewport } from "@/hooks/use-mobile-viewport";
 import { cn } from "@/lib/utils";
 import { effectivePageSize, type TablePaginationProps } from "@/lib/table-pagination";
+import { PageTableSkeleton } from "@/components/loading";
+import { CmsErrorState } from "@/components/cms/cms-empty-state";
 
 export interface Column<T> {
   id: string;
@@ -69,6 +71,11 @@ interface AdvancedTableProps<T> {
   pagination?: TablePaginationProps;
   /** Slice filtered rows client-side when the API returns the full list */
   clientPagination?: TablePaginationProps;
+  isLoading?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
+  errorMessage?: string;
+  loadingRows?: number;
 }
 
 /** Light tinted card backgrounds (cycles per row); dark mode uses muted equivalents */
@@ -105,27 +112,34 @@ function DefaultGridCard<T>({
   return (
     <Card
       className={cn(
-        "p-0 overflow-hidden border shadow-sm transition-all duration-200",
+        "overflow-hidden border shadow-sm transition-all duration-150",
         tone,
-        onRowClick && "cursor-pointer hover:shadow-md hover:border-primary/35 hover:-translate-y-0.5",
+        onRowClick && "cursor-pointer hover:shadow-md hover:border-primary/30",
       )}
       onClick={() => onRowClick?.(item)}
     >
       {primary && (
-        <div className="mb-0 min-w-0 px-4 pt-4 pb-3 bg-white/50 dark:bg-black/15 border-b border-border/40">
-          {primary.cell
-            ? primary.cell(item)
-            : primary.accessorKey
-              ? String(item[primary.accessorKey] ?? "")
-              : null}
+        <div className="min-w-0 border-b border-border/40 bg-background/50 px-3.5 py-2.5 dark:bg-black/10">
+          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {primary.header}
+          </p>
+          <div className="text-sm font-medium leading-snug">
+            {primary.cell
+              ? primary.cell(item)
+              : primary.accessorKey
+                ? String(item[primary.accessorKey] ?? "")
+                : null}
+          </div>
         </div>
       )}
       {bodyCols.length > 0 && (
-        <dl className="space-y-2 px-4 py-3">
-          {bodyCols.map((col) => (
-            <div key={col.id} className="flex justify-between gap-3 text-xs">
-              <dt className="text-muted-foreground shrink-0">{col.header}</dt>
-              <dd className="text-right font-medium min-w-0 text-foreground text-sm leading-relaxed">
+        <dl className="space-y-1.5 px-3.5 py-2.5">
+          {bodyCols.slice(0, 5).map((col) => (
+            <div key={col.id} className="min-w-0">
+              <dt className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                {col.header}
+              </dt>
+              <dd className="mt-0.5 text-xs leading-snug text-foreground">
                 {getColumnDetailContent(col, item)}
               </dd>
             </div>
@@ -134,7 +148,7 @@ function DefaultGridCard<T>({
       )}
       {actionsCol?.cell && (
         <div
-          className="px-4 py-3 border-t border-border/40 bg-white/40 dark:bg-black/10 flex justify-end"
+          className="flex justify-end border-t border-border/40 bg-background/40 px-3 py-2 dark:bg-black/10"
           onClick={(e) => e.stopPropagation()}
         >
           {actionsCol.cell(item)}
@@ -156,20 +170,37 @@ export function AdvancedTable<T>({
   defaultViewMode = "table",
   showViewToggle = true,
   renderGridCard,
-  gridClassName = "grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4",
+  gridClassName = "grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3",
   showRowDetails = true,
   getRowClassName,
   pagination,
   clientPagination,
+  isLoading,
+  error,
+  onRetry,
+  errorMessage,
+  loadingRows = 8,
 }: AdvancedTableProps<T>) {
   const [viewMode, setViewMode] = useDataViewMode(viewStorageKey, defaultViewMode);
   const isMobile = useMobileViewport();
   const effectiveViewMode: DataViewMode = isMobile ? "grid" : viewMode;
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(
-    columns.reduce((acc, col) => ({ ...acc, [col.id]: true }), {}),
-  );
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    const defaults = columns.reduce<Record<string, boolean>>(
+      (acc, col) => ({ ...acc, [col.id]: true }),
+      {},
+    );
+    if (viewStorageKey && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(`cms-adv-cols:${viewStorageKey}`);
+        if (raw) return { ...defaults, ...(JSON.parse(raw) as Record<string, boolean>) };
+      } catch {
+        /* ignore */
+      }
+    }
+    return defaults;
+  });
 
   useEffect(() => {
     setVisibleColumns((prev) => {
@@ -181,9 +212,6 @@ export function AdvancedTable<T>({
           changed = true;
         }
       }
-      // Returning the same reference when nothing changed lets React bail out
-      // of the re-render — callers commonly pass a new `columns` array literal
-      // on every parent render, which would otherwise force a re-render here.
       return changed ? next : prev;
     });
   }, [columns]);
@@ -233,7 +261,13 @@ export function AdvancedTable<T>({
   }, [filteredData.length, clientPagination?.page, clientPagination?.limit]);
 
   const toggleColumn = (id: string) => {
-    setVisibleColumns((prev) => ({ ...prev, [id]: !prev[id] }));
+    setVisibleColumns((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      if (viewStorageKey && typeof window !== "undefined") {
+        localStorage.setItem(`cms-adv-cols:${viewStorageKey}`, JSON.stringify(next));
+      }
+      return next;
+    });
   };
 
   const activeColumns = columns.filter(
@@ -284,16 +318,24 @@ export function AdvancedTable<T>({
     doc.save(`${filename}.pdf`);
   };
 
+  if (isLoading) {
+    return <PageTableSkeleton rows={loadingRows} columns={columns.length} showToolbar />;
+  }
+
+  if (error) {
+    return <CmsErrorState message={errorMessage} onRetry={onRetry} />;
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div className="space-y-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {searchKey ? (
-          <div className="relative w-full sm:max-w-sm">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-foreground/60" strokeWidth={2} />
+          <div className="relative w-full sm:max-w-xs">
+            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
               type="search"
               placeholder={searchPlaceholder}
-              className="pl-8 w-full bg-background"
+              className="h-8 w-full bg-background pl-8 text-xs"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
@@ -302,15 +344,15 @@ export function AdvancedTable<T>({
           <div className="flex-1" />
         )}
 
-        <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           {showViewToggle && !isMobile ? (
             <DataViewToggle value={viewMode} onChange={setViewMode} />
           ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="h-9 gap-1 text-foreground">
-                <Download className="h-4 w-4 shrink-0" strokeWidth={2} />
+              <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                <Download className="h-3.5 w-3.5 shrink-0" />
                 <span className="hidden sm:inline">Export</span>
               </Button>
             </DropdownMenuTrigger>
@@ -318,10 +360,10 @@ export function AdvancedTable<T>({
               <DropdownMenuLabel>Export As</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={exportCSV} className="gap-2 cursor-pointer">
-                <TableIcon className="h-4 w-4 text-foreground" strokeWidth={2} /> CSV
+                <TableIcon className="h-3.5 w-3.5" /> CSV
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportPDF} className="gap-2 cursor-pointer">
-                <FileText className="h-4 w-4 text-foreground" strokeWidth={2} /> PDF
+                <FileText className="h-3.5 w-3.5" /> PDF
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -329,26 +371,26 @@ export function AdvancedTable<T>({
           {effectiveViewMode === "table" && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1 text-foreground">
-                  <SlidersHorizontal className="h-4 w-4 shrink-0" strokeWidth={2} />
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+                  <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
                   <span className="hidden sm:inline">Columns</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-[200px]">
-                <DropdownMenuLabel>Toggle Columns</DropdownMenuLabel>
+                <DropdownMenuLabel>Show columns</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {columns
-                  .filter((col) => !col.detailOnly)
+                  .filter((col) => !col.detailOnly && col.id !== "actions")
                   .map((col) => (
-                  <DropdownMenuCheckboxItem
-                    key={col.id}
-                    className="capitalize"
-                    checked={visibleColumns[col.id]}
-                    onCheckedChange={() => toggleColumn(col.id)}
-                  >
-                    {col.header}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                    <DropdownMenuCheckboxItem
+                      key={col.id}
+                      checked={visibleColumns[col.id]}
+                      onCheckedChange={() => toggleColumn(col.id)}
+                      onSelect={(e) => e.preventDefault()}
+                    >
+                      {col.header}
+                    </DropdownMenuCheckboxItem>
+                  ))}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
@@ -374,29 +416,32 @@ export function AdvancedTable<T>({
             ))}
           </div>
         ) : (
-          <div className="rounded-md border bg-card py-16 text-center text-sm text-muted-foreground">
+          <div className="rounded-md border border-border/60 bg-card py-10 text-center text-xs text-muted-foreground">
             No results found.
           </div>
         )
       ) : (
-        <div className="rounded-md border bg-card text-card-foreground shadow-sm overflow-hidden">
+        <div className="overflow-hidden rounded-md border border-border/60 bg-card">
           <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
+            <TableHeader className="bg-muted/70 [&_tr]:border-border/60">
+              <TableRow className="border-b hover:bg-muted/70">
                 {showRowDetails && (
-                  <TableHead className="w-10 py-3" aria-label="Expand row" />
+                  <TableHead className="h-8 w-8 bg-muted/70 px-1" aria-label="Expand row" />
                 )}
                 {activeColumns.map((col) => (
                   <TableHead
                     key={col.id}
-                    className={cn("font-semibold text-foreground py-3", col.className)}
+                    className={cn(
+                      "h-8 bg-muted/70 px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground",
+                      col.className,
+                    )}
                   >
                     {col.header}
                   </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody>
+            <TableBody className="bg-background">
               {displayData.length > 0 ? (
                 displayData.map((item, rowIndex) => {
                   const isExpanded = expandedRow === rowIndex;
@@ -405,18 +450,19 @@ export function AdvancedTable<T>({
                       <TableRow
                         onClick={() => onRowClick?.(item)}
                         className={cn(
-                          isExpanded && "bg-muted/30",
-                          onRowClick ? "cursor-pointer hover:bg-muted/50" : "hover:bg-muted/30",
+                          "border-b border-border/30 bg-background transition-colors last:border-0 hover:bg-muted/20",
+                          isExpanded && "bg-muted/15",
+                          onRowClick && "cursor-pointer",
                           getRowClassName?.(item),
                         )}
                       >
                         {showRowDetails && (
-                          <TableCell className="py-2 w-10 align-top">
+                          <TableCell className="w-8 px-1 py-1 align-middle">
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 shrink-0 text-foreground"
+                              className="h-6 w-6 shrink-0 text-muted-foreground"
                               aria-expanded={isExpanded}
                               aria-label={isExpanded ? "Collapse details" : "Expand details"}
                               onClick={(e) => {
@@ -425,9 +471,9 @@ export function AdvancedTable<T>({
                               }}
                             >
                               {isExpanded ? (
-                                <ChevronDown className="h-4 w-4" strokeWidth={2} />
+                                <ChevronDown className="h-3.5 w-3.5" />
                               ) : (
-                                <ChevronRight className="h-4 w-4" strokeWidth={2} />
+                                <ChevronRight className="h-3.5 w-3.5" />
                               )}
                             </Button>
                           </TableCell>
@@ -436,17 +482,16 @@ export function AdvancedTable<T>({
                           <TableCell
                             key={col.id}
                             className={cn(
-                              "py-3",
-                              col.id === "actions" ? "align-middle" : "align-top",
+                              "px-2.5 py-1.5 align-middle text-xs text-foreground",
                               col.className,
                             )}
                           >
                             <div
                               className={cn(
-                                "text-sm leading-snug",
+                                "leading-snug",
                                 col.id === "actions"
                                   ? "whitespace-nowrap"
-                                  : "whitespace-normal break-words min-w-[80px] max-w-[420px]",
+                                  : "min-w-0 max-w-[360px] break-words",
                               )}
                             >
                               {col.cell
@@ -460,7 +505,7 @@ export function AdvancedTable<T>({
                       </TableRow>
                       {showRowDetails && isExpanded && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={tableColSpan} className="p-0 border-b">
+                          <TableCell colSpan={tableColSpan} className="border-b p-0">
                             <TableDetailPanel item={item} columns={detailColumns} />
                           </TableCell>
                         </TableRow>
@@ -472,7 +517,7 @@ export function AdvancedTable<T>({
                 <TableRow>
                   <TableCell
                     colSpan={tableColSpan || 1}
-                    className="h-24 text-center text-muted-foreground"
+                    className="h-16 text-center text-xs text-muted-foreground"
                   >
                     No results found.
                   </TableCell>
@@ -491,7 +536,7 @@ export function AdvancedTable<T>({
           onPageChange={resolvedPagination.onPageChange}
           onLimitChange={resolvedPagination.onLimitChange}
           pageSizeOptions={resolvedPagination.pageSizeOptions}
-          className="-mx-0 mt-0 rounded-b-lg"
+          className="rounded-md border border-border/40"
         />
       )}
     </div>

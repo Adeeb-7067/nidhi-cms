@@ -5,14 +5,7 @@ import { ArrowLeft, KeyRound, UserPlus, Wallet, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   formatCurrency,
   PAYMENT_MODE_LABELS,
@@ -62,6 +55,78 @@ export default function SubscriptionDetailPage() {
 
   const activeSeats = sub.assignments.filter((a) => a.isActive);
   const expenses = sub.expenses ?? [];
+
+  const seatColumns: CmsColumn<(typeof activeSeats)[number]>[] = [
+    {
+      id: "employee",
+      header: "Employee",
+      cell: (a) => <span className="font-medium">{a.employeeName ?? `#${a.employeeId}`}</span>,
+    },
+    {
+      id: "email",
+      header: "Seat email",
+      cell: (a) => <span className="text-muted-foreground">{a.seatEmail ?? "—"}</span>,
+    },
+    {
+      id: "since",
+      header: "Since",
+      cell: (a) => (
+        <span className="text-muted-foreground">{format(new Date(a.assignedAt), "MMM d, yyyy")}</span>
+      ),
+    },
+    ...(canEdit
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            align: "right" as const,
+            cell: (a: (typeof activeSeats)[number]) => (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs text-destructive"
+                onClick={() => setRevokeId(a.id)}
+              >
+                <UserMinus className="h-3.5 w-3.5" />
+                Revoke
+              </Button>
+            ),
+          } satisfies CmsColumn<(typeof activeSeats)[number]>,
+        ]
+      : []),
+  ];
+
+  const expenseColumns: CmsColumn<(typeof expenses)[number]>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (e) => format(new Date(e.date), "MMM d, yyyy"),
+    },
+    {
+      id: "expense",
+      header: "Expense",
+      cell: (e) => (
+        <>
+          <Link href="/finance/expenses" className="font-mono hover:text-primary">
+            {e.reference}
+          </Link>
+          <div className="text-[10px] text-muted-foreground">{PAYMENT_MODE_LABELS[e.paymentMode]}</div>
+        </>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (e) => <span className="tabular-nums font-medium">{formatCurrency(e.amount)}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (e) => <FinanceStatusBadge variant="expense" value={e.status} />,
+    },
+  ];
 
   const handleRevoke = async () => {
     if (revokeId == null) return;
@@ -167,42 +232,7 @@ export default function SubscriptionDetailPage() {
                 className="py-10"
               />
             ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Employee</TableHead>
-                      <TableHead className="text-xs">Seat email</TableHead>
-                      <TableHead className="text-xs">Since</TableHead>
-                      {canEdit && <TableHead className="text-xs text-right">Actions</TableHead>}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeSeats.map((a) => (
-                      <TableRow key={a.id}>
-                        <TableCell className="text-xs font-medium">{a.employeeName ?? `#${a.employeeId}`}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{a.seatEmail ?? "—"}</TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(a.assignedAt), "MMM d, yyyy")}
-                        </TableCell>
-                        {canEdit && (
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 gap-1 text-xs text-destructive"
-                              onClick={() => setRevokeId(a.id)}
-                            >
-                              <UserMinus className="h-3.5 w-3.5" />
-                              Revoke
-                            </Button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <CmsDataTable columns={seatColumns} rows={activeSeats} rowKey={(a) => a.id} embedded />
             )}
           </CardContent>
         </Card>
@@ -227,39 +257,7 @@ export default function SubscriptionDetailPage() {
                 className="py-10"
               />
             ) : (
-              <div className="rounded-lg border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Date</TableHead>
-                      <TableHead className="text-xs">Expense</TableHead>
-                      <TableHead className="text-xs text-right">Amount</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {expenses.map((e) => (
-                      <TableRow key={e.id}>
-                        <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                        <TableCell className="text-xs">
-                          <Link href="/finance/expenses" className="font-mono hover:text-primary">
-                            {e.reference}
-                          </Link>
-                          <div className="text-[10px] text-muted-foreground">
-                            {PAYMENT_MODE_LABELS[e.paymentMode]}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs text-right tabular-nums font-medium">
-                          {formatCurrency(e.amount)}
-                        </TableCell>
-                        <TableCell>
-                          <FinanceStatusBadge variant="expense" value={e.status} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <CmsDataTable columns={expenseColumns} rows={expenses} rowKey={(e) => e.id} embedded />
             )}
           </CardContent>
         </Card>

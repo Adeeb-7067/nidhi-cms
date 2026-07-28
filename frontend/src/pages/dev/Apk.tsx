@@ -4,23 +4,22 @@ import {
   useGetApkReleases,
   useCreateApkRelease,
   getGetApkReleasesQueryKey,
+  type ApkRelease,
   type ApkReleaseAudience,
 } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Smartphone, Download, Loader2, Info, Briefcase, Package, Rocket } from "lucide-react";
+import { Plus, Smartphone, Download, Loader2, Briefcase, Package, Rocket, Calendar } from "lucide-react";
 import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevToolbar,
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { PageCardGridSkeleton } from "@/components/loading";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,6 +41,8 @@ import {
 
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { FileUploader } from "@/components/ui/file-uploader";
+
+type ApkRow = ApkRelease;
 
 function isStoredFileUrl(value: string): boolean {
   const trimmed = value.trim();
@@ -93,7 +94,7 @@ export default function DevApk() {
   const [open, setOpen] = useState(false);
 
   const { data: projectsData, isLoading: projectsLoading } = useListProjects({ limit: 50 });
-  const { data: releasesData, isLoading: releasesLoading } = useGetApkReleases(
+  const { data: releasesData, isLoading: releasesLoading, isError: releasesError, refetch: refetchReleases } = useGetApkReleases(
     selectedProjectId!,
     {
       query: {
@@ -177,6 +178,90 @@ export default function DevApk() {
     };
   }, [projectsData?.projects, releasesData, selectedProjectId]);
 
+  const columns = useMemo<CmsColumn<ApkRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Release",
+        cell: (apk) => (
+          <div className="min-w-0">
+            <p className="font-medium line-clamp-2" title={resolveApkDisplayName(apk)}>
+              {resolveApkDisplayName(apk)}
+            </p>
+            <p className="text-[10px] text-muted-foreground">{formatApkReleaseSubtitle(apk)}</p>
+          </div>
+        ),
+      },
+      {
+        id: "platform",
+        header: "Platform",
+        chip: true,
+        cell: (apk) => (
+          <Badge variant="secondary" className="capitalize text-[10px]">
+            {apk.platform}
+          </Badge>
+        ),
+      },
+      {
+        id: "type",
+        header: "Type",
+        chip: true,
+        cell: (apk) => (
+          <Badge variant="outline" className={cn("text-[10px]", getReleaseTypeColor(apk.releaseType))}>
+            {apk.releaseType}
+          </Badge>
+        ),
+      },
+      {
+        id: "audience",
+        header: "Audience",
+        chip: true,
+        cell: (apk) => (
+          <Badge variant="outline" className={cn("text-[10px]", getApkAudienceBadgeClass(apk.audience))}>
+            {getApkAudienceLabel(apk.audience)}
+          </Badge>
+        ),
+      },
+      {
+        id: "uploader",
+        header: "Uploaded by",
+        cell: (apk) => <span className="text-xs text-muted-foreground">{apk.uploaderName}</span>,
+      },
+      {
+        id: "released",
+        header: "Released",
+        cell: (apk) => (
+          <span className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
+            <Calendar className="h-3 w-3 shrink-0" />
+            {apk.createdAt
+              ? new Date(apk.createdAt).toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric",
+                })
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Download",
+        align: "right",
+        hideable: false,
+        cell: (apk) => (
+          <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
+            <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
+              <Download className="mr-1.5 h-3 w-3" />
+              APK
+            </a>
+          </Button>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const releases = releasesData ?? [];
   const getAudienceColor = getApkAudienceBadgeClass;
 
   return (
@@ -241,7 +326,7 @@ export default function DevApk() {
         ]}
       />
 
-      <DevToolbar>
+      <CmsFilterBar>
         <div className="w-full sm:max-w-md space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">
             Select a project to view its releases
@@ -250,7 +335,7 @@ export default function DevApk() {
             value={selectedProjectId?.toString()}
             onValueChange={(v) => setSelectedProjectId(parseInt(v))}
           >
-            <SelectTrigger className="h-9 text-xs bg-muted/30">
+            <SelectTrigger className="h-9 text-xs bg-background">
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
             <SelectContent>
@@ -262,7 +347,7 @@ export default function DevApk() {
             </SelectContent>
           </Select>
         </div>
-      </DevToolbar>
+      </CmsFilterBar>
 
         <Dialog open={open} onOpenChange={handleDialogOpenChange}>
           <DialogContent className="sm:max-w-[640px] max-h-[min(92dvh,900px)] overflow-y-auto bg-card border-border">
@@ -468,67 +553,82 @@ export default function DevApk() {
           title="Select a project"
           description="Choose a project above to view its APK releases or upload a new build."
         />
-      ) : releasesLoading ? (
-        <PageCardGridSkeleton count={3} itemClassName="h-48" />
-      ) : !releasesData || releasesData.length === 0 ? (
-        <DevEmptyState
-          icon={Info}
-          title="No releases found"
-          description='There are no releases for this project yet. Use "Upload Release" to add one.'
-        />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {releasesData.map((release) => (
-            <Card key={release.id} className="bg-card hover:border-primary/50 transition-colors">
-              <CardHeader className="pb-2 p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <Badge variant="outline" className={cn("text-[10px]", getReleaseTypeColor(release.releaseType))}>
-                    {release.releaseType.toUpperCase()}
-                  </Badge>
-                  <Badge variant="outline" className={cn("text-[10px]", getAudienceColor(release.audience))}>
-                    {getApkAudienceLabel(release.audience).toUpperCase()}
-                  </Badge>
-                </div>
-                <CardTitle
-                  className="text-base font-semibold leading-snug sm:text-lg"
-                  title={resolveApkDisplayName(release)}
-                >
-                  <span className="line-clamp-2">{resolveApkDisplayName(release)}</span>
-                </CardTitle>
-                <CardDescription className="space-y-1.5 text-xs">
-                  <span className="block text-foreground/80">
-                    {formatApkReleaseSubtitle(release)}
-                  </span>
-                  <span className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0">
-                      {release.platform}
-                    </Badge>
-                    <span className="text-muted-foreground">
-                      {new Date(release.createdAt).toLocaleDateString()}
-                    </span>
-                  </span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4 p-4">
-                {release.changelog && (
-                  <div className="text-xs text-muted-foreground line-clamp-3 bg-muted/30 p-2 rounded">
-                    {release.changelog}
-                  </div>
+        <CmsDataTable
+          columns={columns}
+          rows={releases}
+          rowKey={(apk) => apk.id}
+          isLoading={releasesLoading}
+          error={releasesError}
+          onRetry={() => refetchReleases()}
+          viewStorageKey="dev-apk"
+          defaultViewMode="grid"
+          empty={{
+            icon: Smartphone,
+            title: "No releases found",
+            description: 'There are no releases for this project yet. Use "Upload Release" to add one.',
+          }}
+          renderGridCard={(apk) => {
+            const index = releases.findIndex((a) => a.id === apk.id);
+            const isLatest = index === 0;
+            return (
+              <div
+                className={cn(
+                  "relative flex h-full flex-col overflow-hidden rounded-xl border bg-card shadow-sm",
+                  isLatest ? "border-primary ring-1 ring-primary/20 shadow-md" : "border-border/60",
                 )}
-                <div className="flex items-center justify-between pt-2">
-                  <div className="text-[10px] text-muted-foreground">
-                    By {release.uploaderName}
+              >
+                {isLatest ? (
+                  <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-bl-lg">
+                    LATEST
                   </div>
-                  <Button size="sm" className="h-8 text-xs" asChild>
-                    <a href={release.fileUrl} target="_blank" rel="noopener noreferrer">
-                      <Download className="mr-2 h-3.5 w-3.5" /> Download
-                    </a>
-                  </Button>
+                ) : null}
+                <div className="border-b border-border/50 bg-muted/20 p-4">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <Badge variant="outline" className={cn("text-[10px]", getReleaseTypeColor(apk.releaseType))}>
+                      {apk.releaseType.toUpperCase()}
+                    </Badge>
+                    <Badge variant="outline" className={cn("text-[10px]", getAudienceColor(apk.audience))}>
+                      {getApkAudienceLabel(apk.audience).toUpperCase()}
+                    </Badge>
+                  </div>
+                  <p
+                    className="text-sm font-semibold leading-snug line-clamp-2 sm:text-base"
+                    title={resolveApkDisplayName(apk)}
+                  >
+                    {resolveApkDisplayName(apk)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">{formatApkReleaseSubtitle(apk)}</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="capitalize text-[10px] px-1.5 py-0">
+                      {apk.platform}
+                    </Badge>
+                    <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(apk.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <div className="flex flex-1 flex-col gap-3 p-4">
+                  {apk.changelog ? (
+                    <div className="rounded-md border border-border bg-background p-2 text-[10px] text-muted-foreground line-clamp-3">
+                      {apk.changelog}
+                    </div>
+                  ) : null}
+                  <div className="mt-auto flex items-center justify-between gap-2 pt-1">
+                    <span className="text-[10px] text-muted-foreground truncate">By {apk.uploaderName}</span>
+                    <Button size="sm" className="h-8 text-xs shrink-0" variant={isLatest ? "default" : "outline"} asChild>
+                      <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
+                        <Download className="mr-2 h-3.5 w-3.5" /> Download
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            );
+          }}
+          gridClassName="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+        />
       )}
     </DevPageShell>
   );

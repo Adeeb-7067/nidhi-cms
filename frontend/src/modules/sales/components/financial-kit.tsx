@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
   AlertCircle,
@@ -15,14 +15,9 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsKpiCard } from "@/components/cms/cms-kpi";
+import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   FinancialTimelineEvent,
@@ -103,34 +98,19 @@ export function FinancialSummaryCard({
   title: string;
   value: string | number;
   hint?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: LucideIcon;
   accent?: "blue" | "green" | "amber" | "red" | "violet";
   alert?: boolean;
 }) {
-  const accents = {
-    blue: "text-blue-600 bg-blue-500/10",
-    green: "text-emerald-600 bg-emerald-500/10",
-    amber: "text-amber-600 bg-amber-500/10",
-    red: "text-red-600 bg-red-500/10",
-    violet: "text-violet-600 bg-violet-500/10",
-  };
   return (
-    <Card className={cn(alert && "border-red-500/30")}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-              {title}
-            </p>
-            <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
-            {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
-          </div>
-          <div className={cn("rounded-lg p-2 shrink-0", accents[accent])}>
-            <Icon className="h-4 w-4" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <CmsKpiCard
+      title={title}
+      value={value}
+      hint={hint}
+      icon={Icon}
+      accent={accent}
+      alert={alert}
+    />
   );
 }
 
@@ -267,75 +247,83 @@ export function PaymentHistoryTable({
   showReceiptLink?: boolean;
   showInvoiceLink?: boolean;
 }) {
+  const columns = useMemo(() => {
+    const cols: CmsColumn<PartialPayment>[] = [
+      {
+        id: "paymentDate",
+        header: "Payment date",
+        cell: (p) => (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {formatSalesPaymentDate(p.paymentDate)}
+          </span>
+        ),
+      },
+      {
+        id: "createdAt",
+        header: "Created at",
+        cell: (p) => (
+          <span className="text-muted-foreground whitespace-nowrap">
+            {formatSalesDateTime(p.createdAt)}
+          </span>
+        ),
+      },
+      {
+        id: "amount",
+        header: "Amount",
+        cell: (p) => <span className="font-medium tabular-nums">{formatCurrency(p.amount)}</span>,
+      },
+      { id: "mode", header: "Mode", cell: (p) => p.mode },
+      {
+        id: "transactionId",
+        header: "Transaction ID",
+        cell: (p) => <span className="font-mono text-muted-foreground">{p.transactionId}</span>,
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (p) => <SalesStatusBadge variant="partialPayment" value={p.status} />,
+      },
+    ];
+    if (showInvoiceLink) {
+      cols.push({
+        id: "invoice",
+        header: "Invoice",
+        cell: (p) =>
+          p.invoiceId ? (
+            <Link href={`/sales/invoices/${p.invoiceId}`} className="font-mono text-primary hover:underline">
+              {p.invoiceNumber ?? `INV-${p.invoiceId}`}
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      });
+    }
+    if (showReceiptLink) {
+      cols.push({
+        id: "receipt",
+        header: "Receipt",
+        align: "right",
+        cell: (p) =>
+          p.receiptId ? (
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+              <Link href={`/sales/receipts/${p.receiptId}`}>{p.receiptNumber}</Link>
+            </Button>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">—</span>
+          ),
+      });
+    }
+    return cols;
+  }, [showInvoiceLink, showReceiptLink]);
+
   if (payments.length === 0) {
     return (
       <p className="text-xs text-muted-foreground py-4 text-center">No payments recorded yet.</p>
     );
   }
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/30">
-            <TableHead className="text-xs">Payment date</TableHead>
-            <TableHead className="text-xs">Created at</TableHead>
-            <TableHead className="text-xs">Amount</TableHead>
-            <TableHead className="text-xs">Mode</TableHead>
-            <TableHead className="text-xs">Transaction ID</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
-            {showInvoiceLink && <TableHead className="text-xs">Invoice</TableHead>}
-            {showReceiptLink && <TableHead className="text-xs text-right">Receipt</TableHead>}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {payments.map((p) => (
-            <TableRow key={p.id}>
-              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatSalesPaymentDate(p.paymentDate)}
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatSalesDateTime(p.createdAt)}
-              </TableCell>
-              <TableCell className="text-xs font-medium tabular-nums">
-                {formatCurrency(p.amount)}
-              </TableCell>
-              <TableCell className="text-xs">{p.mode}</TableCell>
-              <TableCell className="text-xs font-mono text-muted-foreground">
-                {p.transactionId}
-              </TableCell>
-              <TableCell>
-                <SalesStatusBadge variant="partialPayment" value={p.status} />
-              </TableCell>
-              {showInvoiceLink && (
-                <TableCell className="text-xs font-mono">
-                  {p.invoiceId ? (
-                    <Link
-                      href={`/sales/invoices/${p.invoiceId}`}
-                      className="text-primary hover:underline"
-                    >
-                      {p.invoiceNumber ?? `INV-${p.invoiceId}`}
-                    </Link>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-              )}
-              {showReceiptLink && (
-                <TableCell className="text-right">
-                  {p.receiptId ? (
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/receipts/${p.receiptId}`}>{p.receiptNumber}</Link>
-                    </Button>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-              )}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <CmsDataTable embedded columns={columns} rows={payments} rowKey={(p) => p.id} />
   );
 }
 

@@ -10,19 +10,15 @@ import { useNotificationClick } from "@/hooks/use-notification-click";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageNotificationListSkeleton } from "@/components/loading";
-import { Tabs } from "@/components/ui/tabs";
 import { Bell, CheckCheck, ChevronRight, Mail, MailOpen } from "lucide-react";
 import {
   PortalPageShell,
   PortalPageHero,
   PortalKpiGrid,
-  PortalToolbar,
-  PortalTabsList,
-  PortalTabsTrigger,
-  PortalContentCard,
   PortalEmptyState,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs } from "@/components/cms";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { stopPersistentAlert } from "@/lib/notification-alert";
@@ -104,32 +100,25 @@ export default function NotificationsPage() {
         ]}
       />
 
-      <PortalToolbar>
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as "all" | "unread")}>
-          <PortalTabsList>
-            <PortalTabsTrigger value="all">All</PortalTabsTrigger>
-            <PortalTabsTrigger value="unread">
-              Unread
-              {unreadCount > 0 && (
-                <Badge variant="destructive" className="ml-1.5 h-4 px-1 text-[9px]">
-                  {unreadCount}
-                </Badge>
-              )}
-            </PortalTabsTrigger>
-          </PortalTabsList>
-        </Tabs>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CmsChipTabs
+          value={filter}
+          onValueChange={(v) => setFilter(v as "all" | "unread")}
+          items={[
+            { value: "all", label: "All", count: notifStats.total },
+            { value: "unread", label: "Unread", count: unreadCount },
+          ]}
+        />
         {unreadCount > 0 && (
           <Button variant="outline" className={portalActionButtonClass()} onClick={handleMarkAll} disabled={markAllRead.isPending}>
             <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
             Mark all read
           </Button>
         )}
-      </PortalToolbar>
+      </div>
 
       {isLoading ? (
-        <PortalContentCard contentClassName="p-4">
-          <PageNotificationListSkeleton count={6} />
-        </PortalContentCard>
+        <PageNotificationListSkeleton count={6} />
       ) : notifications.length === 0 ? (
         <PortalEmptyState
           icon={Bell}
@@ -137,8 +126,7 @@ export default function NotificationsPage() {
           description={filter === "unread" ? "No unread notifications" : "New alerts will appear here"}
         />
       ) : (
-        <PortalContentCard contentClassName="p-0">
-            <ul className="divide-y divide-border">
+        <ul className="divide-y divide-border rounded-xl border bg-card/80">
               {notifications.map((n) => {
                 const isUnread = !n.readAt;
                 const target = getTarget(n);
@@ -197,7 +185,6 @@ export default function NotificationsPage() {
                 );
               })}
             </ul>
-        </PortalContentCard>
       )}
 
       <DataPagination

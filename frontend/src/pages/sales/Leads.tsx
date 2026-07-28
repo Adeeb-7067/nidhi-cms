@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Plus, Users, Upload, Pencil, Eye, Trash2, Download, Loader2 } from "lucide-react";
+import { Plus, Users, Upload, Pencil, Eye, Trash2, Download, Loader2, Phone, UserCheck, TrendingUp } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
@@ -10,7 +10,6 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,20 +20,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn } from "@/lib/utils";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
-import { useDeleteLead, useListLeads, salesKeys, type Lead, type LeadStatus } from "@/api/sales";
+import { useDeleteLead, useListLeads, useSalesDashboard, salesKeys, type Lead, type LeadStatus } from "@/api/sales";
 import {
   LEAD_STATUS_LABELS,
   LEAD_STATUS_ORDER,
@@ -47,7 +36,6 @@ import {
   SalesFilterBar,
   SalesStatusBadge,
   ExecutiveAvatar,
-  SalesEmptyState,
   LeadFormModal,
   BulkLeadActions,
   LeadImportDialog,
@@ -155,9 +143,11 @@ export default function SalesLeads() {
   };
 
   const { data, isLoading, isError, refetch } = useListLeads(listParams);
+  const { data: dashData } = useSalesDashboard();
   const filtered = data?.leads ?? [];
 
   const totalCount = data?.total ?? 0;
+  const leadsKpi = dashData?.leads;
   const allSelected = filtered.length > 0 && filtered.every((l) => selected.has(l.id));
 
   const toggleAll = () => {
@@ -173,6 +163,156 @@ export default function SalesLeads() {
       return next;
     });
   };
+
+  const chipItems = [
+    {
+      value: "all",
+      label: "All",
+      count: statusTab === "all" ? totalCount : undefined,
+    },
+    ...LEAD_STATUS_ORDER.map((s) => ({
+      value: s,
+      label: LEAD_STATUS_LABELS[s],
+      count: statusTab === s ? totalCount : undefined,
+    })),
+  ];
+
+  const columns: CmsColumn<Lead>[] = [
+    {
+      id: "select",
+      header: <Checkbox checked={allSelected} onCheckedChange={toggleAll} />,
+      headerClassName: "w-10",
+      cell: (lead) => (
+        <Checkbox
+          checked={selected.has(lead.id)}
+          onCheckedChange={() => toggleOne(lead.id)}
+        />
+      ),
+    },
+    {
+      id: "id",
+      header: "ID",
+      cell: (lead) => <span className="font-mono text-muted-foreground">#{lead.id}</span>,
+    },
+    {
+      id: "contact",
+      header: "Contact",
+      cell: (lead) => (
+        <div className="min-w-0">
+          <Link
+            href={`/sales/leads/${lead.id}`}
+            className="font-medium hover:text-primary hover:underline transition-colors"
+          >
+            {lead.name}
+          </Link>
+          <p className="text-[10px] text-muted-foreground">{lead.email ?? "—"}</p>
+        </div>
+      ),
+    },
+    {
+      id: "company",
+      header: "Company",
+      className: "max-w-[140px] truncate",
+      cell: (lead) => lead.company ?? "—",
+    },
+    {
+      id: "source",
+      header: "Source",
+      cell: (lead) => formatLeadSourceLabel(lead.source),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (lead) => <SalesStatusBadge variant="lead" value={lead.status} />,
+    },
+    {
+      id: "priority",
+      header: "Priority",
+      chip: true,
+      cell: (lead) => <SalesStatusBadge variant="priority" value={lead.priority} />,
+    },
+    {
+      id: "assigned",
+      header: "Assigned to",
+      cell: (lead) =>
+        lead.assignedToUser ? (
+          <ExecutiveAvatar name={lead.assignedToUser.name} avatarUrl={lead.assignedToUser.avatarUrl} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "createdBy",
+      header: "Created by",
+      cell: (lead) =>
+        lead.createdByUser ? (
+          <ExecutiveAvatar name={lead.createdByUser.name} avatarUrl={lead.createdByUser.avatarUrl} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "expected",
+      header: "Expected value",
+      align: "right",
+      cell: (lead) => (
+        <span className="font-medium tabular-nums">{formatCompactCurrency(lead.expectedValue)}</span>
+      ),
+    },
+    {
+      id: "reminder",
+      header: "Next reminder",
+      cell: (lead) => (
+        <span className="text-muted-foreground">
+          {lead.reminder?.date ? format(new Date(lead.reminder.date), "MMM d, yyyy") : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (lead) => (
+        <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(lead.createdAt)}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      headerClassName: "w-[108px]",
+      cell: (lead) => (
+        <div className="flex items-center justify-end gap-0.5">
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="View lead" asChild>
+            <Link href={`/sales/leads/${lead.id}`}>
+              <Eye className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Edit lead"
+            onClick={() => openEditDrawer(lead)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive"
+            title="Delete lead"
+            disabled={lead.status === "converted" && !!lead.customerId}
+            onClick={() => setDeleteTarget(lead)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -207,6 +347,39 @@ export default function SalesLeads() {
         }
       />
 
+      <PortalKpiGrid
+        items={[
+          {
+            title: "Total leads",
+            value: leadsKpi?.total ?? totalCount,
+            icon: Users,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Added today",
+            value: leadsKpi?.today ?? 0,
+            icon: TrendingUp,
+            accent: "green",
+            delay: 1,
+          },
+          {
+            title: "This week",
+            value: leadsKpi?.thisWeek ?? 0,
+            icon: UserCheck,
+            accent: "violet",
+            delay: 2,
+          },
+          {
+            title: "Active follow-ups",
+            value: dashData?.activeFollowUps ?? 0,
+            icon: Phone,
+            accent: "amber",
+            delay: 3,
+          },
+        ]}
+      />
+
       <SalesFilterBar
         search={search}
         onSearchChange={setSearch}
@@ -214,18 +387,11 @@ export default function SalesLeads() {
         onExport={() => void exportLeads()}
       />
 
-      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as LeadStatus | "all")}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">
-            All ({statusTab === "all" ? totalCount : "…"})
-          </TabsTrigger>
-          {LEAD_STATUS_ORDER.map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs data-[state=active]:bg-primary/10">
-              {LEAD_STATUS_LABELS[s]}{statusTab === s ? ` (${totalCount})` : ""}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={(v) => setStatusTab(v as LeadStatus | "all")}
+        items={chipItems}
+      />
 
       {selected.size > 0 && (
         <motion.div
@@ -249,170 +415,30 @@ export default function SalesLeads() {
         </motion.div>
       )}
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState
-          icon={Users}
-          title="Failed to load leads"
-          description="Could not fetch leads from the server."
-          actionLabel="Retry"
-          onAction={() => refetch()}
-        />
-      ) : filtered.length === 0 ? (
-        <SalesEmptyState
-          icon={Users}
-          title="No leads found"
-          description="Try adjusting your search or status filter, or add a new lead."
-          actionLabel="Add lead"
-          onAction={openCreateDrawer}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="overflow-x-auto print:overflow-visible">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="w-10">
-                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
-                  </TableHead>
-                  <TableHead className="text-xs">ID</TableHead>
-                  <TableHead className="text-xs">Contact</TableHead>
-                  <TableHead className="text-xs">Company</TableHead>
-                  <TableHead className="text-xs">Source</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Priority</TableHead>
-                  <TableHead className="text-xs">Assigned to</TableHead>
-                  <TableHead className="text-xs">Created by</TableHead>
-                  <TableHead className="text-xs text-right">Expected value</TableHead>
-                  <TableHead className="text-xs">Next reminder</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                  <TableHead className="text-xs text-right w-[108px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((lead) => (
-                  <TableRow
-                    key={lead.id}
-                    className={cn(
-                      "hover:bg-muted/30",
-                      selected.has(lead.id) && "bg-primary/[0.03]",
-                    )}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={selected.has(lead.id)}
-                        onCheckedChange={() => toggleOne(lead.id)}
-                      />
-                    </TableCell>
-                    <TableCell className="text-xs font-mono text-muted-foreground">
-                      #{lead.id}
-                    </TableCell>
-                    <TableCell>
-                      <div className="min-w-0">
-                        <Link href={`/sales/leads/${lead.id}`} className="text-xs font-medium hover:text-primary hover:underline transition-colors">
-                          {lead.name}
-                        </Link>
-                        <p className="text-[10px] text-muted-foreground">{lead.email ?? "—"}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[140px] truncate">{lead.company ?? "—"}</TableCell>
-                    <TableCell className="text-xs">
-                      {formatLeadSourceLabel(lead.source)}
-                    </TableCell>
-                    <TableCell>
-                      <SalesStatusBadge variant="lead" value={lead.status} />
-                    </TableCell>
-                    <TableCell>
-                      <SalesStatusBadge variant="priority" value={lead.priority} />
-                    </TableCell>
-                    <TableCell>
-                      {lead.assignedToUser ? (
-                        <ExecutiveAvatar
-                          name={lead.assignedToUser.name}
-                          avatarUrl={lead.assignedToUser.avatarUrl}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {lead.createdByUser ? (
-                        <ExecutiveAvatar
-                          name={lead.createdByUser.name}
-                          avatarUrl={lead.createdByUser.avatarUrl}
-                        />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums">
-                      {formatCompactCurrency(lead.expectedValue)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {lead.reminder?.date
-                        ? format(new Date(lead.reminder.date), "MMM d, yyyy")
-                        : "—"}
-                    </TableCell>
-                      <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                        {formatSalesDateTime(lead.createdAt)}
-                      </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-0.5">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="View lead"
-                          asChild
-                        >
-                          <Link href={`/sales/leads/${lead.id}`}>
-                            <Eye className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Edit lead"
-                          onClick={() => openEditDrawer(lead)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          title="Delete lead"
-                          disabled={lead.status === "converted" && !!lead.customerId}
-                          onClick={() => setDeleteTarget(lead)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-          <DataPagination
-            page={page}
-            total={totalCount}
-            limit={limit}
-            loadedRowCount={filtered.length}
-            onPageChange={setPage}
-            onLimitChange={setLimit}
-          />
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(lead) => lead.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: Users,
+          title: "No leads found",
+          description: "Try adjusting your search or status filter, or add a new lead.",
+          actionLabel: "Add lead",
+          onAction: openCreateDrawer,
+        }}
+        getRowClassName={(lead) => (selected.has(lead.id) ? "bg-primary/[0.03]" : undefined)}
+        pagination={{
+          page,
+          total: totalCount,
+          limit,
+          loadedRowCount: filtered.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
 
       <LeadImportDialog open={importOpen} onOpenChange={setImportOpen} />
 

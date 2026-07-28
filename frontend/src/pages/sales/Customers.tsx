@@ -6,7 +6,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,16 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
 import {
@@ -57,7 +48,6 @@ import {
   SalesFilterBar,
   SalesStatusBadge,
   ExecutiveAvatar,
-  SalesEmptyState,
   CustomerFormModal,
   CustomerProvisionPortalDialog,
   CustomersSummaryBar,
@@ -186,6 +176,114 @@ export default function Customers() {
     }
   };
 
+  const columns: CmsColumn<Customer>[] = [
+    {
+      id: "company",
+      header: "Company",
+      cell: (c) => (
+        <Link href={`/sales/customers/${c.id}`} className="block min-w-0 hover:text-primary">
+          <p className="font-medium">{c.companyName}</p>
+          <p className="text-[10px] text-muted-foreground">{c.email}</p>
+          {!c.portalUserId ? (
+            <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">Portal not enabled</p>
+          ) : null}
+        </Link>
+      ),
+    },
+    {
+      id: "createdBy",
+      header: "Created by",
+      className: "min-w-[120px]",
+      cell: (c) =>
+        c.createdByUser ? (
+          <ExecutiveAvatar name={c.createdByUser.name} avatarUrl={c.createdByUser.avatarUrl} />
+        ) : (
+          <span className="text-muted-foreground">Unknown</span>
+        ),
+    },
+    { id: "contact", header: "Contact", cell: (c) => c.contactPerson },
+    { id: "phone", header: "Phone", cell: (c) => c.phone ?? "—" },
+    {
+      id: "location",
+      header: "Location",
+      className: "max-w-[140px] truncate",
+      cell: (c) => c.location ?? "—",
+    },
+    { id: "type", header: "Type", cell: (c) => <span className="capitalize">{c.type}</span> },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (c) => <SalesStatusBadge variant="customer" value={c.status} />,
+    },
+    {
+      id: "sales",
+      header: "Total sales",
+      align: "right",
+      cell: (c) => <span className="font-medium tabular-nums">{formatCurrency(c.totalSales)}</span>,
+    },
+    {
+      id: "outstanding",
+      header: "Outstanding",
+      align: "right",
+      cell: (c) => (
+        <span className={`tabular-nums ${c.outstanding > 0 ? "text-destructive font-medium" : ""}`}>
+          {formatCurrency(c.outstanding)}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (c) => (
+        <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(c.createdAt)}</span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      headerClassName: "w-[100px]",
+      cell: (c) => (
+        <div className="flex items-center justify-end gap-0.5">
+          {!c.portalUserId ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-amber-700 hover:text-amber-800"
+              title="Enable client portal"
+              onClick={() => setProvisionTarget(c)}
+            >
+              <KeyRound className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            title="Edit customer"
+            onClick={() => openEdit(c)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-destructive hover:text-destructive disabled:opacity-40"
+            title={c.hasPayments ? "Cannot delete — payments recorded" : "Delete customer"}
+            disabled={c.hasPayments}
+            onClick={() => setDeleteTarget(c)}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -254,119 +352,27 @@ export default function Customers() {
         </Select>
       </SalesFilterBar>
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState icon={Building2} title="Failed to load customers" description="Could not fetch customers." actionLabel="Retry" onAction={() => refetch()} />
-      ) : customers.length === 0 ? (
-        <SalesEmptyState icon={Building2} title="No customers found" description="Try a different search term or filter." />
-      ) : (
-        <>
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Company</TableHead>
-                  <TableHead className="text-xs">Created by</TableHead>
-                  <TableHead className="text-xs">Contact</TableHead>
-                  <TableHead className="text-xs">Phone</TableHead>
-                  <TableHead className="text-xs">Location</TableHead>
-                  <TableHead className="text-xs">Type</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Total sales</TableHead>
-                  <TableHead className="text-xs text-right">Outstanding</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                  <TableHead className="text-xs text-right w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customers.map((c) => (
-                  <TableRow key={c.id} className="hover:bg-muted/30">
-                    <TableCell>
-                      <Link href={`/sales/customers/${c.id}`} className="block min-w-0 hover:text-primary">
-                        <p className="text-xs font-medium">{c.companyName}</p>
-                        <p className="text-[10px] text-muted-foreground">{c.email}</p>
-                        {!c.portalUserId ? (
-                          <p className="text-[10px] text-amber-700 dark:text-amber-400 mt-0.5">Portal not enabled</p>
-                        ) : null}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="min-w-[120px]">
-                      {c.createdByUser ? (
-                        <ExecutiveAvatar name={c.createdByUser.name} avatarUrl={c.createdByUser.avatarUrl} />
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Unknown</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs">{c.contactPerson}</TableCell>
-                    <TableCell className="text-xs">{c.phone ?? "—"}</TableCell>
-                    <TableCell className="text-xs max-w-[140px] truncate">{c.location ?? "—"}</TableCell>
-                    <TableCell className="text-xs capitalize">{c.type}</TableCell>
-                    <TableCell>
-                      <SalesStatusBadge variant="customer" value={c.status} />
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(c.totalSales)}</TableCell>
-                    <TableCell className={`text-xs text-right tabular-nums ${c.outstanding > 0 ? "text-destructive font-medium" : ""}`}>
-                      {formatCurrency(c.outstanding)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">{formatSalesDateTime(c.createdAt)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-0.5">
-                        {!c.portalUserId ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-amber-700 hover:text-amber-800"
-                            title="Enable client portal"
-                            onClick={() => setProvisionTarget(c)}
-                          >
-                            <KeyRound className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : null}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          title="Edit customer"
-                          onClick={() => openEdit(c)}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive disabled:opacity-40"
-                          title={c.hasPayments ? "Cannot delete — payments recorded" : "Delete customer"}
-                          disabled={c.hasPayments}
-                          onClick={() => setDeleteTarget(c)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
-          </div>
-
-          <DataPagination
-            page={page}
-            total={total}
-            limit={limit}
-            loadedRowCount={customers.length}
-            onPageChange={setPage}
-            onLimitChange={setLimit}
-          />
-        </>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={customers}
+        rowKey={(c) => c.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: Building2,
+          title: "No customers found",
+          description: "Try a different search term or filter.",
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: customers.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
       <CustomerFormModal
         open={formOpen}
         onOpenChange={handleFormOpenChange}

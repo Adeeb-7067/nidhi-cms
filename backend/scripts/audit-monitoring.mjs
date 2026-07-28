@@ -10,8 +10,8 @@ import {
   monitoringConsentsTable,
   usersTable,
 } from "../src/models/schema/index.js";
-import { getOrCreateSettings } from "../src/services/company-settings.js";
-import { computeSessionDurations } from "../src/services/work-sessions.service.js";
+import { getOrCreateSettings } from "../src/modules/settings/services/company-settings.js";
+import { computeSessionDurations } from "../src/modules/monitoring/services/work-sessions.service.js";
 import { monitorableStaffRoles } from "../src/constants/user-roles.js";
 import { signAccessToken } from "../src/lib/jwt.js";
 

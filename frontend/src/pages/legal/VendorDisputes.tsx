@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { Plus, Handshake } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockVendorDisputes } from "@/modules/legal/mock-data";
 import { formatCurrency } from "@/modules/legal/constants";
 import {
@@ -11,9 +11,9 @@ import {
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { VendorDispute } from "@/modules/legal/types";
 
 export default function VendorDisputes() {
   const [search, setSearch] = useState("");
@@ -29,6 +29,20 @@ export default function VendorDisputes() {
     );
   }, [search]);
 
+  const columns = useMemo<CmsColumn<VendorDispute>[]>(
+    () => [
+      { id: "vendor", header: "Vendor", cell: (d) => <span className="font-medium">{d.vendorName}</span> },
+      { id: "contract", header: "Contract", cell: (d) => <span className="font-mono text-muted-foreground">{d.contractRef}</span> },
+      { id: "status", header: "Status", chip: true, cell: (d) => <LegalStatusBadge variant="vendorDispute" value={d.status} /> },
+      { id: "risk", header: "Risk", chip: true, cell: (d) => <LegalRiskBadge level={d.risk} /> },
+      { id: "amount", header: "Amount in dispute", align: "right", cell: (d) => <span className="font-medium tabular-nums">{formatCurrency(d.amountInDispute)}</span> },
+      { id: "counsel", header: "Counsel", cell: (d) => <CounselAvatar name={d.assignedTo.name} /> },
+      { id: "opened", header: "Opened", cell: (d) => <span className="text-muted-foreground">{format(new Date(d.openedAt), "MMM d, yyyy")}</span> },
+      { id: "summary", header: "Summary", cell: (d) => <span className="max-w-[200px] block truncate">{d.summary}</span> },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <LegalPageHeader
@@ -43,40 +57,7 @@ export default function VendorDisputes() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search vendors, contracts…" />
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={Handshake} title="No disputes found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Vendor</TableHead>
-                <TableHead className="text-xs">Contract</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs text-right">Amount in dispute</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-                <TableHead className="text-xs">Opened</TableHead>
-                <TableHead className="text-xs">Summary</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((d) => (
-                <TableRow key={d.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">{d.vendorName}</TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">{d.contractRef}</TableCell>
-                  <TableCell><LegalStatusBadge variant="vendorDispute" value={d.status} /></TableCell>
-                  <TableCell><LegalRiskBadge level={d.risk} /></TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(d.amountInDispute)}</TableCell>
-                  <TableCell><CounselAvatar name={d.assignedTo.name} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(d.openedAt), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs max-w-[200px] truncate">{d.summary}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(d) => d.id} empty={{ icon: Handshake, title: "No disputes found" }} />
     </PortalPageShell>
   );
 }

@@ -129,8 +129,9 @@ export function PresenceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) return;
-    sendHeartbeat();
-  }, [location, user, sendHeartbeat]);
+    // Socket-only on navigation — avoid HTTP heartbeats competing with page fetches.
+    socket?.emit("presence:heartbeat", { tabVisible: isTabVisible() });
+  }, [location, user, socket]);
 
   useEffect(() => {
     if (!socket) return;

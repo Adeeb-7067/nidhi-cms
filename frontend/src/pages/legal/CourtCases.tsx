@@ -3,16 +3,16 @@ import { format } from "date-fns";
 import { Plus, Gavel } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockCourtCases } from "@/modules/legal/mock-data";
 import {
   LegalPageHeader,
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { CourtCase } from "@/modules/legal/types";
 
 export default function CourtCases() {
   const [search, setSearch] = useState("");
@@ -28,6 +28,20 @@ export default function CourtCases() {
     );
   }, [search]);
 
+  const columns = useMemo<CmsColumn<CourtCase>[]>(
+    () => [
+      { id: "caseNumber", header: "Case number", cell: (c) => <span className="font-mono font-medium">{c.caseNumber}</span> },
+      { id: "court", header: "Court", cell: (c) => <span className="max-w-[140px] block truncate">{c.court}</span> },
+      { id: "title", header: "Title", cell: (c) => c.title },
+      { id: "status", header: "Status", chip: true, cell: (c) => <LegalStatusBadge variant="courtCase" value={c.status} /> },
+      { id: "risk", header: "Risk", chip: true, cell: (c) => <LegalRiskBadge level={c.risk} /> },
+      { id: "nextHearing", header: "Next hearing", cell: (c) => <span className="text-muted-foreground">{c.nextHearing ? format(new Date(c.nextHearing), "MMM d, yyyy") : "—"}</span> },
+      { id: "counsel", header: "Counsel", cell: (c) => <CounselAvatar name={c.assignedTo.name} /> },
+      { id: "filed", header: "Filed", cell: (c) => <span className="text-muted-foreground">{format(new Date(c.openedAt), "MMM d, yyyy")}</span> },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <LegalPageHeader
@@ -42,42 +56,7 @@ export default function CourtCases() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search case numbers, courts…" />
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={Gavel} title="No court cases found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Case number</TableHead>
-                <TableHead className="text-xs">Court</TableHead>
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Next hearing</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-                <TableHead className="text-xs">Filed</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-mono font-medium">{c.caseNumber}</TableCell>
-                  <TableCell className="text-xs max-w-[140px] truncate">{c.court}</TableCell>
-                  <TableCell className="text-xs">{c.title}</TableCell>
-                  <TableCell><LegalStatusBadge variant="courtCase" value={c.status} /></TableCell>
-                  <TableCell><LegalRiskBadge level={c.risk} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {c.nextHearing ? format(new Date(c.nextHearing), "MMM d, yyyy") : "—"}
-                  </TableCell>
-                  <TableCell><CounselAvatar name={c.assignedTo.name} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(c.openedAt), "MMM d, yyyy")}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(c) => c.id} empty={{ icon: Gavel, title: "No court cases found" }} />
     </PortalPageShell>
   );
 }

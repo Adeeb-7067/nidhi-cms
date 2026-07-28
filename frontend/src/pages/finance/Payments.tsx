@@ -4,22 +4,13 @@ import { format } from "date-fns";
 import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
-  FinanceEmptyState,
   FinanceErrorState,
   FinanceSourceBadge,
   GstClassificationBadge,
@@ -27,7 +18,6 @@ import {
   PaymentEditModal,
   FinanceConfirmDialog,
 } from "@/modules/finance/components";
-import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import type { FinancePayment } from "@/api/finance";
@@ -125,6 +115,132 @@ export default function PaymentsPage() {
     );
   }
 
+  const chipItems = (["all", "incoming", "outgoing"] as const).map((d) => ({
+    value: d,
+    label: d === "all" ? "All" : d,
+  }));
+
+  const columns: CmsColumn<FinancePayment>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (p) => (
+        <Link href={`/finance/payments/${p.source ?? "finance"}/${p.id}`} className="hover:text-primary">
+          {format(new Date(p.date), "MMM d, yyyy")}
+        </Link>
+      ),
+    },
+    {
+      id: "source",
+      header: "Source",
+      chip: true,
+      cell: (p) => <FinanceSourceBadge source={p.source} />,
+    },
+    {
+      id: "direction",
+      header: "Direction",
+      cell: (p) =>
+        p.direction === "incoming" ? (
+          <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+            <ArrowDownLeft className="h-3 w-3" /> In
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400">
+            <ArrowUpRight className="h-3 w-3" /> Out
+          </span>
+        ),
+    },
+    {
+      id: "party",
+      header: "Party",
+      className: "max-w-[160px] truncate",
+      cell: (p) => <span className="font-medium">{p.partyName}</span>,
+    },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (p) => <span className="font-mono text-muted-foreground">{p.reference}</span>,
+    },
+    {
+      id: "mode",
+      header: "Mode",
+      cell: (p) => PAYMENT_MODE_LABELS[p.mode],
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) => <FinanceStatusBadge variant="payment" value={p.status} />,
+    },
+    {
+      id: "gst",
+      header: "GST",
+      chip: true,
+      cell: (p) => <GstClassificationBadge gstEnabled={p.gstEnabled} />,
+    },
+    {
+      id: "gstAmt",
+      header: "GST amt",
+      align: "right",
+      cell: (p) => (
+        <span className="tabular-nums text-muted-foreground">
+          {(p.gstAmount ?? 0) > 0 ? formatCurrency(p.gstAmount ?? 0) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (p) => (
+        <span
+          className={`font-medium tabular-nums ${p.direction === "incoming" ? MONEY_IN_CLASS : MONEY_OUT_CLASS}`}
+        >
+          {formatCurrency(p.amount)}
+        </span>
+      ),
+    },
+    ...(showActions
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            align: "right" as const,
+            cell: (p: FinancePayment) => {
+              const isFinance = !p.source || p.source === "finance";
+              if (!isFinance) return <span className="text-[10px] text-muted-foreground">Sales</span>;
+              return (
+                <div className="flex justify-end gap-1">
+                  {canEdit && p.direction === "outgoing" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setEditPayment(p)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive"
+                      onClick={() => setDeleteTarget(p)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            },
+          } satisfies CmsColumn<FinancePayment>,
+        ]
+      : []),
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
@@ -218,95 +334,31 @@ export default function PaymentsPage() {
 
       <FinanceFilterBar search={search} onSearchChange={(v) => { setSearch(v); resetPage(); }} searchPlaceholder="Search party, reference…" onExport={() => toast.success("Payments export started")} />
 
-      <Tabs value={directionTab} onValueChange={(v) => { setDirectionTab(v); resetPage(); }}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "incoming", "outgoing"] as const).map((d) => (
-            <TabsTrigger key={d} value={d} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {d === "all" ? "All" : d}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={directionTab}
+        onValueChange={(v) => {
+          setDirectionTab(v);
+          resetPage();
+        }}
+        items={chipItems}
+      />
 
-      {payments.length === 0 ? (
-        <FinanceEmptyState icon={Wallet} title="No payments found" description="Adjust filters to see payment records." />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs">Source</TableHead>
-                <TableHead className="text-xs">Direction</TableHead>
-                <TableHead className="text-xs">Party</TableHead>
-                <TableHead className="text-xs">Reference</TableHead>
-                <TableHead className="text-xs">Mode</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">GST</TableHead>
-                <TableHead className="text-xs text-right">GST amt</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                {showActions && <TableHead className="text-xs text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {payments.map((p) => {
-                const isFinance = !p.source || p.source === "finance";
-                return (
-                <TableRow key={`${p.source ?? "finance"}-${p.id}`} className="hover:bg-muted/30">
-                  <TableCell className="text-xs">
-                    <Link href={`/finance/payments/${p.source ?? "finance"}/${p.id}`} className="hover:text-primary">
-                      {format(new Date(p.date), "MMM d, yyyy")}
-                    </Link>
-                  </TableCell>
-                  <TableCell><FinanceSourceBadge source={p.source} /></TableCell>
-                  <TableCell className="text-xs capitalize">
-                    {p.direction === "incoming" ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400"><ArrowDownLeft className="h-3 w-3" /> In</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-400"><ArrowUpRight className="h-3 w-3" /> Out</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs font-medium max-w-[160px] truncate">{p.partyName}</TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">{p.reference}</TableCell>
-                  <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.mode]}</TableCell>
-                  <TableCell><FinanceStatusBadge variant="payment" value={p.status} /></TableCell>
-                  <TableCell><GstClassificationBadge gstEnabled={p.gstEnabled} /></TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
-                    {(p.gstAmount ?? 0) > 0 ? formatCurrency(p.gstAmount ?? 0) : "—"}
-                  </TableCell>
-                  <TableCell className={`text-xs text-right font-medium tabular-nums ${p.direction === "incoming" ? MONEY_IN_CLASS : MONEY_OUT_CLASS}`}>
-                    {formatCurrency(p.amount)}
-                  </TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      {isFinance ? (
-                        <div className="flex justify-end gap-1">
-                          {canEdit && p.direction === "outgoing" && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditPayment(p)} title="Edit">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(p)} title="Delete">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground">Sales</span>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="border-t px-4 py-3">
-            <DataPagination page={page} limit={limit} total={total} onPageChange={setPage} />
-          </div>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={payments}
+        rowKey={(p) => `${p.source ?? "finance"}-${p.id}`}
+        empty={{
+          icon: Wallet,
+          title: "No payments found",
+          description: "Adjust filters to see payment records.",
+        }}
+        pagination={{
+          page,
+          limit,
+          total,
+          onPageChange: setPage,
+        }}
+      />
 
       <RecordOutgoingPaymentModal open={outgoingModalOpen} onOpenChange={setOutgoingModalOpen} onSuccess={() => refetch()} />
       <PaymentEditModal

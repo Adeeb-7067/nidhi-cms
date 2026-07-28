@@ -6,24 +6,25 @@ import { logger } from "./src/lib/logger.js";
 import { initRealtime } from "./src/lib/realtime.js";
 import { initFirebaseAdmin } from "./src/lib/firebase.js";
 import { verifyMailer } from "./src/lib/email.js";
-import { startInventoryExpiryJob } from "./src/services/inventory/expiry-job.js";
-import { startAlertSchedulerJob } from "./src/services/alerts/alert-scheduler-job.js";
-import { startDailyLogComplianceJob } from "./src/services/daily-log-compliance.js";
-import { startScreenshotPurgeJob } from "./src/services/screenshot-purge-job.js";
-import { startReportPurgeJob } from "./src/services/report-purge-job.js";
-import { migrateDirectConversationIndexes } from "./src/services/direct-conversation-migration.js";
+import { startInventoryExpiryJob } from "./src/modules/inventory/services/expiry-job.js";
+import { startAlertSchedulerJob } from "./src/modules/alerts/services/alert-scheduler-job.js";
+import { startDailyLogComplianceJob } from "./src/modules/work/services/daily-log-compliance.js";
+import { startScreenshotPurgeJob } from "./src/modules/monitoring/services/screenshot-purge-job.js";
+import { startReportPurgeJob } from "./src/modules/work/services/report-purge-job.js";
+import { migrateDirectConversationIndexes } from "./src/modules/collab/services/direct-conversation-migration.js";
 import {
   ensureDefaultRoleTemplates,
   backfillSystemTemplatePermissions,
   assignRoleTemplatesToUsers,
-} from "./src/services/permissions.service.js";
-import { seedLeaveTypes } from "./src/services/hrm/leave.service.js";
-import { startLeaveAccrualJob } from "./src/services/hrm/leave-accrual.service.js";
-import { startAttendanceMaterializeJob } from "./src/services/hrm/attendance-materialize.service.js";
-import { startEmployeeExitJob } from "./src/services/hrm/employee-exit-job.js";
-import { startProjectDocumentRenewalReminderJob } from "./src/services/project-documents/renewal-reminder-job.js";
-import { startChequeClearanceReminderJob } from "./src/services/finance/cheque-clearance-reminder-job.js";
-import { startStorageCleanupJob } from "./src/services/finance/storage-cleanup-job.js";
+} from "./src/modules/identity/services/permissions.service.js";
+import { seedLeaveTypes } from "./src/modules/hrm/services/leave.service.js";
+import { startLeaveAccrualJob } from "./src/modules/hrm/services/leave-accrual.service.js";
+import { startAttendanceMaterializeJob } from "./src/modules/hrm/services/attendance-materialize.service.js";
+import { startEmployeeExitJob } from "./src/modules/hrm/services/employee-exit-job.js";
+import { startProjectDocumentRenewalReminderJob } from "./src/modules/admin/services/renewal-reminder-job.js";
+import { startChequeClearanceReminderJob } from "./src/modules/finance/services/cheque-clearance-reminder-job.js";
+import { startStorageCleanupJob } from "./src/modules/finance/services/storage-cleanup-job.js";
+import { startMarketingPostReminderJob } from "./src/modules/marketing/services/post-schedule-reminder-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -69,6 +70,7 @@ const runEmployeeExitTick = startEmployeeExitJob();
 const runProjectDocumentRenewalTick = startProjectDocumentRenewalReminderJob();
 const runChequeClearanceTick = startChequeClearanceReminderJob();
 const runStorageCleanupTick = startStorageCleanupJob();
+const runMarketingPostReminderTick = startMarketingPostReminderJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
@@ -84,8 +86,9 @@ const bootstrapBackgroundJobs = () => {
   void runProjectDocumentRenewalTick();
   void runChequeClearanceTick();
   runStorageCleanupTick();
+  void runMarketingPostReminderTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup, marketing post reminders)",
   );
 };
 void whenDatabaseReady()
@@ -122,4 +125,3 @@ server.listen(port, () => {
     "Server listening with Realtime enabled"
   );
 });
-// Trigger restart after clearing port

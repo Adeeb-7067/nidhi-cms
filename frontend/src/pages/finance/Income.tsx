@@ -4,15 +4,7 @@ import { Plus, TrendingUp, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -26,7 +18,6 @@ import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
-  FinanceEmptyState,
   FinanceErrorState,
   FinanceDualLineChart,
   FinanceAreaTrendChart,
@@ -50,6 +41,7 @@ import { useListClients } from "@/api/generated/api";
 import { toast } from "sonner";
 
 const STATUS_TABS: (IncomeStatus | "all")[] = ["all", "received", "partial", "pending"];
+const PAGE_LIMIT = 20;
 
 export default function IncomePage() {
   const [search, setSearch] = useState("");
@@ -71,7 +63,7 @@ export default function IncomePage() {
   const params: ListIncomeParams = useMemo(
     () => ({
       page,
-      limit: 20,
+      limit: PAGE_LIMIT,
       search: search || undefined,
       status: statusTab === "all" ? undefined : (statusTab as IncomeStatus),
       clientId: clientFilter === "all" ? undefined : Number(clientFilter),
@@ -115,6 +107,104 @@ export default function IncomePage() {
       </PortalPageShell>
     );
   }
+
+  const columns: CmsColumn<Income>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (i) => format(new Date(i.date), "MMM d, yyyy"),
+    },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (i) => <span className="font-mono">{i.reference}</span>,
+    },
+    {
+      id: "client",
+      header: "Client",
+      cell: (i) => <span className="font-medium">{i.clientName}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      className: "max-w-[140px] truncate",
+      cell: (i) => <span className="text-muted-foreground">{i.projectName ?? "—"}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (i) => <FinanceStatusBadge variant="income" value={i.status} />,
+    },
+    {
+      id: "gst",
+      header: "GST",
+      chip: true,
+      cell: (i) => <GstClassificationBadge gstEnabled={i.gstEnabled} />,
+    },
+    {
+      id: "gstAmt",
+      header: "GST amt",
+      align: "right",
+      cell: (i) => (
+        <span className="tabular-nums text-muted-foreground">
+          {(i.gstAmount ?? 0) > 0 ? formatCurrency(i.gstAmount ?? 0) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (i) => (
+        <span className="font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</span>
+      ),
+    },
+    {
+      id: "mode",
+      header: "Mode",
+      cell: (i) => PAYMENT_MODE_LABELS[i.paymentMode],
+    },
+    ...(showActions
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            align: "right" as const,
+            cell: (i: Income) => {
+              const synced = Boolean(i.salesPaymentId);
+              if (synced) return <span className="text-[10px] text-muted-foreground">Sales</span>;
+              return (
+                <div className="flex justify-end gap-1">
+                  {canEdit && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0"
+                      onClick={() => setEditIncome(i)}
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {canDelete && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 w-7 p-0 text-destructive"
+                      onClick={() => setDeleteTarget(i)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+              );
+            },
+          } satisfies CmsColumn<Income>,
+        ]
+      : []),
+  ];
 
   return (
     <PortalPageShell>
@@ -166,85 +256,36 @@ export default function IncomePage() {
         </Select>
       </FinanceFilterBar>
 
-      <Tabs value={statusTab} onValueChange={(v) => { setStatusTab(v); setPage(1); }}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {STATUS_TABS.map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s === "all" ? "All" : s.replace("_", " ")}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={(v) => {
+          setStatusTab(v);
+          setPage(1);
+        }}
+        items={STATUS_TABS.map((s) => ({
+          value: s,
+          label: s === "all" ? "All" : s.replace("_", " "),
+        }))}
+      />
 
-      {income.length === 0 ? (
-        <FinanceEmptyState icon={TrendingUp} title="No income records" description="Adjust filters or record a payment." actionLabel="Record payment" onAction={() => setDrawerOpen(true)} />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs">Reference</TableHead>
-                <TableHead className="text-xs">Client</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">GST</TableHead>
-                <TableHead className="text-xs text-right">GST amt</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Mode</TableHead>
-                {showActions && <TableHead className="text-xs text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {income.map((i) => {
-                const synced = Boolean(i.salesPaymentId);
-                return (
-                <TableRow key={i.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs">{format(new Date(i.date), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs font-mono">{i.reference}</TableCell>
-                  <TableCell className="text-xs font-medium">{i.clientName}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">{i.projectName ?? "—"}</TableCell>
-                  <TableCell><FinanceStatusBadge variant="income" value={i.status} /></TableCell>
-                  <TableCell><GstClassificationBadge gstEnabled={i.gstEnabled} /></TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
-                    {(i.gstAmount ?? 0) > 0 ? formatCurrency(i.gstAmount ?? 0) : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">{formatCurrency(i.amount)}</TableCell>
-                  <TableCell className="text-xs">{PAYMENT_MODE_LABELS[i.paymentMode]}</TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      {synced ? (
-                        <span className="text-[10px] text-muted-foreground">Sales</span>
-                      ) : (
-                        <div className="flex justify-end gap-1">
-                          {canEdit && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setEditIncome(i)} title="Edit">
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(i)} title="Delete">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </TableCell>
-                  )}
-                </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
-            <span>{total} total</span>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
-              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={income.length < 20} onClick={() => setPage((p) => p + 1)}>Next</Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={income}
+        rowKey={(i) => i.id}
+        empty={{
+          icon: TrendingUp,
+          title: "No income records",
+          description: "Adjust filters or record a payment.",
+          actionLabel: "Record payment",
+          onAction: () => setDrawerOpen(true),
+        }}
+        pagination={{
+          page,
+          limit: PAGE_LIMIT,
+          total,
+          onPageChange: setPage,
+        }}
+      />
 
       <RecordPaymentModal open={drawerOpen} onOpenChange={setDrawerOpen} onSuccess={() => refetch()} />
       <IncomeEditModal

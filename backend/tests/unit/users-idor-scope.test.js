@@ -10,7 +10,7 @@ import {
   formatStaffPickerUser,
   isPeopleAdminRole,
   STAFF_PICKER_PROJECTION,
-} from "../../src/services/access/access-context.js";
+} from "../../src/modules/access/services/access-context.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -50,7 +50,7 @@ describe("access-context helpers", () => {
 describe("users controller Hybrid contracts", () => {
   test("GET /users/:id uses assertCanViewUserProfile", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/controllers/users.controller.js"),
+      join(__dirname, "../../src/modules/identity/controllers/users.controller.js"),
       "utf8",
     );
     assert.ok(src.includes("assertCanViewUserProfile"));

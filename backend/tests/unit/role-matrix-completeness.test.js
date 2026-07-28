@@ -51,7 +51,7 @@ describe("CMS role matrix completeness", () => {
   });
 
   test("DEFAULT_TEMPLATES seed includes cmsRole for digital (and peers)", () => {
-    const src = readBackend("src/services/permissions.service.js");
+    const src = readBackend("src/modules/identity/services/permissions.service.js");
     for (const role of ["digital", "finance", "bde", "manager", "super_admin"]) {
       assert.ok(
         src.includes(`cmsRole: "${role}"`),
@@ -90,7 +90,7 @@ describe("CMS role matrix completeness", () => {
   });
 
   test("project member routes exist for digital project assignment", () => {
-    const routes = readBackend("src/routes/projects.routes.js");
+    const routes = readBackend("src/modules/crm/routes/projects.routes.js");
     assert.ok(routes.includes("/projects/:id/members"), "member assign API missing");
     assert.ok(routes.includes("members/batch"), "batch member assign API missing");
   });
@@ -127,7 +127,7 @@ describe("CMS role matrix completeness", () => {
       bdeList.includes('getProjectDetailHref(project.id, "bde", project.type)'),
       "BDE project cards must pass project.type into detail href",
     );
-    const perms = readBackend("src/services/permissions.service.js");
+    const perms = readBackend("src/modules/identity/services/permissions.service.js");
     assert.ok(
       perms.includes("BDE_DIGITAL_PROJECT_VIEW"),
       "BDE template must include Digital view grants for project detail APIs",

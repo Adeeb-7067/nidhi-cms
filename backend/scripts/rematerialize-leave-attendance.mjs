@@ -5,10 +5,10 @@
 import "../load-env.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "../src/lib/db.js";
-import { leaveRequestsTable } from "../src/models/schema/hrm/leave.js";
+import { leaveRequestsTable } from "../src/modules/hrm/schema/leave.js";
 import { usersTable } from "../src/models/schema/index.js";
-import { materializeUserAttendanceDay } from "../src/services/hrm/attendance-materialize.service.js";
-import { eachDateInRange, workDayKeyForDate, getHrmPolicyContext } from "../src/services/hrm/hrm-date-utils.js";
+import { materializeUserAttendanceDay } from "../src/modules/hrm/services/attendance-materialize.service.js";
+import { eachDateInRange, workDayKeyForDate, getHrmPolicyContext } from "../src/modules/hrm/services/hrm-date-utils.js";
 
 async function main() {
   await whenDatabaseReady();

@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CmsChipTabs } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -122,6 +123,7 @@ export default function SalesSettings() {
   const [overdueAlerts, setOverdueAlerts] = useState(true);
   const [documentBranding, setDocumentBranding] = useState<SalesDocumentBrandingFields>(() => createDocumentBrandingState());
   const [hydrated, setHydrated] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("numbering");
 
   useEffect(() => {
     if (settings && !hydrated) {
@@ -184,19 +186,24 @@ export default function SalesSettings() {
           {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
         </div>
       ) : (
-        <Tabs defaultValue="numbering">
-          <TabsList className="h-9 flex-wrap">
-            <TabsTrigger value="numbering" className="text-xs">Proposal numbering</TabsTrigger>
-            <TabsTrigger value="tax" className="text-xs">Tax</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs">Notifications</TabsTrigger>
-            <TabsTrigger value="reminders" className="text-xs">Reminders</TabsTrigger>
-            <TabsTrigger value="documents" className="text-xs">Document fields</TabsTrigger>
-            <TabsTrigger value="sources" className="text-xs">Sources &amp; channels</TabsTrigger>
-            <TabsTrigger value="statuses" className="text-xs">Lead statuses</TabsTrigger>
-            <TabsTrigger value="account" className="text-xs">Account security</TabsTrigger>
-          </TabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={settingsTab}
+            onValueChange={setSettingsTab}
+            items={[
+              { value: "numbering", label: "Proposal numbering" },
+              { value: "tax", label: "Tax" },
+              { value: "notifications", label: "Notifications" },
+              { value: "reminders", label: "Reminders" },
+              { value: "documents", label: "Document fields" },
+              { value: "sources", label: "Sources & channels" },
+              { value: "statuses", label: "Lead statuses" },
+              { value: "account", label: "Account security" },
+            ]}
+          />
+          <Tabs value={settingsTab} onValueChange={setSettingsTab}>
 
-          <TabsContent value="numbering" className="mt-4">
+          <TabsContent value="numbering" className="mt-0">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">
@@ -367,6 +374,7 @@ export default function SalesSettings() {
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
       )}
     </PortalPageShell>
   );

@@ -41,6 +41,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_media",
     "marketing_calendar",
     "marketing_content",
+    "marketing_approvals",
   ],
   video_editor: [
     "marketing_dashboard",
@@ -49,6 +50,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_media",
     "marketing_calendar",
     "marketing_content",
+    "marketing_approvals",
   ],
   content_creator: [
     "marketing_dashboard",
@@ -66,6 +68,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_calendar",
     "marketing_seo",
     "marketing_analytics",
+    "marketing_approvals",
   ],
   ads_manager: [
     "marketing_dashboard",
@@ -74,6 +77,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_calendar",
     "marketing_ads",
     "marketing_analytics",
+    "marketing_approvals",
   ],
   /** Digital freelancer sub-type (role may still be digital). */
   freelancer: [
@@ -82,6 +86,7 @@ export const DIGITAL_ROLE_PERMISSIONS = {
     "marketing_tasks",
     "marketing_media",
     "marketing_calendar",
+    "marketing_approvals",
   ],
 };
 

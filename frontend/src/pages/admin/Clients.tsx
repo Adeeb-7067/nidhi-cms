@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useListClients, useCreateClient, useUpdateClient, useDeleteClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey } from "@/api";
+import { useListClients, useCreateClient, useUpdateClient, useDeleteClient, getListClientsQueryKey, useGetUserCredentials, useRevealCredential, getGetUserCredentialsQueryKey, useClientsSummary, type Client } from "@/api";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,21 +7,19 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn, MapPin } from "lucide-react";
+import { CmsChipTabs, CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   PortalPageShell,
   PortalPageHero,
   PortalKpiGrid,
-  PortalContentCard,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 
 import { Badge } from "@/components/ui/badge";
-import { PageTableSkeleton } from "@/components/loading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
@@ -65,11 +63,8 @@ import { optionalPhoneZod, normalizePhoneForSubmit } from "@/lib/phone-input";
 import { toast } from "sonner";
 import { toastApiError, getApiErrorMessage } from "@/lib/api-error";
 import { listQueryOptions } from "@/lib/list-query-options";
-import { LIST_LIMIT, QUERY_STALE } from "@/lib/query-config";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
-import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
 import { useQueryClient } from "@tanstack/react-query";
-import { Client } from "@/api";
 import { useRefreshPresenceForUserIds } from "@/hooks/use-presence-refresh";
 import { useMergedPresenceForUser, type PresenceUserFields } from "@/hooks/use-merged-presence";
 import { PresenceTableCell } from "@/components/presence/PresenceTableCell";
@@ -196,54 +191,21 @@ export default function AdminClients() {
     resetPage();
   }, [search, resetPage]);
 
-  const { data, isLoading } = useListClients(
+  const { data, isLoading, isError, refetch } = useListClients(
     { search, page, limit: apiLimit },
     { query: listQueryOptions({ queryKey: getListClientsQueryKey({ search, page, limit: apiLimit }) }) },
   );
-  const countQueryBase = { staleTime: QUERY_STALE.reference, select: selectListTotal };
-  const { data: totalClients = 0, isLoading: totalLoading } = useListClients(LIST_COUNT_PARAMS, {
-    query: { ...countQueryBase, queryKey: getListClientsQueryKey(LIST_COUNT_PARAMS) },
-  });
-  const { data: activeClients = 0, isLoading: activeLoading } = useListClients(
-    { ...LIST_COUNT_PARAMS, status: "active" },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListClientsQueryKey({ ...LIST_COUNT_PARAMS, status: "active" }),
-      },
-    },
-  );
-  const { data: inactiveClients = 0, isLoading: inactiveLoading } = useListClients(
-    { ...LIST_COUNT_PARAMS, status: "inactive" },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListClientsQueryKey({ ...LIST_COUNT_PARAMS, status: "inactive" }),
-      },
-    },
-  );
-  const { data: activeProjectSum = 0, isLoading: projectsSumLoading } = useListClients(
-    { page: 1, limit: LIST_LIMIT.admin },
-    {
-      query: {
-        queryKey: [...getListClientsQueryKey({ limit: LIST_LIMIT.admin }), "activeProjectSum"],
-        staleTime: QUERY_STALE.reference,
-        select: (d) =>
-          (d.clients ?? []).reduce((acc, c) => acc + (c.activeProjectCount || 0), 0),
-      },
-    },
-  );
+  const { data: clientSummary, isLoading: statsLoading } = useClientsSummary();
 
   const clientStats = useMemo(
     () => ({
-      total: totalClients,
-      active: activeClients,
-      inactive: inactiveClients,
-      activeProjects: activeProjectSum,
+      total: clientSummary?.total ?? 0,
+      active: clientSummary?.active ?? 0,
+      inactive: clientSummary?.inactive ?? 0,
+      activeProjects: clientSummary?.activeProjects ?? 0,
     }),
-    [totalClients, activeClients, inactiveClients, activeProjectSum],
+    [clientSummary],
   );
-  const statsLoading = totalLoading || activeLoading || inactiveLoading || projectsSumLoading;
 
   const pagePortalUserIds = useMemo(
     () => (data?.clients ?? []).map((c) => c.userId).filter((id): id is number => id != null && id > 0),
@@ -255,6 +217,7 @@ export default function AdminClients() {
   const deleteClientMutation = useDeleteClient();
 
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [sheetTab, setSheetTab] = useState("overview");
   const [revealedPasswords, setRevealedPasswords] = useState<Record<number, string>>({});
   const [revealTimer, setRevealTimer] = useState<Record<number, NodeJS.Timeout>>({});
 
@@ -383,6 +346,7 @@ export default function AdminClients() {
       }
       form.reset();
       queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["clients-summary"] });
     } catch (error: any) {
       toastApiError(error, "Failed to save client");
     }
@@ -395,6 +359,7 @@ export default function AdminClients() {
       toast.success("Client deleted successfully");
       setDeleteId(null);
       queryClient.invalidateQueries({ queryKey: getListClientsQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ["clients-summary"] });
     } catch (error: any) {
       toastApiError(error, "Failed to delete client");
     }
@@ -915,21 +880,55 @@ export default function AdminClients() {
         ]}
       />
 
-      <PortalContentCard>
-          {isLoading ? (
-            <PageTableSkeleton rows={8} columns={6} showToolbar />
-          ) : (
-            <AdvancedTable 
-              data={data?.clients || []} 
-              columns={columns} 
-              searchKey="companyName" 
-              searchPlaceholder="Filter companies..." 
-              filename="ClientsExport"
-              viewStorageKey="companies"
-              onRowClick={(client) => setSelectedClient(client)}
-            />
-          )}
-      </PortalContentCard>
+      <CmsFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search companies…"
+      />
+
+      <AdvancedTable
+        data={data?.clients || []}
+        columns={columns}
+        filename="ClientsExport"
+        viewStorageKey="admin-companies"
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        onRowClick={(client) => setSelectedClient(client)}
+        renderGridCard={(client) => (
+          <button
+            type="button"
+            onClick={() => setSelectedClient(client)}
+            className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-border/60 bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/30"
+          >
+            <div className="flex items-start gap-3">
+              <Avatar className="h-10 w-10 shrink-0 rounded-md border border-border/60">
+                <AvatarImage src={clientDisplayImageUrl(client)} />
+                <AvatarFallback className="rounded-md bg-primary/10 text-primary">
+                  <Building className="h-4 w-4" />
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold line-clamp-2">{client.companyName}</p>
+                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{client.contactPerson}</p>
+              </div>
+              <Badge variant="outline" className="text-[10px] capitalize shrink-0">
+                {client.status}
+              </Badge>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1 truncate">
+                <Mail className="h-3 w-3 shrink-0" />
+                {client.email}
+              </span>
+              <span className="flex items-center gap-1 shrink-0">
+                <Briefcase className="h-3 w-3" />
+                {client.activeProjectCount}
+              </span>
+            </div>
+          </button>
+        )}
+      />
       <DataPagination
         page={data?.page ?? page}
         total={data?.total ?? 0}
@@ -939,8 +938,16 @@ export default function AdminClients() {
         onLimitChange={setLimit}
       />
 
-      <Sheet open={!!selectedClient} onOpenChange={(open) => !open && setSelectedClient(null)}>
-        <SheetContent className="w-[400px] sm:w-[540px] sm:max-w-lg overflow-y-auto">
+      <Sheet
+        open={!!selectedClient}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedClient(null);
+            setSheetTab("overview");
+          }
+        }}
+      >
+        <SheetContent className="w-full max-w-full sm:w-[540px] sm:max-w-lg overflow-y-auto">
           <SheetHeader className="space-y-3">
             <div className="flex items-center gap-4">
               <Avatar className="h-12 w-12 border-2 border-primary/10">
@@ -971,42 +978,48 @@ export default function AdminClients() {
             </div>
           </SheetHeader>
 
-          <Tabs defaultValue="overview" className="mt-6">
-            <TabsList className="grid w-full grid-cols-2 h-8">
-              <TabsTrigger value="overview" className="text-[10px] py-1">Overview</TabsTrigger>
-              <TabsTrigger value="credentials" className="text-[10px] py-1 flex items-center" disabled={!selectedClient?.userId}><Key className="h-3 w-3 mr-1.5" /> Credential Vault</TabsTrigger>
-            </TabsList>
+          <Tabs value={sheetTab} onValueChange={setSheetTab} className="mt-6 space-y-3">
+            <CmsChipTabs
+              value={sheetTab}
+              onValueChange={setSheetTab}
+              items={[
+                { value: "overview", label: "Overview" },
+                ...(selectedClient?.userId
+                  ? [{ value: "credentials", label: "Credential Vault" }]
+                  : []),
+              ]}
+            />
             
-            <TabsContent value="overview" className="space-y-4 pt-3">
+            <TabsContent value="overview" className="space-y-4 mt-0">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Engagement Tier</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Engagement Tier</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
                     <Award className="h-3.5 w-3.5 text-amber-500 shrink-0" /> 
-                    <span className={`px-1.5 py-0.5 rounded font-bold text-[9px] ${(selectedClient as any)?.tier === 'Enterprise' ? 'bg-purple-500/10 text-purple-500' : (selectedClient as any)?.tier === 'Premium' ? 'bg-blue-500/10 text-blue-500' : 'bg-slate-500/10 text-slate-500'}`}>
+                    <span className={`px-1.5 py-0.5 rounded font-bold text-[11px] ${(selectedClient as any)?.tier === 'Enterprise' ? 'bg-purple-500/10 text-purple-500' : (selectedClient as any)?.tier === 'Premium' ? 'bg-blue-500/10 text-blue-500' : 'bg-slate-500/10 text-slate-500'}`}>
                       {(selectedClient as any)?.tier || "Standard"}
                     </span>
                   </p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Industry Vertical</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Industry Vertical</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Building className="h-3.5 w-3.5 text-indigo-500 shrink-0" /> {selectedClient?.industry || "General Market"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">GST Number</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">GST Number</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Briefcase className="h-3.5 w-3.5 text-sky-500 shrink-0" /> {selectedClient?.gstNumber || "Not provided"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Client Since</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Client Since</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Calendar className="h-3.5 w-3.5 text-rose-500 shrink-0" /> {selectedClient?.clientSince ? new Date(selectedClient.clientSince).toLocaleDateString() : "Pending"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Account Email</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Account Email</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all"><Mail className="h-3.5 w-3.5 text-primary shrink-0" /> {selectedClient?.email}</p>
                 </div>
                 {selectedClient?.portalEmail ? (
                   <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Portal login email</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Portal login email</p>
                     <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground break-all">
                       <LogIn className="h-3.5 w-3.5 text-amber-500 shrink-0" /> {selectedClient.portalEmail}
                     </p>
@@ -1014,16 +1027,16 @@ export default function AdminClients() {
                 ) : null}
                 {selectedClient?.userId ? (
                   <div className="col-span-2 rounded-md border border-border/50 bg-muted/30 p-3">
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Portal activity</p>
+                    <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Portal activity</p>
                     <ClientPortalPresenceMeta client={selectedClient} />
                   </div>
                 ) : null}
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Phone Number</p>
                   <p className="text-xs font-semibold flex items-center gap-1.5 text-foreground"><Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" /> {selectedClient?.phone || "Not Provided"}</p>
                 </div>
                 <div className="space-y-1 bg-muted/30 p-2.5 rounded-md border border-border/50 col-span-2">
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider">Address</p>
+                  <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Address</p>
                   <p className="text-xs font-semibold flex items-start gap-1.5 text-foreground whitespace-pre-wrap">
                     <MapPin className="h-3.5 w-3.5 text-orange-500 shrink-0 mt-0.5" />
                     {selectedClient?.address?.trim() || "Not provided"}
@@ -1043,7 +1056,7 @@ export default function AdminClients() {
                       <div className="bg-cyan-500/10 p-2 rounded-md text-cyan-600 group-hover:scale-105 transition-transform"><Globe className="h-4 w-4" /></div>
                       <div>
                         <p className="text-xs font-bold text-foreground group-hover:text-cyan-600 transition-colors">Corporate Website</p>
-                        <p className="text-[9px] text-muted-foreground">Click to open official organization web portal</p>
+                        <p className="text-[11px] text-muted-foreground">Click to open official organization web portal</p>
                       </div>
                     </div>
                     <ExternalLink className="h-3.5 w-3.5 text-cyan-500 opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -1069,59 +1082,76 @@ export default function AdminClients() {
                   <p className="text-[10px] font-medium text-primary">Client Portal Credentials Audit</p>
                 </div>
                 <div className="p-0">
-                  <Table>
-                    <TableHeader className="bg-muted/20">
-                      <TableRow className="hover:bg-transparent text-[9px] font-semibold text-muted-foreground">
-                        <TableHead className="h-7 py-1 pl-3 text-center w-[50px]">Ver.</TableHead>
-                        <TableHead className="h-7 py-1">Assigned By</TableHead>
-                        <TableHead className="h-7 py-1">Date Set</TableHead>
-                        <TableHead className="h-7 py-1 pr-3 text-right w-[120px]">Password</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {isLoadingCredentials ? (
-                        [...Array(3)].map((_, i) => (
-                          <TableRow key={i}>
-                            {[...Array(4)].map((_, j) => (
-                              <TableCell key={j} className="py-2">
-                                <Skeleton className="h-3.5 w-full" />
-                              </TableCell>
-                            ))}
-                          </TableRow>
-                        ))
-                      ) : credentialRows.length === 0 ? (
-                        <TableRow><TableCell colSpan={4} className="h-12 text-center text-[10px] text-muted-foreground">No credential snapshots captured.</TableCell></TableRow>
-                      ) : (
-                        credentialRows.map((cred: any) => (
-                          <TableRow key={cred.id} className="text-[10px] group/row hover:bg-muted/20 border-border/30">
-                            <TableCell className="py-1 pl-3 text-center font-mono text-muted-foreground bg-muted/10 font-medium">#{cred.entryNumber}</TableCell>
-                            <TableCell className="py-1 font-medium">{cred.setBy}</TableCell>
-                            <TableCell className="py-1 text-muted-foreground">{new Date(cred.setAt).toLocaleDateString()}</TableCell>
-                            <TableCell className="py-1 pr-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <span className={`font-mono select-all px-1.5 py-0.5 rounded ${revealedPasswords[cred.id] ? 'text-primary bg-primary/10 font-semibold text-[10px]' : 'text-muted-foreground/60 tracking-widest text-[8px]'}`}>
-                                  {revealedPasswords[cred.id] || '????????'}
-                                </span>
-                                <Button 
-                                  size="icon" 
-                                  variant="ghost" 
-                                  className="h-6 w-6 opacity-60 group-hover/row:opacity-100 hover:text-primary hover:bg-primary/10 transition-all"
-                                  onClick={(e) => { e.stopPropagation(); handleReveal(cred.id); }}
-                                  disabled={revealMutation.isPending}
-                                >
-                                  {revealedPasswords[cred.id] ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                  <DataPagination {...credentialsPagination} />
+                  <CmsDataTable
+                    columns={[
+                      {
+                        id: "ver",
+                        header: "Ver.",
+                        headerClassName: "w-[50px] text-center",
+                        className: "text-center font-mono text-muted-foreground bg-muted/10 font-medium",
+                        cell: (cred: any) => `#${cred.entryNumber}`,
+                      },
+                      {
+                        id: "by",
+                        header: "Assigned By",
+                        cell: (cred: any) => <span className="font-medium">{cred.setBy}</span>,
+                      },
+                      {
+                        id: "date",
+                        header: "Date Set",
+                        cell: (cred: any) => (
+                          <span className="text-muted-foreground">
+                            {new Date(cred.setAt).toLocaleDateString()}
+                          </span>
+                        ),
+                      },
+                      {
+                        id: "password",
+                        header: "Password",
+                        align: "right",
+                        headerClassName: "w-[120px]",
+                        cell: (cred: any) => (
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span
+                              className={`font-mono select-all px-1.5 py-0.5 rounded ${
+                                revealedPasswords[cred.id]
+                                  ? "text-primary bg-primary/10 font-semibold text-[10px]"
+                                  : "text-muted-foreground/60 tracking-widest text-[8px]"
+                              }`}
+                            >
+                              {revealedPasswords[cred.id] || "????????"}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6 opacity-60 hover:text-primary hover:bg-primary/10 transition-all"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleReveal(cred.id);
+                              }}
+                              disabled={revealMutation.isPending}
+                            >
+                              {revealedPasswords[cred.id] ? (
+                                <EyeOff className="h-3 w-3" />
+                              ) : (
+                                <Eye className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </div>
+                        ),
+                      },
+                    ] satisfies CmsColumn<any>[]}
+                    rows={credentialRows}
+                    rowKey={(cred: any) => cred.id}
+                    isLoading={isLoadingCredentials}
+                    loadingRows={3}
+                    embedded
+                    empty={{ title: "No credential snapshots captured." }}
+                    pagination={credentialsPagination}
+                  />
                 </div>
               </div>
-              <p className="text-[9px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
+              <p className="text-[11px] text-muted-foreground/80 mt-2 px-1 italic flex items-start gap-1">
                 <span>??</span> Portals passwords decrypt for 10 seconds only. High-security tracing active.
               </p>
             </TabsContent>

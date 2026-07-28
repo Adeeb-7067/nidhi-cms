@@ -3,7 +3,7 @@
  * Usage: node --env-file=.env ./scripts/clean-db.js --confirm
  */
 import mongoose from "mongoose";
-import { Counter } from "../src/models/schema/counter.js";
+import { Counter } from "../src/modules/platform/schema/counter.js";
 import {
   usersTable,
   credentialHistoryTable,

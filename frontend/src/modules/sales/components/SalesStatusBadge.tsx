@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type { LeadStatus, LeadPriority, ProposalStatus, CustomerStatus, FollowUpStatus, InstallmentStatus, PartialPaymentStatus } from "../types";
 import {
   LEAD_STATUS_LABELS,
@@ -143,14 +143,10 @@ export function SalesStatusBadge({
   }
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold capitalize whitespace-nowrap",
-        style,
-        className,
-      )}
-    >
-      {label}
-    </span>
+    <CmsStatusChip
+      label={label}
+      colorClassName={style}
+      className={className}
+    />
   );
 }

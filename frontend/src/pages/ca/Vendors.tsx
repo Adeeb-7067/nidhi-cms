@@ -2,15 +2,16 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Building2 } from "lucide-react";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { mockCaVendors } from "@/modules/ca/mock-data";
 import { formatCurrency, RECONCILIATION_LABELS } from "@/modules/ca/constants";
-import { CAPageHeader, CAFilterBar, CAEmptyState } from "@/modules/ca/components";
+import type { CaVendor, ReconciliationStatus } from "@/modules/ca/types";
+import { CAPageHeader, CAFilterBar } from "@/modules/ca/components";
 
-const reconStyles = {
-  matched: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
-  unmatched: "bg-red-500/10 text-red-600 border-red-500/25",
-  partial: "bg-amber-500/10 text-amber-700 border-amber-500/25",
+const reconTone: Record<ReconciliationStatus, "success" | "danger" | "warning"> = {
+  matched: "success",
+  unmatched: "danger",
+  partial: "warning",
 };
 
 export default function Vendors() {
@@ -22,6 +23,63 @@ export default function Vendors() {
     );
   }, [search]);
 
+  const columns = useMemo<CmsColumn<CaVendor>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Vendor",
+        cell: (v) => <span className="font-medium">{v.name}</span>,
+      },
+      {
+        id: "gstin",
+        header: "GSTIN",
+        cell: (v) => <span className="font-mono">{v.gstin}</span>,
+      },
+      {
+        id: "pan",
+        header: "PAN",
+        cell: (v) => <span className="font-mono">{v.pan}</span>,
+      },
+      {
+        id: "ledger",
+        header: "Ledger balance",
+        align: "right",
+        cell: (v) => <span className="tabular-nums">{formatCurrency(v.ledgerBalance)}</span>,
+      },
+      {
+        id: "credit",
+        header: "Input credit",
+        align: "right",
+        cell: (v) => (
+          <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+            {formatCurrency(v.inputCreditAvailable)}
+          </span>
+        ),
+      },
+      {
+        id: "recon",
+        header: "Reconciliation",
+        chip: true,
+        cell: (v) => (
+          <CmsStatusChip
+            label={RECONCILIATION_LABELS[v.reconciliationStatus]}
+            tone={reconTone[v.reconciliationStatus]}
+          />
+        ),
+      },
+      {
+        id: "lastPayment",
+        header: "Last payment",
+        cell: (v) => (
+          <span className="text-muted-foreground">
+            {format(new Date(v.lastPaymentAt), "MMM d, yyyy")}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <CAPageHeader
@@ -30,42 +88,12 @@ export default function Vendors() {
         breadcrumbs={[{ label: "CA", href: "/ca" }, { label: "Vendors" }]}
       />
       <CAFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search vendors, GSTIN…" />
-      {filtered.length === 0 ? (
-        <CAEmptyState icon={Building2} title="No vendors found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Vendor</TableHead>
-                <TableHead className="text-xs">GSTIN</TableHead>
-                <TableHead className="text-xs">PAN</TableHead>
-                <TableHead className="text-xs text-right">Ledger balance</TableHead>
-                <TableHead className="text-xs text-right">Input credit</TableHead>
-                <TableHead className="text-xs">Reconciliation</TableHead>
-                <TableHead className="text-xs">Last payment</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((v) => (
-                <TableRow key={v.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">{v.name}</TableCell>
-                  <TableCell className="text-xs font-mono">{v.gstin}</TableCell>
-                  <TableCell className="text-xs font-mono">{v.pan}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums">{formatCurrency(v.ledgerBalance)}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(v.inputCreditAvailable)}</TableCell>
-                  <TableCell>
-                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${reconStyles[v.reconciliationStatus]}`}>
-                      {RECONCILIATION_LABELS[v.reconciliationStatus]}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(v.lastPaymentAt), "MMM d, yyyy")}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(v) => v.id}
+        empty={{ icon: Building2, title: "No vendors found" }}
+      />
     </PortalPageShell>
   );
 }

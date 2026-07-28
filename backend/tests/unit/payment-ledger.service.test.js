@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   deriveInstallmentStatus,
   deriveInvoiceStatus,
-} from "../../src/services/sales/payment-ledger.service.js";
+} from "../../src/modules/sales/services/payment-ledger.service.js";
 
 describe("payment-ledger.service", () => {
   it("deriveInstallmentStatus marks partial when below due", () => {

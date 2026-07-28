@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { parseDateKey, normalizeDateKey } from "../../src/services/hrm/hrm-date-utils.js";
+import { parseDateKey, normalizeDateKey } from "../../src/modules/hrm/services/hrm-date-utils.js";
 
 describe("normalizeDateKey", () => {
   test("accepts ISO date strings", () => {

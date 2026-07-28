@@ -1,20 +1,39 @@
-import { Pencil, Trash2 } from "lucide-react";
+import { Eye, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function MarketingRowActions({
+  onView,
   onEdit,
   onDelete,
+  canView = true,
   canEdit = true,
   canDelete = true,
 }: {
+  onView?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  canView?: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
 }) {
-  if (!canEdit && !canDelete) return null;
+  if (!canView && !canEdit && !canDelete) return null;
   return (
     <div className="flex justify-end gap-1">
+      {canView && onView && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onView();
+          }}
+          title="View"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
+      )}
       {canEdit && onEdit && (
         <Button
           type="button"

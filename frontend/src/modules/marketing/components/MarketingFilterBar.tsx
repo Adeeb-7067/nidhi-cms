@@ -1,14 +1,4 @@
-import { Search, Calendar, Download } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { CmsFilterBar, type CmsSelectFilter } from "@/components/cms";
 
 export function MarketingFilterBar({
   search,
@@ -35,60 +25,44 @@ export function MarketingFilterBar({
   children?: React.ReactNode;
   className?: string;
 }) {
+  const filters: CmsSelectFilter[] = [];
+  if (onDateRangeChange !== undefined) {
+    filters.push({
+      key: "dateRange",
+      value: dateRange,
+      onChange: onDateRangeChange,
+      placeholder: "Period",
+      className: "sm:w-[140px]",
+      options: [
+        { value: "today", label: "Today" },
+        { value: "week", label: "This week" },
+        { value: "month", label: "This month" },
+        { value: "quarter", label: "This quarter" },
+      ],
+    });
+  }
+  if (onClientChange !== undefined && clientList) {
+    filters.push({
+      key: "client",
+      value: client,
+      onChange: onClientChange,
+      placeholder: "All clients",
+      className: "sm:w-[180px]",
+      allOption: { value: "all", label: "All clients" },
+      options: clientList.map((c) => ({ value: c.id, label: c.name })),
+    });
+  }
+
   return (
-    <div
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card/80 p-3 sm:flex-row sm:flex-wrap sm:items-center backdrop-blur-sm",
-        className,
-      )}
+    <CmsFilterBar
+      search={search}
+      onSearchChange={onSearchChange}
+      searchPlaceholder={searchPlaceholder}
+      onExport={onExport}
+      filters={filters.length ? filters : undefined}
+      className={className}
     >
-      {onSearchChange !== undefined && (
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder={searchPlaceholder}
-            className="pl-9 h-9 bg-background"
-            value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-        </div>
-      )}
-      {onDateRangeChange !== undefined && (
-        <Select value={dateRange} onValueChange={onDateRangeChange}>
-          <SelectTrigger className="h-9 w-[140px] bg-background">
-            <Calendar className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Period" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="today">Today</SelectItem>
-            <SelectItem value="week">This week</SelectItem>
-            <SelectItem value="month">This month</SelectItem>
-            <SelectItem value="quarter">This quarter</SelectItem>
-          </SelectContent>
-        </Select>
-      )}
-      {onClientChange !== undefined && clientList && (
-        <Select value={client} onValueChange={onClientChange}>
-          <SelectTrigger className="h-9 w-[180px] bg-background">
-            <SelectValue placeholder="All clients" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All clients</SelectItem>
-            {clientList.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
       {children}
-      {onExport && (
-        <Button size="sm" variant="outline" className="h-9 gap-1.5 ml-auto" onClick={onExport}>
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </Button>
-      )}
-    </div>
+    </CmsFilterBar>
   );
 }

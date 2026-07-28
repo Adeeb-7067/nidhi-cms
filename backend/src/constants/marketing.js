@@ -116,3 +116,12 @@ export const DEFAULT_MEDIA_SUBFOLDERS = [
   "Brand assets",
   "Videos",
 ];
+
+/** Stable keys for default folders — survive display-name renames. */
+export function mediaFolderSeedKey(name) {
+  return String(name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}

@@ -14,14 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import {
   legalDashboardKpis,
@@ -48,6 +41,74 @@ export default function LegalDashboard() {
   const kpis = legalDashboardKpis;
 
   const nonCompliant = mockComplianceItems.filter((c) => c.status === "non_compliant" || c.status === "partial");
+
+  const ndaColumns: CmsColumn<(typeof ndaExpiryAlerts)[number]>[] = [
+    { id: "party", header: "Party", cell: (n) => <span className="font-medium">{n.partyName}</span> },
+    {
+      id: "expires",
+      header: "Expires",
+      cell: (n) => (
+        <span className="text-muted-foreground">{format(new Date(n.expiresAt), "MMM d, yyyy")}</span>
+      ),
+    },
+    { id: "risk", header: "Risk", chip: true, cell: (n) => <LegalRiskBadge level={n.risk} /> },
+  ];
+
+  const agreementColumns: CmsColumn<(typeof agreementRenewalReminders)[number]>[] = [
+    {
+      id: "agreement",
+      header: "Agreement",
+      cell: (a) => (
+        <>
+          <p className="font-medium truncate max-w-[180px]">{a.title}</p>
+          <p className="text-[10px] text-muted-foreground">{a.counterparty}</p>
+        </>
+      ),
+    },
+    {
+      id: "renewal",
+      header: "Renewal",
+      cell: (a) => format(new Date(a.renewalDate), "MMM d, yyyy"),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (a) => <LegalStatusBadge variant="agreement" value={a.status} />,
+    },
+  ];
+
+  const hearingColumns: CmsColumn<(typeof upcomingHearings)[number]>[] = [
+    { id: "type", header: "Type", cell: (h) => h.type },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (h) => (
+        <>
+          <p className="font-medium">{h.title}</p>
+          <p className="text-[10px] text-muted-foreground">{h.subtitle}</p>
+        </>
+      ),
+    },
+    {
+      id: "date",
+      header: "Date",
+      cell: (h) => format(new Date(h.date), "MMM d, h:mm a"),
+    },
+    { id: "risk", header: "Risk", chip: true, cell: (h) => <LegalRiskBadge level={h.risk} /> },
+    {
+      id: "action",
+      header: "Action",
+      align: "right",
+      cell: (h) => (
+        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+          <Link href={h.href}>
+            Open <ArrowRight className="h-3 w-3 ml-1 inline" />
+          </Link>
+        </Button>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -191,83 +252,34 @@ export default function LegalDashboard() {
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <ChartPanel title="NDA expiry alerts" icon={FileWarning} accent="amber" viewAllHref="/legal/nda">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Party</TableHead>
-                <TableHead className="text-xs">Expires</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {ndaExpiryAlerts.slice(0, 5).map((n) => (
-                <TableRow key={n.id}>
-                  <TableCell className="text-xs font-medium">{n.partyName}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(n.expiresAt), "MMM d, yyyy")}</TableCell>
-                  <TableCell><LegalRiskBadge level={n.risk} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <CmsDataTable
+            columns={ndaColumns}
+            rows={ndaExpiryAlerts.slice(0, 5)}
+            rowKey={(n) => n.id}
+            empty={{ title: "No NDA alerts", description: "No upcoming NDA expiries." }}
+            className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
+          />
         </ChartPanel>
 
         <ChartPanel title="Agreement renewals" icon={Scale} accent="violet" viewAllHref="/legal/agreements">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Agreement</TableHead>
-                <TableHead className="text-xs">Renewal</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {agreementRenewalReminders.slice(0, 5).map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell>
-                    <p className="text-xs font-medium truncate max-w-[180px]">{a.title}</p>
-                    <p className="text-[10px] text-muted-foreground">{a.counterparty}</p>
-                  </TableCell>
-                  <TableCell className="text-xs">{format(new Date(a.renewalDate), "MMM d, yyyy")}</TableCell>
-                  <TableCell><LegalStatusBadge variant="agreement" value={a.status} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <CmsDataTable
+            columns={agreementColumns}
+            rows={agreementRenewalReminders.slice(0, 5)}
+            rowKey={(a) => a.id}
+            empty={{ title: "No renewals", description: "No upcoming agreement renewals." }}
+            className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
+          />
         </ChartPanel>
       </div>
 
       <ChartPanel title="Upcoming hearings & deadlines" icon={Gavel} accent="blue">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="text-xs">Type</TableHead>
-              <TableHead className="text-xs">Reference</TableHead>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Risk</TableHead>
-              <TableHead className="text-xs text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {upcomingHearings.slice(0, 6).map((h) => (
-              <TableRow key={`${h.type}-${h.id}`}>
-                <TableCell className="text-xs">{h.type}</TableCell>
-                <TableCell>
-                  <p className="text-xs font-medium">{h.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{h.subtitle}</p>
-                </TableCell>
-                <TableCell className="text-xs">{format(new Date(h.date), "MMM d, h:mm a")}</TableCell>
-                <TableCell><LegalRiskBadge level={h.risk} /></TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                    <Link href={h.href}>
-                      Open <ArrowRight className="h-3 w-3 ml-1 inline" />
-                    </Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <CmsDataTable
+          columns={hearingColumns}
+          rows={upcomingHearings.slice(0, 6)}
+          rowKey={(h) => `${h.type}-${h.id}`}
+          empty={{ title: "No hearings", description: "No upcoming hearings or deadlines." }}
+          className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
+        />
       </ChartPanel>
     </PortalPageShell>
   );

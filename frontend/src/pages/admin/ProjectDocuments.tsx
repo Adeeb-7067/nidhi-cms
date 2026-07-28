@@ -4,19 +4,10 @@ import { Bell, FolderOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { DataPagination } from "@/components/ui/data-pagination";
 import { useTablePagination } from "@/lib/table-pagination";
-import { PageTableSkeleton } from "@/components/loading";
 import { ProjectDocumentFormDialog } from "@/components/project/ProjectDocumentFormDialog";
 import {
   useListProjectDocuments,
@@ -78,24 +69,109 @@ export default function ProjectDocumentsPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <PortalPageShell>
-        <PageTableSkeleton rows={8} columns={7} showToolbar />
-      </PortalPageShell>
-    );
-  }
-
-  if (isError) {
-    return (
-      <PortalPageShell>
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
-          <p className="text-sm text-destructive mb-3">Could not load project documents.</p>
-          <Button size="sm" variant="outline" onClick={() => refetch()}>Retry</Button>
+  const columns: CmsColumn<ProjectDocument>[] = [
+    {
+      id: "project",
+      header: "Project",
+      cell: (doc) => (
+        <button
+          type="button"
+          className="font-medium hover:text-primary text-left"
+          onClick={() => openEdit(doc)}
+        >
+          {doc.projectName ?? `Project #${doc.projectId}`}
+        </button>
+      ),
+    },
+    {
+      id: "fields",
+      header: "Fields",
+      chip: true,
+      cell: (doc) => (
+        <Badge variant="outline" className="text-[10px] font-normal tabular-nums">
+          {doc.completeness?.filled ?? 0}/{doc.completeness?.total ?? doc.fields?.length ?? 0} filled
+        </Badge>
+      ),
+    },
+    {
+      id: "renewal",
+      header: "Renewal",
+      chip: true,
+      cell: (doc) =>
+        doc.nearestRenewal ? (
+          <Badge
+            variant={
+              (doc.nearestRenewal.daysUntilExpiry ?? 99) <= 7
+                ? "destructive"
+                : (doc.nearestRenewal.daysUntilExpiry ?? 99) <= 15
+                  ? "secondary"
+                  : "outline"
+            }
+            className="text-[10px] font-normal gap-1"
+          >
+            <Bell className="h-2.5 w-2.5" />
+            {doc.nearestRenewal.label?.trim() || doc.nearestRenewal.kind}
+            {" · "}
+            {(doc.nearestRenewal.daysUntilExpiry ?? 0) <= 0
+              ? "expired"
+              : `${doc.nearestRenewal.daysUntilExpiry}d`}
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "completeness",
+      header: "Completeness",
+      className: "min-w-[140px]",
+      cell: (doc) => (
+        <div className="flex items-center gap-2">
+          <Progress value={doc.completeness?.percent ?? 0} className="h-1.5 flex-1" />
+          <span className="text-[10px] tabular-nums text-muted-foreground w-8">
+            {doc.completeness?.percent ?? 0}%
+          </span>
         </div>
-      </PortalPageShell>
-    );
-  }
+      ),
+    },
+    {
+      id: "updated",
+      header: "Updated",
+      cell: (doc) => (
+        <span className="text-muted-foreground">{format(new Date(doc.updatedAt), "MMM d, yyyy")}</span>
+      ),
+    },
+    {
+      id: "by",
+      header: "By",
+      cell: (doc) => <span className="text-muted-foreground">{doc.updatedByName ?? "—"}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (doc) => (
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs gap-1"
+            onClick={() => openEdit(doc)}
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs text-destructive hover:text-destructive"
+            onClick={() => setDeleteTarget(doc)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -131,109 +207,27 @@ export default function ProjectDocumentsPage() {
         />
       </div>
 
-      {documents.length === 0 ? (
-        <div className="rounded-xl border bg-card p-10 text-center">
-          <FolderOpen className="h-10 w-10 mx-auto text-muted-foreground/50 mb-3" />
-          <p className="text-sm font-medium">No project documents yet</p>
-          <p className="text-xs text-muted-foreground mt-1 mb-4">Create a dossier and add the fields your team needs.</p>
-          <Button size="sm" onClick={openCreate}>Add first document</Button>
-        </div>
-      ) : (
-        <div className="rounded-xl border bg-card overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Fields</TableHead>
-                <TableHead className="text-xs">Renewal</TableHead>
-                <TableHead className="text-xs">Completeness</TableHead>
-                <TableHead className="text-xs">Updated</TableHead>
-                <TableHead className="text-xs">By</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {documents.map((doc) => (
-                <TableRow key={doc.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">
-                    <button
-                      type="button"
-                      className="hover:text-primary text-left"
-                      onClick={() => openEdit(doc)}
-                    >
-                      {doc.projectName ?? `Project #${doc.projectId}`}
-                    </button>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline" className="text-[10px] font-normal tabular-nums">
-                      {doc.completeness?.filled ?? 0}/{doc.completeness?.total ?? doc.fields?.length ?? 0} filled
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {doc.nearestRenewal ? (
-                      <Badge
-                        variant={
-                          (doc.nearestRenewal.daysUntilExpiry ?? 99) <= 7
-                            ? "destructive"
-                            : (doc.nearestRenewal.daysUntilExpiry ?? 99) <= 15
-                              ? "secondary"
-                              : "outline"
-                        }
-                        className="text-[10px] font-normal gap-1"
-                      >
-                        <Bell className="h-2.5 w-2.5" />
-                        {doc.nearestRenewal.label?.trim() || doc.nearestRenewal.kind}
-                        {" · "}
-                        {(doc.nearestRenewal.daysUntilExpiry ?? 0) <= 0
-                          ? "expired"
-                          : `${doc.nearestRenewal.daysUntilExpiry}d`}
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="min-w-[140px]">
-                    <div className="flex items-center gap-2">
-                      <Progress value={doc.completeness?.percent ?? 0} className="h-1.5 flex-1" />
-                      <span className="text-[10px] tabular-nums text-muted-foreground w-8">
-                        {doc.completeness?.percent ?? 0}%
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {format(new Date(doc.updatedAt), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{doc.updatedByName ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs gap-1"
-                        onClick={() => openEdit(doc)}
-                      >
-                        <Pencil className="h-3 w-3" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 text-xs text-destructive hover:text-destructive"
-                        onClick={() => setDeleteTarget(doc)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <div className="border-t px-4 py-3">
-            <DataPagination page={page} limit={limit} total={total} onPageChange={setPage} />
-          </div>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={documents}
+        rowKey={(doc) => doc.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: FolderOpen,
+          title: "No project documents yet",
+          description: "Create a dossier and add the fields your team needs.",
+          actionLabel: "Add first document",
+          onAction: openCreate,
+        }}
+        pagination={{
+          page,
+          limit,
+          total,
+          onPageChange: setPage,
+        }}
+      />
 
       <ProjectDocumentFormDialog
         open={formOpen}

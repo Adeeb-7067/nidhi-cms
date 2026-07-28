@@ -3,14 +3,6 @@ import { format } from "date-fns";
 import { Image, ExternalLink, Loader2, Plus, CheckCircle2, Eye, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -50,6 +42,7 @@ import type { ApprovalStage, GraphicFileType } from "@/modules/marketing/types";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 const emptyForm = {
   accountId: "",
@@ -80,7 +73,7 @@ export default function MarketingGraphics() {
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
   const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
   const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
-  const { data, isLoading, isError } = useMarketingGraphics(
+  const { data, isLoading, isError, refetch } = useMarketingGraphics(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const createGraphic = useCreateMarketingGraphic();
@@ -124,6 +117,24 @@ export default function MarketingGraphics() {
       ).length,
     }),
     [graphics],
+  );
+
+  const columns = useMemo<CmsColumn<MarketingGraphicDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingGraphicDto>[] = [
+        { id: "design", header: "Design", cell: (g) => <span className="font-medium max-w-[180px] block truncate">{g.title}</span> },
+        { id: "project", header: "Project", cell: (g) => g.clientName },
+        { id: "status", header: "Status", chip: true, cell: (g) => <ApprovalStatusBadge stage={g.status as ApprovalStage} /> },
+        { id: "revisions", header: "Revisions", align: "center", cell: (g) => g.revisionCount },
+        { id: "files", header: "Files", chip: true, cell: (g) => <div className="flex flex-wrap gap-1">{g.fileTypes.map((f) => <Badge key={f} variant="outline" className="text-[9px] px-1.5 py-0">{GRAPHIC_FILE_LABELS[f as GraphicFileType] ?? f}</Badge>)}</div> },
+        { id: "brandGuide", header: "Brand guide", cell: (g) => g.brandGuidelineUrl && g.brandGuidelineUrl !== "#" ? <a href={g.brandGuidelineUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs text-primary hover:underline">View <ExternalLink className="h-3 w-3" /></a> : <span className="text-xs text-muted-foreground">—</span> },
+        { id: "assignee", header: "Assignee", cell: (g) => g.assignee },
+        { id: "due", header: "Due", cell: (g) => g.dueDate ? format(new Date(g.dueDate), "MMM d") : "—" },
+      ];
+      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (g) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, g.createdBy)} canDelete={canDelete && canFullyEditMarketingItem(user, g.createdBy)} onEdit={() => openEdit(g)} onDelete={() => setDeleteTarget(g)} /> });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
   );
 
   const openCreate = () => {
@@ -252,86 +263,7 @@ export default function MarketingGraphics() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={Image} title="Could not load graphics" description="Check your connection and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={Image}
-          title="No graphic requests"
-          description="The queue is empty for current filters."
-          actionLabel={canCreate ? "New graphic" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Design</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Revisions</TableHead>
-                <TableHead className="text-xs">Files</TableHead>
-                <TableHead className="text-xs">Brand guide</TableHead>
-                <TableHead className="text-xs">Assignee</TableHead>
-                <TableHead className="text-xs">Due</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell className="text-xs font-medium max-w-[180px] truncate">{g.title}</TableCell>
-                  <TableCell className="text-xs">{g.clientName}</TableCell>
-                  <TableCell>
-                    <ApprovalStatusBadge stage={g.status as ApprovalStage} />
-                  </TableCell>
-                  <TableCell className="text-xs text-center">{g.revisionCount}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {g.fileTypes.map((f) => (
-                        <Badge key={f} variant="outline" className="text-[9px] px-1.5 py-0">
-                          {GRAPHIC_FILE_LABELS[f as GraphicFileType] ?? f}
-                        </Badge>
-                      ))}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {g.brandGuidelineUrl && g.brandGuidelineUrl !== "#" ? (
-                      <a
-                        href={g.brandGuidelineUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                      >
-                        View <ExternalLink className="h-3 w-3" />
-                      </a>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs">{g.assignee}</TableCell>
-                  <TableCell className="text-xs">
-                    {g.dueDate ? format(new Date(g.dueDate), "MMM d") : "—"}
-                  </TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, g.createdBy)}
-                        canDelete={canDelete && canFullyEditMarketingItem(user, g.createdBy)}
-                        onEdit={() => openEdit(g)}
-                        onDelete={() => setDeleteTarget(g)}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(g) => g.id} isLoading={isLoading} error={isError} onRetry={() => refetch()} empty={{ icon: Image, title: "No graphic requests", description: "The queue is empty for current filters.", actionLabel: canCreate ? "New graphic" : undefined, onAction: canCreate ? openCreate : undefined }} errorMessage="Check your connection and try again." />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg">

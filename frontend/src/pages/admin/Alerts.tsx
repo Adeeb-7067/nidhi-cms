@@ -1,18 +1,11 @@
 import { useMemo, useState } from "react";
-import { Megaphone, Pencil, Ban, Plus } from "lucide-react";
+import { Ban, CheckCircle2, Clock, Megaphone, Pencil, Plus, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Tabs } from "@/components/ui/tabs";
-import { PageTableSkeleton } from "@/components/loading";
-import {
-  PortalPageShell,
-  PortalPageHero,
-  PortalTabsList,
-  PortalTabsTrigger,
-  PortalContentCard,
-} from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs } from "@/components/cms";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
 import { AlertFormDialog } from "@/components/alerts/alert-form-dialog";
@@ -49,11 +42,22 @@ export default function AdminAlerts() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingAlert, setEditingAlert] = useState<Alert | null>(null);
 
-  const { data, isLoading } = useListAlerts({ status: status === "all" ? undefined : status, limit: 200 });
+  const { data, isLoading } = useListAlerts({ limit: 200 });
   const cancelAlert = useCancelAlert();
 
-  const alerts = useMemo(() => data?.alerts ?? [], [data?.alerts]);
-  const { pagination: clientPagination } = useClientPagination(alerts, DEFAULT_TABLE_PAGE_SIZE);
+  const allAlerts = useMemo(() => data?.alerts ?? [], [data?.alerts]);
+  const filtered = useMemo(
+    () => (status === "all" ? allAlerts : allAlerts.filter((a) => a.status === status)),
+    [allAlerts, status],
+  );
+  const { pagination: clientPagination, setPage } = useClientPagination(
+    filtered,
+    DEFAULT_TABLE_PAGE_SIZE,
+  );
+
+  const scheduledCount = allAlerts.filter((a) => a.status === "scheduled").length;
+  const sentCount = allAlerts.filter((a) => a.status === "sent").length;
+  const cancelledCount = allAlerts.filter((a) => a.status === "cancelled").length;
 
   const openCreate = () => {
     setEditingAlert(null);
@@ -77,9 +81,9 @@ export default function AdminAlerts() {
       id: "title",
       header: "Title",
       cell: (alert) => (
-        <div className="flex flex-col min-w-[160px] max-w-md">
-          <span className="font-medium text-xs whitespace-normal">{alert.title}</span>
-          <span className="text-[10px] text-muted-foreground mt-0.5 truncate">{alert.description}</span>
+        <div className="flex min-w-[160px] max-w-md flex-col">
+          <span className="text-xs font-medium whitespace-normal">{alert.title}</span>
+          <span className="mt-0.5 truncate text-[10px] text-muted-foreground">{alert.description}</span>
         </div>
       ),
     },
@@ -92,7 +96,7 @@ export default function AdminAlerts() {
       id: "scheduledAt",
       header: "Scheduled at",
       cell: (alert) => (
-        <span className="text-xs text-muted-foreground">
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
           {new Date(alert.scheduledAt).toLocaleString()}
         </span>
       ),
@@ -101,7 +105,7 @@ export default function AdminAlerts() {
       id: "status",
       header: "Status",
       cell: (alert) => (
-        <Badge variant="outline" className={`${statusBadgeClass(alert.status)} text-[10px] px-1.5 py-0 h-4`}>
+        <Badge variant="outline" className={`${statusBadgeClass(alert.status)} h-4 px-1.5 py-0 text-[10px]`}>
           {alert.status.toUpperCase()}
         </Badge>
       ),
@@ -112,18 +116,18 @@ export default function AdminAlerts() {
       hideInDetail: true,
       cell: (alert) =>
         alert.status === "scheduled" ? (
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-1.5">
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openEdit(alert)}>
-              <Pencil className="h-3 w-3 mr-1" /> Edit
+              <Pencil className="mr-1 h-3 w-3" /> Edit
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border-red-500/20"
+              className="h-7 border-red-500/20 bg-red-500/10 text-xs text-red-500 hover:bg-red-500/20 hover:text-red-600"
               onClick={() => handleCancel(alert)}
               disabled={cancelAlert.isPending}
             >
-              <Ban className="h-3 w-3 mr-1" /> Cancel
+              <Ban className="mr-1 h-3 w-3" /> Cancel
             </Button>
           </div>
         ) : null,
@@ -136,48 +140,52 @@ export default function AdminAlerts() {
         title="Alert Management"
         subtitle="Schedule announcements that pop up as a modal for the selected audience"
         actions={
-          <Button onClick={openCreate}>
-            <Plus className="h-4 w-4 mr-1.5" /> New alert
+          <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
+            <Plus className="h-3.5 w-3.5" /> New alert
           </Button>
         }
       />
 
-      <PortalContentCard contentClassName="p-0">
-        <div className="p-3 border-b border-border">
-          <Tabs value={status} onValueChange={(v) => setStatus(v as AlertStatus | "all")}>
-            <PortalTabsList>
-              <PortalTabsTrigger value="all">All</PortalTabsTrigger>
-              <PortalTabsTrigger value="scheduled">Scheduled</PortalTabsTrigger>
-              <PortalTabsTrigger value="sent">Sent</PortalTabsTrigger>
-              <PortalTabsTrigger value="cancelled">Cancelled</PortalTabsTrigger>
-            </PortalTabsList>
-          </Tabs>
+      <PortalKpiGrid
+        loading={isLoading}
+        items={[
+          { title: "Total alerts", value: allAlerts.length, icon: Megaphone, accent: "violet", delay: 0 },
+          { title: "Scheduled", value: scheduledCount, icon: Clock, accent: "blue", delay: 1 },
+          { title: "Sent", value: sentCount, icon: CheckCircle2, accent: "green", delay: 2 },
+          { title: "Cancelled", value: cancelledCount, icon: XCircle, accent: "red", delay: 3 },
+        ]}
+      />
+
+      <CmsChipTabs
+        value={status}
+        onValueChange={(v) => {
+          setStatus(v as AlertStatus | "all");
+          setPage(1);
+        }}
+        items={[
+          { value: "all", label: "All", count: allAlerts.length },
+          { value: "scheduled", label: "Scheduled", count: scheduledCount },
+          { value: "sent", label: "Sent", count: sentCount },
+          { value: "cancelled", label: "Cancelled", count: cancelledCount },
+        ]}
+      />
+
+      {isLoading ? (
+        <div className="rounded-md border border-border/60 py-16 text-center text-xs text-muted-foreground">
+          Loading alerts…
         </div>
-        <div className="p-4">
-          {isLoading ? (
-            <PageTableSkeleton rows={6} columns={5} showToolbar />
-          ) : alerts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-              <Megaphone className="h-8 w-8 text-muted-foreground opacity-50" />
-              <p className="text-sm font-medium text-foreground">No alerts yet</p>
-              <p className="text-xs text-muted-foreground">
-                Schedule an alert to broadcast an announcement to your team.
-              </p>
-            </div>
-          ) : (
-            <AdvancedTable
-              data={alerts}
-              columns={columns}
-              searchKey="title"
-              searchPlaceholder="Filter alerts..."
-              filename="AlertsExport"
-              viewStorageKey="admin-alerts"
-              showViewToggle
-              clientPagination={clientPagination}
-            />
-          )}
-        </div>
-      </PortalContentCard>
+      ) : (
+        <AdvancedTable
+          data={filtered}
+          columns={columns}
+          searchKey="title"
+          searchPlaceholder="Filter alerts…"
+          filename="AlertsExport"
+          viewStorageKey="admin-alerts"
+          showViewToggle
+          clientPagination={clientPagination}
+        />
+      )}
 
       <AlertFormDialog open={dialogOpen} onOpenChange={setDialogOpen} alert={editingAlert} />
     </PortalPageShell>

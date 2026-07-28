@@ -12,8 +12,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs } from "@/components/cms";
+import { CmsKpiGrid } from "@/components/cms/cms-kpi";
 import { cn } from "@/lib/utils";
 import {
   useGetLead,
@@ -46,24 +48,6 @@ import {
 } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { FileUploader } from "@/components/ui/file-uploader";
-
-/* ─── Stat card ────────────────────────────────────────────────────────────── */
-function StatCard({ icon, label, value, sub, accentClass = "text-primary" }: {
-  icon: React.ReactNode; label: string; value: string; sub?: string; accentClass?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-1.5">
-      <div className="flex items-center gap-2">
-        <span className={cn("h-7 w-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-current/10", accentClass)}>
-          {icon}
-        </span>
-        <span className="text-xs text-muted-foreground">{label}</span>
-      </div>
-      <p className="text-lg font-black tabular-nums text-foreground">{value}</p>
-      {sub && <p className="text-[10px] line-clamp-1 text-muted-foreground/70">{sub}</p>}
-    </div>
-  );
-}
 
 /* ─── Contact row ──────────────────────────────────────────────────────────── */
 function ContactRow({ icon: Icon, label, children }: {
@@ -552,65 +536,53 @@ export default function LeadDetail() {
       )}
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <StatCard
-          icon={<TrendingUp className="h-3.5 w-3.5" />}
-          label="Expected value"
-          value={formatCurrency(lead.expectedValue)}
-          accentClass="text-primary"
-        />
-        <StatCard
-          icon={<Radio className="h-3.5 w-3.5" />}
-          label="Source"
-          value={formatLeadSourceLabel(lead.source)}
-          accentClass="text-violet-600 dark:text-violet-400"
-        />
-        <StatCard
-          icon={<MessageSquare className="h-3.5 w-3.5" />}
-          label="Contact channel"
-          value={formatLeadContactChannelLabel(lead.contactChannel)}
-          accentClass="text-emerald-600 dark:text-emerald-400"
-        />
-        <StatCard
-          icon={<Bell className="h-3.5 w-3.5" />}
-          label="Next reminder"
-          value={lead.reminder?.date ? format(new Date(lead.reminder.date), "MMM d, yyyy") : "Not set"}
-          sub={lead.reminder?.note}
-          accentClass="text-orange-600 dark:text-orange-400"
-        />
-      </div>
+      <CmsKpiGrid
+        columns={4}
+        items={[
+          {
+            title: "Expected value",
+            value: formatCurrency(lead.expectedValue),
+            icon: TrendingUp,
+            accent: "default",
+          },
+          {
+            title: "Source",
+            value: formatLeadSourceLabel(lead.source),
+            icon: Radio,
+            accent: "violet",
+          },
+          {
+            title: "Contact channel",
+            value: formatLeadContactChannelLabel(lead.contactChannel),
+            icon: MessageSquare,
+            accent: "green",
+          },
+          {
+            title: "Next reminder",
+            value: lead.reminder?.date ? format(new Date(lead.reminder.date), "MMM d, yyyy") : "Not set",
+            hint: lead.reminder?.note,
+            icon: Bell,
+            accent: "amber",
+          },
+        ]}
+      />
 
       {/* ── Pipeline strip ── */}
       <LeadPipelineStrip status={lead.status} />
 
       {/* ── Tabs ── */}
-      <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="h-auto w-full justify-start gap-1 rounded-xl bg-muted/50 p-1 flex-wrap">
-          <TabsTrigger value="overview" className="text-xs rounded-lg data-[state=active]:shadow-sm">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="activity" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
-            <Activity className="size-3.5" />
-            Activity
-            {rawActivities.length > 0 && (
-              <span className="rounded-full bg-primary/15 px-1.5 py-0 text-[10px] font-semibold">
-                {rawActivities.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="proposals" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
-            <FileText className="size-3.5" />
-            Proposals
-            <span className="rounded-full bg-muted px-1.5 py-0 text-[10px] font-semibold">
-              {proposals.length}
-            </span>
-          </TabsTrigger>
-          <TabsTrigger value="notes" className="text-xs rounded-lg data-[state=active]:shadow-sm gap-1.5">
-            <StickyNote className="size-3.5" />
-            Notes & Documents
-          </TabsTrigger>
-        </TabsList>
-
+      <div className="space-y-4 pb-24">
+        <CmsChipTabs
+          value={tab}
+          onValueChange={setTab}
+          items={[
+            { value: "overview", label: "Overview" },
+            { value: "activity", label: "Activity", count: rawActivities.length || undefined },
+            { value: "proposals", label: "Proposals", count: proposals.length },
+            { value: "notes", label: "Notes & Documents" },
+          ]}
+        />
+        <Tabs value={tab} onValueChange={setTab}>
         {/* ── Overview tab ── */}
         <TabsContent value="overview" className="mt-0">
           <div className="grid gap-4 lg:grid-cols-3">
@@ -1049,36 +1021,37 @@ export default function LeadDetail() {
           </div>
         </TabsContent>
       </Tabs>
+      </div>
 
       {/* ── Floating action bar ── */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 px-4 py-3 shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.4)]">
+      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.12)] dark:shadow-[0_-4px_24px_-8px_rgba(0,0,0,0.4)]">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+          <Button variant="outline" size="sm" className="min-h-9" onClick={() => setEditOpen(true)}>
             <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
           </Button>
           {!pauseFollowUps && (
             <>
-              <Button variant="outline" size="sm" onClick={() => setFollowUpOpen(true)}>
+              <Button variant="outline" size="sm" className="min-h-9" onClick={() => setFollowUpOpen(true)}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />Follow-up
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setReminderOpen(true)}>
+              <Button variant="outline" size="sm" className="min-h-9" onClick={() => setReminderOpen(true)}>
                 <Bell className="h-3.5 w-3.5 mr-1.5" />
                 {lead.reminder ? "Reminder" : "Set reminder"}
               </Button>
             </>
           )}
           {(lead.status === "proposal_sent" || lead.status === "interested" || lead.status === "project_planning") && (
-            <Button variant="outline" size="sm" onClick={approveLead} disabled={updateLead.isPending}>
+            <Button variant="outline" size="sm" className="min-h-9" onClick={approveLead} disabled={updateLead.isPending}>
               <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />Approve
             </Button>
           )}
           {lead.status !== "converted" && lead.status !== "closed_elsewhere" && (
-            <Button variant="outline" size="sm" onClick={() => setConvertOpen(true)}>
+            <Button variant="outline" size="sm" className="min-h-9" onClick={() => setConvertOpen(true)}>
               <UserCheck className="h-3.5 w-3.5 mr-1.5" />Convert
             </Button>
           )}
           {!pauseFollowUps && (
-            <Button size="sm" onClick={() => setProposalOpen(true)}>
+            <Button size="sm" className="min-h-9" onClick={() => setProposalOpen(true)}>
               <FileText className="h-3.5 w-3.5 mr-1.5" />Generate proposal
             </Button>
           )}

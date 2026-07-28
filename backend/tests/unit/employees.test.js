@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { monthBounds } from "../../src/services/hrm/employees.service.js";
+import { monthBounds } from "../../src/modules/hrm/services/employees.service.js";
 
 describe("monthBounds", () => {
   test("returns first and last day of month", () => {

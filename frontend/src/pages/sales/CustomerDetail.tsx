@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useRoute, useLocation } from "wouter";
-import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, KeyRound, FilePlus, Trash2, MessageSquare } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Globe, MapPin, Pencil, Bell, KeyRound, FilePlus, Trash2, MessageSquare, IndianRupee, Wallet, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -15,9 +15,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { CmsChipTabs } from "@/components/cms";
 import {
   useGetCustomer,
   useGetCustomerHub,
@@ -153,7 +154,7 @@ export default function CustomerDetail() {
   const taskCount = hub?.tasks.length ?? 0;
   const teamCount = hub?.teamMembers.length ?? 0;
   const projectCount = hub?.projects.length ?? 0;
-  const tabCount = (n: number) => (n > 0 ? ` (${n})` : "");
+  const tabCount = (n: number) => (n > 0 ? n : undefined);
 
   return (
     <PortalPageShell>
@@ -244,85 +245,59 @@ export default function CustomerDetail() {
         </Link>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="flex h-auto w-full flex-wrap items-center justify-start gap-1 rounded-xl border border-border/40 bg-muted/50 p-1">
-          <TabsTrigger value="overview" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="proposals" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Proposals{tabCount(proposalsTotal)}
-          </TabsTrigger>
-          <TabsTrigger value="invoices" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Invoices{tabCount(invoices.length)}
-          </TabsTrigger>
-          <TabsTrigger value="payments" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Payments{tabCount(payments.length)}
-          </TabsTrigger>
-          <TabsTrigger value="installments" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Installments{tabCount(installments.length)}
-          </TabsTrigger>
-          <TabsTrigger value="statement" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Statement
-          </TabsTrigger>
-          <TabsTrigger value="projects" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Projects{tabCount(projectCount)}
-          </TabsTrigger>
-          <TabsTrigger value="team" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Team{tabCount(teamCount)}
-          </TabsTrigger>
-          <TabsTrigger value="admin" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Admin
-          </TabsTrigger>
-          <TabsTrigger value="credentials" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Credentials
-          </TabsTrigger>
-          <TabsTrigger value="tickets" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Tickets{tabCount(ticketCount)}
-          </TabsTrigger>
-          <TabsTrigger value="tasks" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Tasks{tabCount(taskCount)}
-          </TabsTrigger>
-          <TabsTrigger value="inventory" className="h-7 rounded-md px-2.5 text-xs font-medium">
-            Inventory
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">
-                  {hasInstallmentSchedule ? "Scheduled" : "Total sales"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <p className="text-lg font-bold">{formatCurrency(customer.totalSales)}</p>
-                {hasInstallmentSchedule ? (
-                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {installments.length} milestone{installments.length === 1 ? "" : "s"}
-                  </p>
-                ) : null}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">Collected</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <p className="text-lg font-bold text-emerald-700">{formatCurrency(totalCollected)}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-2 pt-3 px-3">
-                <CardTitle className="text-[10px] uppercase text-muted-foreground">Outstanding</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 pb-3">
-                <p className={`text-lg font-bold ${customer.outstanding > 0 ? "text-destructive" : ""}`}>
-                  {formatCurrency(customer.outstanding)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+      <div className="space-y-4">
+        <CmsChipTabs
+          value={tab}
+          onValueChange={setTab}
+          items={[
+            { value: "overview", label: "Overview" },
+            { value: "proposals", label: "Proposals", count: tabCount(proposalsTotal) },
+            { value: "invoices", label: "Invoices", count: tabCount(invoices.length) },
+            { value: "payments", label: "Payments", count: tabCount(payments.length) },
+            { value: "installments", label: "Installments", count: tabCount(installments.length) },
+            { value: "statement", label: "Statement" },
+            { value: "projects", label: "Projects", count: tabCount(projectCount) },
+            { value: "team", label: "Team", count: tabCount(teamCount) },
+            { value: "admin", label: "Admin" },
+            { value: "credentials", label: "Credentials" },
+            { value: "tickets", label: "Tickets", count: tabCount(ticketCount) },
+            { value: "tasks", label: "Tasks", count: tabCount(taskCount) },
+            { value: "inventory", label: "Inventory" },
+          ]}
+        />
+        <Tabs value={tab} onValueChange={setTab}>
+        <TabsContent value="overview" className="mt-0">
+          <PortalKpiGrid
+            columns={3}
+            count={3}
+            items={[
+              {
+                title: hasInstallmentSchedule ? "Scheduled" : "Total sales",
+                value: formatCurrency(customer.totalSales),
+                hint: hasInstallmentSchedule
+                  ? `${installments.length} milestone${installments.length === 1 ? "" : "s"}`
+                  : undefined,
+                icon: IndianRupee,
+                accent: "blue",
+                delay: 0,
+              },
+              {
+                title: "Collected",
+                value: formatCurrency(totalCollected),
+                icon: Wallet,
+                accent: "green",
+                delay: 1,
+              },
+              {
+                title: "Outstanding",
+                value: formatCurrency(customer.outstanding),
+                icon: AlertCircle,
+                accent: "red",
+                alert: customer.outstanding > 0,
+                delay: 2,
+              },
+            ]}
+          />
 
           <Card className="mt-4">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
@@ -476,6 +451,7 @@ export default function CustomerDetail() {
           />
         </TabsContent>
       </Tabs>
+      </div>
 
       <CustomerFormModal open={editOpen} onOpenChange={setEditOpen} customer={customer} />
       <ProposalFormSheet open={proposalOpen} onOpenChange={setProposalOpen} defaultCustomerId={customer.id} />

@@ -4,15 +4,7 @@ import { Link } from "wouter";
 import { Plus, TrendingDown, Check, X, Pencil, Trash2, Wallet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -30,7 +22,6 @@ import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
-  FinanceEmptyState,
   FinanceErrorState,
   ExpenseFormModal,
   FinanceConfirmDialog,
@@ -55,6 +46,7 @@ import { toast } from "sonner";
 
 const STATUS_TABS: (ExpenseStatus | "all")[] = ["all", "pending", "approved", "rejected"];
 const SETTLEMENT_OPTIONS: (ExpensePaymentStatus | "all")[] = ["all", "unpaid", "partially_paid", "paid"];
+const PAGE_LIMIT = 20;
 
 function recognizedOf(e: Expense) {
   if (e.status !== "approved") return 0;
@@ -96,7 +88,7 @@ export default function ExpensesPage() {
   const params: ListExpensesParams = useMemo(
     () => ({
       page,
-      limit: 20,
+      limit: PAGE_LIMIT,
       search: search || undefined,
       status: statusTab === "all" ? undefined : (statusTab as ExpenseStatus),
       paymentStatus:
@@ -167,6 +159,178 @@ export default function ExpensesPage() {
       </PortalPageShell>
     );
   }
+
+  const columns: CmsColumn<Expense>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (e) => format(new Date(e.date), "MMM d, yyyy"),
+    },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (e) => (
+        <div className="font-mono">
+          <div>{e.reference}</div>
+          {e.chequeId ? (
+            <Link
+              href={`/finance/cheques/${e.chequeId}`}
+              className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-primary hover:underline"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              Cheque {e.chequeNumber ?? e.chequeReference ?? `#${e.chequeId}`}
+            </Link>
+          ) : null}
+        </div>
+      ),
+    },
+    {
+      id: "vendor",
+      header: "Vendor",
+      className: "max-w-[160px]",
+      cell: (e) => (
+        <>
+          <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
+          <div className="text-[10px] text-muted-foreground truncate">
+            {EXPENSE_CATEGORY_LABELS[e.category]}
+          </div>
+        </>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (e) => <FinanceStatusBadge variant="expense" value={e.status} />,
+    },
+    {
+      id: "settlement",
+      header: "Settlement",
+      chip: true,
+      cell: (e) =>
+        e.status === "approved" && e.paymentStatus ? (
+          <FinanceStatusBadge variant="expensePayment" value={e.paymentStatus} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "gst",
+      header: "GST",
+      chip: true,
+      cell: (e) => (
+        <>
+          <GstClassificationBadge gstEnabled={e.gstEnabled} />
+          {e.gstEnabled && (e.gstAmount ?? 0) > 0 ? (
+            <div className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+              {formatCurrency(e.gstAmount)}
+            </div>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: "bill",
+      header: "Bill",
+      align: "right",
+      cell: (e) => <span className="font-medium tabular-nums">{formatCurrency(e.amount)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      cell: (e) => (
+        <span className="tabular-nums text-muted-foreground">
+          {e.status === "approved" ? formatCurrency(recognizedOf(e)) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "due",
+      header: "Due",
+      align: "right",
+      cell: (e) => {
+        const due = remainingOf(e);
+        if (e.status !== "approved") return "—";
+        if (due > 0) return <span className="text-amber-700 font-medium tabular-nums">{formatCurrency(due)}</span>;
+        return <span className="tabular-nums">{formatCurrency(0)}</span>;
+      },
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (e) => {
+        const due = remainingOf(e);
+        return (
+          <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0"
+              onClick={() => setDetailId(e.id)}
+              title="View bill"
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </Button>
+            {e.status === "pending" && canEdit && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-green-600"
+                  onClick={() => setApproveTarget(e)}
+                  title="Approve"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-amber-600"
+                  onClick={() => handleReject(e)}
+                  title="Reject"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0"
+                  onClick={() => openEdit(e)}
+                  title="Edit"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+            {e.status === "approved" && due > 0 && canEdit && e.chequeStatus !== "issued" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-primary"
+                onClick={() => setPayTarget(e)}
+                title="Pay remaining"
+              >
+                <Wallet className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            {canDelete && e.status !== "approved" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-destructive"
+                onClick={() => setDeleteTarget(e)}
+                title="Delete"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -284,204 +448,40 @@ export default function ExpensesPage() {
         </Select>
       </FinanceFilterBar>
 
-      <Tabs
+      <CmsChipTabs
         value={statusTab}
         onValueChange={(v) => {
           setStatusTab(v);
           setPage(1);
         }}
-      >
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {STATUS_TABS.map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {s === "all" ? "All" : s}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+        items={STATUS_TABS.map((s) => ({
+          value: s,
+          label: s === "all" ? "All" : s,
+        }))}
+      />
 
-      {expenses.length === 0 ? (
-        <FinanceEmptyState
-          icon={TrendingDown}
-          title="No expenses found"
-          description="Adjust filters or add a new expense."
-          actionLabel="Add expense"
-          onAction={openCreate}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs">Reference</TableHead>
-                <TableHead className="text-xs">Vendor</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Settlement</TableHead>
-                <TableHead className="text-xs">GST</TableHead>
-                <TableHead className="text-xs text-right">Bill</TableHead>
-                <TableHead className="text-xs text-right">Paid</TableHead>
-                <TableHead className="text-xs text-right">Due</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {expenses.map((e) => {
-                const due = remainingOf(e);
-                return (
-                  <TableRow
-                    key={e.id}
-                    className="hover:bg-muted/30 cursor-pointer"
-                    onClick={() => setDetailId(e.id)}
-                  >
-                    <TableCell className="text-xs">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-xs font-mono">
-                      <div>{e.reference}</div>
-                      {e.chequeId ? (
-                        <Link
-                          href={`/finance/cheques/${e.chequeId}`}
-                          className="inline-flex items-center gap-1 mt-0.5 text-[10px] text-primary hover:underline"
-                          onClick={(ev) => ev.stopPropagation()}
-                        >
-                          Cheque {e.chequeNumber ?? e.chequeReference ?? `#${e.chequeId}`}
-                        </Link>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-xs max-w-[160px]">
-                      <div className="font-medium truncate">{e.vendorName ?? "—"}</div>
-                      <div className="text-[10px] text-muted-foreground truncate">
-                        {EXPENSE_CATEGORY_LABELS[e.category]}
-                      </div>
-                    </TableCell>
-                    <TableCell onClick={(ev) => ev.stopPropagation()}>
-                      <FinanceStatusBadge variant="expense" value={e.status} />
-                    </TableCell>
-                    <TableCell onClick={(ev) => ev.stopPropagation()}>
-                      {e.status === "approved" && e.paymentStatus ? (
-                        <FinanceStatusBadge variant="expensePayment" value={e.paymentStatus} />
-                      ) : (
-                        <span className="text-muted-foreground text-xs">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell onClick={(ev) => ev.stopPropagation()}>
-                      <GstClassificationBadge gstEnabled={e.gstEnabled} />
-                      {e.gstEnabled && (e.gstAmount ?? 0) > 0 ? (
-                        <div className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
-                          {formatCurrency(e.gstAmount)}
-                        </div>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums">
-                      {formatCurrency(e.amount)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
-                      {e.status === "approved" ? formatCurrency(recognizedOf(e)) : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">
-                      {e.status === "approved" && due > 0 ? (
-                        <span className="text-amber-700 font-medium">{formatCurrency(due)}</span>
-                      ) : e.status === "approved" ? (
-                        formatCurrency(0)
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right" onClick={(ev) => ev.stopPropagation()}>
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0"
-                          onClick={() => setDetailId(e.id)}
-                          title="View bill"
-                        >
-                          <Eye className="h-3.5 w-3.5" />
-                        </Button>
-                        {e.status === "pending" && canEdit && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-green-600"
-                              onClick={() => setApproveTarget(e)}
-                              title="Approve"
-                            >
-                              <Check className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-amber-600"
-                              onClick={() => handleReject(e)}
-                              title="Reject"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => openEdit(e)}
-                              title="Edit"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                          </>
-                        )}
-                        {e.status === "approved" && due > 0 && canEdit && e.chequeStatus !== "issued" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-primary"
-                            onClick={() => setPayTarget(e)}
-                            title="Pay remaining"
-                          >
-                            <Wallet className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {canDelete && e.status !== "approved" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive"
-                            onClick={() => setDeleteTarget(e)}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="flex items-center justify-between px-4 py-3 text-xs text-muted-foreground border-t">
-            <span>{total} total · click a row for full bill detail</span>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs"
-                disabled={expenses.length < 20}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={expenses}
+        rowKey={(e) => e.id}
+        onRowClick={(e) => setDetailId(e.id)}
+        empty={{
+          icon: TrendingDown,
+          title: "No expenses found",
+          description: "Adjust filters or add a new expense.",
+          actionLabel: "Add expense",
+          onAction: openCreate,
+        }}
+        pagination={{
+          page,
+          limit: PAGE_LIMIT,
+          total,
+          onPageChange: setPage,
+        }}
+        toolbar={
+          <p className="text-xs text-muted-foreground">Click a row for full bill detail</p>
+        }
+      />
 
       <ExpenseBillDetailSheet
         expenseId={detailId}

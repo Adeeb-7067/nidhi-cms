@@ -1,0 +1,842 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "cms-chip-tabs.tsx",
+      "file_type": "code",
+      "source_file": "cms-chip-tabs.tsx",
+      "source_location": "L1",
+      "id": "cms_chip_tabs_tsx",
+      "community": 3,
+      "norm_label": "cms-chip-tabs.tsx"
+    },
+    {
+      "label": "CmsChipTab",
+      "file_type": "code",
+      "source_file": "cms-chip-tabs.tsx",
+      "source_location": "L4",
+      "id": "cms_cms_chip_tabs_cmschiptab",
+      "community": 3,
+      "norm_label": "cmschiptab"
+    },
+    {
+      "label": "CmsChipTabs()",
+      "file_type": "code",
+      "source_file": "cms-chip-tabs.tsx",
+      "source_location": "L11",
+      "id": "cms_cms_chip_tabs_cmschiptabs",
+      "community": 3,
+      "norm_label": "cmschiptabs()"
+    },
+    {
+      "label": "cms-confirm-dialog.tsx",
+      "file_type": "code",
+      "source_file": "cms-confirm-dialog.tsx",
+      "source_location": "L1",
+      "id": "cms_confirm_dialog_tsx",
+      "community": 0,
+      "norm_label": "cms-confirm-dialog.tsx"
+    },
+    {
+      "label": "CmsConfirmDialog()",
+      "file_type": "code",
+      "source_file": "cms-confirm-dialog.tsx",
+      "source_location": "L16",
+      "id": "cms_cms_confirm_dialog_cmsconfirmdialog",
+      "community": 0,
+      "norm_label": "cmsconfirmdialog()"
+    },
+    {
+      "label": "cms-data-table.tsx",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L1",
+      "id": "cms_data_table_tsx",
+      "community": 1,
+      "norm_label": "cms-data-table.tsx"
+    },
+    {
+      "label": "CmsColumnAlign",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L17",
+      "id": "cms_cms_data_table_cmscolumnalign",
+      "community": 1,
+      "norm_label": "cmscolumnalign"
+    },
+    {
+      "label": "CmsColumn",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L19",
+      "id": "cms_cms_data_table_cmscolumn",
+      "community": 1,
+      "norm_label": "cmscolumn"
+    },
+    {
+      "label": "CmsDataTableEmpty",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L30",
+      "id": "cms_cms_data_table_cmsdatatableempty",
+      "community": 1,
+      "norm_label": "cmsdatatableempty"
+    },
+    {
+      "label": "CmsDataTableProps",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L38",
+      "id": "cms_cms_data_table_cmsdatatableprops",
+      "community": 1,
+      "norm_label": "cmsdatatableprops"
+    },
+    {
+      "label": "alignClass",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L59",
+      "id": "cms_cms_data_table_alignclass",
+      "community": 1,
+      "norm_label": "alignclass"
+    },
+    {
+      "label": "CmsDataTable()",
+      "file_type": "code",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L69",
+      "id": "cms_cms_data_table_cmsdatatable",
+      "community": 1,
+      "norm_label": "cmsdatatable()"
+    },
+    {
+      "label": "cms-empty-state.tsx",
+      "file_type": "code",
+      "source_file": "cms-empty-state.tsx",
+      "source_location": "L1",
+      "id": "cms_empty_state_tsx",
+      "community": 1,
+      "norm_label": "cms-empty-state.tsx"
+    },
+    {
+      "label": "CmsEmptyState()",
+      "file_type": "code",
+      "source_file": "cms-empty-state.tsx",
+      "source_location": "L7",
+      "id": "cms_cms_empty_state_cmsemptystate",
+      "community": 1,
+      "norm_label": "cmsemptystate()"
+    },
+    {
+      "label": "CmsErrorState()",
+      "file_type": "code",
+      "source_file": "cms-empty-state.tsx",
+      "source_location": "L50",
+      "id": "cms_cms_empty_state_cmserrorstate",
+      "community": 1,
+      "norm_label": "cmserrorstate()"
+    },
+    {
+      "label": "cms-filter-bar.tsx",
+      "file_type": "code",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L1",
+      "id": "cms_filter_bar_tsx",
+      "community": 2,
+      "norm_label": "cms-filter-bar.tsx"
+    },
+    {
+      "label": "CmsFilterOption",
+      "file_type": "code",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L14",
+      "id": "cms_cms_filter_bar_cmsfilteroption",
+      "community": 2,
+      "norm_label": "cmsfilteroption"
+    },
+    {
+      "label": "CmsSelectFilter",
+      "file_type": "code",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L16",
+      "id": "cms_cms_filter_bar_cmsselectfilter",
+      "community": 2,
+      "norm_label": "cmsselectfilter"
+    },
+    {
+      "label": "CmsFilterBar()",
+      "file_type": "code",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L29",
+      "id": "cms_cms_filter_bar_cmsfilterbar",
+      "community": 2,
+      "norm_label": "cmsfilterbar()"
+    },
+    {
+      "label": "cms-page-header.tsx",
+      "file_type": "code",
+      "source_file": "cms-page-header.tsx",
+      "source_location": "L1",
+      "id": "cms_page_header_tsx",
+      "community": 4,
+      "norm_label": "cms-page-header.tsx"
+    },
+    {
+      "label": "CmsBreadcrumb",
+      "file_type": "code",
+      "source_file": "cms-page-header.tsx",
+      "source_location": "L6",
+      "id": "cms_cms_page_header_cmsbreadcrumb",
+      "community": 4,
+      "norm_label": "cmsbreadcrumb"
+    },
+    {
+      "label": "CmsPageHeader()",
+      "file_type": "code",
+      "source_file": "cms-page-header.tsx",
+      "source_location": "L9",
+      "id": "cms_cms_page_header_cmspageheader",
+      "community": 4,
+      "norm_label": "cmspageheader()"
+    },
+    {
+      "label": "cms-status-chip.tsx",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L1",
+      "id": "cms_status_chip_tsx",
+      "community": 0,
+      "norm_label": "cms-status-chip.tsx"
+    },
+    {
+      "label": "CmsStatusTone",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L3",
+      "id": "cms_cms_status_chip_cmsstatustone",
+      "community": 0,
+      "norm_label": "cmsstatustone"
+    },
+    {
+      "label": "cmsStatusToneClass",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L13",
+      "id": "cms_cms_status_chip_cmsstatustoneclass",
+      "community": 0,
+      "norm_label": "cmsstatustoneclass"
+    },
+    {
+      "label": "cmsStatusDotClass",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L23",
+      "id": "cms_cms_status_chip_cmsstatusdotclass",
+      "community": 0,
+      "norm_label": "cmsstatusdotclass"
+    },
+    {
+      "label": "CmsStatusChip()",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L37",
+      "id": "cms_cms_status_chip_cmsstatuschip",
+      "community": 0,
+      "norm_label": "cmsstatuschip()"
+    },
+    {
+      "label": "CmsStatusRegistryEntry",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L70",
+      "id": "cms_cms_status_chip_cmsstatusregistryentry",
+      "community": 0,
+      "norm_label": "cmsstatusregistryentry"
+    },
+    {
+      "label": "createStatusChip()",
+      "file_type": "code",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L78",
+      "id": "cms_cms_status_chip_createstatuschip",
+      "community": 0,
+      "norm_label": "createstatuschip()"
+    },
+    {
+      "label": "index.ts",
+      "file_type": "code",
+      "source_file": "index.ts",
+      "source_location": "L1",
+      "id": "index_ts",
+      "community": 0,
+      "norm_label": "index.ts"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-chip-tabs.tsx",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "cms_chip_tabs_tsx",
+      "target": "cms_cms_chip_tabs_cmschiptab",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-chip-tabs.tsx",
+      "source_location": "L11",
+      "weight": 1.0,
+      "source": "cms_chip_tabs_tsx",
+      "target": "cms_cms_chip_tabs_cmschiptabs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_chip_tabs_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_chip_tabs_cmschiptab",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_chip_tabs_cmschiptabs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-confirm-dialog.tsx",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "cms_confirm_dialog_tsx",
+      "target": "cms_cms_confirm_dialog_cmsconfirmdialog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_confirm_dialog_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_confirm_dialog_cmsconfirmdialog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_empty_state_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_empty_state_cmsemptystate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L12",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_empty_state_cmserrorstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L17",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_cmscolumnalign",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_cmscolumn",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_cmsdatatableempty",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L38",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_cmsdatatableprops",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L59",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_alignclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-data-table.tsx",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "cms_data_table_tsx",
+      "target": "cms_cms_data_table_cmsdatatable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_data_table_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_data_table_cmscolumnalign",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_data_table_cmscolumn",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_data_table_cmsdatatableempty",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_data_table_cmsdatatableprops",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_data_table_cmsdatatable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-empty-state.tsx",
+      "source_location": "L7",
+      "weight": 1.0,
+      "source": "cms_empty_state_tsx",
+      "target": "cms_cms_empty_state_cmsemptystate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-empty-state.tsx",
+      "source_location": "L50",
+      "weight": 1.0,
+      "source": "cms_empty_state_tsx",
+      "target": "cms_cms_empty_state_cmserrorstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_empty_state_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_empty_state_cmsemptystate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_empty_state_cmserrorstate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L14",
+      "weight": 1.0,
+      "source": "cms_filter_bar_tsx",
+      "target": "cms_cms_filter_bar_cmsfilteroption",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "cms_filter_bar_tsx",
+      "target": "cms_cms_filter_bar_cmsselectfilter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-filter-bar.tsx",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "cms_filter_bar_tsx",
+      "target": "cms_cms_filter_bar_cmsfilterbar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_filter_bar_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_filter_bar_cmsfilteroption",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_filter_bar_cmsselectfilter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_filter_bar_cmsfilterbar",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-page-header.tsx",
+      "source_location": "L6",
+      "weight": 1.0,
+      "source": "cms_page_header_tsx",
+      "target": "cms_cms_page_header_cmsbreadcrumb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-page-header.tsx",
+      "source_location": "L9",
+      "weight": 1.0,
+      "source": "cms_page_header_tsx",
+      "target": "cms_cms_page_header_cmspageheader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_page_header_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_page_header_cmsbreadcrumb",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_page_header_cmspageheader",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_cmsstatustone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L13",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_cmsstatustoneclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L23",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_cmsstatusdotclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L37",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_cmsstatuschip",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L70",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_cmsstatusregistryentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "cms-status-chip.tsx",
+      "source_location": "L78",
+      "weight": 1.0,
+      "source": "cms_status_chip_tsx",
+      "target": "cms_cms_status_chip_createstatuschip",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_status_chip_tsx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_cmsstatustone",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_cmsstatustoneclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_cmsstatusdotclass",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_cmsstatuschip",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_cmsstatusregistryentry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "re_exports",
+      "context": "re-export",
+      "confidence": "EXTRACTED",
+      "source_file": "index.ts",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "index_ts",
+      "target": "cms_cms_status_chip_createstatuschip",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "25c0b30499cc662c219a6dc2aa870c8948934260"
+}

@@ -9,7 +9,7 @@ export {
   resetPasswordWithOtp,
   requestChangePasswordOtp,
 } from "./password-auth";
-export { addProjectMembersBatch, type AddProjectMembersBatchResult } from "./project-members-batch";
+export { addProjectMembersBatch, updateProjectMember, type AddProjectMembersBatchResult } from "./project-members-batch";
 export {
   useGetWorkspaceDashboard,
   useGetClientHubDashboard,
@@ -40,6 +40,20 @@ export {
   type DirectConversationListResult,
 } from "./direct-conversations";
 export { setBaseUrl, setAuthTokenGetter, ApiError } from "./custom-fetch";
+export {
+  useNavBadges,
+  useTicketsSummary,
+  useClientsSummary,
+  useRequestsSummary,
+  navBadgesQueryKey,
+  ticketsSummaryQueryKey,
+  clientsSummaryQueryKey,
+  requestsSummaryQueryKey,
+  type NavBadges,
+  type TicketsSummary,
+  type ClientsSummary,
+  type RequestsSummary,
+} from "./list-summaries";
 export {
   fetchTeamEmployee,
   createTeamEmployee,

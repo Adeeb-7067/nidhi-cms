@@ -3,16 +3,16 @@ import { format } from "date-fns";
 import { IndianRupee, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import { mockLegalExpenses, legalExpensesYtd, expensesByCategory } from "@/modules/legal/mock-data";
 import { EXPENSE_CATEGORY_LABELS, formatCurrency, formatCompactCurrency } from "@/modules/legal/constants";
 import {
   LegalPageHeader,
   LegalFilterBar,
-  LegalEmptyState,
 } from "@/modules/legal/components";
 import { toast } from "sonner";
+import type { LegalExpense } from "@/modules/legal/types";
 
 export default function LegalExpenses() {
   const [search, setSearch] = useState("");
@@ -30,6 +30,28 @@ export default function LegalExpenses() {
   }, [search]);
 
   const categoryBreakdown = Object.entries(expensesByCategory).sort((a, b) => b[1] - a[1]);
+
+  const columns = useMemo<CmsColumn<LegalExpense>[]>(
+    () => [
+      { id: "date", header: "Date", cell: (e) => <span className="text-muted-foreground">{format(new Date(e.date), "MMM d, yyyy")}</span> },
+      { id: "category", header: "Category", cell: (e) => EXPENSE_CATEGORY_LABELS[e.category] },
+      { id: "description", header: "Description", cell: (e) => <span className="max-w-[220px] block truncate">{e.description}</span> },
+      { id: "matterRef", header: "Matter ref", cell: (e) => <span className="font-mono text-muted-foreground">{e.matterRef}</span> },
+      { id: "amount", header: "Amount", align: "right", cell: (e) => <span className="font-medium tabular-nums">{formatCurrency(e.amount)}</span> },
+      { id: "approvedBy", header: "Approved by", cell: (e) => e.approvedBy },
+      {
+        id: "receipt",
+        header: "Receipt",
+        chip: true,
+        cell: (e) => (
+          <Badge variant={e.receiptAttached ? "default" : "outline"} className="text-[10px]">
+            {e.receiptAttached ? "Yes" : "Missing"}
+          </Badge>
+        ),
+      },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -81,42 +103,7 @@ export default function LegalExpenses() {
         </div>
       </div>
 
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={IndianRupee} title="No expenses found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Date</TableHead>
-                <TableHead className="text-xs">Category</TableHead>
-                <TableHead className="text-xs">Description</TableHead>
-                <TableHead className="text-xs">Matter ref</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                <TableHead className="text-xs">Approved by</TableHead>
-                <TableHead className="text-xs">Receipt</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((e) => (
-                <TableRow key={e.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(e.date), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs">{EXPENSE_CATEGORY_LABELS[e.category]}</TableCell>
-                  <TableCell className="text-xs max-w-[220px] truncate">{e.description}</TableCell>
-                  <TableCell className="text-xs font-mono text-muted-foreground">{e.matterRef}</TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(e.amount)}</TableCell>
-                  <TableCell className="text-xs">{e.approvedBy}</TableCell>
-                  <TableCell>
-                    <Badge variant={e.receiptAttached ? "default" : "outline"} className="text-[10px]">
-                      {e.receiptAttached ? "Yes" : "Missing"}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(e) => e.id} empty={{ icon: IndianRupee, title: "No expenses found" }} />
     </PortalPageShell>
   );
 }

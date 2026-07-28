@@ -4,7 +4,7 @@ import {
   computeExpectedMinutes,
   formatExpectedHours,
   DEFAULT_OFFICE_SHIFT,
-} from "../../src/services/hrm/shifts.service.js";
+} from "../../src/modules/hrm/services/shifts.service.js";
 
 describe("computeExpectedMinutes", () => {
   test("9:30–18:00 with 30 min break equals 8 hours", () => {

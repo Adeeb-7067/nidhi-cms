@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { buildCmsPayrollPayload, buildPayslipFigures } from "../../src/services/hrm/payslip-template.js";
+import { buildCmsPayrollPayload, buildPayslipFigures } from "../../src/modules/hrm/services/payslip-template.js";
 
 describe("CMS payslip figures", () => {
   test("shows prorated earnings, not full-month contract, for partial attendance", () => {

@@ -15,6 +15,7 @@ const UPLOAD_CATEGORIES = [
   "hrm",
   "screenshots",
   "marketing",
+  "admin",
 ];
 // Screenshots are access-controlled via backend proxy — never serve directly from S3.
 const PRIVATE_CATEGORIES = new Set(["screenshots"]);

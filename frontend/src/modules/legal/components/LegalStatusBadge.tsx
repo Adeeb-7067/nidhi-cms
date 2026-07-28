@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type { RiskLevel } from "../types";
 import { RISK_LABELS } from "../constants";
 import {
@@ -141,17 +141,7 @@ export function LegalStatusBadge({
     style = complianceStyles[v] ?? style;
   }
 
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
-        style,
-        className,
-      )}
-    >
-      {label}
-    </span>
-  );
+  return <CmsStatusChip label={label} colorClassName={style} className={className} />;
 }
 
 export function LegalRiskBadge({
@@ -168,23 +158,15 @@ export function LegalRiskBadge({
     medium: "bg-amber-500/10 text-amber-700 border-amber-500/25",
     high: "bg-red-500/10 text-red-600 border-red-500/25",
   };
-
-  const dotStyles: Record<RiskLevel, string> = {
-    low: "bg-emerald-500",
-    medium: "bg-amber-500",
-    high: "bg-red-500",
-  };
+  const tone = level === "low" ? "success" : level === "medium" ? "warning" : "danger";
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-        styles[level],
-        className,
-      )}
-    >
-      {showDot && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotStyles[level])} />}
-      {RISK_LABELS[level]}
-    </span>
+    <CmsStatusChip
+      label={RISK_LABELS[level]}
+      tone={tone}
+      colorClassName={styles[level]}
+      dot={showDot}
+      className={className}
+    />
   );
 }

@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
 import { CheckCircle2, IndianRupee, Pencil, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
+import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -29,11 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency } from "@/modules/finance/constants";
+import { formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
+import type { PaymentMode } from "@/modules/finance/types";
 import {
   FinancePageHeader,
   FinanceFilterBar,
-  FinanceEmptyState,
   FinanceErrorState,
   FinanceConfirmDialog,
 } from "@/modules/finance/components";
@@ -49,8 +42,10 @@ import {
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { getProjectDetailHref } from "@/lib/project-routes";
+import { PaymentProofUploadField } from "@/modules/sales/components/sales-action-dialogs";
+import { FreelancerNavTabs } from "@/components/freelancers/FreelancerNavTabs";
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
   unpaid: "Unpaid",
@@ -68,6 +63,10 @@ export default function FreelancerEngagementsPage() {
     installmentId: number;
   } | null>(null);
   const [payReference, setPayReference] = useState("");
+  const [payDate, setPayDate] = useState("");
+  const [payMode, setPayMode] = useState("bank_transfer");
+  const [payNote, setPayNote] = useState("");
+  const [payProofUrl, setPayProofUrl] = useState("");
   const [editTarget, setEditTarget] = useState<FreelancerEngagement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FreelancerEngagement | null>(null);
   const [agreedAmount, setAgreedAmount] = useState("");
@@ -82,6 +81,42 @@ export default function FreelancerEngagementsPage() {
   const updateEngagement = useUpdateFreelancerEngagement();
   const deleteEngagement = useDeleteFreelancerEngagement();
   const { data, isLoading, isError, refetch } = useListFreelancerEngagements();
+  const [, setLocation] = useLocation();
+
+  const openPayDialog = (engagement: FreelancerEngagement, installmentId: number) => {
+    setPayTarget({ engagement, installmentId });
+    setPayReference("");
+    setPayDate(format(new Date(), "yyyy-MM-dd"));
+    setPayMode("bank_transfer");
+    setPayNote("");
+    setPayProofUrl("");
+  };
+
+  const handleMarkPaid = async () => {
+    if (!payTarget) return;
+    const engagementId = payTarget.engagement.id;
+    const installmentId = payTarget.installmentId;
+    try {
+      const result = await markPaid.mutateAsync({
+        engagementId,
+        installmentId,
+        status: "paid",
+        reference: payReference.trim() || null,
+        paymentMode: payMode,
+        notes: payNote.trim() || null,
+        proofImageUrl: payProofUrl.trim() || null,
+        paidAt: payDate || null,
+      });
+      toast.success("Payment recorded — opening receipt");
+      setPayTarget(null);
+      setPayReference("");
+      setPayNote("");
+      setPayProofUrl("");
+      setLocation(`/freelancers/receipts/${engagementId}/${result.id ?? installmentId}`);
+    } catch (err) {
+      toastApiError(err, "Failed to record payment");
+    }
+  };
 
   const engagements = useMemo(() => {
     let list = data?.engagements ?? [];
@@ -127,24 +162,6 @@ export default function FreelancerEngagementsPage() {
     [installments],
   );
   const hasPaidRows = (e: FreelancerEngagement) => e.installments.some((i) => i.status === "paid");
-
-  const handleMarkPaid = async () => {
-    if (!payTarget) return;
-    try {
-      await markPaid.mutateAsync({
-        engagementId: payTarget.engagement.id,
-        installmentId: payTarget.installmentId,
-        status: "paid",
-        reference: payReference.trim() || null,
-        paymentMode: "bank_transfer",
-      });
-      toast.success("Payment recorded");
-      setPayTarget(null);
-      setPayReference("");
-    } catch (err) {
-      toastApiError(err, "Failed to record payment");
-    }
-  };
 
   const handleSaveEdit = async () => {
     if (!editTarget) return;
@@ -203,136 +220,184 @@ export default function FreelancerEngagementsPage() {
     );
   }
 
+  const chipItems = [
+    { value: "all", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "unpaid", label: "Outstanding" },
+    { value: "completed", label: "Completed" },
+  ];
+
+  const paymentTone = (status: string): "success" | "warning" | "danger" | "muted" | "neutral" => {
+    if (status === "paid") return "success";
+    if (status === "partially_paid") return "warning";
+    if (status === "unpaid") return "danger";
+    return "muted";
+  };
+
+  const columns: CmsColumn<FreelancerEngagement>[] = [
+    {
+      id: "freelancer",
+      header: "Freelancer",
+      cell: (e) => <span className="font-medium">{e.freelancerName ?? `User #${e.userId}`}</span>,
+    },
+    {
+      id: "project",
+      header: "Project",
+      cell: (e) => (
+        <>
+          <Link
+            href={getProjectDetailHref(e.projectId, undefined, e.projectType)}
+            className="font-medium hover:text-primary hover:underline underline-offset-2"
+          >
+            {e.projectName ?? `Project #${e.projectId}`}
+          </Link>
+          {e.projectType ? (
+            <span className="ml-2 text-[10px] capitalize text-muted-foreground">{e.projectType}</span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: "agreed",
+      header: "Agreed",
+      align: "right",
+      cell: (e) => <span className="tabular-nums font-medium">{formatCurrency(e.agreedAmount)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      cell: (e) => (
+        <span className="tabular-nums font-medium text-emerald-600">{formatCurrency(e.paidAmount)}</span>
+      ),
+    },
+    {
+      id: "remaining",
+      header: "Remaining",
+      align: "right",
+      cell: (e) => (
+        <span className="tabular-nums text-amber-600">{formatCurrency(e.remainingAmount)}</span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (e) => (
+        <CmsStatusChip
+          label={PAYMENT_STATUS_LABEL[e.paymentStatus] ?? e.paymentStatus}
+          tone={paymentTone(e.paymentStatus)}
+        />
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (e) => {
+        const nextPending = e.installments.find((i) => i.status === "pending");
+        const paidLocked = hasPaidRows(e);
+        return (
+          <div className="inline-flex items-center justify-end gap-1">
+            {canEdit && nextPending ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs"
+                onClick={() => openPayDialog(e, nextPending.id)}
+              >
+                Record pay
+              </Button>
+            ) : null}
+            {canEdit ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0"
+                aria-label={`Edit fee for ${e.freelancerName ?? e.userId}`}
+                onClick={() => setEditTarget(e)}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+            {canDelete ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                aria-label={`Delete engagement for ${e.freelancerName ?? e.userId}`}
+                disabled={paidLocked}
+                title={
+                  paidLocked
+                    ? "Cannot delete after payments are recorded"
+                    : "Delete engagement"
+                }
+                onClick={() => setDeleteTarget(e)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="Freelancer Payments & Fee Contracts"
-        description="Project-wise fees, milestone installments, and payout status"
+        title="Payments"
+        description="Project fees, installments, and payout status."
+        breadcrumbs={[
+          { label: "Freelancers", href: "/freelancers" },
+          { label: "Payments" },
+        ]}
       />
+
+      <FreelancerNavTabs activeTab="payments" />
 
       <PortalKpiGrid
         items={[
-          { title: "Engagements", value: String(kpis.count), icon: Wallet },
-          { title: "Agreed Total", value: formatCurrency(kpis.agreed), icon: IndianRupee },
-          { title: "Paid Out", value: formatCurrency(kpis.paid), icon: CheckCircle2 },
-          { title: "Remaining Balance", value: formatCurrency(kpis.remaining), icon: IndianRupee },
+          { title: "Engagements", value: String(kpis.count), icon: Wallet, accent: "blue", delay: 0 },
+          { title: "Agreed total", value: formatCurrency(kpis.agreed), icon: IndianRupee, accent: "violet", delay: 1 },
+          { title: "Paid out", value: formatCurrency(kpis.paid), icon: CheckCircle2, accent: "green", delay: 2 },
+          {
+            title: "Outstanding",
+            value: formatCurrency(kpis.remaining),
+            icon: IndianRupee,
+            accent: "amber",
+            alert: kpis.remaining > 0,
+            delay: 3,
+          },
         ]}
       />
 
       <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search freelancer or project…" />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab} className="mb-4">
-        <TabsList>
-          <TabsTrigger value="all">All Contracts</TabsTrigger>
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="unpaid">Outstanding</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs value={statusTab} onValueChange={setStatusTab} items={chipItems} />
 
-      {engagements.length === 0 ? (
-        <FinanceEmptyState
-          title="No freelancer engagements"
-          description="Assign a freelancer to a project, then set their fee from the project team panel."
-        />
-      ) : (
-        <div className="rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Freelancer</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Agreed</TableHead>
-                <TableHead>Paid</TableHead>
-                <TableHead>Remaining</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {engagements.map((e) => {
-                const nextPending = e.installments.find((i) => i.status === "pending");
-                const paidLocked = hasPaidRows(e);
-                return (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-medium">{e.freelancerName ?? `User #${e.userId}`}</TableCell>
-                    <TableCell>
-                      <Link
-                        href={getProjectDetailHref(e.projectId, undefined, e.projectType)}
-                        className="hover:text-primary font-medium"
-                      >
-                        {e.projectName ?? `Project #${e.projectId}`}
-                      </Link>
-                      {e.projectType ? (
-                        <span className="ml-2 text-xs text-muted-foreground capitalize">{e.projectType}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{formatCurrency(e.agreedAmount)}</TableCell>
-                    <TableCell className="text-emerald-600 font-medium">{formatCurrency(e.paidAmount)}</TableCell>
-                    <TableCell className="text-amber-600">{formatCurrency(e.remainingAmount)}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{PAYMENT_STATUS_LABEL[e.paymentStatus] ?? e.paymentStatus}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex items-center justify-end gap-1">
-                        {canEdit && nextPending ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setPayTarget({ engagement: e, installmentId: nextPending.id });
-                              setPayReference("");
-                            }}
-                          >
-                            Record pay
-                          </Button>
-                        ) : null}
-                        {canEdit ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0"
-                            aria-label={`Edit fee for ${e.freelancerName ?? e.userId}`}
-                            onClick={() => setEditTarget(e)}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : null}
-                        {canDelete ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                            aria-label={`Delete engagement for ${e.freelancerName ?? e.userId}`}
-                            disabled={paidLocked}
-                            title={
-                              paidLocked
-                                ? "Cannot delete after payments are recorded"
-                                : "Delete engagement"
-                            }
-                            onClick={() => setDeleteTarget(e)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={engagements}
+        rowKey={(e) => e.id}
+        empty={{
+          icon: Wallet,
+          title: "No freelancer engagements",
+          description: "Assign a freelancer to a project, then set their fee from the project team panel.",
+        }}
+      />
 
-      {/* RECORD PAYMENT DIALOG */}
+      {/* RECORD PAYMENT DIALOG — mirrors Sales record payment fields */}
       <Dialog open={!!payTarget} onOpenChange={(open) => !open && setPayTarget(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[480px]">
           <DialogHeader>
             <DialogTitle>Record payment</DialogTitle>
+            <DialogDescription>
+              Log an outgoing payout and generate a branded receipt voucher.
+            </DialogDescription>
           </DialogHeader>
           {payTarget ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <p className="text-sm text-muted-foreground">
                 {payTarget.engagement.freelancerName} · {payTarget.engagement.projectName}
               </p>
@@ -346,15 +411,55 @@ export default function FreelancerEngagementsPage() {
                   </p>
                 ) : null;
               })()}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="pay-date">Payment date</Label>
+                  <Input
+                    id="pay-date"
+                    type="date"
+                    value={payDate}
+                    onChange={(ev) => setPayDate(ev.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Payment method</Label>
+                  <Select value={payMode} onValueChange={setPayMode}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(PAYMENT_MODE_LABELS) as PaymentMode[]).map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {PAYMENT_MODE_LABELS[mode]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
               <div className="space-y-1.5">
-                <Label htmlFor="pay-ref">Payment reference / UTR (optional)</Label>
+                <Label htmlFor="pay-ref">Transaction ID</Label>
                 <Input
                   id="pay-ref"
                   value={payReference}
                   onChange={(ev) => setPayReference(ev.target.value)}
-                  placeholder="UTR / cheque / transaction ref"
+                  placeholder="e.g. UTR123456789"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Optional — reference number, UTR, or cheque number.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="pay-note">Note</Label>
+                <Textarea
+                  id="pay-note"
+                  value={payNote}
+                  onChange={(ev) => setPayNote(ev.target.value)}
+                  rows={2}
+                  placeholder="e.g. Milestone 1 payout"
                 />
               </div>
+              <PaymentProofUploadField value={payProofUrl} onChange={setPayProofUrl} />
             </div>
           ) : null}
           <DialogFooter>
@@ -362,7 +467,7 @@ export default function FreelancerEngagementsPage() {
               Cancel
             </Button>
             <Button onClick={() => void handleMarkPaid()} disabled={markPaid.isPending}>
-              Mark paid
+              Record payment
             </Button>
           </DialogFooter>
         </DialogContent>

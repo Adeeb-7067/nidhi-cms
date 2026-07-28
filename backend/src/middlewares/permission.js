@@ -1,5 +1,5 @@
 import { HttpError } from "../lib/http-error.js";
-import { userHasPermission } from "../services/permissions.service.js";
+import { userHasPermission } from "../modules/identity/services/permissions.service.js";
 export function requirePermission(module, action) {
   return async (req, _res, next) => {
     try {

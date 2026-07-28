@@ -1,7 +1,7 @@
 import { verifyAccessToken } from "../lib/jwt.js";
 import { usersTable } from "../models/schema/index.js";
 import { HttpError } from "../lib/http-error.js";
-import { loadClientContext } from "../services/client-team.js";
+import { loadClientContext } from "../modules/identity/services/client-team.js";
 
 // In-process TTL cache: eliminates one DB query per authenticated request.
 // Trade-off: a deactivated or role-changed user has up to 30 s before the

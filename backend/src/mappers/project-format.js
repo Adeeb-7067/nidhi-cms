@@ -4,7 +4,7 @@ import {
   clientsTable,
 } from "../models/schema/index.js";
 import { IdLookupCache } from "../lib/lookup-cache.js";
-import { projectCompanyId } from "../services/access/company-access.js";
+import { projectCompanyId } from "../modules/access/services/company-access.js";
 
 function computeWeightedCompletion(members) {
   if (!members?.length) return 0;

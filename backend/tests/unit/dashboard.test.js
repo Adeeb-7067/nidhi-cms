@@ -7,7 +7,7 @@ import {
   buildTodayStatusBreakdown,
   buildApprovalPipeline,
   computeOnTimeRatePct,
-} from "../../src/services/hrm/dashboard.service.js";
+} from "../../src/modules/hrm/services/dashboard.service.js";
 
 describe("resolveDashboardView", () => {
   test("maps HR roles to admin", () => {

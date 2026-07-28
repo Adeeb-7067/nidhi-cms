@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { Plus, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockClientMatters } from "@/modules/legal/mock-data";
 import { formatCurrency } from "@/modules/legal/constants";
 import {
@@ -11,9 +11,9 @@ import {
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { ClientMatter } from "@/modules/legal/types";
 
 export default function ClientMattersPage() {
   const [search, setSearch] = useState("");
@@ -27,6 +27,19 @@ export default function ClientMattersPage() {
         m.matterTitle.toLowerCase().includes(q),
     );
   }, [search]);
+
+  const columns = useMemo<CmsColumn<ClientMatter>[]>(
+    () => [
+      { id: "client", header: "Client", cell: (m) => <span className="font-medium">{m.clientName}</span> },
+      { id: "matter", header: "Matter", cell: (m) => m.matterTitle },
+      { id: "status", header: "Status", chip: true, cell: (m) => <LegalStatusBadge variant="clientMatter" value={m.status} /> },
+      { id: "risk", header: "Risk", chip: true, cell: (m) => <LegalRiskBadge level={m.risk} /> },
+      { id: "contractValue", header: "Contract value", align: "right", cell: (m) => <span className="font-medium tabular-nums">{formatCurrency(m.contractValue)}</span> },
+      { id: "counsel", header: "Counsel", cell: (m) => <CounselAvatar name={m.assignedTo.name} /> },
+      { id: "opened", header: "Opened", cell: (m) => <span className="text-muted-foreground">{format(new Date(m.openedAt), "MMM d, yyyy")}</span> },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -42,38 +55,7 @@ export default function ClientMattersPage() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search clients, matters…" />
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={Building2} title="No client matters found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Client</TableHead>
-                <TableHead className="text-xs">Matter</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs text-right">Contract value</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-                <TableHead className="text-xs">Opened</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((m) => (
-                <TableRow key={m.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">{m.clientName}</TableCell>
-                  <TableCell className="text-xs">{m.matterTitle}</TableCell>
-                  <TableCell><LegalStatusBadge variant="clientMatter" value={m.status} /></TableCell>
-                  <TableCell><LegalRiskBadge level={m.risk} /></TableCell>
-                  <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(m.contractValue)}</TableCell>
-                  <TableCell><CounselAvatar name={m.assignedTo.name} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(m.openedAt), "MMM d, yyyy")}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(m) => m.id} empty={{ icon: Building2, title: "No client matters found" }} />
     </PortalPageShell>
   );
 }

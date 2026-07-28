@@ -7,12 +7,12 @@ Express 5 API with a **layered MVC** layout. Each layer has a single responsibil
 ```
 HTTP request
   → app.js (global middleware)
-  → routes/index.js (auth gate for protected paths)
-  → routes/<feature>.routes.js (path + middleware + asyncHandler)
-  → controllers/<feature>.controller.js (parse input, call services, send JSON)
-  → services/ (business rules, access checks, side effects)
-  → models/schema (Mongoose collections)
-  → mappers/ (DB/document → API JSON shape)
+    → routes/index.js (auth gate for protected paths)
+    → modules/<domain>/routes/*.routes.js (path + middleware + asyncHandler)
+    → modules/<domain>/controllers/*.controller.js (parse input, call services, send JSON)
+    → modules/<domain>/services/ (business rules, access checks, side effects)
+    → modules/<domain>/schema + models/schema/index.js barrel
+    → mappers/ (DB/document → API JSON shape)
 ```
 
 ## Directory layout
@@ -23,15 +23,14 @@ load-env.js             # dotenv bootstrap
 src/
   app.js                # Express app + global middleware
   config/               # Env validation, public API paths
-  routes/               # One router per feature; wire middleware + controllers
-  controllers/          # Thin handlers: (req, res) only — no Router
-    inventory/          # Large domains split by sub-resource
-  services/
-    access/             # Company/project permission helpers
-    inventory/          # Inventory-specific jobs & activity logging
-    *.js                # Domain services (reporting, work-assignments, …)
+  modules/              # Domain modules — see src/modules/MODULES.md
+    admin/ finance/ hrm/ sales/ marketing/
+    monitoring/ identity/ work/ collab/ crm/
+    inventory/ alerts/ settings/ uploads/ platform/
+    access/ jobs/
+  routes/index.js       # Auth gate + mounts module routers
+  models/schema/index.js # Aggregate Mongoose barrel → modules/*/schema
   mappers/              # Response shaping (*-format.js)
-  models/schema/        # Mongoose models (one file per aggregate)
   middlewares/          # Auth, audit, validation, errors
   utils/                # HTTP helpers (errors, pagination) — no I/O
   lib/                  # Infrastructure: DB, JWT, storage, logger, realtime

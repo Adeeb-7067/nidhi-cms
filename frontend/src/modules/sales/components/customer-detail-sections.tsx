@@ -79,19 +79,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Progress } from "@/components/ui/progress";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
 import { ExecutiveAvatar, SalesEmptyState, SalesStatusBadge } from "@/modules/sales/components";
 import {
-  FinancialSummaryCard,
   InstallmentCard,
   InstallmentProgress,
   OutstandingBadge,
@@ -594,6 +587,57 @@ export function CustomerProjectsSection({
   );
 }
 
+const customerTeamColumns: CmsColumn<NonNullable<CustomerHubData["teamMembers"]>[number]>[] = [
+  {
+    id: "name",
+    header: "Name",
+    className: "min-w-[120px]",
+    cell: (m) => <span className="font-medium max-w-[160px] truncate block">{m.name ?? "—"}</span>,
+  },
+  {
+    id: "role",
+    header: "Role",
+    className: "min-w-[88px]",
+    cell: (m) => <span className="max-w-[120px] truncate block">{m.role ?? m.title ?? "Member"}</span>,
+  },
+  {
+    id: "email",
+    header: "Email",
+    className: "min-w-[160px]",
+    cell: (m) =>
+      m.email ? (
+        <a href={`mailto:${m.email}`} className="text-primary hover:underline inline-flex items-center gap-1 min-w-0 max-w-full">
+          <Mail className="h-3 w-3 shrink-0" />
+          <span className="truncate">{m.email}</span>
+        </a>
+      ) : (
+        "—"
+      ),
+  },
+  {
+    id: "phone",
+    header: "Phone",
+    className: "min-w-[110px] hidden sm:table-cell",
+    headerClassName: "hidden sm:table-cell",
+    cell: (m) =>
+      m.phoneNumber ? (
+        <span className="inline-flex items-center gap-1 whitespace-nowrap">
+          <Phone className="h-3 w-3" />
+          {m.phoneNumber}
+        </span>
+      ) : (
+        "—"
+      ),
+  },
+  {
+    id: "status",
+    header: "Status",
+    className: "min-w-[80px]",
+    chip: true,
+    cell: (m) => <Badge variant="outline" className="text-[10px] capitalize">{m.status}</Badge>,
+  },
+];
+
 export function CustomerTeamSection({
   hub,
   hubLoading,
@@ -629,51 +673,101 @@ export function CustomerTeamSection({
           </Link>
         </Button>
       </div>
-      <div className="rounded-xl border overflow-hidden">
-        <div className="overflow-x-auto">
-        <Table className="min-w-[640px]">
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs min-w-[120px]">Name</TableHead>
-            <TableHead className="text-xs min-w-[88px]">Role</TableHead>
-            <TableHead className="text-xs min-w-[160px]">Email</TableHead>
-            <TableHead className="text-xs min-w-[110px] hidden sm:table-cell">Phone</TableHead>
-            <TableHead className="text-xs min-w-[80px]">Status</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {members.map((m) => (
-            <TableRow key={m.id}>
-              <TableCell className="text-xs font-medium max-w-[160px] truncate">{m.name ?? "—"}</TableCell>
-              <TableCell className="text-xs max-w-[120px] truncate">{m.role ?? m.title ?? "Member"}</TableCell>
-              <TableCell className="text-xs max-w-[200px]">
-                {m.email ? (
-                  <a href={`mailto:${m.email}`} className="text-primary hover:underline inline-flex items-center gap-1 min-w-0 max-w-full">
-                    <Mail className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{m.email}</span>
-                  </a>
-                ) : "—"}
-              </TableCell>
-              <TableCell className="text-xs hidden sm:table-cell whitespace-nowrap">
-                {m.phoneNumber ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Phone className="h-3 w-3" />
-                    {m.phoneNumber}
-                  </span>
-                ) : "—"}
-              </TableCell>
-              <TableCell>
-                <Badge variant="outline" className="text-[10px] capitalize">{m.status}</Badge>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-        </div>
-      </div>
+      <CmsDataTable
+        embedded
+        className="min-w-[640px]"
+        columns={customerTeamColumns}
+        rows={members}
+        rowKey={(m) => m.id}
+      />
     </div>
   );
 }
+
+const portalCredentialColumns: CmsColumn<NonNullable<CustomerHubData["portalCredentials"]>[number]>[] = [
+  { id: "label", header: "Label", cell: (c) => c.label ?? "Portal login" },
+  { id: "setBy", header: "Set by", cell: (c) => <span className="text-muted-foreground">{c.setByLabel ?? "—"}</span> },
+  {
+    id: "date",
+    header: "Date",
+    cell: (c) => <span className="text-muted-foreground">{formatSalesDateTime(c.createdAt)}</span>,
+  },
+];
+
+const inventoryCredentialColumns: CmsColumn<NonNullable<CustomerHubData["inventoryCredentials"]>[number]>[] = [
+  { id: "name", header: "Name", cell: (c) => <span className="font-medium">{c.name ?? c.label}</span> },
+  { id: "project", header: "Project", cell: (c) => c.projectName ?? `#${c.projectId}` },
+  { id: "username", header: "Username", cell: (c) => <span className="font-mono">{c.username ?? "—"}</span> },
+  { id: "type", header: "Type", cell: (c) => <span className="capitalize">{c.category ?? "—"}</span> },
+  {
+    id: "url",
+    header: "URL",
+    cell: (c) =>
+      c.url ? (
+        <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
+          Open <ExternalLink className="h-3 w-3" />
+        </a>
+      ) : (
+        "—"
+      ),
+  },
+];
+
+const customerTicketColumns: CmsColumn<NonNullable<CustomerHubData["tickets"]>[number]>[] = [
+  { id: "id", header: "ID", cell: (t) => <span className="font-mono">#{t.id}</span> },
+  { id: "subject", header: "Subject", cell: (t) => <span className="font-medium max-w-[200px] truncate block">{t.subject}</span> },
+  { id: "priority", header: "Priority", cell: (t) => <span className="capitalize">{t.priority}</span> },
+  { id: "status", header: "Status", cell: (t) => <span className="capitalize">{t.status}</span> },
+  { id: "assigned", header: "Assigned to", cell: (t) => t.assignedToName ?? "Unassigned" },
+  {
+    id: "created",
+    header: "Created",
+    cell: (t) => <span className="text-muted-foreground">{formatSalesDateTime(t.createdAt)}</span>,
+  },
+  {
+    id: "updated",
+    header: "Updated",
+    cell: (t) => (
+      <span className="text-muted-foreground">
+        {t.updatedAt ? format(new Date(t.updatedAt), "MMM d, yyyy") : "—"}
+      </span>
+    ),
+  },
+];
+
+const customerTaskColumns: CmsColumn<NonNullable<CustomerHubData["tasks"]>[number]>[] = [
+  {
+    id: "task",
+    header: "Task",
+    cell: (t) => (
+      <>
+        <Link href={`/dev/tasks/${t.id}`} className="text-primary hover:underline font-medium">
+          {t.title}
+        </Link>
+        <p className="text-[10px] text-muted-foreground font-mono">{t.taskNumber}</p>
+      </>
+    ),
+  },
+  { id: "project", header: "Project", cell: (t) => t.projectName ?? `#${t.projectId}` },
+  { id: "developer", header: "Developer", cell: (t) => t.assigneeName ?? "Unassigned" },
+  { id: "status", header: "Status", cell: (t) => <span className="capitalize">{t.status?.replace(/_/g, " ")}</span> },
+  { id: "priority", header: "Priority", cell: (t) => <span className="capitalize">{t.priority}</span> },
+  {
+    id: "due",
+    header: "Due",
+    cell: (t) => (
+      <span className="text-muted-foreground">
+        {t.dueDate ? format(new Date(t.dueDate), "MMM d, yyyy") : "—"}
+      </span>
+    ),
+  },
+  {
+    id: "progress",
+    header: "Progress",
+    className: "w-28",
+    cell: (t) => <Progress value={t.progress} className="h-1.5" />,
+  },
+];
 
 export function CustomerCredentialsSection({
   hub,
@@ -713,26 +807,12 @@ export function CustomerCredentialsSection({
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Label</TableHead>
-                  <TableHead className="text-xs">Set by</TableHead>
-                  <TableHead className="text-xs">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {portalCreds.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="text-xs">{c.label ?? "Portal login"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{c.setByLabel ?? "—"}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatSalesDateTime(c.createdAt)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <CmsDataTable
+              embedded
+              columns={portalCredentialColumns}
+              rows={portalCreds}
+              rowKey={(c) => c.id}
+            />
           </CardContent>
         </Card>
       ) : null}
@@ -743,34 +823,12 @@ export function CustomerCredentialsSection({
             <CardTitle className="text-sm">Project credentials</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Name</TableHead>
-                  <TableHead className="text-xs">Project</TableHead>
-                  <TableHead className="text-xs">Username</TableHead>
-                  <TableHead className="text-xs">Type</TableHead>
-                  <TableHead className="text-xs">URL</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {inventoryCreds.map((c) => (
-                  <TableRow key={c.id}>
-                    <TableCell className="text-xs font-medium">{c.name ?? c.label}</TableCell>
-                    <TableCell className="text-xs">{c.projectName ?? `#${c.projectId}`}</TableCell>
-                    <TableCell className="text-xs font-mono">{c.username ?? "—"}</TableCell>
-                    <TableCell className="text-xs capitalize">{c.category ?? "—"}</TableCell>
-                    <TableCell className="text-xs">
-                      {c.url ? (
-                        <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
-                          Open <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : "—"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <CmsDataTable
+              embedded
+              columns={inventoryCredentialColumns}
+              rows={inventoryCreds}
+              rowKey={(c) => c.id}
+            />
           </CardContent>
         </Card>
       ) : null}
@@ -795,38 +853,12 @@ export function CustomerTicketsSection({
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs">ID</TableHead>
-            <TableHead className="text-xs">Subject</TableHead>
-            <TableHead className="text-xs">Priority</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs">Assigned to</TableHead>
-            <TableHead className="text-xs">Created</TableHead>
-            <TableHead className="text-xs">Updated</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tickets.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="text-xs font-mono">#{t.id}</TableCell>
-              <TableCell className="text-xs font-medium max-w-[200px] truncate">{t.subject}</TableCell>
-              <TableCell className="text-xs capitalize">{t.priority}</TableCell>
-              <TableCell className="text-xs capitalize">{t.status}</TableCell>
-              <TableCell className="text-xs">{t.assignedToName ?? "Unassigned"}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {formatSalesDateTime(t.createdAt)}
-              </TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {t.updatedAt ? format(new Date(t.updatedAt), "MMM d, yyyy") : "—"}
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <CmsDataTable
+      embedded
+      columns={customerTicketColumns}
+      rows={tickets}
+      rowKey={(t) => t.id}
+    />
   );
 }
 
@@ -847,43 +879,12 @@ export function CustomerTasksSection({
   }
 
   return (
-    <div className="rounded-xl border overflow-hidden">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="text-xs">Task</TableHead>
-            <TableHead className="text-xs">Project</TableHead>
-            <TableHead className="text-xs">Developer</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
-            <TableHead className="text-xs">Priority</TableHead>
-            <TableHead className="text-xs">Due</TableHead>
-            <TableHead className="text-xs">Progress</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {tasks.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="text-xs">
-                <Link href={`/dev/tasks/${t.id}`} className="text-primary hover:underline font-medium">
-                  {t.title}
-                </Link>
-                <p className="text-[10px] text-muted-foreground font-mono">{t.taskNumber}</p>
-              </TableCell>
-              <TableCell className="text-xs">{t.projectName ?? `#${t.projectId}`}</TableCell>
-              <TableCell className="text-xs">{t.assigneeName ?? "Unassigned"}</TableCell>
-              <TableCell className="text-xs capitalize">{t.status?.replace(/_/g, " ")}</TableCell>
-              <TableCell className="text-xs capitalize">{t.priority}</TableCell>
-              <TableCell className="text-xs text-muted-foreground">
-                {t.dueDate ? format(new Date(t.dueDate), "MMM d, yyyy") : "—"}
-              </TableCell>
-              <TableCell className="text-xs w-28">
-                <Progress value={t.progress} className="h-1.5" />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <CmsDataTable
+      embedded
+      columns={customerTaskColumns}
+      rows={tasks}
+      rowKey={(t) => t.id}
+    />
   );
 }
 
@@ -972,6 +973,91 @@ export function CustomerProposalsSection({
       toastApiError(err, "Failed to delete proposal");
     }
   };
+
+  const proposalColumns = useMemo<CmsColumn<Proposal>[]>(
+    () => [
+      {
+        id: "number",
+        header: "Proposal #",
+        cell: (p) => (
+          <Link href={`/sales/proposals/${p.id}`} className="font-mono text-primary hover:underline font-medium">
+            {p.number}
+          </Link>
+        ),
+      },
+      {
+        id: "title",
+        header: "Title",
+        cell: (p) => <div className="font-medium max-w-[220px] truncate">{p.title}</div>,
+      },
+      {
+        id: "amount",
+        header: "Amount",
+        align: "right",
+        cell: (p) => (
+          <span className="tabular-nums font-medium">{formatCurrency(resolveProposalTotal(p).finalTotal)}</span>
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (p) => <SalesStatusBadge variant="proposal" value={p.status} />,
+      },
+      {
+        id: "assigned",
+        header: "Assigned to",
+        cell: (p) => <span className="text-muted-foreground">{p.assignedToUser?.name ?? "—"}</span>,
+      },
+      {
+        id: "created",
+        header: "Created",
+        cell: (p) => <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>,
+      },
+      {
+        id: "validUntil",
+        header: "Valid until",
+        cell: (p) => (
+          <span className="text-muted-foreground">
+            {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        align: "right",
+        cell: (p) => {
+          const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                title="Edit proposal"
+                onClick={() => setEditId(p.id)}
+              >
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+              </Button>
+              {canDelete ? (
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  title="Delete proposal"
+                  onClick={() => setDeleteTarget(p)}
+                >
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              ) : null}
+            </div>
+          );
+        },
+      },
+    ],
+    [setEditId, setDeleteTarget],
+  );
 
   const proposalDialogs = (
     <>
@@ -1074,77 +1160,12 @@ export function CustomerProposalsSection({
       {filtered.length > 0 ? (
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Proposal #</TableHead>
-                  <TableHead className="text-xs">Title</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Assigned to</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                  <TableHead className="text-xs">Valid until</TableHead>
-                  <TableHead className="text-xs text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((p) => {
-                  const { finalTotal } = resolveProposalTotal(p);
-                  const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="text-xs font-mono">
-                        <Link href={`/sales/proposals/${p.id}`} className="text-primary hover:underline font-medium">
-                          {p.number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs font-medium max-w-[220px]">
-                        <div className="truncate">{p.title}</div>
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium">
-                        {formatCurrency(finalTotal)}
-                      </TableCell>
-                      <TableCell>
-                        <SalesStatusBadge variant="proposal" value={p.status} />
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.assignedToUser?.name ?? "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatSalesDateTime(p.createdAt)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            title="Edit proposal"
-                            onClick={() => setEditId(p.id)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
-                          {canDelete ? (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              title="Delete proposal"
-                              onClick={() => setDeleteTarget(p)}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <CmsDataTable
+              embedded
+              columns={proposalColumns}
+              rows={filtered}
+              rowKey={(p) => p.id}
+            />
           </CardContent>
         </Card>
       ) : (
@@ -1159,6 +1180,253 @@ export function CustomerProposalsSection({
 }
 
 // ── Invoices ───────────────────────────────────────────────────────────────────
+
+const customerInvoiceColumns: CmsColumn<SalesInvoice>[] = [
+  {
+    id: "number",
+    header: "Invoice #",
+    cell: (inv) => (
+      <Link href={`/sales/invoices/${inv.id}`} className="font-mono text-primary hover:underline font-medium">
+        {inv.number}
+      </Link>
+    ),
+  },
+  {
+    id: "title",
+    header: "Title",
+    cell: (inv) => <span className="max-w-[200px] truncate block">{inv.title ?? "—"}</span>,
+  },
+  {
+    id: "amount",
+    header: "Amount",
+    align: "right",
+    cell: (inv) => <span className="tabular-nums font-medium">{formatCurrency(inv.amount)}</span>,
+  },
+  {
+    id: "paid",
+    header: "Paid",
+    align: "right",
+    cell: (inv) => (
+      <span className="tabular-nums text-emerald-600">{formatCurrency(inv.paidAmount ?? 0)}</span>
+    ),
+  },
+  {
+    id: "due",
+    header: "Due",
+    align: "right",
+    cell: (inv) => {
+      const remaining = calcRemaining(inv.amount, inv.paidAmount ?? 0);
+      return (
+        <span
+          className={cn(
+            "tabular-nums font-medium",
+            remaining > 0 && inv.status !== "cancelled" && "text-destructive",
+          )}
+        >
+          {inv.status === "cancelled" ? "—" : formatCurrency(remaining)}
+        </span>
+      );
+    },
+  },
+  {
+    id: "status",
+    header: "Status",
+    chip: true,
+    cell: (inv) => <SalesStatusBadge variant="invoice" value={inv.status} />,
+  },
+  {
+    id: "dueDate",
+    header: "Due date",
+    cell: (inv) => (
+      <span className="text-muted-foreground whitespace-nowrap">
+        {format(new Date(inv.dueDate), "MMM d, yyyy")}
+      </span>
+    ),
+  },
+  {
+    id: "created",
+    header: "Created",
+    cell: (inv) => (
+      <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(inv.createdAt)}</span>
+    ),
+  },
+];
+
+const customerPaymentColumns: CmsColumn<SalesPayment>[] = [
+  {
+    id: "receipt",
+    header: "Receipt #",
+    className: "whitespace-nowrap min-w-[132px]",
+    cell: (p) => (
+      <Link href={`/sales/receipts/${p.id}`} className="font-mono font-medium text-primary hover:underline">
+        {p.receiptNumber}
+      </Link>
+    ),
+  },
+  {
+    id: "invoice",
+    header: "Invoice",
+    className: "whitespace-nowrap min-w-[120px]",
+    cell: (p) => {
+      const docInvoiceId = paymentDocumentInvoiceId(p);
+      return (
+        <Link href={`/sales/invoices/${docInvoiceId}`} className="font-mono text-primary hover:underline">
+          {p.invoiceNumber ?? `INV-${docInvoiceId}`}
+        </Link>
+      );
+    },
+  },
+  {
+    id: "installment",
+    header: "Installment",
+    cell: (p) => (
+      <span className="text-muted-foreground max-w-[140px] truncate block">
+        {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
+      </span>
+    ),
+  },
+  { id: "mode", header: "Mode", cell: (p) => formatPaymentMethod(p.paymentMethod) },
+  {
+    id: "transactionId",
+    header: "Transaction ID",
+    cell: (p) => (
+      <span className="font-mono text-muted-foreground max-w-[120px] truncate block" title={p.transactionId ?? undefined}>
+        {p.transactionId ?? "—"}
+      </span>
+    ),
+  },
+  {
+    id: "amount",
+    header: "Amount",
+    align: "right",
+    cell: (p) => <span className="tabular-nums font-semibold text-emerald-700">{formatCurrency(p.amount)}</span>,
+  },
+  {
+    id: "invoiceStatus",
+    header: "Invoice status",
+    chip: true,
+    cell: (p) => <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />,
+  },
+  {
+    id: "paymentDate",
+    header: "Payment date",
+    cell: (p) => (
+      <span className="text-muted-foreground whitespace-nowrap">{formatSalesPaymentDate(p.paymentDate)}</span>
+    ),
+  },
+  {
+    id: "createdAt",
+    header: "Created at",
+    cell: (p) => (
+      <span className="text-muted-foreground whitespace-nowrap">{formatSalesDateTime(p.createdAt)}</span>
+    ),
+  },
+  {
+    id: "createdBy",
+    header: "Created by",
+    cell: (p) =>
+      p.recordedByName ? (
+        <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} className="max-w-[140px]" />
+      ) : (
+        <span className="text-muted-foreground">—</span>
+      ),
+  },
+  {
+    id: "actions",
+    header: "Actions",
+    align: "right",
+    cell: (p) => {
+      const docInvoiceId = paymentDocumentInvoiceId(p);
+      return (
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+            <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
+          </Button>
+          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+            <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
+          </Button>
+        </div>
+      );
+    },
+  },
+];
+
+type StatementTableRow = {
+  key: string;
+  date: string;
+  details: string;
+  href?: string;
+  amount: number;
+  payment: number;
+  balance: number;
+  isBeginning?: boolean;
+  isEmpty?: boolean;
+};
+
+const statementLedgerColumns: CmsColumn<StatementTableRow>[] = [
+  {
+    id: "date",
+    header: "Date",
+    className: "w-[100px]",
+    cell: (row) => <span className="text-muted-foreground">{row.date}</span>,
+  },
+  {
+    id: "details",
+    header: "Details",
+    cell: (row) =>
+      row.isEmpty ? (
+        <span className="block text-center text-muted-foreground py-6">{row.details}</span>
+      ) : row.href ? (
+        <Link href={row.href} className="text-primary hover:underline leading-relaxed">
+          {row.details}
+        </Link>
+      ) : (
+        <span className={row.isBeginning ? "text-muted-foreground" : undefined}>{row.details}</span>
+      ),
+  },
+  {
+    id: "amount",
+    header: "Amount",
+    align: "right",
+    className: "w-[90px]",
+    cell: (row) =>
+      row.isEmpty ? null : (
+        <span className="tabular-nums text-red-700 dark:text-red-400">
+          {row.amount > 0 ? formatStatementTableAmount(row.amount) : row.isBeginning ? "0.00" : ""}
+        </span>
+      ),
+  },
+  {
+    id: "payment",
+    header: "Payments",
+    align: "right",
+    className: "w-[90px]",
+    cell: (row) =>
+      row.isEmpty ? null : (
+        <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+          {row.payment > 0 ? formatStatementTableAmount(row.payment) : row.isBeginning ? "0.00" : ""}
+        </span>
+      ),
+  },
+  {
+    id: "balance",
+    header: "Balance",
+    align: "right",
+    className: "w-[100px]",
+    cell: (row) =>
+      row.isEmpty ? null : (
+        <span
+          className={cn(
+            "tabular-nums font-medium",
+            row.balance < 0 && "text-amber-700",
+            row.balance > 0 && "text-foreground",
+          )}
+        >
+          {formatStatementTableAmount(row.balance)}
+        </span>
+      ),
+  },
+];
 
 export function CustomerInvoicesSection({
   invoices,
@@ -1216,17 +1484,28 @@ export function CustomerInvoicesSection({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <FinancialSummaryCard title="Invoices" value={invoices.length} icon={FileText} accent="blue" />
-        <FinancialSummaryCard title="Total invoiced" value={formatCurrency(totalInvoiced)} icon={IndianRupee} accent="violet" />
-        <FinancialSummaryCard
-          title="Outstanding"
-          value={formatCurrency(computedOutstanding)}
-          icon={Receipt}
-          accent="red"
-          alert={computedOutstanding > 0}
-        />
-      </div>
+      <PortalKpiGrid
+        columns={3}
+        count={3}
+        items={[
+          { title: "Invoices", value: invoices.length, icon: FileText, accent: "blue", delay: 0 },
+          {
+            title: "Total invoiced",
+            value: formatCurrency(totalInvoiced),
+            icon: IndianRupee,
+            accent: "violet",
+            delay: 1,
+          },
+          {
+            title: "Outstanding",
+            value: formatCurrency(computedOutstanding),
+            icon: Receipt,
+            accent: "red",
+            alert: computedOutstanding > 0,
+            delay: 2,
+          },
+        ]}
+      />
 
       {invoicesTruncated ? (
         <p className="text-xs text-amber-700 dark:text-amber-400 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
@@ -1234,60 +1513,12 @@ export function CustomerInvoicesSection({
         </p>
       ) : null}
 
-      <div className="rounded-xl border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="text-xs">Invoice #</TableHead>
-              <TableHead className="text-xs">Title</TableHead>
-              <TableHead className="text-xs text-right">Amount</TableHead>
-              <TableHead className="text-xs text-right">Paid</TableHead>
-              <TableHead className="text-xs text-right">Due</TableHead>
-              <TableHead className="text-xs">Status</TableHead>
-              <TableHead className="text-xs">Due date</TableHead>
-              <TableHead className="text-xs">Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedInvoices.map((inv) => {
-              const remaining = calcRemaining(inv.amount, inv.paidAmount ?? 0);
-              return (
-                <TableRow key={inv.id} className="hover:bg-muted/20">
-                  <TableCell className="text-xs font-mono">
-                    <Link href={`/sales/invoices/${inv.id}`} className="text-primary hover:underline font-medium">
-                      {inv.number}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs max-w-[200px] truncate">{inv.title ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium">
-                    {formatCurrency(inv.amount)}
-                  </TableCell>
-                  <TableCell className="text-xs text-right tabular-nums text-emerald-600">
-                    {formatCurrency(inv.paidAmount ?? 0)}
-                  </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-xs text-right tabular-nums font-medium",
-                      remaining > 0 && inv.status !== "cancelled" && "text-destructive",
-                    )}
-                  >
-                    {inv.status === "cancelled" ? "—" : formatCurrency(remaining)}
-                  </TableCell>
-                  <TableCell>
-                    <SalesStatusBadge variant="invoice" value={inv.status} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {format(new Date(inv.dueDate), "MMM d, yyyy")}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                    {formatSalesDateTime(inv.createdAt)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+      <CmsDataTable
+        embedded
+        columns={customerInvoiceColumns}
+        rows={sortedInvoices}
+        rowKey={(inv) => inv.id}
+      />
 
       <InvoiceFormSheet open={createInvoiceOpen} onOpenChange={setCreateInvoiceOpen} defaultCustomerId={customerId} />
     </div>
@@ -1347,10 +1578,20 @@ export function CustomerPaymentsSection({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-        <FinancialSummaryCard title="Payments" value={payments.length} icon={Receipt} accent="green" />
-        <FinancialSummaryCard title="Total paid" value={formatCurrency(totalPaid)} icon={TrendingUp} accent="green" />
-      </div>
+      <PortalKpiGrid
+        columns={2}
+        count={2}
+        items={[
+          { title: "Payments", value: payments.length, icon: Receipt, accent: "green", delay: 0 },
+          {
+            title: "Total paid",
+            value: formatCurrency(totalPaid),
+            icon: TrendingUp,
+            accent: "green",
+            delay: 1,
+          },
+        ]}
+      />
 
       {paymentsTruncated ? (
         <p className="text-xs text-amber-700 dark:text-amber-400 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
@@ -1358,80 +1599,13 @@ export function CustomerPaymentsSection({
         </p>
       ) : null}
 
-      <div className="rounded-xl border overflow-x-auto">
-        <Table className="min-w-[1100px]">
-          <TableHeader>
-            <TableRow className="bg-muted/30 hover:bg-muted/30">
-              <TableHead className="text-xs whitespace-nowrap min-w-[132px]">Receipt #</TableHead>
-              <TableHead className="text-xs whitespace-nowrap min-w-[120px]">Invoice</TableHead>
-              <TableHead className="text-xs">Installment</TableHead>
-              <TableHead className="text-xs">Mode</TableHead>
-              <TableHead className="text-xs">Transaction ID</TableHead>
-              <TableHead className="text-xs text-right">Amount</TableHead>
-              <TableHead className="text-xs">Invoice status</TableHead>
-              <TableHead className="text-xs">Payment date</TableHead>
-              <TableHead className="text-xs">Created at</TableHead>
-              <TableHead className="text-xs">Created by</TableHead>
-              <TableHead className="text-xs text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedPayments.map((p) => {
-              const docInvoiceId = paymentDocumentInvoiceId(p);
-              return (
-              <TableRow key={p.id} className="hover:bg-muted/20">
-                <TableCell className="text-xs font-mono font-medium whitespace-nowrap">
-                  <Link href={`/sales/receipts/${p.id}`} className="text-primary hover:underline">
-                    {p.receiptNumber}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-xs font-mono whitespace-nowrap">
-                  <Link href={`/sales/invoices/${docInvoiceId}`} className="text-primary hover:underline">
-                    {p.invoiceNumber ?? `INV-${docInvoiceId}`}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground max-w-[140px] truncate">
-                  {p.installmentName ?? (p.installmentId ? `Inst #${p.installmentId}` : "—")}
-                </TableCell>
-                <TableCell className="text-xs">{formatPaymentMethod(p.paymentMethod)}</TableCell>
-                <TableCell className="text-xs font-mono text-muted-foreground max-w-[120px] truncate" title={p.transactionId ?? undefined}>
-                  {p.transactionId ?? "—"}
-                </TableCell>
-                <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">
-                  {formatCurrency(p.amount)}
-                </TableCell>
-                <TableCell>
-                  <SalesStatusBadge variant="invoice" value={p.invoiceStatus} />
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatSalesPaymentDate(p.paymentDate)}
-                </TableCell>
-                <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatSalesDateTime(p.createdAt)}
-                </TableCell>
-                <TableCell>
-                  {p.recordedByName ? (
-                    <ExecutiveAvatar name={p.recordedByName} avatarUrl={p.recordedByAvatarUrl} className="max-w-[140px]" />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">—</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
-                    </Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-            })}
-          </TableBody>
-        </Table>
-      </div>
+      <CmsDataTable
+        embedded
+        className="min-w-[1100px]"
+        columns={customerPaymentColumns}
+        rows={sortedPayments}
+        rowKey={(p) => p.id}
+      />
 
       <RecordPaymentDialog open={recordPaymentOpen} onOpenChange={setRecordPaymentOpen} customerId={customerId} />
     </div>
@@ -1536,6 +1710,46 @@ export function CustomerStatementSection({
     if (toDate) return `Showing all invoices and payments through ${toDate}`;
     return "Showing all invoices and payments";
   }, [fromDate, toDate]);
+
+  const statementRows = useMemo<StatementTableRow[]>(() => {
+    const beginningDate =
+      fromDate || format(new Date(allInvoices[0]?.createdAt ?? new Date()), "yyyy-MM-dd");
+    const rows: StatementTableRow[] = [
+      {
+        key: "__beginning",
+        date: beginningDate,
+        details: "Beginning Balance",
+        amount: 0,
+        payment: 0,
+        balance: ledger.beginningBalance,
+        isBeginning: true,
+      },
+    ];
+    if (ledger.rows.length === 0) {
+      rows.push({
+        key: "__empty",
+        date: "",
+        details: "No transactions in the selected period",
+        amount: 0,
+        payment: 0,
+        balance: 0,
+        isEmpty: true,
+      });
+    } else {
+      rows.push(
+        ...ledger.rows.map((row) => ({
+          key: row.key,
+          date: format(new Date(row.date), "yyyy-MM-dd"),
+          details: row.details,
+          href: row.href,
+          amount: row.amount,
+          payment: row.payment,
+          balance: row.balance,
+        })),
+      );
+    }
+    return rows;
+  }, [ledger, fromDate, allInvoices]);
 
   const handleDownloadPdf = () => {
     setPdfLoading(true);
@@ -1747,72 +1961,19 @@ export function CustomerStatementSection({
           <p className="text-[11px] text-center text-muted-foreground py-1">{showingText}</p>
 
           {/* Ledger table */}
-          <div className="border rounded-md overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="text-xs font-semibold w-[100px]">Date</TableHead>
-                  <TableHead className="text-xs font-semibold">Details</TableHead>
-                  <TableHead className="text-xs font-semibold text-right w-[90px]">Amount</TableHead>
-                  <TableHead className="text-xs font-semibold text-right w-[90px]">Payments</TableHead>
-                  <TableHead className="text-xs font-semibold text-right w-[100px]">Balance</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow className="bg-muted/20 hover:bg-muted/20">
-                  <TableCell className="text-xs text-muted-foreground py-2">
-                    {fromDate || format(new Date(allInvoices[0]?.createdAt ?? new Date()), "yyyy-MM-dd")}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground py-2">Beginning Balance</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums py-2">0.00</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums py-2">0.00</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium py-2">
-                    {formatStatementTableAmount(ledger.beginningBalance)}
-                  </TableCell>
-                </TableRow>
-
-                {ledger.rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center text-xs text-muted-foreground py-8">
-                      No transactions in the selected period
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-
-                {ledger.rows.map((row) => (
-                  <TableRow key={row.key}>
-                    <TableCell className="text-xs text-muted-foreground py-2 align-top">
-                      {format(new Date(row.date), "yyyy-MM-dd")}
-                    </TableCell>
-                    <TableCell className="text-xs py-2 align-top leading-relaxed">
-                      {row.href ? (
-                        <Link href={row.href} className="text-primary hover:underline">
-                          {row.details}
-                        </Link>
-                      ) : (
-                        row.details
-                      )}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums py-2 align-top text-red-700 dark:text-red-400">
-                      {row.amount > 0 ? formatStatementTableAmount(row.amount) : ""}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums py-2 align-top text-emerald-700 dark:text-emerald-400">
-                      {row.payment > 0 ? formatStatementTableAmount(row.payment) : ""}
-                    </TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-xs text-right tabular-nums font-medium py-2 align-top",
-                        row.balance < 0 && "text-amber-700",
-                        row.balance > 0 && "text-foreground",
-                      )}
-                    >
-                      {formatStatementTableAmount(row.balance)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <CmsDataTable
+            embedded
+            columns={statementLedgerColumns}
+            rows={statementRows}
+            rowKey={(row) => row.key}
+            getRowClassName={(row) =>
+              row.isBeginning
+                ? "bg-muted/20 hover:bg-muted/20"
+                : row.isEmpty
+                  ? "hover:bg-transparent"
+                  : undefined
+            }
+          />
 
           <p className="text-sm font-bold text-right pt-2">
             Balance Due {formatStatementSummaryAmount(ledger.balanceDue)}

@@ -4,15 +4,7 @@ import { format } from "date-fns";
 import { Plus, Briefcase } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockEmployeeCases } from "@/modules/legal/mock-data";
 import { CASE_STATUS_LABELS, CASE_STATUS_ORDER, CASE_TYPE_LABELS } from "@/modules/legal/constants";
 import {
@@ -20,9 +12,9 @@ import {
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { EmployeeLegalCase } from "@/modules/legal/types";
 
 export default function LegalCases() {
   const [search, setSearch] = useState("");
@@ -49,6 +41,73 @@ export default function LegalCases() {
     return counts;
   }, []);
 
+  const chipItems = useMemo(
+    () => [
+      { value: "all", label: "All", count: statusCounts.all },
+      ...CASE_STATUS_ORDER.map((s) => ({
+        value: s,
+        label: CASE_STATUS_LABELS[s],
+        count: statusCounts[s] ?? 0,
+      })),
+    ],
+    [statusCounts],
+  );
+
+  const columns = useMemo<CmsColumn<EmployeeLegalCase>[]>(
+    () => [
+      {
+        id: "caseNumber",
+        header: "Case #",
+        cell: (c) => (
+          <Link href={`/legal/cases/${c.id}`} className="font-mono text-primary hover:underline">
+            {c.caseNumber}
+          </Link>
+        ),
+      },
+      {
+        id: "employee",
+        header: "Employee",
+        cell: (c) => <span className="font-medium">{c.employeeName}</span>,
+      },
+      { id: "department", header: "Department", cell: (c) => c.department },
+      { id: "type", header: "Type", cell: (c) => CASE_TYPE_LABELS[c.type] },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (c) => <LegalStatusBadge variant="case" value={c.status} />,
+      },
+      {
+        id: "risk",
+        header: "Risk",
+        chip: true,
+        cell: (c) => <LegalRiskBadge level={c.risk} />,
+      },
+      {
+        id: "counsel",
+        header: "Counsel",
+        cell: (c) => <CounselAvatar name={c.assignedTo.name} />,
+      },
+      {
+        id: "opened",
+        header: "Opened",
+        cell: (c) => (
+          <span className="text-muted-foreground">{format(new Date(c.openedAt), "MMM d, yyyy")}</span>
+        ),
+      },
+      {
+        id: "hearing",
+        header: "Next hearing",
+        cell: (c) => (
+          <span className="text-muted-foreground">
+            {c.nextHearing ? format(new Date(c.nextHearing), "MMM d, yyyy") : "—"}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   return (
     <PortalPageShell>
       <LegalPageHeader
@@ -63,63 +122,24 @@ export default function LegalCases() {
         }
       />
 
-      <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search cases, employees, departments…" />
+      <LegalFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search cases, employees, departments…"
+      />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">
-            All ({statusCounts.all})
-          </TabsTrigger>
-          {CASE_STATUS_ORDER.map((s) => (
-            <TabsTrigger key={s} value={s} className="text-xs data-[state=active]:bg-primary/10">
-              {CASE_STATUS_LABELS[s]} ({statusCounts[s] ?? 0})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs value={statusTab} onValueChange={setStatusTab} items={chipItems} />
 
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={Briefcase} title="No cases found" description="Adjust filters or open a new case." />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Case #</TableHead>
-                <TableHead className="text-xs">Employee</TableHead>
-                <TableHead className="text-xs">Department</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-                <TableHead className="text-xs">Opened</TableHead>
-                <TableHead className="text-xs">Next hearing</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id} className="hover:bg-muted/30">
-                  <TableCell>
-                    <Link href={`/legal/cases/${c.id}`} className="text-xs font-mono text-primary hover:underline">
-                      {c.caseNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs font-medium">{c.employeeName}</TableCell>
-                  <TableCell className="text-xs">{c.department}</TableCell>
-                  <TableCell className="text-xs">{CASE_TYPE_LABELS[c.type]}</TableCell>
-                  <TableCell><LegalStatusBadge variant="case" value={c.status} /></TableCell>
-                  <TableCell><LegalRiskBadge level={c.risk} /></TableCell>
-                  <TableCell><CounselAvatar name={c.assignedTo.name} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{format(new Date(c.openedAt), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {c.nextHearing ? format(new Date(c.nextHearing), "MMM d, yyyy") : "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(c) => c.id}
+        empty={{
+          icon: Briefcase,
+          title: "No cases found",
+          description: "Adjust filters or open a new case.",
+        }}
+      />
     </PortalPageShell>
   );
 }

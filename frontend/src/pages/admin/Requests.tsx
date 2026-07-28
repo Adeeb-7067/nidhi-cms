@@ -1,24 +1,15 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { useListRequests, useUpdateRequest, getListRequestsQueryKey } from "@/api";
+import { useEffect, useMemo, useState } from "react";
+import { useListRequests, useUpdateRequest, useRequestsSummary } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { PageTableSkeleton } from "@/components/loading";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Check, X, MessageSquare, PlusCircle, Package, Clock, Inbox } from "lucide-react";
-import {
-  PortalPageShell,
-  PortalPageHero,
-  PortalKpiGrid,
-  PortalTabsList,
-  PortalTabsTrigger,
-  PortalContentCard,
-} from "@/components/layout/portal-page-kit";
+import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs } from "@/components/cms";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
-import { QUERY_STALE } from "@/lib/query-config";
-import { LIST_COUNT_PARAMS, selectListTotal } from "@/hooks/use-list-totals";
+import { useQueryClient } from "@tanstack/react-query";
 
 type RequestRow = {
   id: number;
@@ -35,52 +26,23 @@ type RequestRow = {
 };
 
 export default function AdminRequests() {
-  const [status, setStatus] = useState<"pending" | "approved" | "rejected" | undefined>("pending");
+  const [status, setStatus] = useState<"pending" | "approved" | "rejected" | "all">("pending");
   const [activeSection, setActiveSection] = useState<"resource" | "addon">("addon");
-  const { data, isLoading, refetch } = useListRequests({ status, limit: 100 });
-  const countQueryBase = { staleTime: QUERY_STALE.reference, select: selectListTotal };
-  const { data: requestTotal = 0, isLoading: totalLoading } = useListRequests(LIST_COUNT_PARAMS, {
-    query: { ...countQueryBase, queryKey: getListRequestsQueryKey(LIST_COUNT_PARAMS) },
-  });
-  const { data: pendingTotal = 0, isLoading: pendingLoading } = useListRequests(
-    { ...LIST_COUNT_PARAMS, status: "pending" },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "pending" }),
-      },
-    },
-  );
-  const { data: approvedTotal = 0, isLoading: approvedLoading } = useListRequests(
-    { ...LIST_COUNT_PARAMS, status: "approved" },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "approved" }),
-      },
-    },
-  );
-  const { data: rejectedTotal = 0, isLoading: rejectedLoading } = useListRequests(
-    { ...LIST_COUNT_PARAMS, status: "rejected" },
-    {
-      query: {
-        ...countQueryBase,
-        queryKey: getListRequestsQueryKey({ ...LIST_COUNT_PARAMS, status: "rejected" }),
-      },
-    },
-  );
-  const updateMutation = useUpdateRequest();
+  const listStatus = status === "all" ? undefined : status;
+  const { data, isLoading, refetch } = useListRequests({ status: listStatus, limit: 100 });
+  const { data: requestSummary, isLoading: statsLoading } = useRequestsSummary();
+  const queryClient = useQueryClient();
 
   const requestStats = useMemo(
     () => ({
-      total: requestTotal,
-      pending: pendingTotal,
-      approved: approvedTotal,
-      rejected: rejectedTotal,
+      total: requestSummary?.total ?? 0,
+      pending: requestSummary?.pending ?? 0,
+      approved: requestSummary?.approved ?? 0,
+      rejected: requestSummary?.rejected ?? 0,
     }),
-    [requestTotal, pendingTotal, approvedTotal, rejectedTotal],
+    [requestSummary],
   );
-  const statsLoading = totalLoading || pendingLoading || approvedLoading || rejectedLoading;
+  const updateMutation = useUpdateRequest();
 
   const addonRequests = useMemo(
     () => (data?.requests.filter((r) => (r as { type: string }).type === "add_on_work") || []) as RequestRow[],
@@ -111,6 +73,8 @@ export default function AdminRequests() {
         onSuccess: () => {
           toast.success(`Request ${newStatus} successfully`);
           refetch();
+          void queryClient.invalidateQueries({ queryKey: ["requests-summary"] });
+          void queryClient.invalidateQueries({ queryKey: ["nav-badges"] });
         },
         onError: (err) => {
           toastApiError(err, "Failed to update request");
@@ -137,23 +101,23 @@ export default function AdminRequests() {
       id: "developer",
       header: activeSection === "addon" ? "Submitted By" : "Developer",
       cell: (request) => (
-        <span className="font-medium text-xs">{request.developerName}</span>
+        <span className="text-xs font-medium">{request.developerName}</span>
       ),
     },
     {
       id: "project",
       header: "Project",
       cell: (request) => (
-        <span className="text-muted-foreground text-xs">{request.projectName}</span>
+        <span className="text-xs text-muted-foreground">{request.projectName}</span>
       ),
     },
     {
       id: "request",
       header: "Request",
       cell: (request) => (
-        <div className="flex flex-col min-w-[160px] max-w-md">
-          <span className="font-medium text-xs whitespace-normal">{request.title}</span>
-          <span className="text-[10px] text-muted-foreground mt-0.5">
+        <div className="flex min-w-[160px] max-w-md flex-col">
+          <span className="text-xs font-medium whitespace-normal">{request.title}</span>
+          <span className="mt-0.5 text-[10px] text-muted-foreground">
             {request.type.replace("_", " ").toUpperCase()}
           </span>
         </div>
@@ -188,7 +152,7 @@ export default function AdminRequests() {
       cell: (request) => (
         <Badge
           variant="outline"
-          className={`${getUrgencyColor(request.urgency)} text-[10px] px-1.5 py-0 h-4`}
+          className={`${getUrgencyColor(request.urgency)} h-4 px-1.5 py-0 text-[10px]`}
         >
           {request.urgency.toUpperCase()}
         </Badge>
@@ -206,7 +170,7 @@ export default function AdminRequests() {
               : request.status === "approved"
                 ? "bg-green-500/10 text-green-500 border-green-500/20"
                 : "bg-red-500/10 text-red-500 border-red-500/20"
-          } text-[10px] px-1.5 py-0 h-4`}
+          } h-4 px-1.5 py-0 text-[10px]`}
         >
           {request.status.toUpperCase()}
         </Badge>
@@ -218,33 +182,35 @@ export default function AdminRequests() {
       hideInDetail: true,
       cell: (request) =>
         request.status === "pending" ? (
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-1.5">
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs bg-green-500/10 text-green-500 hover:bg-green-500/20 hover:text-green-600 border-green-500/20"
+              className="h-7 border-green-500/20 bg-green-500/10 text-xs text-green-500 hover:bg-green-500/20 hover:text-green-600"
               onClick={() => handleUpdateStatus(request.id, "approved")}
               disabled={updateMutation.isPending}
             >
-              <Check className="h-3 w-3 mr-1" /> Approve
+              <Check className="mr-1 h-3 w-3" /> Approve
             </Button>
             <Button
               size="sm"
               variant="outline"
-              className="h-7 text-xs bg-red-500/10 text-red-500 hover:bg-red-500/20 hover:text-red-600 border-red-500/20"
+              className="h-7 border-red-500/20 bg-red-500/10 text-xs text-red-500 hover:bg-red-500/20 hover:text-red-600"
               onClick={() => handleUpdateStatus(request.id, "rejected")}
               disabled={updateMutation.isPending}
             >
-              <X className="h-3 w-3 mr-1" /> Reject
+              <X className="mr-1 h-3 w-3" /> Reject
             </Button>
           </div>
         ) : (
           <Button size="sm" variant="ghost" className="h-7 text-xs">
-            <MessageSquare className="h-3 w-3 mr-1" /> Details
+            <MessageSquare className="mr-1 h-3 w-3" /> Details
           </Button>
         ),
     },
   ];
+
+  const addonPending = addonRequests.filter((r) => r.status === "pending").length;
 
   return (
     <PortalPageShell>
@@ -263,50 +229,46 @@ export default function AdminRequests() {
         ]}
       />
 
-      <Tabs value={activeSection} onValueChange={(v) => setActiveSection(v as "resource" | "addon")}>
-        <PortalTabsList className="mb-4">
-          <PortalTabsTrigger value="addon" className="flex items-center gap-1.5">
-            <PlusCircle className="h-3.5 w-3.5" /> Add-on Work Requests
-            {addonRequests.filter((r) => r.status === "pending").length > 0 && (
-              <Badge variant="destructive" className="text-[9px] px-1 py-0 h-3.5 ml-1">
-                {addonRequests.filter((r) => r.status === "pending").length}
-              </Badge>
-            )}
-          </PortalTabsTrigger>
-          <PortalTabsTrigger value="resource" className="flex items-center gap-1.5">
-            <Package className="h-3.5 w-3.5" /> Resource Requests
-          </PortalTabsTrigger>
-        </PortalTabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={activeSection}
+        onValueChange={(v) => setActiveSection(v as "resource" | "addon")}
+        items={[
+          {
+            value: "addon",
+            label: "Add-on work",
+            count: addonPending > 0 ? addonPending : undefined,
+          },
+          { value: "resource", label: "Resource requests" },
+        ]}
+      />
 
-      <PortalContentCard contentClassName="p-0">
-        <div className="p-3 border-b border-border">
-          <Tabs value={status || "all"} onValueChange={(v) => setStatus(v === "all" ? undefined : (v as typeof status))}>
-            <PortalTabsList>
-              <PortalTabsTrigger value="pending">Pending</PortalTabsTrigger>
-              <PortalTabsTrigger value="approved">Approved</PortalTabsTrigger>
-              <PortalTabsTrigger value="rejected">Rejected</PortalTabsTrigger>
-              <PortalTabsTrigger value="all">All</PortalTabsTrigger>
-            </PortalTabsList>
-          </Tabs>
+      <CmsChipTabs
+        value={status}
+        onValueChange={(v) => setStatus(v as typeof status)}
+        items={[
+          { value: "pending", label: "Pending", count: requestStats.pending },
+          { value: "approved", label: "Approved", count: requestStats.approved },
+          { value: "rejected", label: "Rejected", count: requestStats.rejected },
+          { value: "all", label: "All", count: requestStats.total },
+        ]}
+      />
+
+      {isLoading ? (
+        <div className="rounded-md border border-border/60 py-16 text-center text-xs text-muted-foreground">
+          Loading requests…
         </div>
-        <div className="p-4">
-          {isLoading ? (
-            <PageTableSkeleton rows={8} columns={6} showToolbar />
-          ) : (
-            <AdvancedTable
-              data={tableData}
-              columns={columns}
-              searchKey="title"
-              searchPlaceholder="Filter requests..."
-              filename="RequestsExport"
-              viewStorageKey={`admin-requests-${activeSection}`}
-              showViewToggle
-              clientPagination={clientPagination}
-            />
-          )}
-        </div>
-      </PortalContentCard>
+      ) : (
+        <AdvancedTable
+          data={tableData}
+          columns={columns}
+          searchKey="title"
+          searchPlaceholder="Filter requests…"
+          filename="RequestsExport"
+          viewStorageKey={`admin-requests-${activeSection}`}
+          showViewToggle
+          clientPagination={clientPagination}
+        />
+      )}
     </PortalPageShell>
   );
 }

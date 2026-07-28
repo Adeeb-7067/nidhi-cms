@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
-import { Share2, TrendingUp, TrendingDown, Loader2, Plus, Users, Radio } from "lucide-react";
+import { Share2, TrendingUp, Loader2, Plus, Users, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -30,14 +30,12 @@ import type { MarketingPlatform } from "@/modules/marketing/types";
 import {
   MarketingPageHeader,
   MarketingFilterBar,
-  MarketingEmptyState,
   PlatformIconBadge,
   MarketingRowActions,
   MarketingConfirmDialog,
   DigitalProjectSelect,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
@@ -80,7 +78,7 @@ export default function MarketingSocial() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
-  const { data, isLoading, isError } = useMarketingSocial(
+  const { data, isLoading, isError, refetch } = useMarketingSocial(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const upsertSocial = useUpsertMarketingSocial();
@@ -121,6 +119,85 @@ export default function MarketingSocial() {
     });
     setDialogOpen(true);
   };
+
+  const columns = useMemo<CmsColumn<MarketingSocialMetricDto>[]>(
+    () => [
+      {
+        id: "platform",
+        header: "Platform",
+        cell: (m) => (
+          <div className="flex items-center gap-2">
+            <PlatformIconBadge platform={m.platform} />
+            <span className="font-medium">{PLATFORM_LABELS[m.platform]}</span>
+          </div>
+        ),
+      },
+      {
+        id: "client",
+        header: "Project",
+        className: "max-w-[160px] truncate",
+        cell: (m) => m.clientName ?? "—",
+      },
+      {
+        id: "followers",
+        header: "Followers",
+        align: "right",
+        cell: (m) => <span className="tabular-nums">{m.followers.toLocaleString("en-IN")}</span>,
+      },
+      {
+        id: "reach",
+        header: "Reach",
+        align: "right",
+        cell: (m) => <span className="tabular-nums">{m.reach.toLocaleString("en-IN")}</span>,
+      },
+      {
+        id: "engagement",
+        header: "Engagement",
+        align: "right",
+        cell: (m) => <span className="tabular-nums">{m.engagement.toLocaleString("en-IN")}</span>,
+      },
+      {
+        id: "rate",
+        header: "Eng. rate",
+        align: "right",
+        chip: true,
+        cell: (m) => <span className="font-medium tabular-nums">{m.engagementRate}%</span>,
+      },
+      {
+        id: "best",
+        header: "Best post",
+        className: "max-w-[180px] truncate",
+        hideInGrid: true,
+        cell: (m) => <span className="text-emerald-700 dark:text-emerald-400">{m.bestPostTitle}</span>,
+      },
+      {
+        id: "worst",
+        header: "Needs work",
+        className: "max-w-[180px] truncate",
+        hideInGrid: true,
+        cell: (m) => <span className="text-red-600 dark:text-red-400">{m.worstPostTitle}</span>,
+      },
+      ...(showActions
+        ? [
+            {
+              id: "actions",
+              header: "Actions",
+              align: "right" as const,
+              hideable: false,
+              cell: (m: MarketingSocialMetricDto) => (
+                <MarketingRowActions
+                  canEdit={canEdit && canFullyEditMarketingItem(user, m.createdBy)}
+                  canDelete={canDelete && canDeleteMarketingItem(user, m.createdBy)}
+                  onEdit={() => openEdit(m)}
+                  onDelete={() => setDeleteTarget(m)}
+                />
+              ),
+            },
+          ]
+        : []),
+    ],
+    [showActions, canEdit, canDelete, user],
+  );
 
   const handleSave = async () => {
     const accountId = editing ? editing.accountId : Number(form.accountId);
@@ -189,71 +266,22 @@ export default function MarketingSocial() {
         <DigitalProjectSelect allowAll value={projectFilter} onValueChange={setProjectFilter} className="h-8 w-[220px] text-xs" />
       </MarketingFilterBar>
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs={false} />
-      ) : isError ? (
-        <MarketingEmptyState icon={Share2} title="Could not load social metrics" description="Check your connection and try again." />
-      ) : metrics.length === 0 ? (
-        <MarketingEmptyState
-          icon={Share2}
-          title="No social metrics yet"
-          description="Add platform metrics for a digital project to track performance."
-          onAction={canUpsert ? openCreate : undefined}
-          actionLabel="Add metrics"
-        />
-      ) : (
-        <div className="grid gap-4">
-          {metrics.map((m) => (
-            <Card key={m.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <PlatformIconBadge platform={m.platform} />
-                    <div>
-                      {PLATFORM_LABELS[m.platform]}
-                      {m.clientName ? (
-                        <p className="text-[10px] font-normal text-muted-foreground">{m.clientName}</p>
-                      ) : null}
-                    </div>
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{m.engagementRate}% engagement rate</span>
-                    {showActions && (
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, m.createdBy)}
-                        canDelete={canDelete && canDeleteMarketingItem(user, m.createdBy)}
-                        onEdit={() => openEdit(m)}
-                        onDelete={() => setDeleteTarget(m)}
-                      />
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <PortalKpiGrid
-                  columns={3}
-                  count={3}
-                  items={[
-                    { title: "Followers", value: m.followers.toLocaleString("en-IN"), icon: Share2, accent: "blue", delay: 0 },
-                    { title: "Reach", value: m.reach.toLocaleString("en-IN"), icon: TrendingUp, accent: "green", delay: 1 },
-                    { title: "Engagement", value: m.engagement.toLocaleString("en-IN"), icon: TrendingDown, accent: "violet", delay: 2 },
-                  ]}
-                />
-                <div className="grid sm:grid-cols-2 gap-3 mt-4">
-                  <div className="rounded-lg border bg-emerald-500/5 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-wider text-emerald-700 font-medium">Best post</p>
-                    <p className="text-xs mt-1">{m.bestPostTitle}</p>
-                  </div>
-                  <div className="rounded-lg border bg-red-500/5 px-3 py-2">
-                    <p className="text-[10px] uppercase tracking-wider text-red-600 font-medium">Needs improvement</p>
-                    <p className="text-xs mt-1">{m.worstPostTitle}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={metrics}
+        rowKey={(m) => m.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => void refetch()}
+        viewStorageKey="marketing-social"
+        empty={{
+          icon: Share2,
+          title: "No social metrics yet",
+          description: "Add platform metrics for a digital project to track performance.",
+          actionLabel: canUpsert ? "Add metrics" : undefined,
+          onAction: canUpsert ? openCreate : undefined,
+        }}
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

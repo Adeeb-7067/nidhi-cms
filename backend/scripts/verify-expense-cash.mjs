@@ -10,7 +10,7 @@ import {
   recognizedExpenseAmount,
   recognizedExpenseGst,
   withExpenseSettlementView,
-} from "../src/services/finance/expense-cash.service.js";
+} from "../src/modules/finance/services/expense-cash.service.js";
 
 function step(name, fn) {
   fn();

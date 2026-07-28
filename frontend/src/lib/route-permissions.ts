@@ -5,6 +5,7 @@ import { NAV_HREF_PERMISSION } from "@/modules/permissions/constants";
 const ROUTE_PREFIX_PERMISSIONS: Array<[string, CmsModule]> = [
   ["/admin/projects/", "admin_projects"],
   ["/admin/project-documents", "admin_project_documents"],
+  ["/admin/media", "admin_media"],
   ["/admin/employees/", "hrm_employees"],
   ["/admin/employees", "admin_team"],
   ["/admin/roles", "roles_permissions"],

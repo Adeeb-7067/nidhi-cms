@@ -5,8 +5,8 @@ import {
   resolveLeaveNotifierIds,
   normalizeBalanceAllocations,
   buildBalanceTransitionOps,
-} from "../../src/services/hrm/leave-approval.js";
-import { allocateOldestFirst } from "../../src/services/hrm/leave-accrual.service.js";
+} from "../../src/modules/hrm/services/leave-approval.js";
+import { allocateOldestFirst } from "../../src/modules/hrm/services/leave-accrual.service.js";
 
 describe("canUserReviewLeaveRequest", () => {
   test("blocks self-approval", () => {

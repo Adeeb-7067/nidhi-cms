@@ -21,7 +21,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,15 +34,10 @@ import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevToolbar,
-  DevTabsList,
-  DevTabsTrigger,
-  DevContentCard,
-  devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
+import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
 import { buildBugsCSV, generateBugPDF } from "@/lib/bug-report";
 import { PageTableSkeleton } from "@/components/loading";
-import { Tabs } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,7 +45,7 @@ import { isDevPortalRole, isQaStaffRole } from "@/lib/navigation";
 import { BugFormDialog, openBugFormDeferred } from "@/components/bugs/bug-form-dialog";
 import { BugDetailSheet } from "@/components/bugs/bug-detail-sheet";
 import { BugTable } from "@/components/bugs/bug-table";
-import { BUG_STATUSES, bugStatsFromList, canUserModifyBug } from "@/lib/bug-workflow";
+import { bugStatsFromList, canUserModifyBug } from "@/lib/bug-workflow";
 import { DEFAULT_TABLE_PAGE_SIZE, useTablePagination } from "@/lib/table-pagination";
 import { clearUrlSearchParam, readBugIdFromUrl } from "@/lib/notification-navigation";
 import { getLocationSearch } from "@/lib/electron-bridge";
@@ -297,24 +291,23 @@ export default function DevBugs() {
         ]}
       />
 
-      <DevToolbar className="flex-wrap">
-        {(isAdmin || isQaStaff) && (
-          <Tabs value={scope} onValueChange={(v) => setScope(v as BugListScope)}>
-            <DevTabsList>
-              {isQaStaff && (
-                <DevTabsTrigger value="created">My reports</DevTabsTrigger>
-              )}
-              <DevTabsTrigger value="all">All bugs</DevTabsTrigger>
-              <DevTabsTrigger value="mine">My queue</DevTabsTrigger>
-              {(isAdmin || isQaStaff) && (
-                <DevTabsTrigger value="unassigned">Unassigned</DevTabsTrigger>
-              )}
-            </DevTabsList>
-          </Tabs>
-        )}
-        {isAdmin && (
+      {(isAdmin || isQaStaff) && (
+        <CmsChipTabs
+          value={scope}
+          onValueChange={(v) => setScope(v as BugListScope)}
+          items={[
+            ...(isQaStaff ? [{ value: "created", label: "My reports" }] : []),
+            { value: "all", label: "All bugs" },
+            { value: "mine", label: "My queue" },
+            ...(isAdmin || isQaStaff ? [{ value: "unassigned", label: "Unassigned" }] : []),
+          ]}
+        />
+      )}
+
+      {isAdmin ? (
+        <CmsFilterBar>
           <Select value={projectFilterId} onValueChange={setProjectFilterId}>
-            <SelectTrigger className="h-8 w-[220px] text-xs bg-muted/50 border-0">
+            <SelectTrigger className="h-9 w-full sm:w-[220px] text-xs bg-background">
               <SelectValue placeholder="All projects" />
             </SelectTrigger>
             <SelectContent>
@@ -326,45 +319,33 @@ export default function DevBugs() {
               ))}
             </SelectContent>
           </Select>
-        )}
-        <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto overflow-x-auto">
-          <DevTabsList className="flex-nowrap">
-            <DevTabsTrigger value="all">All</DevTabsTrigger>
-            {BUG_STATUSES.map((s) => (
-              <DevTabsTrigger key={s} value={s} className="whitespace-nowrap">
-                {s.replace(/_/g, " ")}
-              </DevTabsTrigger>
-            ))}
-          </DevTabsList>
-        </Tabs>
-      </DevToolbar>
+        </CmsFilterBar>
+      ) : null}
 
-      <DevContentCard className="shadow-lg shadow-black/5">
-          {isLoading ? (
-            <PageTableSkeleton rows={8} columns={6} showToolbar />
-          ) : (
-            <BugTable
-              bugs={bugs}
-              search={search}
-              onSearchChange={setSearch}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              priorityFilter={priorityFilter}
-              onPriorityFilterChange={setPriorityFilter}
-              pagination={{
-                page: data?.page ?? page,
-                total: data?.total ?? 0,
-                limit,
-                onPageChange: setPage,
-                onLimitChange: setLimit,
-              }}
-              onRowClick={openDetail}
-              onEdit={openEdit}
-              onDelete={(bug) => canDeleteBug(bug) ? setDeleteTarget(bug) : toast.error("You can only delete bugs you reported.")}
-              canEdit={canEditBug}
-            />
-          )}
-        </DevContentCard>
+      {isLoading ? (
+        <PageTableSkeleton rows={8} columns={6} showToolbar />
+      ) : (
+        <BugTable
+          bugs={bugs}
+          search={search}
+          onSearchChange={setSearch}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          priorityFilter={priorityFilter}
+          onPriorityFilterChange={setPriorityFilter}
+          pagination={{
+            page: data?.page ?? page,
+            total: data?.total ?? 0,
+            limit,
+            onPageChange: setPage,
+            onLimitChange: setLimit,
+          }}
+          onRowClick={openDetail}
+          onEdit={openEdit}
+          onDelete={(bug) => canDeleteBug(bug) ? setDeleteTarget(bug) : toast.error("You can only delete bugs you reported.")}
+          canEdit={canEditBug}
+        />
+      )}
 
       <BugFormDialog
         open={formOpen}

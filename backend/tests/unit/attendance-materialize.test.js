@@ -9,7 +9,7 @@ import {
   dailyAttendanceToSummary,
   computeLateInfo,
   MIN_ACTIVE_MINUTES_FOR_PRESENT,
-} from "../../src/services/hrm/attendance-engine.js";
+} from "../../src/modules/hrm/services/attendance-engine.js";
 
 const weekendDays = [0, 6];
 const shift = { startTime: "09:00", endTime: "18:00", graceMinutesIn: 15 };

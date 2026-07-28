@@ -2,10 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import {
-  Clock,
   Camera,
-  FileText,
-  BarChart3,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -19,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { HrmChartCard, HrmTabsList, HrmTabsTrigger } from "@/modules/hrm/components";
+import { HrmChartCard } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import type { DailyLog, LogComplianceCalendar } from "@/api/generated/api.schemas";
 import type { DailySessionTotal } from "@/api/work-sessions";
 import type { ScreenshotItem } from "@/api/monitoring";
@@ -582,26 +580,18 @@ export function EmployeeWorkTab({ employeeId }: { employeeId: number }) {
   const [subTab, setSubTab] = useState("logs");
 
   return (
-    <Tabs value={subTab} onValueChange={setSubTab} className="space-y-4">
-      <HrmTabsList>
-        <HrmTabsTrigger value="logs">
-          <FileText className="h-3.5 w-3.5 mr-1.5" />
-          Daily logs
-        </HrmTabsTrigger>
-        <HrmTabsTrigger value="sessions">
-          <Clock className="h-3.5 w-3.5 mr-1.5" />
-          Work sessions
-        </HrmTabsTrigger>
-        <HrmTabsTrigger value="screenshots">
-          <Camera className="h-3.5 w-3.5 mr-1.5" />
-          Screenshots
-        </HrmTabsTrigger>
-        <HrmTabsTrigger value="report">
-          <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
-          Monthly report
-        </HrmTabsTrigger>
-      </HrmTabsList>
-
+    <div className="space-y-4">
+      <CmsChipTabs
+        value={subTab}
+        onValueChange={setSubTab}
+        items={[
+          { value: "logs", label: "Daily logs" },
+          { value: "sessions", label: "Work sessions" },
+          { value: "screenshots", label: "Screenshots" },
+          { value: "report", label: "Monthly report" },
+        ]}
+      />
+      <Tabs value={subTab} onValueChange={setSubTab}>
       <TabsContent value="logs" className="mt-0">
         <LogsSubTab employeeId={employeeId} />
       </TabsContent>
@@ -617,6 +607,7 @@ export function EmployeeWorkTab({ employeeId }: { employeeId: number }) {
       <TabsContent value="report" className="mt-0">
         <ReportSubTab employeeId={employeeId} />
       </TabsContent>
-    </Tabs>
+      </Tabs>
+    </div>
   );
 }

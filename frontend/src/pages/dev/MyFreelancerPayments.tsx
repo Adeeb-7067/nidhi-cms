@@ -2,20 +2,39 @@ import { useMemo } from "react";
 import { IndianRupee, Wallet, CheckCircle2 } from "lucide-react";
 import { Link } from "wouter";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import { FinancePageHeader, FinanceEmptyState, FinanceErrorState } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
-import { useListFreelancerEngagements } from "@/api/finance";
+import { useListFreelancerEngagements, type FreelancerEngagement } from "@/api/finance";
 import { getProjectDetailHref } from "@/lib/project-routes";
+
+type Installment = FreelancerEngagement["installments"][number];
+
+const installmentColumns: CmsColumn<Installment>[] = [
+  { id: "label", header: "Installment", cell: (inst) => inst.label },
+  {
+    id: "amount",
+    header: "Amount",
+    cell: (inst) => formatCurrency(inst.amount),
+  },
+  {
+    id: "due",
+    header: "Due",
+    cell: (inst) => (inst.dueDate ? new Date(inst.dueDate).toLocaleDateString() : "—"),
+  },
+  {
+    id: "status",
+    header: "Status",
+    chip: true,
+    cell: (inst) => (
+      <CmsStatusChip
+        label={inst.status}
+        tone={inst.status === "paid" ? "success" : "muted"}
+      />
+    ),
+  },
+];
 
 export default function MyFreelancerPaymentsPage() {
   const { data, isLoading, isError, refetch } = useListFreelancerEngagements();
@@ -48,7 +67,7 @@ export default function MyFreelancerPaymentsPage() {
         items={[
           { title: "Agreed total", value: formatCurrency(kpis.agreed), icon: IndianRupee },
           { title: "Received", value: formatCurrency(kpis.paid), icon: CheckCircle2 },
-          { title: "Remaining", value: formatCurrency(kpis.remaining), icon: IndianRupee },
+          { title: "Remaining", value: formatCurrency(kpis.remaining), icon: Wallet },
         ]}
         columns={3}
       />
@@ -74,7 +93,16 @@ export default function MyFreelancerPaymentsPage() {
                     {e.projectType ?? "project"} · {e.paymentMode.replace("_", " ")}
                   </p>
                 </div>
-                <Badge variant="secondary">{e.paymentStatus.replace("_", " ")}</Badge>
+                <CmsStatusChip
+                  label={e.paymentStatus.replace("_", " ")}
+                  tone={
+                    e.paymentStatus === "paid"
+                      ? "success"
+                      : e.paymentStatus === "partially_paid"
+                        ? "warning"
+                        : "muted"
+                  }
+                />
               </div>
               <div className="mb-3 grid grid-cols-3 gap-2 text-sm">
                 <div>
@@ -90,32 +118,13 @@ export default function MyFreelancerPaymentsPage() {
                   <p className="font-medium">{formatCurrency(e.remainingAmount)}</p>
                 </div>
               </div>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Installment</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Due</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {e.installments.map((inst) => (
-                    <TableRow key={inst.id}>
-                      <TableCell>{inst.label}</TableCell>
-                      <TableCell>{formatCurrency(inst.amount)}</TableCell>
-                      <TableCell>
-                        {inst.dueDate ? new Date(inst.dueDate).toLocaleDateString() : "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={inst.status === "paid" ? "default" : "secondary"}>
-                          {inst.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <CmsDataTable
+                columns={installmentColumns}
+                rows={e.installments}
+                rowKey={(inst) => inst.id}
+                embedded
+                empty={{ title: "No installments", description: "No schedule rows yet." }}
+              />
             </div>
           ))}
         </div>

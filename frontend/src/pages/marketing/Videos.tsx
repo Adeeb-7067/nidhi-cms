@@ -4,14 +4,6 @@ import { Video, Check, X, Loader2, Plus, Clapperboard, Download, Sparkles } from
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -56,6 +48,7 @@ import type { VideoExportTarget, VideoRenderStatus } from "@/modules/marketing/t
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 function BoolIcon({ value }: { value: boolean }) {
   return value ? (
@@ -95,7 +88,7 @@ export default function MarketingVideos() {
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
   const formAccountId = form.accountId ? Number(form.accountId) : accountFilterId;
   const { user, canAssignOthers } = useDigitalAssigneeGate(formAccountId);
-  const { data, isLoading, isError } = useMarketingVideos(
+  const { data, isLoading, isError, refetch } = useMarketingVideos(
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
   const createVideo = useCreateMarketingVideo();
@@ -136,6 +129,25 @@ export default function MarketingVideos() {
       exported: videos.filter((v) => v.renderStatus === "exported").length,
     }),
     [videos],
+  );
+
+  const columns = useMemo<CmsColumn<MarketingVideoDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingVideoDto>[] = [
+        { id: "title", header: "Title", cell: (v) => <span className="font-medium max-w-[180px] block truncate">{v.title}</span> },
+        { id: "project", header: "Project", cell: (v) => v.clientName },
+        { id: "renderStatus", header: "Render status", chip: true, cell: (v) => <MarketingStatusBadge variant="videoRender" status={v.renderStatus as VideoRenderStatus} /> },
+        { id: "voiceover", header: "VO", align: "center", cell: (v) => <BoolIcon value={v.hasVoiceover} /> },
+        { id: "subtitles", header: "Subs", align: "center", cell: (v) => <BoolIcon value={v.hasSubtitles} /> },
+        { id: "thumbnail", header: "Thumb", align: "center", cell: (v) => <BoolIcon value={v.hasThumbnail} /> },
+        { id: "export", header: "Export", cell: (v) => VIDEO_EXPORT_LABELS[v.exportTarget as VideoExportTarget] ?? v.exportTarget },
+        { id: "assignee", header: "Assignee", cell: (v) => v.assignee },
+        { id: "due", header: "Due", cell: (v) => v.dueDate ? format(new Date(v.dueDate), "MMM d") : "—" },
+      ];
+      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (v) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, v.createdBy)} canDelete={canDelete && canFullyEditMarketingItem(user, v.createdBy)} onEdit={() => openEdit(v)} onDelete={() => setDeleteTarget(v)} /> });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
   );
 
   const openCreate = () => {
@@ -253,72 +265,7 @@ export default function MarketingVideos() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={Video} title="Could not load videos" description="Check your connection and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={Video}
-          title="No video requests"
-          description="The queue is empty for current filters."
-          actionLabel={canCreate ? "New video" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Title</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Render status</TableHead>
-                <TableHead className="text-xs text-center">VO</TableHead>
-                <TableHead className="text-xs text-center">Subs</TableHead>
-                <TableHead className="text-xs text-center">Thumb</TableHead>
-                <TableHead className="text-xs">Export</TableHead>
-                <TableHead className="text-xs">Assignee</TableHead>
-                <TableHead className="text-xs">Due</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell className="text-xs font-medium max-w-[180px] truncate">{v.title}</TableCell>
-                  <TableCell className="text-xs">{v.clientName}</TableCell>
-                  <TableCell>
-                    <MarketingStatusBadge
-                      variant="videoRender"
-                      status={v.renderStatus as VideoRenderStatus}
-                    />
-                  </TableCell>
-                  <TableCell className={cn("text-center")}><BoolIcon value={v.hasVoiceover} /></TableCell>
-                  <TableCell className="text-center"><BoolIcon value={v.hasSubtitles} /></TableCell>
-                  <TableCell className="text-center"><BoolIcon value={v.hasThumbnail} /></TableCell>
-                  <TableCell className="text-xs">
-                    {VIDEO_EXPORT_LABELS[v.exportTarget as VideoExportTarget] ?? v.exportTarget}
-                  </TableCell>
-                  <TableCell className="text-xs">{v.assignee}</TableCell>
-                  <TableCell className="text-xs">
-                    {v.dueDate ? format(new Date(v.dueDate), "MMM d") : "—"}
-                  </TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, v.createdBy)}
-                        canDelete={canDelete && canFullyEditMarketingItem(user, v.createdBy)}
-                        onEdit={() => openEdit(v)}
-                        onDelete={() => setDeleteTarget(v)}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(v) => v.id} isLoading={isLoading} error={isError} onRetry={() => refetch()} empty={{ icon: Video, title: "No video requests", description: "The queue is empty for current filters.", actionLabel: canCreate ? "New video" : undefined, onAction: canCreate ? openCreate : undefined }} errorMessage="Check your connection and try again." />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">

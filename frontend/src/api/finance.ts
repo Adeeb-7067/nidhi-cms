@@ -330,7 +330,12 @@ export interface TaxSummary {
   periodType: TaxPeriodType;
   gstCollected: number;
   gstPaid: number;
+  /** Alias of gstPaid (input tax credit). */
+  gstInputCredit?: number;
   netGst: number;
+  gstDeposited?: number;
+  /** Remaining GST liability after challans (0 if credit). */
+  gstPayable?: number;
   tdsDeducted: number;
   tdsDeposited: number;
 }
@@ -368,6 +373,8 @@ export interface VendorInvoice {
   gstRate: number;
   gstAmount: number;
   totalAmount: number;
+  paidAmount?: number;
+  paymentId?: number | null;
   status: VendorInvoiceStatus;
   notes?: string | null;
   attachments?: FinanceAttachment[];
@@ -391,12 +398,25 @@ export interface FinanceDashboardKpis {
   overdueAmount: number;
   /** Vendor bills still unpaid (cash not yet paid). */
   outstandingPayables?: number;
+  /** Output GST on invoices / taxable income this period. */
+  gstCollected?: number;
+  /** Input GST credit (ITC) from purchases this period. */
+  gstInputCredit?: number;
+  /** Collected − input credit (positive = liability). */
+  netGst?: number;
+  /** GST challans already deposited for this period key. */
+  gstDeposited?: number;
+  /** Still to remit after deposits (floor 0). */
+  gstPayable?: number;
   trends: {
     totalIncome: number;
     totalExpenses: number;
     netProfit: number;
     pendingInvoices: number;
     overdueAmount: number;
+    gstCollected?: number;
+    gstInputCredit?: number;
+    netGst?: number;
   };
 }
 
@@ -1736,6 +1756,8 @@ export function useCreateVendorInvoice() {
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: financeKeys.vendorInvoices(vars.vendorId) });
+      qc.invalidateQueries({ queryKey: ["finance-payments"] });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("monthly") });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("quarterly") });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("annual") });
@@ -1753,6 +1775,8 @@ export function useUpdateVendorInvoice() {
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: financeKeys.vendorInvoices(vars.vendorId) });
+      qc.invalidateQueries({ queryKey: ["finance-payments"] });
+      qc.invalidateQueries({ queryKey: ["finance-expenses"] });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("monthly") });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("quarterly") });
       qc.invalidateQueries({ queryKey: financeKeys.taxSummary("annual") });
@@ -1818,10 +1842,38 @@ export type FreelancerInstallment = {
   paidAt: string | null;
   paymentMode: string | null;
   reference: string | null;
+  receiptNumber?: string | null;
   notes: string | null;
+  proofImageUrl?: string | null;
   recordedBy: number | null;
+  expenseId?: number | null;
+  paymentId?: number | null;
   createdAt?: string;
   updatedAt?: string;
+};
+
+export type FreelancerInstallmentReceipt = {
+  engagement: {
+    id: number;
+    agreedAmount: number;
+    projectId: number;
+    projectName: string | null;
+    userId: number;
+    freelancerName: string | null;
+    freelancerEmail: string | null;
+    paidAmount: number;
+    remainingBalance: number;
+  };
+  installment: FreelancerInstallment;
+  payment: {
+    id: number;
+    receiptNumber: string;
+    reference: string;
+    amount: number;
+    mode: string;
+    date: string;
+    status: string;
+  } | null;
 };
 
 export type FreelancerEngagement = {
@@ -1948,6 +2000,7 @@ export function useUpdateFreelancerInstallment() {
       paymentMode?: string | null;
       reference?: string | null;
       notes?: string | null;
+      proofImageUrl?: string | null;
       paidAt?: string | null;
     }) =>
       customFetch<FreelancerInstallment>(
@@ -1957,7 +2010,25 @@ export function useUpdateFreelancerInstallment() {
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["finance-freelancer-engagements"] });
       qc.invalidateQueries({ queryKey: ["finance-freelancer-engagement", vars.engagementId] });
+      qc.invalidateQueries({ queryKey: ["finance-payments"] });
     },
+  });
+}
+
+export function useGetFreelancerInstallmentReceipt(
+  engagementId: number,
+  installmentId: number,
+  enabled = true,
+) {
+  return useQuery<FreelancerInstallmentReceipt>({
+    queryKey: ["finance-freelancer-receipt", engagementId, installmentId],
+    queryFn: () =>
+      customFetch(
+        apiUrl(
+          `/api/finance/freelancer-engagements/${engagementId}/installments/${installmentId}/receipt`,
+        ),
+      ),
+    enabled: enabled && engagementId > 0 && installmentId > 0,
   });
 }
 

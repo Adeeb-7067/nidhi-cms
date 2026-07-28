@@ -29,7 +29,7 @@ export function PageShell({
   const headerDesc = description ?? meta.description;
 
   return (
-    <div className={cn("space-y-6 animate-in fade-in duration-300", className)}>
+    <div className={cn("space-y-6 animate-in fade-in duration-300 motion-reduce:animate-none", className)}>
       {showHeader && (
         <PageHeader title={headerTitle} description={headerDesc}>
           {actions}

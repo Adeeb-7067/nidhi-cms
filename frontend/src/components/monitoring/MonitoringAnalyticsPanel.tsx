@@ -21,15 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { PortalContentCard, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { LogActivityHeatmap } from "@/components/analytics/log-activity-heatmap";
 import { useMonitoringAnalytics, type MonitoringAnalyticsEmployee } from "@/api/monitoring-analytics";
@@ -61,54 +54,7 @@ function formatMonthLabel(month: number, year: number) {
   });
 }
 
-function EmployeeRow({ row, rank }: { row: MonitoringAnalyticsEmployee; rank: number }) {
-  return (
-    <TableRow className="text-xs hover:bg-muted/30">
-      <TableCell className="py-2.5 w-8 text-muted-foreground font-mono">{rank}</TableCell>
-      <TableCell className="py-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <Avatar className="h-7 w-7 shrink-0">
-            <AvatarImage src={row.avatarUrl ?? undefined} />
-            <AvatarFallback className="text-[10px]">{row.name?.charAt(0) ?? "?"}</AvatarFallback>
-          </Avatar>
-          <div className="min-w-0">
-            <p className="font-medium truncate">{row.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {row.employeeId ?? row.role}
-            </p>
-          </div>
-        </div>
-      </TableCell>
-      <TableCell className="py-2.5 text-right font-semibold tabular-nums">{row.clockHours}h</TableCell>
-      <TableCell className="py-2.5 text-right tabular-nums text-muted-foreground">{row.loggedHours}h</TableCell>
-      <TableCell className="py-2.5 text-right tabular-nums">
-        {row.flagged ? (
-          <Badge variant="destructive" className="text-[10px] h-5">
-            {row.variancePct}%
-          </Badge>
-        ) : (
-          <span className="text-muted-foreground">{row.variancePct}%</span>
-        )}
-      </TableCell>
-      <TableCell className="py-2.5 min-w-[110px]">
-        <div className="flex items-center gap-2">
-          <Progress value={row.clockUtilisationPct} className="h-1.5 flex-1" />
-          <span className="text-[10px] tabular-nums w-8 text-right">{row.clockUtilisationPct}%</span>
-        </div>
-      </TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{row.sessionCount}</TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{row.daysClocked}</TableCell>
-      <TableCell className="py-2.5 text-center">
-        {row.hasConsent && row.consentCurrent ? (
-          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 mx-auto" />
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
-      </TableCell>
-      <TableCell className="py-2.5 text-center tabular-nums">{row.screenshotCount}</TableCell>
-    </TableRow>
-  );
-}
+type EmployeeRowData = MonitoringAnalyticsEmployee & { rank: number };
 
 export function MonitoringAnalyticsPanel() {
   const now = new Date();
@@ -152,6 +98,105 @@ export function MonitoringAnalyticsPanel() {
     const y = now.getFullYear();
     return [y - 1, y, y + 1];
   }, [now]);
+
+  const employeeRows = useMemo(
+    (): EmployeeRowData[] => employees.map((row, i) => ({ ...row, rank: i + 1 })),
+    [employees],
+  );
+
+  const employeeColumns = useMemo((): CmsColumn<EmployeeRowData>[] => [
+    {
+      id: "rank",
+      header: "#",
+      className: "w-8 font-mono text-muted-foreground",
+      cell: (row) => row.rank,
+    },
+    {
+      id: "employee",
+      header: "Employee",
+      className: "min-w-[140px]",
+      cell: (row) => (
+        <div className="flex items-center gap-2 min-w-0">
+          <Avatar className="h-7 w-7 shrink-0">
+            <AvatarImage src={row.avatarUrl ?? undefined} />
+            <AvatarFallback className="text-[10px]">{row.name?.charAt(0) ?? "?"}</AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="font-medium truncate">{row.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {row.employeeId ?? row.role}
+            </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "clock",
+      header: "Clock",
+      align: "right",
+      cell: (row) => <span className="font-semibold tabular-nums">{row.clockHours}h</span>,
+    },
+    {
+      id: "logged",
+      header: "Logged",
+      align: "right",
+      cell: (row) => <span className="tabular-nums text-muted-foreground">{row.loggedHours}h</span>,
+    },
+    {
+      id: "variance",
+      header: "Variance",
+      align: "right",
+      chip: true,
+      cell: (row) =>
+        row.flagged ? (
+          <Badge variant="destructive" className="text-[10px] h-5">
+            {row.variancePct}%
+          </Badge>
+        ) : (
+          <span className="text-muted-foreground">{row.variancePct}%</span>
+        ),
+    },
+    {
+      id: "utilisation",
+      header: "Utilisation",
+      className: "min-w-[110px]",
+      cell: (row) => (
+        <div className="flex items-center gap-2">
+          <Progress value={row.clockUtilisationPct} className="h-1.5 flex-1" />
+          <span className="text-[10px] tabular-nums w-8 text-right">{row.clockUtilisationPct}%</span>
+        </div>
+      ),
+    },
+    {
+      id: "sessions",
+      header: "Sessions",
+      align: "center",
+      cell: (row) => <span className="tabular-nums">{row.sessionCount}</span>,
+    },
+    {
+      id: "days",
+      header: "Days",
+      align: "center",
+      cell: (row) => <span className="tabular-nums">{row.daysClocked}</span>,
+    },
+    {
+      id: "consent",
+      header: "Consent",
+      align: "center",
+      cell: (row) =>
+        row.hasConsent && row.consentCurrent ? (
+          <ShieldCheck className="h-3.5 w-3.5 text-emerald-600 mx-auto" />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "shots",
+      header: "Shots",
+      align: "center",
+      cell: (row) => <span className="tabular-nums">{row.screenshotCount}</span>,
+    },
+  ], []);
 
   if (isLoading) {
     return (
@@ -432,34 +477,14 @@ export function MonitoringAnalyticsPanel() {
             Sorted by clock hours — compare session time, logs, and monitoring compliance
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-8 text-[10px]">#</TableHead>
-                <TableHead className="text-[10px] min-w-[140px]">Employee</TableHead>
-                <TableHead className="text-[10px] text-right">Clock</TableHead>
-                <TableHead className="text-[10px] text-right">Logged</TableHead>
-                <TableHead className="text-[10px] text-right">Variance</TableHead>
-                <TableHead className="text-[10px] min-w-[110px]">Utilisation</TableHead>
-                <TableHead className="text-[10px] text-center">Sessions</TableHead>
-                <TableHead className="text-[10px] text-center">Days</TableHead>
-                <TableHead className="text-[10px] text-center">Consent</TableHead>
-                <TableHead className="text-[10px] text-center">Shots</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employees.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="h-24 text-center text-xs text-muted-foreground">
-                    No monitoring activity for {formatMonthLabel(month, year)}.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                employees.map((row, i) => <EmployeeRow key={row.userId} row={row} rank={i + 1} />)
-              )}
-            </TableBody>
-          </Table>
+        <div className="p-4 pt-0">
+          <CmsDataTable
+            columns={employeeColumns}
+            rows={employeeRows}
+            rowKey={(row) => row.userId}
+            embedded
+            empty={{ title: `No monitoring activity for ${formatMonthLabel(month, year)}.` }}
+          />
         </div>
       </PortalContentCard>
     </div>

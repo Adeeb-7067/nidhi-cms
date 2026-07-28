@@ -30,6 +30,7 @@ import {
   Clock,
   Monitor,
   ImageOff,
+  Activity,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -45,6 +46,8 @@ import { MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
 import { formatCaptureTimestamp } from "@/lib/screenshot-gallery-utils";
 import { useDailySessionTotals, useAdminActiveAll, type WorkSession } from "@/api/work-sessions";
 import { formatActiveDuration, getLiveDailyActiveMs } from "@/lib/work-session-utils";
+import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsFilterBar } from "@/components/cms";
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -599,29 +602,15 @@ export default function ScreenshotsPage() {
   const pageLoading = usersLoading || isLoading;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="shrink-0 border-b border-border bg-background/80 backdrop-blur-sm px-6 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 shrink-0">
-              <Monitor className="h-4.5 w-4.5 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-lg font-semibold leading-tight">Screenshots</h1>
-              <p className="text-xs text-muted-foreground leading-tight">
-                {pageLoading
-                  ? "Loading…"
-                  : `${visibleEmployees.length} employee${visibleEmployees.length !== 1 ? "s" : ""} · ${totalToday} capture${totalToday !== 1 ? "s" : ""} on ${dateNavLabel(selectedDate).toLowerCase()} · sorted by active time`}
-                {!pageLoading && dataUpdatedAt > 0 && (
-                  <span className="text-muted-foreground/70">
-                    {" · "}
-                    {isFetching ? "Refreshing…" : `Updated ${format(dataUpdatedAt, "h:mm:ss a")}`}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-
+    <PortalPageShell>
+      <PortalPageHero
+        title="Screenshots"
+        subtitle={
+          pageLoading
+            ? "Loading capture gallery…"
+            : `${visibleEmployees.length} employee${visibleEmployees.length !== 1 ? "s" : ""} · ${totalToday} capture${totalToday !== 1 ? "s" : ""} on ${dateNavLabel(selectedDate).toLowerCase()}`
+        }
+        actions={
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center rounded-lg border border-border bg-muted/30 overflow-hidden">
               <button
@@ -646,8 +635,7 @@ export default function ScreenshotsPage() {
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
-
-            {!isToday(selectedDate) && (
+            {!isToday(selectedDate) ? (
               <Button
                 variant="outline"
                 size="sm"
@@ -656,61 +644,108 @@ export default function ScreenshotsPage() {
               >
                 Today
               </Button>
-            )}
-
-            <Select
-              value={selectedUserId ? String(selectedUserId) : "all"}
-              onValueChange={(v) => {
-                setSelectedUserId(v === "all" ? undefined : Number(v));
-              }}
-            >
-              <SelectTrigger className="w-44 h-8 text-sm">
-                {selectedUserId && userMap[selectedUserId] ? (
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar className="h-4 w-4 shrink-0">
-                      {userMap[selectedUserId].avatarUrl && (
-                        <AvatarImage src={userMap[selectedUserId].avatarUrl!} />
-                      )}
-                      <AvatarFallback className="text-[7px] bg-primary/10 text-primary">
-                        {getInitials(userMap[selectedUserId].name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="truncate text-xs">{userMap[selectedUserId].name}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    <Users className="h-3.5 w-3.5 shrink-0" />
-                    <span className="text-xs">All employees</span>
-                  </div>
-                )}
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                    All employees
-                  </div>
-                </SelectItem>
-                {employees.map((u) => (
-                  <SelectItem key={u.id} value={String(u.id)}>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-5 w-5">
-                        {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
-                        <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
-                          {getInitials(u.name)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {u.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            ) : null}
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="flex-1 overflow-auto px-6 py-5 space-y-4">
+      <PortalKpiGrid
+        loading={pageLoading}
+        columns={4}
+        count={4}
+        items={[
+          {
+            title: "Employees",
+            value: visibleEmployees.length,
+            hint: "Shown for this day",
+            icon: Users,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Captures",
+            value: totalToday,
+            hint: dateNavLabel(selectedDate),
+            icon: Camera,
+            accent: "violet",
+            delay: 1,
+          },
+          {
+            title: "Live sessions",
+            value: activeAll?.total ?? 0,
+            hint: "Clocked in now",
+            icon: Activity,
+            accent: "green",
+            delay: 2,
+          },
+          {
+            title: "Last refresh",
+            value:
+              dataUpdatedAt > 0
+                ? isFetching
+                  ? "Refreshing…"
+                  : format(dataUpdatedAt, "h:mm a")
+                : "—",
+            hint: "Gallery sync",
+            icon: Monitor,
+            accent: "amber",
+            delay: 3,
+          },
+        ]}
+      />
+
+      <CmsFilterBar>
+        <Select
+          value={selectedUserId ? String(selectedUserId) : "all"}
+          onValueChange={(v) => {
+            setSelectedUserId(v === "all" ? undefined : Number(v));
+          }}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-56 bg-background text-sm">
+            {selectedUserId && userMap[selectedUserId] ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <Avatar className="h-4 w-4 shrink-0">
+                  {userMap[selectedUserId].avatarUrl && (
+                    <AvatarImage src={userMap[selectedUserId].avatarUrl!} />
+                  )}
+                  <AvatarFallback className="text-[7px] bg-primary/10 text-primary">
+                    {getInitials(userMap[selectedUserId].name)}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="truncate text-xs">{userMap[selectedUserId].name}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <Users className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-xs">All employees</span>
+              </div>
+            )}
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">
+              <div className="flex items-center gap-2">
+                <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                All employees
+              </div>
+            </SelectItem>
+            {employees.map((u) => (
+              <SelectItem key={u.id} value={String(u.id)}>
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-5 w-5">
+                    {u.avatarUrl && <AvatarImage src={u.avatarUrl} />}
+                    <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
+                      {getInitials(u.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  {u.name}
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CmsFilterBar>
+
+      <div className="space-y-4">
         {pageLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
@@ -771,6 +806,6 @@ export default function ScreenshotsPage() {
         onDelete={handleDelete}
         onNavigate={(i) => setSlideView((prev) => prev ? { ...prev, index: i } : null)}
       />
-    </div>
+    </PortalPageShell>
   );
 }

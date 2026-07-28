@@ -28,19 +28,12 @@ import { useClientTeamMembers, useClientTeamActivity, type ClientTeamActivityRow
 import {
   PortalPageShell,
   PortalPageHero,
-  PortalContentCard,
   PortalEmptyState,
 } from "@/components/layout/portal-page-kit";
+import { CmsFilterBar } from "@/components/cms";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
@@ -224,79 +217,73 @@ export default function ClientTeamActivityPage() {
         }
       />
 
-      <PortalContentCard contentClassName="p-0">
-        <div className="flex flex-col gap-3 border-b border-border/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
-            {team.isAdmin ? (
-              <Select
-                value={memberFilter === "all" ? "all" : String(memberFilter)}
-                onValueChange={(value) => {
-                  setPage(1);
-                  setMemberFilter(value === "all" ? "all" : Number(value));
-                }}
-              >
-                <SelectTrigger className="h-9 w-[200px] text-xs">
-                  <Users className="mr-1.5 h-3.5 w-3.5" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All members</SelectItem>
-                  {(memberList.data?.members ?? []).map((m) => (
-                    <SelectItem key={m.userId} value={String(m.userId)}>
-                      {m.name} ({m.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-            <Select
-              value={actionFilter || "all"}
-              onValueChange={(value) => {
-                setPage(1);
-                setActionFilter(value === "all" ? "" : value);
-              }}
-            >
-              <SelectTrigger className="h-9 w-[200px] text-xs">
-                <Activity className="mr-1.5 h-3.5 w-3.5" />
-                <SelectValue placeholder="All actions" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All actions</SelectItem>
-                {Object.entries(ACTION_LABELS).map(([key, label]) => (
-                  <SelectItem key={key} value={key}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {total} {total === 1 ? "entry" : "entries"}
-          </p>
+      <CmsFilterBar
+        filters={[
+          ...(team.isAdmin
+            ? [
+                {
+                  key: "member",
+                  value: memberFilter === "all" ? "all" : String(memberFilter),
+                  onChange: (value: string) => {
+                    setPage(1);
+                    setMemberFilter(value === "all" ? "all" : Number(value));
+                  },
+                  placeholder: "All members",
+                  icon: Users,
+                  className: "w-full sm:w-[220px]",
+                  allOption: { value: "all", label: "All members" },
+                  options: (memberList.data?.members ?? []).map((m) => ({
+                    value: String(m.userId),
+                    label: `${m.name} (${m.email})`,
+                  })),
+                },
+              ]
+            : []),
+          {
+            key: "action",
+            value: actionFilter || "all",
+            onChange: (value: string) => {
+              setPage(1);
+              setActionFilter(value === "all" ? "" : value);
+            },
+            placeholder: "All actions",
+            icon: Activity,
+            className: "w-full sm:w-[220px]",
+            allOption: { value: "all", label: "All actions" },
+            options: Object.entries(ACTION_LABELS).map(([key, label]) => ({
+              value: key,
+              label,
+            })),
+          },
+        ]}
+      />
+
+      <p className="px-1 text-xs text-muted-foreground">
+        {total} {total === 1 ? "entry" : "entries"}
+      </p>
+
+      {isLoading ? (
+        <div className="space-y-2 rounded-xl border bg-card/80 p-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
         </div>
+      ) : rows.length === 0 ? (
+        <PortalEmptyState
+          icon={Activity}
+          title="No activity yet"
+          description="Activity will appear here as members sign in and use the portal."
+        />
+      ) : (
+        <ul className="divide-y divide-border/40 rounded-xl border bg-card/80">
+          {rows.map((row) => (
+            <ActivityRowItem key={row.id} row={row} />
+          ))}
+        </ul>
+      )}
 
-        {isLoading ? (
-          <div className="space-y-2 p-4">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <PortalEmptyState
-            icon={Activity}
-            title="No activity yet"
-            description="Activity will appear here as members sign in and use the portal."
-          />
-        ) : (
-          <ul className="divide-y divide-border/40">
-            {rows.map((row) => (
-              <ActivityRowItem key={row.id} row={row} />
-            ))}
-          </ul>
-        )}
-
-        {totalPages > 1 ? (
-          <div className="flex items-center justify-between border-t border-border/60 p-3">
+      {totalPages > 1 ? (
+        <div className="flex items-center justify-between rounded-xl border bg-card/80 p-3">
             <p className="text-xs text-muted-foreground">
               Page {page} of {totalPages}
             </p>
@@ -323,8 +310,7 @@ export default function ClientTeamActivityPage() {
               </Button>
             </div>
           </div>
-        ) : null}
-      </PortalContentCard>
+      ) : null}
     </PortalPageShell>
   );
 }

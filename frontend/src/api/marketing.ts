@@ -157,7 +157,10 @@ export interface MarketingPostDto {
   id: number;
   accountId: number;
   clientName: string;
+  /** Primary platform (first of `platforms`) for backward compatibility. */
   platform: MarketingPlatform;
+  /** All channels this schedule targets. Falls back to `[platform]` when absent. */
+  platforms?: MarketingPlatform[];
   contentFormat?: PostContentFormat;
   caption: string;
   hashtags: string[];
@@ -472,18 +475,37 @@ export function useMoveMarketingMedia() {
 
 // ── Posts / Approvals ────────────────────────────────────────────────────
 
+export type MarketingPostsQuery = {
+  accountId?: number;
+  /** Inclusive ISO window for calendar boards (preferred over a hard page size). */
+  scheduledFrom?: string;
+  scheduledTo?: string;
+  /** Include drafts with null scheduledAt alongside the date window. */
+  includeUnscheduled?: boolean;
+  scheduleStatus?: string;
+  page?: number;
+  /** Caps at API MAX_PAGE_LIMIT (1000). Date windows default to 1000 server-side. */
+  limit?: number;
+};
+
 export function useMarketingPosts(
-  params?: { accountId?: number },
+  params?: MarketingPostsQuery,
   options?: { enabled?: boolean },
 ) {
   const qs = new URLSearchParams();
-  if (params?.accountId) qs.set("accountId", String(params.accountId));
-  qs.set("limit", "200");
+  if (params?.accountId != null) qs.set("accountId", String(params.accountId));
+  if (params?.scheduledFrom) qs.set("scheduledFrom", params.scheduledFrom);
+  if (params?.scheduledTo) qs.set("scheduledTo", params.scheduledTo);
+  if (params?.includeUnscheduled) qs.set("includeUnscheduled", "1");
+  if (params?.scheduleStatus) qs.set("scheduleStatus", params.scheduleStatus);
+  if (params?.page != null) qs.set("page", String(params.page));
+  if (params?.limit != null) qs.set("limit", String(params.limit));
+  else if (!params?.scheduledFrom && !params?.scheduledTo) qs.set("limit", "200");
   return useQuery({
-    queryKey: ["marketing", "posts", params],
+    queryKey: ["marketing", "posts", params ?? {}],
     enabled: options?.enabled ?? true,
     queryFn: () =>
-      customFetch<{ posts: MarketingPostDto[]; total: number }>(
+      customFetch<{ posts: MarketingPostDto[]; total: number; page: number; limit: number }>(
         apiUrl(`/api/marketing/posts?${qs}`),
       ),
   });

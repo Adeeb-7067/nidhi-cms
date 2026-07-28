@@ -28,14 +28,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useMarketingDashboard } from "@/api/marketing";
 import {
   MarketingPageHeader,
@@ -315,55 +308,67 @@ export default function MarketingDashboard() {
                       </p>
                     </div>
                   ) : (
-                    <div className="overflow-auto rounded-lg border border-border/50">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/30">
-                            <TableHead className="text-[11px]">Task Title</TableHead>
-                            <TableHead className="text-[11px]">Project / Client</TableHead>
-                            <TableHead className="text-[11px]">Priority</TableHead>
-                            <TableHead className="text-[11px] text-right">Deadline</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {upcomingDeadlines.map((t) => (
-                            <TableRow key={t.id} className="hover:bg-muted/40 transition-colors">
-                              <TableCell className="py-2.5 text-xs">
-                                <div className="font-semibold leading-snug text-foreground">{t.title}</div>
-                                <div className="text-[10px] text-muted-foreground mt-0.5">
-                                  {labelOf(TASK_CATEGORY_LABELS, t.category as TaskCategory)}
-                                  {" · "}
-                                  <span className="font-medium text-foreground/80">
-                                    {labelOf(TASK_STATUS_LABELS, t.status as TaskStatus)}
-                                  </span>
-                                </div>
-                              </TableCell>
-                              <TableCell className="max-w-[140px] truncate py-2.5 text-xs text-muted-foreground">
-                                {t.clientName}
-                              </TableCell>
-                              <TableCell className="py-2.5">
-                                <MarketingStatusBadge
-                                  variant="priority"
-                                  value={t.priority as TaskPriority}
-                                />
-                              </TableCell>
-                              <TableCell
-                                className={cn(
-                                  "whitespace-nowrap py-2.5 text-right text-xs tabular-nums font-medium",
-                                  t.overdue
-                                    ? "text-red-600 dark:text-red-400 font-semibold"
-                                    : "text-muted-foreground",
-                                )}
-                              >
-                                {t.deadline
-                                  ? format(new Date(t.deadline), "MMM d, yyyy")
-                                  : "No deadline"}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
+                    <CmsDataTable
+                      columns={[
+                        {
+                          id: "title",
+                          header: "Task Title",
+                          cell: (t) => (
+                            <>
+                              <div className="font-semibold leading-snug text-foreground">{t.title}</div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {labelOf(TASK_CATEGORY_LABELS, t.category as TaskCategory)}
+                                {" · "}
+                                <span className="font-medium text-foreground/80">
+                                  {labelOf(TASK_STATUS_LABELS, t.status as TaskStatus)}
+                                </span>
+                              </div>
+                            </>
+                          ),
+                        },
+                        {
+                          id: "client",
+                          header: "Project / Client",
+                          className: "max-w-[140px] truncate",
+                          cell: (t) => (
+                            <span className="text-muted-foreground">{t.clientName}</span>
+                          ),
+                        },
+                        {
+                          id: "priority",
+                          header: "Priority",
+                          chip: true,
+                          cell: (t) => (
+                            <MarketingStatusBadge
+                              variant="priority"
+                              value={t.priority as TaskPriority}
+                            />
+                          ),
+                        },
+                        {
+                          id: "deadline",
+                          header: "Deadline",
+                          align: "right",
+                          cell: (t) => (
+                            <span
+                              className={cn(
+                                "whitespace-nowrap tabular-nums font-medium",
+                                t.overdue
+                                  ? "text-red-600 dark:text-red-400 font-semibold"
+                                  : "text-muted-foreground",
+                              )}
+                            >
+                              {t.deadline
+                                ? format(new Date(t.deadline), "MMM d, yyyy")
+                                : "No deadline"}
+                            </span>
+                          ),
+                        },
+                      ] satisfies CmsColumn<(typeof upcomingDeadlines)[number]>[]}
+                      rows={upcomingDeadlines}
+                      rowKey={(t) => t.id}
+                      embedded
+                    />
                   )}
                 </ChartPanel>
               </div>
@@ -908,51 +913,62 @@ export default function MarketingDashboard() {
                     Tasks with deadlines will show here.
                   </p>
                 ) : (
-                  <div className="max-h-[360px] overflow-auto rounded-lg border border-border/50">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-[10px]">Task</TableHead>
-                          <TableHead className="text-[10px]">Client</TableHead>
-                          <TableHead className="text-[10px]">Priority</TableHead>
-                          <TableHead className="text-[10px] text-right">Due</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {upcomingDeadlines.map((t) => (
-                          <TableRow key={t.id}>
-                            <TableCell className="py-2 text-xs">
-                              <div className="font-medium leading-snug">{t.title}</div>
-                              <div className="text-[10px] text-muted-foreground">
-                                {labelOf(TASK_CATEGORY_LABELS, t.category as TaskCategory)}
-                                {" · "}
-                                {labelOf(TASK_STATUS_LABELS, t.status as TaskStatus)}
-                              </div>
-                            </TableCell>
-                            <TableCell className="max-w-[140px] truncate py-2 text-xs text-muted-foreground">
-                              {t.clientName}
-                            </TableCell>
-                            <TableCell className="py-2">
-                              <MarketingStatusBadge
-                                variant="priority"
-                                value={t.priority as TaskPriority}
-                              />
-                            </TableCell>
-                            <TableCell
-                              className={cn(
-                                "whitespace-nowrap py-2 text-right text-xs tabular-nums",
-                                t.overdue && "font-medium text-amber-700 dark:text-amber-400",
-                              )}
-                            >
-                              {t.deadline
-                                ? format(new Date(t.deadline), "MMM d")
-                                : "—"}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    className="max-h-[360px] overflow-y-auto"
+                    columns={[
+                      {
+                        id: "title",
+                        header: "Task",
+                        cell: (t) => (
+                          <>
+                            <div className="font-medium leading-snug">{t.title}</div>
+                            <div className="text-[10px] text-muted-foreground">
+                              {labelOf(TASK_CATEGORY_LABELS, t.category as TaskCategory)}
+                              {" · "}
+                              {labelOf(TASK_STATUS_LABELS, t.status as TaskStatus)}
+                            </div>
+                          </>
+                        ),
+                      },
+                      {
+                        id: "client",
+                        header: "Client",
+                        className: "max-w-[140px] truncate",
+                        cell: (t) => (
+                          <span className="text-muted-foreground">{t.clientName}</span>
+                        ),
+                      },
+                      {
+                        id: "priority",
+                        header: "Priority",
+                        chip: true,
+                        cell: (t) => (
+                          <MarketingStatusBadge
+                            variant="priority"
+                            value={t.priority as TaskPriority}
+                          />
+                        ),
+                      },
+                      {
+                        id: "due",
+                        header: "Due",
+                        align: "right",
+                        cell: (t) => (
+                          <span
+                            className={cn(
+                              "whitespace-nowrap tabular-nums",
+                              t.overdue && "font-medium text-amber-700 dark:text-amber-400",
+                            )}
+                          >
+                            {t.deadline ? format(new Date(t.deadline), "MMM d") : "—"}
+                          </span>
+                        ),
+                      },
+                    ] satisfies CmsColumn<(typeof upcomingDeadlines)[number]>[]}
+                    rows={upcomingDeadlines}
+                    rowKey={(t) => t.id}
+                    embedded
+                  />
                 )}
               </ChartPanel>
             </div>

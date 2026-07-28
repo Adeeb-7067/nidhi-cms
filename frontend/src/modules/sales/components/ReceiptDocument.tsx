@@ -34,6 +34,13 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
   const titleSize = compact ? "text-xl" : "text-2xl";
   const amountSize = compact ? "text-2xl" : "text-3xl";
   const sealSize = compact ? "h-14 w-14" : "h-16 w-16";
+  const isOutgoing = receipt.direction === "outgoing";
+  const statusLabel = isOutgoing ? "Payment made" : "Payment received";
+  const partyLabel = isOutgoing ? "Payee" : "Customer";
+  const refLabel = isOutgoing ? "Engagement reference" : "Invoice reference";
+  const amountLabel = isOutgoing ? "Amount paid" : "Amount received";
+  const remainingLabel = isOutgoing ? "Remaining engagement balance" : "Remaining invoice balance";
+  const signedByLabel = isOutgoing ? "Paid by" : "Received by";
 
   return (
     <div
@@ -87,7 +94,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
         >
           <span className="text-sm font-bold" style={{ color: green }} aria-hidden>✓</span>
           <span className={`${compact ? "text-xs" : "text-sm"} font-semibold`} style={{ color: green }}>
-            Payment received
+            {statusLabel}
           </span>
         </div>
       </div>
@@ -104,7 +111,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
           </div>
           <div className="text-right">
             <p className="text-[10px] font-black uppercase tracking-widest mb-1" style={{ color: primary }}>
-              Invoice reference
+              {refLabel}
             </p>
             <p className="text-sm font-mono font-semibold" style={{ color: dark }}>
               {receipt.invoiceNumber}
@@ -113,7 +120,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
         </div>
 
         <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${border}` }}>
-          <DetailRow label="Customer" value={receipt.customerName} />
+          <DetailRow label={partyLabel} value={receipt.customerName} />
           <DetailRow label="Project" value={receipt.projectName} />
           <DetailRow label="Installment" value={receipt.installmentName} />
           <DetailRow label="Payment mode" value={receipt.paymentMethod} />
@@ -125,13 +132,13 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
           style={{ background: "#ECFDF5", border: `1px solid #BBF7D0` }}
         >
           <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color: green }}>
-            Amount received
+            {amountLabel}
           </p>
           <p className={`${amountSize} font-black tabular-nums mt-2`} style={{ color: green }}>
             {formatCurrency(receipt.amountPaid)}
           </p>
           <p className="text-xs mt-3" style={{ color: muted }}>
-            Remaining invoice balance:{" "}
+            {remainingLabel}:{" "}
             <span className="font-semibold" style={{ color: dark }}>
               {formatCurrency(receipt.remainingBalance)}
             </span>
@@ -188,7 +195,7 @@ export function ReceiptDocument({ receipt, compact = false }: { receipt: Payment
       >
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest mb-2" style={{ color: subtle }}>
-            Received by
+            {signedByLabel}
           </p>
           <p className="text-xs font-semibold" style={{ color: dark }}>{receipt.companyName}</p>
         </div>

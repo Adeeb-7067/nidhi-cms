@@ -28,7 +28,7 @@ import {
   marketingSeoAuditsTable,
   marketingReportsTable,
 } from "../src/models/schema/index.js";
-import { bootstrapAccountMediaVault } from "../src/services/marketing/helpers.js";
+import { bootstrapAccountMediaVault } from "../src/modules/marketing/services/helpers.js";
 import { DEFAULT_MEDIA_SUBFOLDERS } from "../src/constants/marketing.js";
 
 const TEST_EMAIL = "digital.flow.test@cms.local";

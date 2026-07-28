@@ -52,17 +52,16 @@ export function GlobalAlertModal() {
 
   return (
     <Dialog open={current != null} onOpenChange={(open) => { if (!open) dismissCurrent(); }}>
-      <DialogContent className="overflow-hidden border-border bg-card p-0 gap-0 shadow-2xl shadow-black/20 sm:max-w-lg">
+      <DialogContent className="overflow-hidden border-border bg-card p-0 gap-0 shadow-2xl shadow-black/20 sm:max-w-xl">
         {current && (
           <>
             {current.photoUrl ? (
-              <div className="relative h-44 w-full shrink-0 overflow-hidden bg-muted sm:h-56">
+              <div className="relative w-full shrink-0 overflow-hidden bg-muted/40">
                 <img
                   src={resolveFileUrl(current.photoUrl)}
                   alt=""
-                  className="h-full w-full object-cover"
+                  className="mx-auto block h-auto w-full max-h-[min(60vh,520px)] object-contain object-center"
                 />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/50 to-transparent" />
               </div>
             ) : (
               <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/10 blur-3xl" />

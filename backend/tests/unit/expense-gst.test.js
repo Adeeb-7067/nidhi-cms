@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   recognizedExpenseGst,
   recognizedExpenseAmount,
-} from "../../src/services/finance/expense-cash.service.js";
+} from "../../src/modules/finance/services/expense-cash.service.js";
 import { calcVendorInvoiceAmounts } from "../../src/utils/vendor-invoice-totals.js";
 
 describe("expense GST classification", () => {

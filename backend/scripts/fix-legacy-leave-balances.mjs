@@ -10,7 +10,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import { leaveTypesTable, leaveBalancesTable, usersTable } from "../src/models/schema/index.js";
-import { reconcileUserLeaveBalances } from "../src/services/hrm/leave-accrual.service.js";
+import { reconcileUserLeaveBalances } from "../src/modules/hrm/services/leave-accrual.service.js";
 
 if (process.env.CONFIRM_LIVE_DB !== "1") {
   console.error(

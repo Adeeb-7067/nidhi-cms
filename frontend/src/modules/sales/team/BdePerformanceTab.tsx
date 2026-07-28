@@ -2,18 +2,11 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Target, Users, Phone, CheckCircle2, AlertCircle, Clock, MinusCircle } from "lucide-react";
 import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -140,6 +133,131 @@ export function BdePerformanceTab({
   const currentYear = now.getFullYear();
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
+  type PerformanceRow = SalesTeamMember & {
+    closedValue: number;
+    target: BdeTarget | undefined;
+    hasAny: boolean;
+    status: TargetStatus;
+  };
+
+  const performanceRows = useMemo<PerformanceRow[]>(
+    () =>
+      sorted.map((exec) => {
+        const t = targetByUserId.get(exec.id);
+        const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
+        const actual = periodStatsByUserId.get(exec.id) ?? exec;
+        const closedValue = actual.closedProjectValue ?? 0;
+        let worstPct = 100;
+        if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (closedValue / t.revenueTarget) * 100 : 0);
+        if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (actual.dealsClosed / t.dealsTarget) * 100 : 0);
+        if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (actual.leadCount / t.leadsTarget) * 100 : 0);
+        return {
+          ...exec,
+          closedValue,
+          target: t,
+          hasAny,
+          status: getTargetStatus(worstPct, hasAny),
+        };
+      }),
+    [sorted, targetByUserId, periodStatsByUserId],
+  );
+
+  const targetProgressColumns = useMemo<CmsColumn<PerformanceRow>[]>(
+    () => [
+      {
+        id: "employee",
+        header: "Employee",
+        cell: (exec) => (
+          <>
+            <ExecutiveAvatar name={exec.name} />
+            <p className="text-[10px] text-muted-foreground pl-9">{exec.email}</p>
+          </>
+        ),
+      },
+      {
+        id: "closedValue",
+        header: "Closed project value",
+        cell: (exec) => (
+          <TargetCell
+            actual={exec.closedValue}
+            target={exec.target?.revenueTarget ?? null}
+            format={formatCompactCurrency}
+          />
+        ),
+      },
+      {
+        id: "deals",
+        header: "Deals target",
+        cell: (exec) => (
+          <TargetCell
+            actual={exec.dealsClosed}
+            target={exec.target?.dealsTarget ?? null}
+            format={(v) => String(v)}
+          />
+        ),
+      },
+      {
+        id: "leads",
+        header: "Leads target",
+        cell: (exec) => (
+          <TargetCell
+            actual={exec.leadCount}
+            target={exec.target?.leadsTarget ?? null}
+            format={(v) => String(v)}
+          />
+        ),
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (exec) => <StatusBadge status={exec.status} />,
+      },
+    ],
+    [],
+  );
+
+  const summaryColumns = useMemo<CmsColumn<SalesTeamMember>[]>(
+    () => [
+      {
+        id: "employee",
+        header: "Employee",
+        cell: (exec) => (
+          <>
+            <ExecutiveAvatar name={exec.name} />
+            <p className="text-[10px] text-muted-foreground pl-9">{exec.email}</p>
+          </>
+        ),
+      },
+      {
+        id: "deals",
+        header: "Deals",
+        align: "right",
+        cell: (exec) => <span className="tabular-nums">{exec.dealsClosed}</span>,
+      },
+      {
+        id: "revenue",
+        header: "Revenue",
+        align: "right",
+        cell: (exec) => (
+          <span className="font-medium tabular-nums">{formatCompactCurrency(exec.revenue)}</span>
+        ),
+      },
+      {
+        id: "followUps",
+        header: "Follow-ups",
+        align: "right",
+        cell: (exec) => (
+          <span className="inline-flex items-center gap-1">
+            <Phone className="h-3 w-3 text-muted-foreground" />
+            {exec.pendingFollowUps}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -238,75 +356,19 @@ export function BdePerformanceTab({
               {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Employee</TableHead>
-                    <TableHead className="text-xs">Closed project value</TableHead>
-                    <TableHead className="text-xs">Deals target</TableHead>
-                    <TableHead className="text-xs">Leads target</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sorted.map((exec) => {
-                    const t = targetByUserId.get(exec.id);
-                    const hasAny = t != null && (t.revenueTarget != null || t.dealsTarget != null || t.leadsTarget != null);
-                    const actual = periodStatsByUserId.get(exec.id) ?? exec;
-
-                    // Overall status = worst metric
-                    let worstPct = 100;
-                    const closedValue = actual.closedProjectValue ?? 0;
-                    if (t?.revenueTarget != null) worstPct = Math.min(worstPct, t.revenueTarget > 0 ? (closedValue / t.revenueTarget) * 100 : 0);
-                    if (t?.dealsTarget != null) worstPct = Math.min(worstPct, t.dealsTarget > 0 ? (actual.dealsClosed / t.dealsTarget) * 100 : 0);
-                    if (t?.leadsTarget != null) worstPct = Math.min(worstPct, t.leadsTarget > 0 ? (actual.leadCount / t.leadsTarget) * 100 : 0);
-                    const status = getTargetStatus(worstPct, hasAny);
-
-                    return (
-                      <TableRow
-                        key={exec.id}
-                        className={cn(
-                          onSelectMember ? "cursor-pointer" : undefined,
-                          status === "completed" && "bg-emerald-50/40 dark:bg-emerald-950/10",
-                          status === "behind" && "bg-red-50/40 dark:bg-red-950/10",
-                        )}
-                        onClick={() => onSelectMember?.(exec)}
-                      >
-                        <TableCell>
-                          <ExecutiveAvatar name={exec.name} />
-                          <p className="text-[10px] text-muted-foreground pl-9">{exec.email}</p>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <TargetCell
-                            actual={closedValue}
-                            target={t?.revenueTarget ?? null}
-                            format={formatCompactCurrency}
-                          />
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <TargetCell
-                            actual={actual.dealsClosed}
-                            target={t?.dealsTarget ?? null}
-                            format={(v) => String(v)}
-                          />
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <TargetCell
-                            actual={actual.leadCount}
-                            target={t?.leadsTarget ?? null}
-                            format={(v) => String(v)}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <StatusBadge status={status} />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+            <CmsDataTable
+              embedded
+              columns={targetProgressColumns}
+              rows={performanceRows}
+              rowKey={(exec) => exec.id}
+              onRowClick={onSelectMember}
+              getRowClassName={(exec) =>
+                cn(
+                  exec.status === "completed" && "bg-emerald-50/40 dark:bg-emerald-950/10 hover:bg-emerald-50/40",
+                  exec.status === "behind" && "bg-red-50/40 dark:bg-red-950/10 hover:bg-red-50/40",
+                )
+              }
+            />
           )}
         </CardContent>
       </Card>
@@ -397,42 +459,13 @@ export function BdePerformanceTab({
           <CardTitle className="text-sm">Performance summary</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Employee</TableHead>
-                  <TableHead className="text-xs text-right">Deals</TableHead>
-                  <TableHead className="text-xs text-right">Revenue</TableHead>
-                  <TableHead className="text-xs text-right">Follow-ups</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sorted.map((exec) => (
-                  <TableRow
-                    key={exec.id}
-                    className={onSelectMember ? "cursor-pointer" : undefined}
-                    onClick={() => onSelectMember?.(exec)}
-                  >
-                    <TableCell>
-                      <ExecutiveAvatar name={exec.name} />
-                      <p className="text-[10px] text-muted-foreground pl-9">{exec.email}</p>
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{exec.dealsClosed}</TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums">
-                      {formatCompactCurrency(exec.revenue)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right">
-                      <span className="inline-flex items-center gap-1">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        {exec.pendingFollowUps}
-                      </span>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <CmsDataTable
+            embedded
+            columns={summaryColumns}
+            rows={sorted}
+            rowKey={(exec) => exec.id}
+            onRowClick={onSelectMember}
+          />
         </CardContent>
       </Card>
     </div>

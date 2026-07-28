@@ -8,8 +8,8 @@ import {
   evaluatePayrollReadiness,
   PAYROLL_DAYS_IN_MONTH,
   resolveContractSalary,
-} from "../../src/services/hrm/payroll-compute.js";
-import { eachDateInRange, getDayOfWeek } from "../../src/services/hrm/hrm-date-utils.js";
+} from "../../src/modules/hrm/services/payroll-compute.js";
+import { eachDateInRange, getDayOfWeek } from "../../src/modules/hrm/services/hrm-date-utils.js";
 
 const period = { startDate: "2026-06-01", endDate: "2026-06-30" };
 const weekendDays = [0, 6];

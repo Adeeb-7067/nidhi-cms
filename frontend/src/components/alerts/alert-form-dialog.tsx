@@ -181,7 +181,7 @@ export function AlertFormDialog({ open, onOpenChange, alert }: AlertFormDialogPr
               <img
                 src={resolveFileUrl(form.photoUrl)}
                 alt="Alert preview"
-                className="max-h-40 rounded-md border border-border object-cover"
+                className="max-h-48 w-full rounded-md border border-border object-contain bg-muted/40"
               />
             ) : null}
           </div>

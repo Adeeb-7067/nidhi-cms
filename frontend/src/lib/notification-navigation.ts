@@ -133,6 +133,38 @@ export function getNotificationTarget(
     return { href: "/notifications", label: "View notifications" };
   }
 
+  if (
+    entityType === "marketing_post" ||
+    type === "marketing_post_assigned" ||
+    type === "marketing_post_reminder"
+  ) {
+    return { href: "/marketing/calendar", label: "Open calendar" };
+  }
+
+  if (entityType === "marketing_task" || type === "marketing_task_assigned") {
+    return { href: "/marketing/tasks", label: "Open tasks" };
+  }
+
+  if (
+    entityType === "marketing_approval" ||
+    type === "marketing_approval_assigned" ||
+    type === "marketing_approval_stage"
+  ) {
+    return { href: "/marketing/approvals", label: "Open approvals" };
+  }
+
+  if (entityType === "marketing_graphic" || type === "marketing_graphic_assigned") {
+    return { href: "/marketing/graphics", label: "Open graphics" };
+  }
+
+  if (entityType === "marketing_video" || type === "marketing_video_assigned") {
+    return { href: "/marketing/videos", label: "Open videos" };
+  }
+
+  if (entityType === "marketing_content" || type === "marketing_content_assigned") {
+    return { href: "/marketing/content", label: "Open content" };
+  }
+
   return null;
 }
 

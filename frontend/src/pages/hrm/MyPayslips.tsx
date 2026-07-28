@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { CalendarClock, FileText, IndianRupee, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import { HrmPageShell } from "@/modules/hrm/components";
-import { HrmRefStatStrip } from "@/modules/hrm/hrm-reference-kit";
+import { CmsKpiGrid } from "@/components/cms/cms-kpi";
 import {
   HrmPayrollExplorer,
   payrollStatusPill,
@@ -35,12 +35,6 @@ export default function HrmMyPayslipsPage() {
   const total = slips.reduce((s, r) => s + (r.net ?? 0), 0);
   const latest = slips[0] ? payslipPeriodLabel(slips[0].month, slips[0].year) : "—";
 
-  const stats = [
-    { label: "Slips", value: String(slips.length) },
-    { label: "Total paid", value: inrMoney(total), valueClassName: "text-primary" },
-    { label: "Latest", value: latest },
-  ];
-
   const slipStatus = (s: HrmPayslip) => (s.status === "PAID" ? "PAID" : "UNPAID");
 
   return (
@@ -59,7 +53,31 @@ export default function HrmMyPayslipsPage() {
           }
           filterBar={
             <div className="space-y-4">
-              <HrmRefStatStrip stats={stats} loading={isLoading} />
+              <CmsKpiGrid
+                columns={3}
+                loading={isLoading}
+                count={3}
+                items={[
+                  {
+                    title: "Slips",
+                    value: slips.length,
+                    icon: FileText,
+                    accent: "blue",
+                  },
+                  {
+                    title: "Total paid",
+                    value: inrMoney(total),
+                    icon: IndianRupee,
+                    accent: "green",
+                  },
+                  {
+                    title: "Latest",
+                    value: latest,
+                    icon: CalendarClock,
+                    accent: "violet",
+                  },
+                ]}
+              />
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <select
                   className="h-8 rounded-md border border-input bg-background px-2 text-xs"

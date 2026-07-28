@@ -40,23 +40,24 @@ Optional: Firebase admin, object storage — see `backend/.env.example`.
 
 ### Frontend — `frontend/.env`
 
-Copy `frontend/.env.example` → `frontend/.env`:
+Copy `frontend/.env.example` → `frontend/.env`. For **local web**, leave `VITE_API_BASE_URL` commented/unset so Vite proxies `/api` (same origin — no OPTIONS preflight). A `frontend/.env.local` with `VITE_API_BASE_URL=` can override an old absolute URL.
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080
+# Local web: leave unset
+# VITE_API_BASE_URL=
+
 VITE_APP_NAME=CMS
 VITE_APP_SHORT_NAME=CMS
 VITE_APP_LOGO=/logo.png
 ```
 
-For production builds on another domain:
+For production **split-domain** web builds or Electron:
 
 ```env
 VITE_API_BASE_URL=https://api.yourdomain.com
 ```
 
 Restart Vite after changing frontend env vars.
-
 ## 3. Seed the database
 
 ```powershell
@@ -81,8 +82,7 @@ cd frontend
 npm run dev
 ```
 
-Open **http://localhost:5173**. With `VITE_API_BASE_URL` set, API calls go to **http://localhost:8080**.
-
+Open **http://localhost:5173**. With `VITE_API_BASE_URL` unset, the UI calls **same-origin** `/api` (Vite proxies to the backend). Absolute `VITE_API_BASE_URL` is only for split-origin or Electron.
 ## 5. Run the Electron desktop app (local dev)
 
 The Electron app loads a **pre-built** copy of the frontend — it does not use the Vite dev server.

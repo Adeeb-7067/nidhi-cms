@@ -1,10 +1,10 @@
 import "../load-env.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "../src/lib/db.js";
-import { ensureDefaultRoleTemplates } from "../src/services/permissions.service.js";
-import { seedLeaveTypes } from "../src/services/hrm/leave.service.js";
-import { seedDefaultShift, listShiftTemplates } from "../src/services/hrm/shifts.service.js";
-import { getOrCreateSettings } from "../src/services/company-settings.js";
+import { ensureDefaultRoleTemplates } from "../src/modules/identity/services/permissions.service.js";
+import { seedLeaveTypes } from "../src/modules/hrm/services/leave.service.js";
+import { seedDefaultShift, listShiftTemplates } from "../src/modules/hrm/services/shifts.service.js";
+import { getOrCreateSettings } from "../src/modules/settings/services/company-settings.js";
 import { companySettingsTable } from "../src/models/schema/index.js";
 
 async function main() {

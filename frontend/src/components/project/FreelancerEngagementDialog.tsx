@@ -31,6 +31,7 @@ import { formatCurrency } from "@/modules/finance/constants";
 import { FinanceConfirmDialog } from "@/modules/finance/components";
 import { toastApiError } from "@/lib/api-error";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 type Props = {
   open: boolean;
@@ -66,6 +67,7 @@ export function FreelancerEngagementDialog({
   const update = useUpdateFreelancerEngagement();
   const remove = useDeleteFreelancerEngagement();
   const markPaid = useUpdateFreelancerInstallment();
+  const [, setLocation] = useLocation();
 
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -203,13 +205,15 @@ export function FreelancerEngagementDialog({
       return;
     }
     try {
-      await markPaid.mutateAsync({
+      const result = await markPaid.mutateAsync({
         engagementId: existing.id,
         installmentId: next.id,
         status: "paid",
         paymentMode: "bank_transfer",
       });
-      toast.success(`Recorded ${formatCurrency(next.amount)}`);
+      toast.success(`Recorded ${formatCurrency(next.amount)} — opening receipt`);
+      onOpenChange(false);
+      setLocation(`/freelancers/receipts/${existing.id}/${result.id ?? next.id}`);
     } catch (err) {
       toastApiError(err, "Failed to record payment");
     }

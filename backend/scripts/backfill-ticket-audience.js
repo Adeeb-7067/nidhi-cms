@@ -5,7 +5,7 @@
 import "../load-env.js";
 import mongoose from "mongoose";
 import { usersTable, ticketsTable } from "../src/models/schema/index.js";
-import { ticketAudienceFromRole } from "../src/services/ticket-support.js";
+import { ticketAudienceFromRole } from "../src/modules/work/services/ticket-support.js";
 
 const mongoUri = process.env.MONGODB_URI || process.env.DATABASE_URL;
 if (!mongoUri) {

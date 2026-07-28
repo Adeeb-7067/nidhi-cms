@@ -16,12 +16,9 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
-  useListRequests,
-  useListBugs,
   useListProjects,
-  getListRequestsQueryKey,
-  getListBugsQueryKey,
   getListProjectsQueryKey,
+  useNavBadges,
 } from "@/api";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { QUERY_STALE } from "@/lib/query-config";
@@ -48,29 +45,12 @@ const spring = { type: "spring" as const, stiffness: 380, damping: 28 };
 
 function useBadgeCounts(role: UserRole) {
   const { unreadNotificationCount } = useRealtime();
-  const { data: pendingRequests } = useListRequests(
-    { status: "pending", limit: 1 },
-    {
-      query: {
-        enabled: role === "super_admin",
-        staleTime: QUERY_STALE.list,
-        queryKey: getListRequestsQueryKey({ status: "pending", limit: 1 }),
-      },
-    },
-  );
-  const { data: openBugs } = useListBugs(
-    { status: "open", limit: 1 },
-    {
-      query: {
-        enabled: isDevPortalRole(role),
-        staleTime: QUERY_STALE.list,
-        queryKey: getListBugsQueryKey({ status: "open", limit: 1 }),
-      },
-    },
+  const { data: badges } = useNavBadges(
+    role === "super_admin" || isDevPortalRole(role),
   );
   return {
-    requests: pendingRequests?.total ?? 0,
-    bugs: openBugs?.total ?? 0,
+    requests: badges?.pendingRequests ?? 0,
+    bugs: badges?.openBugs ?? 0,
     notifications: unreadNotificationCount,
   };
 }

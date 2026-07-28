@@ -4,15 +4,7 @@ import { Link } from "wouter";
 import { HandCoins, Plus, Pencil, Trash2, AlertTriangle, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency, LOAN_SOURCE_LABELS } from "@/modules/finance/constants";
 import type { LoanStatus, LoanSource } from "@/modules/finance/types";
@@ -20,7 +12,6 @@ import {
   FinancePageHeader,
   FinanceFilterBar,
   FinanceStatusBadge,
-  FinanceEmptyState,
   FinanceErrorState,
   LoanFormModal,
   FinanceConfirmDialog,
@@ -94,6 +85,126 @@ export default function LoansPage() {
     );
   }
 
+  const chipItems = (["all", "active", "closed"] as const).map((t) => ({
+    value: t,
+    label: t === "all" ? "All" : t,
+    count: t === "all" ? loans.length : loans.filter((l) => l.status === (t as LoanStatus)).length,
+  }));
+
+  const columns: CmsColumn<Loan>[] = [
+    {
+      id: "loan",
+      header: "Loan",
+      cell: (l) => (
+        <Link href={`/finance/loans/${l.id}`} className="hover:text-primary">
+          <div className="font-medium">{l.name}</div>
+          <div className="font-mono text-[10px] text-muted-foreground">{l.reference}</div>
+        </Link>
+      ),
+    },
+    { id: "lender", header: "Lender", cell: (l) => <span className="text-muted-foreground">{l.lender}</span> },
+    {
+      id: "source",
+      header: "Source",
+      cell: (l) => (
+        <span className="text-muted-foreground">
+          {LOAN_SOURCE_LABELS[(l.source as LoanSource) || "bank"] ?? "Bank"}
+        </span>
+      ),
+    },
+    {
+      id: "start",
+      header: "Start",
+      cell: (l) => <span className="text-muted-foreground">{format(new Date(l.startDate), "MMM d, yyyy")}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (l) => <FinanceStatusBadge variant="loan" value={l.status} />,
+    },
+    {
+      id: "repaid",
+      header: "Repaid",
+      className: "min-w-[120px]",
+      cell: (l) => {
+        const pct = repaymentPct(l.paidAmount, l.principal);
+        return (
+          <>
+            <Progress value={pct} className="h-1.5" />
+            <span className="text-[10px] text-muted-foreground">{pct}%</span>
+          </>
+        );
+      },
+    },
+    {
+      id: "principal",
+      header: "Principal",
+      align: "right",
+      cell: (l) => <span className="tabular-nums">{formatCurrency(l.principal)}</span>,
+    },
+    {
+      id: "paid",
+      header: "Paid",
+      align: "right",
+      cell: (l) => <span className="tabular-nums">{formatCurrency(l.paidAmount)}</span>,
+    },
+    {
+      id: "remaining",
+      header: "Remaining",
+      align: "right",
+      cell: (l) => (
+        <span
+          className={cn(
+            "tabular-nums font-medium",
+            l.remainingAmount > 0 ? "text-amber-700" : "text-emerald-700",
+          )}
+        >
+          {formatCurrency(l.remainingAmount)}
+        </span>
+      ),
+    },
+    {
+      id: "emi",
+      header: "EMI",
+      align: "right",
+      cell: (l) => (
+        <span className="tabular-nums text-muted-foreground">
+          {l.emiAmount != null ? formatCurrency(l.emiAmount) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (l) => (
+        <div className="flex justify-end gap-1">
+          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
+            <Link href={`/finance/loans/${l.id}`}>
+              <Eye className="h-3.5 w-3.5" />
+            </Link>
+          </Button>
+          {canEdit && (
+            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(l)}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 w-7 p-0 text-destructive"
+              onClick={() => setDeleteTarget(l)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
@@ -122,115 +233,25 @@ export default function LoansPage() {
         searchPlaceholder="Search loan, lender, reference…"
       />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "active", "closed"] as const).map((t) => (
-            <TabsTrigger key={t} value={t} className="text-xs capitalize data-[state=active]:bg-primary/10">
-              {t === "all" ? "All" : t} (
-              {t === "all" ? loans.length : loans.filter((l) => l.status === (t as LoanStatus)).length})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs value={statusTab} onValueChange={setStatusTab} items={chipItems} />
 
-      {filtered.length === 0 ? (
-        <FinanceEmptyState
-          icon={HandCoins}
-          title="No loans found"
-          description="Add a loan you’ve taken, then link monthly EMI expenses to it."
-          actionLabel="Add loan"
-          onAction={openCreate}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Loan</TableHead>
-                <TableHead className="text-xs">Lender</TableHead>
-                <TableHead className="text-xs">Source</TableHead>
-                <TableHead className="text-xs">Start</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Repaid</TableHead>
-                <TableHead className="text-xs text-right">Principal</TableHead>
-                <TableHead className="text-xs text-right">Paid</TableHead>
-                <TableHead className="text-xs text-right">Remaining</TableHead>
-                <TableHead className="text-xs text-right">EMI</TableHead>
-                <TableHead className="text-xs text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((l) => {
-                const pct = repaymentPct(l.paidAmount, l.principal);
-                return (
-                  <TableRow key={l.id}>
-                    <TableCell className="text-xs">
-                      <Link href={`/finance/loans/${l.id}`} className="hover:text-primary">
-                        <div className="font-medium">{l.name}</div>
-                        <div className="font-mono text-[10px] text-muted-foreground">{l.reference}</div>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{l.lender}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {LOAN_SOURCE_LABELS[(l.source as LoanSource) || "bank"] ?? "Bank"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {format(new Date(l.startDate), "MMM d, yyyy")}
-                    </TableCell>
-                    <TableCell>
-                      <FinanceStatusBadge variant="loan" value={l.status} />
-                    </TableCell>
-                    <TableCell className="min-w-[120px]">
-                      <Progress value={pct} className="h-1.5" />
-                      <span className="text-[10px] text-muted-foreground">{pct}%</span>
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(l.principal)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(l.paidAmount)}</TableCell>
-                    <TableCell
-                      className={cn(
-                        "text-xs text-right tabular-nums font-medium",
-                        l.remainingAmount > 0 ? "text-amber-700" : "text-emerald-700",
-                      )}
-                    >
-                      {formatCurrency(l.remainingAmount)}
-                    </TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-muted-foreground">
-                      {l.emiAmount != null ? formatCurrency(l.emiAmount) : "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
-                          <Link href={`/finance/loans/${l.id}`}>
-                            <Eye className="h-3.5 w-3.5" />
-                          </Link>
-                        </Button>
-                        {canEdit && (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(l)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {canDelete && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive"
-                            onClick={() => setDeleteTarget(l)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-          <div className="px-4 py-3 text-xs text-muted-foreground border-t">
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(l) => l.id}
+        empty={{
+          icon: HandCoins,
+          title: "No loans found",
+          description: "Add a loan you’ve taken, then link monthly EMI expenses to it.",
+          actionLabel: "Add loan",
+          onAction: openCreate,
+        }}
+        toolbar={
+          <p className="text-xs text-muted-foreground">
             {formatCurrency(totalPrincipal)} principal across {loans.length} loans
-          </div>
-        </div>
-      )}
+          </p>
+        }
+      />
 
       <LoanFormModal
         key={editLoan ? `edit-${editLoan.id}` : "create"}

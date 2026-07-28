@@ -13,7 +13,7 @@ import {
   listAccrualPeriodsAfter,
   nextAccrualPeriodKey,
   previousAccrualPeriodKey,
-} from "../../src/services/hrm/leave-accrual.service.js";
+} from "../../src/modules/hrm/services/leave-accrual.service.js";
 
 describe("computeAvailableBalance", () => {
   test("sums allocated and carried forward minus used and pending", () => {

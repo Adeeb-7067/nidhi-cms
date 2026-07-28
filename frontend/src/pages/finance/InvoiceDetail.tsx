@@ -4,14 +4,7 @@ import { ArrowLeft, FileDown, Mail, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { format } from "date-fns";
 import { formatCurrency, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import {
@@ -57,6 +50,49 @@ export default function FinanceInvoiceDetailPage() {
 
   const paymentHistory = (paymentsData?.payments ?? []).filter((p) => p.invoiceId === invoice.id);
   const remaining = Math.max(0, (invoice.total ?? 0) - invoice.paidAmount);
+
+  const paymentColumns: CmsColumn<(typeof paymentHistory)[number]>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (p) => format(new Date(p.date), "MMM d, yyyy"),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      cell: (p) => <span className="font-medium tabular-nums">{formatCurrency(p.amount)}</span>,
+    },
+    { id: "mode", header: "Mode", cell: (p) => PAYMENT_MODE_LABELS[p.mode] },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (p) => <span className="font-mono text-muted-foreground">{p.reference}</span>,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) => <FinanceStatusBadge variant="payment" value={p.status} />,
+    },
+  ];
+
+  const creditColumns: CmsColumn<(typeof invoice.creditNotes)[number]>[] = [
+    { id: "id", header: "ID", cell: (cn) => <span className="font-mono">{cn.id}</span> },
+    {
+      id: "date",
+      header: "Date",
+      cell: (cn) => format(new Date(cn.date), "MMM d, yyyy"),
+    },
+    { id: "reason", header: "Reason", cell: (cn) => cn.reason },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (cn) => (
+        <span className="tabular-nums text-red-700">−{formatCurrency(cn.amount)}</span>
+      ),
+    },
+  ];
 
   const handleCancel = async () => {
     try {
@@ -113,28 +149,12 @@ export default function FinanceInvoiceDetailPage() {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm">Payment history</CardTitle></CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">Date</TableHead>
-                      <TableHead className="text-xs">Amount</TableHead>
-                      <TableHead className="text-xs">Mode</TableHead>
-                      <TableHead className="text-xs">Reference</TableHead>
-                      <TableHead className="text-xs">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paymentHistory.map((p) => (
-                      <TableRow key={p.id}>
-                        <TableCell className="text-xs">{format(new Date(p.date), "MMM d, yyyy")}</TableCell>
-                        <TableCell className="text-xs font-medium tabular-nums">{formatCurrency(p.amount)}</TableCell>
-                        <TableCell className="text-xs">{PAYMENT_MODE_LABELS[p.mode]}</TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">{p.reference}</TableCell>
-                        <TableCell><FinanceStatusBadge variant="payment" value={p.status} /></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <CmsDataTable
+                  columns={paymentColumns}
+                  rows={paymentHistory}
+                  rowKey={(p) => p.id}
+                  embedded
+                />
               </CardContent>
             </Card>
           )}
@@ -143,26 +163,12 @@ export default function FinanceInvoiceDetailPage() {
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-sm">Credit notes</CardTitle></CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs">ID</TableHead>
-                      <TableHead className="text-xs">Date</TableHead>
-                      <TableHead className="text-xs">Reason</TableHead>
-                      <TableHead className="text-xs text-right">Amount</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {invoice.creditNotes.map((cn) => (
-                      <TableRow key={cn.id}>
-                        <TableCell className="text-xs font-mono">{cn.id}</TableCell>
-                        <TableCell className="text-xs">{format(new Date(cn.date), "MMM d, yyyy")}</TableCell>
-                        <TableCell className="text-xs">{cn.reason}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums text-red-700">−{formatCurrency(cn.amount)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <CmsDataTable
+                  columns={creditColumns}
+                  rows={invoice.creditNotes}
+                  rowKey={(cn) => cn.id}
+                  embedded
+                />
               </CardContent>
             </Card>
           )}

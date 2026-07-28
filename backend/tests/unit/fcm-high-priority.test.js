@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { buildHighPriorityFcmMulticast } from "../../src/services/push-notifications.js";
+import { buildHighPriorityFcmMulticast } from "../../src/modules/collab/services/push-notifications.js";
 
 describe("high-priority FCM for all devices", () => {
   test("multicast includes Android, APNs, and Web high-priority headers", () => {

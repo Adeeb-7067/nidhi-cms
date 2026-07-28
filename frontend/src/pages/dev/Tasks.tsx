@@ -21,12 +21,9 @@ import {
   DevPageShell,
   DevPageHero,
   DevKpiGrid,
-  DevToolbar,
-  DevTabsList,
-  DevTabsTrigger,
-  DevContentCard,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
+import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -50,8 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs } from "@/components/ui/tabs";
-import { Plus, ListTodo, User, Calendar, Loader2, CheckCircle2, Eye } from "lucide-react";
+import { Plus, ListTodo, User, Loader2, CheckCircle2, Eye } from "lucide-react";
 import { TASK_STATUS_LABELS, taskStatusClass } from "@/lib/task-ui";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -211,33 +207,38 @@ export default function DevTasks() {
         ]}
       />
 
-      <DevToolbar className="flex-wrap">
-        {isAdmin && (
-          <Tabs value={scope} onValueChange={(v) => setScope(v as typeof scope)}>
-            <DevTabsList>
-              <DevTabsTrigger value="all">All</DevTabsTrigger>
-              <DevTabsTrigger value="mine">Assigned to me</DevTabsTrigger>
-              <DevTabsTrigger value="unassigned">Unassigned</DevTabsTrigger>
-            </DevTabsList>
-          </Tabs>
-        )}
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="h-8 w-[140px] text-xs bg-muted/50 border-0">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            {Object.entries(TASK_STATUS_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>{label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </DevToolbar>
+      {isAdmin ? (
+        <CmsChipTabs
+          value={scope}
+          onValueChange={(v) => setScope(v as typeof scope)}
+          items={[
+            { value: "all", label: "All" },
+            { value: "mine", label: "Assigned to me" },
+            { value: "unassigned", label: "Unassigned" },
+          ]}
+        />
+      ) : null}
 
-      <DevContentCard contentClassName="p-0">
-          {isLoading ? (
-            <PageTableSkeleton rows={8} columns={6} showToolbar />
-          ) : (
+      <CmsFilterBar
+        filters={[
+          {
+            key: "status",
+            value: statusFilter,
+            onChange: setStatusFilter,
+            placeholder: "Status",
+            allOption: { value: "all", label: "All statuses" },
+            options: Object.entries(TASK_STATUS_LABELS).map(([value, label]) => ({
+              value,
+              label,
+            })),
+            className: "w-full sm:w-[160px]",
+          },
+        ]}
+      />
+
+      {isLoading ? (
+        <PageTableSkeleton rows={8} columns={6} showToolbar />
+      ) : (
           <AdvancedTable
             data={data?.tasks ?? []}
             pagination={{
@@ -354,7 +355,6 @@ export default function DevTasks() {
             onRowClick={(task) => setLocation(`/dev/tasks/${task.id}`)}
           />
           )}
-      </DevContentCard>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-[560px]">

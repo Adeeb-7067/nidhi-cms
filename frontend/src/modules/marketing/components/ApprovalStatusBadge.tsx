@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type { ApprovalStage } from "../types";
 import { APPROVAL_STAGE_LABELS } from "../constants";
 
@@ -19,14 +19,10 @@ export function ApprovalStatusBadge({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
-        stageStyles[stage],
-        className,
-      )}
-    >
-      {APPROVAL_STAGE_LABELS[stage]}
-    </span>
+    <CmsStatusChip
+      label={APPROVAL_STAGE_LABELS[stage]}
+      colorClassName={stageStyles[stage]}
+      className={className}
+    />
   );
 }

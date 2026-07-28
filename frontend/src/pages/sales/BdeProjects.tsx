@@ -11,8 +11,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Briefcase,
   Clock,
@@ -26,7 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { getProjectDetailHref } from "@/lib/project-routes";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { SalesPageHeader, SalesEmptyState, SalesFilterBar } from "@/modules/sales/components";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { SalesPageHeader, SalesFilterBar } from "@/modules/sales/components";
 
 const ONGOING_STATUSES = "in_progress,scoping,uat,on_hold";
 
@@ -102,6 +103,20 @@ function computeProjectStats(projects: Project[]) {
   };
 }
 
+function ProjectLogo({ project, size = "md" }: { project: Project; size?: "sm" | "md" }) {
+  const sizeClass = size === "sm" ? "h-7 w-7" : "h-10 w-10";
+  return (
+    <Avatar className={cn(sizeClass, "shrink-0 rounded-md border border-border/60")}>
+      {project.logoUrl ? (
+        <AvatarImage src={project.logoUrl} alt={project.name} className="object-cover" />
+      ) : null}
+      <AvatarFallback className="rounded-md bg-primary/10 text-[10px] font-semibold text-primary">
+        {project.name.charAt(0)}
+      </AvatarFallback>
+    </Avatar>
+  );
+}
+
 function BdeProjectCard({ project }: { project: Project }) {
   const company = project.companyName ?? project.clientName ?? "Company";
   const deadline = formatDeadline(project.deadline);
@@ -110,16 +125,19 @@ function BdeProjectCard({ project }: { project: Project }) {
     <Card className="flex h-full flex-col border-border/60 overflow-hidden transition-colors hover:border-primary/30 hover:shadow-sm">
       <CardHeader className="space-y-3 pb-3">
         <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <CardTitle className="text-sm font-semibold leading-snug">
-              <Link
-                href={getProjectDetailHref(project.id, "bde", project.type)}
-                className="line-clamp-2 hover:text-primary transition-colors"
-              >
-                {project.name}
-              </Link>
-            </CardTitle>
-            <CardDescription className="mt-1 truncate text-[11px]">{company}</CardDescription>
+          <div className="flex min-w-0 flex-1 items-start gap-2.5">
+            <ProjectLogo project={project} />
+            <div className="min-w-0 flex-1">
+              <CardTitle className="text-sm font-semibold leading-snug">
+                <Link
+                  href={getProjectDetailHref(project.id, "bde", project.type)}
+                  className="line-clamp-2 hover:text-primary transition-colors"
+                >
+                  {project.name}
+                </Link>
+              </CardTitle>
+              <CardDescription className="mt-1 truncate text-[11px]">{company}</CardDescription>
+            </div>
           </div>
           <Badge
             variant="outline"
@@ -219,7 +237,7 @@ export default function BdeProjects() {
   }, [tab]);
 
   const { data: allProjectsData, isLoading: isLoadingAll } = useListProjects({ limit: 100 });
-  const { data, isLoading: isLoadingTab } = useListProjects(listParams);
+  const { data, isLoading: isLoadingTab, isError, refetch } = useListProjects(listParams);
 
   const stats = useMemo(
     () => computeProjectStats(allProjectsData?.projects ?? []),
@@ -236,16 +254,123 @@ export default function BdeProjects() {
     });
   }, [data?.projects, search]);
 
-  const projectsByCompany = useMemo(() => {
-    const map = new Map<string, Project[]>();
-    for (const p of filteredProjects) {
-      const label = p.companyName ?? p.clientName ?? "Other";
-      const list = map.get(label) ?? [];
-      list.push(p);
-      map.set(label, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [filteredProjects]);
+  const columns = useMemo<CmsColumn<Project>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Project",
+        className: "font-medium max-w-[260px]",
+        cell: (project) => (
+          <div className="flex items-center gap-2.5 min-w-0">
+            <ProjectLogo project={project} size="sm" />
+            <div className="min-w-0">
+              <Link
+                href={getProjectDetailHref(project.id, "bde", project.type)}
+                className="line-clamp-2 hover:text-primary transition-colors"
+              >
+                {project.name}
+              </Link>
+              {project.description?.trim() ? (
+                <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
+                  {project.description.trim()}
+                </p>
+              ) : null}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: "company",
+        header: "Company",
+        className: "max-w-[160px] truncate",
+        cell: (project) => project.companyName ?? project.clientName ?? "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        chip: true,
+        cell: (project) => (
+          <Badge
+            variant="outline"
+            className={cn("text-[10px] capitalize", statusBadgeClass(project.status))}
+          >
+            {project.status.replace(/_/g, " ")}
+          </Badge>
+        ),
+      },
+      {
+        id: "progress",
+        header: "Progress",
+        cell: (project) => (
+          <div className="flex min-w-[100px] items-center gap-2">
+            <Progress value={project.completionPct} className="h-1.5 flex-1" />
+            <span className="text-[10px] font-semibold tabular-nums">{project.completionPct}%</span>
+          </div>
+        ),
+      },
+      {
+        id: "priority",
+        header: "Priority",
+        chip: true,
+        cell: (project) => (
+          <span className={cn("text-xs font-medium capitalize", priorityClass(project.priority))}>
+            {project.priority}
+          </span>
+        ),
+      },
+      {
+        id: "deadline",
+        header: "Deadline",
+        cell: (project) => {
+          const deadline = formatDeadline(project.deadline);
+          return (
+            <span
+              className={cn(
+                "flex items-center gap-1 text-xs whitespace-nowrap",
+                deadline.overdue && "text-red-500",
+                deadline.soon && "text-amber-500",
+              )}
+            >
+              <Calendar className="h-3 w-3 shrink-0" />
+              {deadline.label}
+            </span>
+          );
+        },
+      },
+      {
+        id: "pm",
+        header: "PM",
+        hideInGrid: true,
+        cell: (project) => (
+          <span className="text-muted-foreground text-xs">{project.pmName ?? "—"}</span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        align: "right",
+        hideable: false,
+        cell: (project) => (
+          <div className="flex items-center justify-end gap-1">
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+              <Link href={getProjectDetailHref(project.id, "bde", project.type)}>
+                Open
+                <ArrowRight className="ml-1 h-3 w-3" />
+              </Link>
+            </Button>
+            {project.stagingUrl ? (
+              <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" asChild title="Staging">
+                <a href={project.stagingUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </Button>
+            ) : null}
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
 
   const loadedCount = data?.projects.length ?? 0;
   const totalCount = data?.total ?? loadedCount;
@@ -261,7 +386,9 @@ export default function BdeProjects() {
 
       {isLoadingAll ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-xl" />)}
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-xl" />
+          ))}
         </div>
       ) : (
         <PortalKpiGrid
@@ -276,16 +403,21 @@ export default function BdeProjects() {
         />
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs value={tab} onValueChange={(v) => setTab(v as ProjectTab)}>
-          <TabsList className="h-9">
-            <TabsTrigger value="ongoing" className="text-xs">Ongoing</TabsTrigger>
-            <TabsTrigger value="maintenance" className="text-xs">Maintenance</TabsTrigger>
-            <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search project or company…" className="sm:w-auto sm:flex-1 sm:max-w-sm" />
-      </div>
+      <SalesFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search project or company…"
+      />
+
+      <CmsChipTabs
+        value={tab}
+        onValueChange={(v) => setTab(v as ProjectTab)}
+        items={[
+          { value: "ongoing", label: "Ongoing" },
+          { value: "maintenance", label: "Maintenance" },
+          { value: "all", label: "All" },
+        ]}
+      />
 
       {truncated ? (
         <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -293,39 +425,25 @@ export default function BdeProjects() {
         </p>
       ) : null}
 
-      {isLoadingTab ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-72 rounded-xl" />)}
-        </div>
-      ) : filteredProjects.length === 0 ? (
-        <SalesEmptyState
-          icon={FolderKanban}
-          title={search.trim() ? "No projects match your search" : "No projects yet"}
-          description={
-            search.trim()
-              ? "Try a different name or clear the search."
-              : "Create a project from one of your customers, or ask your admin to add you to an existing project."
-          }
-        />
-      ) : (
-        <div className="space-y-8">
-          {projectsByCompany.map(([companyName, companyProjects]) => (
-            <section key={companyName}>
-              <h2 className="mb-3 px-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                {companyName}
-                <span className="ml-2 font-normal normal-case text-foreground/70">
-                  ({companyProjects.length})
-                </span>
-              </h2>
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {companyProjects.map((project) => (
-                  <BdeProjectCard key={project.id} project={project} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={filteredProjects}
+        rowKey={(project) => project.id}
+        isLoading={isLoadingTab}
+        error={isError}
+        onRetry={() => refetch()}
+        viewStorageKey="bde-projects-v2"
+        defaultViewMode="grid"
+        renderGridCard={(project) => <BdeProjectCard project={project} />}
+        gridClassName="grid gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        empty={{
+          icon: FolderKanban,
+          title: search.trim() ? "No projects match your search" : "No projects yet",
+          description: search.trim()
+            ? "Try a different name or clear the search."
+            : "Create a project from one of your customers, or ask your admin to add you to an existing project.",
+        }}
+      />
     </PortalPageShell>
   );
 }

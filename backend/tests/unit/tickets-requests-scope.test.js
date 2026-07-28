@@ -12,7 +12,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 describe("tickets / requests scope contracts", () => {
   test("ticket list uses permission or project scope", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/services/ticket-support.js"),
+      join(__dirname, "../../src/modules/work/services/ticket-support.js"),
       "utf8",
     );
     assert.ok(src.includes("admin_tickets"));
@@ -22,7 +22,7 @@ describe("tickets / requests scope contracts", () => {
 
   test("requests list scopes non-admin roles", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/controllers/requests.controller.js"),
+      join(__dirname, "../../src/modules/work/controllers/requests.controller.js"),
       "utf8",
     );
     assert.ok(src.includes("getAccessibleProjectIds"));

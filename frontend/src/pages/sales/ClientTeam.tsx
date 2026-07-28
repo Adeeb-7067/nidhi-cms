@@ -15,20 +15,10 @@ import {
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useListSalesClientTeam,
   useListCustomers,
@@ -69,12 +58,9 @@ import { readSearchParam } from "@/modules/sales/utils";
 import {
   SalesPageHeader,
   SalesFilterBar,
-  SalesEmptyState,
-  FinancialSummaryCard,
 } from "@/modules/sales/components";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { formatSalesDateTime } from "@/modules/sales/utils";
-import { cn } from "@/lib/utils";
 
 type StatusTab = "all" | SalesClientTeamMemberStatus;
 
@@ -84,14 +70,14 @@ const STATUS_LABEL: Record<SalesClientTeamMemberStatus, string> = {
   inactive: "Inactive",
 };
 
-function statusBadgeClass(status: SalesClientTeamMemberStatus) {
+function statusTone(status: SalesClientTeamMemberStatus): "success" | "warning" | "danger" {
   switch (status) {
     case "active":
-      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400";
+      return "success";
     case "pending":
-      return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400";
+      return "warning";
     case "inactive":
-      return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-400";
+      return "danger";
   }
 }
 
@@ -193,6 +179,137 @@ export default function SalesClientTeamPage() {
     );
   };
 
+  const columns: CmsColumn<SalesClientTeamMember>[] = [
+    {
+      id: "member",
+      header: "Member",
+      headerClassName: "min-w-[200px]",
+      className: "min-w-[200px] max-w-[260px]",
+      cell: (member) => (
+        <div className="flex items-center gap-2.5 min-w-0">
+          <Avatar className="h-8 w-8 shrink-0">
+            {member.avatarUrl ? <AvatarImage src={member.avatarUrl} alt={member.name ?? ""} /> : null}
+            <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-semibold">
+              {(member.name ?? member.email ?? "?").charAt(0)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <p className="font-medium truncate">{member.name ?? "—"}</p>
+            {member.email ? (
+              <a
+                href={`mailto:${member.email}`}
+                className="text-[10px] text-muted-foreground hover:text-primary truncate block"
+              >
+                {member.email}
+              </a>
+            ) : null}
+            {member.phoneNumber ? (
+              <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
+                <Phone className="h-3 w-3 shrink-0" />
+                {member.phoneNumber}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "company",
+      header: "Company",
+      headerClassName: "min-w-[140px]",
+      className: "min-w-[140px] max-w-[180px]",
+      cell: (member) => (
+        <Link
+          href={`/sales/customers/${member.clientCompanyId}`}
+          className="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
+        >
+          <Building2 className="h-3 w-3 shrink-0" />
+          <span className="truncate">
+            {member.companyName ?? `Customer #${member.clientCompanyId}`}
+          </span>
+        </Link>
+      ),
+    },
+    {
+      id: "role",
+      header: "Role",
+      headerClassName: "min-w-[96px] hidden sm:table-cell",
+      className: "text-muted-foreground hidden sm:table-cell max-w-[120px] truncate",
+      cell: (member) => member.title ?? "Member",
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      headerClassName: "min-w-[88px]",
+      cell: (member) => (
+        <CmsStatusChip label={STATUS_LABEL[member.status]} tone={statusTone(member.status)} />
+      ),
+    },
+    {
+      id: "lastLogin",
+      header: "Last login",
+      headerClassName: "min-w-[108px] hidden md:table-cell",
+      className: "text-muted-foreground whitespace-nowrap hidden md:table-cell",
+      cell: (member) =>
+        member.lastLoginAt ? format(new Date(member.lastLoginAt), "MMM d, yyyy") : "Never",
+    },
+    {
+      id: "added",
+      header: "Added",
+      headerClassName: "min-w-[108px] hidden lg:table-cell",
+      className: "text-muted-foreground whitespace-nowrap hidden lg:table-cell",
+      cell: (member) => formatSalesDateTime(member.createdAt),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      headerClassName: "w-[72px]",
+      cell: (member) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem asChild>
+              <Link href={`/sales/customers/${member.clientCompanyId}`}>View customer</Link>
+            </DropdownMenuItem>
+            {canManage ? (
+              <>
+                <DropdownMenuSeparator />
+                {member.status === "inactive" ? (
+                  <DropdownMenuItem onClick={() => handleReactivate(member)}>
+                    <UserCheck className="mr-2 h-3.5 w-3.5" />
+                    Reactivate
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={() => setDeactivateTarget(member)}
+                  >
+                    <UserMinus className="mr-2 h-3.5 w-3.5" />
+                    Deactivate
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={() => handleResend(member)}>
+                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
+                  Resend invitation
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setResetTarget(member)}>
+                  <KeyRound className="mr-2 h-3.5 w-3.5" />
+                  Reset password
+                </DropdownMenuItem>
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <SalesPageHeader
@@ -205,34 +322,40 @@ export default function SalesClientTeamPage() {
         ]}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <FinancialSummaryCard
-          title="Active contacts"
-          value={summary?.activeContacts ?? "—"}
-          icon={UserCheck}
-          accent="green"
-          hint="Can sign in to portal"
-        />
-        <FinancialSummaryCard
-          title="Inactive"
-          value={summary?.inactiveContacts ?? "—"}
-          icon={UserMinus}
-          accent="red"
-        />
-        <FinancialSummaryCard
-          title="Logged in today"
-          value={summary?.contactsLoggedInToday ?? "—"}
-          icon={LogIn}
-          accent="blue"
-        />
-        <FinancialSummaryCard
-          title="Listed below"
-          value={total}
-          icon={UsersRound}
-          accent="violet"
-          hint="Matching current filters"
-        />
-      </div>
+      <PortalKpiGrid
+        items={[
+          {
+            title: "Active contacts",
+            value: summary?.activeContacts ?? "—",
+            hint: "Can sign in to portal",
+            icon: UserCheck,
+            accent: "green",
+            delay: 0,
+          },
+          {
+            title: "Inactive",
+            value: summary?.inactiveContacts ?? "—",
+            icon: UserMinus,
+            accent: "red",
+            delay: 1,
+          },
+          {
+            title: "Logged in today",
+            value: summary?.contactsLoggedInToday ?? "—",
+            icon: LogIn,
+            accent: "blue",
+            delay: 2,
+          },
+          {
+            title: "Listed below",
+            value: total,
+            hint: "Matching current filters",
+            icon: UsersRound,
+            accent: "violet",
+            delay: 3,
+          },
+        ]}
+      />
 
       <SalesFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search name, email, or company…">
         <Select value={customerFilter} onValueChange={setCustomerFilter}>
@@ -250,170 +373,39 @@ export default function SalesClientTeamPage() {
         </Select>
       </SalesFilterBar>
 
-      <Tabs value={statusTab} onValueChange={(v) => setStatusTab(v as StatusTab)}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {(["all", "active", "pending", "inactive"] as StatusTab[]).map((tab) => (
-            <TabsTrigger
-              key={tab}
-              value={tab}
-              className="text-xs capitalize data-[state=active]:bg-primary/10"
-            >
-              {tab === "all" ? "All" : STATUS_LABEL[tab]}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={(v) => setStatusTab(v as StatusTab)}
+        items={(["all", "active", "pending", "inactive"] as StatusTab[]).map((tab) => ({
+          value: tab,
+          label: tab === "all" ? "All" : STATUS_LABEL[tab],
+        }))}
+      />
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(6)].map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full rounded-lg" />
-          ))}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState
-          icon={UsersRound}
-          title="Failed to load client team"
-          description="Could not fetch team members."
-          actionLabel="Retry"
-          onAction={() => void refetch()}
-        />
-      ) : members.length === 0 ? (
-        <SalesEmptyState
-          icon={UsersRound}
-          title="No team members found"
-          description="Customers invite collaborators from their client portal. Adjust filters or check back later."
-          actionLabel="View customers"
-          onAction={() => window.location.assign("/sales/customers")}
-        />
-      ) : (
-        <>
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <div className="overflow-x-auto">
-            <Table className="min-w-[880px]">
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs min-w-[200px]">Member</TableHead>
-                  <TableHead className="text-xs min-w-[140px]">Company</TableHead>
-                  <TableHead className="text-xs min-w-[96px] hidden sm:table-cell">Role</TableHead>
-                  <TableHead className="text-xs min-w-[88px]">Status</TableHead>
-                  <TableHead className="text-xs min-w-[108px] hidden md:table-cell">Last login</TableHead>
-                  <TableHead className="text-xs min-w-[108px] hidden lg:table-cell">Added</TableHead>
-                  <TableHead className="text-xs text-right w-[72px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((member) => (
-                  <TableRow key={member.id} className="hover:bg-muted/30">
-                    <TableCell className="min-w-[200px] max-w-[260px]">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Avatar className="h-8 w-8 shrink-0">
-                          {member.avatarUrl ? (
-                            <AvatarImage src={member.avatarUrl} alt={member.name ?? ""} />
-                          ) : null}
-                          <AvatarFallback className="bg-primary/15 text-primary text-[10px] font-semibold">
-                            {(member.name ?? member.email ?? "?").charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium truncate">{member.name ?? "—"}</p>
-                          {member.email ? (
-                            <a
-                              href={`mailto:${member.email}`}
-                              className="text-[10px] text-muted-foreground hover:text-primary truncate block"
-                            >
-                              {member.email}
-                            </a>
-                          ) : null}
-                          {member.phoneNumber ? (
-                            <p className="text-[10px] text-muted-foreground truncate flex items-center gap-1 mt-0.5">
-                              <Phone className="h-3 w-3 shrink-0" />
-                              {member.phoneNumber}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-xs min-w-[140px] max-w-[180px]">
-                      <Link
-                        href={`/sales/customers/${member.clientCompanyId}`}
-                        className="inline-flex items-center gap-1 text-primary hover:underline min-w-0"
-                      >
-                        <Building2 className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{member.companyName ?? `Customer #${member.clientCompanyId}`}</span>
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground hidden sm:table-cell max-w-[120px] truncate">
-                      {member.title ?? "Member"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      <Badge variant="outline" className={cn("text-[10px] capitalize", statusBadgeClass(member.status))}>
-                        {STATUS_LABEL[member.status]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap hidden md:table-cell">
-                      {member.lastLoginAt ? format(new Date(member.lastLoginAt), "MMM d, yyyy") : "Never"}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap hidden lg:table-cell">
-                      {formatSalesDateTime(member.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-right w-[72px]">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/sales/customers/${member.clientCompanyId}`}>View customer</Link>
-                          </DropdownMenuItem>
-                          {canManage ? (
-                            <>
-                              <DropdownMenuSeparator />
-                              {member.status === "inactive" ? (
-                                <DropdownMenuItem onClick={() => handleReactivate(member)}>
-                                  <UserCheck className="mr-2 h-3.5 w-3.5" />
-                                  Reactivate
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem
-                                  className="text-destructive focus:text-destructive"
-                                  onClick={() => setDeactivateTarget(member)}
-                                >
-                                  <UserMinus className="mr-2 h-3.5 w-3.5" />
-                                  Deactivate
-                                </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem onClick={() => handleResend(member)}>
-                                <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                                Resend invitation
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setResetTarget(member)}>
-                                <KeyRound className="mr-2 h-3.5 w-3.5" />
-                                Reset password
-                              </DropdownMenuItem>
-                            </>
-                          ) : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </div>
-          </div>
-          <DataPagination
-            page={page}
-            total={total}
-            limit={limit}
-            loadedRowCount={members.length}
-            onPageChange={setPage}
-            onLimitChange={setLimit}
-          />
-        </>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={members}
+        rowKey={(m) => m.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => void refetch()}
+        empty={{
+          icon: UsersRound,
+          title: "No team members found",
+          description:
+            "Customers invite collaborators from their client portal. Adjust filters or check back later.",
+          actionLabel: "View customers",
+          onAction: () => window.location.assign("/sales/customers"),
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: members.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
 
       <AlertDialog open={!!deactivateTarget} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
         <AlertDialogContent>

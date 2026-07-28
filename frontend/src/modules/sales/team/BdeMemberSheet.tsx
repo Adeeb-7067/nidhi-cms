@@ -36,14 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -120,6 +113,94 @@ export function BdeMemberSheet({
 
   const currentYear = new Date().getFullYear();
   const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
+
+  const targetRows = useMemo(
+    () =>
+      MONTH_NAMES.map((name, i) => ({
+        month: i + 1,
+        name,
+        target: targetByMonth.get(i + 1),
+        isCurrentMonth: i + 1 === new Date().getMonth() + 1 && targetYear === currentYear,
+      })),
+    [targetByMonth, targetYear, currentYear],
+  );
+
+  const targetColumns = useMemo<CmsColumn<(typeof targetRows)[number]>[]>(
+    () => [
+      {
+        id: "month",
+        header: "Month",
+        cell: (row) => (
+          <>
+            {row.name.slice(0, 3)}
+            {row.isCurrentMonth ? (
+              <Badge variant="secondary" className="ml-1.5 text-[9px] py-0 px-1">
+                Now
+              </Badge>
+            ) : null}
+          </>
+        ),
+      },
+      {
+        id: "revenue",
+        header: "Closed value",
+        align: "right",
+        cell: (row) =>
+          row.target?.revenueTarget != null ? (
+            formatCompactCurrency(row.target.revenueTarget)
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          ),
+      },
+      {
+        id: "deals",
+        header: "Deals",
+        align: "right",
+        cell: (row) =>
+          row.target?.dealsTarget != null ? (
+            row.target.dealsTarget
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          ),
+      },
+      {
+        id: "leads",
+        header: "Leads",
+        align: "right",
+        cell: (row) =>
+          row.target?.leadsTarget != null ? (
+            row.target.leadsTarget
+          ) : (
+            <span className="text-muted-foreground/50">—</span>
+          ),
+      },
+      ...(isAdmin
+        ? [
+            {
+              id: "actions",
+              header: "",
+              className: "w-8",
+              cell: (row: (typeof targetRows)[number]) => (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0"
+                  onClick={() => openSetTarget(row.month, row.target ?? null)}
+                  title={row.target ? "Edit target" : "Set target"}
+                >
+                  {row.target ? (
+                    <Pencil className="h-3 w-3" />
+                  ) : (
+                    <Plus className="h-3 w-3 text-muted-foreground" />
+                  )}
+                </Button>
+              ),
+            } satisfies CmsColumn<(typeof targetRows)[number]>,
+          ]
+        : []),
+    ],
+    [isAdmin, targetRows],
+  );
 
   return (
     <>
@@ -393,70 +474,15 @@ export function BdeMemberSheet({
                     {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Month</TableHead>
-                        <TableHead className="text-xs text-right">Closed value</TableHead>
-                        <TableHead className="text-xs text-right">Deals</TableHead>
-                        <TableHead className="text-xs text-right">Leads</TableHead>
-                        {isAdmin ? <TableHead className="text-xs w-8" /> : null}
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {MONTH_NAMES.map((name, i) => {
-                        const month = i + 1;
-                        const target = targetByMonth.get(month);
-                        const isCurrentMonth =
-                          month === new Date().getMonth() + 1 && targetYear === currentYear;
-                        return (
-                          <TableRow
-                            key={month}
-                            className={isCurrentMonth ? "bg-primary/5 font-medium" : undefined}
-                          >
-                            <TableCell className="text-xs py-2">
-                              {name.slice(0, 3)}
-                              {isCurrentMonth ? (
-                                <Badge variant="secondary" className="ml-1.5 text-[9px] py-0 px-1">Now</Badge>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-xs text-right tabular-nums py-2">
-                              {target?.revenueTarget != null
-                                ? formatCompactCurrency(target.revenueTarget)
-                                : <span className="text-muted-foreground/50">—</span>}
-                            </TableCell>
-                            <TableCell className="text-xs text-right tabular-nums py-2">
-                              {target?.dealsTarget != null
-                                ? target.dealsTarget
-                                : <span className="text-muted-foreground/50">—</span>}
-                            </TableCell>
-                            <TableCell className="text-xs text-right tabular-nums py-2">
-                              {target?.leadsTarget != null
-                                ? target.leadsTarget
-                                : <span className="text-muted-foreground/50">—</span>}
-                            </TableCell>
-                            {isAdmin ? (
-                              <TableCell className="py-2">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-6 w-6 p-0"
-                                  onClick={() => openSetTarget(month, target ?? null)}
-                                  title={target ? "Edit target" : "Set target"}
-                                >
-                                  {target ? (
-                                    <Pencil className="h-3 w-3" />
-                                  ) : (
-                                    <Plus className="h-3 w-3 text-muted-foreground" />
-                                  )}
-                                </Button>
-                              </TableCell>
-                            ) : null}
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                  <CmsDataTable
+                    embedded
+                    columns={targetColumns}
+                    rows={targetRows}
+                    rowKey={(row) => row.month}
+                    getRowClassName={(row) =>
+                      row.isCurrentMonth ? "bg-primary/5 font-medium hover:bg-primary/5" : undefined
+                    }
+                  />
                 )}
 
                 {!isAdmin ? (

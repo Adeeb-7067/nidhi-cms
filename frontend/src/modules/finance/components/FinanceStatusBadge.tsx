@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type { ExpenseCategory, ExpenseStatus, FinanceInvoiceStatus, IncomeStatus, BudgetStatus, LoanStatus, SubscriptionStatus, PayrollStatus, ChequeStatus } from "../types";
 import {
   EXPENSE_CATEGORY_LABELS,
@@ -143,15 +143,5 @@ export function FinanceStatusBadge({
     style = chequeStyles[v] ?? style;
   }
 
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
-        style,
-        className,
-      )}
-    >
-      {label}
-    </span>
-  );
+  return <CmsStatusChip label={label} colorClassName={style} className={className} />;
 }

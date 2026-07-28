@@ -62,6 +62,7 @@ import {
   Search,
   ScrollText,
   FolderKanban,
+  Activity,
 } from "lucide-react";
 
 import { CA_ACCESS_ROLES } from "@/modules/ca/constants";
@@ -202,12 +203,14 @@ export function getNavSections(
       items: [
         { title: "Dashboard", href: "/admin", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
         { title: "Analytics", href: "/admin/analytics", icon: BarChart3, roles: ["super_admin"], group: "Overview" },
-        { title: "All companies", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
+        { title: "Activity", href: "/admin/activity", icon: Activity, roles: ["super_admin"], group: "Overview" },
+        { title: "All clients", href: "/admin/clients", icon: Building2, roles: ["super_admin"], group: "Organization" },
         { title: "All projects", href: "/admin/projects", icon: Briefcase, roles: ["super_admin"], group: "Organization" },
-        { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
         { title: "All team", href: "/admin/employees", icon: Users, roles: ["super_admin"], group: "Organization" },
         { title: "All freelancers", href: "/freelancers/directory", icon: UsersRound, roles: ["super_admin"], group: "Organization" },
         { title: "All vendors", href: "/finance/vendors", icon: Handshake, roles: ["super_admin"], group: "Organization" },
+        { title: "Media", href: "/admin/media", icon: HardDrive, roles: ["super_admin"], group: "Organization" },
+        { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
 
 
@@ -324,7 +327,7 @@ export function getNavSections(
         { title: "Graphics", href: "/marketing/graphics", icon: Image, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Videos", href: "/marketing/videos", icon: Video, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Content", href: "/marketing/content", icon: FileText, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
-        { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: ["super_admin", "digital"], group: "Workflow" },
+        { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: [...MARKETING_ACCESS_ROLES], group: "Workflow" },
         { title: "Social analytics", href: "/marketing/social", icon: Share2, roles: ["super_admin", "digital"], group: "Analytics" },
         { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: ["super_admin", "digital"], group: "Ads" },
         { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: ["super_admin", "digital"], group: "Ads" },

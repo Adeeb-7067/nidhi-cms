@@ -173,7 +173,7 @@ function DeveloperLogsView() {
     const projects = projectsData?.projects ?? [];
     // Only digital specialists are limited to digital projects.
     // Delivery roles (developer/qa/tester/manager/freelancer) keep the full membership list.
-    let list = usesDigitalDailyLogForm(user?.role)
+    let list: Array<{ id: number; name: string; type?: string }> = usesDigitalDailyLogForm(user?.role)
       ? projects.filter((p) => p.type === "digital")
       : projects;
 
@@ -187,7 +187,7 @@ function DeveloperLogsView() {
           fromApi ?? {
             id: editingLog.projectId,
             name: editingLog.projectName || `Project #${editingLog.projectId}`,
-            type: "development" as const,
+            type: "development",
           },
         ];
       }

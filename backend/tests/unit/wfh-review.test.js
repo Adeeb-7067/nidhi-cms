@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { canUserReviewLeaveRequest } from "../../src/services/hrm/leave-approval.js";
+import { canUserReviewLeaveRequest } from "../../src/modules/hrm/services/leave-approval.js";
 
 describe("WFH review authorization (shared leave rules)", () => {
   test("assigned reporting manager may approve WFH", () => {

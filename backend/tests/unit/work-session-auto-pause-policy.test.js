@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import {
   AUTO_PAUSE_STOP_REASONS,
   closeStaleHeartbeatSessions,
-} from "../../src/services/work-sessions.service.js";
-import { shouldNotifySessionEnd, getSessionEndCopy } from "../../src/services/work-session-notifications.js";
-import { isPausedSessionResumableToday } from "../../src/services/work-session-policy.js";
+} from "../../src/modules/monitoring/services/work-sessions.service.js";
+import { shouldNotifySessionEnd, getSessionEndCopy } from "../../src/modules/monitoring/services/work-session-notifications.js";
+import { isPausedSessionResumableToday } from "../../src/modules/monitoring/services/work-session-policy.js";
 
 describe("work session auto-pause policy", () => {
   test("auto pause is limited to shift end, sleep, shutdown, and app close", () => {

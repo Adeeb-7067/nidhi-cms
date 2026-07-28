@@ -6,7 +6,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { applyIdScope, canListAllCompanies, canListAllProjects } from "../../src/services/access/list-scope.js";
+import {
+  applyIdScope,
+  canListAllCompanies,
+  canListAllProjects,
+} from "../../src/modules/access/services/list-scope.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -45,7 +49,7 @@ describe("list-scope helpers", () => {
 describe("RBAC P0 hardening contracts", () => {
   test("users controller only exposes sensitive fields to self/hr/super_admin", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/controllers/users.controller.js"),
+      join(__dirname, "../../src/modules/identity/controllers/users.controller.js"),
       "utf8",
     );
     assert.ok(src.includes("assertCanViewUserProfile"), "profile ACL required");
@@ -54,7 +58,7 @@ describe("RBAC P0 hardening contracts", () => {
 
   test("projects list scopes non-finance roles", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/controllers/projects.controller.js"),
+      join(__dirname, "../../src/modules/crm/controllers/projects.controller.js"),
       "utf8",
     );
     assert.ok(src.includes('req.user.role !== "finance"'), "finance exempt for pickers");
@@ -63,11 +67,11 @@ describe("RBAC P0 hardening contracts", () => {
 
   test("clients/companies list use company scope", () => {
     const clients = readFileSync(
-      join(__dirname, "../../src/controllers/clients.controller.js"),
+      join(__dirname, "../../src/modules/crm/controllers/clients.controller.js"),
       "utf8",
     );
     const companies = readFileSync(
-      join(__dirname, "../../src/controllers/companies.controller.js"),
+      join(__dirname, "../../src/modules/crm/controllers/companies.controller.js"),
       "utf8",
     );
     assert.ok(clients.includes("getAccessibleCompanyIds"));
@@ -77,7 +81,7 @@ describe("RBAC P0 hardening contracts", () => {
 
   test("search controller applies project/company scope", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/controllers/search.controller.js"),
+      join(__dirname, "../../src/modules/crm/controllers/search.controller.js"),
       "utf8",
     );
     assert.ok(src.includes("getAccessibleProjectIds"));
@@ -86,7 +90,7 @@ describe("RBAC P0 hardening contracts", () => {
 
   test("digital scope is membership-only (no accountManager / createdBy / task side-channels)", () => {
     const src = readFileSync(
-      join(__dirname, "../../src/services/marketing/helpers.js"),
+      join(__dirname, "../../src/modules/marketing/services/helpers.js"),
       "utf8",
     );
     const fnStart = src.indexOf("export async function getScopedDigitalUserAccess");
@@ -108,5 +112,42 @@ describe("RBAC P0 hardening contracts", () => {
       !fnBody.includes("marketingTasksTable"),
       "task assignee must not expand project access",
     );
+  });
+
+  test("createAccount asserts project membership for non–super-admin", () => {
+    const src = readFileSync(
+      join(__dirname, "../../src/modules/marketing/controllers/accounts.controller.js"),
+      "utf8",
+    );
+    assert.ok(src.includes("assertUserCanLinkMarketingProject"));
+    const createStart = src.indexOf("export async function createAccount");
+    assert.ok(createStart >= 0);
+    const createBody = src.slice(createStart, createStart + 1200);
+    assert.ok(createBody.includes("assertUserCanLinkMarketingProject"));
+  });
+
+  test("posts and approvals lists apply craft assignee visibility", () => {
+    const src = readFileSync(
+      join(__dirname, "../../src/modules/marketing/controllers/workflow.controller.js"),
+      "utf8",
+    );
+    assert.ok(src.includes("applyCraftAssigneeVisibility"));
+    const posts = src.indexOf("export async function listPosts");
+    const approvals = src.indexOf("export async function listApprovals");
+    assert.ok(posts >= 0 && approvals >= 0);
+    assert.ok(src.slice(posts, posts + 500).includes("applyCraftAssigneeVisibility"));
+    assert.ok(src.slice(approvals, approvals + 500).includes("applyCraftAssigneeVisibility"));
+  });
+
+  test("media rename/move require mutate ownership gate", () => {
+    const src = readFileSync(
+      join(__dirname, "../../src/modules/marketing/controllers/media.controller.js"),
+      "utf8",
+    );
+    assert.ok(src.includes("canMutateMarketingMediaItem"));
+    const rename = src.indexOf("export async function renameMedia");
+    const move = src.indexOf("export async function moveMedia");
+    assert.ok(src.slice(rename, rename + 600).includes("canMutateMarketingMediaItem"));
+    assert.ok(src.slice(move, move + 600).includes("canMutateMarketingMediaItem"));
   });
 });

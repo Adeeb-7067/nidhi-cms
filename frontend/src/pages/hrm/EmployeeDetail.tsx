@@ -25,8 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   HrmPageShell,
   HrmInlineEmptyState,
-  HrmTabsList,
-  HrmTabsTrigger,
   HrmField,
   HrmAttendanceBadge,
   HrmWorkflowBadge,
@@ -34,6 +32,7 @@ import {
   HrmChartCard,
   HrmFilterBar,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import {
   ATTENDANCE_STATUS_LABELS,
   PRIMARY_ATTENDANCE_STATUSES,
@@ -376,19 +375,24 @@ export default function HrmEmployeeDetailPage() {
 
         {employee ? <EmployeeProfileHero employee={employee} /> : null}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <HrmTabsList>
-            <HrmTabsTrigger value="overview">Overview</HrmTabsTrigger>
-            <HrmTabsTrigger value="file">Employee file</HrmTabsTrigger>
-            {showHrmTabs ? (
-              <>
-                <HrmTabsTrigger value="attendance">Attendance</HrmTabsTrigger>
-                <HrmTabsTrigger value="leave">Leaves</HrmTabsTrigger>
-                <HrmTabsTrigger value="payroll">Payroll</HrmTabsTrigger>
-              </>
-            ) : null}
-            <HrmTabsTrigger value="work">Work activity</HrmTabsTrigger>
-          </HrmTabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            items={[
+              { value: "overview", label: "Overview" },
+              { value: "file", label: "Employee file" },
+              ...(showHrmTabs
+                ? [
+                    { value: "attendance", label: "Attendance" },
+                    { value: "leave", label: "Leaves" },
+                    { value: "payroll", label: "Payroll" },
+                  ]
+                : []),
+              { value: "work", label: "Work activity" },
+            ]}
+          />
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
 
           <TabsContent value="overview" className="space-y-4 mt-0">
             {overview && employee ? (
@@ -775,6 +779,7 @@ export default function HrmEmployeeDetailPage() {
             )}
           </TabsContent>
         </Tabs>
+        </div>
       </HrmPageShell>
     </StaffProfileAccessGate>
   );

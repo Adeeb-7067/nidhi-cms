@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type {
   TaskStatus,
   TaskPriority,
@@ -104,14 +104,10 @@ export function MarketingStatusBadge({
 }) {
   const resolved = status ?? value ?? "";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
-        getStyle(variant, resolved),
-        className,
-      )}
-    >
-      {getLabel(variant, resolved)}
-    </span>
+    <CmsStatusChip
+      label={getLabel(variant, resolved)}
+      colorClassName={getStyle(variant, resolved)}
+      className={className}
+    />
   );
 }

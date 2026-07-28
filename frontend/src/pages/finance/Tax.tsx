@@ -3,15 +3,7 @@ import { Percent, Download, FileSpreadsheet, Plus, Pencil, Trash2 } from "lucide
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsDataTable, CmsChipTabs, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -81,6 +73,28 @@ export default function TaxPage() {
     );
   }
 
+  const summaryColumns: CmsColumn<(typeof summaries)[number]>[] = [
+    { id: "period", header: "Period", cell: (row) => <span className="font-medium">{row.period}</span> },
+    { id: "gst-collected", header: "GST Collected", align: "right", cell: (row) => <span className="tabular-nums text-emerald-700">{formatCurrency(row.gstCollected)}</span> },
+    { id: "gst-input-credit", header: "GST Input Credit", align: "right", cell: (row) => <span className="tabular-nums text-red-700">{formatCurrency(row.gstPaid)}</span> },
+    { id: "net-gst", header: "Net GST", align: "right", cell: (row) => <span className="font-medium tabular-nums">{formatCurrency(row.netGst)}</span> },
+    { id: "deposited", header: "Deposited", align: "right", cell: (row) => <span className="tabular-nums">{formatCurrency(row.gstDeposited ?? 0)}</span> },
+    { id: "still-due", header: "Still due", align: "right", cell: (row) => <span className="font-medium tabular-nums">{formatCurrency(row.gstPayable ?? Math.max(0, (row.netGst ?? 0) - (row.gstDeposited ?? 0)))}</span> },
+    { id: "tds", header: "TDS Deducted", align: "right", cell: (row) => <span className="tabular-nums">{formatCurrency(row.tdsDeducted)}</span> },
+    { id: "export", header: "Export", align: "right", cell: (row) => <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.success(`${row.period} export started`)}><Download className="h-3 w-3" /></Button> },
+  ];
+  const depositColumns: CmsColumn<TaxDeposit>[] = [
+    { id: "type", header: "Type", cell: (d) => <span className="uppercase font-medium">{d.type}</span> },
+    { id: "period", header: "Period", cell: (d) => <span className="font-mono">{d.period}</span> },
+    { id: "challan", header: "Challan", cell: (d) => <span className="text-muted-foreground">{d.challanNumber ?? "—"}</span> },
+    { id: "deposited", header: "Deposited", cell: (d) => format(new Date(d.depositedAt), "MMM d, yyyy") },
+    { id: "amount", header: "Amount", align: "right", cell: (d) => <span className="font-medium tabular-nums">{formatCurrency(d.amount)}</span> },
+    ...(canEdit || canDelete ? [{
+      id: "actions", header: "Actions", align: "right" as const,
+      cell: (d: TaxDeposit) => <div className="flex justify-end gap-1">{canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditDeposit(d); setDepositModalOpen(true); }} title="Edit"><Pencil className="h-3.5 w-3.5" /></Button>}{canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(d)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>}</div>,
+    }] : []),
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
@@ -109,17 +123,41 @@ export default function TaxPage() {
 
       <PortalKpiGrid
         items={[
-          { title: `GST collected (${latest?.period ?? "—"})`, value: formatCurrency(latest?.gstCollected ?? 0), icon: Percent, accent: "green", delay: 0 },
-          { title: `GST paid (${latest?.period ?? "—"})`, value: formatCurrency(latest?.gstPaid ?? 0), icon: Percent, accent: "red", delay: 1 },
-          { title: "Net GST payable", value: formatCurrency(latest?.netGst ?? 0), icon: Percent, accent: "amber", delay: 2 },
-          { title: "TDS deposited", value: formatCurrency(latest?.tdsDeposited ?? 0), icon: Percent, accent: "blue", delay: 3 },
+          {
+            title: `GST collected (${latest?.period ?? "—"})`,
+            value: formatCurrency(latest?.gstCollected ?? 0),
+            icon: Percent,
+            accent: "green",
+            delay: 0,
+          },
+          {
+            title: `GST input credit (${latest?.period ?? "—"})`,
+            value: formatCurrency(latest?.gstPaid ?? 0),
+            icon: Percent,
+            accent: "blue",
+            delay: 1,
+          },
+          {
+            title: (latest?.netGst ?? 0) >= 0 ? "Net GST to pay" : "Net GST credit",
+            value: formatCurrency(Math.abs(latest?.netGst ?? 0)),
+            icon: Percent,
+            accent: (latest?.netGst ?? 0) > 0 ? "amber" : "green",
+            delay: 2,
+          },
+          {
+            title: "Still due after deposits",
+            value: formatCurrency(latest?.gstPayable ?? Math.max(0, (latest?.netGst ?? 0) - (latest?.gstDeposited ?? 0))),
+            icon: Percent,
+            accent: (latest?.gstPayable ?? 0) > 0 ? "red" : "green",
+            delay: 3,
+          },
         ]}
       />
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <ChartGridCell colSpan={8}>
-          <ChartPanel title="GST collected vs paid" description="Monthly GST movement" icon={Percent} accent="violet">
-            <FinanceDualLineChart data={gstChartData} line1Key="collected" line2Key="paid" line1Label="GST Collected" line2Label="GST Paid" line1Color="#22c55e" line2Color="#ef4444" />
+          <ChartPanel title="GST collected vs input credit" description="Monthly GST movement" icon={Percent} accent="violet">
+            <FinanceDualLineChart data={gstChartData} line1Key="collected" line2Key="paid" line1Label="GST Collected" line2Label="Input Credit" line1Color="#22c55e" line2Color="#3b82f6" />
           </ChartPanel>
         </ChartGridCell>
         <ChartGridCell colSpan={4}>
@@ -136,99 +174,21 @@ export default function TaxPage() {
 
       <FinanceFilterBar onExport={() => toast.success("Tax report export started")} />
 
-      <Tabs value={periodTab} onValueChange={(v) => setPeriodTab(v as TaxPeriodType)}>
-        <TabsList className="h-9">
-          <TabsTrigger value="monthly" className="text-xs">Monthly</TabsTrigger>
-          <TabsTrigger value="quarterly" className="text-xs">Quarterly</TabsTrigger>
-          <TabsTrigger value="annual" className="text-xs">Annual</TabsTrigger>
-        </TabsList>
+      <CmsChipTabs
+        value={periodTab}
+        onValueChange={(v) => setPeriodTab(v as TaxPeriodType)}
+        items={[
+          { value: "monthly", label: "Monthly" },
+          { value: "quarterly", label: "Quarterly" },
+          { value: "annual", label: "Annual" },
+        ]}
+      />
 
-        <TabsContent value={periodTab} className="mt-4">
-          <div className="rounded-xl border bg-card overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Period</TableHead>
-                  <TableHead className="text-xs text-right">GST Collected</TableHead>
-                  <TableHead className="text-xs text-right">GST Paid</TableHead>
-                  <TableHead className="text-xs text-right">Net GST</TableHead>
-                  <TableHead className="text-xs text-right">TDS Deducted</TableHead>
-                  <TableHead className="text-xs text-right">TDS Deposited</TableHead>
-                  <TableHead className="text-xs text-right">Export</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {summaries.map((row) => (
-                  <TableRow key={row.periodKey}>
-                    <TableCell className="text-xs font-medium">{row.period}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(row.gstCollected)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums text-red-700">{formatCurrency(row.gstPaid)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums font-medium">{formatCurrency(row.netGst)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(row.tdsDeducted)}</TableCell>
-                    <TableCell className="text-xs text-right tabular-nums">{formatCurrency(row.tdsDeposited)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => toast.success(`${row.period} export started`)}>
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </TabsContent>
-      </Tabs>
+      <CmsDataTable columns={summaryColumns} rows={summaries} rowKey={(row) => row.periodKey} />
 
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tax deposits</p>
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Period</TableHead>
-                <TableHead className="text-xs">Challan</TableHead>
-                <TableHead className="text-xs">Deposited</TableHead>
-                <TableHead className="text-xs text-right">Amount</TableHead>
-                {(canEdit || canDelete) && <TableHead className="text-xs text-right">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deposits.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="text-xs uppercase font-medium">{d.type}</TableCell>
-                  <TableCell className="text-xs font-mono">{d.period}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{d.challanNumber ?? "—"}</TableCell>
-                  <TableCell className="text-xs">{format(new Date(d.depositedAt), "MMM d, yyyy")}</TableCell>
-                  <TableCell className="text-xs text-right tabular-nums font-medium">{formatCurrency(d.amount)}</TableCell>
-                  {(canEdit || canDelete) && (
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {canEdit && (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditDeposit(d); setDepositModalOpen(true); }} title="Edit">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {canDelete && (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(d)} title="Delete">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-              {deposits.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={(canEdit || canDelete) ? 6 : 5} className="text-center text-xs text-muted-foreground py-6">
-                    No tax deposits recorded yet.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+        <CmsDataTable columns={depositColumns} rows={deposits} rowKey={(d) => d.id} empty={{ title: "No tax deposits recorded yet." }} />
       </div>
 
       <TaxDepositFormModal

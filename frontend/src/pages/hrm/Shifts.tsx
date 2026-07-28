@@ -24,10 +24,9 @@ import {
   HrmField,
   HrmFilterRow,
   HrmQueryErrorPanel,
-  HrmTabsList,
-  HrmTabsTrigger,
   portalActionButtonClass,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { LEGACY_EMPLOYEE_LABELS } from "@/modules/hrm/hrm-legacy-labels";
@@ -77,6 +76,7 @@ export default function HrmShiftsPage() {
   const [search, setSearch] = useState("");
   const [departmentId, setDepartmentId] = useState<string>("all");
   const [assigningUserId, setAssigningUserId] = useState<number | null>(null);
+  const [shiftTab, setShiftTab] = useState("employees");
 
   const { data: tplData, isLoading: tplLoading } = useHrmShiftTemplates();
   const { data: assignData, isLoading: assignLoading } = useHrmShiftAssignments();
@@ -383,11 +383,16 @@ export default function HrmShiftsPage() {
 
         <HrmPageKpiRow items={kpiItems} loading={pageLoading} />
 
-        <Tabs defaultValue="employees" className="space-y-4">
-          <HrmTabsList>
-            <HrmTabsTrigger value="employees">Employee assignments</HrmTabsTrigger>
-            <HrmTabsTrigger value="templates">Shift templates</HrmTabsTrigger>
-          </HrmTabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={shiftTab}
+            onValueChange={setShiftTab}
+            items={[
+              { value: "employees", label: "Employee assignments" },
+              { value: "templates", label: "Shift templates" },
+            ]}
+          />
+          <Tabs value={shiftTab} onValueChange={setShiftTab}>
 
           <TabsContent value="employees" className="space-y-4">
             {staffError ? (
@@ -453,6 +458,7 @@ export default function HrmShiftsPage() {
             </PortalTablePanel>
           </TabsContent>
         </Tabs>
+        </div>
 
         <Dialog open={tplOpen} onOpenChange={setTplOpen}>
           <DialogContent>

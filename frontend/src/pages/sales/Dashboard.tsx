@@ -24,16 +24,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSalesDashboard, useSalesRevenueTrend, useListFollowUps, useSalesTeam } from "@/api/sales";
 import { formatCompactCurrency, formatCurrency, formatLeadSourceLabel } from "@/modules/sales/constants";
 import {
@@ -193,13 +185,15 @@ export default function SalesDashboard() {
       <motion.div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview KPIs</p>
-          <Tabs value={leadPeriod} onValueChange={(v) => setLeadPeriod(v as typeof leadPeriod)}>
-            <TabsList className="h-7">
-              <TabsTrigger value="today" className="text-[10px] px-2 h-6">Today</TabsTrigger>
-              <TabsTrigger value="week" className="text-[10px] px-2 h-6">Week</TabsTrigger>
-              <TabsTrigger value="month" className="text-[10px] px-2 h-6">Month</TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <CmsChipTabs
+            value={leadPeriod}
+            onValueChange={(v) => setLeadPeriod(v as typeof leadPeriod)}
+            items={[
+              { value: "today", label: "Today" },
+              { value: "week", label: "Week" },
+              { value: "month", label: "Month" },
+            ]}
+          />
         </div>
         {dashLoading ? (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -275,13 +269,15 @@ export default function SalesDashboard() {
             accent="emerald"
             viewAllHref="/sales/reports"
             headerExtra={
-              <Tabs value={trendPeriod} onValueChange={(v) => setTrendPeriod(v as typeof trendPeriod)}>
-                <TabsList className="h-6">
-                  <TabsTrigger value="week" className="text-[10px] px-2 h-5">Week</TabsTrigger>
-                  <TabsTrigger value="month" className="text-[10px] px-2 h-5">Month</TabsTrigger>
-                  <TabsTrigger value="year" className="text-[10px] px-2 h-5">Year</TabsTrigger>
-                </TabsList>
-              </Tabs>
+              <CmsChipTabs
+                value={trendPeriod}
+                onValueChange={(v) => setTrendPeriod(v as typeof trendPeriod)}
+                items={[
+                  { value: "week", label: "Week" },
+                  { value: "month", label: "Month" },
+                  { value: "year", label: "Year" },
+                ]}
+              />
             }
           >
             {trendLoading ? (
@@ -340,33 +336,52 @@ export default function SalesDashboard() {
             {(() => {
               const members = [...(teamData?.team ?? [])].sort((a, b) => b.revenue - a.revenue).slice(0, 5);
               if (!members.length) return <NoDataPlaceholder label="No team members found" />;
+              const ranked = members.map((m, i) => ({ ...m, rank: i + 1 }));
               return (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs w-8">#</TableHead>
-                      <TableHead className="text-xs">Executive</TableHead>
-                      <TableHead className="text-xs text-right">Revenue</TableHead>
-                      <TableHead className="text-xs text-right">Deals</TableHead>
-                      <TableHead className="text-xs text-right">Follow-ups</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {members.map((m, i) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="text-xs font-bold text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell>
-                          <Link href={`/sales/team/${m.id}/profile`}>
-                            <ExecutiveAvatar name={m.name} />
-                          </Link>
-                        </TableCell>
-                        <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(m.revenue)}</TableCell>
-                        <TableCell className="text-xs text-right">{m.dealsClosed}</TableCell>
-                        <TableCell className="text-xs text-right text-amber-600">{m.pendingFollowUps}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <CmsDataTable
+                  columns={[
+                    {
+                      id: "rank",
+                      header: "#",
+                      headerClassName: "w-8",
+                      cell: (m) => (
+                        <span className="font-bold text-muted-foreground">{m.rank}</span>
+                      ),
+                    },
+                    {
+                      id: "executive",
+                      header: "Executive",
+                      cell: (m) => (
+                        <Link href={`/sales/team/${m.id}/profile`}>
+                          <ExecutiveAvatar name={m.name} />
+                        </Link>
+                      ),
+                    },
+                    {
+                      id: "revenue",
+                      header: "Revenue",
+                      align: "right",
+                      cell: (m) => (
+                        <span className="font-medium tabular-nums">{formatCurrency(m.revenue)}</span>
+                      ),
+                    },
+                    {
+                      id: "deals",
+                      header: "Deals",
+                      align: "right",
+                      cell: (m) => m.dealsClosed,
+                    },
+                    {
+                      id: "followups",
+                      header: "Follow-ups",
+                      align: "right",
+                      cell: (m) => <span className="text-amber-600">{m.pendingFollowUps}</span>,
+                    },
+                  ] satisfies CmsColumn<(typeof ranked)[number]>[]}
+                  rows={ranked}
+                  rowKey={(m) => m.id}
+                  embedded
+                />
               );
             })()}
           </ChartPanel>
@@ -381,36 +396,48 @@ export default function SalesDashboard() {
         ) : followUpRows.length === 0 ? (
           <SalesEmptyState title="No follow-ups scheduled" description="Create follow-ups from a lead's detail page." />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Lead</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Follow-up date</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {followUpRows.map((fu) => (
-                <TableRow key={fu.id}>
-                  <TableCell>
-                    <p className="text-xs font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</p>
-                  </TableCell>
-                  <TableCell className="text-xs capitalize">{fu.type}</TableCell>
-                  <TableCell className="text-xs">{format(new Date(fu.scheduledAt), "MMM d, h:mm a")}</TableCell>
-                  <TableCell><SalesStatusBadge variant="followUp" value={fu.status} /></TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/leads/${fu.leadId}`}>
-                        Open <ArrowRight className="h-3 w-3 ml-1 inline" />
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <CmsDataTable
+            columns={[
+              {
+                id: "lead",
+                header: "Lead",
+                cell: (fu) => (
+                  <p className="font-medium">{fu.leadName ?? `Lead #${fu.leadId}`}</p>
+                ),
+              },
+              {
+                id: "type",
+                header: "Type",
+                cell: (fu) => <span className="capitalize">{fu.type}</span>,
+              },
+              {
+                id: "date",
+                header: "Follow-up date",
+                cell: (fu) => format(new Date(fu.scheduledAt), "MMM d, h:mm a"),
+              },
+              {
+                id: "status",
+                header: "Status",
+                chip: true,
+                cell: (fu) => <SalesStatusBadge variant="followUp" value={fu.status} />,
+              },
+              {
+                id: "action",
+                header: "Action",
+                align: "right",
+                cell: (fu) => (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                    <Link href={`/sales/leads/${fu.leadId}`}>
+                      Open <ArrowRight className="h-3 w-3 ml-1 inline" />
+                    </Link>
+                  </Button>
+                ),
+              },
+            ]}
+            rows={followUpRows}
+            rowKey={(fu) => fu.id}
+            embedded
+          />
         )}
       </ChartPanel>
 
@@ -434,34 +461,47 @@ export default function SalesDashboard() {
         ) : (dash?.overdueByCustomer ?? []).length === 0 ? (
           <SalesEmptyState title="No overdue balances" description="Every client is current on their payments." />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="text-xs">Client</TableHead>
-                <TableHead className="text-xs">Contact</TableHead>
-                <TableHead className="text-xs text-right">Overdue amount</TableHead>
-                <TableHead className="text-xs text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(dash?.overdueByCustomer ?? []).map((row) => (
-                <TableRow key={row.customerId}>
-                  <TableCell className="text-xs font-medium">{row.companyName}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{row.contactPerson ?? "—"}</TableCell>
-                  <TableCell className="text-xs text-right font-semibold text-destructive tabular-nums">
+          <CmsDataTable
+            columns={[
+              {
+                id: "client",
+                header: "Client",
+                cell: (row) => <span className="font-medium">{row.companyName}</span>,
+              },
+              {
+                id: "contact",
+                header: "Contact",
+                cell: (row) => (
+                  <span className="text-muted-foreground">{row.contactPerson ?? "—"}</span>
+                ),
+              },
+              {
+                id: "amount",
+                header: "Overdue amount",
+                align: "right",
+                cell: (row) => (
+                  <span className="font-semibold text-destructive tabular-nums">
                     {formatCurrency(row.overdueAmount)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                      <Link href={`/sales/customers/${row.customerId}`}>
-                        Open <ArrowRight className="h-3 w-3 ml-1 inline" />
-                      </Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                ),
+              },
+              {
+                id: "action",
+                header: "Action",
+                align: "right",
+                cell: (row) => (
+                  <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
+                    <Link href={`/sales/customers/${row.customerId}`}>
+                      Open <ArrowRight className="h-3 w-3 ml-1 inline" />
+                    </Link>
+                  </Button>
+                ),
+              },
+            ]}
+            rows={dash?.overdueByCustomer ?? []}
+            rowKey={(row) => row.customerId}
+            embedded
+          />
         )}
       </ChartPanel>
     </PortalPageShell>

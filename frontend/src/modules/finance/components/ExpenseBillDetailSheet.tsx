@@ -9,14 +9,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { FinanceStatusBadge } from "./FinanceStatusBadge";
 import { GstClassificationBadge } from "./GstClassificationBadge";
 import {
@@ -36,6 +29,56 @@ type Props = {
   onEdit?: (expense: Expense) => void;
   onPayRemaining?: (expense: Expense) => void;
 };
+
+type ExpensePaymentRow = {
+  id: number;
+  date: string;
+  recordedByName?: string | null;
+  receiptNumber: string;
+  reference?: string | null;
+  mode: keyof typeof PAYMENT_MODE_LABELS | string;
+  amount: number;
+};
+
+const paymentColumns: CmsColumn<ExpensePaymentRow>[] = [
+  {
+    id: "date",
+    header: "Date",
+    cell: (p) => (
+      <>
+        <div>{format(new Date(p.date), "MMM d, yyyy")}</div>
+        {p.recordedByName ? (
+          <div className="text-[10px] text-muted-foreground">{p.recordedByName}</div>
+        ) : null}
+      </>
+    ),
+  },
+  {
+    id: "receipt",
+    header: "Receipt",
+    cell: (p) => (
+      <>
+        <div className="text-[10px] font-mono">{p.receiptNumber}</div>
+        {p.reference && p.reference !== p.receiptNumber ? (
+          <div className="text-muted-foreground truncate max-w-[120px]" title={p.reference}>
+            {p.reference}
+          </div>
+        ) : null}
+      </>
+    ),
+  },
+  {
+    id: "mode",
+    header: "Mode",
+    cell: (p) => PAYMENT_MODE_LABELS[p.mode as keyof typeof PAYMENT_MODE_LABELS] ?? p.mode,
+  },
+  {
+    id: "amount",
+    header: "Amount",
+    align: "right",
+    cell: (p) => <span className="font-medium tabular-nums">{formatCurrency(p.amount)}</span>,
+  },
+];
 
 function moneyLine(label: string, value: number, emphasize?: "due" | "paid" | "bill") {
   const tone =
@@ -249,42 +292,12 @@ export function ExpenseBillDetailSheet({
                       : "Payments appear here after approval when cash is recorded."}
                   </p>
                 ) : (
-                  <div className="rounded-lg border overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/30">
-                          <TableHead className="text-[10px]">Date</TableHead>
-                          <TableHead className="text-[10px]">Receipt</TableHead>
-                          <TableHead className="text-[10px]">Mode</TableHead>
-                          <TableHead className="text-[10px] text-right">Amount</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {payments.map((p) => (
-                          <TableRow key={p.id}>
-                            <TableCell className="text-xs py-2">
-                              <div>{format(new Date(p.date), "MMM d, yyyy")}</div>
-                              {p.recordedByName ? (
-                                <div className="text-[10px] text-muted-foreground">{p.recordedByName}</div>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-[10px] font-mono py-2">
-                              <div>{p.receiptNumber}</div>
-                              {p.reference && p.reference !== p.receiptNumber ? (
-                                <div className="text-muted-foreground truncate max-w-[120px]" title={p.reference}>
-                                  {p.reference}
-                                </div>
-                              ) : null}
-                            </TableCell>
-                            <TableCell className="text-xs py-2">{PAYMENT_MODE_LABELS[p.mode] ?? p.mode}</TableCell>
-                            <TableCell className="text-xs text-right font-medium tabular-nums py-2">
-                              {formatCurrency(p.amount)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                  <CmsDataTable
+                    embedded
+                    columns={paymentColumns}
+                    rows={payments}
+                    rowKey={(p) => p.id}
+                  />
                 )}
               </div>
             </>

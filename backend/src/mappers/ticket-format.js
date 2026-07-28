@@ -1,7 +1,7 @@
 import { usersTable, projectsTable } from "../models/schema/index.js";
 import { IdLookupCache } from "../lib/lookup-cache.js";
 import { toIso } from "../utils/mongo-list.js";
-import { ticketAudienceFromRole } from "../services/ticket-support.js";
+import { ticketAudienceFromRole } from "../modules/work/services/ticket-support.js";
 async function formatTicketRows(rows) {
   const users = new IdLookupCache(async (ids) => {
     const rows2 = await usersTable

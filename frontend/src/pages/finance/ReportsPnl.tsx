@@ -15,15 +15,8 @@ import { Download, TrendingUp, BarChart3, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { formatCurrency, formatCompactCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -36,6 +29,7 @@ import { toast } from "sonner";
 
 export default function FinanceReportsPnlPage() {
   const [reportTab, setReportTab] = useState("pnl");
+  const [pnlPeriod, setPnlPeriod] = useState("monthly");
   const { data: pnlData, isLoading: pnlLoading, isError: pnlError, refetch: refetchPnl } = useFinancePnl();
   const { data: profitabilityData, isLoading: profitLoading } = useFinanceProfitability(reportTab === "profitability");
   const { data: revenueTrendData, isLoading: revenueLoading } = useFinanceRevenueTrend(6, reportTab === "revenue");
@@ -59,6 +53,25 @@ export default function FinanceReportsPnlPage() {
   const projectProfitability = profitabilityData?.projects ?? [];
   const departmentProfitability = profitabilityData?.departments ?? [];
   const revenueTrend = revenueTrendData?.trend ?? [];
+  const monthlyColumns: CmsColumn<(typeof pnlMonthly)[number]>[] = [
+    { id: "month", header: "Month", cell: (r) => <span className="font-medium">{r.month}</span> },
+    { id: "income", header: "Income", align: "right", cell: (r) => <span className="tabular-nums text-emerald-700">{formatCurrency(r.income)}</span> },
+    { id: "expenses", header: "Expenses", align: "right", cell: (r) => <span className="tabular-nums text-red-700">{formatCurrency(r.expenses)}</span> },
+    { id: "profit", header: "Net Profit", align: "right", cell: (r) => <span className="font-semibold tabular-nums">{formatCurrency(r.profit)}</span> },
+  ];
+  const yearlyColumns: CmsColumn<(typeof pnlYearly)[number]>[] = [
+    { id: "year", header: "Financial Year", cell: (r) => <span className="font-medium">{r.year}</span> },
+    { id: "income", header: "Income", align: "right", cell: (r) => <span className="tabular-nums">{formatCurrency(r.income)}</span> },
+    { id: "expenses", header: "Expenses", align: "right", cell: (r) => <span className="tabular-nums">{formatCurrency(r.expenses)}</span> },
+    { id: "profit", header: "Net Profit", align: "right", cell: (r) => <span className="font-semibold tabular-nums text-emerald-700">{formatCurrency(r.profit)}</span> },
+    { id: "margin", header: "Margin", align: "right", cell: (r) => <span className="tabular-nums">{r.income > 0 ? ((r.profit / r.income) * 100).toFixed(1) : "0.0"}%</span> },
+  ];
+  const departmentColumns: CmsColumn<(typeof departmentProfitability)[number]>[] = [
+    { id: "department", header: "Department", cell: (d) => d.department },
+    { id: "revenue", header: "Revenue", align: "right", cell: (d) => <span className="tabular-nums">{formatCurrency(d.revenue)}</span> },
+    { id: "cost", header: "Cost", align: "right", cell: (d) => <span className="tabular-nums">{formatCurrency(d.cost)}</span> },
+    { id: "profit", header: "Profit", align: "right", cell: (d) => <span className="font-medium tabular-nums text-emerald-700">{formatCurrency(d.revenue - d.cost)}</span> },
+  ];
 
   return (
     <PortalPageShell>
@@ -84,20 +97,29 @@ export default function FinanceReportsPnlPage() {
         }
       />
 
-      <Tabs value={reportTab} onValueChange={setReportTab}>
-        <TabsList className="h-9">
-          <TabsTrigger value="pnl" className="text-xs">Profit & Loss</TabsTrigger>
-          <TabsTrigger value="profitability" className="text-xs">Profitability</TabsTrigger>
-          <TabsTrigger value="revenue" className="text-xs">Revenue analytics</TabsTrigger>
-        </TabsList>
+      <div className="space-y-4">
+        <CmsChipTabs
+          value={reportTab}
+          onValueChange={setReportTab}
+          items={[
+            { value: "pnl", label: "Profit & Loss" },
+            { value: "profitability", label: "Profitability" },
+            { value: "revenue", label: "Revenue analytics" },
+          ]}
+        />
+        <Tabs value={reportTab} onValueChange={setReportTab}>
 
-        <TabsContent value="pnl" className="mt-4 space-y-4">
-          <Tabs defaultValue="monthly">
-            <TabsList className="h-8">
-              <TabsTrigger value="monthly" className="text-xs">Monthly</TabsTrigger>
-              <TabsTrigger value="yearly" className="text-xs">Yearly</TabsTrigger>
-            </TabsList>
-            <TabsContent value="monthly" className="mt-3">
+        <TabsContent value="pnl" className="mt-0 space-y-4">
+          <CmsChipTabs
+            value={pnlPeriod}
+            onValueChange={setPnlPeriod}
+            items={[
+              { value: "monthly", label: "Monthly" },
+              { value: "yearly", label: "Yearly" },
+            ]}
+          />
+          {pnlPeriod === "monthly" ? (
+            <>
               <ChartGridCell colSpan={12}>
                 <ChartPanel title="Monthly P&L" description="Income, expenses, and net profit" icon={BarChart3} accent="emerald" headerExtra={
                   <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={exportPdf}><Download className="h-3 w-3 mr-1" />PDF</Button>
@@ -105,59 +127,14 @@ export default function FinanceReportsPnlPage() {
                   <FinanceDualLineChart data={pnlMonthly.map((r) => ({ month: r.month, income: r.income, expenses: r.expenses }))} line1Key="income" line2Key="expenses" line1Label="Income" line2Label="Expenses" />
                 </ChartPanel>
               </ChartGridCell>
-              <div className="rounded-xl border bg-card overflow-hidden mt-3">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Month</TableHead>
-                      <TableHead className="text-xs text-right">Income</TableHead>
-                      <TableHead className="text-xs text-right">Expenses</TableHead>
-                      <TableHead className="text-xs text-right">Net Profit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pnlMonthly.map((r) => (
-                      <TableRow key={r.month}>
-                        <TableCell className="text-xs font-medium">{r.month}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums text-emerald-700">{formatCurrency(r.income)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums text-red-700">{formatCurrency(r.expenses)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums font-semibold">{formatCurrency(r.profit)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-            <TabsContent value="yearly" className="mt-3">
-              <div className="rounded-xl border bg-card overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="text-xs">Financial Year</TableHead>
-                      <TableHead className="text-xs text-right">Income</TableHead>
-                      <TableHead className="text-xs text-right">Expenses</TableHead>
-                      <TableHead className="text-xs text-right">Net Profit</TableHead>
-                      <TableHead className="text-xs text-right">Margin</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {pnlYearly.map((r) => (
-                      <TableRow key={r.year}>
-                        <TableCell className="text-xs font-medium">{r.year}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{formatCurrency(r.income)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{formatCurrency(r.expenses)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums font-semibold text-emerald-700">{formatCurrency(r.profit)}</TableCell>
-                        <TableCell className="text-xs text-right tabular-nums">{r.income > 0 ? ((r.profit / r.income) * 100).toFixed(1) : "0.0"}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </TabsContent>
-          </Tabs>
+              <CmsDataTable className="mt-3" columns={monthlyColumns} rows={pnlMonthly} rowKey={(r) => r.month} />
+            </>
+          ) : (
+            <CmsDataTable columns={yearlyColumns} rows={pnlYearly} rowKey={(r) => r.year} />
+          )}
         </TabsContent>
 
-        <TabsContent value="profitability" className="mt-4 space-y-4">
+        <TabsContent value="profitability" className="mt-0 space-y-4">
           {profitLoading ? (
             <PageChartGridSkeleton count={2} />
           ) : (
@@ -178,28 +155,7 @@ export default function FinanceReportsPnlPage() {
                 </div>
               </ChartPanel>
               <ChartPanel title="Department-wise profitability" icon={BarChart3} accent="violet">
-                <div className="rounded-xl border overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Department</TableHead>
-                        <TableHead className="text-xs text-right">Revenue</TableHead>
-                        <TableHead className="text-xs text-right">Cost</TableHead>
-                        <TableHead className="text-xs text-right">Profit</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {departmentProfitability.map((d) => (
-                        <TableRow key={d.department}>
-                          <TableCell className="text-xs">{d.department}</TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.revenue)}</TableCell>
-                          <TableCell className="text-xs text-right tabular-nums">{formatCurrency(d.cost)}</TableCell>
-                          <TableCell className="text-xs text-right tabular-nums font-medium text-emerald-700">{formatCurrency(d.revenue - d.cost)}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                <CmsDataTable columns={departmentColumns} rows={departmentProfitability} rowKey={(d) => d.department} />
               </ChartPanel>
             </div>
           )}
@@ -230,6 +186,7 @@ export default function FinanceReportsPnlPage() {
           )}
         </TabsContent>
       </Tabs>
+      </div>
     </PortalPageShell>
   );
 }

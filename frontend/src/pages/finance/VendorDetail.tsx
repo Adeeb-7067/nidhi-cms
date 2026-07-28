@@ -19,14 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -135,6 +128,151 @@ export default function VendorDetailPage() {
   }
 
   const websiteHref = ensureHttpUrl(vendor.website);
+
+  const invoiceColumns: CmsColumn<(typeof invoices)[number]>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (invoice) => (
+        <span className="whitespace-nowrap">{format(new Date(invoice.invoiceDate), "MMM d, yyyy")}</span>
+      ),
+    },
+    {
+      id: "number",
+      header: "Invoice no.",
+      cell: (invoice) => <span className="font-mono">{invoice.invoiceNumber}</span>,
+    },
+    {
+      id: "gst",
+      header: "GST",
+      chip: true,
+      cell: (invoice) => (
+        <>
+          <GstClassificationBadge gstEnabled={invoice.gstEnabled} />
+          {invoice.gstEnabled ? (
+            <span className="ml-1 text-muted-foreground">{invoice.gstRate}%</span>
+          ) : null}
+        </>
+      ),
+    },
+    {
+      id: "taxable",
+      header: "Taxable",
+      align: "right",
+      cell: (invoice) => <span className="tabular-nums">{formatCurrency(invoice.taxableAmount)}</span>,
+    },
+    {
+      id: "inputGst",
+      header: "Input GST",
+      align: "right",
+      cell: (invoice) => (
+        <span className="tabular-nums">
+          {invoice.gstEnabled ? formatCurrency(invoice.gstAmount) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "total",
+      header: "Total",
+      align: "right",
+      cell: (invoice) => (
+        <span className="tabular-nums font-medium">{formatCurrency(invoice.totalAmount)}</span>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (invoice) => <FinanceStatusBadge variant="invoice" value={invoice.status} />,
+    },
+    ...(canEdit || canDelete
+      ? [
+          {
+            id: "actions",
+            header: "",
+            headerClassName: "w-[80px]",
+            cell: (invoice: (typeof invoices)[number]) => (
+              <div className="flex items-center gap-1">
+                {canEdit && invoice.status !== "cancelled" && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => openEditInvoice(invoice)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {canDelete && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive hover:text-destructive"
+                    onClick={() => setDeleteInvoiceTarget(invoice)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            ),
+          } satisfies CmsColumn<(typeof invoices)[number]>,
+        ]
+      : []),
+  ];
+
+  const ledgerColumns: CmsColumn<(typeof entries)[number]>[] = [
+    {
+      id: "date",
+      header: "Date",
+      cell: (entry) => (
+        <span className="whitespace-nowrap">{format(new Date(entry.date), "MMM d, yyyy")}</span>
+      ),
+    },
+    { id: "description", header: "Description", cell: (entry) => entry.description },
+    {
+      id: "reference",
+      header: "Reference",
+      cell: (entry) =>
+        entry.referenceHref ? (
+          <Link
+            href={entry.referenceHref}
+            className="font-mono text-primary hover:underline inline-flex items-center gap-0.5"
+          >
+            {entry.reference} <ArrowRight className="h-3 w-3" />
+          </Link>
+        ) : (
+          <span className="font-mono text-muted-foreground">{entry.reference}</span>
+        ),
+    },
+    {
+      id: "debit",
+      header: "Debit",
+      align: "right",
+      cell: (entry) => (
+        <span className={`tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
+          {entry.debit ? formatCurrency(entry.debit) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "credit",
+      header: "Credit",
+      align: "right",
+      cell: (entry) => (
+        <span className={`tabular-nums font-medium ${MONEY_IN_CLASS}`}>
+          {entry.credit ? formatCurrency(entry.credit) : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "balance",
+      header: "Balance",
+      align: "right",
+      cell: (entry) => (
+        <span className="tabular-nums font-medium">{formatCurrency(entry.balance)}</span>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -367,76 +505,7 @@ export default function VendorDetailPage() {
               No purchase invoices yet. Add vendor bills here to track input GST (GST taking).
             </p>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table className="min-w-[720px]">
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Invoice no.</TableHead>
-                    <TableHead className="text-xs">GST</TableHead>
-                    <TableHead className="text-xs text-right">Taxable</TableHead>
-                    <TableHead className="text-xs text-right">Input GST</TableHead>
-                    <TableHead className="text-xs text-right">Total</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
-                    {(canEdit || canDelete) && <TableHead className="text-xs w-[80px]" />}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {invoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {format(new Date(invoice.invoiceDate), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono">{invoice.invoiceNumber}</TableCell>
-                      <TableCell className="text-xs">
-                        <GstClassificationBadge gstEnabled={invoice.gstEnabled} />
-                        {invoice.gstEnabled && (
-                          <span className="ml-1 text-muted-foreground">{invoice.gstRate}%</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">
-                        {formatCurrency(invoice.taxableAmount)}
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums">
-                        {invoice.gstEnabled ? formatCurrency(invoice.gstAmount) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium">
-                        {formatCurrency(invoice.totalAmount)}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        <FinanceStatusBadge variant="invoice" value={invoice.status} />
-                      </TableCell>
-                      {(canEdit || canDelete) && (
-                        <TableCell className="text-xs">
-                          <div className="flex items-center gap-1">
-                            {canEdit && invoice.status !== "cancelled" && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => openEditInvoice(invoice)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                            {canDelete && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive hover:text-destructive"
-                                onClick={() => setDeleteInvoiceTarget(invoice)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <CmsDataTable columns={invoiceColumns} rows={invoices} rowKey={(inv) => inv.id} embedded />
           )}
         </CardContent>
       </Card>
@@ -469,51 +538,7 @@ export default function VendorDetailPage() {
               No expenses or payments linked to this vendor yet.
             </p>
           ) : (
-            <div className="rounded-lg border overflow-x-auto">
-              <Table className="min-w-[640px]">
-                <TableHeader>
-                  <TableRow className="bg-muted/30">
-                    <TableHead className="text-xs">Date</TableHead>
-                    <TableHead className="text-xs">Description</TableHead>
-                    <TableHead className="text-xs">Reference</TableHead>
-                    <TableHead className="text-xs text-right">Debit</TableHead>
-                    <TableHead className="text-xs text-right">Credit</TableHead>
-                    <TableHead className="text-xs text-right">Balance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((entry) => (
-                    <TableRow key={entry.id}>
-                      <TableCell className="text-xs whitespace-nowrap">
-                        {format(new Date(entry.date), "MMM d, yyyy")}
-                      </TableCell>
-                      <TableCell className="text-xs">{entry.description}</TableCell>
-                      <TableCell className="text-xs">
-                        {entry.referenceHref ? (
-                          <Link
-                            href={entry.referenceHref}
-                            className="font-mono text-primary hover:underline inline-flex items-center gap-0.5"
-                          >
-                            {entry.reference} <ArrowRight className="h-3 w-3" />
-                          </Link>
-                        ) : (
-                          <span className="font-mono text-muted-foreground">{entry.reference}</span>
-                        )}
-                      </TableCell>
-                      <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_OUT_CLASS}`}>
-                        {entry.debit ? formatCurrency(entry.debit) : "—"}
-                      </TableCell>
-                      <TableCell className={`text-xs text-right tabular-nums font-medium ${MONEY_IN_CLASS}`}>
-                        {entry.credit ? formatCurrency(entry.credit) : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums font-medium">
-                        {formatCurrency(entry.balance)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+            <CmsDataTable columns={ledgerColumns} rows={entries} rowKey={(e) => e.id} embedded />
           )}
         </CardContent>
       </Card>

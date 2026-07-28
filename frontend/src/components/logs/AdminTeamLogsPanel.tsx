@@ -35,16 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { DataPagination } from "@/components/ui/data-pagination";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
 import { PDFService } from "@/lib/pdf-service";
 import { cn } from "@/lib/utils";
@@ -255,6 +246,114 @@ export function AdminTeamLogsPanel() {
     month: "long",
     year: "numeric",
   });
+
+  const logColumns = useMemo((): CmsColumn<DailyLog>[] => [
+    {
+      id: "date",
+      header: "Date",
+      className: "min-w-[108px]",
+      cell: (log) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="whitespace-nowrap font-medium">{formatDailyLogWorkDate(log.logDate)}</span>
+          {log.updatedAt && (
+            <span
+              className="text-[10px] text-muted-foreground whitespace-nowrap tabular-nums"
+              title={new Date(log.updatedAt).toLocaleString()}
+            >
+              {formatDailyLogUpdatedLabel(log.logDate, log.updatedAt)}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "developer",
+      header: "Developer",
+      className: "min-w-[120px]",
+      cell: (log) => (
+        <div className="flex items-center gap-1.5 min-w-0">
+          <User className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <div className="min-w-0">
+            <p className="font-medium truncate">{log.developerName}</p>
+            {log.developerEmployeeId && (
+              <p className="text-[10px] text-muted-foreground truncate">{log.developerEmployeeId}</p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "project",
+      header: "Project",
+      className: "max-w-[140px]",
+      cell: (log) => (
+        <span className="font-medium text-primary line-clamp-2">{log.projectName}</span>
+      ),
+    },
+    {
+      id: "task",
+      header: "Task",
+      className: "max-w-[280px]",
+      cell: (log) => (
+        <div>
+          <p className="font-medium line-clamp-1">{log.taskTitle}</p>
+          {log.taskDescription && (
+            <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">{log.taskDescription}</p>
+          )}
+          {(log.blockers || log.nextDayPlan) && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {log.blockers && (
+                <Badge variant="outline" className="text-[9px] h-4 border-destructive/30 text-destructive">
+                  Blocker
+                </Badge>
+              )}
+              {log.nextDayPlan && (
+                <Badge variant="outline" className="text-[9px] h-4">
+                  Next day
+                </Badge>
+              )}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: "hours",
+      header: "Hours",
+      align: "right",
+      className: "w-[72px]",
+      cell: (log) => <span className="tabular-nums text-sm font-semibold">{log.hoursSpent}h</span>,
+    },
+    {
+      id: "done",
+      header: "Done",
+      align: "right",
+      className: "w-[64px]",
+      cell: (log) => (
+        <span className="tabular-nums text-emerald-600 font-medium">{log.completionPct}%</span>
+      ),
+    },
+    {
+      id: "categories",
+      header: "Categories",
+      className: "min-w-[140px]",
+      chip: true,
+      cell: (log) => (
+        <>
+          {(log.workCategories ?? []).slice(0, 2).map((cat) => (
+            <Badge key={cat} variant="secondary" className="text-[9px] h-5 px-1.5">
+              {formatDailyLogCategory(cat)}
+            </Badge>
+          ))}
+          {(log.workCategories?.length ?? 0) > 2 && (
+            <Badge variant="outline" className="text-[9px] h-5 px-1.5">
+              +{(log.workCategories?.length ?? 0) - 2}
+            </Badge>
+          )}
+        </>
+      ),
+    },
+  ], []);
 
   return (
     <PortalPageShell>
@@ -467,158 +566,36 @@ export function AdminTeamLogsPanel() {
             )}
           </div>
 
-          {isLoading ? (
-            <div className="p-4 space-y-2">
-              {[...Array(6)].map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
-          ) : tableLogs.length === 0 ? (
-            <div className="py-16 text-center text-sm text-muted-foreground">
-              <Clock className="mx-auto h-8 w-8 opacity-30 mb-2" />
-              <p className="font-medium text-foreground">No logs found</p>
-              <p className="text-xs mt-1 max-w-sm mx-auto">
-                Try another month, developer, or project — or clear filters to see all team
-                entries.
+          <div className="px-4 pb-4">
+            <CmsDataTable
+              columns={logColumns}
+              rows={tableLogs}
+              rowKey={(log) => log.id}
+              isLoading={isLoading}
+              embedded
+              empty={{
+                icon: Clock,
+                title: "No logs found",
+                description: "Try another month, developer, or project — or clear filters to see all team entries.",
+              }}
+              onRowClick={openLogDetail}
+              getRowClassName={() => "align-top cursor-pointer"}
+              pagination={{
+                page: usesClientFilter ? clientPagination.page : (data?.page ?? page),
+                total: usesClientFilter ? clientPagination.total : (data?.total ?? 0),
+                limit,
+                loadedRowCount: tableLogs.length,
+                onPageChange: usesClientFilter ? clientPagination.onPageChange : setPage,
+                onLimitChange: setLimit,
+              }}
+            />
+            {usesClientFilter && filteredStatsLogs.length >= ADMIN_STATS_LIMIT && (
+              <p className="text-[10px] text-amber-600 pt-2">
+                Search/category results capped at {ADMIN_STATS_LIMIT} entries — narrow month or
+                developer for more.
               </p>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-[10px] uppercase tracking-wider w-[100px]">
-                        Date
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider min-w-[120px]">
-                        Developer
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider min-w-[120px]">
-                        Project
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider min-w-[180px]">
-                        Task
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider w-[72px] text-right">
-                        Hours
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider w-[64px] text-right">
-                        Done
-                      </TableHead>
-                      <TableHead className="text-[10px] uppercase tracking-wider min-w-[140px]">
-                        Categories
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tableLogs.map((log) => (
-                      <TableRow
-                        key={log.id}
-                        className="align-top cursor-pointer hover:bg-muted/40 transition-colors"
-                        onClick={() => openLogDetail(log)}
-                      >
-                        <TableCell className="text-xs py-2.5 min-w-[108px]">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="whitespace-nowrap font-medium">
-                              {formatDailyLogWorkDate(log.logDate)}
-                            </span>
-                            {log.updatedAt && (
-                              <span
-                                className="text-[10px] text-muted-foreground whitespace-nowrap tabular-nums"
-                                title={new Date(log.updatedAt).toLocaleString()}
-                              >
-                                {formatDailyLogUpdatedLabel(log.logDate, log.updatedAt)}
-                              </span>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2.5">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <User className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            <div className="min-w-0">
-                              <p className="text-xs font-medium truncate">{log.developerName}</p>
-                              {log.developerEmployeeId && (
-                                <p className="text-[10px] text-muted-foreground truncate">
-                                  {log.developerEmployeeId}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-xs py-2.5 max-w-[140px]">
-                          <span className="font-medium text-primary line-clamp-2">
-                            {log.projectName}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-2.5 max-w-[280px]">
-                          <p className="text-xs font-medium line-clamp-1">{log.taskTitle}</p>
-                          {log.taskDescription && (
-                            <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5">
-                              {log.taskDescription}
-                            </p>
-                          )}
-                          {(log.blockers || log.nextDayPlan) && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {log.blockers && (
-                                <Badge
-                                  variant="outline"
-                                  className="text-[9px] h-4 border-destructive/30 text-destructive"
-                                >
-                                  Blocker
-                                </Badge>
-                              )}
-                              {log.nextDayPlan && (
-                                <Badge variant="outline" className="text-[9px] h-4">
-                                  Next day
-                                </Badge>
-                              )}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right py-2.5 tabular-nums text-sm font-semibold">
-                          {log.hoursSpent}h
-                        </TableCell>
-                        <TableCell className="text-right py-2.5 tabular-nums text-xs text-emerald-600 font-medium">
-                          {log.completionPct}%
-                        </TableCell>
-                        <TableCell className="py-2.5">
-                          <div className="flex flex-wrap gap-1">
-                            {(log.workCategories ?? []).slice(0, 2).map((cat) => (
-                              <Badge key={cat} variant="secondary" className="text-[9px] h-5 px-1.5">
-                                {formatDailyLogCategory(cat)}
-                              </Badge>
-                            ))}
-                            {(log.workCategories?.length ?? 0) > 2 && (
-                              <Badge variant="outline" className="text-[9px] h-5 px-1.5">
-                                +{(log.workCategories?.length ?? 0) - 2}
-                              </Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              <div className="border-t border-border/60 px-4 py-3">
-                <DataPagination
-                  page={usesClientFilter ? clientPagination.page : (data?.page ?? page)}
-                  total={usesClientFilter ? clientPagination.total : (data?.total ?? 0)}
-                  limit={limit}
-                  loadedRowCount={tableLogs.length}
-                  onPageChange={usesClientFilter ? clientPagination.onPageChange : setPage}
-                  onLimitChange={setLimit}
-                />
-              </div>
-              {usesClientFilter && filteredStatsLogs.length >= ADMIN_STATS_LIMIT && (
-                <p className="text-[10px] text-amber-600 px-4 pb-2">
-                  Search/category results capped at {ADMIN_STATS_LIMIT} entries — narrow month or
-                  developer for more.
-                </p>
-              )}
-            </>
-          )}
+            )}
+          </div>
         </PortalContentCard>
 
         {complianceDeveloperId ? (

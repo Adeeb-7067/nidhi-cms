@@ -9,14 +9,7 @@ import {
 } from "lucide-react";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -68,6 +61,31 @@ export default function FinanceVendorAnalytics() {
     count: c.count,
     value: c.value,
   }));
+
+  const vendorColumns: CmsColumn<(typeof topVendors)[number]>[] = [
+    {
+      id: "vendor",
+      header: "Vendor",
+      className: "truncate max-w-[220px]",
+      cell: (v) => (
+        <Link href={`/finance/vendors/${v.vendorId}`} className="font-medium hover:text-primary">
+          {v.name}
+        </Link>
+      ),
+    },
+    {
+      id: "count",
+      header: "Expenses",
+      align: "right",
+      cell: (v) => <span className="tabular-nums text-muted-foreground">{v.count}</span>,
+    },
+    {
+      id: "spend",
+      header: "Total spend",
+      align: "right",
+      cell: (v) => <span className="font-medium tabular-nums">{formatCurrency(v.spend)}</span>,
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -182,35 +200,13 @@ export default function FinanceVendorAnalytics() {
           </ChartGridCell>
           <ChartGridCell colSpan={8}>
             <ChartPanel title="Vendor spend detail" icon={Building2} accent="blue" viewAllHref="/finance/vendors">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="text-xs">Vendor</TableHead>
-                    <TableHead className="text-xs text-right">Expenses</TableHead>
-                    <TableHead className="text-xs text-right">Total spend</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {topVendors.map((v) => (
-                    <TableRow key={v.vendorId}>
-                      <TableCell className="text-xs font-medium truncate max-w-[220px]">
-                        <Link href={`/finance/vendors/${v.vendorId}`} className="hover:text-primary">
-                          {v.name}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs text-right tabular-nums text-muted-foreground">{v.count}</TableCell>
-                      <TableCell className="text-xs text-right font-medium tabular-nums">{formatCurrency(v.spend)}</TableCell>
-                    </TableRow>
-                  ))}
-                  {topVendors.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-6">
-                        No vendor spend recorded yet.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+              <CmsDataTable
+                columns={vendorColumns}
+                rows={topVendors}
+                rowKey={(v) => v.vendorId}
+                embedded
+                empty={{ title: "No vendor spend recorded yet." }}
+              />
             </ChartPanel>
           </ChartGridCell>
         </div>

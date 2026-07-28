@@ -91,7 +91,7 @@ export function useGetPendingAlerts(enabled = true) {
     queryKey: alertKeys.pending(),
     queryFn: () => customFetch(apiUrl("/api/alerts/pending")),
     enabled,
-    staleTime: 0,
+    staleTime: 60_000,
   });
 }
 

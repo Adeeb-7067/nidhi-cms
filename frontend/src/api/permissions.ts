@@ -37,8 +37,8 @@ export function usePermissionsQuery(enabled = true) {
     queryKey: permissionsQueryKey(),
     queryFn: () => customFetch<PermissionsResponse>(apiUrl("/api/permissions/me")),
     enabled,
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 }
 

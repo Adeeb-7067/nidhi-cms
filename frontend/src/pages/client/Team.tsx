@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Activity,
   RefreshCw,
-  Search,
 } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,7 +46,6 @@ import {
   PortalPageShell,
   PortalPageHero,
   PortalKpiGrid,
-  PortalContentCard,
   PortalEmptyState,
 } from "@/components/layout/portal-page-kit";
 import { Button } from "@/components/ui/button";
@@ -80,14 +78,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -662,6 +653,197 @@ export default function ClientTeamPage() {
     });
   }
 
+  const memberColumns: CmsColumn<ClientTeamMember>[] = [
+    {
+      id: "member",
+      header: "Member",
+      cell: (m) => (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-9 w-9 border border-border/60">
+            <AvatarImage src={m.avatarUrl ?? undefined} />
+            <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">
+              {memberInitials(m.name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{m.name ?? "—"}</p>
+            <p className="truncate text-xs text-muted-foreground">{m.email ?? ""}</p>
+            {m.title ? (
+              <p className="truncate text-[11px] text-muted-foreground/80">{m.title}</p>
+            ) : null}
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (m) => (
+        <Badge variant="outline" className={cn("text-xs font-medium", memberStatusBadgeClass(m.status))}>
+          {statusLabel(m.status)}
+        </Badge>
+      ),
+    },
+    {
+      id: "permissions",
+      header: "Permissions",
+      cell: (m) => (
+        <div className="flex flex-wrap gap-1">
+          {(() => {
+            const visible = CLIENT_PORTAL_SECTIONS.slice(0, 4);
+            const visibleNonNone = visible.filter(
+              (s) => ((m.permissions[s] ?? "none") as ClientPermissionLevel) !== "none",
+            );
+            const remaining = CLIENT_PORTAL_SECTIONS.length - visible.length;
+            return (
+              <>
+                {visibleNonNone.map((section) => {
+                  const lvl = (m.permissions[section] ?? "none") as ClientPermissionLevel;
+                  return (
+                    <Tooltip key={section}>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant="outline"
+                          className={cn("text-[10px]", permissionBadgeClass(lvl))}
+                        >
+                          {CLIENT_SECTION_LABELS[section].split(" ")[0]}: {lvl}
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs">
+                        {CLIENT_SECTION_LABELS[section]}: {CLIENT_PERMISSION_LABELS[lvl]}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })}
+                {remaining > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className="cursor-default text-[10px] text-muted-foreground"
+                      >
+                        + {remaining} more
+                      </Badge>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="max-w-xs text-xs">
+                      <div className="space-y-0.5">
+                        {CLIENT_PORTAL_SECTIONS.map((section) => {
+                          const lvl = (m.permissions[section] ?? "none") as ClientPermissionLevel;
+                          return (
+                            <div key={section} className="flex justify-between gap-3">
+                              <span>{CLIENT_SECTION_LABELS[section]}</span>
+                              <span className="font-mono text-[10px]">
+                                {CLIENT_PERMISSION_LABELS[lvl]}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
+              </>
+            );
+          })()}
+        </div>
+      ),
+    },
+    {
+      id: "lastSignIn",
+      header: "Last sign-in",
+      cell: (m) => (
+        <span className="text-xs text-muted-foreground">
+          {m.lastLoginAt ? formatDistanceToNow(new Date(m.lastLoginAt), { addSuffix: true }) : "Never"}
+        </span>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (m) => (
+        <div className="flex justify-end gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                onClick={() => setEditing(m)}
+              >
+                <ShieldCheck className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit details & permissions</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                onClick={() => handleResendInvite(m)}
+                disabled={resendInvite.isPending}
+              >
+                <Mail className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Resend invitation / new password</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-8 px-2"
+                onClick={() => setResetting(m)}
+              >
+                <KeyRound className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Reset password</TooltipContent>
+          </Tooltip>
+          {m.status === "inactive" ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2"
+                  onClick={() =>
+                    reactivate.mutate(m.id, {
+                      onSuccess: () => toast.success(`${m.name} reactivated.`),
+                      onError: (err) => toastApiError(err),
+                    })
+                  }
+                  disabled={reactivate.isPending}
+                >
+                  <Power className="h-3.5 w-3.5 text-emerald-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reactivate account</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 px-2"
+                  onClick={() => setConfirmDeactivate(m)}
+                >
+                  <PowerOff className="h-3.5 w-3.5 text-red-600" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Deactivate account</TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <PortalPageShell>
       <PortalPageHero
@@ -716,254 +898,55 @@ export default function ClientTeamPage() {
         ]}
       />
 
-      <PortalContentCard>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or email…"
-              className="h-9 pl-8 text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Select
-              value={statusFilter || "all"}
-              onValueChange={(value) =>
-                setStatusFilter(value === "all" ? "" : (value as typeof statusFilter))
-              }
-            >
-              <SelectTrigger className="h-9 w-[140px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="inactive">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 text-xs"
-              onClick={() => list.refetch()}
-              disabled={list.isFetching}
-            >
-              <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", list.isFetching && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-        </div>
+      <CmsFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or email…"
+        filters={[
+          {
+            key: "status",
+            value: statusFilter || "all",
+            onChange: (value) =>
+              setStatusFilter(value === "all" ? "" : (value as typeof statusFilter)),
+            placeholder: "Status",
+            className: "w-full sm:w-[140px]",
+            allOption: { value: "all", label: "All statuses" },
+            options: [
+              { value: "active", label: "Active" },
+              { value: "pending", label: "Pending" },
+              { value: "inactive", label: "Inactive" },
+            ],
+          },
+        ]}
+      >
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-9 text-xs"
+          onClick={() => list.refetch()}
+          disabled={list.isFetching}
+        >
+          <RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", list.isFetching && "animate-spin")} />
+          Refresh
+        </Button>
+      </CmsFilterBar>
 
-        {list.isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : members.length === 0 ? (
-          <PortalEmptyState
-            icon={Users}
-            title="No team members yet"
-            description="Invite your first team member to share controlled access to your projects."
-          />
-        ) : (
-          <div className="overflow-hidden rounded-lg border border-border/60">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Permissions</TableHead>
-                  <TableHead>Last sign-in</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-9 w-9 border border-border/60">
-                          <AvatarImage src={m.avatarUrl ?? undefined} />
-                          <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">
-                            {memberInitials(m.name)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{m.name ?? "—"}</p>
-                          <p className="truncate text-xs text-muted-foreground">{m.email ?? ""}</p>
-                          {m.title ? (
-                            <p className="truncate text-[11px] text-muted-foreground/80">
-                              {m.title}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn("text-xs font-medium", memberStatusBadgeClass(m.status))}
-                      >
-                        {statusLabel(m.status)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {(() => {
-                          const visible = CLIENT_PORTAL_SECTIONS.slice(0, 4);
-                          const visibleNonNone = visible.filter(
-                            (s) => ((m.permissions[s] ?? "none") as ClientPermissionLevel) !== "none",
-                          );
-                          const remaining = CLIENT_PORTAL_SECTIONS.length - visible.length;
-                          return (
-                            <>
-                              {visibleNonNone.map((section) => {
-                                const lvl = (m.permissions[section] ?? "none") as ClientPermissionLevel;
-                                return (
-                                  <Tooltip key={section}>
-                                    <TooltipTrigger asChild>
-                                      <Badge
-                                        variant="outline"
-                                        className={cn("text-[10px]", permissionBadgeClass(lvl))}
-                                      >
-                                        {CLIENT_SECTION_LABELS[section].split(" ")[0]}: {lvl}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="text-xs">
-                                      {CLIENT_SECTION_LABELS[section]}: {CLIENT_PERMISSION_LABELS[lvl]}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                );
-                              })}
-                              {remaining > 0 ? (
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Badge
-                                      variant="outline"
-                                      className="cursor-default text-[10px] text-muted-foreground"
-                                    >
-                                      + {remaining} more
-                                    </Badge>
-                                  </TooltipTrigger>
-                                  <TooltipContent side="top" className="max-w-xs text-xs">
-                                    <div className="space-y-0.5">
-                                      {CLIENT_PORTAL_SECTIONS.map((section) => {
-                                        const lvl = (m.permissions[section] ?? "none") as ClientPermissionLevel;
-                                        return (
-                                          <div key={section} className="flex justify-between gap-3">
-                                            <span>{CLIENT_SECTION_LABELS[section]}</span>
-                                            <span className="font-mono text-[10px]">
-                                              {CLIENT_PERMISSION_LABELS[lvl]}
-                                            </span>
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  </TooltipContent>
-                                </Tooltip>
-                              ) : null}
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {m.lastLoginAt
-                          ? formatDistanceToNow(new Date(m.lastLoginAt), { addSuffix: true })
-                          : "Never"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex justify-end gap-1">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2"
-                              onClick={() => setEditing(m)}
-                            >
-                              <ShieldCheck className="h-3.5 w-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Edit details & permissions</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2"
-                              onClick={() => handleResendInvite(m)}
-                              disabled={resendInvite.isPending}
-                            >
-                              <Mail className="h-3.5 w-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Resend invitation / new password</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-8 px-2"
-                              onClick={() => setResetting(m)}
-                            >
-                              <KeyRound className="h-3.5 w-3.5" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Reset password</TooltipContent>
-                        </Tooltip>
-                        {m.status === "inactive" ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 px-2"
-                                onClick={() =>
-                                  reactivate.mutate(m.id, {
-                                    onSuccess: () => toast.success(`${m.name} reactivated.`),
-                                    onError: (err) => toastApiError(err),
-                                  })
-                                }
-                                disabled={reactivate.isPending}
-                              >
-                                <Power className="h-3.5 w-3.5 text-emerald-600" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Reactivate account</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-8 px-2"
-                                onClick={() => setConfirmDeactivate(m)}
-                              >
-                                <PowerOff className="h-3.5 w-3.5 text-red-600" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Deactivate account</TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </PortalContentCard>
+      {!list.isLoading && members.length === 0 ? (
+        <PortalEmptyState
+          icon={Users}
+          title="No team members yet"
+          description="Invite your first team member to share controlled access to your projects."
+        />
+      ) : (
+        <CmsDataTable
+          columns={memberColumns}
+          rows={members}
+          rowKey={(m) => m.id}
+          isLoading={list.isLoading}
+          error={list.isError}
+          onRetry={() => list.refetch()}
+        />
+      )}
 
       <AddMemberDialog open={addOpen} onOpenChange={setAddOpen} />
       <EditMemberSheet member={editing} onClose={() => setEditing(null)} />

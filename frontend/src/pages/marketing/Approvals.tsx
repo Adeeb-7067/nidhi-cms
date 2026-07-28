@@ -25,7 +25,7 @@ import {
   parseAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
-import { canFullyEditMarketingItem } from "@/lib/cms-project-manage";
+import { canFullyEditMarketingItem, isDigitalElevatedLead, isMarketingOrgAdmin } from "@/lib/cms-project-manage";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -41,6 +41,17 @@ const NEXT_STAGE: Partial<Record<ApprovalStage, ApprovalStage>> = {
 };
 
 const REVISION_FROM: ApprovalStage[] = ["internal_review", "client_review", "approved"];
+
+function canAdvanceApproval(
+  user: { id?: number | null; role?: string | null; subType?: string | null } | null | undefined,
+  item: { assigneeId?: number | null; createdBy?: number | null },
+): boolean {
+  if (!user) return false;
+  if (isMarketingOrgAdmin(user) || isDigitalElevatedLead(user)) return true;
+  if (item.createdBy != null && Number(item.createdBy) === Number(user.id)) return true;
+  if (item.assigneeId != null && Number(item.assigneeId) === Number(user.id)) return true;
+  return false;
+}
 
 export default function MarketingApprovals() {
   const [, navigate] = useLocation();
@@ -151,7 +162,7 @@ export default function MarketingApprovals() {
     <PortalPageShell>
       <MarketingPageHeader
         title="Approval workflow"
-        description="Pipeline: Internal Review → Client Review → Revision → Approved → Scheduled → Published"
+        description="Your assigned review queue — Internal Review → Client Review → Revision → Approved → Scheduled → Published"
         breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Approvals" }]}
       />
 
@@ -176,8 +187,8 @@ export default function MarketingApprovals() {
       ) : approvals.length === 0 ? (
         <MarketingEmptyState
           icon={CheckCircle}
-          title="No approvals yet"
-          description="Create content, posts, or graphics — items enter this pipeline when they need review."
+          title="No approvals assigned"
+          description="Items appear here when they are assigned to you for review."
           actionLabel="Open content"
           onAction={() => navigate("/marketing/content")}
         />
@@ -226,7 +237,7 @@ export default function MarketingApprovals() {
                       ) : (
                         <p className="text-[10px] text-muted-foreground">{item.assignee || "Unassigned"}</p>
                       )}
-                      {canEdit && (
+                      {canEdit && canAdvanceApproval(user, item) && (
                         <div className="flex flex-col gap-1">
                           {NEXT_STAGE[item.stage] && (
                             <Button

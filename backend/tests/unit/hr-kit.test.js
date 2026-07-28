@@ -5,7 +5,7 @@ import {
   createHrKit,
   updateHrKit,
   deleteHrKit,
-} from "../../src/services/hrm/hr-kit.service.js";
+} from "../../src/modules/hrm/services/hr-kit.service.js";
 
 describe("HR Kit Service", () => {
   it("validates title requirement on creation", async () => {

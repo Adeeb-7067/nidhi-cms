@@ -229,6 +229,8 @@ export interface PaymentReceipt {
   sealUrl?: string | null;
   note?: string | null;
   proofImageUrl?: string | null;
+  /** Incoming = customer receipt (default). Outgoing = freelancer payout voucher. */
+  direction?: "incoming" | "outgoing";
 }
 
 export interface InvoiceLineItem {

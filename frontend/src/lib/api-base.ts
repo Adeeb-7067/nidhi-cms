@@ -3,9 +3,11 @@ import { setBaseUrl } from "@/api";
 const API_PATH_PREFIX = "/api";
 
 /**
- * API origin from `VITE_API_BASE_URL` in `frontend/.env` only (host, no `/api` suffix).
- * Production (separate domains): set to your API host, e.g. https://api.yourdomain.com
- * When unset, requests stay relative (same origin) and Vite dev proxy forwards `/api`.
+ * API origin from `VITE_API_BASE_URL` (host, no `/api` suffix).
+ * Local web: leave unset so requests stay relative (`/api`) and Vite proxies them
+ * (same-origin — avoids CORS OPTIONS on every call).
+ * Production: prefer reverse-proxying `/api` on the app host; only set an absolute
+ * origin when UI and API are intentionally on different domains (or Electron builds).
  */
 export function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ?? "";

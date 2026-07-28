@@ -6,7 +6,6 @@ import {
   CalendarClock,
   Shield,
   Globe,
-  Clock,
   CalendarDays,
   ExternalLink,
   ClipboardList,
@@ -34,10 +33,9 @@ import {
   HrmPageShell,
   HrmField,
   HrmQueryErrorPanel,
-  HrmTabsList,
-  HrmTabsTrigger,
   portalActionButtonClass,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import { useHrmSettings, useUpdateHrmSettings, useHrmShiftTemplates } from "@/api/hrm";
 import { toast } from "sonner";
@@ -172,6 +170,7 @@ export default function HrmSettingsPage() {
   const [checklistTasks, setChecklistTasks] = useState<string[]>([]);
   const [newTask, setNewTask] = useState("");
   const [checklistDirty, setChecklistDirty] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("attendance");
 
   useEffect(() => {
     if (data) {
@@ -313,21 +312,17 @@ export default function HrmSettingsPage() {
           <HrmQueryErrorPanel error={error} onRetry={refetch} title="Could not load settings" />
         ) : (
           <form id={FORM_ID} onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <Tabs defaultValue="attendance" className="space-y-4">
-              <HrmTabsList>
-                <HrmTabsTrigger value="attendance">
-                  <Clock className="mr-1.5 h-3.5 w-3.5" />
-                  Attendance
-                </HrmTabsTrigger>
-                <HrmTabsTrigger value="leave">
-                  <CalendarClock className="mr-1.5 h-3.5 w-3.5" />
-                  Leave policy
-                </HrmTabsTrigger>
-                <HrmTabsTrigger value="onboarding">
-                  <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
-                  Onboarding
-                </HrmTabsTrigger>
-              </HrmTabsList>
+            <div className="space-y-4">
+              <CmsChipTabs
+                value={settingsTab}
+                onValueChange={setSettingsTab}
+                items={[
+                  { value: "attendance", label: "Attendance" },
+                  { value: "leave", label: "Leave policy" },
+                  { value: "onboarding", label: "Onboarding" },
+                ]}
+              />
+              <Tabs value={settingsTab} onValueChange={setSettingsTab}>
 
               <TabsContent value="attendance">
                 <PortalContentCard contentClassName="p-5">
@@ -618,6 +613,7 @@ export default function HrmSettingsPage() {
                 </PortalContentCard>
               </TabsContent>
             </Tabs>
+            </div>
 
             {isDirty && (
               <PortalContentCard contentClassName="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">

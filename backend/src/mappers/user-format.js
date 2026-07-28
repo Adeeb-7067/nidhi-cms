@@ -1,5 +1,5 @@
 import { toIso } from "../utils/mongo-list.js";
-import { attachPresenceToUser } from "../services/presence.js";
+import { attachPresenceToUser } from "../modules/monitoring/services/presence.js";
 import { formatUserProfileFields } from "../utils/user-profile-fields.js";
 
 function formatUser(user, { withPresence = false, includeSensitive = false } = {}) {

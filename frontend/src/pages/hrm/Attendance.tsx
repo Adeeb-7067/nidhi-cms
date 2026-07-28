@@ -4,7 +4,6 @@ import { Link } from "wouter";
 import { AlertTriangle, ClipboardEdit, Grid3X3, UserCheck, UserX, CalendarClock, Home, ClipboardList, Clock, Pencil, LogIn, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
@@ -27,8 +26,6 @@ import { HrmGate } from "@/modules/hrm/HrmGate";
 import {
   HrmPageHero,
   HrmPageShell,
-  HrmTabsList,
-  HrmTabsTrigger,
   HrmFilterBar,
   HrmField,
   HrmWorkflowBadge,
@@ -37,6 +34,7 @@ import {
   portalActionButtonClass,
   HrmInsightBanner,
 } from "@/modules/hrm/components";
+import { CmsChipTabs } from "@/components/cms";
 import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { HrmAttendanceGridPanel, attendanceStatusSuffix } from "@/modules/hrm/hrm-attendance-grid";
@@ -697,36 +695,34 @@ export default function HrmAttendancePage() {
           )}
         </HrmFilterBar>
 
-        <Tabs value={attendanceTab} onValueChange={setAttendanceTab} className="space-y-4">
-          <HrmTabsList>
-            <HrmTabsTrigger value="grid">Daily grid</HrmTabsTrigger>
-            <HrmTabsTrigger value="variance">
-              Clock vs logs
-              {varianceRows.length > 0 && (
-                <Badge variant="destructive" className="ml-2 h-5 px-1.5">
-                  {varianceRows.length}
-                </Badge>
-              )}
-            </HrmTabsTrigger>
-            <HrmTabsTrigger value="corrections">
-              Corrections
-              {pendingCorrections.length > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 px-1.5">
-                  {pendingCorrections.length}
-                </Badge>
-              )}
-            </HrmTabsTrigger>
-            {canManage && (
-              <HrmTabsTrigger value="late-excuses">
-                Late excuses
-                {lateExcuseRows.length > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 px-1.5">
-                    {lateExcuseRows.length}
-                  </Badge>
-                )}
-              </HrmTabsTrigger>
-            )}
-          </HrmTabsList>
+        <div className="space-y-4">
+          <CmsChipTabs
+            value={attendanceTab}
+            onValueChange={setAttendanceTab}
+            items={[
+              { value: "grid", label: "Daily grid" },
+              {
+                value: "variance",
+                label: "Clock vs logs",
+                count: varianceRows.length || undefined,
+              },
+              {
+                value: "corrections",
+                label: "Corrections",
+                count: pendingCorrections.length || undefined,
+              },
+              ...(canManage
+                ? [
+                    {
+                      value: "late-excuses",
+                      label: "Late excuses",
+                      count: lateExcuseRows.length || undefined,
+                    },
+                  ]
+                : []),
+            ]}
+          />
+          <Tabs value={attendanceTab} onValueChange={setAttendanceTab}>
 
           <TabsContent value="grid" className="space-y-4 m-0">
             <HrmAttendanceGridPanel
@@ -814,6 +810,7 @@ export default function HrmAttendancePage() {
             </TabsContent>
           )}
         </Tabs>
+        </div>
 
         <Dialog open={correctionOpen} onOpenChange={setCorrectionOpen}>
           <DialogContent>

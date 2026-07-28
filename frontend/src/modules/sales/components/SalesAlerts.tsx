@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useGetDueReminders, useListFollowUps } from "@/api/sales";
+import { usePermission } from "@/modules/permissions/usePermission";
 
 type AlertItem =
   | { kind: "reminder"; leadId: number; leadName: string; date: string; note: string }
@@ -51,14 +52,18 @@ function alertBody(item: AlertItem) {
   return `${item.type} follow-up scheduled for today`;
 }
 
-function useSalesAlerts() {
+function useSalesAlerts(enabled: boolean) {
   const [queue, setQueue] = useState<AlertItem[]>([]);
   const timersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  const { data: remindersData } = useGetDueReminders();
-  const { data: followUpsData } = useListFollowUps({ status: "scheduled", limit: 200 });
+  const { data: remindersData } = useGetDueReminders(enabled);
+  const { data: followUpsData } = useListFollowUps(
+    { status: "scheduled", limit: 200 },
+    enabled,
+  );
 
   useEffect(() => {
+    if (!enabled) return;
     const pending: AlertItem[] = [];
     const todayStr = format(new Date(), "yyyy-MM-dd");
 
@@ -92,9 +97,10 @@ function useSalesAlerts() {
         return newItems.length > 0 ? [...prev, ...newItems] : prev;
       });
     }
-  }, [remindersData, followUpsData]);
+  }, [enabled, remindersData, followUpsData]);
 
   useEffect(() => {
+    if (!enabled) return;
     timersRef.current.forEach(clearTimeout);
     timersRef.current = [];
 
@@ -119,7 +125,7 @@ function useSalesAlerts() {
     }
 
     return () => timersRef.current.forEach(clearTimeout);
-  }, [remindersData]);
+  }, [enabled, remindersData]);
 
   const current = queue[0] ?? null;
 
@@ -134,7 +140,10 @@ function useSalesAlerts() {
 }
 
 export function SalesAlerts() {
-  const { current, dismissCurrent } = useSalesAlerts();
+  const canSalesLeads = usePermission("sales_leads", "view");
+  const { current, dismissCurrent } = useSalesAlerts(canSalesLeads);
+
+  if (!canSalesLeads) return null;
 
   return (
     <Dialog open={current != null} onOpenChange={(open) => { if (!open) dismissCurrent(); }}>

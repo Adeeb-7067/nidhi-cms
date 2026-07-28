@@ -2,40 +2,42 @@ import { Router } from "express";
 import asyncHandler from "express-async-handler";
 import { PUBLIC_API_PATHS, isPublicApiRequest } from "../config/api.js";
 import { requireAuth } from "../middlewares/auth.js";
-import healthRoutes from "./health.routes.js";
-import authRoutes from "./auth.routes.js";
-import searchRoutes from "./search.routes.js";
-import usersRoutes from "./users.routes.js";
-import clientsRoutes from "./clients.routes.js";
-import companiesRoutes from "./companies.routes.js";
-import projectsRoutes from "./projects.routes.js";
-import logsRoutes from "./logs.routes.js";
-import bugsRoutes from "./bugs.routes.js";
-import tasksRoutes from "./tasks.routes.js";
-import apkRoutes from "./apk.routes.js";
-import commentsRoutes from "./comments.routes.js";
-import notificationsRoutes from "./notifications.routes.js";
-import requestsRoutes from "./requests.routes.js";
-import analyticsRoutes from "./analytics.routes.js";
-import reportsRoutes from "./reports.routes.js";
-import settingsRoutes from "./settings.routes.js";
-import uploadsRoutes from "./uploads.routes.js";
-import ticketsRoutes from "./tickets.routes.js";
-import alertsRoutes from "./alerts.routes.js";
-import warningsRoutes from "./warnings.routes.js";
-import inventoryRoutes from "./inventory.routes.js";
-import presenceRoutes from "./presence.routes.js";
-import screenshotsRoutes from "./screenshots.routes.js";
-import monitoringRoutes from "./monitoring.routes.js";
-import workSessionsRoutes from "./work-sessions.routes.js";
-import clientTeamRoutes from "./client-team.routes.js";
-import directConversationsRoutes from "./direct-conversations.routes.js";
-import permissionsRoutes from "./permissions.routes.js";
-import hrmRoutes from "./hrm.routes.js";
-import salesRoutes from "./sales.routes.js";
-import financeRoutes from "./finance.routes.js";
-import marketingRoutes from "./marketing.routes.js";
-import projectDocumentsRoutes from "./project-documents.routes.js";
+import healthRoutes from "../modules/platform/routes/health.routes.js";
+import authRoutes from "../modules/identity/routes/auth.routes.js";
+import searchRoutes from "../modules/crm/routes/search.routes.js";
+import usersRoutes from "../modules/identity/routes/users.routes.js";
+import clientsRoutes from "../modules/crm/routes/clients.routes.js";
+import companiesRoutes from "../modules/crm/routes/companies.routes.js";
+import projectsRoutes from "../modules/crm/routes/projects.routes.js";
+import logsRoutes from "../modules/work/routes/logs.routes.js";
+import bugsRoutes from "../modules/work/routes/bugs.routes.js";
+import tasksRoutes from "../modules/work/routes/tasks.routes.js";
+import apkRoutes from "../modules/work/routes/apk.routes.js";
+import commentsRoutes from "../modules/collab/routes/comments.routes.js";
+import notificationsRoutes from "../modules/collab/routes/notifications.routes.js";
+import requestsRoutes from "../modules/work/routes/requests.routes.js";
+import analyticsRoutes from "../modules/crm/routes/analytics.routes.js";
+import reportsRoutes from "../modules/work/routes/reports.routes.js";
+import settingsRoutes from "../modules/settings/routes/settings.routes.js";
+import uploadsRoutes from "../modules/uploads/routes/uploads.routes.js";
+import ticketsRoutes from "../modules/work/routes/tickets.routes.js";
+import navBadgesRoutes from "../modules/work/routes/nav-badges.routes.js";
+import alertsRoutes from "../modules/alerts/routes/alerts.routes.js";
+import warningsRoutes from "../modules/work/routes/warnings.routes.js";
+import inventoryRoutes from "../modules/inventory/routes/inventory.routes.js";
+import presenceRoutes from "../modules/monitoring/routes/presence.routes.js";
+import screenshotsRoutes from "../modules/monitoring/routes/screenshots.routes.js";
+import monitoringRoutes from "../modules/monitoring/routes/monitoring.routes.js";
+import workSessionsRoutes from "../modules/monitoring/routes/work-sessions.routes.js";
+import clientTeamRoutes from "../modules/identity/routes/client-team.routes.js";
+import directConversationsRoutes from "../modules/collab/routes/direct-conversations.routes.js";
+import permissionsRoutes from "../modules/identity/routes/permissions.routes.js";
+import hrmRoutes from "../modules/hrm/routes.js";
+import salesRoutes from "../modules/sales/routes.js";
+import financeRoutes from "../modules/finance/routes.js";
+import marketingRoutes from "../modules/marketing/routes.js";
+import projectDocumentsRoutes from "../modules/admin/routes/project-documents.routes.js";
+import adminMediaRoutes from "../modules/admin/routes/admin-media.routes.js";
 import { requireDatabase } from "../middlewares/require-database.js";
 const router = Router();
 
@@ -78,6 +80,7 @@ const featureRouters = [
   settingsRoutes,
   uploadsRoutes,
   ticketsRoutes,
+  navBadgesRoutes,
   alertsRoutes,
   warningsRoutes,
   inventoryRoutes,
@@ -93,6 +96,7 @@ const featureRouters = [
   financeRoutes,
   marketingRoutes,
   projectDocumentsRoutes,
+  adminMediaRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);

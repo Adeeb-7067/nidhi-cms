@@ -5,16 +5,11 @@ import { Briefcase, CheckCircle2, Loader2, PauseCircle, Plus, PlayCircle } from 
 import { useQueryClient } from "@tanstack/react-query";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Progress } from "@/components/ui/progress";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { PageTableSkeleton, MarketingListPageSkeleton } from "@/components/loading";
 import {
   Dialog,
   DialogContent,
@@ -46,6 +41,7 @@ import {
   getListClientsQueryKey,
   ListProjectsType,
   ProjectInputPriority,
+  type Project,
 } from "@/api";
 import { QUERY_STALE } from "@/lib/query-config";
 import { canManageCmsProjects } from "@/lib/cms-project-manage";
@@ -55,7 +51,6 @@ import {
   MarketingEmptyState,
   MarketingChipTabs,
 } from "@/modules/marketing/components";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { useAuth } from "@/contexts/AuthContext";
@@ -75,6 +70,17 @@ const PRIORITY_LABELS: Record<string, string> = {
   medium: "Medium",
   high: "High",
   critical: "Critical",
+};
+
+type ProjectTeamPreview = {
+  userId: number;
+  name: string;
+  subType?: string | null;
+  avatarUrl?: string | null;
+};
+
+type DigitalProjectRow = Project & {
+  teamMembers?: ProjectTeamPreview[];
 };
 
 type CreateProjectForm = {
@@ -134,7 +140,7 @@ export default function MarketingProjects() {
   const createProject = useCreateProject();
 
   const rows = useMemo(
-    () => (data?.projects ?? []).filter((p) => p.type === "digital"),
+    () => ((data?.projects ?? []) as DigitalProjectRow[]).filter((p) => p.type === "digital"),
     [data],
   );
 
@@ -164,6 +170,117 @@ export default function MarketingProjects() {
     [rows],
   );
   const companies = clientsData?.clients ?? [];
+
+  const columns = useMemo<Column<DigitalProjectRow>[]>(
+    () => [
+      {
+        id: "name",
+        header: "Project",
+        accessorKey: "name",
+        cell: (p) => (
+          <div className="flex items-center gap-2.5 min-w-[180px]">
+            <Avatar className="h-8 w-8 shrink-0 rounded-md border border-border/60">
+              {p.logoUrl ? (
+                <AvatarImage src={p.logoUrl} alt={p.name} className="object-cover" />
+              ) : null}
+              <AvatarFallback className="rounded-md bg-primary/10 text-[10px] font-semibold text-primary">
+                {p.name.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <Link
+                href={`/marketing/projects/${p.id}`}
+                className="font-semibold text-xs text-primary hover:underline underline-offset-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {p.name}
+              </Link>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {p.companyName || p.clientName || "—"}
+              </p>
+            </div>
+          </div>
+        ),
+        exportValue: (p) => p.name,
+      },
+      {
+        id: "team",
+        header: "Team",
+        cell: (p) => {
+          const team = p.teamMembers ?? [];
+          if (!team.length) {
+            return <span className="text-[10px] text-muted-foreground">No members</span>;
+          }
+          return (
+            <div className="flex items-center gap-2 min-w-[120px]">
+              <div className="flex -space-x-1.5">
+                {team.slice(0, 4).map((m) => (
+                  <Avatar key={m.userId} className="h-7 w-7 border-2 border-background">
+                    {m.avatarUrl ? (
+                      <AvatarImage src={m.avatarUrl} alt={m.name} className="object-cover" />
+                    ) : null}
+                    <AvatarFallback className="text-[9px] bg-primary/15 text-primary">
+                      {m.name.charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+              </div>
+              {team.length > 4 ? (
+                <span className="text-[10px] text-muted-foreground tabular-nums">+{team.length - 4}</span>
+              ) : null}
+            </div>
+          );
+        },
+        exportValue: (p) => (p.teamMembers ?? []).map((m) => m.name).join(", ") || "—",
+      },
+      {
+        id: "status",
+        header: "Status",
+        accessorKey: "status",
+        cell: (p) => (
+          <Badge variant="secondary" className="text-[10px] font-normal">
+            {STATUS_LABELS[p.status] ?? p.status}
+          </Badge>
+        ),
+      },
+      {
+        id: "priority",
+        header: "Priority",
+        accessorKey: "priority",
+        cell: (p) => (
+          <Badge variant="outline" className="text-[10px] font-normal">
+            {PRIORITY_LABELS[p.priority] ?? p.priority}
+          </Badge>
+        ),
+      },
+      {
+        id: "start",
+        header: "Start",
+        cell: (p) => (p.startDate ? format(new Date(p.startDate), "MMM d, yyyy") : "—"),
+        exportValue: (p) => (p.startDate ? format(new Date(p.startDate), "yyyy-MM-dd") : ""),
+      },
+      {
+        id: "deadline",
+        header: "Deadline",
+        cell: (p) => (p.deadline ? format(new Date(p.deadline), "MMM d, yyyy") : "—"),
+        exportValue: (p) => (p.deadline ? format(new Date(p.deadline), "yyyy-MM-dd") : ""),
+      },
+      {
+        id: "progress",
+        header: "Progress",
+        cell: (p) => (
+          <div className="flex items-center gap-2 min-w-[100px]">
+            <Progress value={p.completionPct ?? 0} className="h-1.5 flex-1" />
+            <span className="text-[10px] text-muted-foreground w-8 tabular-nums">
+              {p.completionPct ?? 0}%
+            </span>
+          </div>
+        ),
+        exportValue: (p) => `${p.completionPct ?? 0}%`,
+      },
+    ],
+    [],
+  );
 
   const openCreate = () => {
     setForm({
@@ -219,6 +336,10 @@ export default function MarketingProjects() {
     }
   };
 
+  if (isLoading && !data) {
+    return <MarketingListPageSkeleton />;
+  }
+
   return (
     <PortalPageShell>
       <MarketingPageHeader
@@ -255,14 +376,13 @@ export default function MarketingProjects() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
+      {isError ? (
         <MarketingEmptyState
-          icon={Briefcase}
-          title="Couldn't load projects"
+          title="Could not load projects"
           description="Check that the API is running and you have access."
         />
+      ) : isLoading ? (
+        <PageTableSkeleton rows={8} columns={7} showToolbar />
       ) : filteredRows.length === 0 ? (
         <MarketingEmptyState
           icon={Briefcase}
@@ -272,60 +392,13 @@ export default function MarketingProjects() {
           onAction={canCreate ? openCreate : undefined}
         />
       ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Company</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Priority</TableHead>
-                <TableHead className="text-xs">Start</TableHead>
-                <TableHead className="text-xs">Deadline</TableHead>
-                <TableHead className="text-xs">Progress</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredRows.map((p) => (
-                <TableRow key={p.id} className="hover:bg-muted/30">
-                  <TableCell className="text-xs font-medium">
-                    <Link
-                      href={`/marketing/projects/${p.id}`}
-                      className="text-primary hover:underline underline-offset-2"
-                    >
-                      {p.name}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {p.companyName || p.clientName || "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    <Badge variant="secondary" className="text-[10px] font-normal">
-                      {STATUS_LABELS[p.status] ?? p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {PRIORITY_LABELS[p.priority] ?? p.priority}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {p.startDate ? format(new Date(p.startDate), "MMM d, yyyy") : "—"}
-                  </TableCell>
-                  <TableCell className="text-xs">
-                    {p.deadline ? format(new Date(p.deadline), "MMM d, yyyy") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 min-w-[100px]">
-                      <Progress value={p.completionPct ?? 0} className="h-1.5 flex-1" />
-                      <span className="text-[10px] text-muted-foreground w-8 tabular-nums">
-                        {p.completionPct ?? 0}%
-                      </span>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <AdvancedTable
+          data={filteredRows}
+          columns={columns}
+          filename="DigitalProjects"
+          viewStorageKey="marketing-digital-projects"
+          onRowClick={(p) => setLocation(`/marketing/projects/${p.id}`)}
+        />
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

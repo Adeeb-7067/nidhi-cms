@@ -3,17 +3,16 @@ import { format, differenceInDays } from "date-fns";
 import { Plus, FileWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { mockNdaRecords } from "@/modules/legal/mock-data";
 import {
   LegalPageHeader,
   LegalFilterBar,
   LegalStatusBadge,
   LegalRiskBadge,
-  LegalEmptyState,
   CounselAvatar,
 } from "@/modules/legal/components";
+import type { NdaRecord } from "@/modules/legal/types";
 
 export default function NdaRepository() {
   const [search, setSearch] = useState("");
@@ -27,6 +26,31 @@ export default function NdaRepository() {
       return matchesSearch && matchesTab;
     });
   }, [search, tab]);
+
+  const columns = useMemo<CmsColumn<NdaRecord>[]>(
+    () => [
+      { id: "party", header: "Party", cell: (n) => <span className="font-medium">{n.partyName}</span> },
+      { id: "type", header: "Type", cell: (n) => <span className="capitalize">{n.partyType.replace("_", " ")}</span> },
+      { id: "status", header: "Status", chip: true, cell: (n) => <LegalStatusBadge variant="nda" value={n.status} /> },
+      { id: "signed", header: "Signed", cell: (n) => <span className="text-muted-foreground">{format(new Date(n.signedAt), "MMM d, yyyy")}</span> },
+      { id: "expires", header: "Expires", cell: (n) => format(new Date(n.expiresAt), "MMM d, yyyy") },
+      {
+        id: "daysLeft",
+        header: "Days left",
+        cell: (n) => {
+          const daysLeft = differenceInDays(new Date(n.expiresAt), new Date());
+          return (
+            <span className={`font-medium tabular-nums ${daysLeft < 30 ? "text-destructive" : ""}`}>
+              {daysLeft > 0 ? `${daysLeft}d` : "Expired"}
+            </span>
+          );
+        },
+      },
+      { id: "risk", header: "Risk", chip: true, cell: (n) => <LegalRiskBadge level={n.risk} /> },
+      { id: "counsel", header: "Counsel", cell: (n) => <CounselAvatar name={n.assignedTo.name} /> },
+    ],
+    [],
+  );
 
   return (
     <PortalPageShell>
@@ -42,53 +66,17 @@ export default function NdaRepository() {
         }
       />
       <LegalFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search parties…" />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="h-auto flex-wrap gap-1 bg-transparent p-0">
-          <TabsTrigger value="all" className="text-xs data-[state=active]:bg-primary/10">All</TabsTrigger>
-          <TabsTrigger value="expiring_soon" className="text-xs data-[state=active]:bg-primary/10">Expiring soon</TabsTrigger>
-          <TabsTrigger value="expired" className="text-xs data-[state=active]:bg-primary/10">Expired</TabsTrigger>
-          <TabsTrigger value="active" className="text-xs data-[state=active]:bg-primary/10">Active</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      {filtered.length === 0 ? (
-        <LegalEmptyState icon={FileWarning} title="No NDAs found" />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Party</TableHead>
-                <TableHead className="text-xs">Type</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Signed</TableHead>
-                <TableHead className="text-xs">Expires</TableHead>
-                <TableHead className="text-xs">Days left</TableHead>
-                <TableHead className="text-xs">Risk</TableHead>
-                <TableHead className="text-xs">Counsel</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((n) => {
-                const daysLeft = differenceInDays(new Date(n.expiresAt), new Date());
-                return (
-                  <TableRow key={n.id} className="hover:bg-muted/30">
-                    <TableCell className="text-xs font-medium">{n.partyName}</TableCell>
-                    <TableCell className="text-xs capitalize">{n.partyType.replace("_", " ")}</TableCell>
-                    <TableCell><LegalStatusBadge variant="nda" value={n.status} /></TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{format(new Date(n.signedAt), "MMM d, yyyy")}</TableCell>
-                    <TableCell className="text-xs">{format(new Date(n.expiresAt), "MMM d, yyyy")}</TableCell>
-                    <TableCell className={`text-xs font-medium tabular-nums ${daysLeft < 30 ? "text-destructive" : ""}`}>
-                      {daysLeft > 0 ? `${daysLeft}d` : "Expired"}
-                    </TableCell>
-                    <TableCell><LegalRiskBadge level={n.risk} /></TableCell>
-                    <TableCell><CounselAvatar name={n.assignedTo.name} /></TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsChipTabs
+        value={tab}
+        onValueChange={setTab}
+        items={[
+          { value: "all", label: "All" },
+          { value: "expiring_soon", label: "Expiring soon" },
+          { value: "expired", label: "Expired" },
+          { value: "active", label: "Active" },
+        ]}
+      />
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(n) => n.id} empty={{ icon: FileWarning, title: "No NDAs found" }} />
     </PortalPageShell>
   );
 }

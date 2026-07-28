@@ -10,18 +10,12 @@ import {
   Calendar,
   Wallet,
   ArrowLeftRight,
+  Percent,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { formatCompactCurrency, formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -83,6 +77,68 @@ export default function FinanceDashboard() {
   const apAging = data.apAging ?? [];
   const arAging = data.arAging ?? [];
   const periodLabel = dateRange === "previous" ? "previous month" : "this month";
+
+  type PendingInv = (typeof pendingInvoices)[number];
+  const openInvoiceColumns: CmsColumn<PendingInv>[] = [
+    {
+      id: "invoice",
+      header: "Invoice",
+      cell: (inv) => (
+        <Link href={`/finance/invoices/${inv.id}`} className="font-mono hover:text-primary">
+          {inv.number}
+        </Link>
+      ),
+    },
+    {
+      id: "client",
+      header: "Client",
+      className: "truncate max-w-[140px]",
+      cell: (inv) => inv.clientName,
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (inv) => <FinanceStatusBadge variant="invoice" value={inv.status} />,
+    },
+    {
+      id: "due",
+      header: "Due",
+      align: "right",
+      cell: (inv) => (
+        <span className="font-medium tabular-nums">
+          {formatCurrency((inv.total ?? 0) - inv.paidAmount)}
+        </span>
+      ),
+    },
+  ];
+  const upcomingDueColumns: CmsColumn<PendingInv>[] = [
+    {
+      id: "invoice",
+      header: "Invoice",
+      className: "max-w-[180px] truncate",
+      cell: (inv) => inv.number,
+    },
+    {
+      id: "dueDate",
+      header: "Due",
+      cell: (inv) => (
+        <span className="text-muted-foreground">
+          {inv.dueDate ? format(new Date(inv.dueDate), "MMM d") : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "amount",
+      header: "Amount",
+      align: "right",
+      cell: (inv) => (
+        <span className="font-medium tabular-nums text-emerald-700">
+          {formatCurrency((inv.total ?? 0) - inv.paidAmount)}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <PortalPageShell>
@@ -172,6 +228,49 @@ export default function FinanceDashboard() {
               alert: (kpis.outstandingPayables ?? 0) > 0,
               href: "/finance/expenses",
               delay: 5,
+            },
+          ]}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          GST · {periodLabel}
+        </p>
+        <PortalKpiGrid
+          columns={3}
+          count={3}
+          items={[
+            {
+              title: "GST collected",
+              value: formatCompactCurrency(kpis.gstCollected ?? 0),
+              hint: `${(kpis.trends.gstCollected ?? 0) >= 0 ? "↑" : "↓"} ${Math.abs(kpis.trends.gstCollected ?? 0)}% vs prior · on invoices / income`,
+              icon: Percent,
+              accent: "green",
+              href: "/finance/tax",
+              delay: 0,
+            },
+            {
+              title: "GST input credit",
+              value: formatCompactCurrency(kpis.gstInputCredit ?? 0),
+              hint: `${(kpis.trends.gstInputCredit ?? 0) >= 0 ? "↑" : "↓"} ${Math.abs(kpis.trends.gstInputCredit ?? 0)}% vs prior · ITC on purchases`,
+              icon: Percent,
+              accent: "blue",
+              href: "/finance/tax",
+              delay: 1,
+            },
+            {
+              title: (kpis.netGst ?? 0) >= 0 ? "Net GST to pay" : "Net GST credit",
+              value: formatCompactCurrency(Math.abs(kpis.netGst ?? 0)),
+              hint:
+                (kpis.gstDeposited ?? 0) > 0
+                  ? `Deposited ${formatCompactCurrency(kpis.gstDeposited ?? 0)} · still due ${formatCompactCurrency(kpis.gstPayable ?? 0)}`
+                  : "Collected − input credit · open Tax for deposits",
+              icon: Percent,
+              accent: (kpis.netGst ?? 0) > 0 ? "amber" : (kpis.netGst ?? 0) < 0 ? "green" : "violet",
+              alert: (kpis.gstPayable ?? 0) > 0,
+              href: "/finance/tax",
+              delay: 2,
             },
           ]}
         />
@@ -358,44 +457,14 @@ export default function FinanceDashboard() {
             icon={Receipt}
             accent="violet"
             viewAllHref="/finance/invoices"
-          >            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Invoice</TableHead>
-                  <TableHead className="text-xs">Client</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs text-right">Due</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingInvoices.map((inv) => {
-                  const due = (inv.total ?? 0) - inv.paidAmount;
-                  return (
-                    <TableRow key={`${inv.source ?? "finance"}-${inv.id}`}>
-                      <TableCell className="text-xs font-mono">
-                        <Link href={`/finance/invoices/${inv.id}`} className="hover:text-primary">
-                          {inv.number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs truncate max-w-[140px]">{inv.clientName}</TableCell>
-                      <TableCell>
-                        <FinanceStatusBadge variant="invoice" value={inv.status} />
-                      </TableCell>
-                      <TableCell className="text-xs text-right font-medium tabular-nums">
-                        {formatCurrency(due)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {pendingInvoices.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-xs text-muted-foreground py-6">
-                      No open invoices.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+          >
+            <CmsDataTable
+              columns={openInvoiceColumns}
+              rows={pendingInvoices}
+              rowKey={(inv) => `${inv.source ?? "finance"}-${inv.id}`}
+              embedded
+              empty={{ title: "No open invoices." }}
+            />
           </ChartPanel>
           <ChartPanel
             className="h-auto"
@@ -403,35 +472,14 @@ export default function FinanceDashboard() {
             icon={Calendar}
             accent="blue"
             viewAllHref="/finance/invoices"
-          >            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Invoice</TableHead>
-                  <TableHead className="text-xs">Due</TableHead>
-                  <TableHead className="text-xs text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {pendingInvoices.map((inv) => (
-                  <TableRow key={`due-${inv.source ?? "finance"}-${inv.id}`}>
-                    <TableCell className="text-xs max-w-[180px] truncate">{inv.number}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {inv.dueDate ? format(new Date(inv.dueDate), "MMM d") : "—"}
-                    </TableCell>
-                    <TableCell className="text-xs text-right font-medium tabular-nums text-emerald-700">
-                      {formatCurrency((inv.total ?? 0) - inv.paidAmount)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {pendingInvoices.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} className="text-center text-xs text-muted-foreground py-6">
-                      Nothing due.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+          >
+            <CmsDataTable
+              columns={upcomingDueColumns}
+              rows={pendingInvoices}
+              rowKey={(inv) => `due-${inv.source ?? "finance"}-${inv.id}`}
+              embedded
+              empty={{ title: "Nothing due." }}
+            />
           </ChartPanel>
         </div>
       </div>

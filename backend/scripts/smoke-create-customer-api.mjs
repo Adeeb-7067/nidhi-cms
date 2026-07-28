@@ -6,7 +6,7 @@ import "dotenv/config";
 import mongoose from "mongoose";
 import { usersTable, clientsTable } from "../src/models/schema/index.js";
 import { signAccessToken } from "../src/lib/jwt.js";
-import { deleteClientCompany } from "../src/services/client-company-provision.js";
+import { deleteClientCompany } from "../src/modules/identity/services/client-company-provision.js";
 
 const base = process.env.AUDIT_API_BASE || "http://localhost:15000";
 

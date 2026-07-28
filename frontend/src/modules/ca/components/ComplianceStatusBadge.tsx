@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { CmsStatusChip } from "@/components/cms";
 import type { ComplianceTimingStatus } from "../types";
 import { COMPLIANCE_TIMING_LABELS } from "../constants";
 
@@ -8,11 +8,11 @@ const styles: Record<ComplianceTimingStatus, string> = {
   overdue: "bg-red-500/10 text-red-600 border-red-500/25",
 };
 
-const dotStyles: Record<ComplianceTimingStatus, string> = {
-  completed: "bg-emerald-500",
-  upcoming: "bg-amber-500",
-  overdue: "bg-red-500",
-};
+const tones = {
+  completed: "success",
+  upcoming: "warning",
+  overdue: "danger",
+} as const;
 
 export function ComplianceStatusBadge({
   status,
@@ -24,15 +24,12 @@ export function ComplianceStatusBadge({
   className?: string;
 }) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap",
-        styles[status],
-        className,
-      )}
-    >
-      {showDot && <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", dotStyles[status])} />}
-      {COMPLIANCE_TIMING_LABELS[status]}
-    </span>
+    <CmsStatusChip
+      label={COMPLIANCE_TIMING_LABELS[status]}
+      tone={tones[status]}
+      colorClassName={styles[status]}
+      dot={showDot}
+      className={className}
+    />
   );
 }

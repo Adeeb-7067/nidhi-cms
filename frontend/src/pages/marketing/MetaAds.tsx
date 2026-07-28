@@ -3,14 +3,6 @@ import { Megaphone, Loader2, Plus, PauseCircle, FileEdit, PlayCircle } from "luc
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -52,6 +44,7 @@ import { usePermissions } from "@/modules/permissions/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
 import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
 import type { CampaignStatus, MetaCampaignObjective } from "@/modules/marketing/types";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
 const emptyForm = {
   accountId: "",
@@ -86,7 +79,7 @@ export default function MarketingMetaAds() {
   const [form, setForm] = useState(emptyForm);
 
   const accountFilterId = projectFilter ? Number(projectFilter) : undefined;
-  const { data, isLoading, isError } = useMarketingCampaigns(
+  const { data, isLoading, isError, refetch } = useMarketingCampaigns(
     "meta",
     accountFilterId ? { accountId: accountFilterId } : undefined,
   );
@@ -128,6 +121,29 @@ export default function MarketingMetaAds() {
       draft: campaigns.filter((c) => c.status === "draft").length,
     }),
     [campaigns],
+  );
+
+  const columns = useMemo<CmsColumn<MarketingMetaCampaignDto>[]>(
+    () => {
+      const cols: CmsColumn<MarketingMetaCampaignDto>[] = [
+        { id: "campaign", header: "Campaign", cell: (c) => <span className="font-medium max-w-[140px] block truncate">{c.name}</span> },
+        { id: "project", header: "Project", cell: (c) => c.clientName },
+        { id: "objective", header: "Objective", cell: (c) => META_OBJECTIVE_LABELS[c.objective as MetaCampaignObjective] ?? c.objective },
+        { id: "status", header: "Status", chip: true, cell: (c) => <MarketingStatusBadge variant="campaign" status={c.status as CampaignStatus} /> },
+        { id: "budget", header: "Budget", align: "right", cell: (c) => formatCompactCurrency(c.budgetInr) },
+        { id: "audience", header: "Audience", cell: (c) => <span className="max-w-[120px] block truncate">{c.audience}</span> },
+        { id: "reach", header: "Reach", align: "right", cell: (c) => c.reach.toLocaleString("en-IN") },
+        { id: "impressions", header: "Impr.", align: "right", cell: (c) => c.impressions.toLocaleString("en-IN") },
+        { id: "ctr", header: "CTR", align: "right", cell: (c) => `${c.ctr.toFixed(2)}%` },
+        { id: "cpc", header: "CPC", align: "right", cell: (c) => `₹${c.cpc}` },
+        { id: "cpm", header: "CPM", align: "right", cell: (c) => `₹${c.cpm}` },
+        { id: "leads", header: "Leads", align: "right", cell: (c) => c.leads },
+        { id: "roas", header: "ROAS", align: "right", cell: (c) => `${c.roas.toFixed(1)}x` },
+      ];
+      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (c) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)} canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)} onEdit={() => openEdit(c)} onDelete={() => setDeleteTarget(c)} /> });
+      return cols;
+    },
+    [showActions, canEdit, canDelete, user],
   );
 
   const openCreate = () => {
@@ -260,75 +276,7 @@ export default function MarketingMetaAds() {
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      {isLoading ? (
-        <MarketingListPageSkeleton kpiCount={4} showTabs />
-      ) : isError ? (
-        <MarketingEmptyState icon={Megaphone} title="Could not load campaigns" description="Check your connection and try again." />
-      ) : filtered.length === 0 ? (
-        <MarketingEmptyState
-          icon={Megaphone}
-          title="No campaigns found"
-          description="Adjust your search filters."
-          actionLabel={canCreate ? "New campaign" : undefined}
-          onAction={canCreate ? openCreate : undefined}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30">
-                <TableHead className="text-xs">Campaign</TableHead>
-                <TableHead className="text-xs">Project</TableHead>
-                <TableHead className="text-xs">Objective</TableHead>
-                <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs text-right">Budget</TableHead>
-                <TableHead className="text-xs">Audience</TableHead>
-                <TableHead className="text-xs text-right">Reach</TableHead>
-                <TableHead className="text-xs text-right">Impr.</TableHead>
-                <TableHead className="text-xs text-right">CTR</TableHead>
-                <TableHead className="text-xs text-right">CPC</TableHead>
-                <TableHead className="text-xs text-right">CPM</TableHead>
-                <TableHead className="text-xs text-right">Leads</TableHead>
-                <TableHead className="text-xs text-right">ROAS</TableHead>
-                {showActions && <TableHead className="text-xs text-right w-[80px]">Actions</TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="text-xs font-medium max-w-[140px] truncate">{c.name}</TableCell>
-                  <TableCell className="text-xs">{c.clientName}</TableCell>
-                  <TableCell className="text-xs">
-                    {META_OBJECTIVE_LABELS[c.objective as MetaCampaignObjective] ?? c.objective}
-                  </TableCell>
-                  <TableCell>
-                    <MarketingStatusBadge variant="campaign" status={c.status as CampaignStatus} />
-                  </TableCell>
-                  <TableCell className="text-xs text-right">{formatCompactCurrency(c.budgetInr)}</TableCell>
-                  <TableCell className="text-xs max-w-[120px] truncate">{c.audience}</TableCell>
-                  <TableCell className="text-xs text-right">{c.reach.toLocaleString("en-IN")}</TableCell>
-                  <TableCell className="text-xs text-right">{c.impressions.toLocaleString("en-IN")}</TableCell>
-                  <TableCell className="text-xs text-right">{c.ctr.toFixed(2)}%</TableCell>
-                  <TableCell className="text-xs text-right">₹{c.cpc}</TableCell>
-                  <TableCell className="text-xs text-right">₹{c.cpm}</TableCell>
-                  <TableCell className="text-xs text-right">{c.leads}</TableCell>
-                  <TableCell className="text-xs text-right">{c.roas.toFixed(1)}x</TableCell>
-                  {showActions && (
-                    <TableCell className="text-right">
-                      <MarketingRowActions
-                        canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)}
-                        canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)}
-                        onEdit={() => openEdit(c)}
-                        onDelete={() => setDeleteTarget(c)}
-                      />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      )}
+      <CmsDataTable columns={columns} rows={filtered} rowKey={(c) => c.id} isLoading={isLoading} error={isError} onRetry={() => refetch()} empty={{ icon: Megaphone, title: "No campaigns found", description: "Adjust your search filters.", actionLabel: canCreate ? "New campaign" : undefined, onAction: canCreate ? openCreate : undefined }} errorMessage="Check your connection and try again." />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">

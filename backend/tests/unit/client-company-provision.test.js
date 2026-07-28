@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   shouldSyncPortalEmailWithContact,
   resolveDiscussionStaffUserId,
-} from "../../src/services/client-company-provision.js";
+} from "../../src/modules/identity/services/client-company-provision.js";
 import { formatClientAsCustomer } from "../../src/mappers/client-customer-format.js";
 
 test("shouldSyncPortalEmailWithContact is true only when emails match", () => {

@@ -1,23 +1,13 @@
 import { useMemo, useState, useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, FileText, Send, Pencil, Trash2 } from "lucide-react";
+import { Plus, FileText, Send, Pencil, Trash2, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
-import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { DataPagination } from "@/components/ui/data-pagination";
+import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
+import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useListProposals,
   useSendProposal,
@@ -33,7 +23,6 @@ import {
   SalesFilterBar,
   SalesStatusBadge,
   ExecutiveAvatar,
-  SalesEmptyState,
   ProposalFormSheet,
 } from "@/modules/sales/components";
 import { resolveProposalTotal } from "@/modules/sales/utils";
@@ -51,7 +40,6 @@ const STATUS_ORDER: (ProposalStatus | "all")[] = [
 ];
 
 export default function Proposals() {
-  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [statusTab, setStatusTab] = useState<string>("all");
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
@@ -116,6 +104,117 @@ export default function Proposals() {
 
   const deletingProposal = deletingId !== null ? proposals.find((p) => p.id === deletingId) : null;
 
+  const columns: CmsColumn<Proposal>[] = [
+    {
+      id: "number",
+      header: "Number",
+      cell: (p) => (
+        <Link href={`/sales/proposals/${p.id}`} className="font-mono text-primary hover:underline">
+          {p.number}
+        </Link>
+      ),
+    },
+    {
+      id: "title",
+      header: "Title",
+      className: "max-w-[180px] truncate font-medium",
+      cell: (p) => p.title,
+    },
+    {
+      id: "for",
+      header: "For",
+      className: "max-w-[140px] truncate text-muted-foreground",
+      cell: (p) =>
+        p.lead?.name ??
+        p.customer?.companyName ??
+        p.customer?.contactPerson ??
+        (p.leadId ? `Lead #${p.leadId}` : p.customerId ? `Customer #${p.customerId}` : "—"),
+    },
+    {
+      id: "status",
+      header: "Status",
+      chip: true,
+      cell: (p) => <SalesStatusBadge variant="proposal" value={p.status} />,
+    },
+    {
+      id: "executive",
+      header: "Executive",
+      cell: (p) =>
+        p.assignedToUser ? (
+          <ExecutiveAvatar name={p.assignedToUser.name} />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "total",
+      header: "Total",
+      align: "right",
+      cell: (p) => (
+        <span className="font-medium tabular-nums">{formatCurrency(resolveProposalTotal(p).finalTotal)}</span>
+      ),
+    },
+    {
+      id: "valid",
+      header: "Valid until",
+      cell: (p) => (
+        <span className="text-muted-foreground">
+          {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
+        </span>
+      ),
+    },
+    {
+      id: "created",
+      header: "Created",
+      cell: (p) => <span className="text-muted-foreground">{formatSalesDateTime(p.createdAt)}</span>,
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: (p) => {
+        const canSend = ["draft", "revised", "counter_offer"].includes(p.status);
+        const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {canSend && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                title="Send proposal"
+                disabled={sendingId === p.id}
+                onClick={() => handleSend(p)}
+              >
+                <Send className="h-3.5 w-3.5 text-primary" />
+              </Button>
+            )}
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-7 w-7"
+              title="Edit proposal"
+              onClick={() => setEditId(p.id)}
+            >
+              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+            </Button>
+            {canDelete && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                title="Delete proposal"
+                onClick={() => setDeletingId(p.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </Button>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
+
   return (
     <>
     <PortalPageShell>
@@ -166,160 +265,78 @@ export default function Proposals() {
         </div>
       )}
 
+      <PortalKpiGrid
+        items={[
+          {
+            title: "Total proposals",
+            value: statusCounts.all || total,
+            icon: FileText,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Sent / seen",
+            value: (statusCounts.sent ?? 0) + (statusCounts.seen ?? 0),
+            icon: Send,
+            accent: "violet",
+            delay: 1,
+          },
+          {
+            title: "Approved",
+            value: statusCounts.approved ?? 0,
+            icon: CheckCircle2,
+            accent: "green",
+            delay: 2,
+          },
+          {
+            title: "Declined / expired",
+            value: (statusCounts.declined ?? 0) + (statusCounts.expired ?? 0),
+            icon: XCircle,
+            accent: "red",
+            delay: 3,
+          },
+        ]}
+      />
+
       <SalesFilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search proposals…"
       />
 
-      <Tabs value={statusTab} onValueChange={setStatusTab}>
-        <TabsList className="h-auto flex-wrap justify-start gap-1 bg-transparent p-0">
-          {STATUS_ORDER.map((s) => (
-            <TabsTrigger
-              key={s}
-              value={s}
-              className="text-xs data-[state=active]:bg-primary/10"
-            >
-              {s === "all" ? "All" : ((PROPOSAL_STATUS_LABELS as Record<string, string>)[s] ?? s)} ({statusCounts[s] ?? 0})
-            </TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
+      <CmsChipTabs
+        value={statusTab}
+        onValueChange={setStatusTab}
+        items={STATUS_ORDER.map((s) => ({
+          value: s,
+          label: s === "all" ? "All" : ((PROPOSAL_STATUS_LABELS as Record<string, string>)[s] ?? s),
+          count: statusCounts[s] ?? 0,
+        }))}
+      />
 
-      {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-lg" />)}
-        </div>
-      ) : isError ? (
-        <SalesEmptyState
-          icon={FileText}
-          title="Failed to load proposals"
-          description="Could not fetch proposals from the server."
-          actionLabel="Retry"
-          onAction={() => refetch()}
-        />
-      ) : total === 0 ? (
-        <SalesEmptyState
-          icon={FileText}
-          title="No proposals found"
-          description="Adjust filters or create a new proposal."
-          actionLabel="Create proposal"
-          onAction={() => setCreateOpen(true)}
-        />
-      ) : (
-        <div className="rounded-xl border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30">
-                  <TableHead className="text-xs">Number</TableHead>
-                  <TableHead className="text-xs">Title</TableHead>
-                  <TableHead className="text-xs">For</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Executive</TableHead>
-                  <TableHead className="text-xs text-right">Total</TableHead>
-                  <TableHead className="text-xs">Valid until</TableHead>
-                  <TableHead className="text-xs">Created</TableHead>
-                  <TableHead className="text-xs text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {proposals.map((p) => {
-                  const total = resolveProposalTotal(p).finalTotal;
-                  const forLabel =
-                    p.lead?.name ??
-                    p.customer?.companyName ??
-                    p.customer?.contactPerson ??
-                    (p.leadId ? `Lead #${p.leadId}` : p.customerId ? `Customer #${p.customerId}` : "—");
-                  const canSend = ["draft", "revised", "counter_offer"].includes(p.status);
-                  const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
-                  return (
-                    <TableRow key={p.id} className="hover:bg-muted/30">
-                      <TableCell>
-                        <Link
-                          href={`/sales/proposals/${p.id}`}
-                          className="text-xs font-mono text-primary hover:underline"
-                        >
-                          {p.number}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-xs font-medium max-w-[180px] truncate">
-                        {p.title}
-                      </TableCell>
-                      <TableCell className="text-xs max-w-[140px] truncate text-muted-foreground">
-                        {forLabel}
-                      </TableCell>
-                      <TableCell>
-                        <SalesStatusBadge variant="proposal" value={p.status} />
-                      </TableCell>
-                      <TableCell>
-                        {p.assignedToUser ? (
-                          <ExecutiveAvatar name={p.assignedToUser.name} />
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-xs text-right font-medium tabular-nums">
-                        {formatCurrency(total)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {p.validUntil ? format(new Date(p.validUntil), "MMM d, yyyy") : "—"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatSalesDateTime(p.createdAt)}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center justify-end gap-1">
-                          {canSend && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              title="Send proposal"
-                              disabled={sendingId === p.id}
-                              onClick={(e) => { e.stopPropagation(); handleSend(p); }}
-                            >
-                              <Send className="h-3.5 w-3.5 text-primary" />
-                            </Button>
-                          )}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            title="Edit proposal"
-                            onClick={(e) => { e.stopPropagation(); setEditId(p.id); }}
-                          >
-                            <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
-                          {canDelete && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7"
-                              title="Delete proposal"
-                              onClick={(e) => { e.stopPropagation(); setDeletingId(p.id); }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-          <DataPagination
-            page={page}
-            total={total}
-            limit={limit}
-            loadedRowCount={proposals.length}
-            onPageChange={setPage}
-            onLimitChange={setLimit}
-          />
-        </div>
-      )}
+      <CmsDataTable
+        columns={columns}
+        rows={proposals}
+        rowKey={(p) => p.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: FileText,
+          title: "No proposals found",
+          description: "Adjust filters or create a new proposal.",
+          actionLabel: "Create proposal",
+          onAction: () => setCreateOpen(true),
+        }}
+        pagination={{
+          page,
+          total,
+          limit,
+          loadedRowCount: proposals.length,
+          onPageChange: setPage,
+          onLimitChange: setLimit,
+        }}
+      />
     </PortalPageShell>
     <ProposalFormSheet open={createOpen} onOpenChange={setCreateOpen} />
     <ProposalFormSheet open={editId !== null} onOpenChange={(o) => { if (!o) setEditId(null); }} editId={editId} />

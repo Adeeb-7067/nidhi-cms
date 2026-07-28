@@ -16,9 +16,9 @@ import {
 } from "@/components/layout/portal-page-kit";
 import {
   HrmRefPageHeader,
-  HrmRefStatStrip,
-  hrmKpiToRefStats,
 } from "@/modules/hrm/hrm-reference-kit";
+import { CmsKpiGrid, type CmsKpiAccent, type CmsKpiItem } from "@/components/cms/cms-kpi";
+import { CmsFilterBar, type CmsSelectFilter } from "@/components/cms";
 
 export { portalActionButtonClass };
 export function hrmActionButtonClass(extra?: string) {
@@ -81,23 +81,40 @@ export type HrmKpiItem = {
   alert?: boolean;
 };
 
-/** Satyakabir StatStrip KPI row for HRM pages. */
+function mapHrmAccent(accent?: HrmKpiItem["accent"]): CmsKpiAccent | undefined {
+  if (!accent) return undefined;
+  if (accent === "rose") return "red";
+  if (accent === "emerald") return "green";
+  return accent;
+}
+
+/** Satyakabir StatStrip KPI row for HRM pages — shared CMS KPI kit. */
 export function HrmKpiGrid({
   items,
   columns = 4,
   loading,
+  count,
 }: {
   items: HrmKpiItem[];
   columns?: 2 | 3 | 4;
   loading?: boolean;
   count?: number;
 }) {
-  const col = columns === 2 ? 2 : columns === 3 ? 3 : 4;
+  const mapped: CmsKpiItem[] = items.map((item) => ({
+    title: item.label,
+    value: item.value,
+    hint: item.hint,
+    icon: item.icon,
+    href: item.href,
+    alert: item.alert,
+    accent: mapHrmAccent(item.accent),
+  }));
   return (
-    <HrmRefStatStrip
-      stats={hrmKpiToRefStats(items)}
+    <CmsKpiGrid
+      items={mapped}
       loading={loading}
-      columns={col as 2 | 3 | 4}
+      columns={columns}
+      count={count ?? Math.max(items.length, columns)}
     />
   );
 }
@@ -156,7 +173,7 @@ export function HrmChartCard({
           )}
         </div>
       </CardHeader>
-      <CardContent className={cn("flex flex-1 flex-col pb-4 pt-0", contentClassName)}>{children}</CardContent>
+      <CardContent className={cn("flex flex-1 flex-col pb-2 pt-0", contentClassName)}>{children}</CardContent>
     </Card>
   );
 }
@@ -257,14 +274,54 @@ export function HrmFilterRow({
   );
 }
 
-/** Toolbar row — standalone card, or pass embedded to nest inside a list panel. */
+/** Toolbar row — prefers CmsFilterBar; `embedded` kept for call-site compat. */
 export function HrmFilterBar({
-  embedded,
-  ...props
-}: React.ComponentProps<typeof HrmFilterRow> & { embedded?: boolean }) {
-  const row = <HrmFilterRow {...props} />;
-  if (embedded) return row;
-  return <PortalContentCard contentClassName="p-3">{row}</PortalContentCard>;
+  embedded: _embedded,
+  period,
+  onPeriodChange,
+  periodOptions,
+  onExport,
+  search,
+  onSearchChange,
+  searchPlaceholder = "Filter…",
+  children,
+  className,
+}: {
+  embedded?: boolean;
+  period?: string;
+  onPeriodChange?: (v: string) => void;
+  periodOptions?: Array<{ value: string; label: string }>;
+  onExport?: () => void;
+  search?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
+  children?: ReactNode;
+  className?: string;
+}) {
+  const filters: CmsSelectFilter[] = [];
+  if (onPeriodChange && periodOptions) {
+    filters.push({
+      key: "period",
+      value: period,
+      onChange: onPeriodChange,
+      options: periodOptions,
+      placeholder: "Period",
+      className: "sm:w-[160px]",
+    });
+  }
+
+  return (
+    <CmsFilterBar
+      search={search}
+      onSearchChange={onSearchChange}
+      searchPlaceholder={searchPlaceholder}
+      onExport={onExport}
+      filters={filters.length ? filters : undefined}
+      className={className}
+    >
+      {children}
+    </CmsFilterBar>
+  );
 }
 
 export function HrmInsightBanner({

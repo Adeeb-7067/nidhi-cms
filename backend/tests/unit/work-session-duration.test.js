@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { computeSessionDurations } from "../../src/services/work-sessions.service.js";
-import { computeShiftEndUtc } from "../../src/services/shift-end-clockout.service.js";
+import { computeSessionDurations } from "../../src/modules/monitoring/services/work-sessions.service.js";
+import { computeShiftEndUtc } from "../../src/modules/monitoring/services/shift-end-clockout.service.js";
 
 const TZ = "Asia/Kolkata";
 const SHIFT = { startTime: "09:30", endTime: "18:00" };

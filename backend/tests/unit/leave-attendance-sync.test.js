@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { shouldClockOutForApprovedLeave } from "../../src/services/hrm/leave-attendance-sync.js";
+import { shouldClockOutForApprovedLeave } from "../../src/modules/hrm/services/leave-attendance-sync.js";
 
 describe("shouldClockOutForApprovedLeave", () => {
   test("returns true for approved full-day leave covering today", () => {

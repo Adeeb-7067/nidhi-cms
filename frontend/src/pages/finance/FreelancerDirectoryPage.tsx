@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Users, ExternalLink } from "lucide-react";
+import { Users, ExternalLink, IndianRupee, CheckCircle2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
@@ -21,6 +14,7 @@ import {
 } from "@/modules/finance/components";
 import { FinanceListPageSkeleton } from "@/components/loading";
 import { useListFreelancerEngagements } from "@/api/finance";
+import { FreelancerNavTabs } from "@/components/freelancers/FreelancerNavTabs";
 
 export default function FreelancerDirectoryPage() {
   const [search, setSearch] = useState("");
@@ -28,7 +22,17 @@ export default function FreelancerDirectoryPage() {
 
   const allFreelancersList = useMemo(() => {
     const list = data?.engagements ?? [];
-    const map = new Map<number, { freelancerName: string; userId: number; projects: string[]; totalAgreed: number; totalPaid: number; remaining: number }>();
+    const map = new Map<
+      number,
+      {
+        freelancerName: string;
+        userId: number;
+        projects: string[];
+        totalAgreed: number;
+        totalPaid: number;
+        remaining: number;
+      }
+    >();
     for (const e of list) {
       const existing = map.get(e.userId) ?? {
         freelancerName: e.freelancerName ?? `Freelancer #${e.userId}`,
@@ -49,9 +53,10 @@ export default function FreelancerDirectoryPage() {
     const result = Array.from(map.values());
     const q = search.trim().toLowerCase();
     if (!q) return result;
-    return result.filter((item) =>
-      item.freelancerName.toLowerCase().includes(q) ||
-      item.projects.some((p) => p.toLowerCase().includes(q))
+    return result.filter(
+      (item) =>
+        item.freelancerName.toLowerCase().includes(q) ||
+        item.projects.some((p) => p.toLowerCase().includes(q)),
     );
   }, [data?.engagements, search]);
 
@@ -61,7 +66,7 @@ export default function FreelancerDirectoryPage() {
     const paid = rows.reduce((s, e) => s + e.paidAmount, 0);
     const remaining = rows.reduce((s, e) => s + e.remainingAmount, 0);
     const uniqueFreelancers = new Set(rows.map((e) => e.userId)).size;
-    return { count: rows.length, uniqueFreelancers, agreed, paid, remaining };
+    return { uniqueFreelancers, agreed, paid, remaining };
   }, [data?.engagements]);
 
   if (isLoading) return <FinanceListPageSkeleton />;
@@ -73,91 +78,110 @@ export default function FreelancerDirectoryPage() {
     );
   }
 
+  type FreelancerRow = (typeof allFreelancersList)[number];
+  const columns: CmsColumn<FreelancerRow>[] = [
+    {
+      id: "freelancer",
+      header: "Freelancer",
+      cell: (f) => (
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+            {f.freelancerName.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="font-medium leading-none">{f.freelancerName}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">#{f.userId}</p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "projects",
+      header: "Projects",
+      className: "max-w-[320px]",
+      chip: true,
+      cell: (f) => f.projects.length === 0 ? <span className="text-muted-foreground">—</span> : f.projects.map((p) => (
+        <Badge key={p} variant="secondary" className="text-[10px] font-normal">{p}</Badge>
+      )),
+    },
+    { id: "agreed", header: "Agreed", align: "right", cell: (f) => <span className="font-medium tabular-nums">{formatCurrency(f.totalAgreed)}</span> },
+    { id: "paid", header: "Paid", align: "right", cell: (f) => <span className="font-medium tabular-nums text-emerald-600">{formatCurrency(f.totalPaid)}</span> },
+    { id: "remaining", header: "Remaining", align: "right", cell: (f) => <span className="tabular-nums text-amber-600">{formatCurrency(f.remaining)}</span> },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      cell: () => <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild><Link href="/freelancers/payments">View payments</Link></Button>,
+    },
+  ];
+
   return (
     <PortalPageShell>
       <FinancePageHeader
-        title="All Working Freelancers"
-        description="Directory of active freelancers working across projects with agreed fees and payout balances"
+        title="All freelancers"
+        description="Directory of freelancers with project fees and payout balances."
+        breadcrumbs={[
+          { label: "Freelancers", href: "/freelancers" },
+          { label: "Directory" },
+        ]}
+        actions={
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" asChild>
+            <Link href="/admin/employees?role=freelancer">
+              <ExternalLink className="h-3.5 w-3.5" />
+              Team accounts
+            </Link>
+          </Button>
+        }
       />
+
+      <FreelancerNavTabs activeTab="freelancers" />
 
       <PortalKpiGrid
         items={[
-          { title: "Total Working Freelancers", value: String(kpis.uniqueFreelancers), icon: Users, accent: "blue" },
-          { title: "Agreed Contracts Total", value: formatCurrency(kpis.agreed), icon: Users, accent: "violet" },
-          { title: "Total Paid", value: formatCurrency(kpis.paid), icon: Users, accent: "green" },
-          { title: "Remaining Payable", value: formatCurrency(kpis.remaining), icon: Users, accent: "amber" },
+          {
+            title: "Working freelancers",
+            value: String(kpis.uniqueFreelancers),
+            icon: Users,
+            accent: "blue",
+            delay: 0,
+          },
+          {
+            title: "Agreed total",
+            value: formatCurrency(kpis.agreed),
+            icon: IndianRupee,
+            accent: "violet",
+            delay: 1,
+          },
+          {
+            title: "Paid out",
+            value: formatCurrency(kpis.paid),
+            icon: CheckCircle2,
+            accent: "green",
+            delay: 2,
+          },
+          {
+            title: "Outstanding",
+            value: formatCurrency(kpis.remaining),
+            icon: Wallet,
+            accent: "amber",
+            alert: kpis.remaining > 0,
+            delay: 3,
+          },
         ]}
       />
 
-      <FinanceFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search freelancer name or project…" />
+      <FinanceFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search freelancer name or project…"
+      />
 
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Freelancer Roster ({allFreelancersList.length})
-          </h3>
-          <Button size="sm" variant="outline" asChild>
-            <Link href="/admin/employees?role=freelancer">
-              <ExternalLink className="h-3.5 w-3.5 mr-1.5" /> Full Team Accounts
-            </Link>
-          </Button>
-        </div>
-
-        {allFreelancersList.length === 0 ? (
-          <FinanceEmptyState
-            title="No working freelancers found"
-            description="No freelancers match your search query."
-          />
-        ) : (
-          <div className="rounded-xl border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Freelancer</TableHead>
-                  <TableHead>Assigned Projects</TableHead>
-                  <TableHead>Total Agreed</TableHead>
-                  <TableHead>Total Paid</TableHead>
-                  <TableHead>Remaining Balance</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {allFreelancersList.map((f) => (
-                  <TableRow key={f.userId}>
-                    <TableCell className="font-medium flex items-center gap-2.5">
-                      <div className="h-8 w-8 rounded-full bg-blue-500/10 text-blue-600 flex items-center justify-center font-bold text-xs">
-                        {f.freelancerName.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium leading-none">{f.freelancerName}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">User #{f.userId}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {f.projects.map((p, idx) => (
-                          <Badge key={idx} variant="secondary" className="text-xs font-normal">
-                            {p}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell>{formatCurrency(f.totalAgreed)}</TableCell>
-                    <TableCell className="text-emerald-600 font-medium">{formatCurrency(f.totalPaid)}</TableCell>
-                    <TableCell className="text-amber-600">{formatCurrency(f.remaining)}</TableCell>
-                    <TableCell className="text-right">
-                      <Button size="sm" variant="outline" asChild>
-                        <Link href="/freelancers/payments">View Payments</Link>
-
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </div>
+      <CmsDataTable
+        columns={columns}
+        rows={allFreelancersList}
+        rowKey={(f) => f.userId}
+        empty={{ icon: Users, title: "No freelancers found", description: "No freelancers match your search, or none have project fees yet." }}
+      />
     </PortalPageShell>
   );
 }

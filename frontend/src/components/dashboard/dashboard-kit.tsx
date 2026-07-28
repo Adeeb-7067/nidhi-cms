@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PortalDashboardSkeleton } from "@/components/loading/page-skeletons";
+import { CmsKpiCard } from "@/components/cms/cms-kpi";
 
 const fadeUp = {
   initial: { opacity: 0, y: 12 },
@@ -74,65 +75,6 @@ export type StatCardProps = {
   delay?: number;
 };
 
-const accentMap = {
-  default: {
-    ring: "ring-primary/20",
-    icon: "bg-primary/15 text-primary",
-    glow: "from-primary/5",
-    fill: "border-l-4 border-l-primary bg-gradient-to-br from-primary/12 via-card to-card",
-    value: "text-primary",
-  },
-  blue: {
-    ring: "ring-blue-500/25",
-    icon: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
-    glow: "from-blue-500/5",
-    fill: "border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-500/12 via-card to-card",
-    value: "text-blue-600 dark:text-blue-400",
-  },
-  violet: {
-    ring: "ring-violet-500/25",
-    icon: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
-    glow: "from-violet-500/5",
-    fill: "border-l-4 border-l-violet-500 bg-gradient-to-br from-violet-500/12 via-card to-card",
-    value: "text-violet-600 dark:text-violet-400",
-  },
-  green: {
-    ring: "ring-green-500/25",
-    icon: "bg-green-500/15 text-green-600 dark:text-green-400",
-    glow: "from-green-500/5",
-    fill: "border-l-4 border-l-green-500 bg-gradient-to-br from-green-500/12 via-card to-card",
-    value: "text-green-600 dark:text-green-400",
-  },
-  amber: {
-    ring: "ring-amber-500/25",
-    icon: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-    glow: "from-amber-500/5",
-    fill: "border-l-4 border-l-amber-500 bg-gradient-to-br from-amber-500/12 via-card to-card",
-    value: "text-amber-600 dark:text-amber-400",
-  },
-  red: {
-    ring: "ring-red-500/25",
-    icon: "bg-red-500/15 text-red-600 dark:text-red-400",
-    glow: "from-red-500/5",
-    fill: "border-l-4 border-l-red-500 bg-gradient-to-br from-red-500/12 via-card to-card",
-    value: "text-red-600 dark:text-red-400",
-  },
-  sky: {
-    ring: "ring-sky-500/25",
-    icon: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
-    glow: "from-sky-500/5",
-    fill: "border-l-4 border-l-sky-500 bg-gradient-to-br from-sky-500/12 via-card to-card",
-    value: "text-sky-600 dark:text-sky-400",
-  },
-  pink: {
-    ring: "ring-pink-500/25",
-    icon: "bg-pink-500/15 text-pink-600 dark:text-pink-400",
-    glow: "from-pink-500/5",
-    fill: "border-l-4 border-l-pink-500 bg-gradient-to-br from-pink-500/12 via-card to-card",
-    value: "text-pink-600 dark:text-pink-400",
-  },
-};
-
 /** Standard 2×4 grid for page-level StatCard rows. */
 export function PageKpiRow({
   children,
@@ -196,7 +138,7 @@ export function KpiMetricCard({
   );
 }
 
-/** Minimal centered KPI tile (project analytics, etc.). */
+/** Minimal centered KPI tile — shared CMS kit. */
 export function KpiSimpleCard({
   label,
   value,
@@ -207,12 +149,11 @@ export function KpiSimpleCard({
   valueClassName?: string;
 }) {
   return (
-    <Card className="bg-card border-border/60">
-      <CardContent className="p-2 text-center">
-        <p className="text-[9px] text-muted-foreground uppercase tracking-wide leading-tight">{label}</p>
-        <p className={cn("mt-0.5 text-base font-bold tabular-nums", valueClassName)}>{value}</p>
-      </CardContent>
-    </Card>
+    <CmsKpiCard
+      title={label}
+      value={typeof value === "string" || typeof value === "number" ? value : String(value)}
+      className={valueClassName}
+    />
   );
 }
 
@@ -238,59 +179,23 @@ export function StatCard({
   title,
   value,
   hint,
-  icon: Icon,
+  icon = BarChart3,
   href,
   accent = "default",
   alert,
   delay = 0,
 }: StatCardProps) {
-  const styles = accentMap[accent] ?? accentMap.default;
-  const inner = (
-    <Card
-      className={cn(
-        "dashboard-kpi relative overflow-hidden border-border/50 transition-all duration-200",
-        "hover:shadow-[0_4px_20px_hsl(var(--foreground)/0.08)] hover:border-primary/20",
-        alert && "border-destructive/30 bg-destructive/[0.03]",
-        href && "cursor-pointer group",
-      )}
-    >
-      <motion.div
-        className={cn("absolute inset-0 bg-gradient-to-br to-transparent opacity-0 group-hover:opacity-100 transition-opacity", styles.glow)}
-      />
-      <CardContent className="relative p-3">
-        <motion.div
-          className="flex items-start justify-between gap-2"
-          whileHover={href ? { x: 2 } : undefined}
-        >
-          <motion.div
-            className={cn("flex h-8 w-8 items-center justify-center rounded-lg ring-1", styles.ring, styles.icon)}
-            whileHover={{ scale: 1.06, rotate: 4 }}
-            whileTap={{ scale: 0.95 }}
-            transition={{ type: "spring", stiffness: 400, damping: 18 }}
-          >
-            <Icon className="h-4 w-4" strokeWidth={2} />
-          </motion.div>
-          {alert && value !== 0 && (
-            <span className="h-1.5 w-1.5 rounded-full bg-destructive animate-pulse" />
-          )}
-        </motion.div>
-        <p className="mt-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{title}</p>
-        <p className={cn("mt-0.5 text-lg font-bold tabular-nums tracking-tight", alert && Number(value) > 0 && "text-destructive")}>
-          {value}
-        </p>
-        {hint && <p className="mt-0.5 text-[10px] text-muted-foreground leading-snug">{hint}</p>}
-      </CardContent>
-    </Card>
-  );
-
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: delay * 0.06, duration: 0.3 }}
-    >
-      {href ? <Link href={href}>{inner}</Link> : inner}
-    </motion.div>
+    <CmsKpiCard
+      title={title}
+      value={value}
+      hint={hint}
+      icon={icon}
+      href={href}
+      accent={accent}
+      alert={alert}
+      delay={delay}
+    />
   );
 }
 
@@ -390,81 +295,30 @@ export function DashboardSkeleton() {
   return <PortalDashboardSkeleton />;
 }
 
-/** Premium KPI — icon left, large metric (executive dashboard style). */
+/** Premium KPI — delegates to shared CMS kit. */
 export function ExecutiveStatCard({
   title,
   value,
   hint,
-  icon: Icon = BarChart3,
+  icon = BarChart3,
   href,
   accent = "default",
   alert,
   delay = 0,
   trend,
 }: StatCardProps & { trend?: { label: string; positive?: boolean } }) {
-  const styles = accentMap[accent] ?? accentMap.default;
-  const inner = (
-    <Card
-      className={cn(
-        "dashboard-kpi h-full border-border/50 transition-all duration-200 overflow-hidden",
-        styles.fill,
-        "hover:shadow-[0_4px_20px_hsl(var(--foreground)/0.08)]",
-        alert && "border-destructive/40",
-        href && "cursor-pointer group",
-      )}
-    >
-      <CardContent className="flex h-full items-center gap-4 p-4">
-        <div
-          className={cn(
-            "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 shadow-sm",
-            styles.ring,
-            styles.icon,
-          )}
-        >
-          <Icon className="h-5 w-5" strokeWidth={2} />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{title}</p>
-          <p
-            className={cn(
-              "text-2xl font-bold tabular-nums tracking-tight leading-none mt-1",
-              alert && Number(value) > 0 ? "text-destructive" : styles.value,
-            )}
-          >
-            {value}
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-            {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
-            {trend && (
-              <span
-                className={cn(
-                  "text-[10px] font-semibold",
-                  trend.positive === false ? "text-destructive" : "text-emerald-600",
-                )}
-              >
-                {trend.label}
-              </span>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
   return (
-    <motion.div
-      className="h-full"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: delay * 0.05, duration: 0.3 }}
-    >
-      {href ? (
-        <Link href={href} className="block h-full">
-          {inner}
-        </Link>
-      ) : (
-        inner
-      )}
-    </motion.div>
+    <CmsKpiCard
+      title={title}
+      value={value}
+      hint={hint}
+      icon={icon}
+      href={href}
+      accent={accent}
+      alert={alert}
+      delay={delay}
+      trend={trend}
+    />
   );
 }
 
@@ -532,26 +386,15 @@ export function OverviewTile({
   icon: LucideIcon;
   href?: string;
 }) {
-  const body = (
-    <div
-      className={cn(
-        "flex items-center gap-3 rounded-lg border border-border/50 bg-card p-3 transition-colors",
-        href && "hover:border-primary/25 hover:bg-muted/30 cursor-pointer",
-      )}
-    >
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground truncate">
-          {label}
-        </p>
-        <p className="text-lg font-bold tabular-nums leading-tight">{value}</p>
-        {sublabel && <p className="text-[10px] text-muted-foreground">{sublabel}</p>}
-      </div>
-    </div>
+  return (
+    <CmsKpiCard
+      title={label}
+      value={value}
+      hint={sublabel}
+      icon={Icon}
+      href={href}
+    />
   );
-  return href ? <Link href={href}>{body}</Link> : body;
 }
 
 export function ActivityFeedItem({

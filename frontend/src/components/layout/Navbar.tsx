@@ -451,10 +451,9 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
       {
         query: {
           queryKey: getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
-          // Keep list warm so the dropdown opens instantly; refetch when opened.
-          enabled: !!user,
+          // Fetch only when the dropdown is open — badge count comes from RealtimeContext (limit: 1).
+          enabled: !!user && notifMenuOpen,
           staleTime: QUERY_STALE.notificationsBadge ?? QUERY_STALE.list,
-          refetchOnMount: "always",
         },
       },
     );
@@ -469,13 +468,6 @@ export function Navbar({ sidebarCollapsed, onToggleSidebar, onOpenMobileNav }: N
     unreadCount,
     onAfterNavigate: () => setNotifMenuOpen(false),
   });
-
-  useEffect(() => {
-    if (!notifMenuOpen || !user) return;
-    void queryClient.invalidateQueries({
-      queryKey: getListNotificationsQueryKey({ unreadOnly: true, limit: 10 }),
-    });
-  }, [notifMenuOpen, user, queryClient]);
 
   const firstName = user?.name?.trim().split(/\s+/)[0];
   const greeting = getTimeGreeting(now.getHours());
