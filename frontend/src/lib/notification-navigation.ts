@@ -165,6 +165,33 @@ export function getNotificationTarget(
     return { href: "/marketing/content", label: "Open content" };
   }
 
+  if (
+    type === "ca_due_reminder" ||
+    entityType.startsWith("ca_") ||
+    type.startsWith("ca_")
+  ) {
+    switch (entityType) {
+      case "ca_gst":
+        return { href: "/ca/gst", label: "Open GST" };
+      case "ca_tds":
+        return { href: "/ca/tds", label: "Open TDS" };
+      case "ca_roc":
+        return { href: "/ca/roc", label: "Open ROC" };
+      case "ca_notice":
+        return { href: "/ca/notices", label: "Open notices" };
+      case "ca_dsc":
+        return { href: "/ca/din-dsc", label: "Open DIN / DSC" };
+      case "ca_calendar":
+        return { href: "/ca/compliance-calendar", label: "Open calendar" };
+      case "ca_task":
+        return { href: "/ca/tasks", label: "Open tasks" };
+      case "ca_suspense":
+        return { href: "/ca/suspense", label: "Open suspense" };
+      default:
+        return { href: "/ca", label: "Open CA" };
+    }
+  }
+
   return null;
 }
 

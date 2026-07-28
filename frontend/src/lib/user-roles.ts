@@ -10,6 +10,7 @@ export type UserRole =
   | "bde"
   | "finance"
   | "digital"
+  | "ca"
   | (string & {});
 
 /** Same delivery permissions as developer — only the display label differs. */
@@ -32,6 +33,7 @@ export const STAFF_EMPLOYEE_ROLES: UserRole[] = [
   "bde",
   "finance",
   "digital",
+  "ca",
 ];
 
 /** Everyone listed on Admin → Team (non-client internal accounts). */
@@ -45,7 +47,7 @@ export const ADMIN_STAFF_ROLES: UserRole[] = [
 export const IMPERSONATABLE_STAFF_ROLES: UserRole[] = [...ADMIN_STAFF_ROLES];
 
 /** HRM payroll / leave / employee directory — company employees only (not freelancers). */
-export const HRM_EMPLOYEE_ROLES: UserRole[] = ["hr", "manager", "developer", "tester", "qa", "bde", "finance", "digital"];
+export const HRM_EMPLOYEE_ROLES: UserRole[] = ["hr", "manager", "developer", "tester", "qa", "bde", "finance", "digital", "ca"];
 
 /** Screenshot / attendance monitoring — mirrors developer for freelancers. */
 export const MONITORABLE_STAFF_ROLES: UserRole[] = [
@@ -76,6 +78,7 @@ export const INTERNAL_STAFF_ROLES: UserRole[] = [
   "bde",
   "finance",
   "digital",
+  "ca",
   ...DEV_PORTAL_STAFF_ROLES,
 ];
 
@@ -91,6 +94,7 @@ export const PROFILE_PAGE_ROLES: UserRole[] = [
   "bde",
   "finance",
   "digital",
+  "ca",
   ...DEV_PORTAL_STAFF_ROLES,
   "client",
 ];
@@ -170,6 +174,7 @@ export function formatStaffRoleLabel(role: string): string {
   if (role === "bde") return "BDE";
   if (role === "finance") return "Finance";
   if (role === "digital") return "Digital Specialist";
+  if (role === "ca") return "CA";
   if (role === "developer") return "Developer";
   return role.replace(/_/g, " ");
 }
@@ -184,6 +189,7 @@ export function staffRoleBadgeClass(role: string): string {
   if (role === "bde") return "bg-emerald-500/10 text-emerald-700";
   if (role === "finance") return "bg-violet-500/10 text-violet-700";
   if (role === "digital") return "bg-teal-500/10 text-teal-700";
+  if (role === "ca") return "bg-sky-500/10 text-sky-700";
   return "bg-blue-500/10 text-blue-500";
 }
 

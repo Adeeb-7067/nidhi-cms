@@ -25,6 +25,7 @@ import { startProjectDocumentRenewalReminderJob } from "./src/modules/admin/serv
 import { startChequeClearanceReminderJob } from "./src/modules/finance/services/cheque-clearance-reminder-job.js";
 import { startStorageCleanupJob } from "./src/modules/finance/services/storage-cleanup-job.js";
 import { startMarketingPostReminderJob } from "./src/modules/marketing/services/post-schedule-reminder-job.js";
+import { startCaDueReminderJob } from "./src/modules/ca/services/due-reminder-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
@@ -71,6 +72,7 @@ const runProjectDocumentRenewalTick = startProjectDocumentRenewalReminderJob();
 const runChequeClearanceTick = startChequeClearanceReminderJob();
 const runStorageCleanupTick = startStorageCleanupJob();
 const runMarketingPostReminderTick = startMarketingPostReminderJob();
+const runCaDueReminderTick = startCaDueReminderJob();
 let backgroundJobsBootstrapped = false;
 const bootstrapBackgroundJobs = () => {
   if (backgroundJobsBootstrapped) return;
@@ -87,8 +89,9 @@ const bootstrapBackgroundJobs = () => {
   void runChequeClearanceTick();
   runStorageCleanupTick();
   void runMarketingPostReminderTick();
+  void runCaDueReminderTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup, marketing post reminders)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup, marketing post reminders, CA due reminders)",
   );
 };
 void whenDatabaseReady()

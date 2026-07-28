@@ -1,0 +1,70 @@
+import { Eye, Pencil, Trash2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+
+/** Same CMS row-action pattern as MarketingRowActions. */
+export function CaRowActions({
+  onView,
+  onEdit,
+  onDelete,
+  canView = true,
+  canEdit = true,
+  canDelete = true,
+}: {
+  onView?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  canView?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
+}) {
+  if (!canView && !canEdit && !canDelete) return null;
+  return (
+    <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+      {canView && onView && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onView();
+          }}
+          title="View"
+        >
+          <Eye className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canEdit && onEdit && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit();
+          }}
+          title="Edit"
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {canDelete && onDelete && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0 text-destructive"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      )}
+    </div>
+  );
+}

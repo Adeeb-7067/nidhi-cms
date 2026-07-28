@@ -90,6 +90,20 @@ export function RoleGate({
     }
   }
 
+  if (user.role === "ca") {
+    const keepCaPath =
+      pathOnly.startsWith("/ca") ||
+      pathOnly.startsWith("/profile") ||
+      pathOnly.startsWith("/notifications") ||
+      pathOnly.startsWith("/settings") ||
+      pathOnly.startsWith("/discussions") ||
+      pathOnly === "/admin/tickets" ||
+      pathOnly.startsWith("/hrm/my-");
+    if (!keepCaPath && (pathOnly.startsWith("/admin") || pathOnly.startsWith("/sales") || pathOnly.startsWith("/marketing") || pathOnly.startsWith("/dev"))) {
+      return <Redirect to="/ca" replace />;
+    }
+  }
+
   if (user.role === "freelancer") {
     // Staff hubs → freelancer home. Keep Collab tickets + work deep-links.
     const keepPath =

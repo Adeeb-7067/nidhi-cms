@@ -1,9 +1,14 @@
 import { useMemo } from "react";
 import { format } from "date-fns";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import type { BankTransaction } from "../types";
 import { formatCurrency, PAYMENT_MODE_LABELS, BANK_DIRECTION_LABELS, RECONCILIATION_LABELS } from "../constants";
+import { CaRefLink } from "./CaRefLink";
+import { CaRowActions } from "./CaRowActions";
+import { financePaymentHref, financePaymentsListHref } from "../routes";
 
 const reconStyles = {
   matched: "bg-emerald-500/10 text-emerald-700 border-emerald-500/25",
@@ -11,8 +16,20 @@ const reconStyles = {
   partial: "bg-amber-500/10 text-amber-700 border-amber-500/25",
 };
 
-export function ReconciliationTable({ rows }: { rows: BankTransaction[] }) {
-  const columns = useMemo((): CmsColumn<BankTransaction>[] => [
+type ReconRow = BankTransaction & { financeSource?: "finance" | "sales" };
+
+export function ReconciliationTable({
+  rows,
+  isLoading,
+  error,
+  onRetry,
+}: {
+  rows: ReconRow[];
+  isLoading?: boolean;
+  error?: boolean;
+  onRetry?: () => void;
+}) {
+  const columns = useMemo((): CmsColumn<ReconRow>[] => [
     {
       id: "date",
       header: "Date",
@@ -38,12 +55,20 @@ export function ReconciliationTable({ rows }: { rows: BankTransaction[] }) {
     {
       id: "party",
       header: "Party",
-      cell: (t) => <span className="font-medium max-w-[140px] truncate block">{t.party}</span>,
+      cell: (t) => (
+        <CaRefLink href={financePaymentHref(t.id, t.financeSource ?? "finance")} className="max-w-[140px] truncate block">
+          {t.party}
+        </CaRefLink>
+      ),
     },
     {
       id: "reference",
       header: "Reference",
-      cell: (t) => <span className="font-mono text-muted-foreground">{t.reference}</span>,
+      cell: (t) => (
+        <CaRefLink href={financePaymentHref(t.id, t.financeSource ?? "finance")} mono>
+          {t.reference}
+        </CaRefLink>
+      ),
     },
     {
       id: "amount",
@@ -70,6 +95,33 @@ export function ReconciliationTable({ rows }: { rows: BankTransaction[] }) {
         </span>
       ),
     },
+    {
+      id: "actions",
+      header: "",
+      cell: (t) => {
+        const href = financePaymentHref(t.id, t.financeSource ?? "finance");
+        return (
+          <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
+            {t.reconciliationStatus === "unmatched" || t.reconciliationStatus === "partial" ? (
+              <Button size="sm" variant="outline" className="h-7 text-[10px]" asChild>
+                <Link href={href}>Match in Finance</Link>
+              </Button>
+            ) : null}
+            <CaRowActions
+              canView
+              canEdit
+              canDelete={false}
+              onView={() => {
+                window.location.href = href;
+              }}
+              onEdit={() => {
+                window.location.href = href;
+              }}
+            />
+          </div>
+        );
+      },
+    },
   ], []);
 
   return (
@@ -78,7 +130,20 @@ export function ReconciliationTable({ rows }: { rows: BankTransaction[] }) {
       rows={rows}
       rowKey={(t) => t.id}
       embedded
-      empty={{ title: "No transactions to reconcile" }}
+      isLoading={isLoading}
+      error={error}
+      onRetry={onRetry}
+      onRowClick={(t) => {
+        window.location.href = financePaymentHref(t.id, t.financeSource ?? "finance");
+      }}
+      empty={{
+        title: "No transactions to reconcile",
+        description: "Payments from Finance appear here. Unmatched rows need a party link in Finance.",
+        actionLabel: "Open Finance payments",
+        onAction: () => {
+          window.location.href = financePaymentsListHref();
+        },
+      }}
     />
   );
 }

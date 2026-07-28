@@ -22,6 +22,7 @@ describe("profile page role matrix", () => {
       "bde",
       "finance",
       "digital",
+      "ca",
       "manager",
       "developer",
       "tester",
@@ -44,6 +45,7 @@ describe("profile page role matrix", () => {
       "bde",
       "finance",
       "digital",
+      "ca",
     ]);
   });
 
@@ -57,6 +59,7 @@ describe("profile page role matrix", () => {
       ["bde", "BDE-001", true],
       ["finance", "FIN-001", true],
       ["digital", "DIG-001", true],
+      ["ca", "CA-001", true],
       ["freelancer", "FL-001", false],
       ["super_admin", "ADM-001", false],
       ["client", "CL-001", false],

@@ -137,6 +137,7 @@ export function getHomeHref(
   if (role === "bde") return "/sales/bde";
   if (role === "finance") return "/finance";
   if (role === "digital") return "/marketing";
+  if (role === "ca") return "/ca";
   if (role === "client") return "/client";
   if (role === "freelancer") return "/freelancer";
   return "/dev";
@@ -550,7 +551,7 @@ export function getNavSections(
     },
 
     // =========================
-    // CA (CHARTERED ACCOUNTANT) (UI only — no backend yet)
+    // CA — ca role workbench; super_admin oversight analytics on /ca
     // =========================
     {
       label: "CA Master",
@@ -558,7 +559,8 @@ export function getNavSections(
       icon: Calculator,
       roles: [...CA_ACCESS_ROLES],
       items: [
-        { title: "Dashboard", href: "/ca", icon: LayoutDashboard, roles: [...CA_ACCESS_ROLES], group: "Overview" },
+        { title: "Dashboard", href: "/ca", icon: LayoutDashboard, roles: ["ca"], group: "Overview" },
+        { title: "Analytics", href: "/ca", icon: BarChart3, roles: ["super_admin"], group: "Overview" },
         { title: "Compliance score", href: "/ca/compliance-score", icon: ShieldCheck, roles: [...CA_ACCESS_ROLES], group: "Overview" },
         { title: "Client payments", href: "/ca/client-payments", icon: CreditCard, roles: [...CA_ACCESS_ROLES], group: "Receivables" },
         { title: "Suspense account", href: "/ca/suspense", icon: AlertTriangle, roles: [...CA_ACCESS_ROLES], group: "Receivables" },

@@ -64,6 +64,11 @@ export interface CaDashboardKpis {
   suspenseAmount: number;
   auditStatus: AuditPhase;
   overallComplianceScore: number;
+  openTasks?: number;
+  openNotices?: number;
+  overdueComplianceItems?: number;
+  outstandingPayables?: number;
+  pendingInvoices?: number;
 }
 
 export interface CaAlert {
@@ -233,6 +238,8 @@ export interface CaDocument {
   version: string;
   uploadedAt: string;
   uploadedBy: string;
+  linkedEntityType?: string | null;
+  linkedEntityId?: number | null;
 }
 
 export interface AuditRecord {
@@ -254,6 +261,7 @@ export interface CaNotice {
   dueDate: string;
   workflowStatus: NoticeWorkflowStatus;
   assignedTo: string;
+  replyNotes?: string | null;
 }
 
 export interface ComplianceCalendarItem {
@@ -283,4 +291,4 @@ export interface ComplianceScoreBreakdown {
   overall: number;
 }
 
-export type CaAccessRole = UserRole | "ca";
+export type CaAccessRole = UserRole;

@@ -54,6 +54,7 @@ export const UserRole = {
   bde: 'bde',
   finance: 'finance',
   digital: 'digital',
+  ca: 'ca',
 } as const;
 
 export type UserStatus = typeof UserStatus[keyof typeof UserStatus];

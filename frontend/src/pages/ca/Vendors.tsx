@@ -1,79 +1,74 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Building2 } from "lucide-react";
+import { Building2, ExternalLink, Plus } from "lucide-react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
-import { mockCaVendors } from "@/modules/ca/mock-data";
-import { formatCurrency, RECONCILIATION_LABELS } from "@/modules/ca/constants";
-import type { CaVendor, ReconciliationStatus } from "@/modules/ca/types";
-import { CAPageHeader, CAFilterBar } from "@/modules/ca/components";
-
-const reconTone: Record<ReconciliationStatus, "success" | "danger" | "warning"> = {
-  matched: "success",
-  unmatched: "danger",
-  partial: "warning",
-};
+import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { useListVendors, type FinanceVendor } from "@/api/finance";
+import { CAPageHeader, CAFilterBar, CaRefLink, CaRowActions } from "@/modules/ca/components";
+import { financeVendorHref, financeVendorsListHref } from "@/modules/ca/routes";
 
 export default function Vendors() {
   const [search, setSearch] = useState("");
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return mockCaVendors.filter(
-      (v) => !q || v.name.toLowerCase().includes(q) || v.gstin.toLowerCase().includes(q),
-    );
-  }, [search]);
+  const { data, isLoading, isError, refetch } = useListVendors(
+    search.trim() ? { search: search.trim() } : undefined,
+  );
+  const vendors = data?.vendors ?? [];
 
-  const columns = useMemo<CmsColumn<CaVendor>[]>(
+  const columns = useMemo<CmsColumn<FinanceVendor>[]>(
     () => [
       {
         id: "name",
         header: "Vendor",
-        cell: (v) => <span className="font-medium">{v.name}</span>,
+        cell: (v) => (
+          <CaRefLink href={financeVendorHref(v.id)}>{v.name}</CaRefLink>
+        ),
       },
       {
         id: "gstin",
         header: "GSTIN",
-        cell: (v) => <span className="font-mono">{v.gstin}</span>,
+        cell: (v) => <span className="font-mono">{v.gstin || "—"}</span>,
       },
       {
-        id: "pan",
-        header: "PAN",
-        cell: (v) => <span className="font-mono">{v.pan}</span>,
+        id: "contact",
+        header: "Contact",
+        cell: (v) => <span className="text-muted-foreground">{v.contactPerson || "—"}</span>,
       },
       {
-        id: "ledger",
-        header: "Ledger balance",
-        align: "right",
-        cell: (v) => <span className="tabular-nums">{formatCurrency(v.ledgerBalance)}</span>,
+        id: "email",
+        header: "Email",
+        cell: (v) => <span className="text-muted-foreground">{v.email || "—"}</span>,
       },
       {
-        id: "credit",
-        header: "Input credit",
-        align: "right",
-        cell: (v) => (
-          <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
-            {formatCurrency(v.inputCreditAvailable)}
-          </span>
-        ),
+        id: "phone",
+        header: "Phone",
+        cell: (v) => <span className="text-muted-foreground">{v.phone || "—"}</span>,
       },
       {
-        id: "recon",
-        header: "Reconciliation",
-        chip: true,
-        cell: (v) => (
-          <CmsStatusChip
-            label={RECONCILIATION_LABELS[v.reconciliationStatus]}
-            tone={reconTone[v.reconciliationStatus]}
-          />
-        ),
-      },
-      {
-        id: "lastPayment",
-        header: "Last payment",
+        id: "updated",
+        header: "Updated",
         cell: (v) => (
           <span className="text-muted-foreground">
-            {format(new Date(v.lastPaymentAt), "MMM d, yyyy")}
+            {v.updatedAt ? format(new Date(v.updatedAt), "MMM d, yyyy") : "—"}
           </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "",
+        cell: (v) => (
+          <CaRowActions
+            canView
+            canEdit
+            canDelete={false}
+            onView={() => {
+              window.location.href = financeVendorHref(v.id);
+            }}
+            onEdit={() => {
+              window.location.href = financeVendorHref(v.id);
+            }}
+          />
         ),
       },
     ],
@@ -84,15 +79,36 @@ export default function Vendors() {
     <PortalPageShell>
       <CAPageHeader
         title="Vendor summary"
-        description="Vendor ledger, GST input credit, and reconciliation status"
+        description="Live vendors from Finance — open a row to manage in Finance"
         breadcrumbs={[{ label: "CA", href: "/ca" }, { label: "Vendors" }]}
+        actions={
+          <Button size="sm" className="h-8 gap-1.5" asChild>
+            <Link href={financeVendorsListHref({ create: true })}>
+              <Plus className="h-3.5 w-3.5" /> Add in Finance
+              <ExternalLink className="h-3 w-3 opacity-70" />
+            </Link>
+          </Button>
+        }
       />
       <CAFilterBar search={search} onSearchChange={setSearch} searchPlaceholder="Search vendors, GSTIN…" />
       <CmsDataTable
         columns={columns}
-        rows={filtered}
+        rows={vendors}
         rowKey={(v) => v.id}
-        empty={{ icon: Building2, title: "No vendors found" }}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => void refetch()}
+        onRowClick={(v) => {
+          window.location.href = financeVendorHref(v.id);
+        }}
+        empty={{
+          icon: Building2,
+          title: "No vendors found",
+          actionLabel: "Open Finance vendors",
+          onAction: () => {
+            window.location.href = financeVendorsListHref();
+          },
+        }}
       />
     </PortalPageShell>
   );

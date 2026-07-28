@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Building2, FileText, Globe, Pencil, Phone, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,14 @@ export default function FinanceVendorsPage() {
     setEditVendor(null);
     setModalOpen(true);
   };
+
+  // Deep-link from CA: /finance/vendors?create=1
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("create") === "1") {
+      openCreate();
+    }
+  }, []);
 
   const openEdit = (vendor: FinanceVendor) => {
     setEditVendor(vendor);

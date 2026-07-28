@@ -10,7 +10,17 @@ import { uploadFileWithProgress } from "@/lib/upload-file";
 import { cn } from "@/lib/utils";
 
 /** Maps to POST /api/upload?category=... — stored under bucket subfolders */
-export type UploadCategory = "bugs" | "apk" | "inventory" | "avatars" | "reports" | "misc" | "hrm" | "finance" | "marketing";
+export type UploadCategory =
+  | "bugs"
+  | "apk"
+  | "inventory"
+  | "avatars"
+  | "reports"
+  | "misc"
+  | "hrm"
+  | "finance"
+  | "marketing"
+  | "ca";
 
 export type FileUploaderVariant = "dropzone" | "choose-file";
 
@@ -24,6 +34,7 @@ const CATEGORY_MAX_SIZE_MB: Record<UploadCategory, number> = {
   hrm: 10,
   finance: 10,
   marketing: 100,
+  ca: 50,
 };
 
 interface FileUploaderProps {

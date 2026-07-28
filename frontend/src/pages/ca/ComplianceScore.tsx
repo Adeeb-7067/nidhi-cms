@@ -3,26 +3,35 @@ import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { ChartPanel } from "@/components/dashboard/admin-dashboard-charts";
-import { complianceScoreBreakdown, complianceScoreHistory } from "@/modules/ca/mock-data";
+import { useCaComplianceScore } from "@/api/ca";
 import { formatPercent } from "@/modules/ca/constants";
 import { CAPageHeader, CAScoreWidget } from "@/modules/ca/components";
 
 export default function ComplianceScore() {
-  const scores = complianceScoreBreakdown;
+  const { data, isLoading, isError, refetch } = useCaComplianceScore();
+  const scores = data?.breakdown ?? { gst: 0, tax: 0, roc: 0, audit: 0, overall: 0 };
+  const history = data?.history ?? [];
 
   return (
     <PortalPageShell>
       <CAPageHeader
         title="CEO compliance score"
-        description="GST, tax, ROC, and audit readiness — overall compliance percentage"
+        description="GST, tax, ROC, and audit readiness — scored from live CA filings and notices"
         breadcrumbs={[{ label: "CA", href: "/ca" }, { label: "Compliance score" }]}
       />
+      {isError ? (
+        <button type="button" className="text-sm underline" onClick={() => void refetch()}>
+          Could not load score — retry
+        </button>
+      ) : null}
       <Card className="border-primary/20 bg-primary/[0.02]">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Overall compliance score</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-4xl font-bold tabular-nums text-primary">{formatPercent(scores.overall)}</p>
+          <p className="text-4xl font-bold tabular-nums text-primary">
+            {isLoading ? "…" : formatPercent(scores.overall)}
+          </p>
           <Progress value={scores.overall} className="h-3 mt-3" />
         </CardContent>
       </Card>
@@ -34,7 +43,7 @@ export default function ComplianceScore() {
       </div>
       <ChartPanel title="Score trend" description="Last 6 months" icon={ShieldCheck} accent="blue">
         <div className="grid grid-cols-6 gap-2 pt-2">
-          {complianceScoreHistory.map((h) => (
+          {history.map((h) => (
             <div key={h.month} className="text-center">
               <div className="mx-auto w-full max-w-[48px] h-24 bg-muted/30 rounded flex flex-col justify-end overflow-hidden">
                 <div className="bg-primary/70 rounded-t" style={{ height: `${h.score}%` }} />

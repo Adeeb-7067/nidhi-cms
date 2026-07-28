@@ -1,17 +1,17 @@
 /** Canonical user role lists — keep in sync with Mongoose schema and OpenAPI. */
-const userRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "client", "freelancer", "bde", "finance", "digital"];
+const userRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "client", "freelancer", "bde", "finance", "digital", "ca"];
 
 /** Same delivery permissions as developer — only the display label differs. */
 const developerStaffRoles = ["developer", "freelancer"];
  
 /** Employee ID + dev-portal login (employee ID, not email). */
-const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital"];
+const staffEmployeeRoles = ["manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital", "ca"];
 
 /** Payroll / leave / attendance HRM records — company employees only (not freelancers). */
-const hrmEmployeeRoles = ["hr", "manager", "developer", "tester", "qa", "bde", "finance", "digital"];
+const hrmEmployeeRoles = ["hr", "manager", "developer", "tester", "qa", "bde", "finance", "digital", "ca"];
 
 /** Shown on admin Team page and staff user listings. */
-const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital"];
+const adminStaffRoles = ["super_admin", "hr", "manager", "developer", "tester", "qa", "freelancer", "bde", "finance", "digital", "ca"];
 
 /** Super admin view-as: any active account on Admin → Team (clients use Admin → Clients). */
 const impersonatableStaffRoles = [...adminStaffRoles];

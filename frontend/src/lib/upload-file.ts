@@ -10,6 +10,7 @@ const CATEGORY_MAX_MB: Record<string, number> = {
   misc: 50,
   hrm: 10,
   marketing: 100,
+  ca: 50,
 };
 
 /** Categories that upload directly to object storage (bypassing nginx/Node for the file bytes) when available. */

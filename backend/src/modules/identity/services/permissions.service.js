@@ -16,6 +16,7 @@ import {
   normalizePermissionModule,
   salesModules,
   marketingModules,
+  caModules,
 } from "../../../constants/permissions.js";
 import { userRoles } from "../../../constants/user-roles.js";
 import { evictUserFromAuthCache } from "../../../middlewares/auth.js";
@@ -114,6 +115,20 @@ const FINANCE_GRANTS = FINANCE_MODULES.flatMap((module) => {
 const MARKETING_GRANTS = marketingModules.flatMap((module) =>
   ["view", "create", "edit", "delete", "approve", "export"].map((action) => ({ module, action })),
 );
+
+const CA_GRANTS = [
+  ...caModules.flatMap((module) =>
+    ["view", "create", "edit", "delete", "export"].map((action) => ({ module, action })),
+  ),
+  // Finance read-through — CA reuses Finance money/GST entities (no duplicate ledgers).
+  { module: "finance_dashboard", action: "view" },
+  { module: "finance_vendors", action: "view" },
+  { module: "finance_expenses", action: "view" },
+  { module: "finance_payments", action: "view" },
+  { module: "finance_invoices", action: "view" },
+  { module: "finance_tax", action: "view" },
+  { module: "finance_ledgers", action: "view" },
+];
 
 const DEFAULT_TEMPLATES = [
   { code: "super_admin", name: "Super Admin", cmsRole: "super_admin", isSystem: true, grants: "all" },
@@ -242,6 +257,27 @@ const DEFAULT_TEMPLATES = [
       { module: "admin_tickets", action: "view" },
       { module: "admin_tickets", action: "create" },
       { module: "finance_freelancers", action: "view" },
+    ],
+  },
+
+  {
+    code: "ca",
+    name: "CA",
+    cmsRole: "ca",
+    isSystem: true,
+    grants: [
+      ...CA_GRANTS,
+      { module: "hrm_dashboard", action: "view" },
+      { module: "hrm_my_attendance", action: "view" },
+      { module: "hrm_my_leave", action: "view" },
+      { module: "hrm_my_leave", action: "create" },
+      { module: "hrm_my_wfh", action: "view" },
+      { module: "hrm_my_wfh", action: "create" },
+      { module: "hrm_my_holidays", action: "view" },
+      { module: "hrm_my_payslips", action: "view" },
+      { module: "hrm_holidays", action: "view" },
+      { module: "admin_discussions", action: "view" },
+      { module: "admin_tickets", action: "view" },
     ],
   },
 

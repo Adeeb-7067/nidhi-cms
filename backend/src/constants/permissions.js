@@ -148,6 +148,8 @@ export const financeModules = cmsModuleGroups.find((g) => g.label === "Finance")
 
 export const marketingModules = cmsModuleGroups.find((g) => g.label === "Digital")?.modules ?? [];
 
+export const caModules = cmsModuleGroups.find((g) => g.label === "CA")?.modules ?? [];
+
 export const cmsModules = cmsModuleGroups.flatMap((g) => g.modules);
 
 export const cmsActions = ["view", "create", "edit", "delete", "approve", "finalize", "export"];
@@ -209,6 +211,7 @@ export const defaultTemplateByRole = {
   bde: "bde",
   finance: "finance",
   digital: "digital",
+  ca: "ca",
   client: null,
 };
 
@@ -224,4 +227,5 @@ export const builtInAssignableCmsRoles = [
   { value: "bde", label: "BDE" },
   { value: "finance", label: "Finance" },
   { value: "digital", label: "Digital Specialist" },
+  { value: "ca", label: "CA" },
 ];

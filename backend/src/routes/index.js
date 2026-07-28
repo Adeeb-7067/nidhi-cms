@@ -36,6 +36,7 @@ import hrmRoutes from "../modules/hrm/routes.js";
 import salesRoutes from "../modules/sales/routes.js";
 import financeRoutes from "../modules/finance/routes.js";
 import marketingRoutes from "../modules/marketing/routes.js";
+import caRoutes from "../modules/ca/routes.js";
 import projectDocumentsRoutes from "../modules/admin/routes/project-documents.routes.js";
 import adminMediaRoutes from "../modules/admin/routes/admin-media.routes.js";
 import { requireDatabase } from "../middlewares/require-database.js";
@@ -95,6 +96,7 @@ const featureRouters = [
   salesRoutes,
   financeRoutes,
   marketingRoutes,
+  caRoutes,
   projectDocumentsRoutes,
   adminMediaRoutes,
 ];

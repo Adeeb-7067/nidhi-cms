@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { Plus, TrendingDown, Check, X, Pencil, Trash2, Wallet, Eye } from "lucide-react";
@@ -77,11 +77,24 @@ export default function ExpensesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Expense | null>(null);
   const [approveTarget, setApproveTarget] = useState<Expense | null>(null);
   const [payTarget, setPayTarget] = useState<Expense | null>(null);
-  const [detailId, setDetailId] = useState<number | null>(null);
+  const [detailId, setDetailId] = useState<number | null>(() => {
+    if (typeof window === "undefined") return null;
+    const raw = new URLSearchParams(window.location.search).get("id");
+    const id = raw ? Number(raw) : NaN;
+    return Number.isFinite(id) && id > 0 ? id : null;
+  });
   const { can } = usePermissions();
   const canEdit = can("finance_expenses", "edit");
   const canDelete = can("finance_expenses", "delete");
   const deleteExpense = useDeleteExpense();
+
+  // Deep-link from CA / other portals: /finance/expenses?id=123
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("id");
+    const id = raw ? Number(raw) : NaN;
+    if (Number.isFinite(id) && id > 0) setDetailId(id);
+  }, []);
 
   const { data: projectsData } = useListProjects({ limit: 200 });
 
@@ -131,6 +144,15 @@ export default function ExpensesPage() {
     setEditExpense(null);
     setDrawerOpen(true);
   };
+
+  // Deep-link from CA: /finance/expenses?create=1
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("create") === "1") {
+      openCreate();
+    }
+  }, []);
+
   const openEdit = (expense: Expense) => {
     setDetailId(null);
     setEditExpense(expense);

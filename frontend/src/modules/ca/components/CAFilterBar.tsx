@@ -47,7 +47,8 @@ export function CAFilterBar({
       placeholder: "Date range",
       className: "sm:w-[220px]",
       options: [
-        { value: "jun", label: "Jun 2026" },
+        { value: "jun", label: "Current period" },
+        { value: "prev", label: "Previous period" },
         { value: "q1", label: "Q1 FY 2025–26" },
         { value: "fy", label: "FY 2025–26" },
         { value: "ytd", label: "Year to date" },

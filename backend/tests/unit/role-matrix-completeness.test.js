@@ -52,7 +52,7 @@ describe("CMS role matrix completeness", () => {
 
   test("DEFAULT_TEMPLATES seed includes cmsRole for digital (and peers)", () => {
     const src = readBackend("src/modules/identity/services/permissions.service.js");
-    for (const role of ["digital", "finance", "bde", "manager", "super_admin"]) {
+    for (const role of ["digital", "finance", "bde", "manager", "super_admin", "ca"]) {
       assert.ok(
         src.includes(`cmsRole: "${role}"`),
         `permissions.service DEFAULT_TEMPLATES missing cmsRole: "${role}"`,
@@ -80,6 +80,13 @@ describe("CMS role matrix completeness", () => {
     }
     assert.ok(fe.includes('"digital"'), "digital must be on frontend role lists");
     assert.ok(fe.includes("PROFILE_PAGE_ROLES"), "PROFILE_PAGE_ROLES must exist");
+  });
+
+  test("ca role is on staff / HRM / admin lists (not monitorable)", () => {
+    assert.ok(staffEmployeeRoles.includes("ca"));
+    assert.ok(hrmEmployeeRoles.includes("ca"));
+    assert.ok(adminStaffRoles.includes("ca"));
+    assert.ok(!monitorableStaffRoles.includes("ca"));
   });
 
   test("digital role is on staff / HRM / admin / monitorable lists", () => {

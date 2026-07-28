@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw, Pencil, Trash2 } from "lucide-react";
@@ -35,7 +35,11 @@ import { toast } from "sonner";
 
 export default function PaymentsPage() {
   const [search, setSearch] = useState("");
-  const [directionTab, setDirectionTab] = useState<string>("all");
+  const [directionTab, setDirectionTab] = useState<string>(() => {
+    if (typeof window === "undefined") return "all";
+    const d = new URLSearchParams(window.location.search).get("direction");
+    return d === "incoming" || d === "outgoing" ? d : "all";
+  });
   const { page, setPage, resetPage, limit, apiLimit } = useTablePagination(20);
   const [outgoingModalOpen, setOutgoingModalOpen] = useState(false);
   const [editPayment, setEditPayment] = useState<FinancePayment | null>(null);
@@ -44,6 +48,14 @@ export default function PaymentsPage() {
   const canEdit = can("finance_payments", "edit");
   const canDelete = can("finance_payments", "delete");
   const deletePayment = useDeletePayment();
+
+  // Deep-link from CA: /finance/payments?create=1&direction=incoming
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("create") === "1") {
+      setOutgoingModalOpen(true);
+    }
+  }, []);
 
   const params: ListPaymentsParams = useMemo(
     () => ({
