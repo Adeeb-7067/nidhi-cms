@@ -595,11 +595,12 @@ export default function FreelancerEngagementsPage() {
               ) : null}
               <div className="space-y-1.5">
                 <Label htmlFor="edit-notes">Notes</Label>
-                <Input
+                <Textarea
                   id="edit-notes"
                   value={notes}
                   onChange={(ev) => setNotes(ev.target.value)}
                   placeholder="Optional"
+                  rows={3}
                 />
               </div>
             </div>

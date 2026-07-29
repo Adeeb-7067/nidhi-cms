@@ -1,4 +1,4 @@
-import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, FinanceCheques, Projects, vendorsTable, clientsTable, usersTable, getNextSequence, companySettingsTable } from "../../../models/schema/index.js";
+import { FinanceExpenses, FinancePayments, FinanceLoans, FinanceSubscriptions, FinanceCheques, FinanceBudgets, Projects, vendorsTable, clientsTable, usersTable, getNextSequence, companySettingsTable } from "../../../models/schema/index.js";
 import { badRequest, notFound, parseIdParam, parsePagination, optionalString } from "../../../utils/route-errors.js";
 import { escapeRegex } from "../../../utils/regex.js";
 import { expenseCategories, financePaymentModes } from "../schema/expenses.js";
@@ -20,6 +20,23 @@ async function assertExpenseVendorId(vendorId) {
   if (!Number.isFinite(id)) badRequest("vendorId must be a valid number.", "vendorId");
   const vendor = await vendorsTable.findOne({ id }).select({ id: 1 }).lean();
   if (!vendor) badRequest("Select a valid vendor.", "vendorId");
+  return id;
+}
+
+async function assertBudgetId(budgetId, { projectId } = {}) {
+  if (budgetId == null || budgetId === "") return null;
+  const id = Number(budgetId);
+  if (!Number.isFinite(id)) badRequest("budgetId must be a valid number.", "budgetId");
+  const budget = await FinanceBudgets.findOne({ id }).select({ id: 1, type: 1, projectId: 1 }).lean();
+  if (!budget) badRequest("Select a valid budget.", "budgetId");
+  if (
+    budget.type === "project" &&
+    budget.projectId != null &&
+    projectId != null &&
+    Number(projectId) !== Number(budget.projectId)
+  ) {
+    badRequest("This budget belongs to a different project.", "budgetId");
+  }
   return id;
 }
 
@@ -116,7 +133,8 @@ async function enrichExpenses(items) {
   const loanIds = [...new Set(items.map((e) => e.loanId).filter(Boolean))];
   const subscriptionIds = [...new Set(items.map((e) => e.subscriptionId).filter(Boolean))];
   const chequeIds = [...new Set(items.map((e) => e.chequeId).filter(Boolean))];
-  const [projects, employees, vendors, loans, subscriptions, cheques] = await Promise.all([
+  const budgetIds = [...new Set(items.map((e) => e.budgetId).filter(Boolean))];
+  const [projects, employees, vendors, loans, subscriptions, cheques, budgets] = await Promise.all([
     projectIds.length ? Projects.find({ id: { $in: projectIds } }).select({ id: 1, name: 1 }).lean() : [],
     employeeIds.length ? usersTable.find({ id: { $in: employeeIds } }).select({ id: 1, name: 1 }).lean() : [],
     vendorIds.length
@@ -137,6 +155,9 @@ async function enrichExpenses(items) {
     chequeIds.length
       ? FinanceCheques.find({ id: { $in: chequeIds } }).select({ id: 1, reference: 1, chequeNumber: 1, status: 1 }).lean()
       : [],
+    budgetIds.length
+      ? FinanceBudgets.find({ id: { $in: budgetIds } }).select({ id: 1, name: 1, fiscalYear: 1 }).lean()
+      : [],
   ]);
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
   const employeeMap = new Map(employees.map((e) => [e.id, e.name]));
@@ -144,16 +165,20 @@ async function enrichExpenses(items) {
   const loanMap = new Map(loans.map((l) => [l.id, l]));
   const subscriptionMap = new Map(subscriptions.map((s) => [s.id, s]));
   const chequeMap = new Map(cheques.map((c) => [c.id, c]));
+  const budgetMap = new Map(budgets.map((b) => [b.id, b]));
   return items.map((e) => {
     const vendor = e.vendorId ? vendorMap.get(e.vendorId) : null;
     const vendorFields = vendor ? resolveVendorFields(vendor) : [];
     const loan = e.loanId ? loanMap.get(e.loanId) : null;
     const subscription = e.subscriptionId ? subscriptionMap.get(e.subscriptionId) : null;
     const cheque = e.chequeId ? chequeMap.get(e.chequeId) : null;
+    const budget = e.budgetId ? budgetMap.get(e.budgetId) : null;
     return withExpenseSettlementView({
       ...e,
       projectName: e.projectId ? projectMap.get(e.projectId) ?? null : null,
       employeeName: e.employeeId ? employeeMap.get(e.employeeId) ?? null : null,
+      budgetName: budget?.name ?? null,
+      budgetFiscalYear: budget?.fiscalYear ?? null,
       vendorName: vendor?.companyName ?? null,
       vendorFields,
       vendorSummary: vendorFields.length
@@ -289,6 +314,15 @@ async function createExpense(req, res) {
   const subscription = await assertSubscriptionId(body.subscriptionId);
   const subscriptionId = subscription?.id ?? null;
 
+  let projectId = body.projectId ? Number(body.projectId) : null;
+  const budgetId = await assertBudgetId(body.budgetId, { projectId });
+  if (budgetId) {
+    const budget = await FinanceBudgets.findOne({ id: budgetId }).select({ projectId: 1, type: 1 }).lean();
+    if (budget?.type === "project" && budget.projectId != null && !projectId) {
+      projectId = Number(budget.projectId);
+    }
+  }
+
   const [id, reference] = await Promise.all([getNextSequence("finance_expenses"), nextExpenseReference()]);
 
   const expense = await FinanceExpenses.create({
@@ -298,11 +332,12 @@ async function createExpense(req, res) {
     category: body.category,
     amount,
     paymentMode: body.paymentMode,
-    projectId: body.projectId ? Number(body.projectId) : null,
+    projectId,
     employeeId: body.employeeId ? Number(body.employeeId) : null,
     vendorId,
     loanId,
     subscriptionId,
+    budgetId,
     notes: optionalString(body.notes) ?? null,
     status: "pending",
     gstEnabled: Boolean(body.gstEnabled),
@@ -339,6 +374,23 @@ async function updateExpense(req, res) {
   if (body.paymentMode !== undefined) updates.paymentMode = body.paymentMode;
   if (body.projectId !== undefined) updates.projectId = body.projectId ? Number(body.projectId) : null;
   if (body.employeeId !== undefined) updates.employeeId = body.employeeId ? Number(body.employeeId) : null;
+  if (body.budgetId !== undefined) {
+    const nextProjectId =
+      body.projectId !== undefined
+        ? body.projectId
+          ? Number(body.projectId)
+          : null
+        : expense.projectId;
+    updates.budgetId = await assertBudgetId(body.budgetId, { projectId: nextProjectId });
+    if (updates.budgetId && (nextProjectId == null || body.projectId === "")) {
+      const budget = await FinanceBudgets.findOne({ id: updates.budgetId })
+        .select({ projectId: 1, type: 1 })
+        .lean();
+      if (budget?.type === "project" && budget.projectId != null) {
+        updates.projectId = Number(budget.projectId);
+      }
+    }
+  }
   if (body.vendorId !== undefined) updates.vendorId = await assertExpenseVendorId(body.vendorId);
   if (body.loanId !== undefined) {
     const loan = await assertLoanId(body.loanId);

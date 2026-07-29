@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalContentCard, PortalTablePanel } from "@/components/layout/portal-page-kit";
@@ -629,7 +630,12 @@ export default function HrmEmployeeDetailPage() {
                     </HrmField>
                     <div className="sm:col-span-2">
                       <HrmField label="Bio">
-                        <Input value={bio} onChange={(e) => setBio(e.target.value)} disabled={!canEdit} />
+                        <Textarea
+                          value={bio}
+                          onChange={(e) => setBio(e.target.value)}
+                          disabled={!canEdit}
+                          rows={3}
+                        />
                       </HrmField>
                     </div>
                   </div>

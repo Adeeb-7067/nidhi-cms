@@ -65,6 +65,9 @@ export interface Expense {
   chequeReference?: string | null;
   chequeNumber?: string | null;
   chequeStatus?: ChequeStatus | null;
+  budgetId?: number | null;
+  budgetName?: string | null;
+  budgetFiscalYear?: string | null;
   clientId?: number | null;
   notes: string | null;
   status: ExpenseStatus;

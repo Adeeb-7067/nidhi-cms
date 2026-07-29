@@ -18,6 +18,9 @@ import {
 import { logger } from "./logger.js";
 
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+/** Screenshots must not be served by public `/uploads` static — proxy-only. */
+const PRIVATE_SCREENSHOTS_DIR = path.join(process.cwd(), "private-uploads", "screenshots");
+const PRIVATE_SCREENSHOT_URL_PREFIX = "/private/screenshots/";
 
 function getStorageBackend() {
   return isObjectStorageEnabled() ? "object" : "local";
@@ -26,6 +29,12 @@ function getStorageBackend() {
 function ensureLocalUploadDir() {
   if (!fsSync.existsSync(UPLOAD_DIR)) {
     fsSync.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+}
+
+function ensurePrivateScreenshotsDir() {
+  if (!fsSync.existsSync(PRIVATE_SCREENSHOTS_DIR)) {
+    fsSync.mkdirSync(PRIVATE_SCREENSHOTS_DIR, { recursive: true });
   }
 }
 
@@ -39,8 +48,18 @@ async function storeUpload(buffer, originalName, mimetype, category = "misc") {
     const { url, key } = await uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
     return { url, key, storage: "object" };
   }
-  ensureLocalUploadDir();
   const filename = localFilename(originalName);
+  if (category === "screenshots") {
+    ensurePrivateScreenshotsDir();
+    const filePath = path.join(PRIVATE_SCREENSHOTS_DIR, filename);
+    await fs.writeFile(filePath, buffer);
+    return {
+      url: `${PRIVATE_SCREENSHOT_URL_PREFIX}${filename}`,
+      key: `screenshots/${filename}`,
+      storage: "local",
+    };
+  }
+  ensureLocalUploadDir();
   const filePath = path.join(UPLOAD_DIR, filename);
   await fs.writeFile(filePath, buffer);
   return { url: `/uploads/${filename}`, key: filename, storage: "local" };
@@ -84,6 +103,12 @@ async function deleteStoredFile(fileUrl) {
     return;
   }
 
+  if (fileUrl.startsWith(PRIVATE_SCREENSHOT_URL_PREFIX)) {
+    const relPath = fileUrl.slice(PRIVATE_SCREENSHOT_URL_PREFIX.length);
+    await fs.unlink(path.join(PRIVATE_SCREENSHOTS_DIR, relPath));
+    return;
+  }
+
   if (fileUrl.startsWith("/uploads/")) {
     // Keep subpaths after /uploads/ — path.basename would drop directories.
     const relPath = fileUrl.slice("/uploads/".length);
@@ -105,6 +130,8 @@ function validateStoredFileUrl(url, fieldName = "fileUrl") {
   const trimmed = String(url).trim();
   // Existing records may still reference local uploads served by the API.
   if (trimmed.startsWith("/uploads/")) return;
+  // Private screenshot paths are served only via the auth'd content proxy.
+  if (trimmed.startsWith(PRIVATE_SCREENSHOT_URL_PREFIX)) return;
   assertValidStoredFileUrl(trimmed, fieldName);
 }
 

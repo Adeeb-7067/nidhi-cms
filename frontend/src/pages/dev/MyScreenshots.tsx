@@ -31,7 +31,7 @@ import {
 
 export default function MyScreenshotsPage() {
   const { user } = useAuth();
-  const { isClockedIn } = useWorkSession();
+  const { isClockedIn, isScreenshotCapturing } = useWorkSession();
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -97,11 +97,15 @@ export default function MyScreenshotsPage() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {isClockedIn && (
+            {isScreenshotCapturing ? (
               <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-700 border-emerald-500/20">
                 Clocked in — capturing
               </Badge>
-            )}
+            ) : isClockedIn ? (
+              <Badge variant="outline" className="text-xs">
+                Clocked in
+              </Badge>
+            ) : null}
 
             <div className="flex items-center rounded-lg border border-border bg-muted/30 overflow-hidden">
               <button
@@ -187,9 +191,11 @@ export default function MyScreenshotsPage() {
                 : "No screenshots captured on this day"}
             </p>
             <p className="text-xs text-muted-foreground mt-1.5 max-w-sm">
-              {isClockedIn
+              {isScreenshotCapturing
                 ? "Screenshots will appear here as they are captured by the desktop app."
-                : "Clock in with the desktop app to start screenshot capture."}
+                : isClockedIn
+                  ? "Capture starts after monitoring consent is granted in the desktop app."
+                  : "Clock in with the desktop app to start screenshot capture."}
             </p>
           </div>
         ) : (

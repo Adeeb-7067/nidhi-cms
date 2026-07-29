@@ -177,17 +177,36 @@ console.log('[cms] API base URL:', API_URL);
 // connect-src allows both http: and https: so the renderer can reach the
 // backend regardless of whether it is served over HTTP (local dev) or HTTPS
 // (production). ws:/wss: covers Socket.io in both environments.
-const CSP = [
-  "default-src 'self' https: data: blob:;",
-  "script-src 'self' 'unsafe-inline';",           // Vite injects inline init scripts
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
-  "font-src 'self' https://fonts.gstatic.com data:;",
-  "img-src 'self' data: blob: https: http://localhost:* http://127.0.0.1:*;",
-  "connect-src 'self' http: https: ws: wss:;",   // allows local HTTP + production HTTPS
-  "worker-src 'self' blob:;",
-  "frame-src 'none';",
-  "object-src 'none';",
-].join(' ');
+// img-src includes the live API origin so LAN/dev HTTP gallery proxies work.
+function buildCsp() {
+  let apiOrigin = null;
+  try {
+    apiOrigin = new URL(resolveApiBaseUrl()).origin;
+  } catch {
+    /* ignore */
+  }
+  const imgParts = new Set([
+    "'self'",
+    'data:',
+    'blob:',
+    'https:',
+    'http://localhost:*',
+    'http://127.0.0.1:*',
+  ]);
+  if (apiOrigin) imgParts.add(apiOrigin);
+
+  return [
+    "default-src 'self' https: data: blob:;",
+    "script-src 'self' 'unsafe-inline';",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;",
+    "font-src 'self' https://fonts.gstatic.com data:;",
+    `img-src ${[...imgParts].join(' ')};`,
+    "connect-src 'self' http: https: ws: wss:;",
+    "worker-src 'self' blob:;",
+    "frame-src 'none';",
+    "object-src 'none';",
+  ].join(' ');
+}
 
 function applyCSP() {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -204,7 +223,7 @@ function applyCSP() {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [CSP],
+        'Content-Security-Policy': [buildCsp()],
       },
     });
   });

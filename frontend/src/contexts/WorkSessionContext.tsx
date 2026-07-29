@@ -29,6 +29,8 @@ interface WorkSessionContextType {
   clockIn: (opts?: { quietSuccess?: boolean }) => Promise<void>;
   clockOut: (reason?: "clock_out" | "app_quit" | "logout") => Promise<void>;
   isClockedIn: boolean;
+  /** True only when Electron screenshot scheduler is actually enabled. */
+  isScreenshotCapturing: boolean;
 }
 
 const WorkSessionContext = createContext<WorkSessionContextType>({
@@ -37,6 +39,7 @@ const WorkSessionContext = createContext<WorkSessionContextType>({
   clockIn: async () => {},
   clockOut: async () => {},
   isClockedIn: false,
+  isScreenshotCapturing: false,
 });
 
 export function WorkSessionProvider({ children }: { children: ReactNode }) {
@@ -69,6 +72,13 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
   const clockOutMutation = useClockOut();
 
   const activeSession = activeData?.session ?? null;
+
+  const isScreenshotCapturing =
+    isElectron() &&
+    !!activeSession?.isActive &&
+    !!status?.screenshotEnabled &&
+    !!consent?.hasConsented &&
+    !!consent?.isCurrentVersion;
 
   // Web + desktop open together: refetch when this tab/window gains focus.
   useEffect(() => {
@@ -334,6 +344,7 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
         clockIn,
         clockOut,
         isClockedIn: !!activeSession?.isActive,
+        isScreenshotCapturing,
       }}
     >
       {children}

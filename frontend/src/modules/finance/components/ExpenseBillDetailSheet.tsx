@@ -182,6 +182,15 @@ export function ExpenseBillDetailSheet({
                   <div>{data.projectName ?? "—"}</div>
                 </div>
                 <div>
+                  <div className="text-[11px] text-muted-foreground">Budget</div>
+                  <div>
+                    {data.budgetName ?? "—"}
+                    {data.budgetFiscalYear ? (
+                      <span className="text-muted-foreground text-xs ml-1">FY {data.budgetFiscalYear}</span>
+                    ) : null}
+                  </div>
+                </div>
+                <div>
                   <div className="text-[11px] text-muted-foreground">Category</div>
                   <div>{EXPENSE_CATEGORY_LABELS[data.category]}</div>
                 </div>

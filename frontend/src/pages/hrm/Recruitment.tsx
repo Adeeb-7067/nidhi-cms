@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -489,7 +490,11 @@ export default function HrmRecruitmentPage() {
                 </Select>
               </HrmField>
               <HrmField label="Notes">
-                <Input value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} />
+                <Textarea
+                  value={form.notes}
+                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                  rows={3}
+                />
               </HrmField>
               <div className="grid gap-4 sm:grid-cols-2">
                 <HrmField label="Experience (years)">

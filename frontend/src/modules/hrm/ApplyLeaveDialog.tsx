@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -308,10 +309,11 @@ export function ApplyLeaveDialog({
             </HrmField>
           </div>
           <HrmField label={L.reason}>
-            <Input
+            <Textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder={isAdminMode ? "Reason noted on the employee record" : "Brief reason for your leave"}
+              rows={3}
             />
           </HrmField>
         </div>

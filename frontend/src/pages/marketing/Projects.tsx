@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { DigitalProjectServiceFields } from "@/components/project/DigitalProjectServiceFields";
 import {
@@ -481,10 +482,11 @@ export default function MarketingProjects() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Description (optional)</Label>
-              <Input
+              <Textarea
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                className="h-8 text-xs"
+                className="min-h-[72px] text-xs resize-y"
+                rows={3}
               />
             </div>
             <DigitalProjectServiceFields

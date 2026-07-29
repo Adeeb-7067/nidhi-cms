@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { IndianRupee, Pencil, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -332,11 +333,12 @@ export function FreelancerEngagementDialog({
       ) : null}
       <div className="space-y-1.5">
         <Label htmlFor="notes">Notes</Label>
-        <Input
+        <Textarea
           id="notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Scope, milestones, or payment terms"
+          rows={3}
         />
       </div>
     </div>

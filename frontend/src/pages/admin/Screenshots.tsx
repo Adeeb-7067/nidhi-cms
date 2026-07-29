@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useListUsers } from "@/api";
 import {
   useListScreenshots,
@@ -16,65 +16,43 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   ChevronLeft,
   ChevronRight,
-  X,
   Camera,
   Users,
-  Trash2,
   Clock,
   Monitor,
   ImageOff,
   Activity,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  format,
-  addDays,
-  subDays,
-  isToday,
-  isYesterday,
-} from "date-fns";
+import { format, addDays, subDays, isToday } from "date-fns";
 import { getApiErrorMessage } from "@/lib/api-error";
 import { cn } from "@/lib/utils";
 import { MONITORABLE_STAFF_ROLES } from "@/lib/user-roles";
-import { formatCaptureTimestamp } from "@/lib/screenshot-gallery-utils";
+import {
+  dateNavLabel,
+  hourLabel,
+  localDayRange,
+} from "@/lib/screenshot-gallery-utils";
+import { ScreenshotHourBlock } from "@/components/monitoring/ScreenshotHourBlock";
+import {
+  ScreenshotSlideViewer,
+  type ScreenshotSlideViewState,
+} from "@/components/monitoring/ScreenshotSlideViewer";
 import { useDailySessionTotals, useAdminActiveAll, type WorkSession } from "@/api/work-sessions";
 import { formatActiveDuration, getLiveDailyActiveMs } from "@/lib/work-session-utils";
 import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { CmsFilterBar } from "@/components/cms";
 
-// ─── helpers ────────────────────────────────────────────────────────────────
-
 function getInitials(name: string) {
-  return name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase();
-}
-
-function hourLabel(h: number) {
-  const start = h === 0 ? "12 AM" : h < 12 ? `${h} AM` : h === 12 ? "12 PM" : `${h - 12} PM`;
-  const end = h + 1 === 12 ? "12 PM" : h + 1 < 12 ? `${h + 1} AM` : h + 1 === 24 ? "12 AM" : `${h + 1 - 12} PM`;
-  return `${start} – ${end}`;
-}
-
-/** Local calendar day bounds for API filters. */
-function localDayRange(date: Date): { startDate: string; endDate: string } {
-  const y = date.getFullYear();
-  const m = date.getMonth();
-  const d = date.getDate();
-  const start = new Date(y, m, d, 0, 0, 0, 0);
-  const end = new Date(y, m, d, 23, 59, 59, 999);
-  return { startDate: start.toISOString(), endDate: end.toISOString() };
-}
-
-function dateNavLabel(d: Date) {
-  if (isToday(d)) return "Today";
-  if (isYesterday(d)) return "Yesterday";
-  return format(d, "MMM d, yyyy");
+  return name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
 }
 
 interface UserInfo {
@@ -84,80 +62,6 @@ interface UserInfo {
   role: string;
   status?: string;
 }
-
-interface SlideViewState {
-  slides: ScreenshotItem[];
-  index: number;
-  employee: UserInfo | undefined;
-  hourLabel: string;
-  sessionTotalMs?: number;
-}
-
-// ─── HourBlock ───────────────────────────────────────────────────────────────
-
-function HourBlock({
-  hour,
-  items,
-  onOpen,
-}: {
-  hour: number;
-  items: ScreenshotItem[];
-  onOpen: () => void;
-}) {
-  const thumb = items[0];
-  const label = hourLabel(hour);
-
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      title={`${label} · ${items.length} capture${items.length !== 1 ? "s" : ""} · click to view`}
-      className="group relative flex flex-col rounded-xl overflow-hidden border border-border bg-card hover:border-primary/40 hover:shadow-lg hover:shadow-primary/5 transition-all duration-150 text-left w-[160px] shrink-0"
-    >
-      <div className="relative h-[90px] bg-muted overflow-hidden">
-        {thumb ? (
-          <img
-            src={thumb.fileUrl}
-            alt=""
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Camera className="h-6 w-6 text-muted-foreground/30" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        <div className="absolute top-1.5 right-1.5">
-          <span className="bg-black/70 backdrop-blur-sm text-white text-[10px] font-semibold px-1.5 py-0.5 rounded-md">
-            {items.length}
-          </span>
-        </div>
-        {items.length > 1 && (
-          <div className="absolute bottom-1.5 left-1.5 flex gap-0.5">
-            {Array.from({ length: Math.min(items.length, 4) }).map((_, i) => (
-              <div
-                key={i}
-                className="h-1 w-3 rounded-full bg-white/60"
-                style={{ opacity: 1 - i * 0.2 }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="px-2.5 py-2">
-        <p className="text-[11px] font-semibold text-foreground leading-tight">{label}</p>
-        <p className="text-[10px] text-muted-foreground mt-0.5">
-          {items.length} capture{items.length !== 1 ? "s" : ""}
-        </p>
-      </div>
-    </button>
-  );
-}
-
-// ─── EmployeeRow ──────────────────────────────────────────────────────────────
 
 function EmployeeRow({
   serialNumber,
@@ -186,7 +90,13 @@ function EmployeeRow({
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [baseDailyMs, activeSession?.id, activeSession?.durationMs, activeSession?.lastHeartbeatAt, activeSession?.isActive]);
+  }, [
+    baseDailyMs,
+    activeSession?.id,
+    activeSession?.durationMs,
+    activeSession?.lastHeartbeatAt,
+    activeSession?.isActive,
+  ]);
 
   const totalCaptures = Array.from(hourBuckets.values()).reduce((s, a) => s + a.length, 0);
   const hours = Array.from(hourBuckets.keys()).sort((a, b) => a - b);
@@ -256,7 +166,7 @@ function EmployeeRow({
         ) : (
           <div className="flex gap-3 pb-1">
             {hours.map((h) => (
-              <HourBlock
+              <ScreenshotHourBlock
                 key={h}
                 hour={h}
                 items={hourBuckets.get(h)!}
@@ -270,216 +180,16 @@ function EmployeeRow({
   );
 }
 
-// ─── SlideViewer ──────────────────────────────────────────────────────────────
-
-function SlideViewer({
-  state,
-  onClose,
-  onDelete,
-  onNavigate,
-}: {
-  state: SlideViewState | null;
-  onClose: () => void;
-  onDelete: (id: number) => Promise<void>;
-  onNavigate: (index: number) => void;
-}) {
-  const [deleting, setDeleting] = useState(false);
-
-  const slides = state?.slides ?? [];
-  const idx = state?.index ?? 0;
-  const current = slides[idx];
-  const captureTimestamp = current ? formatCaptureTimestamp(current.takenAt) : "";
-
-  const prev = useCallback(() => {
-    if (idx > 0) onNavigate(idx - 1);
-  }, [idx, onNavigate]);
-
-  const next = useCallback(() => {
-    if (idx < slides.length - 1) onNavigate(idx + 1);
-  }, [idx, slides.length, onNavigate]);
-
-  useEffect(() => {
-    if (!state) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") prev();
-      else if (e.key === "ArrowRight") next();
-      else if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [state, prev, next, onClose]);
-
-  const handleDelete = async () => {
-    if (!current) return;
-    setDeleting(true);
-    try {
-      await onDelete(current.id);
-      if (slides.length <= 1) {
-        onClose();
-      } else {
-        onNavigate(Math.min(idx, slides.length - 2));
-      }
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  return (
-    <Dialog open={!!state} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-[92vw] w-full max-h-[94vh] p-0 gap-0 overflow-hidden rounded-2xl bg-zinc-950 border-zinc-800 [&>button:last-child]:hidden">
-        <DialogTitle className="sr-only">Screenshot Viewer</DialogTitle>
-        {state && current && (
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-zinc-800">
-              <div className="flex items-center gap-3 min-w-0">
-                {state.employee && (
-                  <>
-                    <Avatar className="h-7 w-7 text-[10px] shrink-0">
-                      {state.employee.avatarUrl && <AvatarImage src={state.employee.avatarUrl} />}
-                      <AvatarFallback className="bg-primary/20 text-primary text-[10px] font-bold">
-                        {getInitials(state.employee.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-semibold text-white truncate">
-                      {state.employee.name}
-                    </span>
-                    {state.sessionTotalMs != null && state.sessionTotalMs > 0 && (
-                      <>
-                        <span className="text-zinc-500">·</span>
-                        <span className="text-xs text-zinc-400 tabular-nums">
-                          {formatActiveDuration(state.sessionTotalMs)}
-                        </span>
-                      </>
-                    )}
-                    <span className="text-zinc-500">·</span>
-                  </>
-                )}
-                <div className="flex items-center gap-1.5 text-zinc-400 text-sm">
-                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                  <span>{state.hourLabel}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-xs text-zinc-500 font-medium tabular-nums">
-                  {idx + 1} / {slides.length}
-                </span>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-zinc-400 hover:text-red-400 hover:bg-red-500/10"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  title="Delete this screenshot"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7 text-zinc-400 hover:text-white hover:bg-zinc-800"
-                  onClick={onClose}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="relative flex-1 flex items-center justify-center min-h-0 bg-zinc-950 px-14 py-4">
-              <div className="relative inline-flex max-w-full max-h-full">
-                <img
-                  key={current.id}
-                  src={current.fileUrl}
-                  alt="screenshot"
-                  className="max-w-full max-h-[calc(94vh-180px)] rounded-lg shadow-2xl object-contain"
-                />
-
-                <div className="absolute top-2.5 left-2.5 right-2.5 pointer-events-none flex items-start justify-between gap-2">
-                  <span className="inline-flex items-center gap-1.5 rounded-md bg-black/65 backdrop-blur-md px-2.5 py-1.5 text-sm font-semibold text-white tabular-nums shadow-lg">
-                    <Clock className="h-3.5 w-3.5 text-white/80 shrink-0" />
-                    {captureTimestamp}
-                  </span>
-                  {current.fileSize ? (
-                    <span className="rounded-md bg-black/65 backdrop-blur-md px-2 py-1 text-[10px] text-white/80 tabular-nums shadow-lg">
-                      {(current.fileSize / 1024).toFixed(0)} KB
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={prev}
-                disabled={idx === 0}
-                className={cn(
-                  "absolute left-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/80 backdrop-blur text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all",
-                  idx === 0 && "opacity-20 cursor-not-allowed",
-                )}
-              >
-                <ChevronLeft className="h-5 w-5" />
-              </button>
-
-              <button
-                type="button"
-                onClick={next}
-                disabled={idx === slides.length - 1}
-                className={cn(
-                  "absolute right-3 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700 bg-zinc-900/80 backdrop-blur text-zinc-300 hover:text-white hover:bg-zinc-800 transition-all",
-                  idx === slides.length - 1 && "opacity-20 cursor-not-allowed",
-                )}
-              >
-                <ChevronRight className="h-5 w-5" />
-              </button>
-            </div>
-
-            {slides.length > 1 && (
-              <div className="border-t border-zinc-800 bg-zinc-900/60 px-4 py-2.5">
-                <div className="flex gap-2 overflow-x-auto pb-0.5">
-                  {slides.map((s, i) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => onNavigate(i)}
-                      title={formatCaptureTimestamp(s.takenAt)}
-                      className={cn(
-                        "relative shrink-0 h-12 w-20 rounded-md overflow-hidden border-2 transition-all",
-                        i === idx
-                          ? "border-primary shadow-md shadow-primary/30"
-                          : "border-transparent opacity-50 hover:opacity-80",
-                      )}
-                    >
-                      <img
-                        src={s.fileUrl}
-                        alt=""
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent pt-3 pb-0.5 px-1 pointer-events-none">
-                        <span className="block text-center text-[8px] font-medium text-white tabular-nums truncate">
-                          {format(new Date(s.takenAt), "MMM d · h:mm a")}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function ScreenshotsPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedUserId, setSelectedUserId] = useState<number | undefined>();
-  const [slideView, setSlideView] = useState<SlideViewState | null>(null);
+  const [slideView, setSlideView] = useState<ScreenshotSlideViewState | null>(null);
 
   const { data: usersData, isLoading: usersLoading } = useListUsers({ staff: "1", limit: 200 });
   const allUsers: UserInfo[] = usersData?.users ?? [];
-  const employees = allUsers.filter((u) => MONITORABLE_STAFF_ROLES.includes(u.role as typeof MONITORABLE_STAFF_ROLES[number]));
+  const employees = allUsers.filter((u) =>
+    MONITORABLE_STAFF_ROLES.includes(u.role as (typeof MONITORABLE_STAFF_ROLES)[number]),
+  );
   const userMap = Object.fromEntries(allUsers.map((u) => [u.id, u]));
 
   const dayRange = useMemo(() => localDayRange(selectedDate), [selectedDate]);
@@ -512,7 +222,6 @@ export default function ScreenshotsPage() {
     return map;
   }, [dailyTotals]);
 
-  /** All visible staff, ranked by daily active session time (longest first). */
   const visibleEmployees = useMemo(() => {
     const list = selectedUserId
       ? employees.filter((u) => u.id === selectedUserId)
@@ -534,7 +243,7 @@ export default function ScreenshotsPage() {
     });
   }, [employees, selectedUserId, sessionByUserId, activeSessionByUser]);
 
-  const { data, isLoading, dataUpdatedAt, isFetching } = useListScreenshots(
+  const { data, isLoading, isError, error, refetch, dataUpdatedAt, isFetching } = useListScreenshots(
     {
       userId: selectedUserId,
       startDate: dayRange.startDate,
@@ -592,9 +301,8 @@ export default function ScreenshotsPage() {
     setSlideView({
       slides: items,
       index: 0,
-      employee: userMap[userId],
+      employeeName: userMap[userId]?.name,
       hourLabel: hourLabel(hour),
-      sessionTotalMs: sessionByUserId.get(userId)?.totalMs,
     });
   };
 
@@ -608,7 +316,9 @@ export default function ScreenshotsPage() {
         subtitle={
           pageLoading
             ? "Loading capture gallery…"
-            : `${visibleEmployees.length} employee${visibleEmployees.length !== 1 ? "s" : ""} · ${totalToday} capture${totalToday !== 1 ? "s" : ""} on ${dateNavLabel(selectedDate).toLowerCase()}`
+            : isError
+              ? "Could not load screenshots"
+              : `${visibleEmployees.length} employee${visibleEmployees.length !== 1 ? "s" : ""} · ${totalToday} capture${totalToday !== 1 ? "s" : ""} on ${dateNavLabel(selectedDate).toLowerCase()}`
         }
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -746,7 +456,20 @@ export default function ScreenshotsPage() {
       </CmsFilterBar>
 
       <div className="space-y-4">
-        {pageLoading ? (
+        {isError ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-destructive/10 mb-4">
+              <AlertCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <p className="text-sm font-medium text-foreground/80">Failed to load screenshots</p>
+            <p className="text-xs text-muted-foreground mt-1.5 max-w-sm">
+              {getApiErrorMessage(error, "Please try again.")}
+            </p>
+            <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
+              Retry
+            </Button>
+          </div>
+        ) : pageLoading ? (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-xl border border-border overflow-hidden">
@@ -800,11 +523,11 @@ export default function ScreenshotsPage() {
         )}
       </div>
 
-      <SlideViewer
+      <ScreenshotSlideViewer
         state={slideView}
         onClose={() => setSlideView(null)}
         onDelete={handleDelete}
-        onNavigate={(i) => setSlideView((prev) => prev ? { ...prev, index: i } : null)}
+        onNavigate={(i) => setSlideView((prev) => (prev ? { ...prev, index: i } : null))}
       />
     </PortalPageShell>
   );

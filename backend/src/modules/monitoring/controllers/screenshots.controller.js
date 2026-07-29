@@ -3,8 +3,16 @@ import { createReadStream } from "node:fs";
 import { access } from "node:fs/promises";
 import { GetObjectCommand, getS3Client } from "../../../lib/object-storage.js";
 import * as screenshotsService from "../services/screenshots.service.js";
+import {
+  formatScreenshot,
+  guessImageContentType,
+  resolveScreenshotFileRef,
+} from "../services/screenshot-content.js";
 import { badRequest, notFound, forbidden, parseIdParam, parsePagination } from "../../../utils/route-errors.js";
 import { employeeScreenshotsTable } from "../../../models/schema/index.js";
+
+const PRIVATE_SCREENSHOTS_DIR = path.join(process.cwd(), "private-uploads", "screenshots");
+const PUBLIC_UPLOADS_DIR = path.join(process.cwd(), "uploads");
 
 export async function create(req, res) {
   if (!req.file) badRequest("Screenshot file is required.", "file");
@@ -80,62 +88,52 @@ export async function serveContent(req, res) {
     forbidden("You can only view your own screenshots.");
   }
 
-  const { fileUrl } = doc;
+  const resolved = resolveScreenshotFileRef(doc.fileUrl);
+  if (!resolved.ok) notFound("Screenshot file");
 
   // Allow cross-origin reads so <img src> tags on the frontend (different port
   // in dev, different subdomain in prod) can display the image. helmet sets
   // Cross-Origin-Resource-Policy: same-origin globally; we override it here
   // because this endpoint is already protected by auth + token validation.
   res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("Cache-Control", "private, max-age=3600");
 
-  if (/^https?:\/\//i.test(fileUrl)) {
+  if (resolved.kind === "object") {
     const bucket = process.env.LINODE_OBJECT_BUCKET;
     if (!bucket) notFound("Screenshot file (storage not configured)");
-    // Key is the URL path after the leading slash: /bucket/prefix/file → prefix/file
-    const key = new URL(fileUrl).pathname.slice(1);
     try {
       const result = await getS3Client().send(
-        new GetObjectCommand({ Bucket: bucket, Key: key })
+        new GetObjectCommand({ Bucket: bucket, Key: resolved.key }),
       );
-      res.setHeader("Content-Type", result.ContentType || "image/png");
-      res.setHeader("Cache-Control", "private, max-age=3600");
+      res.setHeader(
+        "Content-Type",
+        result.ContentType || guessImageContentType(resolved.key),
+      );
       result.Body.pipe(res);
     } catch (err) {
       if (err.name === "NoSuchKey") notFound("Screenshot file");
       throw err;
     }
-  } else if (fileUrl.startsWith("/uploads/")) {
-    const relPath = fileUrl.slice("/uploads/".length);
-    const filePath = path.join(process.cwd(), "uploads", relPath);
-    try {
-      await access(filePath);
-    } catch {
-      notFound("Screenshot file");
-    }
-    res.setHeader("Content-Type", "image/png");
-    res.setHeader("Cache-Control", "private, max-age=3600");
-    createReadStream(filePath).pipe(res);
-  } else {
+    return;
+  }
+
+  const filePath =
+    resolved.kind === "private-local"
+      ? path.join(PRIVATE_SCREENSHOTS_DIR, resolved.relativePath)
+      : path.join(PUBLIC_UPLOADS_DIR, resolved.relativePath);
+
+  // Path must stay inside the intended root (defense in depth vs join quirks).
+  const root =
+    resolved.kind === "private-local" ? PRIVATE_SCREENSHOTS_DIR : PUBLIC_UPLOADS_DIR;
+  if (!path.resolve(filePath).startsWith(path.resolve(root) + path.sep)) {
     notFound("Screenshot file");
   }
-}
 
-// Build a proxy URL with the bearer token embedded so <img src> tags can load it.
-// The token is the one the requester used for this API call — already authenticated.
-function formatScreenshot(doc, req) {
-  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "") ?? "";
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
-  const fileUrl = token
-    ? `${baseUrl}/api/screenshots/${doc.id}/content?token=${encodeURIComponent(token)}`
-    : null;
-
-  return {
-    id: doc.id,
-    userId: doc.userId,
-    sessionId: doc.sessionId ?? null,
-    projectId: doc.projectId ?? null,
-    fileUrl,
-    fileSize: doc.fileSize ?? null,
-    takenAt: doc.takenAt,
-  };
+  try {
+    await access(filePath);
+  } catch {
+    notFound("Screenshot file");
+  }
+  res.setHeader("Content-Type", guessImageContentType(resolved.relativePath));
+  createReadStream(filePath).pipe(res);
 }

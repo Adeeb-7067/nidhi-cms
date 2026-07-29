@@ -497,6 +497,14 @@ export function MediaDesktopExplorer({
   const currentFolder = currentId ? byId.get(currentId) : null;
   /** Prefer explicit selection; otherwise rename the folder currently open. */
   const renameTarget = selected ?? currentFolder;
+  const canDeleteItem = useCallback(
+    (item: ExplorerMediaItem | null | undefined) => {
+      if (!item || item.parentId == null) return false;
+      if (canDelete) return true;
+      return !isAdmin && canEdit && item.kind === "folder";
+    },
+    [canDelete, canEdit, isAdmin],
+  );
 
   const openItem = (item: ExplorerMediaItem) => {
     if (item.kind === "folder") {
@@ -634,7 +642,7 @@ export function MediaDesktopExplorer({
     }
   };
 
-  const canDeleteSelected = selected != null && selected.parentId != null;
+  const canDeleteSelected = canDeleteItem(selected);
   const canMoveSelected = selected != null && selected.parentId != null && canEdit;
   const canDownloadSelected =
     selected != null && selected.kind !== "folder";
@@ -714,9 +722,8 @@ export function MediaDesktopExplorer({
       }
       if (
         (e.key === "Delete" || e.key === "Backspace") &&
-        canDelete &&
         selectedId &&
-        byId.get(selectedId)?.parentId != null
+        canDeleteItem(byId.get(selectedId))
       ) {
         e.preventDefault();
         setDeleteOpen(true);
@@ -734,6 +741,7 @@ export function MediaDesktopExplorer({
     byId,
     canEdit,
     canDelete,
+    canDeleteItem,
     navigate,
   ]);
 
@@ -1140,7 +1148,7 @@ export function MediaDesktopExplorer({
                         Move…
                       </ContextMenuItem>
                     ) : null}
-                    {canDelete && item.parentId != null ? (
+                    {canDeleteItem(item) ? (
                       <>
                         <ContextMenuSeparator />
                         <ContextMenuItem
@@ -1227,7 +1235,7 @@ export function MediaDesktopExplorer({
                         Move…
                       </ContextMenuItem>
                     ) : null}
-                    {canDelete && item.parentId != null ? (
+                    {canDeleteItem(item) ? (
                       <>
                         <ContextMenuSeparator />
                         <ContextMenuItem

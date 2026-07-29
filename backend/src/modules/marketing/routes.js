@@ -54,7 +54,16 @@ router.post("/marketing/media/folders", ...p("marketing_media", "create"), wrap(
 router.post("/marketing/media/files", ...p("marketing_media", "create"), wrap(mediaCtrl.registerFile));
 router.patch("/marketing/media/:id", ...p("marketing_media", "edit"), wrap(mediaCtrl.renameMedia));
 router.post("/marketing/media/:id/move", ...p("marketing_media", "edit"), wrap(mediaCtrl.moveMedia));
-router.delete("/marketing/media/:id", ...p("marketing_media", "delete"), wrap(mediaCtrl.deleteMedia));
+router.delete(
+  "/marketing/media/:id",
+  requireAuth,
+  requireAnyPermission(
+    ["marketing_media", "delete"],
+    ["marketing_media", "edit"],
+  ),
+  requireDigitalModuleAccess("marketing_media"),
+  wrap(mediaCtrl.deleteMedia),
+);
 
 // ── Calendar posts + approvals ───────────────────────────────────────────
 router.get("/marketing/posts", ...p("marketing_calendar"), wrap(workflowCtrl.listPosts));

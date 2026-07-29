@@ -4,6 +4,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -478,11 +479,12 @@ function RoleFormFields({
       )}
       <div className="space-y-2">
         <Label htmlFor="role-desc">Description</Label>
-        <Input
+        <Textarea
           id="role-desc"
           value={form.description}
           onChange={(e) => onChange({ ...form, description: e.target.value })}
           placeholder="Optional"
+          rows={3}
         />
       </div>
     </div>

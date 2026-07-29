@@ -527,8 +527,9 @@ export function ProjectDocumentFormDialog({
                               </div>
                               <div className="space-y-1.5">
                                 <Label className="text-xs">Notes (optional)</Label>
-                                <Input
-                                  className="h-9 text-sm"
+                                <Textarea
+                                  className="min-h-[64px] text-sm resize-y"
+                                  rows={2}
                                   value={renewal.notes ?? ""}
                                   onChange={(e) =>
                                     updateRenewal(renewal.id, { notes: e.target.value || null })

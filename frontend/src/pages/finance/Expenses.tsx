@@ -220,6 +220,22 @@ export default function ExpensesPage() {
       ),
     },
     {
+      id: "budget",
+      header: "Budget",
+      className: "max-w-[140px]",
+      cell: (e) =>
+        e.budgetName ? (
+          <>
+            <div className="font-medium truncate">{e.budgetName}</div>
+            {e.budgetFiscalYear ? (
+              <div className="text-[10px] text-muted-foreground">FY {e.budgetFiscalYear}</div>
+            ) : null}
+          </>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       id: "status",
       header: "Status",
       chip: true,

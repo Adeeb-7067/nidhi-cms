@@ -22,7 +22,7 @@ import {
   ensureAccountMediaVault,
   getScopedDigitalUserAccess,
   assertScopedAccountAccess,
-  canDeleteMarketingOwnedItem,
+  canDeleteMarketingMediaItem,
   canMutateMarketingMediaItem,
 } from "../services/helpers.js";
 import path from "path";
@@ -297,8 +297,12 @@ export async function deleteMedia(req, res) {
   if (!doc) notFound("Media item");
   assertDocAccount(doc, accountId);
 
-  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only the creator or an org admin can delete this media item.");
+  if (!(await canDeleteMarketingMediaItem(req.user, doc))) {
+    forbidden(
+      doc.kind === "folder"
+        ? "Only the creator, project account manager, or an org admin can delete this folder."
+        : "Only the creator or an org admin can delete this media item.",
+    );
   }
 
   if (doc.kind === "folder" && doc.parentId == null) {

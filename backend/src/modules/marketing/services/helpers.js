@@ -500,6 +500,20 @@ export async function canMutateMarketingMediaItem(user, doc) {
 }
 
 /**
+ * Folder delete: creator / org admin, or project Account Manager for that vault.
+ * File delete stays stricter (creator / org admin only).
+ */
+export async function canDeleteMarketingMediaItem(user, doc) {
+  if (canFullyEditMarketingOwnedItem(user, doc)) return true;
+  if (!doc || doc.kind !== "folder" || !doc.accountId) return false;
+  const account = await marketingAccountsTable
+    .findOne({ id: Number(doc.accountId), isDeleted: false })
+    .lean();
+  if (!account) return false;
+  return canManageDigitalTasksForAccount(user, account);
+}
+
+/**
  * Approval stage advance: creator, assignee, org admin, elevated lead, or project AM.
  * Broader than full detail edit so workflow can move without unlocking all fields.
  */

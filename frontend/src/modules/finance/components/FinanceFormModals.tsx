@@ -63,6 +63,7 @@ import {
   useCreateTaxDeposit,
   useUpdateTaxDeposit,
   useListVendors,
+  useListBudgets,
   type Expense,
   type Income,
   type FinancePayment,
@@ -119,6 +120,22 @@ function inferExpenseGstRate(taxable: number, gstAmount: number): string {
     : "18";
 }
 
+/** Indian FY label for a calendar date (Apr–Mar), e.g. 2026-07-15 → "2026-27". */
+function fiscalYearForDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  const y = d.getMonth() >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+  const endShort = (y + 1) % 100;
+  return `${y}-${String(endShort).padStart(2, "0")}`;
+}
+
+function budgetOptionLabel(b: Budget): string {
+  const parts = [b.name, b.fiscalYear];
+  if (b.type === "project" && b.projectName) parts.push(b.projectName);
+  if (b.department) parts.push(b.department);
+  return parts.filter(Boolean).join(" · ");
+}
+
 const expenseSchema = z.object({
   date: z.string().min(1, "Date is required"),
   category: z.string(),
@@ -128,6 +145,7 @@ const expenseSchema = z.object({
   employeeId: z.string().optional(),
   vendorId: z.string().optional(),
   loanId: z.string().optional(),
+  budgetId: z.string().optional(),
   notes: z.string().optional(),
   gstEnabled: z.boolean(),
   gstRate: z.string(),
@@ -148,6 +166,7 @@ export function ExpenseFormModal({
   const { data: employeesData } = useHrmEmployees({ limit: 200, status: "active" }, { enabled: open });
   const { data: vendorsData, refetch: refetchVendors } = useListVendors(undefined, open);
   const { data: loansData } = useListLoans({ status: "active" }, open);
+  const { data: budgetsData } = useListBudgets(undefined, open);
   const [attachments, setAttachments] = useState<{ name: string; url: string }[]>([]);
   const [vendorModalOpen, setVendorModalOpen] = useState(false);
 
@@ -160,6 +179,7 @@ export function ExpenseFormModal({
     employeeId: "",
     vendorId: "",
     loanId: "",
+    budgetId: "",
     notes: "",
     gstEnabled: false,
     gstRate: "18",
@@ -172,6 +192,8 @@ export function ExpenseFormModal({
 
   const watchedLoanId = form.watch("loanId");
   const watchedVendorId = form.watch("vendorId");
+  const watchedProjectId = form.watch("projectId");
+  const watchedDate = form.watch("date");
   const watchedGstEnabled = form.watch("gstEnabled");
   const watchedAmount = form.watch("amount");
   const watchedGstRate = form.watch("gstRate");
@@ -210,6 +232,33 @@ export function ExpenseFormModal({
     return list;
   }, [activeLoans, expense]);
 
+  const expenseFiscalYear = useMemo(() => fiscalYearForDate(watchedDate), [watchedDate]);
+  const budgetOptions = useMemo(() => {
+    const all = budgetsData?.budgets ?? [];
+    if (!expenseFiscalYear) return all;
+    return all.filter((b) => b.fiscalYear === expenseFiscalYear);
+  }, [budgetsData?.budgets, expenseFiscalYear]);
+
+  useEffect(() => {
+    if (!open || isEdit) return;
+    const current = form.getValues("budgetId");
+    if (current) return;
+    const projectNum = optionalSelectId(watchedProjectId);
+    if (!projectNum || !expenseFiscalYear) return;
+    const match = budgetOptions.find(
+      (b) => b.type === "project" && b.projectId === projectNum,
+    );
+    if (match) form.setValue("budgetId", String(match.id));
+  }, [open, isEdit, watchedProjectId, expenseFiscalYear, budgetOptions, form]);
+
+  useEffect(() => {
+    if (!open) return;
+    const current = form.getValues("budgetId");
+    if (!current || current === "none") return;
+    const selected = budgetOptions.find((b) => String(b.id) === current);
+    if (!selected) form.setValue("budgetId", "");
+  }, [open, budgetOptions, form]);
+
   useEffect(() => {
     if (!open) return;
     if (expense) {
@@ -226,6 +275,7 @@ export function ExpenseFormModal({
         employeeId: expense.employeeId ? String(expense.employeeId) : "",
         vendorId: expense.vendorId ? String(expense.vendorId) : "",
         loanId: expense.loanId ? String(expense.loanId) : "",
+        budgetId: expense.budgetId ? String(expense.budgetId) : "",
         notes: expense.notes ?? "",
         gstEnabled: gstOn,
         gstRate: inferExpenseGstRate(taxable, gstAmt),
@@ -254,6 +304,7 @@ export function ExpenseFormModal({
         employeeId: optionalSelectId(values.employeeId),
         vendorId: optionalSelectId(values.vendorId),
         loanId,
+        budgetId: optionalSelectId(values.budgetId),
         notes: values.notes || undefined,
         attachments,
         gstEnabled: values.gstEnabled,
@@ -444,6 +495,32 @@ export function ExpenseFormModal({
                   </FormItem>
                 )} />
               </div>
+              <FormField control={form.control} name="budgetId" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Budget</FormLabel>
+                  <Select onValueChange={(v) => field.onChange(v === "none" ? "" : v)} value={field.value || "none"}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Count against a budget (optional)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="none">None — auto from project / department</SelectItem>
+                      {budgetOptions.map((b) => (
+                        <SelectItem key={b.id} value={String(b.id)}>
+                          {budgetOptionLabel(b)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    {expenseFiscalYear
+                      ? `Showing FY ${expenseFiscalYear} budgets. Pick one to track spend explicitly.`
+                      : "Pick a budget to count this expense against when approved."}
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )} />
               <FormField control={form.control} name="vendorId" render={({ field }) => (
                 <FormItem>
                   <div className="flex items-center justify-between gap-2">
@@ -2039,7 +2116,13 @@ export function VendorFormModal({
                 )} />
               </div>
               <FormField control={form.control} name="address" render={({ field }) => (
-                <FormItem><FormLabel>Address</FormLabel><FormControl><Input placeholder="Billing address (optional)" {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel>Address</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} placeholder="Billing address (optional)" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
               )} />
               <FormField control={form.control} name="gstin" render={({ field }) => (
                 <FormItem><FormLabel>GSTIN</FormLabel><FormControl><Input placeholder="Optional" {...field} /></FormControl><FormMessage /></FormItem>

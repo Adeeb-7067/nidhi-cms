@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { CheckCircle, Clock, Home, Plus, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { phoneValidationError, normalizePhoneForSubmit } from "@/lib/phone-input";
 import {
@@ -294,10 +295,11 @@ export default function HrmWfhPage() {
                 </HrmField>
               </div>
               <HrmField label={LEGACY_WFH_LABELS.reason} hint="Brief note for your manager">
-                <Input
+                <Textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="e.g. home repair appointment"
+                  rows={3}
                 />
               </HrmField>
               <HrmField label={LEGACY_WFH_LABELS.contactPhone} hint="10-digit mobile number">

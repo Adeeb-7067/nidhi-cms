@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1005,10 +1006,11 @@ function DevicesTab({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Notes (optional)</Label>
-              <Input
+              <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="h-8 text-xs"
+                className="min-h-[64px] text-xs resize-y"
+                rows={2}
                 placeholder="SIM, screen lock PIN location…"
               />
             </div>
@@ -1208,10 +1210,11 @@ function SubscriptionsTab({
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Notes (optional)</Label>
-              <Input
+              <Textarea
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                className="h-8 text-xs"
+                className="min-h-[64px] text-xs resize-y"
+                rows={2}
               />
             </div>
           </div>

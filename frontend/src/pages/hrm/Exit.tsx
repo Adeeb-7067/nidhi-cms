@@ -440,10 +440,11 @@ export default function HrmExitPage() {
                         </HrmField>
                       ) : null}
                       <HrmField label="Notes">
-                        <Input
+                        <Textarea
                           value={detailNotes}
                           onChange={(e) => setDetailNotes(e.target.value)}
                           placeholder="HR notes for this exit"
+                          rows={3}
                         />
                       </HrmField>
                     </div>
@@ -459,10 +460,11 @@ export default function HrmExitPage() {
                         />
                       </HrmField>
                       <HrmField label="Notes">
-                        <Input
+                        <Textarea
                           value={detailNotes}
                           onChange={(e) => setDetailNotes(e.target.value)}
                           placeholder="Internal notes"
+                          rows={3}
                         />
                       </HrmField>
                     </div>
@@ -594,7 +596,12 @@ export default function HrmExitPage() {
                 </Select>
               </HrmField>
               <HrmField label="Reason">
-                <Input value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} />
+                <Textarea
+                  value={form.reason}
+                  onChange={(e) => setForm({ ...form, reason: e.target.value })}
+                  rows={3}
+                  placeholder="Why is this exit being started?"
+                />
               </HrmField>
               <div className="grid gap-4 sm:grid-cols-2">
                 <HrmField label="Resignation date">
@@ -623,7 +630,11 @@ export default function HrmExitPage() {
                 </HrmField>
               </div>
               <HrmField label="Notes (optional)">
-                <Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
+                <Textarea
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  rows={3}
+                />
               </HrmField>
             </div>
             <DialogFooter>

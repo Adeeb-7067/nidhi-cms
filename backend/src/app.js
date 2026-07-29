@@ -51,7 +51,15 @@ app.use(
 app.use(responseCompression);
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+// Public static for non-private uploads. Screenshots must never be here —
+// they live under private-uploads/ and are streamed via /api/screenshots/:id/content.
+app.use("/uploads", (req, res, next) => {
+  const p = req.path || "";
+  if (p === "/screenshots" || p.startsWith("/screenshots/")) {
+    return res.status(404).end();
+  }
+  next();
+}, express.static(path.join(process.cwd(), "uploads")));
 app.use(auditMiddleware);
 app.use("/api", (_req, res, next) => {
   res.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");

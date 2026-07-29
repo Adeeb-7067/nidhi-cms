@@ -5,6 +5,7 @@ import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -291,7 +292,12 @@ export default function Products() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Description</Label>
-              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Optional details" />
+              <Textarea
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Optional details"
+                rows={3}
+              />
             </div>
             <Button size="sm" className="w-full" onClick={addProduct} disabled={createProduct.isPending}>
               {createProduct.isPending ? "Saving…" : "Save product"}
@@ -343,7 +349,11 @@ export default function Products() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Description</Label>
-              <Input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
+              <Textarea
+                value={editForm.description}
+                onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                rows={3}
+              />
             </div>
           </div>
           <DialogFooter>

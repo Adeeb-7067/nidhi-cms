@@ -69,6 +69,8 @@ const expenseSchema = new Schema(
     },
     taxDepositId: { type: Number, ref: "FinanceTaxDeposits", default: null, index: true },
     payrollRunId: { type: Number, ref: "PayrollRuns", default: null, index: true },
+    /** When set, approved spend counts toward this budget (see budgets.controller computeSpentForBudget). */
+    budgetId: { type: Number, ref: "FinanceBudgets", default: null, index: true },
     notes: { type: String, default: null, trim: true },
     status: { type: String, enum: expenseStatuses, default: "pending", required: true, index: true },
     /**

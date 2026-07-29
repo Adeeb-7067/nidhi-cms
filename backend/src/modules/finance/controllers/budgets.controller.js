@@ -21,11 +21,25 @@ async function sumRecognized(match) {
   return rows[0]?.total ?? 0;
 }
 
+function fiscalYearDateRange(fy) {
+  return parseFiscalYear(fy);
+}
+
 async function computeSpentForBudget(budget) {
-  const { start, end } = parseFiscalYear(budget.fiscalYear);
+  const { start, end } = fiscalYearDateRange(budget.fiscalYear);
+  const fiscalDate = { $gte: start, $lt: end };
+  const approved = { status: "approved", date: fiscalDate };
+
+  const explicit = await sumRecognized({ budgetId: budget.id, ...approved });
+
   if (budget.type === "project") {
-    if (!budget.projectId) return 0;
-    return sumRecognized({ projectId: budget.projectId, status: "approved", date: { $gte: start, $lt: end } });
+    if (!budget.projectId) return explicit;
+    const legacy = await sumRecognized({
+      budgetId: null,
+      projectId: budget.projectId,
+      ...approved,
+    });
+    return explicit + legacy;
   }
 
   // Annual/company or annual/department budgets: sum approved expenses whose
@@ -38,11 +52,16 @@ async function computeSpentForBudget(budget) {
       .lean();
     const dept = await departmentsTable.findOne({ name: budget.department }).select({ id: 1 }).lean();
     const employeeIds = dept ? deptUsers.filter((u) => u.departmentId === dept.id).map((u) => u.id) : [];
-    return sumRecognized({ employeeId: { $in: employeeIds }, status: "approved", date: { $gte: start, $lt: end } });
+    const legacy = await sumRecognized({
+      budgetId: null,
+      employeeId: { $in: employeeIds },
+      ...approved,
+    });
+    return explicit + legacy;
   }
 
-  const [expenseTotal, payrollTotal] = await Promise.all([
-    sumRecognized({ status: "approved", date: { $gte: start, $lt: end } }),
+  const [legacyExpenses, payrollTotal] = await Promise.all([
+    sumRecognized({ budgetId: null, ...approved }),
     (async () => {
       let total = 0;
       for (let d = new Date(start); d < end; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
@@ -52,7 +71,7 @@ async function computeSpentForBudget(budget) {
       return total;
     })(),
   ]);
-  return expenseTotal + payrollTotal;
+  return explicit + legacyExpenses + payrollTotal;
 }
 
 async function listBudgets(req, res) {
@@ -131,4 +150,4 @@ async function deleteBudget(req, res) {
   res.json({ success: true });
 }
 
-export { listBudgets, createBudget, updateBudget, deleteBudget, budgetStatuses };
+export { listBudgets, createBudget, updateBudget, deleteBudget, budgetStatuses, computeSpentForBudget };
