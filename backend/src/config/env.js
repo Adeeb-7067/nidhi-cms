@@ -14,17 +14,44 @@ function getRequiredPort() {
   }
   return port;
 }
-function getAllowedOrigins() {
+
+/** Vite `--host 0.0.0.0` serves on LAN IPs; allow those in local development only. */
+function isPrivateLanHostname(hostname) {
+  if (!hostname) return false;
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+    return true;
+  }
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  return false;
+}
+
+/**
+ * Shared CORS origin check for Express + Socket.IO.
+ * Returns true when the request origin is allowed.
+ */
+function isAllowedOrigin(origin) {
+  // No Origin (same-origin / non-browser) or Electron file:// (Origin: null)
+  if (!origin || origin === "null") return true;
   const raw = process.env.ALLOWED_ORIGINS;
   if (!raw) return true;
-  const origins = raw.split(",").map((o) => o.trim());
-  // Accept requests from Electron desktop clients: the file:// protocol sends Origin: null
-  return (origin, callback) => {
-    if (!origin || origin === "null" || origins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, false);
+  const allowed = raw.split(",").map((o) => o.trim()).filter(Boolean);
+  if (allowed.includes(origin)) return true;
+  // Vite --host 0.0.0.0 prints Network: http://10.x.x.x:5173 — allow LAN in development.
+  if (process.env.NODE_ENV === "development") {
+    try {
+      return isPrivateLanHostname(new URL(origin).hostname);
+    } catch {
+      return false;
     }
+  }
+  return false;
+}
+
+function getAllowedOrigins() {
+  return (origin, callback) => {
+    callback(null, isAllowedOrigin(origin));
   };
 }
 
@@ -41,5 +68,6 @@ function getFrontendDistPath() {
 export {
   getAllowedOrigins,
   getFrontendDistPath,
-  getRequiredPort
+  getRequiredPort,
+  isAllowedOrigin,
 };

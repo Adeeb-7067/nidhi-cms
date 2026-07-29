@@ -1,7 +1,10 @@
 /**
- * Read-only report of stored files (local `uploads/` or object storage) that don't
- * appear to be referenced by any known DB field. Does NOT delete anything — this is
- * for manual review before ever wiring up automated cleanup.
+ * Read-only report of stored files under the CMS folder (BUCKET_FOLDER_PATH)
+ * that don't appear to be referenced by any known DB field.
+ *
+ * Does NOT delete anything — ever. For manual review only.
+ * Object listing is hard-scoped to the CMS prefix so other projects on a shared
+ * bucket are never reported (or touched).
  *
  * Usage: node --env-file=.env ./scripts/find-orphaned-uploads.mjs
  */
@@ -23,7 +26,7 @@ import {
   candidatesTable,
   hrmLettersTable,
 } from "../src/models/schema/index.js";
-import { isObjectStorageEnabled, getS3Client } from "../src/lib/object-storage.js";
+import { isObjectStorageEnabled, getS3Client, getBucketFolderPrefix, isCmsObjectKey, objectKeyFromStoredRef } from "../src/lib/object-storage.js";
 
 // Categories with their own dedicated retention/purge job — not "orphaned", just
 // not-yet-expired. Excluded from this report to avoid noise.
@@ -62,16 +65,7 @@ function extractUrls(doc, fieldPath) {
 
 /** Convert a stored URL into a comparable key: object-storage key, or /uploads/-relative path. */
 function urlToKey(url) {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url)) {
-    try {
-      return new URL(url).pathname.slice(1);
-    } catch {
-      return null;
-    }
-  }
-  if (url.startsWith("/uploads/")) return url.slice("/uploads/".length);
-  return null;
+  return objectKeyFromStoredRef(url);
 }
 
 async function collectReferencedKeys() {
@@ -102,13 +96,20 @@ function isSelfManaged(key) {
 async function listObjectStorageFiles() {
   const client = getS3Client();
   const bucket = process.env.LINODE_OBJECT_BUCKET;
+  // Only scan the CMS folder — the bucket may be shared with other projects.
+  const prefix = getBucketFolderPrefix();
   const files = [];
   let continuationToken;
   do {
     const res = await client.send(
-      new ListObjectsV2Command({ Bucket: bucket, ContinuationToken: continuationToken }),
+      new ListObjectsV2Command({
+        Bucket: bucket,
+        Prefix: prefix,
+        ContinuationToken: continuationToken,
+      }),
     );
     for (const obj of res.Contents ?? []) {
+      if (!obj.Key || !isCmsObjectKey(obj.Key)) continue;
       files.push({ key: obj.Key, size: obj.Size, lastModified: obj.LastModified });
     }
     continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
@@ -156,7 +157,8 @@ async function main() {
   const referenced = await collectReferencedKeys();
 
   const backend = isObjectStorageEnabled() ? "object storage" : "local uploads/";
-  console.log(`Listing files from: ${backend}...`);
+  const cmsPrefix = isObjectStorageEnabled() ? getBucketFolderPrefix() : null;
+  console.log(`Listing files from: ${backend}${cmsPrefix ? ` (prefix=${cmsPrefix})` : ""}...`);
   const stored = isObjectStorageEnabled()
     ? await listObjectStorageFiles()
     : await listLocalUploadFiles();

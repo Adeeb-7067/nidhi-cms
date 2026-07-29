@@ -20,10 +20,57 @@ const UPLOAD_CATEGORIES = [
 ];
 // Screenshots are access-controlled via backend proxy — never serve directly from S3.
 const PRIVATE_CATEGORIES = new Set(["screenshots"]);
+/** Default object-key prefix when BUCKET_FOLDER_PATH is missing/empty (shared-bucket isolation). */
+const DEFAULT_BUCKET_FOLDER_PREFIX = "ClientManagement-CMS/";
+
 function normalizeFolderPrefix(raw) {
-  const base = (raw ?? "ClientManagement-CMS/").trim().replace(/^\/+/, "");
+  const base = (raw ?? DEFAULT_BUCKET_FOLDER_PREFIX).trim().replace(/^\/+/, "");
+  // Empty/root prefixes would scope list/delete to the entire shared bucket — never allow that.
+  if (!base || base === "/") return DEFAULT_BUCKET_FOLDER_PREFIX;
   return base.endsWith("/") ? base : `${base}/`;
 }
+
+/** CMS folder prefix for this deployment (`BUCKET_FOLDER_PATH`). */
+function getBucketFolderPrefix() {
+  return normalizeFolderPrefix(process.env.BUCKET_FOLDER_PATH);
+}
+
+/**
+ * Whether `key` is inside the CMS folder on a possibly shared bucket.
+ * Rejects other project prefixes and `..` path segments.
+ */
+function isCmsObjectKey(key) {
+  if (!key || typeof key !== "string") return false;
+  const normalized = key.replace(/^\/+/, "");
+  if (!normalized || normalized.includes("\\") || normalized.split("/").includes("..")) {
+    return false;
+  }
+  return normalized.startsWith(getBucketFolderPrefix());
+}
+
+/** Bucket-relative key from a public URL, `/uploads/...` path, or raw object key. */
+function objectKeyFromStoredRef(urlOrKey) {
+  if (!urlOrKey || typeof urlOrKey !== "string") return null;
+  const trimmed = urlOrKey.trim();
+  if (!trimmed) return null;
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    try {
+      const pathname = new URL(trimmed).pathname.slice(1);
+      try {
+        return decodeURIComponent(pathname);
+      } catch {
+        return pathname;
+      }
+    } catch {
+      return null;
+    }
+  }
+  if (trimmed.startsWith("/uploads/")) return trimmed.slice("/uploads/".length);
+  if (!trimmed.includes("://") && !trimmed.startsWith("/")) return trimmed.replace(/^\/+/, "");
+  return null;
+}
+
 function sanitizeFilename(name) {
   const ext = path.extname(name).replace(/[^a-zA-Z0-9.]/g, "");
   const base = path.basename(name, path.extname(name)).replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -67,7 +114,7 @@ function getPublicUrl(objectKey) {
   return `https://${bucket}.${region}.digitaloceanspaces.com/${objectKey}`;
 }
 function buildObjectKey(originalName, category) {
-  const prefix = normalizeFolderPrefix(process.env.BUCKET_FOLDER_PATH);
+  const prefix = getBucketFolderPrefix();
   const categoryPath = normalizeCategory(category);
   return `${prefix}${categoryPath}${Date.now()}-${randomUUID().slice(0, 8)}-${sanitizeFilename(originalName)}`;
 }
@@ -132,6 +179,12 @@ async function createPresignedUploadUrl(originalName, mimetype, category, expire
 
 /** Confirm a direct-to-bucket upload actually landed, then set its final ACL. */
 async function finalizeObjectUpload(key, category) {
+  if (!isCmsObjectKey(key)) {
+    throw new HttpError(400, "Upload key is outside the CMS storage folder.", {
+      code: "INVALID_UPLOAD_KEY",
+      field: "key",
+    });
+  }
   const client = getS3Client();
   const bucket = process.env.LINODE_OBJECT_BUCKET;
   let head;
@@ -171,9 +224,12 @@ export {
   buildObjectKey,
   createPresignedUploadUrl,
   finalizeObjectUpload,
+  getBucketFolderPrefix,
   getPublicUrl,
   getS3Client,
+  isCmsObjectKey,
   isObjectStorageEnabled,
+  objectKeyFromStoredRef,
   uploadBufferToObjectStorage,
   uploadLocalFileToObjectStorage,
   uploadToObjectStorage

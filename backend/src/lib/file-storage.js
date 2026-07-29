@@ -8,24 +8,32 @@ import {
   createPresignedUploadUrl,
   finalizeObjectUpload,
   getS3Client,
+  isCmsObjectKey,
   isObjectStorageEnabled,
+  objectKeyFromStoredRef,
   uploadBufferToObjectStorage,
   uploadLocalFileToObjectStorage,
-  UPLOAD_CATEGORIES
+  UPLOAD_CATEGORIES,
 } from "./object-storage.js";
+import { logger } from "./logger.js";
+
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+
 function getStorageBackend() {
   return isObjectStorageEnabled() ? "object" : "local";
 }
+
 function ensureLocalUploadDir() {
   if (!fsSync.existsSync(UPLOAD_DIR)) {
     fsSync.mkdirSync(UPLOAD_DIR, { recursive: true });
   }
 }
+
 function localFilename(originalName) {
   const safe = originalName.replace(/[^a-zA-Z0-9.]/g, "_");
   return `${Date.now()}-${randomUUID().slice(0, 8)}-${safe}`;
 }
+
 async function storeUpload(buffer, originalName, mimetype, category = "misc") {
   if (isObjectStorageEnabled()) {
     const { url, key } = await uploadBufferToObjectStorage(buffer, originalName, mimetype, category);
@@ -37,6 +45,7 @@ async function storeUpload(buffer, originalName, mimetype, category = "misc") {
   await fs.writeFile(filePath, buffer);
   return { url: `/uploads/${filename}`, key: filename, storage: "local" };
 }
+
 async function storeGeneratedFile(localPath, originalName, mimetype, category = "reports") {
   if (isObjectStorageEnabled()) {
     const { url, key } = await uploadLocalFileToObjectStorage(localPath, originalName, mimetype, category);
@@ -45,22 +54,43 @@ async function storeGeneratedFile(localPath, originalName, mimetype, category = 
   const filename = path.basename(localPath);
   return { url: `/uploads/${filename}`, key: filename, storage: "local" };
 }
-/** Delete a file previously returned by storeUpload/storeGeneratedFile — local disk or object storage. */
+
+/**
+ * Delete a file previously returned by storeUpload / storeGeneratedFile.
+ * Object-storage deletes are confined to BUCKET_FOLDER_PATH (shared-bucket safety).
+ */
 async function deleteStoredFile(fileUrl) {
   if (!fileUrl) return;
+
   if (/^https?:\/\//i.test(fileUrl)) {
     if (!isObjectStorageEnabled()) return;
-    const key = new URL(fileUrl).pathname.slice(1);
+
+    const key = objectKeyFromStoredRef(fileUrl);
+    if (!key) {
+      logger.warn({ fileUrl }, "Skipping object delete: could not parse storage key");
+      return;
+    }
+    if (!isCmsObjectKey(key)) {
+      logger.error(
+        { key, fileUrl },
+        "Blocked object delete outside CMS folder (BUCKET_FOLDER_PATH)",
+      );
+      return;
+    }
+
     await getS3Client().send(
-      new DeleteObjectCommand({ Bucket: process.env.LINODE_OBJECT_BUCKET, Key: key })
+      new DeleteObjectCommand({ Bucket: process.env.LINODE_OBJECT_BUCKET, Key: key }),
     );
-  } else if (fileUrl.startsWith("/uploads/")) {
-    // Preserve the full subpath after /uploads/ — path.basename would strip subdirectories.
+    return;
+  }
+
+  if (fileUrl.startsWith("/uploads/")) {
+    // Keep subpaths after /uploads/ — path.basename would drop directories.
     const relPath = fileUrl.slice("/uploads/".length);
-    const filePath = path.join(UPLOAD_DIR, relPath);
-    await fs.unlink(filePath);
+    await fs.unlink(path.join(UPLOAD_DIR, relPath));
   }
 }
+
 function resolvePublicFileUrl(storedUrl, req) {
   if (!storedUrl) return null;
   if (/^https?:\/\//i.test(storedUrl)) return storedUrl;
@@ -69,6 +99,7 @@ function resolvePublicFileUrl(storedUrl, req) {
   }
   return storedUrl;
 }
+
 function validateStoredFileUrl(url, fieldName = "fileUrl") {
   if (!url) return;
   const trimmed = String(url).trim();
@@ -76,12 +107,14 @@ function validateStoredFileUrl(url, fieldName = "fileUrl") {
   if (trimmed.startsWith("/uploads/")) return;
   assertValidStoredFileUrl(trimmed, fieldName);
 }
+
 function validateStoredFileUrls(urls, fieldName = "attachments") {
   if (!urls?.length) return;
   for (const url of urls) {
     assertValidStoredFileUrl(url, fieldName);
   }
 }
+
 export {
   UPLOAD_CATEGORIES,
   createPresignedUploadUrl,
@@ -94,5 +127,5 @@ export {
   storeGeneratedFile,
   storeUpload,
   validateStoredFileUrl,
-  validateStoredFileUrls
+  validateStoredFileUrls,
 };

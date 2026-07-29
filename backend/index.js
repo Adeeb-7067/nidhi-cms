@@ -23,10 +23,10 @@ import { startAttendanceMaterializeJob } from "./src/modules/hrm/services/attend
 import { startEmployeeExitJob } from "./src/modules/hrm/services/employee-exit-job.js";
 import { startProjectDocumentRenewalReminderJob } from "./src/modules/admin/services/renewal-reminder-job.js";
 import { startChequeClearanceReminderJob } from "./src/modules/finance/services/cheque-clearance-reminder-job.js";
-import { startStorageCleanupJob } from "./src/modules/finance/services/storage-cleanup-job.js";
 import { startMarketingPostReminderJob } from "./src/modules/marketing/services/post-schedule-reminder-job.js";
 import { startCaDueReminderJob } from "./src/modules/ca/services/due-reminder-job.js";
 import { getStorageBackend, isObjectStorageEnabled } from "./src/lib/file-storage.js";
+import { getBucketFolderPrefix } from "./src/lib/object-storage.js";
 import mongoose from "mongoose";
 import { whenDatabaseReady } from "./src/lib/db.js";
 
@@ -70,7 +70,6 @@ const runAttendanceMaterializeTick = startAttendanceMaterializeJob();
 const runEmployeeExitTick = startEmployeeExitJob();
 const runProjectDocumentRenewalTick = startProjectDocumentRenewalReminderJob();
 const runChequeClearanceTick = startChequeClearanceReminderJob();
-const runStorageCleanupTick = startStorageCleanupJob();
 const runMarketingPostReminderTick = startMarketingPostReminderJob();
 const runCaDueReminderTick = startCaDueReminderJob();
 let backgroundJobsBootstrapped = false;
@@ -87,11 +86,10 @@ const bootstrapBackgroundJobs = () => {
   void runAlertSchedulerTick();
   void runProjectDocumentRenewalTick();
   void runChequeClearanceTick();
-  runStorageCleanupTick();
   void runMarketingPostReminderTick();
   void runCaDueReminderTick();
   logger.info(
-    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, storage cleanup, marketing post reminders, CA due reminders)",
+    "Background jobs started (inventory expiry, screenshot purge, report purge, daily log compliance, leave accrual, attendance materialize, employee exit automation, alert scheduler, project document renewals, cheque clearance, marketing post reminders, CA due reminders). Orphan storage auto-cleanup is permanently disabled.",
   );
 };
 void whenDatabaseReady()
@@ -123,7 +121,8 @@ server.listen(port, () => {
     {
       port,
       fileStorage: getStorageBackend(),
-      bucket: isObjectStorageEnabled() ? process.env.LINODE_OBJECT_BUCKET : void 0
+      bucket: isObjectStorageEnabled() ? process.env.LINODE_OBJECT_BUCKET : void 0,
+      cmsFolder: isObjectStorageEnabled() ? getBucketFolderPrefix() : void 0,
     },
     "Server listening with Realtime enabled"
   );
