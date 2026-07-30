@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import {
@@ -10,39 +10,89 @@ import {
   AlertTriangle,
   ArrowRight,
   Briefcase,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
 import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
-import {
-  legalDashboardKpis,
-  ndaExpiryAlerts,
-  agreementRenewalReminders,
-  upcomingHearings,
-  casesByStatus,
-  riskDistribution,
-  mockComplianceItems,
-  legalCounsel,
-} from "@/modules/legal/mock-data";
+import { useLegalDashboard, type LegalHearingDto } from "@/api/legal";
+import type { AgreementRecord, ComplianceItem, NdaRecord } from "@/modules/legal/types";
 import { formatCompactCurrency, formatPercent } from "@/modules/legal/constants";
 import {
   LegalPageHeader,
   LegalFilterBar,
   LegalRiskBadge,
   LegalStatusBadge,
+  legalDateRangeBounds,
 } from "@/modules/legal/components";
-import { toast } from "sonner";
+
+function trendHint(value: number, suffix: string) {
+  if (value === 0) return suffix;
+  const arrow = value > 0 ? "↑" : "↓";
+  return `${arrow} ${Math.abs(value)}% ${suffix}`;
+}
+
+function inRange(iso: string | undefined | null, start: Date, end: Date) {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  return t >= start.getTime() && t <= end.getTime();
+}
+
+function matchesCounsel(
+  assigned: { id?: number } | null | undefined,
+  counselFilter: string,
+) {
+  if (counselFilter === "all") return true;
+  return String(assigned?.id ?? "") === counselFilter;
+}
 
 export default function LegalDashboard() {
   const [dateRange, setDateRange] = useState("ytd");
-  const [counsel, setCounsel] = useState("all");
-  const kpis = legalDashboardKpis;
+  const [counselFilter, setCounselFilter] = useState("all");
+  const { data, isLoading, isError, refetch } = useLegalDashboard();
 
-  const nonCompliant = mockComplianceItems.filter((c) => c.status === "non_compliant" || c.status === "partial");
+  const kpis = data?.kpis;
+  const casesByStatus = data?.casesByStatus ?? [];
+  const riskDistribution = data?.riskDistribution ?? [];
+  const counselList = data?.counsel ?? [];
+  const { start, end } = useMemo(() => legalDateRangeBounds(dateRange), [dateRange]);
 
-  const ndaColumns: CmsColumn<(typeof ndaExpiryAlerts)[number]>[] = [
+  const ndaExpiryAlerts = useMemo(() => {
+    const rows = data?.ndaExpiryAlerts ?? [];
+    return rows.filter(
+      (n) =>
+        matchesCounsel(n.assignedTo, counselFilter) && inRange(n.expiresAt, start, end),
+    );
+  }, [data?.ndaExpiryAlerts, counselFilter, start, end]);
+
+  const agreementRenewalReminders = useMemo(() => {
+    const rows = data?.agreementRenewalReminders ?? [];
+    return rows.filter(
+      (a) =>
+        matchesCounsel(a.assignedTo, counselFilter) && inRange(a.renewalDate, start, end),
+    );
+  }, [data?.agreementRenewalReminders, counselFilter, start, end]);
+
+  const upcomingHearings = useMemo(() => {
+    const rows = data?.upcomingHearings ?? [];
+    return rows.filter((h) => {
+      const counselOk =
+        counselFilter === "all" || String(h.assignedToId ?? "") === counselFilter;
+      return counselOk && inRange(h.date, start, end);
+    });
+  }, [data?.upcomingHearings, counselFilter, start, end]);
+
+  const nonCompliant = useMemo(() => {
+    const rows = data?.complianceGaps ?? [];
+    return rows.filter((c) => matchesCounsel(c.owner, counselFilter));
+  }, [data?.complianceGaps, counselFilter]);
+
+  const maxCaseCount = Math.max(1, ...casesByStatus.map((r) => r.count));
+
+  const ndaColumns: CmsColumn<NdaRecord>[] = [
     { id: "party", header: "Party", cell: (n) => <span className="font-medium">{n.partyName}</span> },
     {
       id: "expires",
@@ -54,7 +104,7 @@ export default function LegalDashboard() {
     { id: "risk", header: "Risk", chip: true, cell: (n) => <LegalRiskBadge level={n.risk} /> },
   ];
 
-  const agreementColumns: CmsColumn<(typeof agreementRenewalReminders)[number]>[] = [
+  const agreementColumns: CmsColumn<AgreementRecord>[] = [
     {
       id: "agreement",
       header: "Agreement",
@@ -78,7 +128,7 @@ export default function LegalDashboard() {
     },
   ];
 
-  const hearingColumns: CmsColumn<(typeof upcomingHearings)[number]>[] = [
+  const hearingColumns: CmsColumn<LegalHearingDto>[] = [
     { id: "type", header: "Type", cell: (h) => h.type },
     {
       id: "reference",
@@ -110,6 +160,33 @@ export default function LegalDashboard() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <PortalPageShell>
+        <div className="flex items-center justify-center py-24 text-muted-foreground gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading legal dashboard…
+        </div>
+      </PortalPageShell>
+    );
+  }
+
+  if (isError || !kpis) {
+    return (
+      <PortalPageShell>
+        <LegalPageHeader
+          title="Legal Dashboard"
+          description="Could not load dashboard data."
+          breadcrumbs={[{ label: "Legal", href: "/legal" }, { label: "Dashboard" }]}
+          actions={
+            <Button size="sm" variant="outline" className="h-8" onClick={() => void refetch()}>
+              Retry
+            </Button>
+          }
+        />
+      </PortalPageShell>
+    );
+  }
+
   return (
     <PortalPageShell>
       <LegalPageHeader
@@ -117,13 +194,8 @@ export default function LegalDashboard() {
         description="Department overview — cases, compliance, agreements, and risk indicators"
         breadcrumbs={[{ label: "Legal", href: "/legal" }, { label: "Dashboard" }]}
         actions={
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-8"
-            onClick={() => toast.success("Legal summary export started (demo)")}
-          >
-            Export summary
+          <Button size="sm" variant="outline" className="h-8" asChild>
+            <Link href="/legal/counsel">Manage counsel</Link>
           </Button>
         }
       />
@@ -131,14 +203,15 @@ export default function LegalDashboard() {
       <LegalFilterBar
         dateRange={dateRange}
         onDateRangeChange={setDateRange}
-        counsel={counsel}
-        onCounselChange={setCounsel}
-        counselList={legalCounsel}
-        onExport={() => toast.success("Export started (demo)")}
+        counsel={counselFilter}
+        onCounselChange={setCounselFilter}
+        counselList={counselList}
       />
 
       <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overview KPIs</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Overview KPIs
+        </p>
         <PortalKpiGrid
           columns={4}
           count={6}
@@ -146,7 +219,7 @@ export default function LegalDashboard() {
             {
               title: "Active employee cases",
               value: String(kpis.activeCases),
-              hint: `↑ ${kpis.trends.activeCases}% vs prior period`,
+              hint: trendHint(kpis.trends.activeCases, "opened vs last month"),
               icon: Briefcase,
               accent: "blue",
               href: "/legal/cases",
@@ -155,7 +228,7 @@ export default function LegalDashboard() {
             {
               title: "NDA alerts",
               value: String(kpis.ndaAlerts),
-              hint: `↑ ${kpis.trends.ndaAlerts}% expiring or expired`,
+              hint: trendHint(kpis.trends.ndaAlerts, "vs prior month window"),
               icon: FileWarning,
               accent: "amber",
               alert: true,
@@ -165,7 +238,7 @@ export default function LegalDashboard() {
             {
               title: "Open court cases",
               value: String(kpis.courtCases),
-              hint: `${kpis.trends.courtCases}% vs last quarter`,
+              hint: trendHint(kpis.trends.courtCases, "filed vs last month"),
               icon: Gavel,
               accent: "violet",
               href: "/legal/court-cases",
@@ -183,7 +256,7 @@ export default function LegalDashboard() {
             {
               title: "Legal expenses (YTD)",
               value: formatCompactCurrency(kpis.expensesYtd),
-              hint: `↑ ${kpis.trends.expensesYtd}% vs prior year`,
+              hint: trendHint(kpis.trends.expensesYtd, "vs prior year to date"),
               icon: IndianRupee,
               accent: "sky",
               href: "/legal/expenses",
@@ -205,7 +278,13 @@ export default function LegalDashboard() {
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-12">
         <ChartGridCell colSpan={4}>
-          <ChartPanel title="Cases by status" description="Employee legal matters" icon={Briefcase} accent="blue" viewAllHref="/legal/cases">
+          <ChartPanel
+            title="Cases by status"
+            description="Employee legal matters"
+            icon={Briefcase}
+            accent="blue"
+            viewAllHref="/legal/cases"
+          >
             <div className="space-y-3 py-2">
               {casesByStatus.map((row) => (
                 <div key={row.name} className="space-y-1">
@@ -213,7 +292,7 @@ export default function LegalDashboard() {
                     <span>{row.name}</span>
                     <span className="font-semibold tabular-nums">{row.count}</span>
                   </div>
-                  <Progress value={(row.count / 7) * 100} className="h-1.5" />
+                  <Progress value={(row.count / maxCaseCount) * 100} className="h-1.5" />
                 </div>
               ))}
             </div>
@@ -221,10 +300,18 @@ export default function LegalDashboard() {
         </ChartGridCell>
 
         <ChartGridCell colSpan={4}>
-          <ChartPanel title="Risk distribution" description="Across all legal matters" icon={AlertTriangle} accent="amber">
+          <ChartPanel
+            title="Risk distribution"
+            description="Across all legal matters"
+            icon={AlertTriangle}
+            accent="amber"
+          >
             <div className="space-y-3 py-2">
               {riskDistribution.map((row) => (
-                <div key={row.name} className="flex items-center justify-between gap-2 rounded-lg border p-2.5">
+                <div
+                  key={row.name}
+                  className="flex items-center justify-between gap-2 rounded-lg border p-2.5"
+                >
                   <LegalRiskBadge level={row.name.toLowerCase() as "low" | "medium" | "high"} />
                   <span className="text-xs font-semibold tabular-nums">{row.count} items</span>
                 </div>
@@ -234,9 +321,15 @@ export default function LegalDashboard() {
         </ChartGridCell>
 
         <ChartGridCell colSpan={4}>
-          <ChartPanel title="Compliance gaps" description="Partial or non-compliant" icon={ShieldCheck} accent="rose" viewAllHref="/legal/compliance">
+          <ChartPanel
+            title="Compliance gaps"
+            description="Partial or non-compliant"
+            icon={ShieldCheck}
+            accent="rose"
+            viewAllHref="/legal/compliance"
+          >
             <div className="space-y-2">
-              {nonCompliant.slice(0, 4).map((item) => (
+              {nonCompliant.slice(0, 4).map((item: ComplianceItem) => (
                 <div key={item.id} className="flex items-start justify-between gap-2 rounded-lg border p-2.5">
                   <div className="min-w-0">
                     <p className="text-xs font-medium truncate">{item.requirement}</p>
@@ -245,6 +338,9 @@ export default function LegalDashboard() {
                   <LegalStatusBadge variant="compliance" value={item.status} />
                 </div>
               ))}
+              {!nonCompliant.length ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">No compliance gaps</p>
+              ) : null}
             </div>
           </ChartPanel>
         </ChartGridCell>
@@ -256,17 +352,22 @@ export default function LegalDashboard() {
             columns={ndaColumns}
             rows={ndaExpiryAlerts.slice(0, 5)}
             rowKey={(n) => n.id}
-            empty={{ title: "No NDA alerts", description: "No upcoming NDA expiries." }}
+            empty={{ title: "No NDA alerts", description: "No matching NDA expiries for this filter." }}
             className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
           />
         </ChartPanel>
 
-        <ChartPanel title="Agreement renewals" icon={Scale} accent="violet" viewAllHref="/legal/agreements">
+        <ChartPanel
+          title="Agreement renewals"
+          icon={Scale}
+          accent="violet"
+          viewAllHref="/legal/agreements"
+        >
           <CmsDataTable
             columns={agreementColumns}
             rows={agreementRenewalReminders.slice(0, 5)}
             rowKey={(a) => a.id}
-            empty={{ title: "No renewals", description: "No upcoming agreement renewals." }}
+            empty={{ title: "No renewals", description: "No matching renewals for this filter." }}
             className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
           />
         </ChartPanel>
@@ -277,7 +378,7 @@ export default function LegalDashboard() {
           columns={hearingColumns}
           rows={upcomingHearings.slice(0, 6)}
           rowKey={(h) => `${h.type}-${h.id}`}
-          empty={{ title: "No hearings", description: "No upcoming hearings or deadlines." }}
+          empty={{ title: "No hearings", description: "No matching hearings for this filter." }}
           className="[&>div]:shadow-none [&>div]:border-0 [&>div]:rounded-none"
         />
       </ChartPanel>

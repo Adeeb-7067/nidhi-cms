@@ -20,6 +20,12 @@ export const RISK_LABELS: Record<RiskLevel, string> = {
   high: "High",
 };
 
+export const COUNSEL_ROLE_LABELS: Record<"legal_head" | "associate" | "external_counsel", string> = {
+  legal_head: "Legal head",
+  associate: "Associate",
+  external_counsel: "External counsel",
+};
+
 export const CASE_STATUS_LABELS: Record<EmployeeCaseStatus, string> = {
   open: "Open",
   under_review: "Under review",

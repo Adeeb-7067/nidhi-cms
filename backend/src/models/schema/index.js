@@ -30,3 +30,4 @@ export * from "../../modules/sales/schema/index.js";
 export * from "../../modules/finance/schema/index.js";
 export * from "../../modules/marketing/schema/index.js";
 export * from "../../modules/ca/schema/index.js";
+export * from "../../modules/legal/schema/index.js";

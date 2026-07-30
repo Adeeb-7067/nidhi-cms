@@ -376,8 +376,9 @@ export function EmployeePaidLeaveCard({
           </div>
         ) : null}
         <p className="text-[11px] text-muted-foreground">
-          Cycle started {cycleSummary.cycleStartDateLabel}. Prior unused days were reset; next reset{" "}
-          {cycleSummary.resetDateLabel}.
+          This cycle: {cycleSummary.cycleStartDateLabel} → {cycleSummary.resetDateLabel}. Unused days
+          from earlier cycles were cleared; days earned inside this cycle (including previous months)
+          stay until the next reset.
         </p>
       </CardContent>
     </Card>

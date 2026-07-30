@@ -1,10 +1,10 @@
 import { useRoute, Link } from "wouter";
 import { format } from "date-fns";
-import { ArrowLeft, Calendar, User } from "lucide-react";
+import { ArrowLeft, Calendar, User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getCaseById } from "@/modules/legal/mock-data";
+import { useLegalCase } from "@/api/legal";
 import { CASE_TYPE_LABELS } from "@/modules/legal/constants";
 import {
   LegalPageHeader,
@@ -17,13 +17,23 @@ import {
 export default function LegalCaseDetail() {
   const [, params] = useRoute("/legal/cases/:id");
   const caseId = Number(params?.id);
-  const legalCase = getCaseById(caseId);
+  const { data: legalCase, isLoading, isError } = useLegalCase(caseId);
 
-  if (!legalCase) {
+  if (isLoading) {
+    return (
+      <PortalPageShell>
+        <div className="flex items-center justify-center py-24 text-muted-foreground gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading case…
+        </div>
+      </PortalPageShell>
+    );
+  }
+
+  if (isError || !legalCase) {
     return (
       <LegalEmptyState
         title="Case not found"
-        description={`No case with ID #${caseId} exists in the demo data.`}
+        description={`No case with ID #${caseId} was found.`}
         actionLabel="Back to cases"
         onAction={() => window.history.back()}
       />
@@ -59,7 +69,9 @@ export default function LegalCaseDetail() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2 pt-3 px-3">
-            <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">Department</CardTitle>
+            <CardTitle className="text-[10px] font-medium text-muted-foreground uppercase">
+              Department
+            </CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3 text-sm font-semibold">{legalCase.department}</CardContent>
         </Card>
@@ -70,7 +82,7 @@ export default function LegalCaseDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3">
-            <CounselAvatar name={legalCase.assignedTo.name} />
+            <CounselAvatar name={legalCase.assignedTo?.name ?? "—"} />
           </CardContent>
         </Card>
         <Card>
@@ -88,7 +100,9 @@ export default function LegalCaseDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="px-3 pb-3 text-sm font-semibold">
-            {legalCase.nextHearing ? format(new Date(legalCase.nextHearing), "MMM d, yyyy h:mm a") : "Not scheduled"}
+            {legalCase.nextHearing
+              ? format(new Date(legalCase.nextHearing), "MMM d, yyyy h:mm a")
+              : "Not scheduled"}
           </CardContent>
         </Card>
       </div>
@@ -99,9 +113,11 @@ export default function LegalCaseDetail() {
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground leading-relaxed">{legalCase.summary}</p>
-          <p className="text-xs text-muted-foreground mt-4">
-            Last updated {format(new Date(legalCase.updatedAt), "MMM d, yyyy h:mm a")}
-          </p>
+          {legalCase.updatedAt ? (
+            <p className="text-xs text-muted-foreground mt-4">
+              Last updated {format(new Date(legalCase.updatedAt), "MMM d, yyyy h:mm a")}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </PortalPageShell>

@@ -179,13 +179,16 @@ async function renderCanvas(
 function addCanvasToPdf(
   pdf: jsPDF,
   canvas: HTMLCanvasElement,
-  options: { singlePage?: boolean; marginMm: number },
+  options: { singlePage?: boolean; marginMm: number; imageQuality?: number },
 ): void {
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
   const margin = options.marginMm;
   const contentW = pageWidth - margin * 2;
   const contentH = pageHeight - margin * 2;
+  // JPEG (not PNG): screenshot-style captures compress ~10–50× with little visual loss.
+  const quality = options.imageQuality ?? 0.82;
+  const toImage = (c: HTMLCanvasElement) => c.toDataURL("image/jpeg", quality);
 
   if (options.singlePage) {
     const naturalH = (canvas.height * contentW) / canvas.width;
@@ -197,13 +200,13 @@ function addCanvasToPdf(
     }
     const x = (pageWidth - renderW) / 2;
     const y = margin;
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", x, y, renderW, renderH);
+    pdf.addImage(toImage(canvas), "JPEG", x, y, renderW, renderH);
     return;
   }
 
   const fullImgH = (canvas.height * contentW) / canvas.width;
   if (fullImgH <= contentH) {
-    pdf.addImage(canvas.toDataURL("image/png"), "PNG", margin, margin, contentW, fullImgH);
+    pdf.addImage(toImage(canvas), "JPEG", margin, margin, contentW, fullImgH);
     return;
   }
 
@@ -223,7 +226,7 @@ function addCanvasToPdf(
     ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
     ctx.drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
     const sliceHmm = (slicePx * contentW) / canvas.width;
-    pdf.addImage(sliceCanvas.toDataURL("image/png"), "PNG", margin, margin, contentW, sliceHmm);
+    pdf.addImage(toImage(sliceCanvas), "JPEG", margin, margin, contentW, sliceHmm);
     srcY += slicePx;
     pageIndex += 1;
   }
@@ -264,7 +267,7 @@ export async function downloadElementAsPdf(
     const contentHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1);
     host.style.height = `${contentHeight}px`;
 
-    const scale = options?.singlePage ? 1.5 : 2;
+    const scale = options?.singlePage ? 1.25 : 1.5;
     let canvas: HTMLCanvasElement;
     try {
       canvas = await renderCanvas(host, clone, captureWidth, scale);
@@ -287,7 +290,7 @@ export async function downloadElementAsPdf(
 
     let imgData: string;
     try {
-      imgData = canvas.toDataURL("image/png");
+      imgData = canvas.toDataURL("image/jpeg", 0.82);
     } catch {
       throw new Error("PDF export blocked by cross-origin content");
     }
@@ -296,12 +299,13 @@ export async function downloadElementAsPdf(
       throw new Error("PDF capture produced blank content");
     }
 
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
     const marginMm = options?.marginMm ?? 10;
 
     addCanvasToPdf(pdf, canvas, {
       singlePage: options?.singlePage,
       marginMm,
+      imageQuality: 0.82,
     });
 
     pdf.save(`${sanitizeFilename(filename)}.pdf`);

@@ -1,5 +1,6 @@
 import { usersTable } from "../../../models/schema/index.js";
 import { toIso } from "../../../utils/mongo-list.js";
+import { softDeleteFields as sharedSoftDelete } from "../../../utils/soft-crud-factory.js";
 
 export function dateOnly(value) {
   if (!value) return null;
@@ -21,5 +22,5 @@ export async function resolveUserNames(ids) {
 }
 
 export function softDeleteFields() {
-  return { isDeleted: true, deletedAt: new Date() };
+  return sharedSoftDelete();
 }

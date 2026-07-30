@@ -655,6 +655,10 @@ export function useUpdateHrmSettings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: hrmSettingsQueryKey() });
       qc.invalidateQueries({ queryKey: hrmAuditQueryKey() });
+      // Leave-calendar heal runs on the API — refresh balances/requests/employee cards.
+      qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "employees"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "dashboard"] });
     },
     meta: { errorMessage: "Could not save settings" },
   });

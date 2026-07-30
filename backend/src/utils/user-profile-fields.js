@@ -150,12 +150,17 @@ export function normalizeSalary(src) {
 
 function pickLeave(src, leaveAccrualDaysPerMonth) {
   const base = src && typeof src === "object" ? src : {};
+  // Explicit empty / null from the employee form means "use company HRM default".
+  if (leaveAccrualDaysPerMonth === null || leaveAccrualDaysPerMonth === "") {
+    return { monthlyQuota: null };
+  }
   const quota =
     parseNumber(base.monthlyQuota) ??
     parseNumber(leaveAccrualDaysPerMonth) ??
     parseNumber(base.monthlyLeaveQuota);
   return {
-    monthlyQuota: quota ?? 1,
+    // null = inherit company hrmPaidLeavesPerMonth at accrual time (all employees).
+    monthlyQuota: quota,
   };
 }
 

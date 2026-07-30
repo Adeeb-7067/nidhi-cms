@@ -14,29 +14,44 @@ export async function downloadPayslipPdfFromHtml(htmlContent: string, filename: 
 
   try {
     const canvas = await html2canvas(host, {
-      scale: 2,
+      scale: 1.5,
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
     });
 
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const quality = 0.82;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
     const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-    let heightLeft = imgHeight;
-    let position = 0;
+    if (imgHeight <= pageHeight) {
+      pdf.addImage(canvas.toDataURL("image/jpeg", quality), "JPEG", 0, 0, pageWidth, imgHeight);
+      pdf.save(`${filename}.pdf`);
+      return;
+    }
 
-    pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-    heightLeft -= pageHeight;
+    // Slice per page so we don't embed the full tall image on every page.
+    const pageHeightPx = (pageHeight / imgHeight) * canvas.height;
+    let srcY = 0;
+    let pageIndex = 0;
 
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", 0, position, pageWidth, imgHeight);
-      heightLeft -= pageHeight;
+    while (srcY < canvas.height - 0.5) {
+      if (pageIndex > 0) pdf.addPage();
+      const slicePx = Math.min(pageHeightPx, canvas.height - srcY);
+      const sliceCanvas = document.createElement("canvas");
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = Math.ceil(slicePx);
+      const ctx = sliceCanvas.getContext("2d");
+      if (!ctx) break;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, sliceCanvas.width, sliceCanvas.height);
+      ctx.drawImage(canvas, 0, srcY, canvas.width, slicePx, 0, 0, canvas.width, slicePx);
+      const sliceHmm = (slicePx * pageWidth) / canvas.width;
+      pdf.addImage(sliceCanvas.toDataURL("image/jpeg", quality), "JPEG", 0, 0, pageWidth, sliceHmm);
+      srcY += slicePx;
+      pageIndex += 1;
     }
 
     pdf.save(`${filename}.pdf`);

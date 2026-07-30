@@ -43,8 +43,10 @@ import { userHasPermission } from "../services/permissions.service.js";
 import { buildUserProfilePatchSet, buildProfilePatchMongoUpdate } from "../../../utils/user-profile-fields.js";
 import {
   ensureUserLeaveAccrualForPeriod,
+  healLeaveBalancesForAllStaff,
   leaveProfileFieldsTouched,
 } from "../services/leave-accrual.service.js";
+import { logger } from "../../../lib/logger.js";
 import * as employeesService from "../services/employees.service.js";
 import * as dashboardService from "../services/dashboard.service.js";
 import { badRequest, forbidden, notFound, parseIdParam, parsePagination } from "../../../utils/route-errors.js";
@@ -678,6 +680,32 @@ async function patchHrmSettings(req, res) {
   for (const f of fields) {
     if (req.body[f] !== undefined) update[f] = req.body[f];
   }
+  const numericFields = [
+    "hrmLeaveYearStartMonth",
+    "hrmDefaultShiftTemplateId",
+    "hrmAttendanceShortfallThresholdMinutes",
+    "hrmPaidLeavesPerMonth",
+    "hrmLeaveResetCycleMonths",
+    "hrmMaxFreeLates",
+    "hrmLatePenaltyAmount",
+    "hrmLeaveCarryForwardStartYear",
+  ];
+  for (const f of numericFields) {
+    if (update[f] === undefined || update[f] === null) continue;
+    const n = Number(update[f]);
+    if (!Number.isFinite(n)) {
+      badRequest(`Invalid numeric value for ${f}.`);
+    }
+    update[f] = n;
+  }
+  if (update.hrmLeaveYearStartMonth != null) {
+    const m = update.hrmLeaveYearStartMonth;
+    if (m < 1 || m > 12) badRequest("hrmLeaveYearStartMonth must be between 1 and 12.");
+  }
+  if (update.hrmLeaveResetCycleMonths != null) {
+    const c = update.hrmLeaveResetCycleMonths;
+    if (c < 1 || c > 12) badRequest("hrmLeaveResetCycleMonths must be between 1 and 12.");
+  }
   if (req.body.hrmOnboardingChecklistTemplate !== undefined) {
     if (!Array.isArray(req.body.hrmOnboardingChecklistTemplate)) {
       badRequest("hrmOnboardingChecklistTemplate must be an array of task titles.");
@@ -729,6 +757,23 @@ async function patchHrmSettings(req, res) {
     broadcast("hrm_settings_updated", { hrmGlobalWfhMode: enabled });
   }
 
+  const leaveCalendarChanged =
+    (req.body.hrmLeaveYearStartMonth !== undefined &&
+      Number(req.body.hrmLeaveYearStartMonth) !== Number(settings.hrmLeaveYearStartMonth ?? 1)) ||
+    (req.body.hrmLeaveResetCycleMonths !== undefined &&
+      Number(req.body.hrmLeaveResetCycleMonths) !== Number(settings.hrmLeaveResetCycleMonths ?? 3)) ||
+    (req.body.hrmPaidLeavesPerMonth !== undefined &&
+      Number(req.body.hrmPaidLeavesPerMonth) !== Number(settings.hrmPaidLeavesPerMonth ?? 1));
+
+  if (leaveCalendarChanged) {
+    try {
+      const heal = await healLeaveBalancesForAllStaff({ reason: "hrm_settings_leave_calendar_changed" });
+      broadcast("hrm_leave_updated", { heal: true, ...heal });
+    } catch (err) {
+      logger.error({ err }, "Leave balance heal after settings change failed");
+    }
+  }
+
   if (Object.keys(update).length) {
     await logHrmAudit({
       actorId: req.user.id,
@@ -736,7 +781,7 @@ async function patchHrmSettings(req, res) {
       entityType: "company_settings",
       entityId: settings.id,
       severity: "info",
-      metadata: { fields: Object.keys(update) },
+      metadata: { fields: Object.keys(update), leaveCalendarHealed: leaveCalendarChanged },
     });
   }
   res.json(formatSettings(updated));

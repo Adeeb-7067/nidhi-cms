@@ -40,18 +40,17 @@ export function LeaveCycleResetBanner({
             <span className="font-semibold text-foreground">
               {paidLeavesPerMonth} day{paidLeavesPerMonth === 1 ? "" : "s"}
             </span>{" "}
-            each month. Unused days stack inside the current{" "}
-            <span className="font-semibold text-foreground">{summary.cycleMonths}-month</span> cycle,
-            then unused balance resets to zero.
+            each month. Unused days stack month-to-month inside the current{" "}
+            <span className="font-semibold text-foreground">{summary.cycleMonths}-month</span> cycle
+            (e.g. June carries into July), then unused balance resets to zero.
           </p>
           <p>
-            This cycle started{" "}
+            This cycle:{" "}
             <span className="font-semibold text-foreground">{summary.cycleStartDateLabel}</span>
+            {" → "}
+            <span className="font-semibold text-foreground">{summary.resetDateLabel}</span>
             {" · "}
             <span className="font-semibold text-foreground">{summary.daysRemainingLabel}</span>
-            {" · "}
-            next reset{" "}
-            <span className="font-semibold text-foreground">{summary.resetDateLabel}</span>
           </p>
           <p className="text-[11px]">
             Rejected or cancelled requests restore balance. Approved half days use{" "}

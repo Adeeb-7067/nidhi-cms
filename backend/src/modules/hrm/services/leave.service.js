@@ -23,6 +23,7 @@ import {
   currentAccrualPeriodKey,
   ensureUserLeaveAccrualForPeriod,
   getLeaveYearForDate,
+  reclaimStrandedPriorYearAccrual,
   reconcileAutoSeededBalance,
   reconcileUserLeaveBalances,
   syncUserLeaveAvailable,
@@ -200,6 +201,8 @@ export async function listLeaveBalances(userId, year) {
   const periodKey = currentAccrualPeriodKey(now, tz);
   const user = await usersTable.findOne({ id: userId }).select({ lastLeaveAccrualPeriod: 1 }).lean();
   const needsAccrual = !user?.lastLeaveAccrualPeriod || user.lastLeaveAccrualPeriod !== periodKey;
+  // Always reclaim stranded prior-year EL during the first cycle so month-forward UI matches balances.
+  await reclaimStrandedPriorYearAccrual(userId, { now });
   if (needsAccrual) {
     await ensureUserLeaveAccrualForPeriod(userId);
     await reconcileUserLeaveBalances(userId, y);

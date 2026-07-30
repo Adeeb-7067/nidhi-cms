@@ -219,9 +219,46 @@ export default function HrmSettingsPage() {
       toast.error("Select at least one weekend day");
       return;
     }
+    const numericFields: (keyof SettingsForm)[] = [
+      "hrmAttendanceShortfallThresholdMinutes",
+      "hrmMaxFreeLates",
+      "hrmLatePenaltyAmount",
+      "hrmPaidLeavesPerMonth",
+      "hrmLeaveResetCycleMonths",
+      "hrmLeaveCarryForwardStartYear",
+      "hrmLeaveYearStartMonth",
+    ];
+    for (const key of numericFields) {
+      const v = values[key];
+      if (typeof v === "number" && !Number.isFinite(v)) {
+        toast.error("Please enter valid numbers in all settings fields");
+        return;
+      }
+    }
+    if (
+      values.hrmLeaveResetCycleMonths < 1 ||
+      values.hrmLeaveResetCycleMonths > 12 ||
+      values.hrmLeaveYearStartMonth < 1 ||
+      values.hrmLeaveYearStartMonth > 12
+    ) {
+      toast.error("Leave reset cycle must be 1–12 months and leave year start must be a valid month");
+      return;
+    }
     try {
-      await updateSettings.mutateAsync(values);
-      form.reset(values);
+      const saved = await updateSettings.mutateAsync(values);
+      form.reset({
+        hrmAttendanceShortfallThresholdMinutes: saved.hrmAttendanceShortfallThresholdMinutes,
+        hrmGlobalWfhMode: saved.hrmGlobalWfhMode,
+        hrmMaxFreeLates: saved.hrmMaxFreeLates,
+        hrmLatePenaltyAmount: saved.hrmLatePenaltyAmount,
+        hrmPaidLeavesPerMonth: saved.hrmPaidLeavesPerMonth,
+        hrmLeaveResetCycleMonths: saved.hrmLeaveResetCycleMonths,
+        hrmElectronOnlyClock: saved.hrmElectronOnlyClock,
+        hrmLeaveCarryForwardStartYear: saved.hrmLeaveCarryForwardStartYear,
+        hrmLeaveYearStartMonth: saved.hrmLeaveYearStartMonth,
+        hrmDefaultShiftTemplateId: saved.hrmDefaultShiftTemplateId,
+        hrmWeekendDays: saved.hrmWeekendDays,
+      });
       toast.success("HRM settings saved");
     } catch {
       // Error toast handled by useUpdateHrmSettings
@@ -456,13 +493,13 @@ export default function HrmSettingsPage() {
                   <SettingsSectionHeader
                     icon={CalendarClock}
                     title={LEGACY_SETTINGS_LABELS.leavePolicy}
-                    description="Paid leave accrues monthly. Unused days carry forward within each cycle, then reset when the cycle ends."
+                    description="Applies to every HRM employee (developer, QA, BDE, manager, HR, finance, digital, CA). Personal override only if set on the employee file. Freelancers are excluded."
                   />
 
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <HrmField
                       label={LEGACY_SETTINGS_LABELS.paidLeavesPerMonth}
-                      hint="Default accrual for new employees"
+                      hint="Default accrual for all employees without a personal override"
                     >
                       <Input
                         type="number"
@@ -473,7 +510,7 @@ export default function HrmSettingsPage() {
                     </HrmField>
                     <HrmField
                       label={LEGACY_SETTINGS_LABELS.leaveResetCycleMonths}
-                      hint="Unused paid leave resets every N months (default 3)"
+                      hint="Unused paid leave stacks month-to-month inside each N-month cycle, then resets. Changing this re-heals all employee balances."
                     >
                       <Input
                         type="number"
@@ -495,7 +532,7 @@ export default function HrmSettingsPage() {
                     </HrmField>
                     <HrmField
                       label={LEGACY_SETTINGS_LABELS.leaveYearStartMonth}
-                      hint="Fiscal leave year begins in this month"
+                      hint="Fiscal leave year + reset-cycle anchor. Changing this auto-heals balances so unused days stay in the current cycle."
                     >
                       <Select
                         value={String(form.watch("hrmLeaveYearStartMonth") ?? 1)}

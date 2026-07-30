@@ -530,7 +530,7 @@ export function getNavSections(
     },
 
     // =========================
-    // LEGAL (UI only — no backend yet)
+    // LEGAL
     // =========================
     {
       label: "Legal",
@@ -539,6 +539,7 @@ export function getNavSections(
       roles: ["super_admin"],
       items: [
         { title: "Dashboard", href: "/legal", icon: LayoutDashboard, roles: ["super_admin"], group: "Overview" },
+        { title: "Counsel", href: "/legal/counsel", icon: Users, roles: ["super_admin"], group: "Overview" },
         { title: "Employee cases", href: "/legal/cases", icon: Briefcase, roles: ["super_admin"], group: "Matters" },
         { title: "Vendor disputes", href: "/legal/vendor-disputes", icon: Handshake, roles: ["super_admin"], group: "Matters" },
         { title: "Client matters", href: "/legal/client-matters", icon: Building2, roles: ["super_admin"], group: "Matters" },

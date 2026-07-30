@@ -72,6 +72,7 @@ const SalesSettings = React.lazy(() => import("@/pages/sales/Settings"));
 const SalesNotifications = React.lazy(() => import("@/pages/sales/SalesNotifications"));
 
 const LegalDashboard = React.lazy(() => import("@/pages/legal/Dashboard"));
+const LegalCounsel = React.lazy(() => import("@/pages/legal/Counsel"));
 const LegalCases = React.lazy(() => import("@/pages/legal/Cases"));
 const LegalCaseDetail = React.lazy(() => import("@/pages/legal/CaseDetail"));
 const LegalVendorDisputes = React.lazy(() => import("@/pages/legal/VendorDisputes"));
@@ -418,6 +419,11 @@ export function PageOutlet() {
         </RoleGate>
       </Route>
 
+      <Route path="/legal/counsel">
+        <RoleGate>
+          <LegalCounsel />
+        </RoleGate>
+      </Route>
       <Route path="/legal/cases/:id">
         <RoleGate>
           <LegalCaseDetail />

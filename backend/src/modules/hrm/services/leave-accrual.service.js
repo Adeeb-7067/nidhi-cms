@@ -51,6 +51,35 @@ export function isLeaveCycleResetMonth(month, startMonth = 1, cycleMonths = LEAV
   return ((month - sm + 12) % 12) % cycle === 0;
 }
 
+/**
+ * True during the first reset-cycle of a leave year (e.g. start=6, cycle=3 → Jun/Jul/Aug).
+ * Used to reclaim EL that was mis-bucketed into the prior leave-year label after settings changes.
+ */
+export function isInFirstLeaveCycle(month, startMonth = 1, cycleMonths = LEAVE_RESET_CYCLE_MONTHS) {
+  const sm = Math.min(12, Math.max(1, startMonth));
+  const cycle = Math.min(12, Math.max(1, Number(cycleMonths) || LEAVE_RESET_CYCLE_MONTHS));
+  const offset = (month - sm + 12) % 12;
+  return offset < cycle;
+}
+
+/**
+ * Whether an older leave-year balance row should be folded into the current leave year.
+ * Touch date (last accrual/update) must itself map to the current leave year under
+ * today's start-month setting — otherwise it is a true closed-year leftover.
+ */
+export function shouldReclaimStrandedAccrualTouch({
+  calendarMonth,
+  startMonth = 1,
+  cycleMonths = LEAVE_RESET_CYCLE_MONTHS,
+  currentLeaveYear,
+  touchYear,
+  touchMonth,
+}) {
+  if (!isInFirstLeaveCycle(calendarMonth, startMonth, cycleMonths)) return false;
+  if (touchYear == null || touchMonth == null) return true;
+  return getLeaveYearForDate(touchYear, touchMonth, startMonth) === currentLeaveYear;
+}
+
 /** Resolve configured leave reset cycle length from company settings. */
 export function resolveLeaveResetCycleMonths(settings) {
   const configured = settings?.hrmLeaveResetCycleMonths;
@@ -62,6 +91,17 @@ export function resolveLeaveResetCycleMonths(settings) {
 
 /** Days to credit this employee for the monthly accrual run (Satyakabir: leave.monthlyQuota). */
 export function resolveAccrualDaysPerMonth(user, settings) {
+  // Explicit per-employee override from Employee file ("Leave accrual / month").
+  const perUser = user?.leaveAccrualDaysPerMonth;
+  if (perUser != null && Number.isFinite(Number(perUser))) {
+    return Math.max(0, Number(perUser));
+  }
+  // Company HRM setting — applies to every employee without a personal override.
+  const global = settings?.hrmPaidLeavesPerMonth;
+  if (global != null && Number.isFinite(Number(global))) {
+    return Math.max(0, Number(global));
+  }
+  // Legacy nested / monthlyLeaveQuota only when leaveAccrualDaysPerMonth was never set.
   const nested = user?.leave?.monthlyQuota;
   if (nested != null && Number.isFinite(Number(nested))) {
     return Math.max(0, Number(nested));
@@ -69,14 +109,6 @@ export function resolveAccrualDaysPerMonth(user, settings) {
   const legacy = user?.monthlyLeaveQuota;
   if (legacy != null && Number.isFinite(Number(legacy))) {
     return Math.max(0, Number(legacy));
-  }
-  const perUser = user?.leaveAccrualDaysPerMonth;
-  if (perUser != null && Number.isFinite(Number(perUser))) {
-    return Math.max(0, Number(perUser));
-  }
-  const global = settings?.hrmPaidLeavesPerMonth;
-  if (global != null && Number.isFinite(Number(global))) {
-    return Math.max(0, Number(global));
   }
   return 1;
 }
@@ -446,6 +478,273 @@ async function resetUserAccrualLeaveBalance(userId, leaveYear, accrualType, sess
 }
 
 /**
+ * Move unused EL sitting on older leave-year rows into the current leave year.
+ * Fixes month-forward gaps when leave-year start month changed (e.g. June credit
+ * stored under 2025 while the current Jun–Aug cycle expects it on 2026).
+ * Only runs during the first cycle of the leave year.
+ */
+export async function reclaimStrandedPriorYearAccrual(userId, options = {}) {
+  const { now = new Date() } = options;
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const { year, month } = localDateParts(now, tz);
+  const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
+  const cycleMonths = resolveLeaveResetCycleMonths(settings);
+
+  if (!isInFirstLeaveCycle(month, startMonth, cycleMonths)) {
+    return { skipped: "not_first_cycle" };
+  }
+
+  const leaveYear = getLeaveYearForDate(year, month, startMonth);
+  const accrualType = await findAccrualLeaveType();
+  if (!accrualType) return { skipped: "no_accrual_leave_type" };
+
+  const olderRows = await leaveBalancesTable
+    .find({ userId, leaveTypeId: accrualType.id, year: { $lt: leaveYear } })
+    .lean();
+  if (!olderRows.length) return { skipped: "nothing_to_reclaim", leaveYear };
+
+  let reclaimedTotal = 0;
+  for (const prior of olderRows) {
+    const stranded = computeAvailableBalance(prior);
+    if (stranded <= 0) continue;
+
+    const touchDate = prior.updatedAt
+      ? new Date(prior.updatedAt)
+      : prior.createdAt
+        ? new Date(prior.createdAt)
+        : null;
+    const touchParts = touchDate ? localDateParts(touchDate, tz) : null;
+    if (
+      !shouldReclaimStrandedAccrualTouch({
+        calendarMonth: month,
+        startMonth,
+        cycleMonths,
+        currentLeaveYear: leaveYear,
+        touchYear: touchParts?.year,
+        touchMonth: touchParts?.month,
+      })
+    ) {
+      continue;
+    }
+
+    await runInTx(async (session) => {
+      const sessOpts = session ? { session } : {};
+      const priorRow = await leaveBalancesTable
+        .findOne({ id: prior.id })
+        .session(session ?? null);
+      if (!priorRow) return;
+      const amount = computeAvailableBalance(priorRow);
+      if (amount <= 0) return;
+
+      const cleared = await leaveBalancesTable.updateOne(
+        { id: priorRow.id, version: priorRow.version },
+        {
+          $set: { allocated: 0, carriedForward: 0, used: 0, pending: 0 },
+          $inc: { version: 1 },
+        },
+        sessOpts,
+      );
+      if (cleared.modifiedCount !== 1) {
+        throw new Error(`Stranded leave reclaim conflict (prior) for user ${userId}`);
+      }
+
+      const current = await ensureBalanceRow(userId, accrualType.id, leaveYear, session);
+      const moved = await leaveBalancesTable.updateOne(
+        { id: current.id, version: current.version },
+        { $inc: { allocated: amount, version: 1 } },
+        sessOpts,
+      );
+      if (moved.modifiedCount !== 1) {
+        throw new Error(`Stranded leave reclaim conflict (current) for user ${userId}`);
+      }
+      reclaimedTotal += amount;
+    });
+  }
+
+  if (reclaimedTotal <= 0) {
+    return { skipped: "nothing_to_reclaim", leaveYear };
+  }
+
+  await syncUserLeaveAvailable(userId, leaveYear);
+  return { reclaimed: reclaimedTotal, leaveYear, leaveTypeId: accrualType.id };
+}
+
+/**
+ * Clear leave quota fields that merely mirror the company default so every
+ * employee without a true personal override inherits HRM settings changes.
+ * True overrides (e.g. 2 or 4 days/month) are preserved on leaveAccrualDaysPerMonth.
+ */
+export async function syncStaffLeaveQuotasToCompanyPolicy() {
+  const settings = await getOrCreateSettings();
+  const companyDefault = resolveAccrualDaysPerMonth({}, settings);
+  const staff = await usersTable
+    .find(
+      { role: { $in: hrmEmployeeRoles }, status: "active" },
+      { id: 1, leaveAccrualDaysPerMonth: 1, monthlyLeaveQuota: 1, leave: 1 },
+    )
+    .lean();
+
+  let cleared = 0;
+  let preservedOverrides = 0;
+
+  for (const user of staff) {
+    const explicit = user.leaveAccrualDaysPerMonth;
+    const nested = user.leave?.monthlyQuota;
+    const legacy = user.monthlyLeaveQuota;
+
+    // Personal override different from company default — keep it.
+    if (explicit != null && Number.isFinite(Number(explicit)) && Number(explicit) !== companyDefault) {
+      preservedOverrides += 1;
+      continue;
+    }
+    // Legacy nested-only override — promote to leaveAccrualDaysPerMonth so it stays explicit.
+    if (
+      (explicit == null || !Number.isFinite(Number(explicit))) &&
+      nested != null &&
+      Number.isFinite(Number(nested)) &&
+      Number(nested) !== companyDefault
+    ) {
+      await usersTable.updateOne(
+        { id: user.id },
+        {
+          $set: {
+            leaveAccrualDaysPerMonth: Number(nested),
+            monthlyLeaveQuota: Number(nested),
+            leave: { ...(user.leave && typeof user.leave === "object" ? user.leave : {}), monthlyQuota: Number(nested) },
+          },
+        },
+      );
+      preservedOverrides += 1;
+      continue;
+    }
+
+    const storesDefault =
+      (explicit != null && Number(explicit) === companyDefault) ||
+      (nested != null && Number(nested) === companyDefault) ||
+      (legacy != null && Number(legacy) === companyDefault);
+    if (!storesDefault) continue;
+
+    await usersTable.updateOne(
+      { id: user.id },
+      {
+        $set: {
+          leaveAccrualDaysPerMonth: null,
+          monthlyLeaveQuota: null,
+          leave: { ...(user.leave && typeof user.leave === "object" ? user.leave : {}), monthlyQuota: null },
+        },
+      },
+    );
+    cleared += 1;
+  }
+
+  return { companyDefault, cleared, preservedOverrides, staffCount: staff.length };
+}
+
+/**
+ * After leave-calendar settings change (or on demand): fold stranded EL and
+ * catch up accrual so month-forward balances match the active cycle for everyone.
+ */
+export async function healLeaveBalancesForAllStaff(options = {}) {
+  const { now = new Date(), reason = "manual" } = options;
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const periodKey = currentAccrualPeriodKey(now, tz);
+
+  const quotaSync = await syncStaffLeaveQuotasToCompanyPolicy();
+
+  const staff = await usersTable
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1 })
+    .lean();
+
+  let reclaimedTotal = 0;
+  let reclaimedEmployees = 0;
+  let accrualEmployees = 0;
+
+  for (const user of staff) {
+    const reclaim = await reclaimStrandedPriorYearAccrual(user.id, { now });
+    if (reclaim.reclaimed > 0) {
+      reclaimedTotal += reclaim.reclaimed;
+      reclaimedEmployees += 1;
+    }
+    const accrual = await ensureUserLeaveAccrualForPeriod(user.id, { periodKey, now });
+    if (accrual.credited > 0) accrualEmployees += 1;
+  }
+
+  await logHrmAudit({
+    actorId: null,
+    action: "leave_balance_heal",
+    entityType: "leave_balance",
+    entityId: null,
+    severity: "info",
+    metadata: {
+      reason,
+      periodKey,
+      reclaimedTotal,
+      reclaimedEmployees,
+      accrualEmployees,
+      staffCount: staff.length,
+      quotaSync,
+    },
+  });
+
+  logger.info(
+    { reason, periodKey, reclaimedTotal, reclaimedEmployees, accrualEmployees, quotaSync },
+    "Leave balance heal completed",
+  );
+
+  return {
+    periodKey,
+    reclaimedTotal,
+    reclaimedEmployees,
+    accrualEmployees,
+    staffCount: staff.length,
+    quotaSync,
+  };
+}
+
+/**
+ * Forfeit unused EL on a closed leave-year label (called when a new leave year starts).
+ */
+export async function forfeitPriorLeaveYearAccrual(priorLeaveYear) {
+  const accrualType = await findAccrualLeaveType();
+  if (!accrualType) return { skipped: "no_accrual_leave_type" };
+
+  const staff = await usersTable
+    .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1 })
+    .lean();
+
+  let forfeitTotal = 0;
+  let employeeCount = 0;
+
+  await runInTx(async (session) => {
+    for (const user of staff) {
+      const forfeited = await resetUserAccrualLeaveBalance(
+        user.id,
+        priorLeaveYear,
+        accrualType,
+        session,
+      );
+      if (forfeited > 0) {
+        forfeitTotal += forfeited;
+        employeeCount += 1;
+      }
+    }
+  });
+
+  await logHrmAudit({
+    actorId: null,
+    action: "leave_prior_year_forfeit",
+    entityType: "leave_balance",
+    entityId: null,
+    severity: "info",
+    metadata: { priorLeaveYear, forfeitTotal, employeeCount, leaveTypeCode: accrualType.code },
+  });
+
+  return { priorLeaveYear, forfeitTotal, employeeCount };
+}
+
+/**
  * Forfeit unused paid-leave balance and zero counters for the accrual leave type.
  * Runs on the first month of each leave cycle (every 3 months by default).
  */
@@ -522,6 +821,10 @@ export async function ensureUserLeaveAccrualForPeriod(userId, options = {}) {
 
   const { year, month } = parsePeriodKey(periodKey);
   const leaveYear = getLeaveYearForDate(year, month, startMonth);
+
+  // Fold prior-year stranded EL into the current leave year during the first cycle
+  // so June unused days appear in Jul/Aug when leave-year start is June.
+  await reclaimStrandedPriorYearAccrual(userId, { now });
 
   if (days <= 0) {
     if (isLeaveCycleResetMonth(month, startMonth, cycleMonths)) {
@@ -676,9 +979,10 @@ export async function runLeaveAccrualTick(now = new Date()) {
   const cycleMonths = resolveLeaveResetCycleMonths(settings);
   let carryOutcome = null;
 
-  // Year-end carry-forward for non-accrual leave types (CL/SL) when the leave year starts.
+  // Year-end: forfeit unused EL on the closed leave-year label, then carry CL/SL.
   if (month === startMonth) {
     const targetLeaveYear = getLeaveYearForDate(year, month, startMonth);
+    await forfeitPriorLeaveYearAccrual(targetLeaveYear - 1);
     carryOutcome = await runLeaveCarryForward(targetLeaveYear);
   }
 
@@ -714,13 +1018,9 @@ export async function backfillCurrentMonthAccrual() {
     const accrualType = await findAccrualLeaveType();
     if (!accrualType) return;
 
-    const staff = await usersTable
-      .find({ role: { $in: hrmEmployeeRoles }, status: "active" }, { id: 1 })
-      .lean();
-
-    for (const user of staff) {
-      await ensureUserLeaveAccrualForPeriod(user.id, { periodKey });
-    }
+    // Heal first so any leave-year start change while the API was down is corrected
+    // before monthly catch-up credits.
+    await healLeaveBalancesForAllStaff({ reason: "startup_backfill" });
     logger.info({ periodKey }, "Leave accrual startup backfill complete");
   } catch (err) {
     logger.error({ err }, "Leave accrual startup backfill failed");

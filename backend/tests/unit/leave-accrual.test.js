@@ -5,6 +5,8 @@ import {
   currentAccrualPeriodKey,
   getLeaveYearForDate,
   isLeaveCycleResetMonth,
+  isInFirstLeaveCycle,
+  shouldReclaimStrandedAccrualTouch,
   resolveAccrualDaysPerMonth,
   resolveLeaveResetCycleMonths,
   computeCarryForwardAmount,
@@ -43,6 +45,11 @@ describe("getLeaveYearForDate", () => {
     assert.equal(getLeaveYearForDate(2026, 3, 4), 2025);
     assert.equal(getLeaveYearForDate(2026, 1, 4), 2025);
   });
+  test("fiscal year starting June keeps Jun–Dec in same leave year", () => {
+    assert.equal(getLeaveYearForDate(2026, 6, 6), 2026);
+    assert.equal(getLeaveYearForDate(2026, 7, 6), 2026);
+    assert.equal(getLeaveYearForDate(2026, 5, 6), 2025);
+  });
 });
 
 describe("isLeaveCycleResetMonth", () => {
@@ -60,6 +67,66 @@ describe("isLeaveCycleResetMonth", () => {
     assert.equal(isLeaveCycleResetMonth(5, 4, 3), false);
     assert.equal(isLeaveCycleResetMonth(7, 4, 3), true);
   });
+
+  test("June start resets Jun / Sep / Dec / Mar", () => {
+    assert.equal(isLeaveCycleResetMonth(6, 6, 3), true);
+    assert.equal(isLeaveCycleResetMonth(7, 6, 3), false);
+    assert.equal(isLeaveCycleResetMonth(8, 6, 3), false);
+    assert.equal(isLeaveCycleResetMonth(9, 6, 3), true);
+  });
+});
+
+describe("isInFirstLeaveCycle", () => {
+  test("June start: Jun–Aug are first cycle", () => {
+    assert.equal(isInFirstLeaveCycle(6, 6, 3), true);
+    assert.equal(isInFirstLeaveCycle(7, 6, 3), true);
+    assert.equal(isInFirstLeaveCycle(8, 6, 3), true);
+    assert.equal(isInFirstLeaveCycle(9, 6, 3), false);
+  });
+});
+
+describe("shouldReclaimStrandedAccrualTouch", () => {
+  test("reclaims June touch into current leave year during Jul of June-start cycle", () => {
+    assert.equal(
+      shouldReclaimStrandedAccrualTouch({
+        calendarMonth: 7,
+        startMonth: 6,
+        cycleMonths: 3,
+        currentLeaveYear: 2026,
+        touchYear: 2026,
+        touchMonth: 6,
+      }),
+      true,
+    );
+  });
+
+  test("does not reclaim closed-year May leftover after June start", () => {
+    assert.equal(
+      shouldReclaimStrandedAccrualTouch({
+        calendarMonth: 7,
+        startMonth: 6,
+        cycleMonths: 3,
+        currentLeaveYear: 2026,
+        touchYear: 2026,
+        touchMonth: 5,
+      }),
+      false,
+    );
+  });
+
+  test("does not reclaim outside the first cycle", () => {
+    assert.equal(
+      shouldReclaimStrandedAccrualTouch({
+        calendarMonth: 10,
+        startMonth: 6,
+        cycleMonths: 3,
+        currentLeaveYear: 2026,
+        touchYear: 2026,
+        touchMonth: 6,
+      }),
+      false,
+    );
+  });
 });
 
 describe("resolveLeaveResetCycleMonths", () => {
@@ -76,22 +143,21 @@ describe("resolveLeaveResetCycleMonths", () => {
 });
 
 describe("resolveAccrualDaysPerMonth", () => {
-  test("uses leave.monthlyQuota when set (Satyakabir)", () => {
-    assert.equal(resolveAccrualDaysPerMonth({ leave: { monthlyQuota: 2 } }, {}), 2);
-  });
-
-  test("uses monthlyLeaveQuota legacy field", () => {
-    assert.equal(resolveAccrualDaysPerMonth({ monthlyLeaveQuota: 1.5 }, {}), 1.5);
-  });
-
   test("uses per-user leaveAccrualDaysPerMonth override when set", () => {
     assert.equal(resolveAccrualDaysPerMonth({ leaveAccrualDaysPerMonth: 2.5 }, {}), 2.5);
     assert.equal(resolveAccrualDaysPerMonth({ leaveAccrualDaysPerMonth: 0 }, {}), 0);
   });
 
-  test("falls back to company setting", () => {
+  test("company setting applies when employee has no personal override", () => {
     assert.equal(resolveAccrualDaysPerMonth({}, { hrmPaidLeavesPerMonth: 1.5 }), 1.5);
     assert.equal(resolveAccrualDaysPerMonth({}, { hrmPaidLeavesPerMonth: 0 }), 0);
+    assert.equal(
+      resolveAccrualDaysPerMonth(
+        { leave: { monthlyQuota: 9 }, monthlyLeaveQuota: 9 },
+        { hrmPaidLeavesPerMonth: 1.5 },
+      ),
+      1.5,
+    );
   });
 
   test("defaults to 1 when neither override nor setting", () => {
@@ -99,14 +165,19 @@ describe("resolveAccrualDaysPerMonth", () => {
     assert.equal(resolveAccrualDaysPerMonth({}, { hrmPaidLeavesPerMonth: null }), 1);
   });
 
-  test("nested monthlyQuota wins over leaveAccrualDaysPerMonth", () => {
+  test("leaveAccrualDaysPerMonth wins over company and nested quota", () => {
     assert.equal(
       resolveAccrualDaysPerMonth(
         { leave: { monthlyQuota: 2 }, leaveAccrualDaysPerMonth: 3 },
         { hrmPaidLeavesPerMonth: 1 },
       ),
-      2,
+      3,
     );
+  });
+
+  test("legacy nested monthlyQuota used only when no company setting and no leaveAccrualDaysPerMonth", () => {
+    assert.equal(resolveAccrualDaysPerMonth({ leave: { monthlyQuota: 2 } }, {}), 2);
+    assert.equal(resolveAccrualDaysPerMonth({ monthlyLeaveQuota: 1.5 }, {}), 1.5);
   });
 
   test("per-user leaveAccrualDaysPerMonth wins over global", () => {

@@ -638,7 +638,7 @@ export default function HrmEmployeeDetailPage() {
                         disabled={!canEdit}
                       />
                     </HrmField>
-                    <HrmField label="Leave accrual / month" hint="Blank = company default">
+                    <HrmField label="Leave accrual / month" hint="Blank = company HRM default (applies to all staff)">
                       <Input
                         type="number"
                         min={0}
@@ -646,7 +646,7 @@ export default function HrmEmployeeDetailPage() {
                         value={accrualDays}
                         onChange={(e) => setAccrualDays(e.target.value)}
                         disabled={!canEdit}
-                        placeholder="Default"
+                        placeholder="Company default"
                       />
                     </HrmField>
                     <HrmField label="Late charge %">

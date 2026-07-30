@@ -616,7 +616,7 @@ export function buildTeamEmployeePayload(
       monthlyQuota: isFreelancer
         ? 0
         : values.leaveAccrualDaysPerMonth === "" || values.leaveAccrualDaysPerMonth == null
-          ? 1
+          ? null
           : Number(values.leaveAccrualDaysPerMonth),
     },
     wfh: { monthlyLimit: isFreelancer ? 0 : values.wfhMonthlyLimit },
