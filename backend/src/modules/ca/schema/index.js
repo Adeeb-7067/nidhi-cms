@@ -14,6 +14,7 @@ export {
   CaSuspenseEntries,
   CaScoreHistory,
 } from "./phase2.js";
+export { CaBankStatements, CaBankStatementLines } from "./bank-statements.js";
 
 import { CaTasks } from "./tasks.js";
 import { CaDocuments } from "./documents.js";
@@ -31,6 +32,7 @@ import {
   CaSuspenseEntries,
   CaScoreHistory,
 } from "./phase2.js";
+import { CaBankStatements, CaBankStatementLines } from "./bank-statements.js";
 
 export const caTasksTable = CaTasks;
 export const caDocumentsTable = CaDocuments;
@@ -46,3 +48,5 @@ export const caDinDscTable = CaDinDsc;
 export const caAuditsTable = CaAudits;
 export const caSuspenseEntriesTable = CaSuspenseEntries;
 export const caScoreHistoryTable = CaScoreHistory;
+export const caBankStatementsTable = CaBankStatements;
+export const caBankStatementLinesTable = CaBankStatementLines;

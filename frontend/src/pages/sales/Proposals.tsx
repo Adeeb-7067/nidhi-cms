@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
 import {
   useListProposals,
@@ -176,40 +176,31 @@ export default function Proposals() {
         const canSend = ["draft", "revised", "counter_offer"].includes(p.status);
         const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
         return (
-          <div className="flex items-center justify-end gap-1">
-            {canSend && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                title="Send proposal"
-                disabled={sendingId === p.id}
-                onClick={() => handleSend(p)}
-              >
-                <Send className="h-3.5 w-3.5 text-primary" />
-              </Button>
-            )}
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7"
-              title="Edit proposal"
-              onClick={() => setEditId(p.id)}
-            >
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-            </Button>
-            {canDelete && (
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                title="Delete proposal"
-                onClick={() => setDeletingId(p.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </Button>
-            )}
-          </div>
+          <CmsRowActions
+            label="Proposal actions"
+            items={[
+              {
+                label: "Send",
+                icon: Send,
+                onSelect: () => handleSend(p),
+                disabled: sendingId === p.id,
+                hidden: !canSend,
+              },
+              {
+                label: "Edit",
+                icon: Pencil,
+                onSelect: () => setEditId(p.id),
+              },
+              {
+                label: "Delete",
+                icon: Trash2,
+                onSelect: () => setDeletingId(p.id),
+                variant: "destructive",
+                separatorBefore: true,
+                hidden: !canDelete,
+              },
+            ]}
+          />
         );
       },
     },

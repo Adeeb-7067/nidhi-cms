@@ -35,6 +35,7 @@ import { formatUserRole } from "@/lib/bug-workflow";
 import { isStaffEmployeeRole } from "@/lib/user-roles";
 import { FreelancerEngagementDialog } from "@/components/project/FreelancerEngagementDialog";
 import { usePermissions } from "@/modules/permissions/usePermission";
+import { CmsRowActions } from "@/components/cms";
 import {
   Loader2,
   Trash2,
@@ -519,35 +520,24 @@ export function ProjectTeamPanel({
                     </Button>
                   ) : null}
                   {canManage ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    aria-label={`Edit ${member.name}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openEditMember(member);
-                    }}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  ) : null}
-                  {canManage ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                    aria-label={`Remove ${member.name}`}
-                    disabled={removeMember.isPending}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemove(member);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                    <CmsRowActions
+                      label={`${member.name} actions`}
+                      items={[
+                        {
+                          label: "Edit",
+                          icon: Pencil,
+                          onSelect: () => openEditMember(member),
+                        },
+                        {
+                          label: "Remove",
+                          icon: Trash2,
+                          onSelect: () => handleRemove(member),
+                          variant: "destructive",
+                          separatorBefore: true,
+                          disabled: removeMember.isPending,
+                        },
+                      ]}
+                    />
                   ) : null}
                 </div>
               </div>

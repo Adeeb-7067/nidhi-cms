@@ -27,6 +27,10 @@ const gstFilingSchema = new Schema(
     filedAt: { type: Date, default: null },
     lateFee: { type: Number, default: 0, min: 0 },
     interest: { type: Number, default: 0, min: 0 },
+    /** Amounts declared on the return (GSTR-3B) for books-vs-return variance. */
+    outputTax: { type: Number, default: 0, min: 0 },
+    inputTax: { type: Number, default: 0, min: 0 },
+    netTax: { type: Number, default: 0 },
     notes: { type: String, default: null, trim: true },
     ...softDelete,
   },

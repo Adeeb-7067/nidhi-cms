@@ -127,6 +127,9 @@ export const gstFilings = makeSoftCrud({
     filedAt: dateOnly(doc.filedAt),
     lateFee: Number(doc.lateFee ?? 0),
     interest: Number(doc.interest ?? 0),
+    outputTax: Number(doc.outputTax ?? 0),
+    inputTax: Number(doc.inputTax ?? 0),
+    netTax: Number(doc.netTax ?? 0),
     notes: doc.notes ?? null,
   }),
   parseCreate: async (body) => ({
@@ -137,6 +140,9 @@ export const gstFilings = makeSoftCrud({
     filedAt: requireDate(body.filedAt, "filedAt", { required: false }),
     lateFee: requireNumber(body.lateFee ?? 0, "lateFee", { min: 0 }),
     interest: requireNumber(body.interest ?? 0, "interest", { min: 0 }),
+    outputTax: requireNumber(body.outputTax ?? 0, "outputTax", { min: 0 }),
+    inputTax: requireNumber(body.inputTax ?? 0, "inputTax", { min: 0 }),
+    netTax: requireNumber(body.netTax ?? (Number(body.outputTax ?? 0) - Number(body.inputTax ?? 0)), "netTax"),
     notes: optionalString(body.notes),
   }),
   parsePatch: async (body) => {
@@ -148,6 +154,9 @@ export const gstFilings = makeSoftCrud({
     if (body.filedAt !== undefined) out.filedAt = requireDate(body.filedAt, "filedAt", { required: false });
     if (body.lateFee !== undefined) out.lateFee = requireNumber(body.lateFee, "lateFee", { min: 0 });
     if (body.interest !== undefined) out.interest = requireNumber(body.interest, "interest", { min: 0 });
+    if (body.outputTax !== undefined) out.outputTax = requireNumber(body.outputTax, "outputTax", { min: 0 });
+    if (body.inputTax !== undefined) out.inputTax = requireNumber(body.inputTax, "inputTax", { min: 0 });
+    if (body.netTax !== undefined) out.netTax = requireNumber(body.netTax, "netTax");
     if (body.notes !== undefined) out.notes = optionalString(body.notes);
     return out;
   },

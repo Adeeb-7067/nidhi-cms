@@ -4,7 +4,7 @@ import { Link } from "wouter";
 import { Plus, TrendingDown, Check, X, Pencil, Trash2, Wallet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -301,70 +301,44 @@ export default function ExpensesPage() {
       cell: (e) => {
         const due = remainingOf(e);
         return (
-          <div className="flex justify-end gap-1" onClick={(ev) => ev.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0"
-              onClick={() => setDetailId(e.id)}
-              title="View bill"
-            >
-              <Eye className="h-3.5 w-3.5" />
-            </Button>
-            {e.status === "pending" && canEdit && (
-              <>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-green-600"
-                  onClick={() => setApproveTarget(e)}
-                  title="Approve"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-amber-600"
-                  onClick={() => handleReject(e)}
-                  title="Reject"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0"
-                  onClick={() => openEdit(e)}
-                  title="Edit"
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            )}
-            {e.status === "approved" && due > 0 && canEdit && e.chequeStatus !== "issued" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-primary"
-                onClick={() => setPayTarget(e)}
-                title="Pay remaining"
-              >
-                <Wallet className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {canDelete && e.status !== "approved" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-destructive"
-                onClick={() => setDeleteTarget(e)}
-                title="Delete"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            )}
-          </div>
+          <CmsRowActions
+            label={`Actions for ${e.reference}`}
+            items={[
+              { label: "View bill", icon: Eye, onSelect: () => setDetailId(e.id) },
+              {
+                label: "Approve",
+                icon: Check,
+                onSelect: () => setApproveTarget(e),
+                hidden: !(e.status === "pending" && canEdit),
+              },
+              {
+                label: "Reject",
+                icon: X,
+                onSelect: () => handleReject(e),
+                hidden: !(e.status === "pending" && canEdit),
+              },
+              {
+                label: "Edit",
+                icon: Pencil,
+                onSelect: () => openEdit(e),
+                hidden: !(e.status === "pending" && canEdit),
+              },
+              {
+                label: "Pay remaining",
+                icon: Wallet,
+                onSelect: () => setPayTarget(e),
+                hidden: !(e.status === "approved" && due > 0 && canEdit && e.chequeStatus !== "issued"),
+              },
+              {
+                label: "Delete",
+                icon: Trash2,
+                onSelect: () => setDeleteTarget(e),
+                variant: "destructive",
+                separatorBefore: true,
+                hidden: !(canDelete && e.status !== "approved"),
+              },
+            ]}
+          />
         );
       },
     },

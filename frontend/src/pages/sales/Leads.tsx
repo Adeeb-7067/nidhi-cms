@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
-import { Plus, Users, Upload, Pencil, Eye, Trash2, Download, Loader2, Phone, UserCheck, TrendingUp } from "lucide-react";
+import { Plus, Users, Upload, Download, Loader2, Phone, UserCheck, TrendingUp, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
@@ -21,7 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
 import { useDeleteLead, useListLeads, useSalesDashboard, salesKeys, type Lead, type LeadStatus } from "@/api/sales";
 import {
@@ -280,36 +280,23 @@ export default function SalesLeads() {
       id: "actions",
       header: "Actions",
       align: "right",
-      headerClassName: "w-[108px]",
+      headerClassName: "w-[72px]",
       cell: (lead) => (
-        <div className="flex items-center justify-end gap-0.5">
-          <Button type="button" variant="ghost" size="icon" className="h-8 w-8" title="View lead" asChild>
-            <Link href={`/sales/leads/${lead.id}`}>
-              <Eye className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Edit lead"
-            onClick={() => openEditDrawer(lead)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive"
-            title="Delete lead"
-            disabled={lead.status === "converted" && !!lead.customerId}
-            onClick={() => setDeleteTarget(lead)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <CmsRowActions
+          label="Lead actions"
+          viewHref={`/sales/leads/${lead.id}`}
+          onEdit={() => openEditDrawer(lead)}
+          items={[
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => setDeleteTarget(lead),
+              variant: "destructive",
+              separatorBefore: true,
+              disabled: lead.status === "converted" && !!lead.customerId,
+            },
+          ]}
+        />
       ),
     },
   ];

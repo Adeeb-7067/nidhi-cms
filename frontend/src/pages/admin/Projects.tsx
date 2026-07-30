@@ -29,8 +29,6 @@ import { AdvancedTable, Column } from "@/components/ui/advanced-table";
 import {
   Plus,
   Briefcase,
-  Edit,
-  Trash2,
   Mail,
   Building2,
   BarChart3,
@@ -43,7 +41,7 @@ import {
   PortalKpiGrid,
   portalActionButtonClass,
 } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
+import { CmsChipTabs, CmsFilterBar, CmsRowActions } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FileUploader } from "@/components/ui/file-uploader";
@@ -614,14 +612,11 @@ export default function AdminProjects() {
       header: "Actions",
       hideInDetail: true,
       cell: (project) => (
-          <div className="flex justify-end gap-1">
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditProject(project); }}>
-              <Edit className="h-3 w-3" />
-            </Button>
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(project.id); }}>
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
+          <CmsRowActions
+            label="Project actions"
+            onEdit={() => setEditProject(project)}
+            onDelete={() => setDeleteId(project.id)}
+          />
         ),
     }
   ];
@@ -1306,14 +1301,11 @@ export default function AdminProjects() {
                   </div>
                   <div className="mt-auto flex items-center justify-between gap-2 pt-3">
                     <span className="text-[10px] capitalize text-muted-foreground">{project.priority} priority</span>
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setEditProject(project)}>
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500" onClick={() => setDeleteId(project.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
+                    <CmsRowActions
+                      label="Project actions"
+                      onEdit={() => setEditProject(project)}
+                      onDelete={() => setDeleteId(project.id)}
+                    />
                   </div>
                 </div>
               );

@@ -86,6 +86,30 @@ export default function Gst() {
   );
   const notices = noticesData?.notices ?? [];
 
+  const returnTotals = useMemo(() => {
+    const gstr3b = filings.filter((f) => f.returnType === "GSTR-3B");
+    const source = gstr3b.length ? gstr3b : filings;
+    return source.reduce(
+      (acc, f) => {
+        acc.outputTax += Number(f.outputTax ?? 0);
+        acc.inputTax += Number(f.inputTax ?? 0);
+        acc.netTax += Number(f.netTax ?? Number(f.outputTax ?? 0) - Number(f.inputTax ?? 0));
+        acc.count += 1;
+        return acc;
+      },
+      { outputTax: 0, inputTax: 0, netTax: 0, count: 0 },
+    );
+  }, [filings]);
+
+  const variance = useMemo(
+    () => ({
+      output: gst.outputTax - returnTotals.outputTax,
+      input: gst.inputTax - returnTotals.inputTax,
+      net: gst.netLiability - returnTotals.netTax,
+    }),
+    [gst.outputTax, gst.inputTax, gst.netLiability, returnTotals],
+  );
+
   const penalty = useMemo(() => {
     const lateFeesAccrued = filings.reduce((s, f) => s + Number(f.lateFee ?? 0), 0);
     const interestOnDelay = filings.reduce((s, f) => s + Number(f.interest ?? 0), 0);
@@ -112,6 +136,16 @@ export default function Gst() {
         chip: true,
         cell: (f) => (
           <CmsStatusChip label={FILING_STATUS_LABELS[f.status]} tone={filingTone[f.status]} />
+        ),
+      },
+      {
+        id: "declared",
+        header: "Return net",
+        align: "right",
+        cell: (f) => (
+          <span className="tabular-nums text-muted-foreground">
+            {formatCurrency(Number(f.netTax ?? Number(f.outputTax ?? 0) - Number(f.inputTax ?? 0)))}
+          </span>
         ),
       },
       {
@@ -227,10 +261,10 @@ export default function Gst() {
       <PortalKpiGrid
         columns={3}
         items={[
-          { title: "Output tax", value: formatCompactCurrency(gst.outputTax), icon: Receipt, accent: "blue", delay: 0 },
-          { title: "Input tax credit", value: formatCompactCurrency(gst.inputTax), icon: Receipt, accent: "green", delay: 1 },
+          { title: "Books · Output tax", value: formatCompactCurrency(gst.outputTax), icon: Receipt, accent: "blue", delay: 0 },
+          { title: "Books · Input credit", value: formatCompactCurrency(gst.inputTax), icon: Receipt, accent: "green", delay: 1 },
           {
-            title: "Net liability",
+            title: "Books · Net liability",
             value: formatCompactCurrency(gst.netLiability),
             icon: Receipt,
             accent: "amber",
@@ -239,6 +273,48 @@ export default function Gst() {
           },
         ]}
       />
+
+      <Card className={Math.abs(variance.net) > 1 ? "border-amber-500/40" : undefined}>
+        <CardHeader className="pb-2 pt-3 px-4">
+          <CardTitle className="text-sm">Books vs return variance</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Finance tax summary vs declared amounts on GSTR-3B filings in this period
+            {returnTotals.count ? ` (${returnTotals.count} filing${returnTotals.count === 1 ? "" : "s"})` : " — enter return amounts on filings"}
+          </p>
+        </CardHeader>
+        <CardContent className="px-4 pb-4">
+          <div className="grid gap-3 sm:grid-cols-3 text-sm">
+            <div>
+              <p className="text-[11px] text-muted-foreground uppercase">Output variance</p>
+              <p className={`font-semibold tabular-nums ${Math.abs(variance.output) > 1 ? "text-amber-700" : ""}`}>
+                {formatCurrency(variance.output)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Books {formatCurrency(gst.outputTax)} − Return {formatCurrency(returnTotals.outputTax)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground uppercase">Input variance</p>
+              <p className={`font-semibold tabular-nums ${Math.abs(variance.input) > 1 ? "text-amber-700" : ""}`}>
+                {formatCurrency(variance.input)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Books {formatCurrency(gst.inputTax)} − Return {formatCurrency(returnTotals.inputTax)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[11px] text-muted-foreground uppercase">Net variance</p>
+              <p className={`font-bold tabular-nums ${Math.abs(variance.net) > 1 ? "text-red-600" : "text-emerald-700"}`}>
+                {formatCurrency(variance.net)}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                Books {formatCurrency(gst.netLiability)} − Return {formatCurrency(returnTotals.netTax)}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2 pt-3 px-3">

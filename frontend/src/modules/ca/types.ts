@@ -157,6 +157,9 @@ export interface GstReturnFiling {
   dueDate: string;
   status: FilingStatus;
   filedAt?: string;
+  outputTax?: number;
+  inputTax?: number;
+  netTax?: number;
 }
 
 export interface GstNotice {

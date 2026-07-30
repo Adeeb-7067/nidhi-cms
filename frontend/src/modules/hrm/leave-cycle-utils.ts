@@ -40,9 +40,31 @@ export function getNextLeaveCycleResetDate(
   return new Date(targetYear, targetMonth - 1, 1);
 }
 
+/** First day of the current accrual cycle (after the last reset). */
+export function getCurrentLeaveCycleStartDate(
+  now = new Date(),
+  startMonth = 1,
+  cycleMonths = DEFAULT_LEAVE_RESET_CYCLE_MONTHS,
+): Date {
+  const month = now.getMonth() + 1;
+  const sm = Math.min(12, Math.max(1, startMonth));
+  const cycle = resolveLeaveResetCycleMonths(cycleMonths);
+  const offset = (month - sm + 12) % 12;
+  const monthsIntoCycle = offset % cycle;
+  let targetYear = now.getFullYear();
+  let targetMonth = month - monthsIntoCycle;
+  while (targetMonth < 1) {
+    targetMonth += 12;
+    targetYear -= 1;
+  }
+  return new Date(targetYear, targetMonth - 1, 1);
+}
+
 export type LeaveCycleResetSummary = {
   resetDate: Date;
   resetDateLabel: string;
+  cycleStartDate: Date;
+  cycleStartDateLabel: string;
   daysRemaining: number;
   cycleMonths: number;
   daysRemainingLabel: string;
@@ -61,6 +83,7 @@ export function getLeaveCycleResetSummary(options?: {
   const startMonth = options?.leaveYearStartMonth ?? 1;
   const cycleMonths = resolveLeaveResetCycleMonths(options?.resetCycleMonths);
   const resetDate = getNextLeaveCycleResetDate(now, startMonth, cycleMonths);
+  const cycleStartDate = getCurrentLeaveCycleStartDate(now, startMonth, cycleMonths);
 
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const resetStart = new Date(resetDate.getFullYear(), resetDate.getMonth(), resetDate.getDate());
@@ -79,6 +102,8 @@ export function getLeaveCycleResetSummary(options?: {
   return {
     resetDate,
     resetDateLabel: formatLeaveCycleResetDate(resetDate),
+    cycleStartDate,
+    cycleStartDateLabel: formatLeaveCycleResetDate(cycleStartDate),
     daysRemaining,
     cycleMonths,
     daysRemainingLabel,

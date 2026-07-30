@@ -34,21 +34,28 @@ export function LeaveCycleResetBanner({
       <div className="flex items-start gap-2">
         <CalendarClock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
         <div className="space-y-1">
-          <p className="font-medium text-foreground">Paid leave cycle</p>
+          <p className="font-medium text-foreground">How paid leave works</p>
           <p>
-            You earn{" "}
+            Earn{" "}
             <span className="font-semibold text-foreground">
               {paidLeavesPerMonth} day{paidLeavesPerMonth === 1 ? "" : "s"}
             </span>{" "}
-            each month. Unused days carry forward within each{" "}
-            <span className="font-semibold text-foreground">{summary.cycleMonths}-month</span> cycle, then
-            expire.
+            each month. Unused days stack inside the current{" "}
+            <span className="font-semibold text-foreground">{summary.cycleMonths}-month</span> cycle,
+            then unused balance resets to zero.
           </p>
           <p>
+            This cycle started{" "}
+            <span className="font-semibold text-foreground">{summary.cycleStartDateLabel}</span>
+            {" · "}
             <span className="font-semibold text-foreground">{summary.daysRemainingLabel}</span>
             {" · "}
-            Resets on{" "}
+            next reset{" "}
             <span className="font-semibold text-foreground">{summary.resetDateLabel}</span>
+          </p>
+          <p className="text-[11px]">
+            Rejected or cancelled requests restore balance. Approved half days use{" "}
+            <span className="font-semibold text-foreground">0.5</span> day.
           </p>
         </div>
       </div>

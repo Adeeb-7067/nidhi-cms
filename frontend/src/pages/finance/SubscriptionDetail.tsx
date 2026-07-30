@@ -5,7 +5,7 @@ import { ArrowLeft, KeyRound, UserPlus, Wallet, UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   formatCurrency,
   PAYMENT_MODE_LABELS,
@@ -81,15 +81,17 @@ export default function SubscriptionDetailPage() {
             header: "Actions",
             align: "right" as const,
             cell: (a: (typeof activeSeats)[number]) => (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 gap-1 text-xs text-destructive"
-                onClick={() => setRevokeId(a.id)}
-              >
-                <UserMinus className="h-3.5 w-3.5" />
-                Revoke
-              </Button>
+              <CmsRowActions
+                label="Seat actions"
+                items={[
+                  {
+                    label: "Revoke",
+                    icon: UserMinus,
+                    onSelect: () => setRevokeId(a.id),
+                    variant: "destructive",
+                  },
+                ]}
+              />
             ),
           } satisfies CmsColumn<(typeof activeSeats)[number]>,
         ]

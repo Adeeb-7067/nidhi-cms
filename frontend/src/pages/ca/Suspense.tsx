@@ -85,36 +85,27 @@ export default function Suspense() {
         id: "actions",
         header: "Actions",
         cell: (e) => (
-          <div className="flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
-            {canAssign ? (
-              <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px]"
-                  onClick={() => openAssign(e, "client")}
-                >
-                  Client
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-7 text-[10px]"
-                  onClick={() => openAssign(e, "vendor")}
-                >
-                  Vendor
-                </Button>
-              </>
-            ) : null}
-            <CaRowActions
-              canView
-              canEdit={canEdit}
-              canDelete={canDelete}
-              onView={() => crud.openView(e)}
-              onEdit={() => crud.openEdit(e)}
-              onDelete={() => crud.setDeleteTarget(e)}
-            />
-          </div>
+          <CaRowActions
+            label="Suspense actions"
+            canView
+            canEdit={canEdit}
+            canDelete={canDelete}
+            onView={() => crud.openView(e)}
+            onEdit={() => crud.openEdit(e)}
+            onDelete={() => crud.setDeleteTarget(e)}
+            items={[
+              {
+                label: "Assign to client",
+                onSelect: () => openAssign(e, "client"),
+                hidden: !canAssign,
+              },
+              {
+                label: "Assign to vendor",
+                onSelect: () => openAssign(e, "vendor"),
+                hidden: !canAssign,
+              },
+            ]}
+          />
         ),
       },
     ],

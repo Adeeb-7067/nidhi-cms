@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Building2, Pencil, Trash2, Users, CheckCircle, Hash, Eye } from "lucide-react";
+import { Plus, Building2, Pencil, Users, CheckCircle, Hash } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -163,19 +164,14 @@ export default function HrmDepartmentsPage() {
     {
       id: "actions",
       header: "Actions",
-      className: "text-right w-[140px]",
+      className: "text-right w-[56px]",
       cell: (d) => (
-        <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDetailDept(d)}>
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(d)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(d.id)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <CmsRowActions
+          label={`Actions for ${d.name}`}
+          onView={() => setDetailDept(d)}
+          onEdit={() => openEdit(d)}
+          onDelete={() => setDeleteId(d.id)}
+        />
       ),
     },
   ];

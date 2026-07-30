@@ -43,3 +43,17 @@ export function formatLeaveDayPartLabel(dayPart?: string | null): string {
       return dayPart?.replace(/_/g, " ") ?? "—";
   }
 }
+
+/** Display leave day counts (supports half days like 0.5). */
+export function formatLeaveDayCount(days?: number | null): string {
+  if (days == null || Number.isNaN(Number(days))) return "—";
+  const value = Number(days);
+  if (Number.isInteger(value)) return String(value);
+  return String(Math.round(value * 100) / 100);
+}
+
+export function formatLeaveDaysLabel(days?: number | null): string {
+  const count = formatLeaveDayCount(days);
+  if (count === "—") return "—";
+  return `${count} day${count === "1" ? "" : "s"}`;
+}

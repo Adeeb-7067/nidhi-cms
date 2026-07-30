@@ -1,9 +1,8 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { CheckCircle2, Receipt } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CheckCircle2, Receipt, Eye } from "lucide-react";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -83,7 +82,12 @@ export default function FreelancerReceiptsPage() {
       id: "actions",
       header: "Actions",
       align: "right",
-      cell: (item) => <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => openReceipt(item)}><Receipt className="h-3.5 w-3.5" />View</Button>,
+      cell: (item) => (
+        <CmsRowActions
+          label="Receipt actions"
+          items={[{ label: "View", icon: Eye, onSelect: () => openReceipt(item) }]}
+        />
+      ),
     },
   ];
 

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -293,32 +294,37 @@ export default function HrmExperienceLettersPage() {
       header: "",
       hideInDetail: true,
       cell: (r) => (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewLetterId(r.id)}>
-            <Eye className="h-3.5 w-3.5" />
-          </Button>
-          {canExport ? (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void handleDownload(r)}>
-              <Download className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-          {canEdit ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              disabled={sendMutation.isPending}
-              onClick={() => void handleSend(r)}
-            >
-              <Mail className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-          {canDelete ? (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteId(r.id)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-        </div>
+        <CmsRowActions
+          label="Experience letter actions"
+          items={[
+            {
+              label: "View",
+              icon: Eye,
+              onSelect: () => setViewLetterId(r.id),
+            },
+            {
+              label: "Download",
+              icon: Download,
+              onSelect: () => void handleDownload(r),
+              hidden: !canExport,
+            },
+            {
+              label: "Send email",
+              icon: Mail,
+              onSelect: () => void handleSend(r),
+              disabled: sendMutation.isPending,
+              hidden: !canEdit,
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => setDeleteId(r.id),
+              variant: "destructive",
+              separatorBefore: true,
+              hidden: !canDelete,
+            },
+          ]}
+        />
       ),
     },
   ], [canDelete, canEdit, canExport, sendMutation.isPending]);

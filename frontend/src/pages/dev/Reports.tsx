@@ -33,6 +33,7 @@ import {
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { apiUrl } from "@/lib/api-base";
@@ -246,26 +247,40 @@ export default function DevReports() {
       hideInDetail: true,
       cell: (report) =>
         report.status === "ready" && report.fileUrl ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-8 text-xs"
-            disabled={downloadingId === report.id}
-            onClick={() => void handleDownload(report.id)}
-          >
-            {downloadingId === report.id ? (
-              <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5 mr-2" />
-            )}
-            Download
-          </Button>
+          <CmsRowActions
+            label="Report actions"
+            items={[
+              {
+                label: downloadingId === report.id ? "Downloading…" : "Download",
+                icon: downloadingId === report.id ? Loader2 : Download,
+                onSelect: () => void handleDownload(report.id),
+                disabled: downloadingId === report.id,
+              },
+            ]}
+          />
         ) : report.status === "generating" || report.status === "queued" ? (
-          <Button size="sm" variant="ghost" className="h-8 text-xs" disabled>
-            <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" /> Processing
-          </Button>
+          <CmsRowActions
+            label="Report actions"
+            items={[
+              {
+                label: "Processing",
+                icon: Loader2,
+                disabled: true,
+              },
+            ]}
+          />
         ) : report.status === "failed" ? (
-          <span className="text-[10px] text-red-500">Generation failed</span>
+          <CmsRowActions
+            label="Report actions"
+            items={[
+              {
+                label: "Generation failed",
+                icon: AlertCircle,
+                disabled: true,
+                variant: "destructive",
+              },
+            ]}
+          />
         ) : null,
     },
   ];

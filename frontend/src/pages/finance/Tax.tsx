@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { Percent, Download, FileSpreadsheet, Plus, Pencil, Trash2 } from "lucide-react";
+import { Percent, Download, FileSpreadsheet, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import { CmsDataTable, CmsChipTabs, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsChipTabs, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -91,7 +91,15 @@ export default function TaxPage() {
     { id: "amount", header: "Amount", align: "right", cell: (d) => <span className="font-medium tabular-nums">{formatCurrency(d.amount)}</span> },
     ...(canEdit || canDelete ? [{
       id: "actions", header: "Actions", align: "right" as const,
-      cell: (d: TaxDeposit) => <div className="flex justify-end gap-1">{canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditDeposit(d); setDepositModalOpen(true); }} title="Edit"><Pencil className="h-3.5 w-3.5" /></Button>}{canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(d)} title="Delete"><Trash2 className="h-3.5 w-3.5" /></Button>}</div>,
+      cell: (d: TaxDeposit) => (
+        <CmsRowActions
+          label="Deposit actions"
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => { setEditDeposit(d); setDepositModalOpen(true); }}
+          onDelete={() => setDeleteTarget(d)}
+        />
+      ),
     }] : []),
   ];
 

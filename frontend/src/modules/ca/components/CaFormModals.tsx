@@ -512,10 +512,19 @@ export function CaGstFilingFormModal({ open, onOpenChange, editing, readOnly = f
     filedAt: "",
     lateFee: "0",
     interest: "0",
+    outputTax: "0",
+    inputTax: "0",
+    netTax: "0",
   });
 
   useEffect(() => {
     if (!open) return;
+    const outputTax = String(editing?.outputTax ?? 0);
+    const inputTax = String(editing?.inputTax ?? 0);
+    const net =
+      editing?.netTax != null
+        ? String(editing.netTax)
+        : String((Number(editing?.outputTax ?? 0) || 0) - (Number(editing?.inputTax ?? 0) || 0));
     setForm({
       returnType: editing?.returnType ?? "GSTR-3B",
       period: editing?.period ?? "",
@@ -524,6 +533,9 @@ export function CaGstFilingFormModal({ open, onOpenChange, editing, readOnly = f
       filedAt: editing?.filedAt ?? "",
       lateFee: String(editing?.lateFee ?? 0),
       interest: String(editing?.interest ?? 0),
+      outputTax,
+      inputTax,
+      netTax: net,
     });
   }, [open, editing]);
 
@@ -536,6 +548,9 @@ export function CaGstFilingFormModal({ open, onOpenChange, editing, readOnly = f
       saving={create.isPending || update.isPending}
       onSubmit={() => {
         if (!form.period || !form.dueDate) return toast.error("Period and due date are required");
+        const outputTax = Number(form.outputTax) || 0;
+        const inputTax = Number(form.inputTax) || 0;
+        const netTax = form.netTax !== "" ? Number(form.netTax) : outputTax - inputTax;
         const payload = {
           returnType: form.returnType as CaGstFilingDto["returnType"],
           period: form.period,
@@ -544,6 +559,9 @@ export function CaGstFilingFormModal({ open, onOpenChange, editing, readOnly = f
           filedAt: form.filedAt || undefined,
           lateFee: Number(form.lateFee) || 0,
           interest: Number(form.interest) || 0,
+          outputTax,
+          inputTax,
+          netTax: Number.isFinite(netTax) ? netTax : outputTax - inputTax,
         };
         void saveOrToast(
           () =>
@@ -577,6 +595,39 @@ export function CaGstFilingFormModal({ open, onOpenChange, editing, readOnly = f
         </CaField>
         <CaField label="Status">
           <CaSelect value={form.status} onValueChange={(v) => setForm((f) => ({ ...f, status: v }))} options={filingStatusOptions} />
+        </CaField>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <CaField label="Output tax (return)">
+          <CaTextInput
+            type="number"
+            value={form.outputTax}
+            onChange={(e) => {
+              const outputTax = e.target.value;
+              setForm((f) => ({
+                ...f,
+                outputTax,
+                netTax: String((Number(outputTax) || 0) - (Number(f.inputTax) || 0)),
+              }));
+            }}
+          />
+        </CaField>
+        <CaField label="Input tax (return)">
+          <CaTextInput
+            type="number"
+            value={form.inputTax}
+            onChange={(e) => {
+              const inputTax = e.target.value;
+              setForm((f) => ({
+                ...f,
+                inputTax,
+                netTax: String((Number(f.outputTax) || 0) - (Number(inputTax) || 0)),
+              }));
+            }}
+          />
+        </CaField>
+        <CaField label="Net tax (return)">
+          <CaTextInput type="number" value={form.netTax} onChange={(e) => setForm((f) => ({ ...f, netTax: e.target.value }))} />
         </CaField>
       </div>
       <div className="grid grid-cols-3 gap-3">

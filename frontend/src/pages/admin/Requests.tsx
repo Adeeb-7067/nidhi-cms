@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X, MessageSquare, PlusCircle, Package, Clock, Inbox } from "lucide-react";
 import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs } from "@/components/cms";
+import { CmsChipTabs, CmsRowActions } from "@/components/cms";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
@@ -182,30 +182,35 @@ export default function AdminRequests() {
       hideInDetail: true,
       cell: (request) =>
         request.status === "pending" ? (
-          <div className="flex justify-end gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 border-green-500/20 bg-green-500/10 text-xs text-green-500 hover:bg-green-500/20 hover:text-green-600"
-              onClick={() => handleUpdateStatus(request.id, "approved")}
-              disabled={updateMutation.isPending}
-            >
-              <Check className="mr-1 h-3 w-3" /> Approve
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 border-red-500/20 bg-red-500/10 text-xs text-red-500 hover:bg-red-500/20 hover:text-red-600"
-              onClick={() => handleUpdateStatus(request.id, "rejected")}
-              disabled={updateMutation.isPending}
-            >
-              <X className="mr-1 h-3 w-3" /> Reject
-            </Button>
-          </div>
+          <CmsRowActions
+            label="Request actions"
+            items={[
+              {
+                label: "Approve",
+                icon: Check,
+                onSelect: () => handleUpdateStatus(request.id, "approved"),
+                disabled: updateMutation.isPending,
+              },
+              {
+                label: "Reject",
+                icon: X,
+                onSelect: () => handleUpdateStatus(request.id, "rejected"),
+                disabled: updateMutation.isPending,
+                variant: "destructive",
+              },
+            ]}
+          />
         ) : (
-          <Button size="sm" variant="ghost" className="h-7 text-xs">
-            <MessageSquare className="mr-1 h-3 w-3" /> Details
-          </Button>
+          <CmsRowActions
+            label="Request actions"
+            items={[
+              {
+                label: "Details",
+                icon: MessageSquare,
+                onSelect: () => undefined,
+              },
+            ]}
+          />
         ),
     },
   ];

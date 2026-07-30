@@ -79,7 +79,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Progress } from "@/components/ui/progress";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
@@ -1030,28 +1030,20 @@ export function CustomerProposalsSection({
         cell: (p) => {
           const canDelete = ["draft", "revised", "declined", "expired"].includes(p.status);
           return (
-            <div className="flex items-center justify-end gap-1">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                title="Edit proposal"
-                onClick={() => setEditId(p.id)}
-              >
-                <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
-              </Button>
-              {canDelete ? (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="h-7 w-7"
-                  title="Delete proposal"
-                  onClick={() => setDeleteTarget(p)}
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              ) : null}
-            </div>
+            <CmsRowActions
+              label="Proposal actions"
+              onEdit={() => setEditId(p.id)}
+              items={[
+                {
+                  label: "Delete",
+                  icon: Trash2,
+                  onSelect: () => setDeleteTarget(p),
+                  variant: "destructive",
+                  separatorBefore: true,
+                  hidden: !canDelete,
+                },
+              ]}
+            />
           );
         },
       },
@@ -1338,14 +1330,21 @@ const customerPaymentColumns: CmsColumn<SalesPayment>[] = [
     cell: (p) => {
       const docInvoiceId = paymentDocumentInvoiceId(p);
       return (
-        <div className="flex items-center justify-end gap-1">
-          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-            <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
-          </Button>
-          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-            <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
-          </Button>
-        </div>
+        <CmsRowActions
+          label="Payment actions"
+          items={[
+            {
+              label: "Invoice",
+              icon: FileText,
+              href: `/sales/invoices/${docInvoiceId}`,
+            },
+            {
+              label: "Receipt",
+              icon: Receipt,
+              href: `/sales/receipts/${p.id}`,
+            },
+          ]}
+        />
       );
     },
   },

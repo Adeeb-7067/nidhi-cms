@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
-import { KeyRound, Plus, Pencil, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { KeyRound, Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   formatCurrency,
   SUBSCRIPTION_BILLING_LABELS,
@@ -99,7 +99,16 @@ export default function SubscriptionsPage() {
     { id: "purchase-email", header: "Purchase email", className: "max-w-[180px]", cell: (s) => <span className="truncate text-muted-foreground" title={s.purchaseEmail ?? undefined}>{s.purchaseEmail || "—"}</span> },
     { id: "renewal", header: "Renewal", cell: (s) => <span className="text-muted-foreground">{s.renewalDate ? format(new Date(s.renewalDate), "MMM d, yyyy") : "—"}</span> },
     { id: "cost", header: "Cost / cycle", align: "right", cell: (s) => <span className="font-medium tabular-nums">{formatCurrency(s.costAmount)}</span> },
-    { id: "actions", header: "Actions", align: "right", cell: (s) => <div className="flex justify-end gap-1"><Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View"><Link href={`/finance/subscriptions/${s.id}`}><Eye className="h-3.5 w-3.5" /></Link></Button>{canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setEditSub(s); setDrawerOpen(true); }}><Pencil className="h-3.5 w-3.5" /></Button>}{canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(s)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div> },
+    { id: "actions", header: "Actions", align: "right", cell: (s) => (
+      <CmsRowActions
+        label="Subscription actions"
+        viewHref={`/finance/subscriptions/${s.id}`}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        onEdit={() => { setEditSub(s); setDrawerOpen(true); }}
+        onDelete={() => setDeleteTarget(s)}
+      />
+    ) },
   ];
 
   return (

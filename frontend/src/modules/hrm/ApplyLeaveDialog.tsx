@@ -17,6 +17,7 @@ import { useHrmEmployees, useHrmLeaveBalances, useHrmLeaveTypes } from "@/api/hr
 import { HrmField, hrmActionButtonClass } from "@/modules/hrm/components";
 import { LEGACY_LEAVE_LABELS as L } from "@/modules/hrm/hrm-legacy-labels";
 import {
+  formatLeaveDayCount,
   getTodayDateKey,
   isLeaveDateInPast,
   resolveLeaveDayPart,
@@ -75,7 +76,7 @@ function LeaveBalanceSnapshot({
             className="inline-flex items-center gap-1.5 rounded-md border border-border/50 bg-background px-2.5 py-1 text-xs"
           >
             <span className="text-muted-foreground">{b.leaveType?.name ?? `Type #${b.leaveTypeId}`}</span>
-            <span className="font-semibold tabular-nums">{getLeaveBalanceAvailable(b)}</span>
+            <span className="font-semibold tabular-nums">{formatLeaveDayCount(getLeaveBalanceAvailable(b))}</span>
           </span>
         ))}
       </div>

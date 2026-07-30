@@ -7,7 +7,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import { Button } from "@/components/ui/button";
 import { DataPagination } from "@/components/ui/data-pagination";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
-import { CmsChipTabs, CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsFilterBar, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Plus, Mail, Building, Briefcase, Trash2, Edit, Eye, EyeOff, Key, ShieldCheck, Phone, Calendar, Award, Globe, ExternalLink, Users, TrendingUp, LogIn, MapPin } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -512,27 +512,30 @@ export default function AdminClients() {
       header: "Actions",
       hideInDetail: true,
       cell: (client) => (
-        <div className="flex justify-end gap-2 transition-opacity">
-          {canViewAsClient(client) && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-[10px] font-semibold text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-              title="View as this client"
-              disabled={impersonatingUserId === client.userId || isImpersonating}
-              onClick={(e) => void handleViewAsClient(client, e)}
-            >
-              <LogIn className="h-3 w-3 mr-1" />
-              View as
-            </Button>
-          )}
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEditClient(client); }}>
-            <Edit className="h-3 w-3" />
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteId(client.id); }}>
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
+        <CmsRowActions
+          label="Client actions"
+          items={[
+            {
+              label: "View as",
+              icon: LogIn,
+              onSelect: () => void handleViewAsClient(client),
+              disabled: impersonatingUserId === client.userId || isImpersonating,
+              hidden: !canViewAsClient(client),
+            },
+            {
+              label: "Edit",
+              icon: Edit,
+              onSelect: () => setEditClient(client),
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => setDeleteId(client.id),
+              variant: "destructive",
+              separatorBefore: true,
+            },
+          ]}
+        />
       )
     }
   ];

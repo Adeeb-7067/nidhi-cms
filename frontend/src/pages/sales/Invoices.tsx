@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { Plus, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
 import { useListInvoices, useSalesDashboard, type SalesInvoice } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
@@ -138,9 +138,10 @@ export default function Invoices() {
       header: "Actions",
       align: "right",
       cell: (inv) => (
-        <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-          <Link href={`/sales/invoices/${inv.id}`}>View</Link>
-        </Button>
+        <CmsRowActions
+          label="Invoice actions"
+          viewHref={`/sales/invoices/${inv.id}`}
+        />
       ),
     },
   ];

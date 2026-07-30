@@ -6,21 +6,16 @@ import {
   Download,
   Layers,
   Loader2,
-  MoreHorizontal,
   Play,
   RefreshCw,
   Wallet,
   Check,
+  RotateCcw,
+  FileArchive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -67,7 +62,7 @@ import {
 import { isCurrentPayrollPeriod } from "@/modules/hrm/payroll-period-utils";
 import { PayrollReadinessBanner, payrollSelectTriggerClass } from "@/modules/hrm/payroll-kit";
 import { HrmPayslipPreviewPanel } from "@/modules/hrm/HrmPayslipPreviewPanel";
-import { HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
+import { downloadHrmPayslip, HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
 import { inrMoney } from "@/modules/hrm/payslip-view-model";
 import {
   payrollExportUrl,
@@ -88,7 +83,7 @@ import {
   useUpsertSalaryStructure,
 } from "@/api/hrm";
 import { getAccessToken } from "@/lib/auth-storage";
-import { getResponseErrorMessage, isApiError } from "@/lib/api-error";
+import { getResponseErrorMessage, isApiError, toastApiError } from "@/lib/api-error";
 import type { HrmPayrollChecklist, HrmPayrollLine, HrmSalaryStructure } from "@/modules/hrm/types";
 import { LEGACY_PAYROLL_LABELS } from "@/modules/hrm/hrm-legacy-labels";
 
@@ -463,67 +458,72 @@ export default function HrmPayrollPage() {
                     Pay all
                   </Button>
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <MoreHorizontal className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {isDraft && runId && (
-                      <DropdownMenuItem onClick={() => review.mutate(runId, { onSuccess: () => toast.success("Marked reviewed") })}>
-                        Mark reviewed
-                      </DropdownMenuItem>
-                    )}
-                    {(isDraft || isReviewed) && runId && (
-                      <DropdownMenuItem onClick={() => setFinalizeConfirmOpen(true)}>
-                        Finalize & publish payslips
-                      </DropdownMenuItem>
-                    )}
-                    {isFinalized && runId && (
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() =>
-                          revert.mutate(runId, {
-                            onSuccess: () => toast.success("Payroll reverted to reviewed — you can now edit and re-finalize"),
-                          })
-                        }
-                      >
-                        Revert finalization
-                      </DropdownMenuItem>
-                    )}
-                    {runId && (isFinalized || isPaid) && (
-                      <DropdownMenuItem
-                        onClick={() =>
-                          regenerate.mutate(runId, {
-                            onSuccess: () => toast.success("Payslips regenerated with latest template"),
-                          })
-                        }
-                        disabled={regenerate.isPending}
-                      >
-                        Regenerate payslips
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={() => void handleExport()}>
-                      <Download className="mr-2 h-4 w-4" />
-                      Export CSV
-                    </DropdownMenuItem>
-                    {runId && selectedRun && ["finalized", "paid"].includes(selectedRun.status) && (
-                      <DropdownMenuItem onClick={() => void handleBankExport()}>
-                        <Download className="mr-2 h-4 w-4" />
-                        Export bank transfer CSV
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setStructuresOpen(true)}>
-                      <Layers className="mr-2 h-4 w-4" />
-                      Salary structures
-                    </DropdownMenuItem>
-                    <DropdownMenuItem asChild>
-                      <Link href="/hrm/salary-slips">Open salary slip archive</Link>
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <CmsRowActions
+                  label="Payroll actions"
+                  items={[
+                    {
+                      label: "Mark reviewed",
+                      icon: Check,
+                      onSelect: () =>
+                        review.mutate(runId!, { onSuccess: () => toast.success("Marked reviewed") }),
+                      hidden: !(isDraft && runId),
+                    },
+                    {
+                      label: "Finalize & publish payslips",
+                      onSelect: () => setFinalizeConfirmOpen(true),
+                      hidden: !((isDraft || isReviewed) && runId),
+                    },
+                    {
+                      label: "Revert finalization",
+                      icon: RotateCcw,
+                      onSelect: () =>
+                        revert.mutate(runId!, {
+                          onSuccess: () =>
+                            toast.success(
+                              "Payroll reverted to reviewed — you can now edit and re-finalize",
+                            ),
+                        }),
+                      variant: "destructive",
+                      hidden: !(isFinalized && runId),
+                    },
+                    {
+                      label: "Regenerate payslips",
+                      icon: RefreshCw,
+                      onSelect: () =>
+                        regenerate.mutate(runId!, {
+                          onSuccess: () => toast.success("Payslips regenerated with latest template"),
+                        }),
+                      disabled: regenerate.isPending,
+                      hidden: !(runId && (isFinalized || isPaid)),
+                    },
+                    {
+                      label: "Export CSV",
+                      icon: Download,
+                      onSelect: () => void handleExport(),
+                    },
+                    {
+                      label: "Export bank transfer CSV",
+                      icon: Download,
+                      onSelect: () => void handleBankExport(),
+                      hidden: !(
+                        runId &&
+                        selectedRun &&
+                        ["finalized", "paid"].includes(selectedRun.status)
+                      ),
+                    },
+                    {
+                      label: "Salary structures",
+                      icon: Layers,
+                      onSelect: () => setStructuresOpen(true),
+                      separatorBefore: true,
+                    },
+                    {
+                      label: "Open salary slip archive",
+                      icon: FileArchive,
+                      href: "/hrm/salary-slips",
+                    },
+                  ]}
+                />
               </div>
             }
             filterBar={
@@ -617,11 +617,28 @@ export default function HrmPayrollPage() {
                 render: () => payrollStatusPill(lineIsPaid()),
               },
               {
-                key: "dl",
-                header: "",
-                className: "text-right w-16",
+                key: "actions",
+                header: "Actions",
+                className: "text-right w-14",
                 render: (r) =>
-                  r.payslipId ? <HrmPayslipDownloadButton payslipId={r.payslipId} /> : null,
+                  r.payslipId ? (
+                    <div data-stop-row-click>
+                      <CmsRowActions
+                        label="Payslip actions"
+                        items={[
+                          {
+                            label: "Download PDF",
+                            icon: Download,
+                            onSelect: () => {
+                              void downloadHrmPayslip(r.payslipId!).catch((err) =>
+                                toastApiError(err, "Could not download payslip"),
+                              );
+                            },
+                          },
+                        ]}
+                      />
+                    </div>
+                  ) : null,
               },
             ]}
             detailTitle={(r) => r.employeeName ?? `User #${r.userId}`}

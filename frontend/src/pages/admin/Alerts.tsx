@@ -5,7 +5,7 @@ import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PortalPageShell, PortalPageHero, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs } from "@/components/cms";
+import { CmsChipTabs, CmsRowActions } from "@/components/cms";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { DEFAULT_TABLE_PAGE_SIZE, useClientPagination } from "@/lib/table-pagination";
 import { AlertFormDialog } from "@/components/alerts/alert-form-dialog";
@@ -116,20 +116,24 @@ export default function AdminAlerts() {
       hideInDetail: true,
       cell: (alert) =>
         alert.status === "scheduled" ? (
-          <div className="flex justify-end gap-1.5">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => openEdit(alert)}>
-              <Pencil className="mr-1 h-3 w-3" /> Edit
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 border-red-500/20 bg-red-500/10 text-xs text-red-500 hover:bg-red-500/20 hover:text-red-600"
-              onClick={() => handleCancel(alert)}
-              disabled={cancelAlert.isPending}
-            >
-              <Ban className="mr-1 h-3 w-3" /> Cancel
-            </Button>
-          </div>
+          <CmsRowActions
+            label="Alert actions"
+            items={[
+              {
+                label: "Edit",
+                icon: Pencil,
+                onSelect: () => openEdit(alert),
+              },
+              {
+                label: "Cancel",
+                icon: Ban,
+                onSelect: () => handleCancel(alert),
+                disabled: cancelAlert.isPending,
+                variant: "destructive",
+                separatorBefore: true,
+              },
+            ]}
+          />
         ) : null,
     },
   ];

@@ -110,6 +110,10 @@ export default function FinancePaymentDetail() {
             </div>
           ) : null}
           <div>
+            <p className="text-xs text-muted-foreground">Party type</p>
+            <p className="font-medium capitalize">{payment.partyType}</p>
+          </div>
+          <div>
             <p className="text-xs text-muted-foreground">GST classification</p>
             <GstClassificationBadge gstEnabled={payment.gstEnabled} />
           </div>
@@ -124,6 +128,54 @@ export default function FinancePaymentDetail() {
                 <p className="font-medium tabular-nums">{formatCurrency(payment.gstAmount ?? 0)}</p>
               </div>
             </>
+          ) : null}
+          {payment.invoiceId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Finance invoice</p>
+              <Link href={`/finance/invoices/${payment.invoiceId}`} className="text-primary hover:underline font-medium">
+                Invoice #{payment.invoiceId}
+              </Link>
+            </div>
+          ) : null}
+          {payment.salesInvoiceId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Sales invoice</p>
+              <Link href={`/sales/invoices/${payment.salesInvoiceId}`} className="text-primary hover:underline font-medium">
+                Sales invoice #{payment.salesInvoiceId}
+              </Link>
+            </div>
+          ) : null}
+          {payment.expenseId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Expense bill</p>
+              <Link href={`/finance/expenses?id=${payment.expenseId}`} className="text-primary hover:underline font-medium">
+                Expense #{payment.expenseId}
+              </Link>
+            </div>
+          ) : null}
+          {payment.vendorId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Vendor</p>
+              <Link href={`/finance/vendors/${payment.vendorId}`} className="text-primary hover:underline font-medium">
+                Vendor #{payment.vendorId}
+              </Link>
+            </div>
+          ) : null}
+          {payment.taxDepositId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Tax deposit</p>
+              <Link href="/finance/tax" className="text-primary hover:underline font-medium">
+                Tax deposit #{payment.taxDepositId}
+              </Link>
+            </div>
+          ) : null}
+          {payment.payrollRunId ? (
+            <div>
+              <p className="text-xs text-muted-foreground">Payroll run</p>
+              <Link href="/hrm/payroll" className="text-primary hover:underline font-medium">
+                Payroll #{payment.payrollRunId}
+              </Link>
+            </div>
           ) : null}
         </div>
       </div>

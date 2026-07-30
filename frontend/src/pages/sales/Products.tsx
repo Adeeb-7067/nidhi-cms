@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Plus, Package, PackageCheck, Pencil, Trash2, IndianRupee } from "lucide-react";
+import { Plus, Package, PackageCheck, IndianRupee } from "lucide-react";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
@@ -36,7 +36,7 @@ import {
 import { formatCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
 import { SalesPageHeader } from "@/modules/sales/components";
-import { CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { usePermissions } from "@/modules/permissions/usePermission";
 
 type ProductForm = {
@@ -206,30 +206,13 @@ export default function Products() {
             id: "actions",
             header: "Actions",
             align: "right" as const,
-            headerClassName: "w-[100px]",
+            headerClassName: "w-[72px]",
             cell: (p: SalesProduct) => (
-              <div className="flex items-center justify-end gap-0.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8"
-                  title="Edit product"
-                  onClick={() => openEdit(p)}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  title="Delete product"
-                  onClick={() => setDeleteTarget(p)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
+              <CmsRowActions
+                label="Product actions"
+                onEdit={() => openEdit(p)}
+                onDelete={() => setDeleteTarget(p)}
+              />
             ),
           } satisfies CmsColumn<SalesProduct>,
         ]

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Plus, Receipt, FileDown, Pencil, Trash2 } from "lucide-react";
+import { Plus, Receipt, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +16,7 @@ import {
   FinanceConfirmDialog,
   FinanceSourceBadge,
 } from "@/modules/finance/components";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   useListInvoices,
   useInvoiceAging,
@@ -194,38 +194,16 @@ export default function FinanceInvoicesPage() {
         align: "right",
         cell: (inv) => {
           const href = inv.detailHref ?? `/finance/invoices/${inv.id}`;
+          const isFinance = !inv.source || inv.source === "finance";
           return (
-            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-              <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-                <Link href={href}>View</Link>
-              </Button>
-              {(!inv.source || inv.source === "finance") && (
-                <>
-                  {canEdit && inv.status !== "cancelled" && inv.paidAmount === 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => openEdit(inv)}
-                      title="Edit"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {canDelete && inv.paidAmount === 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive"
-                      onClick={() => setDeleteTarget(inv)}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </>
-              )}
-            </div>
+            <CmsRowActions
+              label="Invoice actions"
+              viewHref={href}
+              canEdit={isFinance && canEdit && inv.status !== "cancelled" && inv.paidAmount === 0}
+              canDelete={isFinance && canDelete && inv.paidAmount === 0}
+              onEdit={() => openEdit(inv)}
+              onDelete={() => setDeleteTarget(inv)}
+            />
           );
         },
       },

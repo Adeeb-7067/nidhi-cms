@@ -1,19 +1,21 @@
 import { useMemo, useState } from "react";
-import { CalendarClock, FileText, IndianRupee, RefreshCw } from "lucide-react";
+import { CalendarClock, Download, FileText, IndianRupee, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import { HrmPageShell } from "@/modules/hrm/components";
 import { CmsKpiGrid } from "@/components/cms/cms-kpi";
+import { CmsRowActions } from "@/components/cms";
 import {
   HrmPayrollExplorer,
   payrollStatusPill,
 } from "@/modules/hrm/payroll-satyakabir-ui";
 import { HrmPayslipPreviewPanel } from "@/modules/hrm/HrmPayslipPreviewPanel";
-import { HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
+import { downloadHrmPayslip } from "@/modules/hrm/HrmPayslipDownloadButton";
 import { inrMoney } from "@/modules/hrm/payslip-view-model";
 import { payslipPeriodLabel } from "@/modules/hrm/payslip-utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useMyPayslips } from "@/api/hrm";
+import { toastApiError } from "@/lib/api-error";
 import type { HrmPayslip } from "@/modules/hrm/types";
 import { cn } from "@/lib/utils";
 
@@ -129,10 +131,27 @@ export default function HrmMyPayslipsPage() {
               render: (r) => payrollStatusPill(slipStatus(r) === "PAID"),
             },
             {
-              key: "dl",
-              header: "",
-              className: "text-right w-16",
-              render: (r) => <HrmPayslipDownloadButton payslipId={r.id} />,
+              key: "actions",
+              header: "Actions",
+              className: "text-right w-14",
+              render: (r) => (
+                <div data-stop-row-click>
+                  <CmsRowActions
+                    label="Payslip actions"
+                    items={[
+                      {
+                        label: "Download PDF",
+                        icon: Download,
+                        onSelect: () => {
+                          void downloadHrmPayslip(r.id).catch((err) =>
+                            toastApiError(err, "Could not download payslip"),
+                          );
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+              ),
             },
           ]}
           detailTitle={(r) => `Salary slip · ${payslipPeriodLabel(r.month, r.year)}`}

@@ -108,10 +108,16 @@ export function canFullyEditMarketingItem(
   return String(createdBy) === String(user.id);
 }
 
-/** Same ownership rule as edit — creator or org admin. */
+/**
+ * Delete gate: creator, org admin, or elevated digital lead (Account Manager / specialist).
+ * Broader than edit — AMs with calendar delete may remove team schedules, not only their own.
+ */
 export function canDeleteMarketingItem(
   user?: CmsUserLike,
   createdBy?: number | string | null,
 ): boolean {
-  return canFullyEditMarketingItem(user, createdBy);
+  if (!user) return false;
+  if (isMarketingOrgAdmin(user) || isDigitalElevatedLead(user)) return true;
+  if (createdBy == null || user.id == null) return false;
+  return String(createdBy) === String(user.id);
 }

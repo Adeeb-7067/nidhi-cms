@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Link } from "wouter";
-import { HandCoins, Plus, Pencil, Trash2, AlertTriangle, Eye } from "lucide-react";
+import { HandCoins, Plus, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency, LOAN_SOURCE_LABELS } from "@/modules/finance/constants";
 import type { LoanStatus, LoanSource } from "@/modules/finance/types";
@@ -179,28 +179,14 @@ export default function LoansPage() {
       header: "Actions",
       align: "right",
       cell: (l) => (
-        <div className="flex justify-end gap-1">
-          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" asChild title="View">
-            <Link href={`/finance/loans/${l.id}`}>
-              <Eye className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-          {canEdit && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(l)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 w-7 p-0 text-destructive"
-              onClick={() => setDeleteTarget(l)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <CmsRowActions
+          label="Loan actions"
+          viewHref={`/finance/loans/${l.id}`}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => openEdit(l)}
+          onDelete={() => setDeleteTarget(l)}
+        />
       ),
     },
   ];

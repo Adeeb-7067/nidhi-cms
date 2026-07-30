@@ -261,6 +261,21 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(canFullyEditMarketingOwnedItem(admin, { createdBy: 5 }), true);
   });
 
+  it("AM may delete others' calendar posts; craft creator only deletes own", async () => {
+    const { canDeleteMarketingOwnedItem } = await import(
+      "../../src/modules/marketing/services/helpers.js"
+    );
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    const designer = { role: "digital", subType: "Designer", id: 42 };
+    const peer = { role: "digital", subType: "Designer", id: 43 };
+    const admin = { role: "super_admin", id: 1 };
+    const doc = { createdBy: 42, accountId: null };
+    assert.equal(await canDeleteMarketingOwnedItem(am, doc), true);
+    assert.equal(await canDeleteMarketingOwnedItem(admin, doc), true);
+    assert.equal(await canDeleteMarketingOwnedItem(designer, doc), true);
+    assert.equal(await canDeleteMarketingOwnedItem(peer, doc), false);
+  });
+
   it("approval stage: assignee/creator/elevated lead may advance; peer craft may not", async () => {
     const { canAdvanceMarketingApprovalStage } = await import(
       "../../src/modules/marketing/services/helpers.js"

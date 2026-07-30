@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Clock, Pencil, Plus, Users, Timer, Building2 } from "lucide-react";
+import { Clock, Plus, Users, Timer, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,7 +26,7 @@ import {
   HrmQueryErrorPanel,
   portalActionButtonClass,
 } from "@/modules/hrm/components";
-import { CmsChipTabs } from "@/components/cms";
+import { CmsChipTabs, CmsRowActions } from "@/components/cms";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { LEGACY_EMPLOYEE_LABELS } from "@/modules/hrm/hrm-legacy-labels";
@@ -349,13 +349,9 @@ export default function HrmShiftsPage() {
     {
       id: "actions",
       header: "Actions",
-      className: "text-right w-[80px]",
+      className: "text-right w-[56px]",
       cell: (t) => (
-        <div className="flex justify-end" onClick={(e) => e.stopPropagation()}>
-          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(t)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <CmsRowActions label={`Actions for ${t.name}`} onEdit={() => openEdit(t)} />
       ),
     },
   ], []);

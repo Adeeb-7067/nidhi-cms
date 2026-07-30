@@ -1,11 +1,11 @@
 import { format } from "date-fns";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, X } from "lucide-react";
 import type { Column } from "@/components/ui/advanced-table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CmsRowActions } from "@/components/cms";
 import { HrmApprovalActions, HrmWorkflowBadge } from "@/modules/hrm/components";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
-import { formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
+import { formatLeaveDayCount, formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
 import type { HrmHoliday, HrmLeaveBalance, HrmLeaveRequest, HrmWfhRequest, HrmExitRequest } from "@/modules/hrm/types";
 import { getLeaveBalanceAvailable, getLeaveBalanceCarriedForward } from "@/modules/hrm/employee-profile-types";
 
@@ -52,8 +52,8 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
     {
       id: "days",
       header: "Days",
-      cell: (r) => <span className="tabular-nums">{r.days ?? "—"}</span>,
-      exportValue: (r) => (r.days != null ? String(r.days) : ""),
+      cell: (r) => <span className="tabular-nums">{formatLeaveDayCount(r.days)}</span>,
+      exportValue: (r) => (r.days != null ? formatLeaveDayCount(r.days) : ""),
     },
     {
       id: "reason",
@@ -89,14 +89,18 @@ export function buildLeaveRequestColumns(opts: LeaveColumnOptions): Column<HrmLe
               onReject={() => opts.onReject?.(r.id)}
             />
           ) : r.status === "pending" && r.userId === opts.currentUserId ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={opts.reviewPending}
-              onClick={() => opts.onCancel?.(r.id)}
-            >
-              Cancel
-            </Button>
+            <CmsRowActions
+              label="Leave actions"
+              items={[
+                {
+                  label: "Cancel",
+                  icon: X,
+                  onSelect: () => opts.onCancel?.(r.id),
+                  disabled: opts.reviewPending,
+                  variant: "destructive",
+                },
+              ]}
+            />
           ) : null}
         </div>
       ),
@@ -209,17 +213,29 @@ export function buildLeaveBalanceColumns(): Column<HrmLeaveBalance>[] {
       header: "Accrued",
       cell: (b) => {
         const accrued = (b.allocated ?? 0) + getLeaveBalanceCarriedForward(b);
-        return <span className="tabular-nums">{accrued}</span>;
+        return <span className="tabular-nums">{formatLeaveDayCount(accrued)}</span>;
       },
-      exportValue: (b) => String((b.allocated ?? 0) + getLeaveBalanceCarriedForward(b)),
+      exportValue: (b) => formatLeaveDayCount((b.allocated ?? 0) + getLeaveBalanceCarriedForward(b)),
     },
-    { id: "used", header: "Used", accessorKey: "used" },
-    { id: "pending", header: "Pending", accessorKey: "pending" },
+    {
+      id: "used",
+      header: "Used",
+      cell: (b) => <span className="tabular-nums">{formatLeaveDayCount(b.used)}</span>,
+      exportValue: (b) => formatLeaveDayCount(b.used),
+    },
+    {
+      id: "pending",
+      header: "Pending",
+      cell: (b) => <span className="tabular-nums">{formatLeaveDayCount(b.pending)}</span>,
+      exportValue: (b) => formatLeaveDayCount(b.pending),
+    },
     {
       id: "available",
       header: "Available",
-      cell: (b) => <span className="font-medium tabular-nums">{getLeaveBalanceAvailable(b)}</span>,
-      exportValue: (b) => String(getLeaveBalanceAvailable(b)),
+      cell: (b) => (
+        <span className="font-medium tabular-nums">{formatLeaveDayCount(getLeaveBalanceAvailable(b))}</span>
+      ),
+      exportValue: (b) => formatLeaveDayCount(getLeaveBalanceAvailable(b)),
     },
   ];
 }
@@ -267,8 +283,8 @@ export function buildWfhRequestColumns(opts: WfhColumnOptions): Column<HrmWfhReq
     {
       id: "days",
       header: "Days",
-      cell: (r) => <span className="tabular-nums">{r.days ?? "—"}</span>,
-      exportValue: (r) => (r.days != null ? String(r.days) : ""),
+      cell: (r) => <span className="tabular-nums">{formatLeaveDayCount(r.days)}</span>,
+      exportValue: (r) => (r.days != null ? formatLeaveDayCount(r.days) : ""),
     },
     {
       id: "reason",
@@ -304,14 +320,18 @@ export function buildWfhRequestColumns(opts: WfhColumnOptions): Column<HrmWfhReq
               onReject={() => opts.onReject?.(r.id)}
             />
           ) : r.status === "pending" && r.userId === opts.currentUserId ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={opts.reviewPending}
-              onClick={() => opts.onCancel?.(r.id)}
-            >
-              Cancel
-            </Button>
+            <CmsRowActions
+              label="WFH actions"
+              items={[
+                {
+                  label: "Cancel",
+                  icon: X,
+                  onSelect: () => opts.onCancel?.(r.id),
+                  disabled: opts.reviewPending,
+                  variant: "destructive",
+                },
+              ]}
+            />
           ) : null}
         </div>
       ),

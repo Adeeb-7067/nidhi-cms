@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PortalEmptyState, PortalSectionMeta } from "@/components/layout/portal-page-kit";
 import { PageKpiSkeleton } from "@/components/dashboard/dashboard-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   HrmPageShell,
   HrmPageHeader,
@@ -330,7 +331,7 @@ export function HrmApprovalActions({
   onApprove,
   onReject,
   disabled,
-  compact,
+  compact: _compact,
 }: {
   onApprove: () => void;
   onReject: () => void;
@@ -338,26 +339,24 @@ export function HrmApprovalActions({
   compact?: boolean;
 }) {
   return (
-    <div className={cn("flex justify-end gap-2", compact && "gap-1")}>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled}
-        className="h-7 border-emerald-500/20 bg-emerald-500/10 text-xs text-emerald-600 hover:bg-emerald-500/20"
-        onClick={onApprove}
-      >
-        <Check className="mr-1 h-3 w-3" /> Approve
-      </Button>
-      <Button
-        size="sm"
-        variant="outline"
-        disabled={disabled}
-        className="h-7 border-red-500/20 bg-red-500/10 text-xs text-red-600 hover:bg-red-500/20"
-        onClick={onReject}
-      >
-        <X className="mr-1 h-3 w-3" /> Reject
-      </Button>
-    </div>
+    <CmsRowActions
+      label="Approval actions"
+      items={[
+        {
+          label: "Approve",
+          icon: Check,
+          onSelect: onApprove,
+          disabled,
+        },
+        {
+          label: "Reject",
+          icon: X,
+          onSelect: onReject,
+          disabled,
+          variant: "destructive",
+        },
+      ]}
+    />
   );
 }
 

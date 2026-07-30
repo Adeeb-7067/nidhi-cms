@@ -13,6 +13,33 @@ import {
 } from "./payslip-utils";
 import { downloadPayslipPdfFromHtml } from "./payslip-download";
 
+/** Shared download used by the PDF button and CmsRowActions menus. */
+export async function downloadHrmPayslip(payslipId: number, detailUrl?: string): Promise<void> {
+  if (!payslipId) {
+    toast.error("Missing payslip id");
+    return;
+  }
+  const detail = await customFetch<HrmPayslipDetail>(
+    apiUrl(detailUrl ?? `/api/hrm/payslips/${payslipId}`),
+  );
+  const filename = payslipDownloadFilename(detail);
+  const html = detail.htmlContent ?? buildPayslipPrintHtml(detail);
+
+  if (detail.htmlContent?.trim()) {
+    await downloadPayslipPdfFromHtml(html, filename);
+    toast.success("Salary slip PDF downloaded");
+    return;
+  }
+
+  const printed = printPayslipHtml(html, filename);
+  if (!printed) {
+    downloadPayslipHtml(html, filename);
+    toast.success("Payslip downloaded — open the file and print to PDF if needed");
+  } else {
+    toast.success("Payslip opened for print / save as PDF");
+  }
+}
+
 export function HrmPayslipDownloadButton({
   payslipId,
   detailUrl,
@@ -27,31 +54,9 @@ export function HrmPayslipDownloadButton({
 
   const handleClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!payslipId) {
-      toast.error("Missing payslip id");
-      return;
-    }
     setLoading(true);
     try {
-      const detail = await customFetch<HrmPayslipDetail>(
-        apiUrl(detailUrl ?? `/api/hrm/payslips/${payslipId}`),
-      );
-      const filename = payslipDownloadFilename(detail);
-      const html = detail.htmlContent ?? buildPayslipPrintHtml(detail);
-
-      if (detail.htmlContent?.trim()) {
-        await downloadPayslipPdfFromHtml(html, filename);
-        toast.success("Salary slip PDF downloaded");
-        return;
-      }
-
-      const printed = printPayslipHtml(html, filename);
-      if (!printed) {
-        downloadPayslipHtml(html, filename);
-        toast.success("Payslip downloaded — open the file and print to PDF if needed");
-      } else {
-        toast.success("Payslip opened for print / save as PDF");
-      }
+      await downloadHrmPayslip(payslipId, detailUrl);
     } catch (err) {
       toastApiError(err, "Could not download payslip");
     } finally {

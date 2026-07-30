@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw, Pencil, Trash2 } from "lucide-react";
+import { Wallet, ArrowDownLeft, ArrowUpRight, Bell, Plus, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS, PAYMENT_MODE_LABELS } from "@/modules/finance/constants";
 import {
@@ -222,30 +222,13 @@ export default function PaymentsPage() {
               const isFinance = !p.source || p.source === "finance";
               if (!isFinance) return <span className="text-[10px] text-muted-foreground">Sales</span>;
               return (
-                <div className="flex justify-end gap-1">
-                  {canEdit && p.direction === "outgoing" && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setEditPayment(p)}
-                      title="Edit"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {canDelete && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive"
-                      onClick={() => setDeleteTarget(p)}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+                <CmsRowActions
+                  label="Payment actions"
+                  canEdit={canEdit && p.direction === "outgoing"}
+                  canDelete={canDelete}
+                  onEdit={() => setEditPayment(p)}
+                  onDelete={() => setDeleteTarget(p)}
+                />
               );
             },
           } satisfies CmsColumn<FinancePayment>,

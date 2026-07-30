@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { BookOpen, Plus, ArrowRight, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import type { LedgerType } from "@/modules/finance/types";
@@ -219,30 +219,13 @@ export default function LedgersPage() {
                       </span>
                     </div>
                     {activeTab === "bank" && (canEditBank || canDeleteBank) && (
-                      <div className="flex gap-1">
-                        {canEditBank && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0"
-                            onClick={() => openEditBank(account)}
-                            title="Edit"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {canDeleteBank && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive"
-                            onClick={() => setDeleteTarget(account)}
-                            title="Delete"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
+                      <CmsRowActions
+                        label="Bank account actions"
+                        canEdit={canEditBank}
+                        canDelete={canDeleteBank}
+                        onEdit={() => openEditBank(account)}
+                        onDelete={() => setDeleteTarget(account)}
+                      />
                     )}
                   </div>
                 </div>

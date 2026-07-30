@@ -44,6 +44,8 @@ import {
   getEmployeeContractNet,
   getEmployeeDisplayName,
 } from "./employee-profile-types";
+import { formatLeaveDayCount, formatLeaveDayPartLabel, formatLeaveDaysLabel } from "./leave-form-utils";
+import { getLeaveCycleResetSummary } from "./leave-cycle-utils";
 import { githubProfileUrl } from "@/modules/admin/employee-form-shared";
 
 const CHART_TOOLTIP = {
@@ -283,10 +285,14 @@ export function EmployeePaidLeaveCard({
   balances,
   overviewBalances,
   monthlyQuota,
+  leaveYearStartMonth,
+  resetCycleMonths,
 }: {
   balances: HrmLeaveBalance[];
   overviewBalances: HrmEmployeeOverview["leaveBalances"];
   monthlyQuota?: number | null;
+  leaveYearStartMonth?: number;
+  resetCycleMonths?: number | null;
 }) {
   const elBalance =
     balances.find((b) => b.leaveType?.code === "EL") ??
@@ -294,6 +300,10 @@ export function EmployeePaidLeaveCard({
     balances[0];
 
   const overviewEl = overviewBalances.find((b) => b.code === "EL");
+  const cycleSummary = getLeaveCycleResetSummary({
+    leaveYearStartMonth,
+    resetCycleMonths,
+  });
 
   if (!elBalance && !overviewEl) {
     return (
@@ -310,6 +320,7 @@ export function EmployeePaidLeaveCard({
   const used = elBalance?.used ?? 0;
   const pending = elBalance?.pending ?? 0;
   const carry = getLeaveBalanceCarriedForward(elBalance ?? {});
+  const accrued = allocated + carry;
   const available =
     elBalance != null
       ? getLeaveBalanceAvailable(elBalance)
@@ -322,40 +333,52 @@ export function EmployeePaidLeaveCard({
         <CardDescription className="text-xs">
           {monthlyQuota != null ? (
             <>
-              Monthly quota:{" "}
+              Earns{" "}
               <span className="font-semibold text-foreground">
-                {monthlyQuota} day{monthlyQuota === 1 ? "" : "s"}/month
+                {formatLeaveDayCount(monthlyQuota)}/month
               </span>
               {" · "}
             </>
           ) : null}
-          Accrued balance. Available now:{" "}
-          <span className="font-semibold text-foreground">{available} day{available === 1 ? "" : "s"}</span>
+          Available now:{" "}
+          <span className="font-semibold text-foreground">{formatLeaveDaysLabel(available)}</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4 pb-5">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: "Accrued", value: allocated + carry },
-            { label: "Taken", value: used },
-            { label: "Left", value: available },
-            { label: "Pending", value: pending },
+            { label: "Accrued", value: accrued, hint: "Earned this cycle" },
+            { label: "Taken", value: used, hint: "Approved used" },
+            { label: "Pending", value: pending, hint: "Awaiting approval" },
+            { label: "Left", value: available, hint: "Can still apply" },
           ].map((item) => (
             <div key={item.label} className="rounded-lg border border-border/50 bg-background/60 px-3 py-2">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{item.label}</p>
-              <p className="text-lg font-bold tabular-nums">{item.value}</p>
+              <p className="text-lg font-bold tabular-nums">{formatLeaveDayCount(item.value)}</p>
+              <p className="text-[10px] text-muted-foreground">{item.hint}</p>
             </div>
           ))}
         </div>
-        {allocated + carry > 0 ? (
+        <p className="text-[11px] text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {formatLeaveDayCount(accrued)} − {formatLeaveDayCount(used)} − {formatLeaveDayCount(pending)} ={" "}
+            {formatLeaveDayCount(available)}
+          </span>
+          {" · "}Accrued − Taken − Pending = Left
+        </p>
+        {accrued > 0 ? (
           <div className="space-y-1">
             <div className="flex justify-between text-[10px] text-muted-foreground">
               <span>Utilization</span>
-              <span>{Math.round((used / (allocated + carry)) * 100)}%</span>
+              <span>{Math.round((used / accrued) * 100)}%</span>
             </div>
-            <Progress value={Math.min(100, (used / (allocated + carry)) * 100)} className="h-1.5" />
+            <Progress value={Math.min(100, (used / accrued) * 100)} className="h-1.5" />
           </div>
         ) : null}
+        <p className="text-[11px] text-muted-foreground">
+          Cycle started {cycleSummary.cycleStartDateLabel}. Prior unused days were reset; next reset{" "}
+          {cycleSummary.resetDateLabel}.
+        </p>
       </CardContent>
     </Card>
   );
@@ -783,8 +806,17 @@ export function EmployeeInfoGrid({ employee, overview }: { employee: HrmEmployee
 
 export function EmployeeRecentLeaveList({ rows }: { rows: HrmLeaveRequest[] }) {
   const recent = [...rows].sort((a, b) => b.startDate.localeCompare(a.startDate)).slice(0, 5);
+
+  const balanceEffect = (r: HrmLeaveRequest) => {
+    const days = formatLeaveDaysLabel(r.days);
+    if (r.status === "approved") return `${days} used`;
+    if (r.status === "pending") return `${days} reserved`;
+    if (r.status === "rejected" || r.status === "cancelled") return "Balance restored";
+    return days;
+  };
+
   return (
-    <HrmChartCard title="Recent leave" description="Latest applications">
+    <HrmChartCard title="Recent leave" description="Approved uses balance · rejected restores it">
       {recent.length === 0 ? (
         <p className="py-6 text-center text-xs text-muted-foreground">No leave requests yet.</p>
       ) : (
@@ -796,7 +828,13 @@ export function EmployeeRecentLeaveList({ rows }: { rows: HrmLeaveRequest[] }) {
                   {r.startDate}
                   {r.endDate !== r.startDate ? ` – ${r.endDate}` : ""}
                 </p>
-                <p className="text-[10px] text-muted-foreground">{r.leaveTypeName ?? r.leaveType?.name ?? "Leave"} · {r.days ?? "—"} days</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {r.leaveTypeName ?? r.leaveType?.name ?? "Leave"}
+                  {" · "}
+                  {formatLeaveDayPartLabel(r.dayPart)}
+                  {" · "}
+                  {balanceEffect(r)}
+                </p>
               </div>
               <HrmWorkflowBadge status={r.status} />
             </li>
@@ -853,7 +891,7 @@ export function EmployeeOverviewStats({
     <>
       <StatMini label="Attendance rate" value={`${rate}%`} hint="This month" icon={User} accent="green" />
       <StatMini label="Work hours" value={`${hours}h`} hint="This month" icon={Clock} accent="blue" />
-      <StatMini label="Leave available" value={leaveAvailable} hint="Paid days left" icon={Calendar} accent="violet" />
+      <StatMini label="Leave available" value={formatLeaveDayCount(leaveAvailable)} hint="Paid days left" icon={Calendar} accent="violet" />
       <StatMini label="Pending leave" value={overview.pendingLeave} icon={Briefcase} accent="amber" />
       <StatMini label="Net salary" value={netPay} icon={Wallet} accent="emerald" />
       <StatMini label="Tenure" value={computeTenure(employee.joiningDate)} icon={Building2} accent="rose" />

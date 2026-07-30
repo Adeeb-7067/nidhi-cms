@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Building2, FileText, Globe, Pencil, Phone, Plus, Trash2 } from "lucide-react";
+import { Building2, FileText, Globe, Phone, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   FinancePageHeader,
   FinanceFilterBar,
@@ -121,19 +121,13 @@ export default function FinanceVendorsPage() {
       header: "Actions",
       align: "right",
       cell: (vendor) => (
-        <div className="flex justify-end gap-1">
-          {canEdit && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={() => openEdit(vendor)}>
-              <Pencil className="h-3.5 w-3.5" />
-              Edit
-            </Button>
-          )}
-          {canDelete && (
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(vendor)}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <CmsRowActions
+          label="Vendor actions"
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => openEdit(vendor)}
+          onDelete={() => setDeleteTarget(vendor)}
+        />
       ),
     },
   ];

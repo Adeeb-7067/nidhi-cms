@@ -23,7 +23,7 @@ import {
   DevKpiGrid,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { CmsChipTabs, CmsFilterBar } from "@/components/cms";
+import { CmsChipTabs, CmsFilterBar, CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +47,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, ListTodo, User, Loader2, CheckCircle2, Eye } from "lucide-react";
+import { Plus, ListTodo, User, Loader2, CheckCircle2 } from "lucide-react";
 import { TASK_STATUS_LABELS, taskStatusClass } from "@/lib/task-ui";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -333,18 +333,10 @@ export default function DevTasks() {
                 id: "actions",
                 header: "",
                 cell: (task: WorkTask) => (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLocation(`/dev/tasks/${task.id}`);
-                    }}
-                    aria-label="View task"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                  </Button>
+                  <CmsRowActions
+                    label="Task actions"
+                    viewHref={`/dev/tasks/${task.id}`}
+                  />
                 ),
               },
             ]}

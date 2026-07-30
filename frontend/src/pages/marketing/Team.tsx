@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { Link } from "wouter";
 import {
   Users,
   CheckSquare,
@@ -11,8 +10,6 @@ import {
   LogIn,
   Pencil,
   Trash2,
-  Eye,
-  Loader2,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -20,13 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useMarketingDashboard, useMarketingPerformance } from "@/api/marketing";
@@ -35,6 +25,7 @@ import {
   MarketingEmptyState,
   MarketingFilterBar,
   MarketingConfirmDialog,
+  MarketingRowActions,
 } from "@/modules/marketing/components";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/modules/permissions/usePermission";
@@ -215,40 +206,37 @@ export default function DigitalTeam() {
       header: "Actions",
       align: "right",
       cell: (m) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild>
-            <Link href={`/marketing/tasks?assigneeId=${m.id}`}>
-              <CheckSquare className="h-3.5 w-3.5 text-blue-500" /> Tasks
-            </Link>
-          </Button>
-          {isAdmin && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs gap-1 text-amber-700 hover:text-amber-800 hover:bg-amber-500/10 border-amber-200 dark:text-amber-400 dark:border-amber-900/50"
-              disabled={impersonatingId === m.id || isImpersonating}
-              onClick={() => void handleViewAs(m)}
-            >
-              {impersonatingId === m.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-              View as
-            </Button>
-          )}
-          {canEditTeam && (
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => handleEdit(m)}>
-              <Pencil className="h-3.5 w-3.5 text-muted-foreground" /> Edit
-            </Button>
-          )}
-          {canDeleteTeam && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-500/10 border-red-200 dark:text-red-400 dark:border-red-900/50"
-              onClick={() => confirmDelete(m)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
+        <MarketingRowActions
+          label={`${m.name} actions`}
+          items={[
+            {
+              label: "Tasks",
+              icon: CheckSquare,
+              href: `/marketing/tasks?assigneeId=${m.id}`,
+            },
+            {
+              label: "View as",
+              icon: LogIn,
+              onSelect: () => void handleViewAs(m),
+              disabled: impersonatingId === m.id || isImpersonating,
+              hidden: !isAdmin,
+            },
+            {
+              label: "Edit",
+              icon: Pencil,
+              onSelect: () => handleEdit(m),
+              hidden: !canEditTeam,
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => confirmDelete(m),
+              variant: "destructive",
+              separatorBefore: true,
+              hidden: !canDeleteTeam,
+            },
+          ]}
+        />
       ),
     },
   ];

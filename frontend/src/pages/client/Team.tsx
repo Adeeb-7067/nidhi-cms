@@ -78,7 +78,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsFilterBar, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -763,83 +763,47 @@ export default function ClientTeamPage() {
       header: "Actions",
       align: "right",
       cell: (m) => (
-        <div className="flex justify-end gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2"
-                onClick={() => setEditing(m)}
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit details & permissions</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2"
-                onClick={() => handleResendInvite(m)}
-                disabled={resendInvite.isPending}
-              >
-                <Mail className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Resend invitation / new password</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 px-2"
-                onClick={() => setResetting(m)}
-              >
-                <KeyRound className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Reset password</TooltipContent>
-          </Tooltip>
-          {m.status === "inactive" ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2"
-                  onClick={() =>
-                    reactivate.mutate(m.id, {
-                      onSuccess: () => toast.success(`${m.name} reactivated.`),
-                      onError: (err) => toastApiError(err),
-                    })
-                  }
-                  disabled={reactivate.isPending}
-                >
-                  <Power className="h-3.5 w-3.5 text-emerald-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reactivate account</TooltipContent>
-            </Tooltip>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-8 px-2"
-                  onClick={() => setConfirmDeactivate(m)}
-                >
-                  <PowerOff className="h-3.5 w-3.5 text-red-600" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Deactivate account</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        <CmsRowActions
+          label="Team member actions"
+          items={[
+            {
+              label: "Edit details & permissions",
+              icon: ShieldCheck,
+              onSelect: () => setEditing(m),
+            },
+            {
+              label: "Resend invitation",
+              icon: Mail,
+              onSelect: () => handleResendInvite(m),
+              disabled: resendInvite.isPending,
+            },
+            {
+              label: "Reset password",
+              icon: KeyRound,
+              onSelect: () => setResetting(m),
+            },
+            {
+              label: "Reactivate account",
+              icon: Power,
+              onSelect: () =>
+                reactivate.mutate(m.id, {
+                  onSuccess: () => toast.success(`${m.name} reactivated.`),
+                  onError: (err) => toastApiError(err),
+                }),
+              disabled: reactivate.isPending,
+              hidden: m.status !== "inactive",
+              separatorBefore: true,
+            },
+            {
+              label: "Deactivate account",
+              icon: PowerOff,
+              onSelect: () => setConfirmDeactivate(m),
+              hidden: m.status === "inactive",
+              variant: "destructive",
+              separatorBefore: true,
+            },
+          ]}
+        />
       ),
     },
   ];

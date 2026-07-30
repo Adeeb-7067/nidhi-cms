@@ -1,8 +1,5 @@
-/**
- * Satyakabir HRM frontend UI patterns — reference: `HRM Satyakabir/Frontend/src/`
- * Use these primitives on every CMS HRM page for visual parity.
- */
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import { BarChart3, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -386,12 +383,90 @@ export function HrmRefPdfPanel({
   emptyDescription?: string;
   emptyAction?: ReactNode;
 }) {
+  const [probe, setProbe] = useState<"idle" | "checking" | "ok" | "missing">("idle");
+
+  useEffect(() => {
+    if (!fileUrl) {
+      setProbe("idle");
+      return;
+    }
+    let cancelled = false;
+    setProbe("checking");
+
+    const check = async () => {
+      try {
+        // Prefer HEAD; some Spaces configs only allow GET publicly.
+        let res = await fetch(fileUrl, { method: "HEAD", mode: "cors" });
+        if (res.status === 405 || res.status === 403) {
+          res = await fetch(fileUrl, {
+            method: "GET",
+            mode: "cors",
+            headers: { Range: "bytes=0-0" },
+          });
+        }
+        if (cancelled) return;
+        if (res.status === 404) {
+          setProbe("missing");
+          return;
+        }
+        const ct = (res.headers.get("content-type") || "").toLowerCase();
+        // S3/Spaces NoSuchKey often returns 404 XML, or 200 XML on misconfigured proxies.
+        if (ct.includes("xml") || ct.includes("text/html") || ct.includes("application/xml")) {
+          setProbe("missing");
+          return;
+        }
+        if (!res.ok) {
+          setProbe("missing");
+          return;
+        }
+        setProbe("ok");
+      } catch {
+        // CORS may block HEAD/GET from localhost against Spaces — still try iframe.
+        if (!cancelled) setProbe("ok");
+      }
+    };
+    void check();
+    return () => {
+      cancelled = true;
+    };
+  }, [fileUrl]);
+
   if (!fileUrl) {
     return (
       <div className="flex min-h-[22rem] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border/60 bg-muted/10 px-6 py-10 text-center">
         <p className="text-sm font-medium">{emptyTitle}</p>
         <p className="mt-1 max-w-sm text-xs text-muted-foreground">{emptyDescription}</p>
         {emptyAction && <div className="mt-5">{emptyAction}</div>}
+      </div>
+    );
+  }
+
+  if (probe === "checking") {
+    return (
+      <div className="flex min-h-[22rem] flex-1 flex-col items-center justify-center rounded-xl border border-border/60 bg-muted/10 px-6 py-10">
+        <Skeleton className="h-8 w-48" />
+        <p className="mt-3 text-xs text-muted-foreground">Checking document…</p>
+      </div>
+    );
+  }
+
+  if (probe === "missing") {
+    return (
+      <div className="flex min-h-[22rem] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 px-6 py-10 text-center">
+        <p className="text-sm font-medium">Document file is missing from storage</p>
+        <p className="mt-1 max-w-md text-xs text-muted-foreground">
+          The kit item still has a file link, but the PDF is not in the bucket (deleted, never uploaded, or wrong key).
+          Re-upload the document from Edit.
+        </p>
+        {emptyAction && <div className="mt-5">{emptyAction}</div>}
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 text-xs text-muted-foreground hover:underline"
+        >
+          Open stored URL anyway
+        </a>
       </div>
     );
   }

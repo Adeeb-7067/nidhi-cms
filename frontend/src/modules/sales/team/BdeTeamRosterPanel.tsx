@@ -5,11 +5,11 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   BarChart3,
   Clock,
-  Edit,
   Eye,
   LineChart,
   LogIn,
   Mail,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -31,6 +31,7 @@ import { AvatarWithPresence } from "@/components/presence/AvatarWithPresence";
 import { PresenceTableCell } from "@/components/presence/PresenceTableCell";
 import { PortalContentCard, PortalKpiGrid, portalActionButtonClass } from "@/components/layout/portal-page-kit";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
+import { CmsRowActions } from "@/components/cms";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -53,11 +54,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { PageTableSkeleton } from "@/components/loading";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { SalesEmptyState } from "@/modules/sales/components";
 import { formatCompactCurrency } from "@/modules/sales/constants";
 import { formatSalesDateTime } from "@/modules/sales/utils";
@@ -137,41 +133,6 @@ function memberToUser(member: SalesTeamMember): User {
     presenceStatus: member.presenceStatus,
     createdAt: member.createdAt ?? "",
   } as User;
-}
-
-function RosterActionButton({
-  label,
-  onClick,
-  disabled,
-  className,
-  children,
-}: {
-  label: string;
-  onClick: (e: React.MouseEvent) => void;
-  disabled?: boolean;
-  className?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          size="icon"
-          variant="ghost"
-          className={`h-7 w-7 shrink-0 ${className ?? ""}`}
-          disabled={disabled}
-          onClick={onClick}
-          aria-label={label}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {label}
-      </TooltipContent>
-    </Tooltip>
-  );
 }
 
 export function BdeTeamRosterPanel({
@@ -373,67 +334,47 @@ export function BdeTeamRosterPanel({
       hideInDetail: true,
       className: "w-[1%] whitespace-nowrap align-middle",
       cell: (member) => (
-        <div
-          className="flex items-center justify-end gap-0.5 flex-nowrap min-w-[9.5rem]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <RosterActionButton
-            label="Open profile"
-            onClick={(e) => {
-              e.stopPropagation();
-              setLocation(getAdminEmployeeDetailHref(member.id));
-            }}
-          >
-            <Eye className="h-3.5 w-3.5" />
-          </RosterActionButton>
-          {onOpenSalesDetail && isTeamAdmin ? (
-            <RosterActionButton
-              label="Sales performance"
-              className="text-violet-600 hover:text-violet-700 hover:bg-violet-500/10"
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenSalesDetail(member);
-              }}
-            >
-              <LineChart className="h-3.5 w-3.5" />
-            </RosterActionButton>
-          ) : null}
-          {isTeamAdmin && canViewAsBde(member, viewer?.role) ? (
-            <RosterActionButton
-              label="View as BDE"
-              className="text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-              disabled={impersonatingId === member.id || isImpersonating}
-              onClick={(e) => void handleViewAs(member, e)}
-            >
-              <LogIn className="h-3.5 w-3.5" />
-            </RosterActionButton>
-          ) : null}
-          {isTeamAdmin ? (
-            <RosterActionButton
-              label="Edit"
-              onClick={(e) => {
-                e.stopPropagation();
+        <CmsRowActions
+          label={`${member.name} actions`}
+          items={[
+            {
+              label: "Open profile",
+              icon: Eye,
+              onSelect: () => setLocation(getAdminEmployeeDetailHref(member.id)),
+            },
+            {
+              label: "Sales performance",
+              icon: LineChart,
+              onSelect: () => onOpenSalesDetail!(member),
+              hidden: !(onOpenSalesDetail && isTeamAdmin),
+            },
+            {
+              label: "View as BDE",
+              icon: LogIn,
+              disabled: impersonatingId === member.id || isImpersonating,
+              onSelect: () => void handleViewAs(member),
+              hidden: !(isTeamAdmin && canViewAsBde(member, viewer?.role)),
+            },
+            {
+              label: "Edit",
+              icon: Pencil,
+              onSelect: () => {
                 setEditMember(memberToUser(member));
                 setIsDialogOpen(true);
-              }}
-            >
-              <Edit className="h-3.5 w-3.5" />
-            </RosterActionButton>
-          ) : null}
-          {isTeamAdmin ? (
-            <RosterActionButton
-              label={member.status !== "active" ? "Already deactivated" : "Deactivate"}
-              className="text-red-500 hover:text-red-600 hover:bg-red-500/10 disabled:opacity-30"
-              disabled={member.status !== "active"}
-              onClick={(e) => {
-                e.stopPropagation();
-                setDeleteId(member.id);
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </RosterActionButton>
-          ) : null}
-        </div>
+              },
+              hidden: !isTeamAdmin,
+            },
+            {
+              label: member.status !== "active" ? "Already deactivated" : "Deactivate",
+              icon: Trash2,
+              disabled: member.status !== "active",
+              onSelect: () => setDeleteId(member.id),
+              hidden: !isTeamAdmin,
+              variant: "destructive",
+              separatorBefore: true,
+            },
+          ]}
+        />
       ),
     },
   ];

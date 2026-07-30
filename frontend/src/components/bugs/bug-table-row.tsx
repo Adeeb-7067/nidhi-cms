@@ -2,12 +2,13 @@ import React from "react";
 import type { Bug } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CmsRowActions } from "@/components/cms";
 import { BugTrackStatusBadges } from "./bug-track-status";
 import { AssigneeAvatars } from "./assignee-avatars";
 import { BugAttachmentThumb } from "./bug-attachments";
 import { PRIORITY_LABELS } from "@/lib/bug-workflow";
 import { cn } from "@/lib/utils";
-import { ChevronRight, Eye, Edit, Trash2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export type BugDisplayRow = Bug & {
@@ -143,34 +144,14 @@ export function BugProjectActionsCell({
   const editable = (typeof canEdit === "function" ? canEdit(row) : canEdit) && onEdit;
   if (!editable && !onDelete) return null;
   return (
-    <div
-      className="flex items-center gap-0.5"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      {editable && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => onEdit!(row)}
-          aria-label="Edit bug"
-        >
-          <Edit className="h-3.5 w-3.5" />
-        </Button>
-      )}
-      {onDelete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={() => onDelete(row)}
-          aria-label="Delete bug"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-    </div>
+    <CmsRowActions
+      label="Bug actions"
+      canView={false}
+      canEdit={!!editable}
+      canDelete={!!onDelete}
+      onEdit={editable ? () => onEdit!(row) : undefined}
+      onDelete={onDelete ? () => onDelete(row) : undefined}
+    />
   );
 }
 
@@ -257,31 +238,15 @@ export function BugFullActionsCell({
 }) {
   const editable = (typeof canEdit === "function" ? canEdit(row) : canEdit) && onEdit;
   return (
-    <div
-      className="flex justify-end gap-0.5"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.stopPropagation()}
-    >
-      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onRowClick(row)}>
-        <Eye className="h-3.5 w-3.5" />
-      </Button>
-      {editable && (
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit!(row)}>
-          <Edit className="h-3.5 w-3.5" />
-        </Button>
-      )}
-      {onDelete && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={() => onDelete(row)}
-          aria-label="Delete bug"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-    </div>
+    <CmsRowActions
+      label="Bug actions"
+      canView
+      canEdit={!!editable}
+      canDelete={!!onDelete}
+      onView={() => onRowClick(row)}
+      onEdit={editable ? () => onEdit!(row) : undefined}
+      onDelete={onDelete ? () => onDelete(row) : undefined}
+    />
   );
 }
 

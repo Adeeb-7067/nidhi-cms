@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
-import { IdCard, Loader2, Printer, Users } from "lucide-react";
+import { IdCard, Eye, Loader2, Printer, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -246,7 +247,18 @@ export default function HrmIdCardsPage() {
       id: "actions",
       header: "",
       hideInDetail: true,
-      cell: (e) => <HrmIdCardViewButton onClick={() => openPreview(e)} />,
+      cell: (e) => (
+        <CmsRowActions
+          label="ID card actions"
+          items={[
+            {
+              label: "View card",
+              icon: Eye,
+              onSelect: () => openPreview(e),
+            },
+          ]}
+        />
+      ),
     },
   ], []);
 

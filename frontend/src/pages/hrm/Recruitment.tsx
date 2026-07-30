@@ -13,6 +13,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { normalizePhoneForSubmit, phoneValidationError, sanitizePhoneDigits } from "@/lib/phone-input";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -368,36 +369,38 @@ export default function HrmRecruitmentPage() {
     {
       id: "actions",
       header: "Actions",
-      className: "text-right",
+      className: "text-right w-[56px]",
       cell: (c) => (
-        <div className="flex flex-wrap justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {RECRUITMENT_ONBOARDING_STAGES.includes(c.stage as (typeof RECRUITMENT_ONBOARDING_STAGES)[number]) && canOnboard ? (
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={startOnboarding.isPending}
-              onClick={() => handleStartOnboarding(c)}
-            >
-              <Rocket className="mr-1 h-3 w-3" />
-              Onboard
-            </Button>
-          ) : null}
-          {canEdit ? (
-            <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => openEdit(c)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-          {canDelete ? (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-destructive"
-              onClick={() => setDeleteTarget(c)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-        </div>
+        <CmsRowActions
+          label={`Actions for ${c.name}`}
+          items={[
+            {
+              label: "Onboard",
+              icon: Rocket,
+              onSelect: () => handleStartOnboarding(c),
+              disabled: startOnboarding.isPending,
+              hidden: !(
+                RECRUITMENT_ONBOARDING_STAGES.includes(
+                  c.stage as (typeof RECRUITMENT_ONBOARDING_STAGES)[number],
+                ) && canOnboard
+              ),
+            },
+            {
+              label: "Edit",
+              icon: Pencil,
+              onSelect: () => openEdit(c),
+              hidden: !canEdit,
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => setDeleteTarget(c),
+              variant: "destructive",
+              separatorBefore: true,
+              hidden: !canDelete,
+            },
+          ]}
+        />
       ),
     },
   ], [canDelete, canEdit, canOnboard, startOnboarding.isPending]);

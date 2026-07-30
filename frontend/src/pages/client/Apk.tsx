@@ -10,7 +10,7 @@ import {
   PortalPageHero,
   PortalKpiGrid,
 } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsFilterBar, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   getApkAudienceBadgeClass,
   getApkAudienceLabel,
@@ -122,16 +122,20 @@ export default function ClientApk() {
       },
       {
         id: "actions",
-        header: "Download",
+        header: "Actions",
         align: "right",
         hideable: false,
         cell: (apk) => (
-          <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
-            <a href={apk.fileUrl} download>
-              <Download className="mr-1.5 h-3 w-3" />
-              APK
-            </a>
-          </Button>
+          <CmsRowActions
+            label="APK actions"
+            items={[
+              {
+                label: "Download APK",
+                icon: Download,
+                href: apk.fileUrl,
+              },
+            ]}
+          />
         ),
       },
     ],

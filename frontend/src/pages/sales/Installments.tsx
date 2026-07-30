@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
 import { useListInstallments, useListCustomers, type Installment } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
@@ -156,9 +156,10 @@ export default function InstallmentsPage() {
         align: "right",
         hideable: false,
         cell: (inst) => (
-          <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-            <Link href={`/sales/installments/${inst.id}`}>View</Link>
-          </Button>
+          <CmsRowActions
+            label="Installment actions"
+            viewHref={`/sales/installments/${inst.id}`}
+          />
         ),
       },
     ],

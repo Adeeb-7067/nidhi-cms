@@ -9,6 +9,7 @@ import * as documentsCtrl from "./controllers/documents.controller.js";
 import * as calendarCtrl from "./controllers/calendar.controller.js";
 import * as noticesCtrl from "./controllers/notices.controller.js";
 import * as p2 from "./controllers/phase2.controller.js";
+import * as bankStatementsCtrl from "./controllers/bank-statements.controller.js";
 import { assignSuspenseEntry } from "./services/suspense-assign.service.js";
 
 const router = Router();
@@ -62,5 +63,26 @@ mountCrud("/ca/din-dsc", p2.dinDsc);
 mountCrud("/ca/audits", p2.audits);
 mountCrud("/ca/suspense", p2.suspense);
 router.post("/ca/suspense/:id/assign", ...p("edit"), wrap(assignSuspenseEntry));
+
+/** Bank statement import + match (true recon). */
+router.get("/ca/bank-statements", ...p("view"), wrap(bankStatementsCtrl.listStatements));
+router.post("/ca/bank-statements/import", ...p("create"), wrap(bankStatementsCtrl.importStatement));
+router.post(
+  "/ca/bank-statements/unmatched-payments-to-suspense",
+  ...p("create"),
+  wrap(bankStatementsCtrl.unmatchedPaymentsToSuspense),
+);
+router.get("/ca/bank-statements/:id", ...p("view"), wrap(bankStatementsCtrl.getStatement));
+router.get("/ca/bank-statements/:id/lines", ...p("view"), wrap(bankStatementsCtrl.listStatementLines));
+router.post("/ca/bank-statements/:id/auto-match", ...p("edit"), wrap(bankStatementsCtrl.autoMatchStatement));
+router.post(
+  "/ca/bank-statements/:id/to-suspense",
+  ...p("create"),
+  wrap(bankStatementsCtrl.unmatchedCreditsToSuspense),
+);
+router.delete("/ca/bank-statements/:id", ...p("delete"), wrap(bankStatementsCtrl.deleteStatement));
+router.post("/ca/bank-statement-lines/:lineId/match", ...p("edit"), wrap(bankStatementsCtrl.matchLine));
+router.post("/ca/bank-statement-lines/:lineId/unmatch", ...p("edit"), wrap(bankStatementsCtrl.unmatchLine));
+router.post("/ca/bank-statement-lines/:lineId/ignore", ...p("edit"), wrap(bankStatementsCtrl.ignoreLine));
 
 export default router;

@@ -36,7 +36,7 @@ import { getAccessToken } from "@/lib/auth-storage";
 import { apiUrl } from "@/lib/api-base";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { AdvancedTable, Column } from "@/components/ui/advanced-table";
-import { CmsChipTabs, CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsFilterBar, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -851,52 +851,40 @@ export default function AdminEmployees() {
       header: "Actions",
       hideInDetail: true,
       cell: (user) => (
-        <div className="flex justify-end gap-2 transition-opacity">
-          {user.role !== "super_admin" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-[10px] font-semibold"
-              title="Open employee profile"
-              onClick={(e) => {
-                e.stopPropagation();
-                setLocation(getStaffProfileHref(user.id, user.role, viewer?.role));
-              }}
-            >
-              <Eye className="h-3 w-3 mr-1" />
-              Profile
-            </Button>
-          )}
-          {canViewAsEmployee(user, viewer?.id) && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 px-2 text-[10px] font-semibold text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-              title="View as this employee"
-              disabled={impersonatingId === user.id || isImpersonating}
-              onClick={(e) => void handleViewAs(user, e)}
-            >
-              <LogIn className="h-3 w-3 mr-1" />
-              View as
-            </Button>
-          )}
-          {user.role !== "super_admin" && (
-            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={(e) => { e.stopPropagation(); setEmployeeFormTab("personal"); setEditFormSynced(false); setEditUser(user); }}>
-              <Edit className="h-3 w-3" />
-            </Button>
-          )}
-          {viewer?.role === "super_admin" && user.role !== "super_admin" && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-              title="Issue warning"
-              onClick={(e) => { e.stopPropagation(); setWarnEmployee({ id: user.id, name: user.name }); }}
-            >
-              <AlertTriangle className="h-3 w-3" />
-            </Button>
-          )}
-        </div>
+        <CmsRowActions
+          label="Employee actions"
+          items={[
+            {
+              label: "Profile",
+              icon: Eye,
+              onSelect: () => setLocation(getStaffProfileHref(user.id, user.role, viewer?.role)),
+              hidden: user.role === "super_admin",
+            },
+            {
+              label: "View as",
+              icon: LogIn,
+              onSelect: () => void handleViewAs(user),
+              disabled: impersonatingId === user.id || isImpersonating,
+              hidden: !canViewAsEmployee(user, viewer?.id),
+            },
+            {
+              label: "Edit",
+              icon: Edit,
+              onSelect: () => {
+                setEmployeeFormTab("personal");
+                setEditFormSynced(false);
+                setEditUser(user);
+              },
+              hidden: user.role === "super_admin",
+            },
+            {
+              label: "Issue warning",
+              icon: AlertTriangle,
+              onSelect: () => setWarnEmployee({ id: user.id, name: user.name }),
+              hidden: viewer?.role !== "super_admin" || user.role === "super_admin",
+            },
+          ]}
+        />
       )
     }
   ];

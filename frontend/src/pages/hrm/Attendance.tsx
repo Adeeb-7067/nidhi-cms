@@ -34,7 +34,7 @@ import {
   portalActionButtonClass,
   HrmInsightBanner,
 } from "@/modules/hrm/components";
-import { CmsChipTabs } from "@/components/cms";
+import { CmsChipTabs, CmsRowActions } from "@/components/cms";
 import { ManualAttendanceDialog } from "@/modules/hrm/ManualAttendanceDialog";
 import { HrmEmployeeAvatar } from "@/modules/hrm/dashboard-sections";
 import { HrmAttendanceGridPanel, attendanceStatusSuffix } from "@/modules/hrm/hrm-attendance-grid";
@@ -458,14 +458,17 @@ export default function HrmAttendancePage() {
       header: "Actions",
       className: "text-right",
       cell: (r) => (
-        <Button
-          size="sm"
-          className={portalActionButtonClass()}
-          disabled={excuseLate.isPending}
-          onClick={() => openExcuseDialog(r)}
-        >
-          Excuse late
-        </Button>
+        <CmsRowActions
+          label="Late excuse actions"
+          items={[
+            {
+              label: "Excuse late",
+              icon: Clock,
+              onSelect: () => openExcuseDialog(r),
+              disabled: excuseLate.isPending,
+            },
+          ]}
+        />
       ),
     },
   ], [excuseLate.isPending]);
@@ -740,30 +743,24 @@ export default function HrmAttendancePage() {
                           const isLateOnsite =
                             normalizeAttendanceStatus(r.status) === "onsite" && !r.forgivenLate;
                           return (
-                            <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                              {isLateOnsite && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs"
-                                  disabled={excuseLate.isPending}
-                                  onClick={() => openExcuseDialog(r)}
-                                >
-                                  <Clock className="mr-1 h-3 w-3" />
-                                  Excuse
-                                </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-7 text-xs"
-                                disabled={adminOverride.isPending}
-                                onClick={() => openAdjustDialog(r)}
-                              >
-                                <Pencil className="mr-1 h-3 w-3" />
-                                Adjust
-                              </Button>
-                            </div>
+                            <CmsRowActions
+                              label="Attendance actions"
+                              items={[
+                                {
+                                  label: "Excuse",
+                                  icon: Clock,
+                                  onSelect: () => openExcuseDialog(r),
+                                  disabled: excuseLate.isPending,
+                                  hidden: !isLateOnsite,
+                                },
+                                {
+                                  label: "Adjust",
+                                  icon: Pencil,
+                                  onSelect: () => openAdjustDialog(r),
+                                  disabled: adminOverride.isPending,
+                                },
+                              ]}
+                            />
                           );
                         },
                       },

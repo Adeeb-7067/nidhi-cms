@@ -499,18 +499,33 @@ export default function ProposalCreate() {
             <Card>
               <CardContent className="pt-4 space-y-3">
                 <div className="space-y-2">
-                  <Label htmlFor="terms">Terms</Label>
-                  <Textarea id="terms" rows={2} value={terms} onChange={(e) => setTerms(e.target.value)} />
+                  <Label htmlFor="terms">Terms & conditions</Label>
+                  <Textarea
+                    id="terms"
+                    rows={6}
+                    className="min-h-[8rem] text-sm leading-relaxed resize-y"
+                    value={terms}
+                    onChange={(e) => setTerms(e.target.value)}
+                    placeholder="Payment terms, delivery, warranties…"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Client notes</Label>
-                  <Textarea id="notes" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                  <Textarea
+                    id="notes"
+                    rows={5}
+                    className="min-h-[6.5rem] text-sm leading-relaxed resize-y"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Visible to client"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="internalNotes">Internal notes</Label>
                   <Textarea
                     id="internalNotes"
-                    rows={2}
+                    rows={4}
+                    className="min-h-[5.5rem] text-sm leading-relaxed resize-y"
                     value={internalNotes}
                     onChange={(e) => setInternalNotes(e.target.value)}
                     placeholder="Visible to sales team only"

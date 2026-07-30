@@ -73,6 +73,7 @@ import {
   DigitalProjectSelect,
   MarketingAssigneeField,
   MarketingChipTabs,
+  MarketingRowActions,
   resolveFormAssigneeId,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
@@ -736,41 +737,31 @@ export default function MarketingCalendar() {
                           </div>
                         ) : null}
 
-                        <div className="mt-3 flex justify-end gap-1 border-t border-border/50 pt-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 gap-1 px-2 text-xs"
-                            onClick={() => setPreviewTarget(p)}
-                          >
-                            <Eye className="h-3 w-3" />
-                            Preview
-                          </Button>
-                          {canEdit && canFullyEditMarketingItem(user, p.createdBy) ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 gap-1 px-2 text-xs"
-                              onClick={() => openEdit(p)}
-                            >
-                              <Pencil className="h-3 w-3" />
-                              Edit
-                            </Button>
-                          ) : null}
-                          {canDeleteOwn && canDeleteMarketingItem(user, p.createdBy) ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 gap-1 px-2 text-xs text-destructive hover:text-destructive"
-                              onClick={() => setDeleteTarget(p)}
-                            >
-                              <Trash2 className="h-3 w-3" />
-                              Delete
-                            </Button>
-                          ) : null}
+                        <div className="mt-3 flex justify-end border-t border-border/50 pt-2">
+                          <MarketingRowActions
+                            label="Post actions"
+                            items={[
+                              {
+                                label: "Preview",
+                                icon: Eye,
+                                onSelect: () => setPreviewTarget(p),
+                              },
+                              {
+                                label: "Edit",
+                                icon: Pencil,
+                                onSelect: () => openEdit(p),
+                                hidden: !(canEdit && canFullyEditMarketingItem(user, p.createdBy)),
+                              },
+                              {
+                                label: "Delete",
+                                icon: Trash2,
+                                onSelect: () => setDeleteTarget(p),
+                                variant: "destructive",
+                                separatorBefore: true,
+                                hidden: !(canDeleteOwn && canDeleteMarketingItem(user, p.createdBy)),
+                              },
+                            ]}
+                          />
                         </div>
                       </article>
                     </li>
@@ -812,28 +803,24 @@ export default function MarketingCalendar() {
                             </span>
                           </span>
                         </button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 shrink-0 gap-1 px-2 text-xs"
-                          onClick={() => setPreviewTarget(p)}
-                        >
-                          <Eye className="h-3 w-3" />
-                          Preview
-                        </Button>
-                        {canDeleteOwn && canDeleteMarketingItem(user, p.createdBy) ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 shrink-0 gap-1 px-2 text-xs text-destructive hover:text-destructive"
-                            onClick={() => setDeleteTarget(p)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                            Delete
-                          </Button>
-                        ) : null}
+                        <MarketingRowActions
+                          label="Post actions"
+                          items={[
+                            {
+                              label: "Preview",
+                              icon: Eye,
+                              onSelect: () => setPreviewTarget(p),
+                            },
+                            {
+                              label: "Delete",
+                              icon: Trash2,
+                              onSelect: () => setDeleteTarget(p),
+                              variant: "destructive",
+                              separatorBefore: true,
+                              hidden: !(canDeleteOwn && canDeleteMarketingItem(user, p.createdBy)),
+                            },
+                          ]}
+                        />
                       </div>
                     ))}
                   </div>

@@ -546,17 +546,35 @@ export function ProposalFormSheet({
 
             {/* Notes */}
             <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Terms</Label>
-                <Textarea rows={2} className="text-xs resize-none" value={terms} onChange={(e) => setTerms(e.target.value)} />
+              <div className="space-y-1.5">
+                <Label className="text-xs">Terms & conditions</Label>
+                <Textarea
+                  rows={6}
+                  className="min-h-[8rem] text-sm leading-relaxed resize-y"
+                  value={terms}
+                  onChange={(e) => setTerms(e.target.value)}
+                  placeholder="Payment terms, delivery, warranties…"
+                />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label className="text-xs">Client notes</Label>
-                <Textarea rows={2} className="text-xs resize-none" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Visible to client" />
+                <Textarea
+                  rows={5}
+                  className="min-h-[6.5rem] text-sm leading-relaxed resize-y"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Visible to client"
+                />
               </div>
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <Label className="text-xs">Internal notes</Label>
-                <Textarea rows={2} className="text-xs resize-none" value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} placeholder="Visible to sales team only" />
+                <Textarea
+                  rows={4}
+                  className="min-h-[5.5rem] text-sm leading-relaxed resize-y"
+                  value={internalNotes}
+                  onChange={(e) => setInternalNotes(e.target.value)}
+                  placeholder="Visible to sales team only"
+                />
               </div>
             </div>
           </div>

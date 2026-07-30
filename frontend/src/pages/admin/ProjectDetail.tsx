@@ -55,7 +55,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, MapPin, ChevronDown, Pencil } from "lucide-react";
+import { Loader2, Plus, MapPin, ChevronDown } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ProjectTimelineView } from "@/components/ui/project-timeline-view";
 import { ProjectInventoryPanel } from "@/components/inventory/ProjectInventoryPanel";
@@ -69,7 +69,7 @@ import { ProjectDetailPageSkeleton } from "@/components/loading";
 import { FormattedText } from "@/components/ui/formatted-text";
 import { getApkAudienceLabel, resolveApkDisplayName } from "@/lib/apk-audience";
 import { Button } from "@/components/ui/button";
-import { CmsDataTable, CmsKpiGrid, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsKpiGrid, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { 
   ArrowLeft, Users, Github, Layout, Globe, Calendar, Clock, Download, Bug, MessageSquare, 
   Smartphone, FileText, CheckCircle, XCircle, Lock, FileJson, Package, Percent, Timer
@@ -431,11 +431,18 @@ export default function AdminProjectDetail() {
       header: "Action",
       align: "right",
       cell: (apk) => (
-        <Button size="sm" variant="ghost" className="h-7 text-xs" asChild>
-          <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
-            <Download className="h-3 w-3 mr-1.5" /> Download
-          </a>
-        </Button>
+        <CmsRowActions
+          label="APK actions"
+          items={[
+            {
+              label: "Download",
+              icon: Download,
+              onSelect: () => {
+                window.open(apk.fileUrl, "_blank", "noopener,noreferrer");
+              },
+            },
+          ]}
+        />
       ),
     },
   ];
@@ -553,16 +560,10 @@ export default function AdminProjectDetail() {
             header: "Actions",
             headerClassName: "w-[72px]",
             cell: (m: Milestone) => (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                title="Edit milestone"
-                onClick={() => openEditMilestone(m)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
+              <CmsRowActions
+                label="Milestone actions"
+                onEdit={() => openEditMilestone(m)}
+              />
             ),
           } satisfies CmsColumn<Milestone>,
         ]

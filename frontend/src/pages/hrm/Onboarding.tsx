@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import { format } from "date-fns";
-import { CheckCircle2, ClipboardList, Plus, Rocket, Trash2, UserPlus } from "lucide-react";
+import { CheckCircle2, ClipboardList, ListChecks, Plus, Rocket, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
+import { CmsRowActions } from "@/components/cms";
 import {
   Dialog,
   DialogContent,
@@ -295,9 +296,16 @@ export default function HrmOnboardingPage() {
       header: "Actions",
       className: "text-right",
       cell: (r) => (
-        <Button size="sm" variant="outline" onClick={() => setDetailId(r.id)}>
-          Checklist
-        </Button>
+        <CmsRowActions
+          label="Onboarding actions"
+          items={[
+            {
+              label: "Checklist",
+              icon: ListChecks,
+              onSelect: () => setDetailId(r.id),
+            },
+          ]}
+        />
       ),
     },
   ], []);

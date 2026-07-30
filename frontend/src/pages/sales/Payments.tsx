@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { Plus, IndianRupee, Receipt } from "lucide-react";
+import { Plus, IndianRupee, Receipt, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
 import { useListPayments, useSalesDashboard } from "@/api/sales";
 import { formatCurrency } from "@/modules/sales/constants";
@@ -160,14 +160,21 @@ export default function Payments() {
       cell: (p) => {
         const docInvoiceId = paymentDocumentInvoiceId(p);
         return (
-          <div className="flex items-center justify-end gap-1">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-              <Link href={`/sales/invoices/${docInvoiceId}`}>Invoice</Link>
-            </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-              <Link href={`/sales/receipts/${p.id}`}>Receipt</Link>
-            </Button>
-          </div>
+          <CmsRowActions
+            label="Payment actions"
+            items={[
+              {
+                label: "Invoice",
+                icon: FileText,
+                href: `/sales/invoices/${docInvoiceId}`,
+              },
+              {
+                label: "Receipt",
+                icon: Receipt,
+                href: `/sales/receipts/${p.id}`,
+              },
+            ]}
+          />
         );
       },
     },

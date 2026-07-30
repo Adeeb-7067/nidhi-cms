@@ -447,7 +447,14 @@ function makeMutations<TCreate extends object, TDto>(path: string, invalidateKey
   };
 }
 
-export type CaGstFilingDto = GstReturnFiling & { lateFee?: number; interest?: number; notes?: string | null };
+export type CaGstFilingDto = GstReturnFiling & {
+  lateFee?: number;
+  interest?: number;
+  outputTax?: number;
+  inputTax?: number;
+  netTax?: number;
+  notes?: string | null;
+};
 export type CaTdsReturnDto = TdsReturn & { filedAt?: string | null; notes?: string | null };
 export type CaTdsCertificateDto = TdsCertificate & { issuedAt?: string | null; financialYear?: string | null };
 export type CaCompanyItrDto = CompanyItr & {
@@ -581,5 +588,192 @@ export function useCaComplianceScore(enabled = true) {
     queryFn: () => customFetch(apiUrl("/api/ca/compliance-score")),
     enabled,
     staleTime: 30_000,
+  });
+}
+
+// ── Bank statements (true recon) ─────────────────────────────────────────
+
+export interface CaBankStatementDto {
+  id: number;
+  accountName: string;
+  bankName: string | null;
+  fileName: string | null;
+  periodFrom: string | null;
+  periodTo: string | null;
+  importedAt: string | null;
+  lineCount: number;
+  matchedCount: number;
+  unmatchedCount: number;
+  notes: string | null;
+}
+
+export interface CaBankStatementLineDto {
+  id: number;
+  statementId: number;
+  date: string | null;
+  description: string;
+  reference: string;
+  amount: number;
+  direction: "incoming" | "outgoing";
+  balance: number | null;
+  status: "unmatched" | "matched" | "ignored";
+  financePaymentId: number | null;
+  matchedAt: string | null;
+  suspenseId: number | null;
+}
+
+export function useCaBankStatements(enabled = true) {
+  return useQuery<{ statements: CaBankStatementDto[]; total: number }>({
+    queryKey: ["ca", "bank-statements"],
+    queryFn: () => customFetch(apiUrl("/api/ca/bank-statements?limit=50")),
+    enabled,
+    staleTime: 15_000,
+  });
+}
+
+export function useCaBankStatementLines(
+  statementId: number | null,
+  params?: { status?: string; direction?: string; limit?: number },
+  enabled = true,
+) {
+  return useQuery<{ lines: CaBankStatementLineDto[]; total: number; statementId: number }>({
+    queryKey: ["ca", "bank-statement-lines", statementId, params],
+    queryFn: () =>
+      customFetch(
+        apiUrl(`/api/ca/bank-statements/${statementId}/lines${toQueryString({ limit: 1000, ...params })}`),
+      ),
+    enabled: enabled && !!statementId,
+    staleTime: 10_000,
+  });
+}
+
+export function useImportCaBankStatement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      csvText: string;
+      accountName?: string;
+      bankName?: string;
+      fileName?: string;
+      notes?: string;
+      autoMatch?: boolean;
+    }) =>
+      customFetch<{
+        statement: CaBankStatementDto;
+        imported: number;
+        autoMatched: number;
+        parseWarnings: string[];
+      }>(apiUrl("/api/ca/bank-statements/import"), {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "dashboard"] });
+    },
+  });
+}
+
+export function useAutoMatchCaBankStatement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch<{ matched: number; statement: CaBankStatementDto }>(
+        apiUrl(`/api/ca/bank-statements/${id}/auto-match`),
+        { method: "POST", body: "{}" },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+    },
+  });
+}
+
+export function useMatchCaBankStatementLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { lineId: number; paymentId: number }) =>
+      customFetch<CaBankStatementLineDto>(apiUrl(`/api/ca/bank-statement-lines/${body.lineId}/match`), {
+        method: "POST",
+        body: JSON.stringify({ paymentId: body.paymentId }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+    },
+  });
+}
+
+export function useUnmatchCaBankStatementLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (lineId: number) =>
+      customFetch<CaBankStatementLineDto>(apiUrl(`/api/ca/bank-statement-lines/${lineId}/unmatch`), {
+        method: "POST",
+        body: "{}",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+    },
+  });
+}
+
+export function useIgnoreCaBankStatementLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (lineId: number) =>
+      customFetch<CaBankStatementLineDto>(apiUrl(`/api/ca/bank-statement-lines/${lineId}/ignore`), {
+        method: "POST",
+        body: "{}",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+    },
+  });
+}
+
+export function useDeleteCaBankStatement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      customFetch(apiUrl(`/api/ca/bank-statements/${id}`), { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statements"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+    },
+  });
+}
+
+export function useStatementCreditsToSuspense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (statementId: number) =>
+      customFetch<{ created: number; linked: number; total: number }>(
+        apiUrl(`/api/ca/bank-statements/${statementId}/to-suspense`),
+        { method: "POST", body: "{}" },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "suspense"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "bank-statement-lines"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "dashboard"] });
+    },
+  });
+}
+
+export function useUnmatchedPaymentsToSuspense() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      customFetch<{ created: number; linked: number; total: number }>(
+        apiUrl("/api/ca/bank-statements/unmatched-payments-to-suspense"),
+        { method: "POST", body: "{}" },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["ca", "suspense"] });
+      void qc.invalidateQueries({ queryKey: ["ca", "dashboard"] });
+    },
   });
 }

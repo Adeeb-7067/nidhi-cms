@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { getProjectDetailHref } from "@/lib/project-routes";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { SalesPageHeader, SalesFilterBar } from "@/modules/sales/components";
 
 const ONGOING_STATUSES = "in_progress,scoping,uat,on_hold";
@@ -351,21 +351,26 @@ export default function BdeProjects() {
         align: "right",
         hideable: false,
         cell: (project) => (
-          <div className="flex items-center justify-end gap-1">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
-              <Link href={getProjectDetailHref(project.id, "bde", project.type)}>
-                Open
-                <ArrowRight className="ml-1 h-3 w-3" />
-              </Link>
-            </Button>
-            {project.stagingUrl ? (
-              <Button size="icon" variant="outline" className="h-7 w-7 shrink-0" asChild title="Staging">
-                <a href={project.stagingUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-              </Button>
-            ) : null}
-          </div>
+          <CmsRowActions
+            label="Project actions"
+            items={[
+              {
+                label: "Open",
+                icon: ArrowRight,
+                href: getProjectDetailHref(project.id, "bde", project.type),
+              },
+              {
+                label: "Staging",
+                icon: ExternalLink,
+                onSelect: () => {
+                  if (project.stagingUrl) {
+                    window.open(project.stagingUrl, "_blank", "noreferrer");
+                  }
+                },
+                hidden: !project.stagingUrl,
+              },
+            ]}
+          />
         ),
       },
     ],

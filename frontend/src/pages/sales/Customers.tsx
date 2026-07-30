@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
-import { Building2, Plus, Download, Pencil, Trash2, KeyRound } from "lucide-react";
+import { Building2, Plus, Download, KeyRound, Pencil, Trash2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PortalPageShell } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { API_PAGE_LIMIT_CAP, useTablePagination } from "@/lib/table-pagination";
 import { apiUrl } from "@/lib/api-base";
 import { customFetch } from "@/api/custom-fetch";
@@ -243,43 +243,32 @@ export default function Customers() {
       id: "actions",
       header: "Actions",
       align: "right",
-      headerClassName: "w-[100px]",
+      headerClassName: "w-[72px]",
       cell: (c) => (
-        <div className="flex items-center justify-end gap-0.5">
-          {!c.portalUserId ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-amber-700 hover:text-amber-800"
-              title="Enable client portal"
-              onClick={() => setProvisionTarget(c)}
-            >
-              <KeyRound className="h-3.5 w-3.5" />
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title="Edit customer"
-            onClick={() => openEdit(c)}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-destructive hover:text-destructive disabled:opacity-40"
-            title={c.hasPayments ? "Cannot delete — payments recorded" : "Delete customer"}
-            disabled={c.hasPayments}
-            onClick={() => setDeleteTarget(c)}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+        <CmsRowActions
+          label="Customer actions"
+          items={[
+            {
+              label: "Enable portal",
+              icon: KeyRound,
+              onSelect: () => setProvisionTarget(c),
+              hidden: !!c.portalUserId,
+            },
+            {
+              label: "Edit",
+              icon: Pencil,
+              onSelect: () => openEdit(c),
+            },
+            {
+              label: "Delete",
+              icon: Trash2,
+              onSelect: () => setDeleteTarget(c),
+              variant: "destructive",
+              separatorBefore: true,
+              disabled: c.hasPayments,
+            },
+          ]}
+        />
       ),
     },
   ];

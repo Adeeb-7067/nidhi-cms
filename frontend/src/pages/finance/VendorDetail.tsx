@@ -19,7 +19,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { formatCurrency, MONEY_IN_CLASS, MONEY_OUT_CLASS } from "@/modules/finance/constants";
 import {
   FinancePageHeader,
@@ -192,28 +192,13 @@ export default function VendorDetailPage() {
             header: "",
             headerClassName: "w-[80px]",
             cell: (invoice: (typeof invoices)[number]) => (
-              <div className="flex items-center gap-1">
-                {canEdit && invoice.status !== "cancelled" && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => openEditInvoice(invoice)}
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-                {canDelete && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => setDeleteInvoiceTarget(invoice)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                )}
-              </div>
+              <CmsRowActions
+                label="Invoice actions"
+                canEdit={canEdit && invoice.status !== "cancelled"}
+                canDelete={canDelete}
+                onEdit={() => openEditInvoice(invoice)}
+                onDelete={() => setDeleteInvoiceTarget(invoice)}
+              />
             ),
           } satisfies CmsColumn<(typeof invoices)[number]>,
         ]

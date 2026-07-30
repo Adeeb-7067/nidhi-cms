@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { CheckCircle2, IndianRupee, Pencil, Trash2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -298,46 +298,34 @@ export default function FreelancerEngagementsPage() {
         const nextPending = e.installments.find((i) => i.status === "pending");
         const paidLocked = hasPaidRows(e);
         return (
-          <div className="inline-flex items-center justify-end gap-1">
-            {canEdit && nextPending ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 text-xs"
-                onClick={() => openPayDialog(e, nextPending.id)}
-              >
-                Record pay
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0"
-                aria-label={`Edit fee for ${e.freelancerName ?? e.userId}`}
-                onClick={() => setEditTarget(e)}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-            {canDelete ? (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                aria-label={`Delete engagement for ${e.freelancerName ?? e.userId}`}
-                disabled={paidLocked}
-                title={
-                  paidLocked
-                    ? "Cannot delete after payments are recorded"
-                    : "Delete engagement"
-                }
-                onClick={() => setDeleteTarget(e)}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-          </div>
+          <CmsRowActions
+            label={`Engagement actions for ${e.freelancerName ?? e.userId}`}
+            items={[
+              {
+                label: "Record pay",
+                icon: Wallet,
+                onSelect: () => {
+                  if (nextPending) openPayDialog(e, nextPending.id);
+                },
+                hidden: !(canEdit && nextPending),
+              },
+              {
+                label: "Edit",
+                icon: Pencil,
+                onSelect: () => setEditTarget(e),
+                hidden: !canEdit,
+              },
+              {
+                label: "Delete",
+                icon: Trash2,
+                onSelect: () => setDeleteTarget(e),
+                variant: "destructive",
+                separatorBefore: true,
+                disabled: paidLocked,
+                hidden: !canDelete,
+              },
+            ]}
+          />
         );
       },
     },

@@ -36,7 +36,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -181,19 +181,16 @@ export function BdeMemberSheet({
               header: "",
               className: "w-8",
               cell: (row: (typeof targetRows)[number]) => (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0"
-                  onClick={() => openSetTarget(row.month, row.target ?? null)}
-                  title={row.target ? "Edit target" : "Set target"}
-                >
-                  {row.target ? (
-                    <Pencil className="h-3 w-3" />
-                  ) : (
-                    <Plus className="h-3 w-3 text-muted-foreground" />
-                  )}
-                </Button>
+                <CmsRowActions
+                  label="Target actions"
+                  items={[
+                    {
+                      label: row.target ? "Edit target" : "Set target",
+                      icon: row.target ? Pencil : Plus,
+                      onSelect: () => openSetTarget(row.month, row.target ?? null),
+                    },
+                  ]}
+                />
               ),
             } satisfies CmsColumn<(typeof targetRows)[number]>,
           ]

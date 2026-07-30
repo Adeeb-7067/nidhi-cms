@@ -480,10 +480,19 @@ export function canFullyEditMarketingOwnedItem(user, doc) {
 }
 
 /**
- * Soft-delete gate: org admin or item creator.
+ * Soft-delete gate: org admin, item creator, elevated digital lead (AM / specialist),
+ * or project/workspace Account Manager for the item's account.
+ * Module `:delete` alone is not enough for craft roles — ownership / lead scope still applies.
  */
 export async function canDeleteMarketingOwnedItem(user, doc) {
-  return canFullyEditMarketingOwnedItem(user, doc);
+  if (canFullyEditMarketingOwnedItem(user, doc)) return true;
+  if (isDigitalElevatedLead(user)) return true;
+  if (!doc?.accountId) return false;
+  const account = await marketingAccountsTable
+    .findOne({ id: Number(doc.accountId), isDeleted: false })
+    .lean();
+  if (!account) return false;
+  return canManageDigitalTasksForAccount(user, account);
 }
 
 /**

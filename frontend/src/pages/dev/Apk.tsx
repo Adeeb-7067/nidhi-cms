@@ -18,7 +18,7 @@ import {
   DevEmptyState,
   devActionButtonClass,
 } from "@/components/dev/dev-page-kit";
-import { CmsDataTable, CmsFilterBar, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsFilterBar, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -245,16 +245,20 @@ export default function DevApk() {
       },
       {
         id: "actions",
-        header: "Download",
+        header: "Actions",
         align: "right",
         hideable: false,
         cell: (apk) => (
-          <Button size="sm" variant="outline" className="h-7 text-xs" asChild>
-            <a href={apk.fileUrl} target="_blank" rel="noopener noreferrer">
-              <Download className="mr-1.5 h-3 w-3" />
-              APK
-            </a>
-          </Button>
+          <CmsRowActions
+            label="APK actions"
+            items={[
+              {
+                label: "Download APK",
+                icon: Download,
+                href: apk.fileUrl,
+              },
+            ]}
+          />
         ),
       },
     ],

@@ -68,10 +68,13 @@ import {
   useHrmAttendanceDaily,
   useHrmLeaveBalances,
   useHrmLeaveRequests,
+  useHrmSettings,
   useSendEmployeeCredentials,
 } from "@/api/hrm";
 import { useHrmPermission } from "@/modules/hrm/useHrmPermission";
 import { buildLeaveBalanceColumns } from "@/modules/hrm/hrm-table-columns";
+import { LeaveCycleResetBanner } from "@/modules/hrm/LeaveCycleResetBanner";
+import { formatLeaveDayCount, formatLeaveDayPartLabel } from "@/modules/hrm/leave-form-utils";
 import type { HrmAttendanceSummary, HrmLeaveRequest } from "@/modules/hrm/types";
 import { formatCurrency } from "@/modules/finance/constants";
 import { getEmployeeContractNet } from "@/modules/hrm/employee-profile-types";
@@ -151,6 +154,7 @@ export default function HrmEmployeeDetailPage() {
     { userId: employeeId },
     { enabled: leaveTabActive && !!employeeId },
   );
+  const { data: hrmSettings } = useHrmSettings();
 
   const managerOptions = (staffData?.employees ?? []).filter((u) => u.id !== employeeId);
 
@@ -253,7 +257,20 @@ export default function HrmEmployeeDetailPage() {
       cell: (r) => r.leaveTypeName ?? r.leaveType?.name ?? "—",
       exportValue: (r) => r.leaveTypeName ?? r.leaveType?.name ?? "",
     },
-    { id: "days", header: "Days", cell: (r) => r.days ?? "—", exportValue: (r) => String(r.days ?? "") },
+    {
+      id: "duration",
+      header: "Duration",
+      cell: (r) => (
+        <span className="text-xs text-muted-foreground">{formatLeaveDayPartLabel(r.dayPart)}</span>
+      ),
+      exportValue: (r) => formatLeaveDayPartLabel(r.dayPart),
+    },
+    {
+      id: "days",
+      header: "Days",
+      cell: (r) => <span className="tabular-nums">{formatLeaveDayCount(r.days)}</span>,
+      exportValue: (r) => formatLeaveDayCount(r.days),
+    },
     {
       id: "status",
       header: "Status",
@@ -406,8 +423,11 @@ export default function HrmEmployeeDetailPage() {
                       monthlyQuota={
                         employee.leaveAccrualDaysPerMonth ??
                         employee.monthlyLeaveQuota ??
+                        hrmSettings?.hrmPaidLeavesPerMonth ??
                         null
                       }
+                      leaveYearStartMonth={hrmSettings?.hrmLeaveYearStartMonth ?? 1}
+                      resetCycleMonths={hrmSettings?.hrmLeaveResetCycleMonths ?? 3}
                     />
                   </div>
                   <div className="grid gap-3 sm:grid-cols-2 lg:col-span-4 lg:grid-cols-3">
@@ -418,6 +438,17 @@ export default function HrmEmployeeDetailPage() {
                     />
                   </div>
                 </div>
+
+                <LeaveCycleResetBanner
+                  leaveYearStartMonth={hrmSettings?.hrmLeaveYearStartMonth ?? 1}
+                  resetCycleMonths={hrmSettings?.hrmLeaveResetCycleMonths ?? 3}
+                  paidLeavesPerMonth={
+                    employee.leaveAccrualDaysPerMonth ??
+                    employee.monthlyLeaveQuota ??
+                    hrmSettings?.hrmPaidLeavesPerMonth ??
+                    1
+                  }
+                />
 
                 <EmployeeTodayStatusCards todayRow={todayRow} />
 
@@ -727,6 +758,16 @@ export default function HrmEmployeeDetailPage() {
           </TabsContent>
 
           <TabsContent value="leave" className="mt-0 space-y-4">
+            <LeaveCycleResetBanner
+              leaveYearStartMonth={hrmSettings?.hrmLeaveYearStartMonth ?? 1}
+              resetCycleMonths={hrmSettings?.hrmLeaveResetCycleMonths ?? 3}
+              paidLeavesPerMonth={
+                employee?.leaveAccrualDaysPerMonth ??
+                employee?.monthlyLeaveQuota ??
+                hrmSettings?.hrmPaidLeavesPerMonth ??
+                1
+              }
+            />
             <div className="grid gap-4 lg:grid-cols-2">
               <PortalTablePanel>
                 <AdvancedTable

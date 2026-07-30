@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { PiggyBank, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
+import { PiggyBank, AlertTriangle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Progress } from "@/components/ui/progress";
 import { formatCurrency, calcBudgetConsumption, moneySignClass } from "@/modules/finance/constants";
 import {
@@ -97,7 +97,15 @@ export default function BudgetsPage() {
     { id: "allocated", header: "Allocated", align: "right", cell: (b) => <span className="tabular-nums">{formatCurrency(b.allocated)}</span> },
     { id: "spent", header: "Spent", align: "right", cell: (b) => <span className="tabular-nums">{formatCurrency(b.spent)}</span> },
     { id: "variance", header: "Variance", align: "right", cell: (b) => <span className={cn("font-medium tabular-nums", moneySignClass(b.allocated - b.spent))}>{formatCurrency(Math.abs(b.allocated - b.spent))}</span> },
-    ...(canEdit || canDelete ? [{ id: "actions", header: "Actions", align: "right" as const, cell: (b: Budget) => <div className="flex justify-end gap-1">{canEdit && <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(b)}><Pencil className="h-3.5 w-3.5" /></Button>}{canDelete && <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(b)}><Trash2 className="h-3.5 w-3.5" /></Button>}</div> }] : []),
+    ...(canEdit || canDelete ? [{ id: "actions", header: "Actions", align: "right" as const, cell: (b: Budget) => (
+      <CmsRowActions
+        label="Budget actions"
+        canEdit={canEdit}
+        canDelete={canDelete}
+        onEdit={() => openEdit(b)}
+        onDelete={() => setDeleteTarget(b)}
+      />
+    ) }] : []),
   ];
 
   return (

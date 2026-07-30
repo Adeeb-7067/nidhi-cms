@@ -190,7 +190,12 @@ export interface FinancePayment {
   employeeId: number | null;
   invoiceId: number | null;
   salesInvoiceId?: number | null;
+  incomeId?: number | null;
   expenseId: number | null;
+  vendorInvoiceId?: number | null;
+  freelancerInstallmentId?: number | null;
+  taxDepositId?: number | null;
+  payrollRunId?: number | null;
   bankAccountId: number | null;
   recordedByName?: string | null;
   salesPaymentId?: number | null;

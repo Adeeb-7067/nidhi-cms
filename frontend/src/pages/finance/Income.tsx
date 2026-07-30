@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Plus, TrendingUp, Pencil, Trash2 } from "lucide-react";
+import { Plus, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { ChartPanel, ChartGridCell } from "@/components/dashboard/admin-dashboard-charts";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -175,30 +175,13 @@ export default function IncomePage() {
               const synced = Boolean(i.salesPaymentId);
               if (synced) return <span className="text-[10px] text-muted-foreground">Sales</span>;
               return (
-                <div className="flex justify-end gap-1">
-                  {canEdit && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0"
-                      onClick={() => setEditIncome(i)}
-                      title="Edit"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {canDelete && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-destructive"
-                      onClick={() => setDeleteTarget(i)}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
+                <CmsRowActions
+                  label="Income actions"
+                  canEdit={canEdit}
+                  canDelete={canDelete}
+                  onEdit={() => setEditIncome(i)}
+                  onDelete={() => setDeleteTarget(i)}
+                />
               );
             },
           } satisfies CmsColumn<Income>,

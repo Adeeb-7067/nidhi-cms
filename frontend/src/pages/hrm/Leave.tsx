@@ -41,7 +41,8 @@ export default function HrmLeavePage() {
   const [applyOpen, setApplyOpen] = useState(false);
   const [leaveTab, setLeaveTab] = useState("history");
   const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | "pending" | "approved">("all");
-  const [queueStatusFilter, setQueueStatusFilter] = useState<"all" | "pending" | "approved">("all");
+  /** Approvals queue defaults to pending so admins see only what needs action. */
+  const [queueStatusFilter, setQueueStatusFilter] = useState<"all" | "pending" | "approved">("pending");
 
   const requestsQuery = useHrmLeaveRequests(
     canAdminView || canApprove
@@ -182,10 +183,11 @@ export default function HrmLeavePage() {
     () =>
       buildLeaveRequestColumns({
         showEmployee: canAdminView,
-        showActions: !canAdminView,
+        // Admins need Approve/Reject on All requests too — pending rows looked actionless otherwise.
+        showActions: !canAdminView || canApprove,
         ...leaveActionOpts,
       }),
-    [canAdminView, leaveActionOpts],
+    [canAdminView, canApprove, leaveActionOpts],
   );
 
   const balanceColumns = useMemo(() => buildLeaveBalanceColumns(), []);
@@ -197,7 +199,7 @@ export default function HrmLeavePage() {
           title={canAdminView ? "Leave management" : "My leave"}
           description={
             canAdminView
-              ? "Review pending requests and apply leave on behalf of employees"
+              ? "Approve or reject pending leave, or apply on behalf of employees"
               : "Apply for leave and track your remaining balance"
           }
           breadcrumbs={[{ label: "HRM", href: "/hrm" }, { label: "Leave" }]}
@@ -223,7 +225,7 @@ export default function HrmLeavePage() {
             onValueChange={setLeaveTab}
             items={[
               { value: "history", label: canAdminView ? "All requests" : "My requests" },
-              ...((canAdminView || canApprove) ? [{ value: "queue", label: "Approvals" }] : []),
+              ...((canAdminView || canApprove) ? [{ value: "queue", label: "Pending" }] : []),
               { value: "rejected", label: "Rejected" },
               ...(!canAdminView ? [{ value: "balances", label: "Balances" }] : []),
             ]}

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import {
   Archive,
+  Download,
   ExternalLink,
   FileSpreadsheet,
   Loader2,
@@ -10,6 +11,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { CmsRowActions } from "@/components/cms";
 import { HrmGate } from "@/modules/hrm/HrmGate";
 import { HrmPageShell } from "@/modules/hrm/components";
 import { HrmPersonChip } from "@/modules/hrm/rich-ui-kit";
@@ -28,7 +30,7 @@ import {
   type PayrollStatusFilter,
 } from "@/modules/hrm/payroll-satyakabir-ui";
 import { HrmPayslipPreviewPanel } from "@/modules/hrm/HrmPayslipPreviewPanel";
-import { HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
+import { downloadHrmPayslip } from "@/modules/hrm/HrmPayslipDownloadButton";
 import { inrMoney } from "@/modules/hrm/payslip-view-model";
 import { payslipPeriodLabel } from "@/modules/hrm/payslip-utils";
 import {
@@ -40,7 +42,7 @@ import {
   useHrmPayrollChecklistByPeriod,
 } from "@/api/hrm";
 import { getAccessToken } from "@/lib/auth-storage";
-import { getResponseErrorMessage } from "@/lib/api-error";
+import { getResponseErrorMessage, toastApiError } from "@/lib/api-error";
 import { payrollExportUrl } from "@/api/hrm";
 import type { HrmAdminPayslipRow } from "@/modules/hrm/types";
 import { PayrollReadinessBanner } from "@/modules/hrm/payroll-kit";
@@ -316,10 +318,27 @@ export default function HrmSalarySlipsPage() {
               render: (r) => payrollStatusPill(r.status === "PAID"),
             },
             {
-              key: "dl",
-              header: "",
-              className: "text-right w-16",
-              render: (r) => <HrmPayslipDownloadButton payslipId={r.id} />,
+              key: "actions",
+              header: "Actions",
+              className: "text-right w-14",
+              render: (r) => (
+                <div data-stop-row-click>
+                  <CmsRowActions
+                    label="Payslip actions"
+                    items={[
+                      {
+                        label: "Download PDF",
+                        icon: Download,
+                        onSelect: () => {
+                          void downloadHrmPayslip(r.id).catch((err) =>
+                            toastApiError(err, "Could not download payslip"),
+                          );
+                        },
+                      },
+                    ]}
+                  />
+                </div>
+              ),
             },
           ]}
           detailTitle={(r) => r.employeeName}

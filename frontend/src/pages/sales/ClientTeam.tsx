@@ -5,7 +5,6 @@ import {
   Building2,
   KeyRound,
   LogIn,
-  MoreHorizontal,
   Phone,
   RefreshCw,
   UserCheck,
@@ -17,15 +16,8 @@ import { toastApiError } from "@/lib/api-error";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, CmsStatusChip, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, CmsStatusChip, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -267,45 +259,42 @@ export default function SalesClientTeamPage() {
       align: "right",
       headerClassName: "w-[72px]",
       cell: (member) => (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem asChild>
-              <Link href={`/sales/customers/${member.clientCompanyId}`}>View customer</Link>
-            </DropdownMenuItem>
-            {canManage ? (
-              <>
-                <DropdownMenuSeparator />
-                {member.status === "inactive" ? (
-                  <DropdownMenuItem onClick={() => handleReactivate(member)}>
-                    <UserCheck className="mr-2 h-3.5 w-3.5" />
-                    Reactivate
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => setDeactivateTarget(member)}
-                  >
-                    <UserMinus className="mr-2 h-3.5 w-3.5" />
-                    Deactivate
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={() => handleResend(member)}>
-                  <RefreshCw className="mr-2 h-3.5 w-3.5" />
-                  Resend invitation
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setResetTarget(member)}>
-                  <KeyRound className="mr-2 h-3.5 w-3.5" />
-                  Reset password
-                </DropdownMenuItem>
-              </>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <CmsRowActions
+          label="Client team actions"
+          items={[
+            {
+              label: "View customer",
+              href: `/sales/customers/${member.clientCompanyId}`,
+            },
+            {
+              label: "Reactivate",
+              icon: UserCheck,
+              onSelect: () => handleReactivate(member),
+              separatorBefore: true,
+              hidden: !canManage || member.status !== "inactive",
+            },
+            {
+              label: "Deactivate",
+              icon: UserMinus,
+              onSelect: () => setDeactivateTarget(member),
+              variant: "destructive",
+              separatorBefore: true,
+              hidden: !canManage || member.status === "inactive",
+            },
+            {
+              label: "Resend invitation",
+              icon: RefreshCw,
+              onSelect: () => handleResend(member),
+              hidden: !canManage,
+            },
+            {
+              label: "Reset password",
+              icon: KeyRound,
+              onSelect: () => setResetTarget(member),
+              hidden: !canManage,
+            },
+          ]}
+        />
       ),
     },
   ];

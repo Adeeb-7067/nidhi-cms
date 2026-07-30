@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 import { toast } from "sonner";
-import { Phone, Mail, Video, Check, Loader2, CalendarClock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Phone, Mail, Video, Check, CalendarClock, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsChipTabs, CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsChipTabs, CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { useTablePagination } from "@/lib/table-pagination";
 import {
   useListFollowUps,
@@ -166,17 +165,17 @@ export default function FollowUps() {
         if (!canComplete) return null;
         const completing = completingId === fu.id;
         return (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 gap-1 text-xs"
-            disabled={completing}
-            onClick={() => void handleComplete(fu.id)}
-          >
-            {completing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-            Mark done
-          </Button>
+          <CmsRowActions
+            label="Follow-up actions"
+            items={[
+              {
+                label: completing ? "Marking done…" : "Mark done",
+                icon: Check,
+                onSelect: () => void handleComplete(fu.id),
+                disabled: completing,
+              },
+            ]}
+          />
         );
       },
     },

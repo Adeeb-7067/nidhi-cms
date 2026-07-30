@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Users, ExternalLink, IndianRupee, CheckCircle2, Wallet } from "lucide-react";
+import { Users, ExternalLink, IndianRupee, CheckCircle2, Wallet, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/modules/finance/constants";
 import {
@@ -111,7 +111,12 @@ export default function FreelancerDirectoryPage() {
       id: "actions",
       header: "Actions",
       align: "right",
-      cell: () => <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild><Link href="/freelancers/payments">View payments</Link></Button>,
+      cell: () => (
+        <CmsRowActions
+          label="Freelancer actions"
+          items={[{ label: "View payments", icon: Eye, href: "/freelancers/payments" }]}
+        />
+      ),
     },
   ];
 

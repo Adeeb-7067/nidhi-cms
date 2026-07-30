@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { Bell, FolderOpen, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Bell, FolderOpen, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
-import { CmsDataTable, type CmsColumn } from "@/components/cms";
+import { CmsDataTable, CmsRowActions, type CmsColumn } from "@/components/cms";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useTablePagination } from "@/lib/table-pagination";
@@ -150,25 +150,11 @@ export default function ProjectDocumentsPage() {
       header: "Actions",
       align: "right",
       cell: (doc) => (
-        <div className="flex justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs gap-1"
-            onClick={() => openEdit(doc)}
-          >
-            <Pencil className="h-3 w-3" />
-            Edit
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs text-destructive hover:text-destructive"
-            onClick={() => setDeleteTarget(doc)}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
-        </div>
+        <CmsRowActions
+          label="Document actions"
+          onEdit={() => openEdit(doc)}
+          onDelete={() => setDeleteTarget(doc)}
+        />
       ),
     },
   ];

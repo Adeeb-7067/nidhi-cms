@@ -357,7 +357,9 @@ export async function deletePost(req, res) {
   assertDocAccount(doc, accountId);
 
   if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only the post creator or an org admin can delete calendar posts.");
+    forbidden(
+      "Only the post creator, an Account Manager / digital lead, or an org admin can delete calendar posts.",
+    );
   }
 
   doc.isDeleted = true;

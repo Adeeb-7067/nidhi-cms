@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import { ExternalLink, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { Download, ExternalLink, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { CmsRowActions } from "@/components/cms";
 import {
   Select,
   SelectContent,
@@ -33,7 +34,7 @@ import { HrmPageShell } from "@/modules/hrm/components";
 import { HrmPersonChip } from "@/modules/hrm/rich-ui-kit";
 import { HrmPayrollExplorer, currentPayrollPeriod } from "@/modules/hrm/payroll-satyakabir-ui";
 import { ManualPayslipPreviewPanel } from "@/modules/hrm/ManualPayslipPreviewPanel";
-import { HrmPayslipDownloadButton } from "@/modules/hrm/HrmPayslipDownloadButton";
+import { downloadHrmPayslip } from "@/modules/hrm/HrmPayslipDownloadButton";
 import { inrMoney } from "@/modules/hrm/payslip-view-model";
 import { payslipPeriodLabel } from "@/modules/hrm/payslip-utils";
 import {
@@ -232,26 +233,32 @@ export default function HrmManualPayslipsPage() {
             },
             {
               key: "actions",
-              header: "",
-              className: "text-right w-28",
+              header: "Actions",
+              className: "text-right w-14",
               render: (r) => (
-                <div className="flex items-center justify-end gap-2">
-                  <HrmPayslipDownloadButton
-                    payslipId={r.id}
-                    detailUrl={`/api/hrm/manual-payslips/${r.id}`}
+                <div data-stop-row-click>
+                  <CmsRowActions
+                    label="Payslip actions"
+                    items={[
+                      {
+                        label: "Download PDF",
+                        icon: Download,
+                        onSelect: () => {
+                          void downloadHrmPayslip(
+                            r.id,
+                            `/api/hrm/manual-payslips/${r.id}`,
+                          ).catch((err) => toastApiError(err, "Could not download payslip"));
+                        },
+                      },
+                      {
+                        label: "Delete",
+                        icon: Trash2,
+                        onSelect: () => setDeleteRow(r),
+                        variant: "destructive",
+                        separatorBefore: true,
+                      },
+                    ]}
                   />
-                  <button
-                    type="button"
-                    data-stop-row-click
-                    className="text-muted-foreground hover:text-destructive"
-                    title="Delete"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteRow(r);
-                    }}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
                 </div>
               ),
             },

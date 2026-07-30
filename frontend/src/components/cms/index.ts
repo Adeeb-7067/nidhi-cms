@@ -18,6 +18,11 @@ export {
   type CmsDataTableEmpty,
   type CmsDataTableProps,
 } from "./cms-data-table";
+export {
+  CmsRowActions,
+  type CmsRowActionItem,
+  type CmsRowActionsProps,
+} from "./cms-row-actions";
 export { cmsListQueryProps } from "./cms-list-query";
 export {
   CmsKpiCard,
