@@ -41,13 +41,12 @@ import type {
 import { salesKeys, useAssignCustomerAdmin, useDeleteProposal } from "@/api/sales";
 import { formatPaymentMethod, resolveProposalTotal, formatSalesDateTime, formatSalesPaymentDate, paymentDocumentInvoiceId } from "@/modules/sales/utils";
 import { useSalesDocumentBranding } from "@/modules/sales/hooks/use-sales-document-branding";
-import { customFieldsForDocument } from "@/modules/sales/company-branding";
+import { buildCustomerStatementLedger } from "@/modules/sales/customer-statement-ledger";
+import { downloadElementAsPdf } from "@/modules/sales/pdf-download";
 import {
-  buildCustomerStatementLedger,
-  formatStatementSummaryAmount,
-  formatStatementTableAmount,
-} from "@/modules/sales/customer-statement-ledger";
-import { downloadCustomerStatementPdf } from "@/modules/sales/customer-statement-pdf";
+  buildStatementDocRows,
+  CustomerStatementDocument,
+} from "@/modules/sales/components/CustomerStatementDocument";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1350,83 +1349,6 @@ const customerPaymentColumns: CmsColumn<SalesPayment>[] = [
   },
 ];
 
-type StatementTableRow = {
-  key: string;
-  date: string;
-  details: string;
-  href?: string;
-  amount: number;
-  payment: number;
-  balance: number;
-  isBeginning?: boolean;
-  isEmpty?: boolean;
-};
-
-const statementLedgerColumns: CmsColumn<StatementTableRow>[] = [
-  {
-    id: "date",
-    header: "Date",
-    className: "w-[100px]",
-    cell: (row) => <span className="text-muted-foreground">{row.date}</span>,
-  },
-  {
-    id: "details",
-    header: "Details",
-    cell: (row) =>
-      row.isEmpty ? (
-        <span className="block text-center text-muted-foreground py-6">{row.details}</span>
-      ) : row.href ? (
-        <Link href={row.href} className="text-primary hover:underline leading-relaxed">
-          {row.details}
-        </Link>
-      ) : (
-        <span className={row.isBeginning ? "text-muted-foreground" : undefined}>{row.details}</span>
-      ),
-  },
-  {
-    id: "amount",
-    header: "Amount",
-    align: "right",
-    className: "w-[90px]",
-    cell: (row) =>
-      row.isEmpty ? null : (
-        <span className="tabular-nums text-red-700 dark:text-red-400">
-          {row.amount > 0 ? formatStatementTableAmount(row.amount) : row.isBeginning ? "0.00" : ""}
-        </span>
-      ),
-  },
-  {
-    id: "payment",
-    header: "Payments",
-    align: "right",
-    className: "w-[90px]",
-    cell: (row) =>
-      row.isEmpty ? null : (
-        <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
-          {row.payment > 0 ? formatStatementTableAmount(row.payment) : row.isBeginning ? "0.00" : ""}
-        </span>
-      ),
-  },
-  {
-    id: "balance",
-    header: "Balance",
-    align: "right",
-    className: "w-[100px]",
-    cell: (row) =>
-      row.isEmpty ? null : (
-        <span
-          className={cn(
-            "tabular-nums font-medium",
-            row.balance < 0 && "text-amber-700",
-            row.balance > 0 && "text-foreground",
-          )}
-        >
-          {formatStatementTableAmount(row.balance)}
-        </span>
-      ),
-  },
-];
-
 export function CustomerInvoicesSection({
   invoices,
   customerId,
@@ -1615,27 +1537,6 @@ export function CustomerPaymentsSection({
 
 type PeriodPreset = "all" | "this_year" | "last_year" | "last_6m" | "last_3m" | "this_month" | "custom";
 
-function StatementSummaryRow({
-  label,
-  value,
-  bold,
-  alert,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-  alert?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between py-1.5 text-xs">
-      <span className="text-muted-foreground">{label}:</span>
-      <span className={cn("tabular-nums", bold && "font-semibold text-sm", alert && "text-destructive")}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
 export function CustomerStatementSection({
   customer,
   statement,
@@ -1661,30 +1562,38 @@ export function CustomerStatementSection({
     setPeriod(preset);
     switch (preset) {
       case "all":
-        setFromDate(""); setToDate(""); break;
+        setFromDate("");
+        setToDate("");
+        break;
       case "this_month":
         setFromDate(format(startOfMonth(now), "yyyy-MM-dd"));
-        setToDate(format(now, "yyyy-MM-dd")); break;
+        setToDate(format(now, "yyyy-MM-dd"));
+        break;
       case "last_3m":
         setFromDate(format(subMonths(now, 3), "yyyy-MM-dd"));
-        setToDate(format(now, "yyyy-MM-dd")); break;
+        setToDate(format(now, "yyyy-MM-dd"));
+        break;
       case "last_6m":
         setFromDate(format(subMonths(now, 6), "yyyy-MM-dd"));
-        setToDate(format(now, "yyyy-MM-dd")); break;
+        setToDate(format(now, "yyyy-MM-dd"));
+        break;
       case "this_year":
         setFromDate(format(startOfYear(now), "yyyy-MM-dd"));
-        setToDate(format(now, "yyyy-MM-dd")); break;
+        setToDate(format(now, "yyyy-MM-dd"));
+        break;
       case "last_year": {
         const ly = subYears(now, 1);
         setFromDate(format(startOfYear(ly), "yyyy-MM-dd"));
-        setToDate(format(endOfYear(ly), "yyyy-MM-dd")); break;
+        setToDate(format(endOfYear(ly), "yyyy-MM-dd"));
+        break;
       }
-      default: break;
+      default:
+        break;
     }
   }
 
-  const from = fromDate ? new Date(fromDate + "T00:00:00") : null;
-  const to = toDate ? new Date(toDate + "T23:59:59") : null;
+  const from = fromDate ? new Date(`${fromDate}T00:00:00`) : null;
+  const to = toDate ? new Date(`${toDate}T23:59:59`) : null;
 
   const allInvoices = statement?.invoices ?? [];
   const allPayments = statement?.payments ?? [];
@@ -1703,64 +1612,28 @@ export function CustomerStatementSection({
   }, [fromDate, toDate]);
 
   const showingText = useMemo(() => {
-    if (fromDate && toDate)
+    if (fromDate && toDate) {
       return `Showing all invoices and payments between ${fromDate} and ${toDate}`;
+    }
     if (fromDate) return `Showing all invoices and payments from ${fromDate}`;
     if (toDate) return `Showing all invoices and payments through ${toDate}`;
     return "Showing all invoices and payments";
   }, [fromDate, toDate]);
 
-  const statementRows = useMemo<StatementTableRow[]>(() => {
-    const beginningDate =
-      fromDate || format(new Date(allInvoices[0]?.createdAt ?? new Date()), "yyyy-MM-dd");
-    const rows: StatementTableRow[] = [
-      {
-        key: "__beginning",
-        date: beginningDate,
-        details: "Beginning Balance",
-        amount: 0,
-        payment: 0,
-        balance: ledger.beginningBalance,
-        isBeginning: true,
-      },
-    ];
-    if (ledger.rows.length === 0) {
-      rows.push({
-        key: "__empty",
-        date: "",
-        details: "No transactions in the selected period",
-        amount: 0,
-        payment: 0,
-        balance: 0,
-        isEmpty: true,
-      });
-    } else {
-      rows.push(
-        ...ledger.rows.map((row) => ({
-          key: row.key,
-          date: format(new Date(row.date), "yyyy-MM-dd"),
-          details: row.details,
-          href: row.href,
-          amount: row.amount,
-          payment: row.payment,
-          balance: row.balance,
-        })),
-      );
-    }
-    return rows;
-  }, [ledger, fromDate, allInvoices]);
+  const statementRows = useMemo(
+    () => buildStatementDocRows(ledger, fromDate, allInvoices[0]?.createdAt),
+    [ledger, fromDate, allInvoices],
+  );
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
+    if (!printRef.current) {
+      toast.error("Statement is not ready to export");
+      return;
+    }
     setPdfLoading(true);
     try {
-      downloadCustomerStatementPdf({
-        customer,
-        company: branding,
-        companyGstin: branding.gstin,
-        ledger,
-        periodLabel,
-        showingText,
-        fromDate,
+      await downloadElementAsPdf(printRef.current, `statement-${customer.companyName}`, {
+        widthPx: 794,
       });
       toast.success("Statement PDF downloaded");
     } catch (err) {
@@ -1780,29 +1653,12 @@ export function CustomerStatementSection({
   <title>Statement — ${customer.companyName}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; padding: 40px; }
-    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-    h2 { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
-    p { font-size: 12px; color: #555; line-height: 1.6; }
-    .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 2px solid #eee; }
-    .company-right { text-align: right; }
-    .company-right .name { font-size: 14px; font-weight: 700; color: #111; }
-    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 28px; }
-    .summary-box { background: #f8f9fa; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; }
-    .summary-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 12px; border-bottom: 1px solid #eee; }
-    .summary-row:last-child { border-bottom: none; font-weight: 700; font-size: 13px; padding-top: 8px; }
-    .showing-text { text-align: center; color: #777; font-size: 11px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-    th { background: #f1f5f9; text-align: left; padding: 8px 10px; font-weight: 600; font-size: 11px; border: 1px solid #e2e8f0; }
-    td { padding: 7px 10px; border: 1px solid #e2e8f0; vertical-align: top; }
-    .tr-alt { background: #fafafa; }
-    .tr-begin { background: #f0f9ff; font-style: italic; color: #555; }
-    .text-right { text-align: right; }
-    .balance-col { font-weight: 600; }
-    .text-red { color: #dc2626; }
-    .text-green { color: #16a34a; }
-    .label { color: #6b7280; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
-    .to-name { font-size: 14px; font-weight: 700; }
+    body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #111827; padding: 24px; }
+    a { color: #1d4ed8; }
+    @media print {
+      body { padding: 0; }
+      @page { margin: 12mm; }
+    }
   </style>
 </head>
 <body>${printRef.current.innerHTML}</body>
@@ -1813,12 +1669,16 @@ export function CustomerStatementSection({
 
   if (statementLoading) return <LoadingBlock />;
   if (!statement) {
-    return <SalesEmptyState title="Statement unavailable" description="Could not load the account statement." />;
+    return (
+      <SalesEmptyState
+        title="Statement unavailable"
+        description="Could not load the account statement."
+      />
+    );
   }
 
   return (
     <div className="space-y-4">
-      {/* ── Filter bar ── */}
       <Card>
         <CardContent className="p-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -1843,7 +1703,10 @@ export function CustomerStatementSection({
                 type="date"
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
                 value={fromDate}
-                onChange={(e) => { setFromDate(e.target.value); setPeriod("custom"); }}
+                onChange={(e) => {
+                  setFromDate(e.target.value);
+                  setPeriod("custom");
+                }}
               />
             </div>
             <div className="flex items-center gap-1.5">
@@ -1852,11 +1715,14 @@ export function CustomerStatementSection({
                 type="date"
                 className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
                 value={toDate}
-                onChange={(e) => { setToDate(e.target.value); setPeriod("custom"); }}
+                onChange={(e) => {
+                  setToDate(e.target.value);
+                  setPeriod("custom");
+                }}
               />
             </div>
 
-            <div className="flex items-center gap-1.5 ml-auto">
+            <div className="ml-auto flex items-center gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
@@ -1888,7 +1754,9 @@ export function CustomerStatementSection({
                 asChild
                 title="Email customer"
               >
-                <a href={`mailto:${customer.email}?subject=Account Statement — ${customer.companyName}&body=Please find your account statement attached.`}>
+                <a
+                  href={`mailto:${customer.email}?subject=${encodeURIComponent(`Account Statement — ${customer.companyName}`)}&body=${encodeURIComponent("Please find your account statement attached.")}`}
+                >
                   <Mail className="h-3.5 w-3.5" />
                 </a>
               </Button>
@@ -1897,88 +1765,15 @@ export function CustomerStatementSection({
         </CardContent>
       </Card>
 
-      {/* ── Statement document ── */}
-      <div ref={printRef} className="rounded-xl border bg-white shadow-sm overflow-hidden text-foreground">
-        {/* Issuer letterhead */}
-        <div className="px-8 pt-8 pb-6 border-b">
-          <p className="text-sm font-bold leading-snug">{branding.companyName}</p>
-          <p className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap leading-relaxed max-w-md">
-            {branding.address}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            GSTIN Number: {branding.gstin}
-          </p>
-          {customFieldsForDocument(branding, "statement").map((field) => (
-            <p key={field.id} className="text-xs text-muted-foreground mt-1">
-              {field.label}: {field.value}
-            </p>
-          ))}
-        </div>
-
-        <div className="px-8 py-6 space-y-5">
-          {/* To / Account Summary */}
-          <div className="grid gap-6 sm:grid-cols-2">
-            <div className="space-y-1">
-              <p className="text-[11px] text-muted-foreground">To</p>
-              <p className="text-sm font-bold">{customer.companyName}</p>
-              {customer.location ? (
-                <p className="text-xs text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {customer.location}
-                </p>
-              ) : null}
-              {customer.gstin ? (
-                <p className="text-xs text-muted-foreground">GSTIN Number: {customer.gstin}</p>
-              ) : null}
-            </div>
-
-            <div className="space-y-1 sm:text-right">
-              <div className="flex items-start justify-between sm:justify-end gap-4 sm:block">
-                <p className="text-sm font-bold">Account Summary</p>
-                <p className="text-[11px] text-muted-foreground sm:mt-1">{periodLabel}</p>
-              </div>
-              <StatementSummaryRow
-                label="Beginning Balance"
-                value={formatStatementSummaryAmount(ledger.beginningBalance)}
-              />
-              <StatementSummaryRow
-                label="Invoiced Amount"
-                value={formatStatementSummaryAmount(ledger.invoicedInPeriod)}
-              />
-              <StatementSummaryRow
-                label="Amount Paid"
-                value={formatStatementSummaryAmount(ledger.paidInPeriod)}
-              />
-              <StatementSummaryRow
-                label="Balance Due"
-                value={formatStatementSummaryAmount(ledger.balanceDue)}
-                bold
-                alert={ledger.balanceDue > 0}
-              />
-            </div>
-          </div>
-
-          <p className="text-[11px] text-center text-muted-foreground py-1">{showingText}</p>
-
-          {/* Ledger table */}
-          <CmsDataTable
-            embedded
-            columns={statementLedgerColumns}
-            rows={statementRows}
-            rowKey={(row) => row.key}
-            getRowClassName={(row) =>
-              row.isBeginning
-                ? "bg-muted/20 hover:bg-muted/20"
-                : row.isEmpty
-                  ? "hover:bg-transparent"
-                  : undefined
-            }
-          />
-
-          <p className="text-sm font-bold text-right pt-2">
-            Balance Due {formatStatementSummaryAmount(ledger.balanceDue)}
-          </p>
-        </div>
-      </div>
+      <CustomerStatementDocument
+        documentRef={printRef}
+        customer={customer}
+        company={branding}
+        ledger={ledger}
+        periodLabel={periodLabel}
+        showingText={showingText}
+        rows={statementRows}
+      />
     </div>
   );
 }
