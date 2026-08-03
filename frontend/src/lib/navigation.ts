@@ -354,11 +354,19 @@ export function getNavSections(
       roles: ["super_admin", "digital", "bde", "finance", ...DEV_PORTAL_STAFF_ROLES],
       items: [
         {
+          title: "Dashboard",
+          href: "/dev",
+          icon: LayoutDashboard,
+          // Super Admin: dedicated Delivery Dashboard (not Manage /admin).
+          roles: ["super_admin"],
+          group: "Overview",
+        },
+        {
           title: "Workspace",
           href: "/dev",
           icon: LayoutDashboard,
-          // Staff workspace home for Delivery; freelancers use /freelancer.
-          roles: ["super_admin", "developer", "tester", "qa"],
+          // Personal delivery hub for developers / QA only.
+          roles: ["developer", "tester", "qa"],
           group: "Overview",
         },
         {

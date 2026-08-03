@@ -3,9 +3,12 @@
               COMPREHENSIVE CODEBASE ANALYSIS & DOCUMENTATION
 ================================================================================
 
-Generated: July 2, 2026 (roles & permissions section updated)
+Generated: July 31, 2026 (full refresh — modular backend, roles, live Legal/CA/Finance/Marketing)
 Repository: D:\Content-Management-Hub
+HEAD: 18a7e6df
 Analysis scope: Full monorepo (backend + frontend + electron + docs)
+Companion audit: CMS_FULL_AUDIT_REPORT.md + CMS_AUDIT_FILE_CATALOG.json
+SaaS / CTO readiness: CMS_SAAS_CTO_AUDIT.md (2026-08-01 — scores, Top 20/50, roadmap)
 
 ================================================================================
 TABLE OF CONTENTS
@@ -29,7 +32,7 @@ TABLE OF CONTENTS
  15.  Email System
  16.  Background Jobs & Scheduled Tasks
  17.  Reports & PDF Generation
- 18.  Mock UI Modules (Sales, Finance, Legal, CA)
+ 18.  Business Portals (Sales, Finance, Legal, CA, Marketing)
  19.  Data Flow Diagrams
  20.  Development & Deployment
  21.  Seed Data & Test Credentials
@@ -37,6 +40,7 @@ TABLE OF CONTENTS
  23.  Known Gaps & Technical Notes
  24.  Electron Desktop App
  25.  File Index (Key Paths)
+  —  See also: CMS_SAAS_CTO_AUDIT.md (SaaS readiness, Impact×Effort)
 
 ================================================================================
 1. EXECUTIVE SUMMARY
@@ -61,29 +65,29 @@ Typical production deployment uses two domains:
 The Electron desktop app connects to the same remote backend — it wraps only
 the frontend in a native shell (shell architecture, no embedded backend).
 
-Six primary user roles drive the legacy permission model, plus extended
-staff roles and a CMS-wide permission matrix (role templates):
+Twelve CMS login roles drive identity, home redirects, and data scoping,
+plus a CMS-wide permission matrix (role templates):
 
-  super_admin, hr, manager, developer, tester, qa, client, freelancer, bde
+  super_admin, hr, manager, developer, tester, qa, client, freelancer,
+  bde, finance, digital, ca
 
 Access is controlled by TWO layers (see Section 6a):
-  1. CMS login role (user.role) — identity, defaults, data scoping
+  1. CMS login role (user.role) — identity, defaults, data scoping, home URL
   2. Permission template (roleTemplateId) — module×action matrix (primary)
 
-The codebase contains ~865+ indexed source files with graphify knowledge
-graph auto-updated on code changes (graphify-out/).
+Backend is a domain modular monolith under backend/src/modules/ (19 domains).
+~1,298 inventoried source files; graphify ~16k nodes; code-review-graph
+~509 indexed files / 2.4k nodes (auto-updated on code changes).
 
 Core live features (backend-integrated):
-  Projects, Bugs, Daily Logs, Tasks, APK Releases, Discussions/Comments,
-  Tickets, Resource Requests, Inventory Vault, Analytics, Reports,
-  Notifications, Presence, Client Portal, Employee Management,
-  Screenshot Monitoring, Attendance tracking, HRM (full suite),
-  Sales/CRM (live API with permission gates).
-
-Partially mock / limited backend:
-  Finance (/finance/*)     — super_admin UI; coarse permission module
-  Legal (/legal/*)         — super_admin UI; coarse permission module
-  CA Panel (/ca/*)         — permission-gated UI; some mock data
+  Projects (development | maintenance | digital), Bugs, Daily Logs, Tasks,
+  APK Releases, Discussions/Comments, Tickets, Resource Requests,
+  Inventory Vault, Analytics, Reports, Notifications, Presence,
+  Client Portal, Employee Management, Screenshot Monitoring (private
+  uploads + content proxy), Attendance / work sessions, HRM (full suite),
+  Sales/CRM, Finance (expenses, vendors, ledgers, tax, loans, …),
+  Marketing / Digital hub, Legal department API, CA compliance workbench
+  (tasks, notices, GST/TDS/ITR/ROC surfaces, bank-statement recon).
 
 ================================================================================
 2. WHAT THIS PROJECT IS
@@ -157,17 +161,21 @@ bugs, logs, releases, inventory, and discussion channels.
                          │ (push, opt.) │
                          └──────────────┘
 
-REQUEST FLOW (Backend)
-----------------------
+REQUEST FLOW (Backend — modular monolith)
+-----------------------------------------
   HTTP Request
-    → app.js (helmet, cors, compression, json parser, static uploads)
-    → routes/index.js (global auth gate)
-    → routes/<feature>.routes.js (middleware + asyncHandler)
-    → controllers/<feature>.controller.js (parse input, call services)
-    → services/ (business rules, access checks)
-    → models/schema/ (Mongoose queries)
+    → app.js (helmet, cors, compression, json parser, static /uploads)
+    → routes/index.js (global auth gate + ?token= → Authorization)
+    → modules/<domain>/routes/*.routes.js (middleware + asyncHandler)
+    → modules/<domain>/controllers/*.controller.js
+    → modules/<domain>/services/ (business rules, access checks)
+    → modules/<domain>/schema + models/schema/index.js barrel
     → mappers/ (DB document → API JSON)
     → JSON response
+
+  Domains: access, admin, alerts, ca, collab, crm, finance, hrm, identity,
+           inventory, jobs, legal, marketing, monitoring, platform, sales,
+           settings, uploads, work — see backend/src/modules/MODULES.md
 
 FRONTEND FLOW
 -------------
@@ -259,29 +267,42 @@ Content-Management-Hub/
 ├── backend/
 │   ├── index.js                 # Entry: HTTP server + Socket.IO + jobs
 │   ├── load-env.js              # dotenv bootstrap
-│   ├── openapi.yaml             # REST API contract (~all endpoints)
-│   ├── ARCHITECTURE.md          # Backend MVC guide
+│   ├── openapi.yaml             # REST API contract
+│   ├── ARCHITECTURE.md          # Backend MVC + modular guide
 │   ├── DEPLOYMENT.md            # Production hosting
 │   ├── ecosystem.config.cjs     # PM2 config
 │   ├── build.mjs                # esbuild bundler
-│   ├── scripts/
-│   │   ├── seed.js              # Database seeding
-│   │   └── seed-more.js         # Extended seed data
+│   ├── scripts/                 # seed / migrate / smoke (~44)
+│   ├── tests/unit/              # 64 unit tests
 │   └── src/
 │       ├── app.js               # Express app + middleware stack
 │       ├── config/              # Env, public API paths
-│       ├── routes/              # 22 feature routers
-│       ├── controllers/         # HTTP handlers (thin)
-│       │   └── inventory/       # Sub-resource controllers
-│       ├── services/            # Business logic + background jobs
-│       │   ├── access/          # Permission helpers
-│       │   ├── bugs/            # Bug workflow
-│       │   └── inventory/       # Inventory jobs
+│       ├── routes/index.js      # Auth gate + mounts module routers (~38)
+│       ├── modules/             # Domain modular monolith (see MODULES.md)
+│       │   ├── access/          # Company/project row-level scopes
+│       │   ├── admin/           # Project documents, admin media
+│       │   ├── alerts/          # Alerts + deliveries
+│       │   ├── ca/              # CA tasks/docs/calendar/notices/bank stmts
+│       │   ├── collab/          # Comments, notifications, DMs
+│       │   ├── crm/             # Clients, companies, projects, analytics
+│       │   ├── finance/         # Expenses, vendors, ledgers, tax, loans
+│       │   ├── hrm/             # Attendance, leave, payroll, recruitment
+│       │   ├── identity/        # Auth, users, permissions
+│       │   ├── inventory/       # Credentials / assets / subscriptions
+│       │   ├── jobs/            # Recurring job locks
+│       │   ├── legal/           # Legal dashboard + matter resources
+│       │   ├── marketing/       # Digital hub (tasks, content, ads)
+│       │   ├── monitoring/      # Screenshots, presence, work sessions
+│       │   ├── platform/        # Health, workspace, activity, counters
+│       │   ├── sales/           # Leads, proposals, invoices, payments
+│       │   ├── settings/        # Company settings
+│       │   ├── uploads/         # File upload endpoints
+│       │   └── work/            # Tasks, bugs, logs, apk, tickets, reports
 │       ├── mappers/             # DB → API JSON formatters
-│       ├── models/schema/       # 30+ Mongoose schemas
-│       ├── middlewares/         # Auth, audit, errors
+│       ├── models/schema/       # Aggregate schema barrel → modules/*/schema
+│       ├── middlewares/         # Auth, audit, permission, errors
 │       ├── lib/                 # DB, JWT, storage, realtime, email
-│       ├── utils/               # HTTP errors, pagination
+│       ├── utils/               # HTTP errors, pagination, digital fields
 │       └── api-zod/generated/   # Auto-generated Zod types
 │
 ├── frontend/
@@ -291,37 +312,32 @@ Content-Management-Hub/
 │   └── src/
 │       ├── main.tsx             # App bootstrap
 │       ├── App.tsx              # Providers + routing shell
-│       ├── api/                 # Orval generated + custom fetch
+│       ├── api/                 # Orval generated + hand clients (finance/sales/hrm/ca)
 │       │   └── generated/       # api.ts, api.schemas.ts
 │       ├── contexts/            # Auth, Theme, Realtime, Presence
 │       ├── hooks/               # Custom React hooks
-│       ├── lib/                 # 43+ utility modules (incl. electron-bridge.ts)
+│       ├── lib/                 # Utilities (navigation, route-permissions, electron-bridge)
 │       ├── modules/
-│       │   ├── sales/           # Sales CRM (mock data)
-│       │   ├── finance/         # Finance panel (mock data)
-│       │   ├── legal/           # Legal department panel (mock data)
-│       │   └── ca/              # CA management panel (mock data)
-│       ├── pages/               # Route-level components
-│       │   ├── admin/           # Super admin pages (+ screenshots, attendance)
+│       │   ├── sales/           # Sales CRM (live API)
+│       │   ├── finance/         # Finance panel (live API)
+│       │   ├── legal/           # Legal department (live API)
+│       │   ├── ca/              # CA management (live API + bank recon)
+│       │   ├── marketing/       # Digital / marketing hub (live API)
+│       │   ├── hrm/             # HRM UI helpers
+│       │   ├── permissions/     # PermissionGate, usePermission
+│       │   └── admin/           # Shared admin form helpers
+│       ├── pages/               # Route-level components (~170)
+│       │   ├── admin/           # Super admin (+ screenshots, attendance)
 │       │   ├── dev/             # Developer/QA/freelancer workspace
 │       │   ├── client/          # Client portal
-│       │   ├── sales/           # Sales CRM pages
-│       │   ├── finance/         # Finance panel pages
-│       │   ├── legal/           # Legal panel pages
-│       │   ├── ca/              # CA panel pages
+│       │   ├── sales/ finance/ legal/ ca/ marketing/ hrm/
 │       │   ├── settings/        # Settings (path-based sections)
 │       │   └── auth/            # Login, forgot password
 │       └── components/          # Feature + UI components
-│           ├── ui/              # ~60 shadcn primitives (sidebar uses localStorage)
-│           ├── layout/          # App shell, sidebar, navbar
-│           ├── bugs/            # Bug tracker UI
-│           ├── logs/            # Daily log UI
-│           ├── discussions/     # Chat-style discussions
-│           ├── chat/            # Shared comment/composer primitives
-│           ├── inventory/       # Project inventory panel
-│           ├── tickets/         # Support tickets
-│           ├── presence/        # Online status UI
-│           └── dashboard/       # Charts and KPI widgets
+│           ├── ui/              # shadcn primitives
+│           ├── layout/          # App shell, sidebar, navbar, PageOutlet
+│           ├── bugs/ logs/ discussions/ chat/ inventory/ tickets/
+│           ├── presence/ dashboard/
 │
 └── graphify-out/                # Knowledge graph analysis artifacts
     ├── graph.json
@@ -341,12 +357,15 @@ ROLES (CMS login roles — user.role field)
   tester, qa   — QA staff; default template employee
   freelancer   — External contractor; default template employee
   bde          — Business development; default template bde
+  finance      — Finance staff; home /finance; employee-ID login
+  digital      — Digital/marketing specialist; home /marketing; digital projects only
+  ca           — Chartered-accountant workbench; home /ca
   client       — External client portal (separate boundary from staff matrix)
 
 LOGIN METHODS
 -------------
   super_admin, client, hr  → Login with EMAIL + password
-  developer, tester, qa, freelancer, manager, bde
+  developer, tester, qa, freelancer, manager, bde, finance, digital, ca
                            → Login with EMPLOYEE ID (e.g. AL001) + password
 
 USER STATUSES: active | inactive | suspended
@@ -358,8 +377,9 @@ CMS ROLE vs PERMISSION TEMPLATE (two-layer model)
   Required on every account         | Optional; "Default for role" if null
   Login home redirect               | Sidebar + page access (mapped routes)
   BDE own-leads data scoping        | API requirePermission checks
-  Manager team scoping (team-scope) | Button-level PermissionGate (partial)
-  Employee ID generation            | HRM/Sales route visibility
+  Digital → digital projects only   | Button-level PermissionGate (partial)
+  Manager team scoping (team-scope) | HRM/Sales/Finance/CA/Marketing visibility
+  Employee ID generation            |
   Profile page variant              |
 
   Resolution order for effective permissions:
@@ -409,12 +429,13 @@ Client hub dashboard          |       |     |        |    |  ✓
 
 ACCESS SCOPING LOGIC
 --------------------
-  Project/company scope (services/access/):
+  Project/company scope (modules/access/services/):
     super_admin  → Full access everywhere
     client       → Only their linked company and its projects
-    developer/tester/qa → Access if project member
+    digital      → Digital-type projects (membership / digital access helpers)
+    developer/tester/qa/freelancer → Access if project member
 
-  HRM data scope (services/hrm/team-scope.js) — HYBRID:
+  HRM data scope (modules/hrm/… team-scope) — HYBRID:
     super_admin  → Org-wide
     Permission   → hrm_employees:view or hrm_attendance:view → org-wide
     manager role → Direct reports only (still CMS role, not template)
@@ -428,26 +449,32 @@ FRONTEND NAVIGATION (permission-driven as of July 2026)
 
   Route gates: RoleGate checks permission matrix when route is mapped;
                allowedRoles only for client routes + mixed staff/client pages
+               Role-specific redirects: digital → /marketing, ca → /ca, etc.
 
   Mapped zones (examples):
     /admin/*           → admin_* modules
     /hrm/*             → hrm_* modules
     /sales/*           → sales_* modules
     /dev/*             → dev_* modules
-    /legal/*, /finance/*, /ca/* → single coarse modules
+    /marketing/*       → marketing_* modules (digital hub)
+    /finance/*         → finance_* modules (granular: vendors, tax, …)
+    /legal/*, /ca/*    → legal / ca modules (coarser)
     /client/*          → client_portal + client role isolation
 
-ROLE-BASED HOME REDIRECT AFTER LOGIN (still CMS role)
-----------------------------------------------------
+ROLE-BASED HOME REDIRECT AFTER LOGIN (still CMS role — getHomeHref)
+--------------------------------------------------------------------
   super_admin → /admin
   hr          → /hrm
   client      → /client
+  finance     → /finance
+  digital     → /marketing
+  ca          → /ca
   all others  → /dev
 
 ================================================================================
 6a. ROLES & PERMISSIONS MATRIX (CMS RBAC) — CURRENT STATUS
 ================================================================================
-Last updated: July 2, 2026
+Last updated: July 31, 2026
 
 OVERVIEW
 --------
@@ -460,14 +487,14 @@ WHAT THE MATRIX CONTROLS (implemented)
   ✓ Sidebar visibility (canViewHref on mapped routes)
   ✓ Page access (RoleGate → resolveRoutePermission → usePermission)
   ✓ In-page gates (PermissionGate, usePermission hook)
-  ✓ HRM API routes (requirePermission on hrm.routes.js)
-  ✓ Sales API routes (requirePermission on sales.routes.js)
+  ✓ HRM / Sales / Finance / Marketing / CA / Legal API permission gates
   ✓ Roles API (requirePermission roles_permissions view/edit)
   ✓ Monitoring attendance route (monitor_attendance module)
   ✓ Template CRUD + batch save on Roles page
   ✓ Permission validation on PATCH (catalog enum check)
   ✓ Transactional template permission replace (runInTx)
   ✓ Cache eviction on template change (30s backend, 30s frontend stale)
+  ✓ Roles finance / digital / ca in userRoles + frontend mirrors + tests
 
 WHAT STILL USES CMS ROLE / HARDCODED LOGIC (not fully matrix-driven)
 --------------------------------------------------------------------
@@ -476,7 +503,8 @@ WHAT STILL USES CMS ROLE / HARDCODED LOGIC (not fully matrix-driven)
   ✗ Projects, bugs, tasks, logs, tickets, users APIs — mostly requireAuth
     only; membership/role checks in controllers (not requirePermission)
   ✗ BDE data scope — sales controllers filter by req.user.role === "bde"
-  ✗ Manager team scope — team-scope.js uses role === "manager"
+  ✗ Digital create/list — role === "digital" forces type digital projects
+  ✗ Manager team scope — team-scope uses role === "manager"
   ✗ Login home URL — getHomeHref(role) not template-based
   ✗ Many in-page buttons — still check user.role === "super_admin"
   ✗ Data scope flags — no per-template org/team/self scope on Roles page
@@ -484,20 +512,24 @@ WHAT STILL USES CMS ROLE / HARDCODED LOGIC (not fully matrix-driven)
 KEY FILES
 ---------
   Backend:
-    backend/src/constants/permissions.js     — Module catalog + groups
-    backend/src/services/permissions.service.js — Templates, resolution, cache
-    backend/src/middlewares/permission.js    — requirePermission middleware
-    backend/src/routes/permissions.routes.js — /api/roles, /api/permissions/me
-    backend/src/controllers/permissions.controller.js
+    backend/src/constants/permissions.js
+    backend/src/constants/user-roles.js
+    backend/src/modules/identity/services/permissions.service.js
+    backend/src/middlewares/permission.js
+    backend/src/modules/identity/routes/permissions.routes.js
+    backend/src/modules/identity/controllers/permissions.controller.js
+    backend/src/middlewares/digital-access.js
 
   Frontend:
-    frontend/src/pages/admin/RolesPermissions.tsx — Matrix UI (batch save)
-    frontend/src/modules/permissions/usePermission.ts — can(), canViewHref()
-    frontend/src/modules/permissions/PermissionGate.tsx — Page/section gate
-    frontend/src/components/layout/RoleGate.tsx — Route gate
-    frontend/src/lib/route-permissions.ts — href → module mapping
-    frontend/src/modules/permissions/constants.ts — Labels (sync with backend)
-    frontend/src/modules/admin/employee-form-shared.ts — Template assignment
+    frontend/src/pages/admin/RolesPermissions.tsx
+    frontend/src/modules/permissions/usePermission.ts
+    frontend/src/modules/permissions/PermissionGate.tsx
+    frontend/src/components/layout/RoleGate.tsx
+    frontend/src/lib/route-permissions.ts
+    frontend/src/lib/user-roles.ts
+    frontend/src/lib/navigation.ts                 — getHomeHref + nav sections
+    frontend/src/modules/permissions/constants.ts
+    frontend/src/modules/admin/employee-form-shared.ts
 
 PERMISSION MODULES (catalog groups)
 -----------------------------------
@@ -505,8 +537,10 @@ PERMISSION MODULES (catalog groups)
   Manage: admin_dashboard, admin_analytics, admin_companies, admin_projects,
           admin_team, admin_requests, admin_tickets, admin_discussions
   Monitoring: monitor_screenshots, monitor_attendance, monitor_policy
-  Sales & CRM: sales_dashboard, sales_leads, … sales_settings (14 modules)
-  Legal, Finance, CA: single module each (coarse granularity)
+  Sales & CRM: sales_dashboard, sales_leads, … sales_settings
+  Finance: finance_dashboard, finance_vendors, finance_expenses, finance_tax, …
+  Marketing: marketing_dashboard, marketing_tasks, marketing_content, …
+  Legal, CA: legal / ca modules (coarser granularity)
   Delivery: dev_workspace, dev_projects, dev_logs, dev_tasks, dev_bugs, …
   Client portal: client_portal
   HRM: hrm_dashboard, hrm_employees, hrm_payroll, … + self-service modules
@@ -537,9 +571,10 @@ RECENT RBAC CHANGES (July 2026)
   - Removed HR auto-bypass on frontend PermissionGate and backend middleware
   - RoleGate prioritizes permission matrix over allowedRoles when route mapped
   - Sidebar driven by canViewHref (not per-item CMS role arrays)
-  - PageOutlet: ~100 routes simplified to plain <RoleGate>
+  - PageOutlet: routes simplified to plain <RoleGate> + role redirects
   - Batch save on Roles page (no per-checkbox API race)
-  - Manager template backfilled with hrm_employees:view
+  - Added finance, digital, ca CMS roles (enums, nav, homes, tests)
+  - Digital project type + digital-access middleware
   - team-scope.js and StaffProfileAccessGate use permissions not HR bypass
   - updateRoleTemplatePermissions: validated + transactional
   - Unmapped nav hrefs hidden except profile/settings/notifications
@@ -548,7 +583,7 @@ REMAINING WORK FOR "FULLY DYNAMIC" RBAC
 ---------------------------------------
   P2: User count per template on Roles page; clone template UX
   P3: requirePermission on projects/bugs/tasks/tickets/users routes
-  P3: Replace BDE/manager role scoping with template scope flags
+  P3: Replace BDE/manager/digital role scoping with template scope flags
   P3: Audit all pages for PermissionGate on action buttons
   P4: DB-driven catalog (modules editable without code deploy)
   P4: Optional CMS role deprecation (template-only accounts)
@@ -1413,138 +1448,76 @@ FRONTEND PDF (client-side)
   Uses jsPDF + jspdf-autotable
 
 ================================================================================
-18. MOCK UI MODULES (SALES, FINANCE, LEGAL, CA)
+18. BUSINESS PORTALS (SALES, FINANCE, LEGAL, CA, MARKETING)
 ================================================================================
 
-IMPORTANT: These are UI PROTOTYPES only — mock data, NOT live API integration.
-All follow the same pattern: modules/<name>/ + pages/<name>/ + PageOutlet routes.
+STATUS (July 31, 2026): These portals are LIVE — backend APIs under
+modules/{sales,finance,legal,ca,marketing} with requirePermission gates.
+Frontend uses hand-written api/{sales,finance,hrm,ca,legal}.ts clients plus
+Orval where generated. Some CA Phase-2 tax surfaces still lean on finance
+money entities (GST/TDS money stays in Finance — CA is compliance/workbench).
 
 COMMON PATTERN
 --------------
-  modules/<module>/
-    types.ts, constants.ts, index.ts
-    mock-data/          — Hardcoded realistic records
-    components/         — PageHeader, FilterBar, StatusBadge, EmptyState, etc.
-  pages/<module>/       — One file per route (PortalPageShell wrapper)
-  lib/navigation.ts     — Sidebar section with role-gated nav items
+  modules/<module>/          — types, components, constants
+  pages/<module>/            — One file per route (PortalPageShell wrapper)
+  lib/navigation.ts          — Sidebar section + getHomeHref
+  lib/route-permissions.ts   — href → permission module
   components/layout/PageOutlet.tsx — React.lazy routes + RoleGate
 
 18.1 SALES/CRM (/sales/*)
 ---------------------------
-Access: super_admin only
-Location: frontend/src/modules/sales/
+Access: permission matrix (sales_*); BDE operates, super_admin manages
+Backend: modules/sales/ · Frontend: modules/sales/ + pages/sales/
 
-Pages (17 routes):
-  /sales                    Dashboard (KPIs, pipeline, financial timeline)
-  /sales/leads              Lead management
-  /sales/leads/:id          Lead detail
-  /sales/follow-ups         Follow-up tracking
-  /sales/proposals          Proposals list
-  /sales/proposals/create   Create proposal
-  /sales/proposals/:id      Proposal detail
-  /sales/customers          Customer management
-  /sales/customers/:id      Customer detail
-  /sales/installments       Installment plans
-  /sales/installments/:id   Installment detail
-  /sales/invoices           Invoices
-  /sales/invoices/:id       Invoice detail
-  /sales/payments           Payments
-  /sales/receipts/:id       Receipt detail
-  /sales/products           Product catalog
-  /sales/team               Sales team
-  /sales/reports            Sales reports
-  /sales/notifications      Financial alerts
-  /sales/settings           Automation settings (demo toasts)
-
-Components: SalesPageHeader, SalesFilterBar, SalesPipelineFlow, SalesDonutPanel,
-  SalesCharts, ActivityTimeline, financial-kit, SalesStatusBadge
-
-Data: modules/sales/mock-data.ts, billing-mock-data.ts
+Pages include: dashboard, leads, follow-ups, proposals, customers,
+installments, invoices, payments, receipts, products, team, reports,
+notifications, settings, customer statement (print UI; dedicated PDF
+module removed Jul 31).
 
 18.2 FINANCE (/finance/*)
 --------------------------
-Access: super_admin only
-Location: frontend/src/modules/finance/
+Access: finance role + permission matrix (finance_* granular modules)
+Backend: modules/finance/ · Frontend: modules/finance/ + pages/finance/
 
-Pages (11 routes):
-  /finance                  Dashboard
-  /finance/expenses         Expense tracking
-  /finance/income           Income records
-  /finance/payments         Payment management
-  /finance/invoices         Invoice list
-  /finance/invoices/:id     Invoice detail
-  /finance/payroll          Payroll
-  /finance/budgets          Budget planning
-  /finance/ledgers          General ledgers
-  /finance/tax              Tax management
-  /finance/reports/pnl      P&L reports
+Live: expenses (soft-delete), income, payments, cheques, vendors + analytics,
+invoices, payroll bridge, budgets, loans, subscriptions, ledgers, tax,
+P&L reports, freelancers, notifications.
 
-Components: FinancePageHeader, FinanceFilterBar, FinanceStatusBadge,
-  FinanceDonutPanel, FinanceCharts, finance-kit, FinanceFormDrawers
-
-Data: modules/finance/mock-data.ts
+GST rule of thumb: bill holds GST; payment is cash-linked — see feature-
+completeness workspace rule. Tax service excludes soft-deleted expenses;
+KPI/ledger/report services still need the shared match helper.
 
 18.3 LEGAL DEPARTMENT (/legal/*)
 ---------------------------------
-Access: super_admin only
-Location: frontend/src/modules/legal/
+Access: permission module `legal` (typically super_admin)
+Backend: modules/legal/ (dashboard, CRUD resources, counsel schemas)
+Frontend: modules/legal/ + pages/legal/
 
-Pages (11 routes):
-  /legal                    Legal dashboard (KPIs, NDA alerts, risk indicators)
-  /legal/cases              Employee legal cases
-  /legal/cases/:id          Case detail
-  /legal/vendor-disputes    Vendor dispute management
-  /legal/client-matters     Client legal matters
-  /legal/nda                NDA repository with expiry alerts
-  /legal/agreements         Agreement management + renewal reminders
-  /legal/notices            Legal notice tracking (incoming/outgoing)
-  /legal/court-cases        Court case management
-  /legal/compliance         Compliance tracker
-  /legal/expenses           Legal expense tracking
-
-Components: LegalPageHeader, LegalFilterBar, LegalStatusBadge, LegalRiskBadge
-  (Low/Medium/High), LegalEmptyState, CounselAvatar
-
-Compliance color coding: completed (green) / upcoming (amber) / overdue (red)
-Data: modules/legal/mock-data/ (cases, nda, agreements, court-cases, etc.)
+Live API: dashboard KPIs, NDA alerts, compliance score, matter resources
+(cases, vendor disputes, client matters, NDAs, agreements, notices,
+court cases, compliance, expenses) via shared crud-factory pattern.
 
 18.4 CA MANAGEMENT PANEL (/ca/*)
 --------------------------------
-Access: super_admin + planned ca role (CA_ACCESS_ROLES in modules/ca/constants)
-Location: frontend/src/modules/ca/
+Access: ca + super_admin (CA_ACCESS_ROLES); permission module `ca`
+Backend: modules/ca/ · Frontend: modules/ca/ + pages/ca/ + api/ca.ts
 
-Pages (18 routes):
-  /ca                       CA master dashboard (CEO widgets, alert box)
-  /ca/client-payments       Client payments (GST / Non-GST classification)
-  /ca/vendors               Vendor ledger + GST input credit
-  /ca/expenses              Expense management by category
-  /ca/bank-reconciliation   Bank reconciliation (NEFT/RTGS/UPI)
-  /ca/suspense              Suspense account (unidentified payments)
-  /ca/gst                   GST management (GSTR-1/3B, notices, penalties)
-  /ca/tds                   TDS management (returns, Form 16/16A)
-  /ca/company-itr           Company ITR module
-  /ca/director-itr          Director ITR (PAN, filing status)
-  /ca/roc                   ROC compliance (AOC-4, MGT-7, ADT-1, DIR-3 KYC)
-  /ca/din-dsc               DIN/DSC management (90/60/30-day alerts)
-  /ca/documents             Document management (GST cert, MOA, AOA, etc.)
-  /ca/audit                 Audit management (internal + statutory)
-  /ca/notices               Notice workflow (GST/IT/MCA/PF/ESIC)
-  /ca/compliance-calendar   Compliance calendar with color-coded due dates
-  /ca/tasks                 CA task chain (CEO → CA → Accountant)
-  /ca/compliance-score      CEO compliance score dashboard
+Live: dashboard, compliance score, export pack, tasks, documents,
+calendar events, notices, Phase-2 GST/TDS/ITR/ROC/DIN/Audit/Suspense
+entities, bank-statement import/auto-match/line match (true recon),
+suspense assign. Money/tax totals still sourced via Finance where designed.
 
-Components: CAPageHeader, CAFilterBar, ComplianceStatusBadge, CAAlertBox
-  (dismissible banners), CAScoreWidget, ReconciliationTable, CAEmptyState
+18.5 MARKETING / DIGITAL HUB (/marketing/*)
+-------------------------------------------
+Access: digital + super_admin (MARKETING_ACCESS_ROLES); marketing_* modules
+Backend: modules/marketing/ · Project type `digital` in crm/schema/projects.js
+Frontend: modules/marketing/ + pages/marketing/
 
-Mock data: Realistic Indian IT company figures (INR ₹, GSTIN, PAN, TAN formats)
-Compliance badges: Completed / Upcoming / Overdue (consistent across all pages)
-
-CEO dashboard widgets: Total Revenue, Total Expenses, GST Liability,
-  Pending GST Filings, Pending ROC Filings, Suspense Amount, Audit Status,
-  Overall Compliance Score
-
-Note: ca role referenced in routes/nav via type assertion; backend UserRole
-does not yet include "ca" — only super_admin can access until backend adds role.
+Live: dashboard, tasks, projects (digital), media, calendar, graphics,
+videos, content, approvals, Meta/Google ads, social analytics, SEO,
+performance, team, reports. Digital specialists create only digital
+projects; detail routes under /marketing/projects/:id.
 
 ================================================================================
 19. DATA FLOW DIAGRAMS
@@ -1772,20 +1745,21 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
 ================================================================================
 
 1. PARTIAL RBAC COVERAGE (July 2026 status)
-   HRM + Sales + mapped nav routes are permission-matrix driven.
-   Projects, bugs, tasks, logs, tickets, users APIs still use requireAuth +
-   controller-level role/membership checks — NOT fully matrix-controlled.
-   BDE/manager data scoping still uses CMS role in backend services.
+   HRM + Sales + Finance + Marketing + CA + Legal + mapped nav routes are
+   permission-matrix driven. Projects, bugs, tasks, logs, tickets, users APIs
+   still use requireAuth + controller-level role/membership checks.
+   BDE/manager/digital data scoping still uses CMS role in backend services.
    See Section 6a for full current status and remaining work.
 
-2. MOCK / COARSE UI MODULES
-   Finance and Legal use single permission modules (finance, legal).
-   CA panel has live routes with permission gates; some pages use mock data.
+2. PORTAL GRANULARITY
+   Finance and Marketing use granular permission modules.
+   Legal and CA remain coarser single modules.
    Sales/CRM has live backend API with per-route requirePermission.
 
 3. OPENAPI GAPS
-   Missing from openapi.yaml:
+   Missing or incomplete in openapi.yaml (hand clients compensate):
    - All /projects/:id/inventory/* routes
+   - Some CA/legal/finance extensions
    - POST /upload
    - POST /auth/impersonate, /auth/stop-impersonate
    - POST /notifications/broadcast
@@ -1793,66 +1767,68 @@ GAP: Inventory routes should be added to openapi.yaml for full codegen parity.
    - GET /users/preview-employee-id
    - POST /projects/:id/members/batch
 
-3. COMPANIES VS CLIENTS
+4. COMPANIES VS CLIENTS
    clientsTable and companiesTable are the SAME Mongoose model.
    API exposes both naming conventions for UI flexibility.
    Projects reference via companyId and/or clientId.
 
-4. DUAL API PATTERN ON FRONTEND
+5. DUAL API PATTERN ON FRONTEND
    Most endpoints use Orval-generated hooks.
-   Inventory, workspace dashboard, presence, discussion previews use
-   hand-written fetch wrappers.
+   Finance, sales, hrm, ca, legal, inventory, workspace, presence, discussion
+   previews use hand-written fetch wrappers.
 
-5. NUMERIC IDs
+6. NUMERIC IDs
    All entities use Counter collection sequences, not MongoDB ObjectIds.
    Enables predictable references but requires getNextSequence() on create.
 
-6. GRAPH STALENESS
+7. GRAPH STALENESS
    graphify-out/ knowledge graph is updated via `graphify update .` after
    significant code changes (AST-only, no API cost). Run after module additions.
+   code-review-graph MCP indexes ~509 files (may lag graphify).
 
-7. TESTER VS QA
+8. TESTER VS QA
    Both roles share identical permissions in most of the system.
    Frontend treats them as QA staff (isQaStaffRole helper).
 
-8. PROJECT DETAIL SHARED ROUTE
-   /admin/projects/:id accessible by dev/tester/qa (not just super_admin).
-   API enforces project membership; clients use /client portal instead.
+9. PROJECT DETAIL SHARED ROUTE
+   /admin/projects/:id accessible by delivery staff (not just super_admin).
+   Digital projects use /marketing/projects/:id. API enforces membership;
+   clients use /client portal instead.
 
-9. OPTIONAL FEATURES (env-gated)
-   - Firebase FCM push notifications
-   - S3-compatible object storage (falls back to local uploads/)
-   - SMTP email (gracefully skipped if not configured)
+10. OPTIONAL FEATURES (env-gated)
+    - Firebase FCM push notifications
+    - S3-compatible object storage (falls back to local uploads/)
+    - SMTP email (gracefully skipped if not configured)
 
-10. RECENT FEATURE ADDITIONS (2026)
+11. SECURITY / MONEY (see CMS_FULL_AUDIT_REPORT.md)
+    - JWT + CRED_ENCRYPT_KEY still have hardcoded dev fallbacks
+    - /uploads still public for non-screenshot assets (screenshots private)
+    - Soft-deleted expenses excluded in finance-tax; not yet all KPI/ledger paths
+    - Tokens in localStorage (XSS risk)
+    - No auth rate limit on login/refresh/OTP
+
+12. RECENT FEATURE ADDITIONS (2026)
+    - Domain modular monolith (backend/src/modules/*)
     - CMS-wide roles & permissions matrix (role templates + module×action)
+    - Roles: freelancer, finance, digital, ca
+    - Project type digital + marketing hub
     - HRM full suite (attendance, leave, payroll, recruitment, etc.)
     - Sales/CRM live API with permission middleware
-    - Permission-driven sidebar and RoleGate (July 2026 RBAC phase)
-    - Freelancer role (dev-portal access, monitoring-eligible)
-    - Screenshot monitoring + attendance tracking (admin + Electron agent)
-    - Settings path-based sections (/settings/monitoring)
-    - Finance mock UI module (/finance/*)
-    - Legal department mock UI module (/legal/*)
-    - CA management mock UI module (/ca/*, 18 pages)
-    - Electron api-config.json bundling for packaged screenshot uploads
+    - Finance live API (expenses, vendors, tax, loans, ledgers, …)
+    - Legal live API + dashboard
+    - CA live API + bank-statement import/match
+    - Screenshot monitoring via private-uploads + content proxy
+    - Electron desktop app (Windows + macOS, shell architecture)
     - Discussion channels with mentions, voice messages, emoji
     - APK audience targeting (team_only, client_visible, all_visible)
-    - Daily log virtual projects (Others, Meeting)
-    - Comment notification recipients and mention parsing
-    - Discussion previews API for chat list
-    - Client recent activity panel
-    - Workspace recent projects list
-    - PDF export utilities
-    - Electron desktop app (Windows + macOS, shell architecture)
+    - Removed customer-statement PDF generation module (Jul 31)
 
-11. ELECTRON FUTURE WORK (not yet implemented)
+13. ELECTRON FUTURE WORK (not yet implemented)
     - Window size/position persistence across restarts (electron-store)
     - DevTools keyboard shortcut (F12) in development mode
     - Production logging to file (electron-log)
     - Custom protocol handler (cms://) for email notification deep-links
     - macOS notarization (required for distribution outside personal machine)
-    - App icon assets (icon.ico / icon.icns) — currently skips tray gracefully
 
 ================================================================================
 24. ELECTRON DESKTOP APP
@@ -2098,64 +2074,73 @@ ENTRY POINTS
   electron/preload.js                       contextBridge IPC surface
   electron/launch.js                        Dev launcher (env fix)
 
-AUTH
+AUTH / RBAC
   backend/src/middlewares/auth.js           requireAuth, requireRole
-  backend/src/middlewares/permission.js   requirePermission, requireAnyPermission
-  backend/src/services/permissions.service.js  Templates, userHasPermission
+  backend/src/middlewares/permission.js     requirePermission, requireAnyPermission
+  backend/src/modules/identity/services/permissions.service.js
   backend/src/constants/permissions.js      Module catalog, defaultTemplateByRole
+  backend/src/constants/user-roles.js       Canonical role lists
   frontend/src/contexts/AuthContext.tsx     Session management
   frontend/src/lib/auth-storage.ts          Token localStorage
+  frontend/src/lib/user-roles.ts            Frontend role mirrors
   frontend/src/modules/permissions/         usePermission, PermissionGate, constants
   frontend/src/pages/admin/RolesPermissions.tsx  Roles matrix admin UI
 
 ROUTING
   backend/src/routes/index.js               API router + auth gate
-  backend/src/routes/permissions.routes.js    Roles & permissions API
-  backend/src/routes/hrm.routes.js            HRM API (requirePermission)
-  backend/src/routes/sales.routes.js          Sales API (requirePermission)
+  backend/src/modules/identity/routes/permissions.routes.js
+  backend/src/modules/hrm/routes.js         HRM API (requirePermission)
+  backend/src/modules/sales/routes.js       Sales API (requirePermission)
+  backend/src/modules/finance/routes.js     Finance API
+  backend/src/modules/marketing/routes.js   Marketing / digital API
+  backend/src/modules/ca/routes.js          CA API (+ bank statements)
+  backend/src/modules/legal/routes.js       Legal API
+  backend/src/modules/MODULES.md            Domain module map
   frontend/src/components/layout/PageOutlet.tsx  Frontend routes + RoleGate
-  frontend/src/lib/navigation.ts            Sidebar nav sections
+  frontend/src/lib/navigation.ts            Sidebar nav + getHomeHref
   frontend/src/lib/route-permissions.ts     href → permission module map
   frontend/src/lib/route-meta.ts            Page titles/breadcrumbs
   frontend/src/lib/electron-bridge.ts       isElectron, getLocationSearch,
                                             clearLocationParam, openExternal
 
-MOCK UI MODULES
-  frontend/src/modules/sales/               Sales CRM mock module
-  frontend/src/modules/finance/             Finance mock module
-  frontend/src/modules/legal/                 Legal department mock module
-  frontend/src/modules/ca/                    CA management mock module
-  frontend/src/pages/sales/                   Sales pages
-  frontend/src/pages/finance/                 Finance pages
-  frontend/src/pages/legal/                   Legal pages
-  frontend/src/pages/ca/                      CA pages (18 routes)
+BUSINESS PORTALS (LIVE)
+  frontend/src/modules/sales/               Sales CRM
+  frontend/src/modules/finance/             Finance
+  frontend/src/modules/legal/               Legal department
+  frontend/src/modules/ca/                  CA management
+  frontend/src/modules/marketing/           Digital / marketing hub
+  frontend/src/pages/{sales,finance,legal,ca,marketing,hrm}/
 
 MONITORING
   frontend/src/pages/admin/Screenshots.tsx
   frontend/src/pages/admin/Attendance.tsx
   frontend/src/components/monitoring/
+  backend/src/modules/monitoring/
   electron/scripts/write-api-config.js      Bundled API URL for packaged app
 
 CORE FEATURES
-  backend/src/controllers/bugs.controller.js
-  backend/src/services/bugs/bug-workflow.js
+  backend/src/modules/work/controllers/bugs.controller.js
+  backend/src/modules/work/services/bug-workflow.js
   frontend/src/pages/dev/Bugs.tsx
   frontend/src/lib/bug-workflow.ts
 
-  backend/src/controllers/logs.controller.js
-  backend/src/services/daily-log-compliance.js
+  backend/src/modules/work/controllers/logs.controller.js
+  backend/src/modules/work/services/daily-log-compliance.js
   frontend/src/pages/dev/Logs.tsx
 
-  backend/src/controllers/comments.controller.js
-  backend/src/services/discussion-previews.js
+  backend/src/modules/collab/controllers/comments.controller.js
+  backend/src/modules/collab/services/discussion-previews.js
   frontend/src/pages/admin/Discussions.tsx
 
-  backend/src/controllers/inventory/
+  backend/src/modules/inventory/
   frontend/src/components/inventory/ProjectInventoryPanel.tsx
   frontend/src/lib/inventory-api.ts
 
-  backend/src/controllers/apk.controller.js
+  backend/src/modules/work/controllers/apk.controller.js
   frontend/src/pages/dev/Apk.tsx
+
+  backend/src/modules/crm/                  Clients, companies, projects (incl. digital)
+  backend/src/modules/access/               Row-level company/project scopes
 
 REALTIME
   backend/src/lib/realtime.js               Socket.IO server
@@ -2167,6 +2152,7 @@ INFRASTRUCTURE
   backend/src/lib/file-storage.js           Upload handling
   backend/src/lib/email.js                  SMTP mailer
   backend/src/lib/object-storage.js         S3 client
+  backend/src/lib/jwt.js                    JWT sign/verify
   backend/openapi.yaml                      API contract
 
 CONFIG
@@ -2177,13 +2163,16 @@ CONFIG
   frontend/electron.vite.config.ts          Vite config (Electron build)
   electron/package.json                     Electron + electron-builder config
 
-  DOCUMENTATION
+DOCUMENTATION
   README.md                                 Root overview
   LOCAL_RUNNING.md                          Dev setup + seeds
   ELECTRON_INSTALL_GUIDE.md                 Electron build + API config guide
+  CMS_FULL_AUDIT_REPORT.md                  Security / quality audit
+  CMS_AUDIT_FILE_CATALOG.json               Full file inventory
   backend/README.md                         Backend setup
-  backend/ARCHITECTURE.md                   MVC guide
+  backend/ARCHITECTURE.md                   MVC + modular guide
   backend/DEPLOYMENT.md                     Production deploy
+  DEPLOYMENT_PLESK.md                       Plesk hosting
   frontend/README.md                        Frontend setup
   graphify-out/GRAPH_REPORT.md              Code knowledge graph
 
@@ -2191,9 +2180,10 @@ CONFIG
                               END OF DOCUMENT
 ================================================================================
 
-This analysis covers the Content Management Hub codebase as of July 2, 2026.
+This analysis covers the Content Management Hub codebase as of July 31, 2026.
 For roles & permissions current status, see Section 6a.
+For security / quality scoring, see CMS_FULL_AUDIT_REPORT.md.
 For the latest API contract, see backend/openapi.yaml.
 For local setup (web + Electron), see LOCAL_RUNNING.md and ELECTRON_INSTALL_GUIDE.md.
-For architecture patterns, see backend/ARCHITECTURE.md.
+For architecture patterns, see backend/ARCHITECTURE.md and modules/MODULES.md.
 For Electron desktop details, see Section 24 of this document.

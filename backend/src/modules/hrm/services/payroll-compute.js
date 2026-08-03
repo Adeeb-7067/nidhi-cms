@@ -1,7 +1,21 @@
 import { eachDateInRange, getDayOfWeek } from "./hrm-date-utils.js";
 
-/** Days in month for daily-rate pay (platform convention: gross / 30). */
+/**
+ * Legacy fallback when callers omit `daysInMonth`. Prefer
+ * {@link calendarDaysInMonth} so full-month attendance equals contract pay
+ * in 28/29/30/31-day months.
+ */
 export const PAYROLL_DAYS_IN_MONTH = 30;
+
+/** Calendar length of a month (1–12). Used as the daily-rate divisor. */
+export function calendarDaysInMonth(year, month) {
+  const y = Number(year);
+  const m = Number(month);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) {
+    return PAYROLL_DAYS_IN_MONTH;
+  }
+  return new Date(y, m, 0).getDate();
+}
 
 /** Count Sundays in a calendar range (YYYY-MM-DD, inclusive). */
 export function countSundaysInRange(startDate, endDate) {
@@ -124,7 +138,9 @@ export function aggregateAttendanceForPayroll(
 }
 
 /**
- * Attendance-based pay: earn (gross/30 × paidDays), deduct LOP for unpaid leave days + statutory.
+ * Attendance-based pay: earn (gross / daysInMonth × paidDays), deduct LOP for
+ * unpaid leave days + statutory. Pass calendar month length so a full month of
+ * paid days yields the full contract amount (e.g. 31 in July, 28/29 in Feb).
  */
 export function computePayrollLineAmounts({
   gross = 0,
@@ -137,7 +153,8 @@ export function computePayrollLineAmounts({
   tds = 0,
   daysInMonth = PAYROLL_DAYS_IN_MONTH,
 }) {
-  const dailyRate = gross / daysInMonth;
+  const divisor = Math.max(1, Number(daysInMonth) || PAYROLL_DAYS_IN_MONTH);
+  const dailyRate = gross / divisor;
   const earned = Math.round(dailyRate * paidDays * 100) / 100;
   const lopDeduction = Math.round(dailyRate * lopDays * 100) / 100;
   const latePenalty =

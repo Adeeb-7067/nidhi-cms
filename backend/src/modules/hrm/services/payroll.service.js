@@ -44,6 +44,7 @@ import { encryptIntoFields, decryptFromFields, maskTail } from "../../../lib/hrm
 import {
   aggregateAttendanceForPayroll,
   buildLeavePayrollByDate,
+  calendarDaysInMonth,
   computePayrollLineAmounts,
   evaluatePayrollReadiness,
   resolveContractSalary,
@@ -707,6 +708,8 @@ export async function generatePayrollRun(year, month, actorId) {
 
       tds: 0,
 
+      daysInMonth: calendarDaysInMonth(year, month),
+
     });
 
     const hasPayrollActivity = (amounts.paidDays ?? 0) > 0 || (amounts.lopDays ?? 0) > 0;
@@ -1121,6 +1124,7 @@ export async function updatePayrollLine(lineId, body) {
       pfEmployee: line.pfEmployee ?? 0,
       esiEmployee: line.esiEmployee ?? 0,
       tds: line.tds ?? 0,
+      daysInMonth: calendarDaysInMonth(run.year, run.month),
     });
     Object.assign(patch, amounts);
   } else {
@@ -1346,6 +1350,8 @@ export async function exportPayrollBankTransferCsv(runId) {
 export {
 
   aggregateAttendanceForPayroll,
+
+  calendarDaysInMonth,
 
   computePayrollLineAmounts,
 

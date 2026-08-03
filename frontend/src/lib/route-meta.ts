@@ -306,8 +306,8 @@ const STATIC_ROUTES: Record<string, RouteMeta> = {
     hideHeader: true,
   },
   "/dev": {
-    title: "Workspace",
-    description: "Your projects, shortcuts, and recent activity.",
+    title: "Dashboard",
+    description: "Delivery section dashboard — agency ops for admins, personal workspace for staff.",
     hideHeader: true,
   },
   "/dev/projects": {
@@ -375,7 +375,7 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
     const home =
       role === "client"
         ? { label: "Client", href: "/client" as const }
-        : { label: "Dev", href: "/dev" as const };
+        : { label: "Delivery", href: "/dev" as const };
     return [
       home,
       {
@@ -393,7 +393,7 @@ export function getRouteBreadcrumbs(pathname: string, role?: UserRole | string):
     admin: { label: "Admin", home: "/admin" },
     sales: { label: "Sales", home: "/sales" },
     finance: { label: "Finance", home: "/finance" },
-    dev: { label: "Dev", home: "/dev" },
+    dev: { label: "Delivery", home: "/dev" },
     client: { label: "Client", home: "/client" },
     settings: { label: "Settings", home: "/settings" },
     notifications: { label: "Alerts", home: "/notifications" },

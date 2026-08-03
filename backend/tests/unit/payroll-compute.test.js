@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   aggregateAttendanceForPayroll,
   buildLeavePayrollByDate,
+  calendarDaysInMonth,
   computePayrollLineAmounts,
   countSundaysInRange,
   evaluatePayrollReadiness,
@@ -195,13 +196,14 @@ describe("aggregateAttendanceForPayroll", () => {
 });
 
 describe("computePayrollLineAmounts", () => {
-  test("earns gross/30 per paid day; LOP only for unpaid leave days", () => {
+  test("earns gross/daysInMonth per paid day; LOP only for unpaid leave days", () => {
     const line = computePayrollLineAmounts({
       gross: 30000,
       paidDays: 28,
       lopDays: 2,
       pfEmployee: 1800,
       tds: 0,
+      daysInMonth: 30,
     });
     assert.equal(line.gross, 28000);
     assert.equal(line.lopDeduction, 2000);
@@ -220,11 +222,35 @@ describe("computePayrollLineAmounts", () => {
     assert.equal(line.net, 0);
   });
 
-  test("uses PAYROLL_DAYS_IN_MONTH constant", () => {
+  test("defaults to PAYROLL_DAYS_IN_MONTH when daysInMonth omitted", () => {
     assert.equal(PAYROLL_DAYS_IN_MONTH, 30);
     const line = computePayrollLineAmounts({ gross: 30000, paidDays: 1, lopDays: 1 });
     assert.equal(line.gross, 1000);
     assert.equal(line.lopDeduction, 1000);
+  });
+
+  test("full July attendance equals contract pay with 31-day divisor", () => {
+    assert.equal(calendarDaysInMonth(2026, 7), 31);
+    const line = computePayrollLineAmounts({
+      gross: 30000,
+      paidDays: 31,
+      lopDays: 0,
+      daysInMonth: calendarDaysInMonth(2026, 7),
+    });
+    assert.equal(line.gross, 30000);
+    assert.equal(line.net, 30000);
+  });
+
+  test("full February attendance equals contract pay with 28-day divisor", () => {
+    assert.equal(calendarDaysInMonth(2026, 2), 28);
+    const line = computePayrollLineAmounts({
+      gross: 28000,
+      paidDays: 28,
+      lopDays: 0,
+      daysInMonth: calendarDaysInMonth(2026, 2),
+    });
+    assert.equal(line.gross, 28000);
+    assert.equal(line.net, 28000);
   });
 
   test("adds late penalty (lateCount × per-day amount) to deductions", () => {
@@ -234,6 +260,7 @@ describe("computePayrollLineAmounts", () => {
       lopDays: 0,
       lateCount: 3,
       latePenaltyPerDay: 100,
+      daysInMonth: 30,
     });
     assert.equal(line.gross, 30000);
     assert.equal(line.latePenalty, 300);
@@ -248,6 +275,7 @@ describe("computePayrollLineAmounts", () => {
       lopDays: 0,
       lateCount: 5,
       latePenaltyPerDay: 0,
+      daysInMonth: 30,
     });
     assert.equal(line.latePenalty, 0);
     assert.equal(line.deductions, 0);

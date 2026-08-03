@@ -55,7 +55,7 @@ npm run build:mac
 
 ```powershell
 cd electron
-$env:VITE_API_BASE_URL = "https://api.yourdomain.com"
+$env:VITE_API_BASE_URL = "https://api.cms.satyakabir.co.in"
 npm run build:linux
 ```
 

@@ -31,6 +31,11 @@ const LISTABLE_BUG = {
 
 async function getScopedProjectIds(user) {
   const role = user.role;
+  // Super admin delivery workspace is org-wide — not membership-scoped.
+  if (role === "super_admin") {
+    return projectsTable.distinct("id");
+  }
+
   const memberships = await projectMembersTable.find({ userId: user.id }, { projectId: 1 }).lean().exec();
   let projectIds = memberships.map((m) => m.projectId);
 
@@ -74,6 +79,7 @@ function isoWeekKey(date) {
 
 export async function buildWorkspaceDashboard(user) {
   const role = user.role;
+  const isOrgAdmin = role === "super_admin";
   const projectIds = await getScopedProjectIds(user);
   const projectFilter = projectIds.length ? { id: { $in: projectIds } } : { id: -1 };
   const bugProjectFilter = projectIds.length ? { projectId: { $in: projectIds } } : { projectId: -1 };
@@ -92,17 +98,24 @@ export async function buildWorkspaceDashboard(user) {
   const isQa = role === "qa" || role === "tester";
   const isPortalStaff = isDevPortalStaffRole(role);
   const [
-    projects,
+    pipelineProjects,
+    recentProjectDocs,
     openBugs,
     openTickets,
     unreadNotifications,
+    openRequests,
     bugSeverityAgg,
     recentBugDocs,
   ] = await Promise.all([
-    projectsTable.find(projectFilter).sort({ updatedAt: -1 }).limit(24).lean().exec(),
+    // Full scoped set for accurate pipeline / KPI counts (not capped).
+    projectsTable.find(projectFilter, { id: 1, status: 1, type: 1, name: 1 }).lean().exec(),
+    projectsTable.find(projectFilter).sort({ updatedAt: -1 }).limit(8).lean().exec(),
     bugsTable.countDocuments({ ...bugProjectFilter, ...LISTABLE_BUG, ...OPEN_BUG_FILTER }),
     ticketsTable.countDocuments(await buildOpenTicketCountFilter(user)),
     notificationsTable.countDocuments({ userId: user.id, isRead: false }),
+    isOrgAdmin
+      ? resourceRequestsTable.countDocuments({ status: "pending" })
+      : Promise.resolve(0),
     bugsTable.aggregate([
       { $match: { ...bugProjectFilter, ...LISTABLE_BUG, ...OPEN_BUG_FILTER } },
       { $group: { _id: "$severity", count: { $sum: 1 } } },
@@ -114,6 +127,7 @@ export async function buildWorkspaceDashboard(user) {
       .lean()
       .exec(),
   ]);
+  const projects = pipelineProjects;
 
   let hoursThisWeek = 0;
   let bugsAssigned = 0;
@@ -219,13 +233,36 @@ export async function buildWorkspaceDashboard(user) {
     bugsTrend = bugTrendRows.map((r) => ({ month: r._id, count: r.count }));
   }
 
+  if (isOrgAdmin) {
+    const bugTrendRows = await bugsTable.aggregate([
+      {
+        $match: {
+          ...LISTABLE_BUG,
+          createdAt: { $gte: sixMonthsAgo },
+        },
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } },
+          count: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+    bugsTrend = bugTrendRows.map((r) => ({ month: r._id, count: r.count }));
+  }
+
   const severityMap = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const row of bugSeverityAgg) {
     if (row._id && severityMap[row._id] !== undefined) severityMap[row._id] = row.count;
   }
 
-  const formattedProjects = await formatProjectList(projects.slice(0, 8));
+  const formattedProjects = await formatProjectList(recentProjectDocs);
   const projectNameById = new Map(projects.map((p) => [p.id, p.name]));
+  // Prefer names from recent docs when present (pipeline projection may omit name).
+  for (const p of recentProjectDocs) {
+    if (p.name) projectNameById.set(p.id, p.name);
+  }
 
   const recentLogProjectIds = [
     ...new Set(
@@ -261,6 +298,7 @@ export async function buildWorkspaceDashboard(user) {
     openBugs +
     openTickets +
     unreadNotifications +
+    (isOrgAdmin ? openRequests : 0) +
     (isDev ? bugsAssigned : 0) +
     (isQa ? bugsReported : 0) +
     (isPortalStaff ? milestonesAssigned : 0);
@@ -272,6 +310,7 @@ export async function buildWorkspaceDashboard(user) {
       openBugs,
       openTickets,
       unreadNotifications,
+      openRequests: isOrgAdmin ? openRequests : undefined,
       hoursThisWeek: isDev ? Math.round(hoursThisWeek * 10) / 10 : undefined,
       bugsAssigned: isDev ? bugsAssigned : undefined,
       bugsReported: isQa ? bugsReported : undefined,

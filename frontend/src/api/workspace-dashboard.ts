@@ -8,6 +8,7 @@ export type WorkspaceDashboard = {
     openBugs: number;
     openTickets: number;
     unreadNotifications: number;
+    openRequests?: number;
     hoursThisWeek?: number;
     bugsAssigned?: number;
     bugsReported?: number;

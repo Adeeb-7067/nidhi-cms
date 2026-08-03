@@ -187,7 +187,7 @@ function tableRowsAmountOnly(rows) {
     .join("");
 }
 
-/** Prorated earnings rows for CMS payroll (contract net / 30 × paid days). */
+/** Prorated earnings rows for CMS payroll (earned gross split across salary components). */
 function buildCmsEarningsRows(payRollData, salary) {
   const earnedGross = Number(payRollData?.earnedGross ?? 0);
   const basic =

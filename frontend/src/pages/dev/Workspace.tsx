@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Bell,
   FlaskConical,
-  LayoutDashboard,
   Layers,
   TrendingUp,
   Activity,
@@ -20,7 +19,6 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { isDeveloperRole } from "@/lib/navigation";
 import { useGetWorkspaceDashboard } from "@/api";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import {
@@ -81,14 +79,6 @@ function projectStatusBadgeClass(status: string) {
   }
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  developer: "Developer",
-  freelancer: "Freelancer",
-  tester: "QA / Tester",
-  qa: "QA / Tester",
-  super_admin: "Super Admin",
-};
-
 function milestoneStatusClass(status: string) {
   switch (status) {
     case "completed":
@@ -113,12 +103,16 @@ function formatMilestoneDue(plannedDate: string) {
   return label;
 }
 
-export default function DevWorkspace() {
+export default function StaffDevWorkspace() {
   const { user } = useAuth();
   const [period, setPeriod] = useState("6m");
   const { data, isLoading, isError } = useGetWorkspaceDashboard();
 
   if (!user) return null;
+  if (user.role === "super_admin") {
+    // Safety net — Super Admin must never see the personal developer hub.
+    return null;
+  }
   if (isLoading) return <DashboardSkeleton />;
   if (isError || !data) {
     return (
@@ -133,7 +127,7 @@ export default function DevWorkspace() {
   const isTester = role === "tester" || role === "qa";
   const isDeveloper = isDeveloperRole(role);
   const isPortalStaff = isDeveloper || isTester;
-  const canReportBugs = isTester || role === "super_admin";
+  const canReportBugs = isTester;
   const kpis = data.kpis;
 
   const pipelineData = [
@@ -215,7 +209,7 @@ export default function DevWorkspace() {
       ? [{
           title: "My milestones",
           value: kpis.milestonesAssigned,
-          hint: kpis.milestonesAssigned === 1 ? "Assigned to you" : "Assigned to you",
+          hint: "Assigned to you",
           icon: MapPin,
           href: "/dev/projects",
           accent: "violet" as const,
@@ -246,16 +240,6 @@ export default function DevWorkspace() {
               : `Your delivery hub · ${today}`
         }
         breadcrumbs={[{ label: "Delivery", href: "/dev" }, { label: "Workspace" }]}
-        actions={
-          role === "super_admin" ? (
-            <Button variant="outline" size="sm" className="h-8" asChild>
-              <Link href="/admin">
-                <LayoutDashboard className="h-4 w-4 mr-2" />
-                Admin dashboard
-              </Link>
-            </Button>
-          ) : undefined
-        }
       />
 
       <DashboardFilterBar

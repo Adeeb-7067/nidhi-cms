@@ -13,12 +13,24 @@ import { calcSalesInvoiceBreakdown } from "../../../utils/sales-totals.js";
 import { EXPENSE_CATEGORY_LABELS } from "../../../constants/finance-labels.js";
 import { recognizedExpenseAmount } from "./expense-cash.service.js";
 
-function buildEntriesWithBalance(rawEntries, openingBalance = 0) {
-  const sorted = [...rawEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
+/** Coerce ledger entry dates so sort never throws on null/string/invalid values. */
+export function normalizeLedgerDate(value) {
+  if (value instanceof Date) {
+    return Number.isFinite(value.getTime()) ? value : new Date(0);
+  }
+  if (value == null || value === "") return new Date(0);
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed : new Date(0);
+}
+
+export function buildEntriesWithBalance(rawEntries, openingBalance = 0) {
+  const sorted = [...rawEntries].sort(
+    (a, b) => normalizeLedgerDate(a.date).getTime() - normalizeLedgerDate(b.date).getTime(),
+  );
   let balance = openingBalance;
   const entries = sorted.map((e, i) => {
-    balance += e.debit - e.credit;
-    return { id: i + 1, ...e, balance: Math.round(balance) };
+    balance += (Number(e.debit) || 0) - (Number(e.credit) || 0);
+    return { id: i + 1, ...e, date: normalizeLedgerDate(e.date), balance: Math.round(balance) };
   });
   return { entries, closingBalance: Math.round(balance) };
 }
