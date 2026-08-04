@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import {
   computeAvailableBalance,
   currentAccrualPeriodKey,
+  currentCycleStartPeriodKey,
+  expectedAccruedDaysInCycle,
+  accrualPeriodKeyFromJoiningDate,
   getLeaveYearForDate,
   isLeaveCycleResetMonth,
   isInFirstLeaveCycle,
@@ -13,6 +16,7 @@ import {
   allocateOldestFirst,
   leaveProfileFieldsTouched,
   listAccrualPeriodsAfter,
+  listEligibleAccrualPeriodsInCycle,
   nextAccrualPeriodKey,
   previousAccrualPeriodKey,
 } from "../../src/modules/hrm/services/leave-accrual.service.js";
@@ -114,6 +118,20 @@ describe("shouldReclaimStrandedAccrualTouch", () => {
     );
   });
 
+  test("does not reclaim when touch date is missing", () => {
+    assert.equal(
+      shouldReclaimStrandedAccrualTouch({
+        calendarMonth: 7,
+        startMonth: 6,
+        cycleMonths: 3,
+        currentLeaveYear: 2026,
+        touchYear: null,
+        touchMonth: null,
+      }),
+      false,
+    );
+  });
+
   test("does not reclaim outside the first cycle", () => {
     assert.equal(
       shouldReclaimStrandedAccrualTouch({
@@ -207,12 +225,128 @@ describe("listAccrualPeriodsAfter", () => {
   test("returns empty when already credited through target", () => {
     assert.deepEqual(listAccrualPeriodsAfter("2026-07", "2026-07"), []);
   });
+
+  test("skips months before join period", () => {
+    assert.deepEqual(
+      listAccrualPeriodsAfter("2026-04", "2026-08", { notBeforePeriod: "2026-06" }),
+      ["2026-06", "2026-07", "2026-08"],
+    );
+  });
+});
+
+describe("eligible cycle accrual", () => {
+  test("June-start cycle in August earns Jun–Aug (3 months)", () => {
+    assert.equal(currentCycleStartPeriodKey("2026-08", 6, 3), "2026-06");
+    assert.deepEqual(
+      listEligibleAccrualPeriodsInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+      }),
+      ["2026-06", "2026-07", "2026-08"],
+    );
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        daysPerMonth: 1,
+      }),
+      3,
+    );
+  });
+
+  test("join before cycle start does not add an extra pre-cycle month", () => {
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        joinPeriod: "2026-05",
+        daysPerMonth: 1,
+      }),
+      3,
+    );
+  });
+
+  test("mid-cycle join only earns from join month onward", () => {
+    assert.deepEqual(
+      listEligibleAccrualPeriodsInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        joinPeriod: "2026-07",
+      }),
+      ["2026-07", "2026-08"],
+    );
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        joinPeriod: "2026-07",
+        daysPerMonth: 1,
+      }),
+      2,
+    );
+  });
+
+  test("changing paid leave days/month scales cycle earned instantly", () => {
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        joinPeriod: "2026-05",
+        daysPerMonth: 1,
+      }),
+      3,
+    );
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        joinPeriod: "2026-05",
+        daysPerMonth: 2,
+      }),
+      6,
+    );
+  });
+
+  test("reducing paid leave days/month from 3 to 1 drops cycle earned from 9 to 3", () => {
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        daysPerMonth: 3,
+      }),
+      9,
+    );
+    assert.equal(
+      expectedAccruedDaysInCycle({
+        throughPeriod: "2026-08",
+        startMonth: 6,
+        cycleMonths: 3,
+        daysPerMonth: 1,
+      }),
+      3,
+    );
+  });
 });
 
 describe("nextAccrualPeriodKey", () => {
   test("rolls year boundary", () => {
     assert.equal(nextAccrualPeriodKey("2026-12"), "2027-01");
     assert.equal(nextAccrualPeriodKey("2026-06"), "2026-07");
+  });
+});
+
+describe("accrualPeriodKeyFromJoiningDate", () => {
+  test("keeps YYYY-MM-DD calendar month without timezone shift", () => {
+    assert.equal(accrualPeriodKeyFromJoiningDate("2026-05-24", "Asia/Kolkata"), "2026-05");
+    assert.equal(accrualPeriodKeyFromJoiningDate("2026-05-01", "Asia/Kolkata"), "2026-05");
   });
 });
 

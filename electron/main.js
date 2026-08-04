@@ -92,6 +92,14 @@ const SESSION_END_NATIVE_COPY = {
     title: 'Session closed — 24-hour limit',
     body: 'Your session hit the 24-hour limit. Clock in to start a new session.',
   },
+  client_disconnected: {
+    title: 'Session paused — connection lost',
+    body: 'Your session was paused because the app stopped sending heartbeats. Clock in again today to continue.',
+  },
+  overtime_idle: {
+    title: 'Overtime session paused — inactive',
+    body: 'No activity detected. Clock in again today to resume overtime.',
+  },
   system_resumed: {
     title: 'Resuming work session',
     body: 'Your PC woke up. Continuing today\'s session (sleep time is not counted).',

@@ -4,6 +4,7 @@ import {
   closeSessionsExceedingMaxDuration,
   closeSessionsPastWorkDay,
   closeStaleHeartbeatSessions,
+  OVERTIME_HEARTBEAT_STALE_MINUTES,
 } from "./work-sessions.service.js";
 import { closeSessionsPastShiftEnd } from "./shift-end-clockout.service.js";
 import { deleteStoredFile } from "../../../lib/file-storage.js";
@@ -15,9 +16,8 @@ const DAY_MS = 864e5;
 // Max session wall-clock span — aligned with work-session-policy.js (24 h).
 const STALE_SESSION_HOURS = 24;
 
-// Stale-heartbeat auto-close is disabled (see closeStaleHeartbeatSessions).
-// Auto-pause is only: shift end, PC sleep, app/window shutdown (+ day boundary).
-const HEARTBEAT_STALE_MINUTES = 90;
+// Overtime-only: pause when heartbeats stop (normal shift hours are never closed for this).
+const HEARTBEAT_STALE_MINUTES = OVERTIME_HEARTBEAT_STALE_MINUTES;
 
 const SERVER_STARTED_AT = Date.now();
 
@@ -97,25 +97,16 @@ async function runShiftEndSessionCleanup() {
 async function runHeartbeatStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
-  // No-op by policy — kept so operators can see the job still runs.
   const staleMs = HEARTBEAT_STALE_MINUTES * 60 * 1000;
   const normalCutoff = Date.now() - staleMs;
   const startupCutoff = SERVER_STARTED_AT - staleMs;
   const cutoff = new Date(Math.min(normalCutoff, startupCutoff));
-  const { closed, disabled } = await closeStaleHeartbeatSessions(cutoff);
-
-  if (disabled) {
-    logger.debug(
-      { thresholdMinutes: HEARTBEAT_STALE_MINUTES },
-      "Heartbeat stale session cleanup skipped (auto-pause limited to shift/sleep/shutdown)",
-    );
-    return;
-  }
+  const { closed } = await closeStaleHeartbeatSessions(cutoff);
 
   if (closed > 0) {
     logger.info(
       { count: closed, thresholdMinutes: HEARTBEAT_STALE_MINUTES },
-      "Heartbeat stale session cleanup: closed disconnected sessions",
+      "Overtime idle cleanup: paused inactive overtime sessions",
     );
   }
 }

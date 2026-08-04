@@ -148,7 +148,8 @@ export default function HrmEmployeeDetailPage() {
     { enabled: attendanceTabActive && !!employeeId },
   );
   const { data: balancesData } = useHrmLeaveBalances(employeeId, overview?.month.year, {
-    enabled: leaveTabActive && !!employeeId,
+    enabled: !!employeeId && showHrmTabs,
+    staleTime: 0,
   });
   const { data: leaveReqData } = useHrmLeaveRequests(
     { userId: employeeId },
@@ -198,8 +199,8 @@ export default function HrmEmployeeDetailPage() {
   const leaveRows = leaveTabActive
     ? (leaveReqData?.requests ?? [])
     : (data?.leaveRequests ?? []);
-  const balanceRows = leaveTabActive
-    ? (balancesData?.balances ?? [])
+  const balanceRows = balancesData?.balances?.length
+    ? balancesData.balances
     : (data?.leaveBalances ?? []);
   const todayRow = useMemo(() => todayAttendanceRow(attendanceRows), [attendanceRows]);
 

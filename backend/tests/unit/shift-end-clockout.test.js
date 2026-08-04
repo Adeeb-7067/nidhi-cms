@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   computeShiftEndUtc,
   shouldAutoClockOutAtShiftEnd,
+  isOvertimeActiveSegment,
+  isSubjectToOvertimeIdlePause,
 } from "../../src/modules/monitoring/services/shift-end-clockout.service.js";
 import {
   isPausedSessionResumableToday,
@@ -82,6 +84,22 @@ describe("shouldAutoClockOutAtShiftEnd", () => {
       resolveActiveSegmentStart(session, shiftEnd).toISOString(),
       "2026-07-03T13:30:00.000Z",
     );
+  });
+
+  test("isOvertimeActiveSegment is true only after shift end resume/clock-in", () => {
+    const midShift = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      segmentStartedAt: new Date("2026-07-03T04:30:00.000Z"),
+    };
+    const overtime = {
+      startedAt: new Date("2026-07-03T04:30:00.000Z"),
+      segmentStartedAt: new Date("2026-07-03T13:30:00.000Z"),
+    };
+    assert.equal(isOvertimeActiveSegment(midShift, SHIFT, TZ), false);
+    assert.equal(isOvertimeActiveSegment(overtime, SHIFT, TZ), true);
+    assert.equal(isSubjectToOvertimeIdlePause(midShift, SHIFT, TZ), false);
+    assert.equal(isSubjectToOvertimeIdlePause(overtime, SHIFT, TZ), true);
+    assert.equal(isSubjectToOvertimeIdlePause(overtime, null, TZ), true);
   });
 
   test("uses explicit segmentStartedAt for overtime (preferred over startedAt)", () => {

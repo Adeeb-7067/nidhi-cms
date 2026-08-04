@@ -42,9 +42,9 @@ import { logHrmAudit } from "../services/hrm-audit.service.js";
 import { userHasPermission } from "../services/permissions.service.js";
 import { buildUserProfilePatchSet, buildProfilePatchMongoUpdate } from "../../../utils/user-profile-fields.js";
 import {
-  ensureUserLeaveAccrualForPeriod,
   healLeaveBalancesForAllStaff,
   leaveProfileFieldsTouched,
+  recomputeUserLeaveAccrualForCurrentCycle,
 } from "../services/leave-accrual.service.js";
 import { logger } from "../../../lib/logger.js";
 import * as employeesService from "../services/employees.service.js";
@@ -847,7 +847,15 @@ async function patchUserHrmProfile(req, res) {
     });
   }
   if (leaveProfileFieldsTouched(Object.keys(update))) {
-    await ensureUserLeaveAccrualForPeriod(userId);
+    const override =
+      Object.prototype.hasOwnProperty.call(update, "leaveAccrualDaysPerMonth")
+        ? update.leaveAccrualDaysPerMonth
+        : Object.prototype.hasOwnProperty.call(update, "monthlyLeaveQuota")
+          ? update.monthlyLeaveQuota
+          : update.leave?.monthlyQuota;
+    await recomputeUserLeaveAccrualForCurrentCycle(userId, {
+      daysPerMonthOverride: override,
+    });
   }
   const detail = await employeesService.getHrmEmployeeDetail(userId);
   res.json({ message: "HRM profile updated", employee: detail.employee });

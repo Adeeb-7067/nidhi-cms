@@ -46,6 +46,29 @@ export function computeShiftEndUtc(dateStr, shift, tz) {
 }
 
 /**
+ * True when the current active segment began at/after shift end (overtime clock-in/resume).
+ * Mid-shift segments are never overtime — even if "now" is past shift end.
+ */
+export function isOvertimeActiveSegment(session, shift, tz) {
+  if (!session?.startedAt || !shift?.endTime) return false;
+  const dateStr = workDayKey(session.startedAt, tz);
+  const shiftEnd = computeShiftEndUtc(dateStr, shift, tz);
+  if (!shiftEnd) return false;
+  const segmentStart = resolveActiveSegmentStart(session, shiftEnd);
+  return segmentStart.getTime() >= shiftEnd.getTime();
+}
+
+/**
+ * Whether overtime idle-pause policy applies.
+ * No shift template → apply idle pause (cannot prove mid-shift work).
+ */
+export function isSubjectToOvertimeIdlePause(session, shift, tz) {
+  if (!session?.startedAt) return false;
+  if (!shift?.endTime) return true;
+  return isOvertimeActiveSegment(session, shift, tz);
+}
+
+/**
  * True when an active session started during the shift and the shift end time has passed.
  * Uses segmentStartedAt (current segment) — overtime after shift end stays open until manual clock-out.
  */

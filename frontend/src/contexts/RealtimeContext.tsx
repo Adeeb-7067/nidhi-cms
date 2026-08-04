@@ -351,11 +351,12 @@ export const RealtimeProvider = ({ children }: { children: ReactNode }) => {
         const body =
           data.body ??
           "Your work session has ended. Clock in again today to continue the same shift.";
+        const resumeLabel = stopReason === "overtime_idle" ? "Resume" : "Clock in";
         toast.warning(title, {
           description: body,
           duration: Infinity,
           action: {
-            label: "Clock in",
+            label: resumeLabel,
             onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
           },
         });

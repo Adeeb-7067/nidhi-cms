@@ -63,6 +63,17 @@ interface UserInfo {
   status?: string;
 }
 
+/** Live tick only for the selected day — never blend today's open session into past dates. */
+function activeSessionForSelectedDay(
+  viewingToday: boolean,
+  dayHasActiveSession: boolean | undefined,
+  activeSession: WorkSession | undefined,
+): WorkSession | undefined {
+  if (!activeSession?.isActive) return undefined;
+  if (viewingToday || dayHasActiveSession) return activeSession;
+  return undefined;
+}
+
 function EmployeeRow({
   serialNumber,
   employee,
@@ -70,6 +81,7 @@ function EmployeeRow({
   sessionTotalMs,
   sessionInProgress,
   activeSession,
+  viewingToday,
   onOpenSlide,
 }: {
   serialNumber: number;
@@ -78,29 +90,34 @@ function EmployeeRow({
   sessionTotalMs?: number;
   sessionInProgress?: boolean;
   activeSession?: WorkSession;
+  viewingToday: boolean;
   onOpenSlide: (hour: number) => void;
 }) {
   const baseDailyMs = sessionTotalMs ?? 0;
+  const liveSession = activeSessionForSelectedDay(viewingToday, sessionInProgress, activeSession);
   const [liveDailyMs, setLiveDailyMs] = useState(() =>
-    getLiveDailyActiveMs(baseDailyMs, activeSession),
+    getLiveDailyActiveMs(baseDailyMs, liveSession),
   );
 
   useEffect(() => {
-    const tick = () => setLiveDailyMs(getLiveDailyActiveMs(baseDailyMs, activeSession));
+    const tick = () => setLiveDailyMs(getLiveDailyActiveMs(baseDailyMs, liveSession));
     tick();
+    if (!liveSession?.isActive) return;
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [
     baseDailyMs,
-    activeSession?.id,
-    activeSession?.durationMs,
-    activeSession?.lastHeartbeatAt,
-    activeSession?.isActive,
+    liveSession?.id,
+    liveSession?.durationMs,
+    liveSession?.lastHeartbeatAt,
+    liveSession?.isActive,
+    liveSession?.startedAt,
   ]);
 
   const totalCaptures = Array.from(hourBuckets.values()).reduce((s, a) => s + a.length, 0);
   const hours = Array.from(hourBuckets.keys()).sort((a, b) => a - b);
   const isInactive = employee.status === "inactive";
+  const activeLabel = viewingToday ? "active today" : "active";
 
   return (
     <div className="rounded-xl border border-border bg-card/50 overflow-hidden">
@@ -127,14 +144,14 @@ function EmployeeRow({
                 <span className="text-amber-600 normal-case font-medium">Inactive</span>
               </>
             )}
-            {(liveDailyMs > 0 || sessionInProgress) && (
+            {(liveDailyMs > 0 || Boolean(liveSession)) && (
               <>
                 <span className="text-muted-foreground/50">·</span>
                 <span className="inline-flex items-center gap-1 tabular-nums normal-case font-medium text-foreground">
                   <Clock className="h-3 w-3 shrink-0" />
                   {formatActiveDuration(liveDailyMs)}
-                  <span className="text-muted-foreground font-normal">active today</span>
-                  {sessionInProgress && (
+                  <span className="text-muted-foreground font-normal">{activeLabel}</span>
+                  {liveSession && (
                     <span className="text-emerald-600 font-medium">live</span>
                   )}
                 </span>
@@ -143,7 +160,7 @@ function EmployeeRow({
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
-          {(liveDailyMs > 0 || sessionInProgress) && (
+          {(liveDailyMs > 0 || Boolean(liveSession)) && (
             <Badge
               variant="outline"
               className="text-[10px] tabular-nums border-emerald-200 text-emerald-700 dark:text-emerald-400"
@@ -194,6 +211,7 @@ export default function ScreenshotsPage() {
 
   const dayRange = useMemo(() => localDayRange(selectedDate), [selectedDate]);
   const dayKey = useMemo(() => format(selectedDate, "yyyy-MM-dd"), [selectedDate]);
+  const viewingToday = isToday(selectedDate);
 
   const { data: dailyTotals } = useDailySessionTotals(
     {
@@ -201,7 +219,7 @@ export default function ScreenshotsPage() {
       toDate: dayKey,
       limit: 200,
     },
-    { refetchInterval: isToday(selectedDate) ? 30_000 : false },
+    { refetchInterval: viewingToday ? 30_000 : false },
   );
 
   const { data: activeAll } = useAdminActiveAll();
@@ -227,21 +245,23 @@ export default function ScreenshotsPage() {
       ? employees.filter((u) => u.id === selectedUserId)
       : employees;
     return [...list].sort((a, b) => {
+      const rowA = sessionByUserId.get(a.id);
+      const rowB = sessionByUserId.get(b.id);
       const sa = getLiveDailyActiveMs(
-        sessionByUserId.get(a.id)?.totalMs ?? 0,
-        activeSessionByUser.get(a.id),
+        rowA?.totalMs ?? 0,
+        activeSessionForSelectedDay(viewingToday, rowA?.hasActiveSession, activeSessionByUser.get(a.id)),
       );
       const sb = getLiveDailyActiveMs(
-        sessionByUserId.get(b.id)?.totalMs ?? 0,
-        activeSessionByUser.get(b.id),
+        rowB?.totalMs ?? 0,
+        activeSessionForSelectedDay(viewingToday, rowB?.hasActiveSession, activeSessionByUser.get(b.id)),
       );
       if (sb !== sa) return sb - sa;
-      const liveA = sessionByUserId.get(a.id)?.hasActiveSession ? 1 : 0;
-      const liveB = sessionByUserId.get(b.id)?.hasActiveSession ? 1 : 0;
+      const liveA = rowA?.hasActiveSession ? 1 : 0;
+      const liveB = rowB?.hasActiveSession ? 1 : 0;
       if (liveB !== liveA) return liveB - liveA;
       return a.name.localeCompare(b.name);
     });
-  }, [employees, selectedUserId, sessionByUserId, activeSessionByUser]);
+  }, [employees, selectedUserId, sessionByUserId, activeSessionByUser, viewingToday]);
 
   const { data, isLoading, isError, error, refetch, dataUpdatedAt, isFetching } = useListScreenshots(
     {
@@ -516,6 +536,7 @@ export default function ScreenshotsPage() {
                 sessionTotalMs={session?.totalMs}
                 sessionInProgress={session?.hasActiveSession}
                 activeSession={activeSessionByUser.get(emp.id)}
+                viewingToday={viewingToday}
                 onOpenSlide={(h) => openSlide(emp.id, h)}
               />
             );

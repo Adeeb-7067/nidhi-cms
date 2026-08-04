@@ -3,7 +3,8 @@ export const MAX_SESSION_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Work-session policy (product rules):
- * - Auto-pause only: shift end, PC sleep, PC/app shutdown (window close).
+ * - During normal shift hours: auto-pause only for shift end, PC sleep, PC/app shutdown.
+ * - Overtime (clock-in/resume after shift end): also auto-pause on stale heartbeat.
  * - Everything else is manual clock-out.
  * - One work day → one session: pause/resume same day; next day → new session.
  */

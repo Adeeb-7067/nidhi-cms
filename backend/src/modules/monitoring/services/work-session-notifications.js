@@ -52,6 +52,10 @@ const SESSION_END_COPY = {
     title: "Session paused — connection lost",
     body: "Your session was paused because the app stopped sending heartbeats. Clock in again today to continue the same session.",
   },
+  overtime_idle: {
+    title: "Overtime session paused — inactive",
+    body: "Your overtime session was paused because no activity was detected (CMS closed, idle, or offline). Clock in again today to resume — idle time is not counted.",
+  },
 };
 
 export function shouldNotifySessionEnd(stopReason) {

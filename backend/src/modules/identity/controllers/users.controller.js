@@ -32,8 +32,8 @@ import {
   buildProfilePatchMongoUpdate,
 } from "../../../utils/user-profile-fields.js";
 import {
-  ensureUserLeaveAccrualForPeriod,
   leaveProfileFieldsTouched,
+  recomputeUserLeaveAccrualForCurrentCycle,
 } from "../../hrm/services/leave-accrual.service.js";
 import { syncSalaryStructureFromProfile } from "../../hrm/services/payroll.service.js";
 import {
@@ -157,6 +157,9 @@ async function postUsers(req, res) {
   });
   if (body.salary !== undefined) {
     await syncSalaryStructureFromProfile(user.id);
+  }
+  if (leaveProfileFieldsTouched(Object.keys(profileFields)) || profileFields.leaveAccrualDaysPerMonth != null) {
+    await recomputeUserLeaveAccrualForCurrentCycle(user.id);
   }
   res.status(201).json(formatUser(user, { includeSensitive: true }));
 }
@@ -282,7 +285,15 @@ async function patchUsersById(req, res) {
 
   if (body.role !== undefined) notifyUser(id, "role_updated", { userId: id, role: user.role });
   if (leaveProfileFieldsTouched(Object.keys(profilePatch))) {
-    await ensureUserLeaveAccrualForPeriod(id);
+    const override =
+      Object.prototype.hasOwnProperty.call(profilePatch, "leaveAccrualDaysPerMonth")
+        ? profilePatch.leaveAccrualDaysPerMonth
+        : Object.prototype.hasOwnProperty.call(profilePatch, "monthlyLeaveQuota")
+          ? profilePatch.monthlyLeaveQuota
+          : profilePatch.leave?.monthlyQuota;
+    await recomputeUserLeaveAccrualForCurrentCycle(id, {
+      daysPerMonthOverride: override,
+    });
   }
   if (body.salary !== undefined) {
     await syncSalaryStructureFromProfile(id);

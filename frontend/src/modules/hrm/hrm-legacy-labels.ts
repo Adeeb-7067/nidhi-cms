@@ -66,7 +66,7 @@ export const LEGACY_LEAVE_LABELS = {
   dialogDescription: "Submit a request to HR. You will be notified once it is approved or rejected.",
   adminDialogTitle: "Apply leave for employee",
   adminDialogDescription:
-    "Record leave on behalf of an employee. The request enters the normal approval queue unless you approve it separately.",
+    "Record leave on behalf of an employee, including past dates when needed. The request enters the normal approval queue unless you approve it separately.",
   employee: "Employee",
   leaveType: "Leave type",
   duration: "Duration",

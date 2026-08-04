@@ -11,7 +11,7 @@ import { getApiBaseUrl } from "@/lib/api-base";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRealtime } from "@/contexts/RealtimeContext";
 import { useMonitoringStatus, useConsentStatus } from "@/api/monitoring";
-import { useActiveSession, useClockIn, useClockOut, activeSessionQueryKey, type WorkSession } from "@/api/work-sessions";
+import { useActiveSession, useClockIn, useClockOut, activeSessionQueryKey, sendWorkSessionHeartbeat, type WorkSession } from "@/api/work-sessions";
 import { useListNotifications, getListNotificationsQueryKey } from "@/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -92,6 +92,68 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [sessionEnabled, queryClient]);
 
+  // Track real user activity so overtime idle pause does not treat "app open" as work.
+  const lastUserActivityAtRef = useRef<number>(Date.now());
+  useEffect(() => {
+    if (!sessionEnabled || !activeSession?.isActive) return;
+    const mark = () => {
+      lastUserActivityAtRef.current = Date.now();
+    };
+    mark();
+    const opts: AddEventListenerOptions = { passive: true, capture: true };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") mark();
+    };
+    window.addEventListener("mousemove", mark, opts);
+    window.addEventListener("mousedown", mark, opts);
+    window.addEventListener("keydown", mark, opts);
+    window.addEventListener("scroll", mark, opts);
+    window.addEventListener("touchstart", mark, opts);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("mousemove", mark, opts);
+      window.removeEventListener("mousedown", mark, opts);
+      window.removeEventListener("keydown", mark, opts);
+      window.removeEventListener("scroll", mark, opts);
+      window.removeEventListener("touchstart", mark, opts);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [sessionEnabled, activeSession?.isActive]);
+
+  // Heartbeats while clocked in (Electron main also heartbeats; renderer reports activity).
+  // Overtime idle pause prefers lastUserActivityAt; mid-shift misses are ignored server-side.
+  useEffect(() => {
+    if (!sessionEnabled || !activeSession?.isActive) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      try {
+        const data = await sendWorkSessionHeartbeat(
+          new Date(lastUserActivityAtRef.current).toISOString(),
+        );
+        if (cancelled) return;
+        if (!data.session?.isActive) {
+          queryClient.setQueryData(activeSessionQueryKey(), {
+            session: null,
+            stopReason: data.stopReason,
+          });
+          queryClient.invalidateQueries({ queryKey: ["work-sessions"] });
+        }
+      } catch {
+        /* network blip — server overtime cleanup decides if idle */
+      }
+    };
+
+    void tick();
+    const id = window.setInterval(() => {
+      void tick();
+    }, 120_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [sessionEnabled, activeSession?.isActive, queryClient]);
+
   // Keep stable refs so the pre-quit handler never captures stale closures.
   // useMutation and activeSession both change identity across renders.
   const clockOutMutationRef = useRef(clockOutMutation);
@@ -113,9 +175,11 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     system_sleep: "Session paused — PC went to sleep.",
     system_shutdown: "Session paused — PC shut down.",
     app_quit: "Session paused — app was closed.",
+    overtime_idle:
+      "Overtime paused — no activity detected. Click Resume to continue.",
   };
 
-  // Server-side policy closed the session between polls (shift end, day end, etc.).
+  // Server-side policy closed the session between polls (shift end, day end, overtime idle, etc.).
   useEffect(() => {
     if (!sessionEnabled || activeSession) return;
     const reason = activeData?.stopReason;
@@ -123,11 +187,16 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
     shownStopReasonRef.current = reason;
     const message = SESSION_END_POLL_MESSAGES[reason];
     if (!message) return;
-    if (reason === "shift_ended" || reason === "day_ended" || reason === "app_quit") {
+    if (
+      reason === "shift_ended" ||
+      reason === "day_ended" ||
+      reason === "app_quit" ||
+      reason === "overtime_idle"
+    ) {
       toast.warning(message, {
         duration: Infinity,
         action: {
-          label: "Clock in",
+          label: reason === "overtime_idle" ? "Resume" : "Clock in",
           onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
         },
       });
@@ -188,18 +257,25 @@ export function WorkSessionProvider({ children }: { children: ReactNode }) {
       shift_ended: "Automatically clocked out — your shift ended. Clock in again for overtime.",
       logout: "Session paused — you logged out.",
       admin_terminated: "Session ended — an administrator ended your session.",
+      overtime_idle:
+        "Overtime paused — no activity detected. Click Resume to continue.",
     };
     const unsubscribe = window.electron.onSessionEnded(({ stopReason }) => {
       queryClient.setQueryData(activeSessionQueryKey(), { session: null });
       queryClient.invalidateQueries({ queryKey: ["work-sessions"] });
       const message = SESSION_END_MESSAGES[stopReason];
       if (!message) return;
-      // Sleep is followed by auto-resume — keep this short. Shift end needs a sticky CTA.
-      if (stopReason === "shift_ended" || stopReason === "day_ended" || stopReason === "app_quit") {
+      // Sleep is followed by auto-resume — keep this short. Shift end / OT idle need a sticky CTA.
+      if (
+        stopReason === "shift_ended" ||
+        stopReason === "day_ended" ||
+        stopReason === "app_quit" ||
+        stopReason === "overtime_idle"
+      ) {
         toast.warning(message, {
           duration: Infinity,
           action: {
-            label: "Clock in",
+            label: stopReason === "overtime_idle" ? "Resume" : "Clock in",
             onClick: () => window.dispatchEvent(new Event("cms:request-clock-in")),
           },
         });

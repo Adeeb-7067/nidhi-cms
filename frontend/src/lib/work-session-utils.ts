@@ -37,7 +37,11 @@ export function getLiveActiveDurationMs(session: WorkSession, nowMs = Date.now()
   return getActiveSessionElapsedMs(session, nowMs);
 }
 
-/** Daily active total with live tick for the in-progress session segment. */
+/**
+ * Daily active total with live tick for the in-progress session segment.
+ * Caller must only pass an activeSession that belongs to the same work day as
+ * `dailyTotalMs` (e.g. do not pass today's open session when viewing yesterday).
+ */
 export function getLiveDailyActiveMs(
   dailyTotalMs: number,
   activeSession: WorkSession | null | undefined,

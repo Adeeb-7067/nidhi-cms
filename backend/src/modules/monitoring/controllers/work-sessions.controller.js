@@ -34,6 +34,7 @@ function formatSession(session) {
     deviceInfo: session.deviceInfo ?? null,
     stopReason: session.stopReason ?? null,
     lastHeartbeatAt: session.lastHeartbeatAt ?? null,
+    lastUserActivityAt: session.lastUserActivityAt ?? null,
     pausePeriods: session.pausePeriods ?? [],
     /** Active work time — excludes recorded pause periods between clock-out/in. */
     durationMs: activeDurationMs,
@@ -67,7 +68,9 @@ export async function handleClockIn(req, res) {
 }
 
 export async function handleHeartbeat(req, res) {
-  const { session, stopReason } = await touchHeartbeat(req.user.id);
+  const { session, stopReason } = await touchHeartbeat(req.user.id, {
+    lastUserActivityAt: req.body?.lastUserActivityAt ?? null,
+  });
   if (!session) {
     return res.status(200).json({
       session: null,
@@ -99,7 +102,10 @@ export async function handleGetActive(req, res) {
   const userId = isAdmin && req.query.userId
     ? parseIdParam(req.query.userId, "userId")
     : req.user.id;
-  const { session, stopReason } = await getActiveSession(userId);
+  // Only the employee's own poll counts as a heartbeat (admin viewing must not keep OT alive).
+  const { session, stopReason } = await getActiveSession(userId, {
+    updateHeartbeat: userId === req.user.id,
+  });
   res.json({ session: formatSession(session), stopReason: stopReason ?? undefined });
 }
 

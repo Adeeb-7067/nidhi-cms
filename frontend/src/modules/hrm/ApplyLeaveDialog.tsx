@@ -124,11 +124,19 @@ export function ApplyLeaveDialog({
   const leaveTypes = typesData?.types ?? [];
   const selectedEmployee = employees.find((e) => String(e.id) === targetUserId);
 
-  const leaveStartInPast = isLeaveDateInPast(startDate);
+  /** Past dates allowed only when HR/manager applies for a different employee. */
+  const allowPastDates =
+    isAdminMode &&
+    !!targetUserId &&
+    currentUserId != null &&
+    Number(targetUserId) !== Number(currentUserId);
+
+  const leaveStartInPast = !allowPastDates && isLeaveDateInPast(startDate);
   const leaveEndInPast =
-    leaveDuration === "half" || leaveDuration === "short"
-      ? leaveStartInPast
-      : isLeaveDateInPast(endDate);
+    !allowPastDates &&
+    (leaveDuration === "half" || leaveDuration === "short"
+      ? isLeaveDateInPast(startDate)
+      : isLeaveDateInPast(endDate));
 
   useEffect(() => {
     if (!open) return;
@@ -157,7 +165,15 @@ export function ApplyLeaveDialog({
     }
     const isHalfOrShort = leaveDuration === "half" || leaveDuration === "short";
     const effectiveEnd = isHalfOrShort ? startDate : endDate;
-    if (isLeaveDateInPast(startDate) || isLeaveDateInPast(effectiveEnd)) {
+    const submittingOnBehalf =
+      isAdminMode &&
+      !!targetUserId &&
+      currentUserId != null &&
+      Number(targetUserId) !== Number(currentUserId);
+    if (
+      !submittingOnBehalf &&
+      (isLeaveDateInPast(startDate) || isLeaveDateInPast(effectiveEnd))
+    ) {
       toast.error("Leave cannot be applied for past dates");
       return;
     }
@@ -275,11 +291,11 @@ export function ApplyLeaveDialog({
             <HrmField label={L.startDate}>
               <Input
                 type="date"
-                min={todayDateKey}
+                min={allowPastDates ? undefined : todayDateKey}
                 value={startDate}
                 onChange={(e) => {
                   const next = e.target.value;
-                  if (next && isLeaveDateInPast(next)) {
+                  if (next && !allowPastDates && isLeaveDateInPast(next)) {
                     toast.error("Leave cannot be applied for past dates");
                     return;
                   }
@@ -295,12 +311,12 @@ export function ApplyLeaveDialog({
             <HrmField label={L.endDate}>
               <Input
                 type="date"
-                min={todayDateKey}
+                min={allowPastDates ? undefined : todayDateKey}
                 value={leaveDuration === "half" || leaveDuration === "short" ? startDate : endDate}
                 disabled={leaveDuration === "half" || leaveDuration === "short"}
                 onChange={(e) => {
                   const next = e.target.value;
-                  if (next && isLeaveDateInPast(next)) {
+                  if (next && !allowPastDates && isLeaveDateInPast(next)) {
                     toast.error("Leave cannot be applied for past dates");
                     return;
                   }

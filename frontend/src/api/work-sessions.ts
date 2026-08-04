@@ -13,7 +13,8 @@ export type StopReason =
   | "system_sleep"
   | "system_shutdown"
   | "network_lost"
-  | "client_disconnected";
+  | "client_disconnected"
+  | "overtime_idle";
 
 export interface WorkSessionPausePeriod {
   pausedAt: string;
@@ -31,6 +32,7 @@ export interface WorkSession {
   deviceInfo: string | null;
   stopReason: StopReason | null;
   lastHeartbeatAt?: string | null;
+  lastUserActivityAt?: string | null;
   pausePeriods?: WorkSessionPausePeriod[];
   /** Active work time (excludes pause periods). */
   durationMs: number;
@@ -198,5 +200,18 @@ export function useClockOut() {
       qc.setQueryData(activeSessionQueryKey(), { session: null });
       qc.invalidateQueries({ queryKey: ["work-sessions"] });
     },
+  });
+}
+
+/** Keep lastHeartbeatAt + lastUserActivityAt fresh while clocked in (required for overtime idle pause). */
+export async function sendWorkSessionHeartbeat(
+  lastUserActivityAt?: string | null,
+): Promise<ActiveSessionState> {
+  return customFetch<ActiveSessionState>(apiUrl("/api/work-sessions/heartbeat"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      lastUserActivityAt: lastUserActivityAt ?? undefined,
+    }),
   });
 }

@@ -1034,6 +1034,8 @@ export function usePatchUserHrmProfile() {
       qc.invalidateQueries({ queryKey: ["/api/users"] });
       qc.invalidateQueries({ queryKey: hrmEmployeesQueryKey() });
       qc.invalidateQueries({ queryKey: hrmEmployeeQueryKey(vars.userId) });
+      qc.invalidateQueries({ queryKey: ["hrm", "leave"] });
+      qc.invalidateQueries({ queryKey: ["hrm", "leave", "balances", vars.userId] });
       qc.invalidateQueries({ queryKey: ["hrm", "shifts", "assignments"] });
     },
     meta: { errorMessage: "Could not update employee profile" },

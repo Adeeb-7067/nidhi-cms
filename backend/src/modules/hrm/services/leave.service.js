@@ -20,12 +20,11 @@ import { wfhRequestsTable } from "../schema/wfh.js";
 import { runInTx } from "../../../lib/db-tx.js";
 import {
   allocateOldestFirst,
-  currentAccrualPeriodKey,
-  ensureUserLeaveAccrualForPeriod,
   getLeaveYearForDate,
   reclaimStrandedPriorYearAccrual,
   reconcileAutoSeededBalance,
   reconcileUserLeaveBalances,
+  recomputeUserLeaveAccrualForCurrentCycle,
   syncUserLeaveAvailable,
 } from "./leave-accrual.service.js";
 import { getOrCreateSettings } from "../../settings/services/company-settings.js";
@@ -198,15 +197,11 @@ export async function listLeaveBalances(userId, year) {
   const startMonth = settings.hrmLeaveYearStartMonth ?? 1;
   const y = year != null ? getLeaveYearForDate(year, cm, startMonth) : getLeaveYearForDate(cy, cm, startMonth);
 
-  const periodKey = currentAccrualPeriodKey(now, tz);
-  const user = await usersTable.findOne({ id: userId }).select({ lastLeaveAccrualPeriod: 1 }).lean();
-  const needsAccrual = !user?.lastLeaveAccrualPeriod || user.lastLeaveAccrualPeriod !== periodKey;
-  // Always reclaim stranded prior-year EL during the first cycle so month-forward UI matches balances.
+  // Always recompute EL from (employee or company) days/month × months in the active cycle
+  // so quota edits show instantly and stale incremental credits cannot linger.
   await reclaimStrandedPriorYearAccrual(userId, { now });
-  if (needsAccrual) {
-    await ensureUserLeaveAccrualForPeriod(userId);
-    await reconcileUserLeaveBalances(userId, y);
-  }
+  await recomputeUserLeaveAccrualForCurrentCycle(userId, { now });
+  await reconcileUserLeaveBalances(userId, y);
 
   const types = await leaveTypesTable.find({ status: "active" }).sort({ fifoPriority: 1 }).lean();
   const existingBalances = await leaveBalancesTable
@@ -270,7 +265,9 @@ export async function applyLeaveRequest(userId, body, actorId) {
 
   const { weekendDays, settings, timezone } = await getHrmPolicyContext();
   const todayKey = workDayKeyForDate(new Date(), timezone);
-  if (startDate < todayKey) {
+  // Employees cannot backdate their own leave; HR/managers applying on behalf may.
+  const appliedOnBehalf = actorId != null && Number(actorId) !== Number(userId);
+  if (!appliedOnBehalf && startDate < todayKey) {
     badRequest("Leave cannot be applied for past dates.", "startDate");
   }
 

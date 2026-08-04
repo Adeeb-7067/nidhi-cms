@@ -11,18 +11,28 @@ import {
   defaultDailyRangeStart,
   isPausedSessionResumableToday,
 } from "./work-session-policy.js";
-import { evaluateShiftEndPolicy } from "./shift-end-clockout.service.js";
+import {
+  evaluateShiftEndPolicy,
+  isSubjectToOvertimeIdlePause,
+} from "./shift-end-clockout.service.js";
+import {
+  buildShiftMapForRange,
+  resolveDefaultShiftTemplateId,
+  resolveWeekendDays,
+} from "../../hrm/services/shifts.service.js";
 import { broadcastWorkSessionSync } from "./work-session-sync.js";
 
 /**
- * Auto pause (not permanent end) — only these may stop a session without a manual clock-out click.
+ * Auto pause (not permanent end) — stop without a manual clock-out click.
  * day_ended is a work-day boundary (yesterday's session closes; today starts a new one).
+ * overtime_idle is overtime-only (stale user activity after shift end / no shift).
  */
 export const AUTO_PAUSE_STOP_REASONS = [
   "shift_ended",
   "system_sleep",
   "system_shutdown",
   "app_quit",
+  "overtime_idle",
 ];
 
 /** Same-day clock-in always resumes today's session for these (and any other same-day pause). */
@@ -33,9 +43,9 @@ const RESUMABLE_STOP_REASONS = [
   "logout",
   "system_sleep",
   "system_shutdown",
-  // Legacy rows — still resume same day, but new auto-closes no longer emit these.
   "network_lost",
   "client_disconnected",
+  "overtime_idle",
 ];
 
 /**
@@ -52,7 +62,15 @@ const SURFACED_AUTO_STOP_REASONS = [
   "system_sleep",
   "system_shutdown",
   "app_quit",
+  "overtime_idle",
+  "client_disconnected",
 ];
+
+/**
+ * Overtime-only: pause when no user activity for this long (within the 5–10 minute product window).
+ * Normal shift hours never use this — mid-shift network blips must not erase work time.
+ */
+export const OVERTIME_HEARTBEAT_STALE_MINUTES = 8;
 
 function sumPauseDurationMs(pausePeriods = []) {
   return pausePeriods.reduce((sum, period) => {
@@ -103,6 +121,15 @@ async function closeActiveSession(session, stopReason, endedAt = new Date()) {
         sessionId: updated.id,
         stopReason,
       });
+      // Only overtime idle needs an immediate sync broadcast; other auto-pauses
+      // already surface via work_session_ended / next poll (avoids duplicate toasts).
+      if (stopReason === "overtime_idle") {
+        broadcastWorkSessionSync(updated.userId, {
+          action: "auto_pause",
+          session: null,
+          stopReason,
+        });
+      }
     }
   }
   return updated ?? null;
@@ -112,7 +139,10 @@ async function closeActiveSession(session, stopReason, endedAt = new Date()) {
  * Single gate for day-end, max-duration, and shift-end policies.
  * Every code path that returns or keeps an active session must go through this.
  */
-async function synchronizeActiveSession(session, { updateHeartbeat = true } = {}) {
+async function synchronizeActiveSession(
+  session,
+  { updateHeartbeat = true, lastUserActivityAt = null } = {},
+) {
   if (!session?.isActive) return { session: null, stopReason: null };
 
   const settings = await getOrCreateSettings();
@@ -133,12 +163,25 @@ async function synchronizeActiveSession(session, { updateHeartbeat = true } = {}
 
   if (!updateHeartbeat) return { session, stopReason: null };
 
+  const $set = { lastHeartbeatAt: now };
+  const activity = parseClientActivityAt(lastUserActivityAt, now);
+  if (activity) $set.lastUserActivityAt = activity;
+
   const refreshed = await workSessionsTable.findOneAndUpdate(
     { id: session.id, userId: session.userId, isActive: true },
-    { $set: { lastHeartbeatAt: now } },
+    { $set },
     { new: true },
   );
   return { session: refreshed ?? session, stopReason: null };
+}
+
+/** Accept client-reported activity; ignore future timestamps / invalid values. */
+function parseClientActivityAt(value, now = new Date()) {
+  if (value == null || value === "") return null;
+  const parsed = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  if (parsed.getTime() > now.getTime() + 60_000) return now;
+  return parsed;
 }
 
 async function deliverClockInSession(session) {
@@ -251,6 +294,7 @@ async function resumeSession(session, deviceInfo) {
         stopReason: null,
         segmentStartedAt: now,
         lastHeartbeatAt: now,
+        lastUserActivityAt: now,
         deviceInfo: deviceInfo ?? session.deviceInfo ?? null,
         pausePeriods,
       },
@@ -348,6 +392,7 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
     isActive: true,
     deviceInfo: deviceInfo ?? null,
     lastHeartbeatAt: now,
+    lastUserActivityAt: now,
     pausePeriods: [],
   });
   const session = created.toObject ? created.toObject() : created;
@@ -357,13 +402,16 @@ export async function clockIn(userId, deviceInfo, { forceNew = false } = {}) {
   throw new Error("Clock-in could not start an active session after policy sync.");
 }
 
-export async function touchHeartbeat(userId) {
+export async function touchHeartbeat(userId, { lastUserActivityAt = null } = {}) {
   const active = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (!active) {
     const stopReason = await resolveRecentSessionStopReason(userId);
     return { session: null, stopReason };
   }
-  return synchronizeActiveSession(active);
+  return synchronizeActiveSession(active, {
+    updateHeartbeat: true,
+    lastUserActivityAt,
+  });
 }
 
 export async function clockOut(userId, stopReason = "clock_out") {
@@ -390,7 +438,7 @@ export async function forceClockOutAll(stopReason = "session_expired") {
   return result.modifiedCount;
 }
 
-export async function getActiveSession(userId) {
+export async function getActiveSession(userId, { updateHeartbeat = true } = {}) {
   let session = await workSessionsTable.findOne({ userId, isActive: true }).lean();
   if (session) {
     session = (await tryReclaimStrayActiveSession(userId)) ?? session;
@@ -399,7 +447,7 @@ export async function getActiveSession(userId) {
     const stopReason = await resolveRecentSessionStopReason(userId);
     return { session: null, stopReason };
   }
-  return synchronizeActiveSession(session);
+  return synchronizeActiveSession(session, { updateHeartbeat });
 }
 
 export async function listSessions(userId, { page = 1, limit = 20 } = {}) {
@@ -465,12 +513,99 @@ export async function closeSessionsExceedingMaxDuration() {
 }
 
 /**
- * Stale-heartbeat auto-close is DISABLED.
- * Policy: only shift end, sleep, and app/window shutdown may auto-pause a session.
- * Missed heartbeats must not silently erase work time.
+ * Reference instant for overtime idle: prefer real user activity over heartbeat.
+ * Heartbeat alone can stay fresh while the app sits open unused.
  */
-export async function closeStaleHeartbeatSessions(_cutoff) {
-  return { closed: 0, disabled: true };
+export function resolveOvertimeIdleReferenceAt(session) {
+  if (session?.lastUserActivityAt) {
+    const activity = new Date(session.lastUserActivityAt);
+    if (Number.isFinite(activity.getTime())) return activity;
+  }
+  const fallback = session?.lastHeartbeatAt ?? session?.segmentStartedAt ?? session?.startedAt;
+  if (!fallback) return null;
+  const parsed = new Date(fallback);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
+/**
+ * End overtime idle at the last activity/heartbeat — do not credit the stale gap until the job runs.
+ */
+export function resolveOvertimeIdleEndedAt(session, now = new Date()) {
+  const reference = resolveOvertimeIdleReferenceAt(session);
+  const nowMs = now.getTime();
+  if (!reference) return now;
+
+  const segmentRaw = session?.segmentStartedAt ?? session?.startedAt;
+  const segmentMs = segmentRaw ? new Date(segmentRaw).getTime() : NaN;
+  let endedMs = reference.getTime();
+  if (Number.isFinite(segmentMs)) endedMs = Math.max(endedMs, segmentMs);
+  endedMs = Math.min(endedMs, nowMs);
+  return new Date(endedMs);
+}
+
+/**
+ * Pure check: should this active session be paused for stale overtime activity?
+ * Mid-shift sessions always return false — network blips during normal hours are ignored.
+ * No shift template → subject to idle pause (cannot prove mid-shift).
+ */
+export function shouldPauseOvertimeForStaleHeartbeat(session, { cutoff, shift, tz, now = new Date() }) {
+  if (!session?.isActive) return false;
+  if (!session.startedAt) return false;
+  if (!isSameWorkDay(session.startedAt, now, tz)) return false;
+  if (!isSubjectToOvertimeIdlePause(session, shift, tz)) return false;
+
+  const reference = resolveOvertimeIdleReferenceAt(session);
+  if (!reference) return false;
+  return reference.getTime() <= cutoff.getTime();
+}
+
+/**
+ * Overtime-only stale-activity pause.
+ * Normal shift hours are never closed here (even if heartbeats are missing).
+ * After pause, same-day clock-in resumes the session.
+ * endedAt is last activity/heartbeat so the idle gap is not counted as work.
+ */
+export async function closeStaleHeartbeatSessions(cutoff) {
+  const settings = await getOrCreateSettings();
+  const tz = resolveWorkDayTimezone(settings.complianceTimezone);
+  const now = new Date();
+  const staleCutoff =
+    cutoff instanceof Date && Number.isFinite(cutoff.getTime())
+      ? cutoff
+      : new Date(now.getTime() - OVERTIME_HEARTBEAT_STALE_MINUTES * 60 * 1000);
+
+  const active = await workSessionsTable.find({ isActive: true }).lean();
+  if (!active.length) return { closed: 0, disabled: false };
+
+  const todayKey = workDayKey(now, tz);
+  const userIds = [...new Set(active.map((s) => s.userId))];
+  const defaultShiftId = await resolveDefaultShiftTemplateId(settings);
+  const shiftMap = await buildShiftMapForRange(userIds, todayKey, todayKey, {
+    defaultTemplateId: defaultShiftId,
+    weekendDays: resolveWeekendDays(settings),
+  });
+
+  let closed = 0;
+  for (const session of active) {
+    const dateStr = workDayKey(session.startedAt, tz);
+    const shift = shiftMap.get(`${session.userId}:${dateStr}`);
+    if (
+      !shouldPauseOvertimeForStaleHeartbeat(session, {
+        cutoff: staleCutoff,
+        shift,
+        tz,
+        now,
+      })
+    ) {
+      continue;
+    }
+
+    const endedAt = resolveOvertimeIdleEndedAt(session, now);
+    const updated = await closeActiveSession(session, "overtime_idle", endedAt);
+    if (updated) closed++;
+  }
+
+  return { closed, disabled: false };
 }
 
 const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/;

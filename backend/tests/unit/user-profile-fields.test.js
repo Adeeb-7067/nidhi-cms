@@ -60,6 +60,16 @@ describe("buildUserProfilePatchSet", () => {
     assert.equal(set.gender, "Female");
   });
 
+  test("paid leave form field wins over stale nested leave.monthlyQuota", () => {
+    const set = buildUserProfilePatchSet({
+      leaveAccrualDaysPerMonth: 3,
+      leave: { monthlyQuota: 1 },
+    });
+    assert.equal(set.leaveAccrualDaysPerMonth, 3);
+    assert.equal(set.monthlyLeaveQuota, 3);
+    assert.equal(set.leave.monthlyQuota, 3);
+  });
+
   test("rejects invalid enum values", () => {
     assert.throws(
       () => buildUserProfilePatchSet({ gender: "Invalid" }),

@@ -14,6 +14,7 @@ export const DEFAULT_WORKDAY_MINUTES = 480;
 export const MISSING_CLOCK_OUT_STOP_REASONS = new Set([
   "day_ended",
   "client_disconnected",
+  "overtime_idle",
   "session_expired",
   "system_sleep",
   "network_lost",

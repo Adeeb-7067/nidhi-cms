@@ -67,6 +67,7 @@ const REASON_LABELS: Record<StopReason, string> = {
   system_shutdown: "PC shutdown",
   network_lost: "Network lost",
   client_disconnected: "Disconnected",
+  overtime_idle: "OT idle",
 };
 
 const REASON_CLASS: Record<StopReason, string> = {
@@ -81,6 +82,7 @@ const REASON_CLASS: Record<StopReason, string> = {
   system_shutdown: "text-violet-700 bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800",
   network_lost: "text-orange-700 bg-orange-50 border-orange-200 dark:bg-orange-950/30 dark:border-orange-800",
   client_disconnected: "text-red-600 bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800",
+  overtime_idle: "text-amber-700 bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800",
 };
 
 // ── EmployeeCell ──────────────────────────────────────────────────────────

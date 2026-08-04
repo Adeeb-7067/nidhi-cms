@@ -29,10 +29,18 @@ const workSessionSchema = new Schema({
       "system_shutdown",
       "network_lost",
       "client_disconnected",
+      /** Overtime segment paused — no recent user activity / heartbeat. */
+      "overtime_idle",
     ],
     default: null,
   },
   lastHeartbeatAt: { type: Date, default: null },
+  /**
+   * Last real user interaction (mouse/keyboard/focus) reported by the client.
+   * Overtime idle pause prefers this over lastHeartbeatAt so an open-but-idle
+   * app does not keep accruing time.
+   */
+  lastUserActivityAt: { type: Date, default: null },
   /** Audit trail of pause/resume cycles within a single shift (same session id). */
   pausePeriods: {
     type: [

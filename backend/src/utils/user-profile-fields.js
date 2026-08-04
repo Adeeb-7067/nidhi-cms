@@ -154,9 +154,10 @@ function pickLeave(src, leaveAccrualDaysPerMonth) {
   if (leaveAccrualDaysPerMonth === null || leaveAccrualDaysPerMonth === "") {
     return { monthlyQuota: null };
   }
+  // Prefer the dedicated form field when set — nested leave.monthlyQuota can be stale.
   const quota =
-    parseNumber(base.monthlyQuota) ??
     parseNumber(leaveAccrualDaysPerMonth) ??
+    parseNumber(base.monthlyQuota) ??
     parseNumber(base.monthlyLeaveQuota);
   return {
     // null = inherit company hrmPaidLeavesPerMonth at accrual time (all employees).
