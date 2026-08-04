@@ -3,22 +3,23 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FRAME_START, TOTAL_FRAMES } from "@/data/cinematic";
 
-const PRELOAD_AHEAD = 18;
-const PRELOAD_BEHIND = 8;
-const INITIAL_BATCH = 40;
-const MAX_CACHE = 72;
-/** Cap parallel JPG fetches — production servers drop connections under open storms. */
-const MAX_CONCURRENT = 6;
-const MAX_RETRIES = 3;
+/** Logical film stills were baked at 72fps from a ~10s master. */
+const FILM_FPS = 72;
+const SCRUB_SRC = "/TITLE__Satyakabir_Technologies.scrub.mp4";
+const FALLBACK_SRC = "/TITLE__Satyakabir_Technologies.mp4";
+
+function withBase(path: string) {
+  const base = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
+  return `${base}${path}`;
+}
 
 function framePath(index: number) {
-  const base = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
-  return `${base}/frames/frame${String(index).padStart(4, "0")}.jpg`;
+  return withBase(`/frames/frame${String(index).padStart(4, "0")}.jpg`);
 }
 
 /**
- * Canvas frame scrubber — GPU-friendly draw path, sliding prefetch, LRU cache.
- * Production-hardened: concurrency queue, retries, nearest-frame fallback.
+ * Canvas scrubber — prefers a single MP4 seek (reliable on servers),
+ * falls back to the JPG sequence if video cannot load.
  */
 export function useFrameScrubber() {
   const [currentFrame, setCurrentFrameState] = useState(FRAME_START);
@@ -27,35 +28,73 @@ export function useFrameScrubber() {
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const modeRef = useRef<"video" | "images">("video");
   const cacheRef = useRef<Map<number, HTMLImageElement>>(new Map());
-  const pendingRef = useRef<Set<number>>(new Set());
-  const failedRef = useRef<Map<number, number>>(new Map()); // index → attempts
-  const queueRef = useRef<number[]>([]);
-  const activeLoadsRef = useRef(0);
   const frameRef = useRef(FRAME_START);
-  const lastDirRef = useRef(1);
+  const durationRef = useRef(TOTAL_FRAMES / FILM_FPS);
+  const seekingRef = useRef(false);
+  const targetTimeRef = useRef(0);
   const drawRafRef = useRef(0);
   const pendingDrawRef = useRef<number | null>(null);
-  const pumpRef = useRef<() => void>(() => {});
 
-  const touchCache = useCallback((index: number, img: HTMLImageElement) => {
-    const cache = cacheRef.current;
-    if (cache.has(index)) cache.delete(index);
-    cache.set(index, img);
-    while (cache.size > MAX_CACHE) {
-      const oldest = cache.keys().next().value as number | undefined;
-      if (oldest === undefined) break;
-      if (oldest === frameRef.current) {
-        const keep = cache.get(oldest);
-        if (!keep) break;
-        cache.delete(oldest);
-        cache.set(oldest, keep);
-        if (cache.size <= 1) break;
-        continue;
-      }
-      cache.delete(oldest);
+  const getCtx = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    let ctx = ctxRef.current;
+    if (!ctx) {
+      ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
+      if (!ctx) return null;
+      ctxRef.current = ctx;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "medium";
     }
+    return ctx;
   }, []);
+
+  const coverDraw = useCallback(
+    (source: CanvasImageSource, sw: number, sh: number) => {
+      const canvas = canvasRef.current;
+      const ctx = getCtx();
+      if (!canvas || !ctx || sw <= 0 || sh <= 0) return;
+
+      const w = canvas.width;
+      const h = canvas.height;
+      const canvasRatio = w / h;
+      const srcRatio = sw / sh;
+
+      let drawWidth = w;
+      let drawHeight = h;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      if (canvasRatio > srcRatio) {
+        drawHeight = w / srcRatio;
+        offsetY = (h - drawHeight) / 2;
+      } else {
+        drawWidth = h * srcRatio;
+        offsetX = (w - drawWidth) / 2;
+      }
+
+      ctx.fillStyle = "#020305";
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(source, offsetX, offsetY, drawWidth, drawHeight);
+    },
+    [getCtx],
+  );
+
+  const frameToTime = useCallback((frame: number) => {
+    const dur = durationRef.current;
+    if (!Number.isFinite(dur) || dur <= 0) return 0;
+    const t = ((frame - 1) / Math.max(1, TOTAL_FRAMES - 1)) * dur;
+    return Math.min(Math.max(0, t), Math.max(0, dur - 0.04));
+  }, []);
+
+  const drawVideo = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth <= 0) return;
+    coverDraw(video, video.videoWidth, video.videoHeight);
+  }, [coverDraw]);
 
   const nearestCached = useCallback((index: number): number | null => {
     const cache = cacheRef.current;
@@ -69,52 +108,19 @@ export function useFrameScrubber() {
         best = key;
       }
     }
-    // Don't stretch more than ~1s of film at 72fps-ish mapping
-    if (best != null && bestDist <= 24) return best;
+    if (best != null && bestDist <= 36) return best;
     return null;
   }, []);
 
-  const drawFrame = useCallback(
+  const drawImageFrame = useCallback(
     (index: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      let ctx = ctxRef.current;
-      if (!ctx) {
-        ctx = canvas.getContext("2d", { alpha: false, desynchronized: true });
-        if (!ctx) return;
-        ctxRef.current = ctx;
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "medium";
-      }
-
       const drawIndex = nearestCached(index);
       if (drawIndex == null) return;
       const img = cacheRef.current.get(drawIndex);
       if (!img) return;
-
-      const w = canvas.width;
-      const h = canvas.height;
-      const canvasRatio = w / h;
-      const imgRatio = img.width / img.height;
-
-      let drawWidth = w;
-      let drawHeight = h;
-      let offsetX = 0;
-      let offsetY = 0;
-
-      if (canvasRatio > imgRatio) {
-        drawHeight = w / imgRatio;
-        offsetY = (h - drawHeight) / 2;
-      } else {
-        drawWidth = h * imgRatio;
-        offsetX = (w - drawWidth) / 2;
-      }
-
-      ctx.fillStyle = "#020305";
-      ctx.fillRect(0, 0, w, h);
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+      coverDraw(img, img.width, img.height);
     },
-    [nearestCached],
+    [coverDraw, nearestCached],
   );
 
   const scheduleDraw = useCallback(
@@ -125,212 +131,266 @@ export function useFrameScrubber() {
         drawRafRef.current = 0;
         const next = pendingDrawRef.current;
         pendingDrawRef.current = null;
-        if (next != null && next === frameRef.current) drawFrame(next);
+        if (next == null || next !== frameRef.current) return;
+        if (modeRef.current === "video") drawVideo();
+        else drawImageFrame(next);
       });
     },
-    [drawFrame],
+    [drawImageFrame, drawVideo],
   );
 
-  const fetchOne = useCallback(
-    (index: number): Promise<boolean> =>
-      new Promise((resolve) => {
+  const pumpSeek = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || modeRef.current !== "video") return;
+    if (seekingRef.current) return;
+
+    const target = targetTimeRef.current;
+    if (Math.abs(video.currentTime - target) < 0.012) {
+      drawVideo();
+      return;
+    }
+
+    seekingRef.current = true;
+    try {
+      video.currentTime = target;
+    } catch {
+      seekingRef.current = false;
+    }
+  }, [drawVideo]);
+
+  // Stable seeked handler via ref so boot effect does not re-run
+  const pumpSeekRef = useRef(pumpSeek);
+  const drawVideoRef = useRef(drawVideo);
+  pumpSeekRef.current = pumpSeek;
+  drawVideoRef.current = drawVideo;
+
+  const loadJpg = useCallback(
+    (index: number) =>
+      new Promise<void>((resolve) => {
+        if (cacheRef.current.has(index)) {
+          resolve();
+          return;
+        }
         const img = new Image();
         img.decoding = "async";
-        // Bust sticky CDN/proxy error caches between retries
-        const attempts = failedRef.current.get(index) ?? 0;
-        img.src = attempts > 0 ? `${framePath(index)}?r=${attempts}` : framePath(index);
+        img.src = framePath(index);
         img.onload = () => {
-          touchCache(index, img);
-          failedRef.current.delete(index);
+          cacheRef.current.set(index, img);
+          while (cacheRef.current.size > 64) {
+            const oldest = cacheRef.current.keys().next().value as number | undefined;
+            if (oldest === undefined || oldest === frameRef.current) break;
+            cacheRef.current.delete(oldest);
+          }
           if (frameRef.current === index) scheduleDraw(index);
-          resolve(true);
+          resolve();
         };
-        img.onerror = () => {
-          failedRef.current.set(index, attempts + 1);
-          resolve(false);
-        };
+        img.onerror = () => resolve();
       }),
-    [scheduleDraw, touchCache],
-  );
-
-  const pumpQueue = useCallback(() => {
-    while (activeLoadsRef.current < MAX_CONCURRENT && queueRef.current.length > 0) {
-      const index = queueRef.current.shift();
-      if (index == null) break;
-      if (cacheRef.current.has(index)) {
-        pendingRef.current.delete(index);
-        continue;
-      }
-
-      activeLoadsRef.current += 1;
-      void fetchOne(index).then((ok) => {
-        activeLoadsRef.current -= 1;
-        pendingRef.current.delete(index);
-
-        if (!ok) {
-          const attempts = failedRef.current.get(index) ?? 0;
-          if (attempts < MAX_RETRIES) {
-            // Re-queue failed frame at the end so others keep flowing
-            if (!pendingRef.current.has(index) && !cacheRef.current.has(index)) {
-              pendingRef.current.add(index);
-              queueRef.current.push(index);
-            }
-          }
-        }
-
-        pumpRef.current();
-      });
-    }
-  }, [fetchOne]);
-
-  useEffect(() => {
-    pumpRef.current = pumpQueue;
-  }, [pumpQueue]);
-
-  const enqueueFrame = useCallback(
-    (index: number, priority = false) => {
-      if (index < FRAME_START || index > TOTAL_FRAMES) return;
-      if (cacheRef.current.has(index) || pendingRef.current.has(index)) return;
-      const attempts = failedRef.current.get(index) ?? 0;
-      if (attempts >= MAX_RETRIES) return;
-
-      pendingRef.current.add(index);
-      if (priority) queueRef.current.unshift(index);
-      else queueRef.current.push(index);
-      pumpQueue();
-    },
-    [pumpQueue],
-  );
-
-  const loadFrame = useCallback(
-    (index: number): Promise<void> => {
-      if (index < FRAME_START || index > TOTAL_FRAMES) return Promise.resolve();
-      if (cacheRef.current.has(index)) return Promise.resolve();
-
-      enqueueFrame(index, true);
-
-      // Wait until cached or permanently failed (with timeout so scrub never hangs)
-      return new Promise((resolve) => {
-        const started = performance.now();
-        const tick = () => {
-          if (cacheRef.current.has(index)) {
-            resolve();
-            return;
-          }
-          const attempts = failedRef.current.get(index) ?? 0;
-          if (attempts >= MAX_RETRIES && !pendingRef.current.has(index)) {
-            resolve();
-            return;
-          }
-          if (performance.now() - started > 8000) {
-            resolve();
-            return;
-          }
-          requestAnimationFrame(tick);
-        };
-        requestAnimationFrame(tick);
-      });
-    },
-    [enqueueFrame],
-  );
-
-  const prefetchAround = useCallback(
-    (center: number) => {
-      const dir = lastDirRef.current;
-      const ahead = dir >= 0 ? PRELOAD_AHEAD : PRELOAD_BEHIND;
-      const behind = dir >= 0 ? PRELOAD_BEHIND : PRELOAD_AHEAD;
-      const start = Math.max(FRAME_START, center - behind);
-      const end = Math.min(TOTAL_FRAMES, center + ahead);
-      if (dir >= 0) {
-        for (let i = center; i <= end; i++) enqueueFrame(i, i === center);
-        for (let i = center - 1; i >= start; i--) enqueueFrame(i);
-      } else {
-        for (let i = center; i >= start; i--) enqueueFrame(i, i === center);
-        for (let i = center + 1; i <= end; i++) enqueueFrame(i);
-      }
-    },
-    [enqueueFrame],
+    [scheduleDraw],
   );
 
   const setCurrentFrame = useCallback(
     (frame: number) => {
       const clamped = Math.min(TOTAL_FRAMES, Math.max(FRAME_START, Math.round(frame)));
       if (frameRef.current === clamped) return;
-
-      lastDirRef.current = clamped > frameRef.current ? 1 : -1;
       frameRef.current = clamped;
       setCurrentFrameState(clamped);
 
-      if (cacheRef.current.has(clamped)) {
-        scheduleDraw(clamped);
-      } else {
-        // Draw nearest immediately so scroll never freezes on a blank/stale canvas
-        scheduleDraw(clamped);
-        void loadFrame(clamped).then(() => {
-          if (frameRef.current === clamped) scheduleDraw(clamped);
-        });
+      if (modeRef.current === "video") {
+        targetTimeRef.current = frameToTime(clamped);
+        pumpSeek();
+        return;
       }
-      prefetchAround(clamped);
+
+      scheduleDraw(clamped);
+      void loadJpg(clamped).then(() => {
+        if (frameRef.current === clamped) scheduleDraw(clamped);
+      });
+      for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 12); i++) void loadJpg(i);
+      for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 6); i--) void loadJpg(i);
     },
-    [loadFrame, prefetchAround, scheduleDraw],
+    [frameToTime, loadJpg, pumpSeek, scheduleDraw],
   );
 
   useEffect(() => {
     let cancelled = false;
-    let loaded = 0;
+    let progressTimer = 0;
+    let softTimer = 0;
+    let hardTimer = 0;
+
+    const onSeeked = () => {
+      seekingRef.current = false;
+      drawVideoRef.current();
+      const video = videoRef.current;
+      if (!video) return;
+      if (Math.abs(video.currentTime - targetTimeRef.current) > 0.02) {
+        pumpSeekRef.current();
+      }
+    };
+
+    const bootVideo = () =>
+      new Promise<boolean>((resolve) => {
+        const video = document.createElement("video");
+        video.muted = true;
+        video.playsInline = true;
+        video.preload = "auto";
+        video.setAttribute("playsinline", "true");
+        video.setAttribute("webkit-playsinline", "true");
+        video.disablePictureInPicture = true;
+        video.controls = false;
+        video.style.cssText =
+          "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:0";
+        document.body.appendChild(video);
+        videoRef.current = video;
+
+        const sources = [withBase(SCRUB_SRC), withBase(FALLBACK_SRC)];
+        let sourceIdx = 0;
+        let settled = false;
+
+        const detachBootListeners = () => {
+          video.removeEventListener("loadedmetadata", onMeta);
+          video.removeEventListener("canplay", onCanPlay);
+          video.removeEventListener("progress", onProgress);
+          video.removeEventListener("error", onError);
+          window.clearInterval(progressTimer);
+          window.clearTimeout(softTimer);
+          window.clearTimeout(hardTimer);
+        };
+
+        const succeed = () => {
+          if (settled || cancelled) return;
+          settled = true;
+          detachBootListeners();
+          modeRef.current = "video";
+          durationRef.current =
+            Number.isFinite(video.duration) && video.duration > 0
+              ? video.duration
+              : TOTAL_FRAMES / FILM_FPS;
+          video.addEventListener("seeked", onSeeked);
+          targetTimeRef.current = frameToTime(FRAME_START);
+          try {
+            video.currentTime = targetTimeRef.current;
+          } catch {
+            /* ignore */
+          }
+          setLoadProgress(100);
+          resolve(true);
+        };
+
+        const failOver = () => {
+          if (settled) return;
+          sourceIdx += 1;
+          if (sourceIdx < sources.length) {
+            video.src = sources[sourceIdx];
+            video.load();
+            return;
+          }
+          settled = true;
+          detachBootListeners();
+          video.removeEventListener("seeked", onSeeked);
+          video.removeAttribute("src");
+          video.load();
+          video.remove();
+          videoRef.current = null;
+          resolve(false);
+        };
+
+        const onMeta = () => {
+          if (Number.isFinite(video.duration) && video.duration > 0) {
+            durationRef.current = video.duration;
+          }
+        };
+
+        const onCanPlay = () => {
+          if (video.readyState >= 2) succeed();
+        };
+
+        const onProgress = () => {
+          try {
+            if (!video.duration || !video.buffered.length) return;
+            const end = video.buffered.end(video.buffered.length - 1);
+            const pct = Math.min(99, Math.round((end / video.duration) * 100));
+            setLoadProgress((p) => Math.max(p, pct));
+            if (end / video.duration >= 0.85 && video.readyState >= 3) succeed();
+          } catch {
+            /* ignore */
+          }
+        };
+
+        const onError = () => failOver();
+
+        video.addEventListener("loadedmetadata", onMeta);
+        video.addEventListener("canplay", onCanPlay);
+        video.addEventListener("progress", onProgress);
+        video.addEventListener("error", onError);
+
+        softTimer = window.setTimeout(() => {
+          if (!settled && video.readyState >= 2) succeed();
+        }, 3500);
+        hardTimer = window.setTimeout(() => {
+          if (!settled) failOver();
+        }, 12000);
+
+        progressTimer = window.setInterval(() => {
+          if (settled) return;
+          setLoadProgress((p) => (p < 90 ? p + 1 : p));
+        }, 120);
+
+        video.src = sources[0];
+        video.load();
+      });
+
+    const bootImages = async () => {
+      modeRef.current = "images";
+      const batch = Math.min(36, TOTAL_FRAMES - FRAME_START + 1);
+      let loaded = 0;
+      const chunk = 6;
+      for (let offset = 0; offset < batch && !cancelled; offset += chunk) {
+        const slice = Array.from(
+          { length: Math.min(chunk, batch - offset) },
+          (_, i) => FRAME_START + offset + i,
+        );
+        await Promise.all(
+          slice.map((idx) =>
+            loadJpg(idx).then(() => {
+              if (cancelled) return;
+              loaded += 1;
+              setLoadProgress(Math.round((loaded / batch) * 100));
+            }),
+          ),
+        );
+      }
+    };
 
     const boot = async () => {
-      const batch = Math.min(INITIAL_BATCH, TOTAL_FRAMES - FRAME_START + 1);
-      const targets = Array.from({ length: batch }, (_, i) => FRAME_START + i);
-
-      // Enqueue whole initial window with concurrency limit
-      for (const idx of targets) enqueueFrame(idx, true);
-
-      await Promise.all(
-        targets.map(
-          (idx) =>
-            new Promise<void>((resolve) => {
-              const started = performance.now();
-              const tick = () => {
-                if (cancelled) {
-                  resolve();
-                  return;
-                }
-                if (cacheRef.current.has(idx)) {
-                  loaded += 1;
-                  setLoadProgress(Math.round((loaded / batch) * 100));
-                  resolve();
-                  return;
-                }
-                const attempts = failedRef.current.get(idx) ?? 0;
-                if (
-                  (attempts >= MAX_RETRIES && !pendingRef.current.has(idx)) ||
-                  performance.now() - started > 12000
-                ) {
-                  loaded += 1;
-                  setLoadProgress(Math.round((loaded / batch) * 100));
-                  resolve();
-                  return;
-                }
-                requestAnimationFrame(tick);
-              };
-              requestAnimationFrame(tick);
-            }),
-        ),
-      );
-
+      const ok = await bootVideo();
+      if (cancelled) return;
+      if (!ok) await bootImages();
       if (cancelled) return;
       setIsLoaded(true);
       scheduleDraw(FRAME_START);
-      prefetchAround(FRAME_START);
     };
 
     void boot();
+
     return () => {
       cancelled = true;
+      window.clearInterval(progressTimer);
+      window.clearTimeout(softTimer);
+      window.clearTimeout(hardTimer);
       if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
+      const video = videoRef.current;
+      if (video) {
+        video.removeEventListener("seeked", onSeeked);
+        video.removeAttribute("src");
+        video.load();
+        video.remove();
+        videoRef.current = null;
+      }
     };
-  }, [enqueueFrame, prefetchAround, scheduleDraw]);
+    // Boot once on mount — helpers are stable enough via refs
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const resize = () => {
