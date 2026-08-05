@@ -17,7 +17,7 @@ import {
   deriveMarketingPlatformEnums,
   mergeMarketingPlatformEnums,
 } from "../../../utils/digital-project-fields.js";
-import { normalizeSubRole, isDigitalElevatedLead, shouldRestrictToOwnDigitalTasks, resolveDigitalTaskAssigneeId } from "../../../middlewares/digital-access.js";
+import { normalizeSubRole, isDigitalElevatedLead, shouldRestrictToOwnDigitalTasks, resolveDigitalTaskAssigneeId, isProjectAccountManagerSubType } from "../../../middlewares/digital-access.js";
 import { assertProjectMember } from "../../work/services/work-assignments.js";
 
 export async function recordMarketingActivity({
@@ -398,10 +398,7 @@ export function canViewMarketingClientBudget(userOrRole) {
   return canManageMarketingClientCommercial(userOrRole);
 }
 
-/** True when project-member subType is Account Manager (roster role on that project). */
-export function isProjectAccountManagerSubType(subType) {
-  return normalizeSubRole(subType) === "account_manager";
-}
+export { isProjectAccountManagerSubType };
 
 /**
  * Can assign / manage team tasks on this digital workspace:
@@ -476,6 +473,33 @@ export function isMarketingOrgAdmin(user) {
 export function canFullyEditMarketingOwnedItem(user, doc) {
   if (!user || !doc) return false;
   if (isMarketingOrgAdmin(user)) return true;
+  return doc.createdBy != null && Number(doc.createdBy) === Number(user.id);
+}
+
+/**
+ * Ads portfolio: org admins + elevated digital leads see every campaign in scope.
+ * Craft employees (Ads Manager, roster AM without AM specialty, etc.) only see
+ * campaigns they created — create/edit/delete still work on their own rows.
+ */
+export function shouldRestrictToOwnMarketingCampaigns(user) {
+  if (!user) return false;
+  if (isMarketingOrgAdmin(user) || isDigitalElevatedLead(user)) return false;
+  return user.role === "digital" || user.role === "freelancer";
+}
+
+/** Apply createdBy = self for employee Ads list queries. */
+export function applyOwnCreatedCampaignVisibility(query, user) {
+  if (!shouldRestrictToOwnMarketingCampaigns(user)) return;
+  query.createdBy = Number(user.id);
+}
+
+/**
+ * Ads delete: creator, org admin, or elevated digital lead (AM / specialist).
+ * Narrower than calendar/task delete — project-roster AM cannot wipe peers' ads.
+ */
+export function canDeleteMarketingCampaign(user, doc) {
+  if (!user || !doc) return false;
+  if (isMarketingOrgAdmin(user) || isDigitalElevatedLead(user)) return true;
   return doc.createdBy != null && Number(doc.createdBy) === Number(user.id);
 }
 

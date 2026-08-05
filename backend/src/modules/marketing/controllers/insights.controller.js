@@ -36,7 +36,8 @@ import {
   loadWorkspaceLabelsByAccountIds,
   applyScopedAccountQuery,
   assertScopedAccountAccess,
-  canDeleteMarketingOwnedItem,
+  applyOwnCreatedCampaignVisibility,
+  canDeleteMarketingCampaign,
   canFullyEditMarketingOwnedItem,
 } from "../services/helpers.js";
 
@@ -90,6 +91,7 @@ export async function listCampaigns(req, res) {
   const pagination = parsePagination(req.query);
   const query = { isDeleted: false };
   await applyScopedAccountQuery(query, req.user, req.query.accountId);
+  applyOwnCreatedCampaignVisibility(query, req.user);
   if (req.query.network) query.network = String(req.query.network);
   if (req.query.status) query.status = String(req.query.status);
 
@@ -216,8 +218,8 @@ export async function deleteCampaign(req, res) {
   if (!doc) notFound("Campaign");
   assertDocAccount(doc, accountId);
 
-  if (!(await canDeleteMarketingOwnedItem(req.user, doc))) {
-    forbidden("Only the campaign creator or an org admin can delete ad campaigns.");
+  if (!canDeleteMarketingCampaign(req.user, doc)) {
+    forbidden("You can only delete campaigns you created.");
   }
 
   doc.isDeleted = true;

@@ -14,7 +14,18 @@ export const DEFAULT_TITLE =
 export const DEFAULT_DESCRIPTION =
   "Satyakabir Technologies builds AI-first platforms, cloud estates, and product software from Bengaluru — principal-led engineering for ambitious organizations worldwide.";
 
-export const DEFAULT_OG_IMAGE = `${SITE_URL}/brand/sk-logo.png`;
+export const DEFAULT_OG_IMAGE = `${SITE_URL}/brand/sk-icon-512.png`;
+
+/** Site-wide favicon / PWA icons — included on every page metadata object. */
+export const SITE_ICONS: NonNullable<Metadata["icons"]> = {
+  icon: [
+    { url: "/favicon.ico", sizes: "any" },
+    { url: "/favicon.svg", type: "image/svg+xml" },
+    { url: "/brand/sk-icon-192.png", type: "image/png", sizes: "192x192" },
+  ],
+  shortcut: ["/favicon.ico"],
+  apple: [{ url: "/brand/sk-icon-192.png", sizes: "180x180", type: "image/png" }],
+};
 
 export function absoluteUrl(path = "/"): string {
   if (!path || path === "/") return SITE_URL;
@@ -60,6 +71,7 @@ export function buildPageMetadata({
     description: desc,
     keywords: keywords?.length ? keywords : undefined,
     alternates: { canonical: path === "/" ? "/" : path },
+    icons: SITE_ICONS,
     robots: noIndex
       ? { index: false, follow: false }
       : { index: true, follow: true, googleBot: { index: true, follow: true } },

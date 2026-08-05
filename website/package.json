@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "frames": "node scripts/extract-frames.mjs",
-    "scrub": "node scripts/encode-scrub.mjs"
+    "scrub": "node scripts/encode-scrub.mjs",
+    "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

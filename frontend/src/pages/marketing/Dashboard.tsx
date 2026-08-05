@@ -61,6 +61,7 @@ import {
   canViewMarketingClientBudget,
   isDigitalElevatedLead,
 } from "@/lib/cms-project-manage";
+import { usePermissions } from "@/modules/permissions/usePermission";
 
 function labelOf<T extends string>(map: Record<T, string>, key: string): string {
   return (map as Record<string, string>)[key] ?? key.replace(/_/g, " ");
@@ -98,9 +99,11 @@ function DashboardSkeleton() {
 
 export default function MarketingDashboard() {
   const { user } = useAuth();
+  const { can } = usePermissions();
   const { data, isLoading, isError, refetch } = useMarketingDashboard();
+  // Account Manager / Digital Specialist / org admin → ops shell.
   const isAdmin = isDigitalElevatedLead(user);
-  const canViewClientBudget = canViewMarketingClientBudget(user);
+  const canViewClientBudget = canViewMarketingClientBudget(user) || can("marketing_reports", "view");
   const subTypeLower = (user?.subType ?? "").toLowerCase();
 
   const kpis = data?.kpis;
@@ -214,6 +217,16 @@ export default function MarketingDashboard() {
         href: "/marketing/calendar",
         delay: 5,
         show: !isSeo && !isAds,
+      },
+      {
+        title: "Ads running",
+        value: kpis?.adsRunning ?? 0,
+        hint: "Active Meta / Google campaigns",
+        icon: Megaphone,
+        accent: "green" as const,
+        href: "/marketing/meta-ads",
+        delay: 5,
+        show: isAds || isGeneric,
       },
       {
         title: "Assigned Projects",

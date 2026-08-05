@@ -10,6 +10,7 @@ import {
   normalizeSubRole,
   filterDigitalPermissionSet,
   requireDigitalModuleAccess,
+  getDigitalExtraModules,
   shouldRestrictToOwnDigitalTasks,
   resolveDigitalTaskAssigneeId,
 } from "../../src/middlewares/digital-access.js";
@@ -88,13 +89,26 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!modules.includes("marketing_reports"));
   });
 
-  it("Account Manager can approve content and view reports", () => {
+  it("Account Manager can approve content, view reports, and access Ads", () => {
     const am = { role: "digital", subType: "Account Manager", id: 5 };
     const modules = getDigitalSubRoleModules(am);
     assert.ok(modules.includes("marketing_approvals"));
     assert.ok(modules.includes("marketing_reports"));
     assert.ok(modules.includes("marketing_dashboard"));
+    assert.ok(modules.includes("marketing_ads"));
+    assert.equal(checkDigitalModuleAccess(am, "marketing_ads"), true);
     assert.equal(canAccessDigitalFreelancerDirectory(am), true);
+    assert.equal(isDigitalElevatedLead(am), true);
+  });
+
+  it("Ads Manager can access Ads but not Reports or commercial tools", () => {
+    const ads = { role: "digital", subType: "Ads Manager", id: 13 };
+    const modules = getDigitalSubRoleModules(ads);
+    assert.ok(modules.includes("marketing_ads"));
+    assert.ok(modules.includes("marketing_analytics"));
+    assert.ok(!modules.includes("marketing_reports"));
+    assert.equal(isDigitalElevatedLead(ads), false);
+    assert.equal(canAccessDigitalFreelancerDirectory(ads), false);
   });
 
   it("Content Creator can open Approvals but not Ads/Reports", () => {
@@ -235,6 +249,47 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.ok(!set.has("finance_freelancers:view"));
   });
 
+  it("project-roster Account Manager gets Ads only — not Reports or freelancer directory", () => {
+    const rosterAm = { role: "digital", subType: "Designer", id: 21 };
+    const set = new Set([
+      "marketing_ads:view",
+      "marketing_ads:create",
+      "marketing_ads:edit",
+      "marketing_ads:delete",
+      "marketing_reports:view",
+      "finance_freelancers:view",
+      "marketing_clients:edit",
+    ]);
+    filterDigitalPermissionSet(rosterAm, set, { extraModules: ["marketing_ads"] });
+    assert.ok(set.has("marketing_ads:view"));
+    assert.ok(set.has("marketing_ads:create"));
+    assert.ok(set.has("marketing_ads:edit"));
+    // Employee view: no delete → ads page stays in "my campaigns" shell.
+    assert.ok(!set.has("marketing_ads:delete"));
+    assert.ok(!set.has("marketing_reports:view"));
+    assert.ok(!set.has("finance_freelancers:view"));
+    assert.ok(!set.has("marketing_clients:edit"));
+  });
+
+  it("Account Manager (incl. project-elevated specialty) keeps Ads view and delete", () => {
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    const set = new Set([
+      "marketing_ads:view",
+      "marketing_ads:create",
+      "marketing_ads:edit",
+      "marketing_ads:delete",
+      "marketing_reports:view",
+      "marketing_content:delete",
+    ]);
+    filterDigitalPermissionSet(am, set);
+    assert.ok(set.has("marketing_ads:view"));
+    assert.ok(set.has("marketing_ads:create"));
+    assert.ok(set.has("marketing_ads:edit"));
+    assert.ok(set.has("marketing_ads:delete"));
+    assert.ok(set.has("marketing_reports:view"));
+    assert.ok(set.has("marketing_content:delete"));
+  });
+
   it("craft assignee resolution always returns self unless allowAssignOthers", () => {
     const designer = { role: "digital", subType: "Designer", id: 42 };
     assert.equal(resolveDigitalTaskAssigneeId(designer, 99), 42);
@@ -259,6 +314,35 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 5 }), true);
     assert.equal(canFullyEditMarketingOwnedItem(am, { createdBy: 1 }), false);
     assert.equal(canFullyEditMarketingOwnedItem(admin, { createdBy: 5 }), true);
+  });
+
+  it("employee Ads list is own-created only; admin / AM see portfolio", async () => {
+    const {
+      shouldRestrictToOwnMarketingCampaigns,
+      applyOwnCreatedCampaignVisibility,
+      canDeleteMarketingCampaign,
+    } = await import("../../src/modules/marketing/services/helpers.js");
+    const ads = { role: "digital", subType: "Ads Manager", id: 13 };
+    const am = { role: "digital", subType: "Account Manager", id: 5 };
+    const admin = { role: "super_admin", id: 1 };
+
+    assert.equal(shouldRestrictToOwnMarketingCampaigns(ads), true);
+    assert.equal(shouldRestrictToOwnMarketingCampaigns(am), false);
+    assert.equal(shouldRestrictToOwnMarketingCampaigns(admin), false);
+
+    const employeeQuery = {};
+    applyOwnCreatedCampaignVisibility(employeeQuery, ads);
+    assert.equal(employeeQuery.createdBy, 13);
+
+    const adminQuery = {};
+    applyOwnCreatedCampaignVisibility(adminQuery, am);
+    assert.equal(adminQuery.createdBy, undefined);
+
+    // Employees may delete their own ads; not peers'. Leads delete any.
+    assert.equal(canDeleteMarketingCampaign(ads, { createdBy: 13 }), true);
+    assert.equal(canDeleteMarketingCampaign(ads, { createdBy: 99 }), false);
+    assert.equal(canDeleteMarketingCampaign(am, { createdBy: 99 }), true);
+    assert.equal(canDeleteMarketingCampaign(admin, { createdBy: 99 }), true);
   });
 
   it("AM may delete others' calendar posts; craft creator only deletes own", async () => {
@@ -309,17 +393,37 @@ describe("Digital Department RBAC & Sub-Role Access Control", () => {
     assert.equal(await canMutateMarketingMediaItem(admin, doc), true);
   });
 
-  it("requireDigitalModuleAccess rejects designer on ads", () => {
+  it("requireDigitalModuleAccess rejects designer on ads", async () => {
     const mw = requireDigitalModuleAccess("marketing_ads");
-    let status = "next";
+    // No id → no project-roster lookup, so the sub-role gate is the only verdict.
     const req = { user: { role: "digital", subType: "Designer" } };
-    try {
-      mw(req, {}, () => {
-        status = "allowed";
-      });
-    } catch (err) {
-      status = err?.statusCode ?? err?.status ?? "forbidden";
-    }
-    assert.notEqual(status, "allowed");
+    let passed = false;
+    let error = null;
+    await mw(req, {}, (err) => {
+      if (err) error = err;
+      else passed = true;
+    });
+    assert.equal(passed, false);
+    assert.equal(error?.statusCode ?? error?.status, 403);
+  });
+
+  it("requireDigitalModuleAccess lets ads-capable sub-roles through", async () => {
+    const mw = requireDigitalModuleAccess("marketing_ads");
+    const req = { user: { role: "digital", subType: "Account Manager", id: 5 } };
+    let passed = false;
+    await mw(req, {}, (err) => {
+      if (!err) passed = true;
+    });
+    assert.equal(passed, true);
+  });
+
+  it("getDigitalExtraModules grants nothing extra to real AM / non-digital roles", async () => {
+    assert.deepEqual(
+      await getDigitalExtraModules({ role: "digital", subType: "Account Manager", id: 5 }),
+      [],
+    );
+    assert.deepEqual(await getDigitalExtraModules({ role: "admin", id: 5 }), []);
+    // Craft specialty with no user id → no roster lookup possible → no grant.
+    assert.deepEqual(await getDigitalExtraModules({ role: "digital", subType: "Designer" }), []);
   });
 });

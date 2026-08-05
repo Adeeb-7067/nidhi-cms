@@ -1,4 +1,5 @@
 import { forbidden } from "../utils/route-errors.js";
+import { projectMembersTable, marketingAccountsTable } from "../models/schema/index.js";
 
 /**
  * Granular module permissions for Digital sub-roles.
@@ -141,6 +142,62 @@ export function checkDigitalModuleAccess(user, requiredModule) {
   return allowed.includes(requiredModule);
 }
 
+/**
+ * Modules a project-roster Account Manager may open beyond their craft specialty.
+ * Deliberately narrow: Ads only — Reports, freelancer directory, and commercial
+ * budgets still require the employee Digital specialty.
+ */
+export const PROJECT_ACCOUNT_MANAGER_EXTRA_MODULES = ["marketing_ads"];
+
+/** True when project-member subType is Account Manager (roster role on that project). */
+export function isProjectAccountManagerSubType(subType) {
+  return normalizeSubRole(subType) === "account_manager";
+}
+
+const ROSTER_AM_CACHE_TTL_MS = 30_000;
+/** @type {Map<number, { value: boolean, expiresAt: number }>} */
+const _rosterAmCache = new Map();
+
+export function evictRosterAccountManagerCache(userId) {
+  if (userId == null) _rosterAmCache.clear();
+  else _rosterAmCache.delete(Number(userId));
+}
+
+/**
+ * Project roster / workspace "Account Manager" — unlocks Ads even when the
+ * employee's Digital specialty field is empty or a craft role.
+ */
+export async function userIsProjectAccountManagerAnywhere(userId) {
+  const uid = Number(userId);
+  if (!Number.isFinite(uid)) return false;
+
+  const cached = _rosterAmCache.get(uid);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const [managed, members] = await Promise.all([
+    marketingAccountsTable
+      .findOne({ accountManagerId: uid, isDeleted: false })
+      .select({ id: 1 })
+      .lean(),
+    projectMembersTable.find({ userId: uid }).select({ subType: 1 }).lean(),
+  ]);
+  const value = Boolean(managed) || members.some((m) => isProjectAccountManagerSubType(m.subType));
+
+  _rosterAmCache.set(uid, { value, expiresAt: Date.now() + ROSTER_AM_CACHE_TTL_MS });
+  return value;
+}
+
+/** Extra modules granted by project-roster Account Manager status (none for real AM/leads). */
+export async function getDigitalExtraModules(user) {
+  if (!user || (user.role !== "digital" && user.role !== "freelancer")) return [];
+  const sub = normalizeSubRole(user.subType);
+  if (sub === "account_manager" || sub === "digital_specialist") return [];
+  if (await userIsProjectAccountManagerAnywhere(user.id)) {
+    return PROJECT_ACCOUNT_MANAGER_EXTRA_MODULES;
+  }
+  return [];
+}
+
 /** Who may create/update CMS projects and manage members (matches project routes). */
 export function canManageCmsProjects(user) {
   if (!user) return false;
@@ -204,13 +261,16 @@ export function resolveDigitalTaskAssigneeId(user, requestedAssigneeId, { allowA
  * Demote template actions for digital specialists who should not act like super admin.
  * View stays for allowed modules; create/edit kept for craft roles; delete/approve/export
  * reserved for AM / specialist.
+ *
+ * `extraModules` widens module visibility only (never actions) — used for project-roster
+ * Account Managers who need Ads on their workspaces without the full AM pack.
  */
-export function filterDigitalPermissionSet(user, permissionSet) {
+export function filterDigitalPermissionSet(user, permissionSet, { extraModules = [] } = {}) {
   if (!user || (user.role !== "digital" && user.role !== "freelancer")) {
     return permissionSet;
   }
 
-  const allowedModules = new Set(getDigitalSubRoleModules(user));
+  const allowedModules = new Set([...getDigitalSubRoleModules(user), ...extraModules]);
   const sub = normalizeSubRole(user.subType);
   const elevated = DIGITAL_ELEVATED_ACTION_SUBROLES.has(sub);
   const canManageProjects = canManageCmsProjects(user);
@@ -291,13 +351,18 @@ export function requireDigitalSubRole(...allowedSubRoles) {
  * Super Admin and non-digital roles bypass.
  */
 export function requireDigitalModuleAccess(requiredModule) {
-  return (req, _res, next) => {
-    if (!req.user) return next();
-    if (req.user.role === "super_admin") return next();
-    if (req.user.role !== "digital" && req.user.role !== "freelancer") return next();
-    if (!checkDigitalModuleAccess(req.user, requiredModule)) {
+  return async (req, _res, next) => {
+    try {
+      if (!req.user) return next();
+      if (req.user.role === "super_admin") return next();
+      if (req.user.role !== "digital" && req.user.role !== "freelancer") return next();
+      if (checkDigitalModuleAccess(req.user, requiredModule)) return next();
+      // Roster Account Managers get Ads without the full AM specialty pack.
+      const extra = await getDigitalExtraModules(req.user);
+      if (extra.includes(requiredModule)) return next();
       return forbidden("Your role does not have access to this module.");
+    } catch (err) {
+      return next(err);
     }
-    next();
   };
 }

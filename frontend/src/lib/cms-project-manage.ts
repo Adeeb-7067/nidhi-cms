@@ -109,8 +109,29 @@ export function canFullyEditMarketingItem(
 }
 
 /**
+ * Ads campaigns: Account Manager / digital lead / org admin may edit any campaign;
+ * craft Ads Manager may only edit campaigns they created.
+ */
+export function canEditMarketingAdsItem(
+  user?: CmsUserLike,
+  createdBy?: number | string | null,
+): boolean {
+  if (!user) return false;
+  if (isMarketingOrgAdmin(user) || isDigitalElevatedLead(user)) return true;
+  if (createdBy == null || user.id == null) return false;
+  return String(createdBy) === String(user.id);
+}
+
+/** True when the viewer should see the Digital admin/ops shell (vs craft employee workspace). */
+export function isDigitalAdminView(user?: CmsUserLike): boolean {
+  return isMarketingOrgAdmin(user) || isDigitalElevatedLead(user);
+}
+
+/**
  * Delete gate: creator, org admin, or elevated digital lead (Account Manager / specialist).
  * Broader than edit — AMs with calendar delete may remove team schedules, not only their own.
+ * For Ads UI, combine with create/edit module grants so craft staff can remove their own rows
+ * even without marketing_ads:delete.
  */
 export function canDeleteMarketingItem(
   user?: CmsUserLike,

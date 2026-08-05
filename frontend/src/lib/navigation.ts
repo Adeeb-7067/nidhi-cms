@@ -331,6 +331,7 @@ export function getNavSections(
         { title: "Content", href: "/marketing/content", icon: FileText, roles: [...MARKETING_ACCESS_ROLES], group: "Content" },
         { title: "Approvals", href: "/marketing/approvals", icon: ShieldCheck, roles: [...MARKETING_ACCESS_ROLES], group: "Workflow" },
         { title: "Social analytics", href: "/marketing/social", icon: Share2, roles: ["super_admin", "digital"], group: "Analytics" },
+        // Ads: Account Manager + Ads Manager (+ specialist) retain marketing_ads after sub-role filter.
         { title: "Meta Ads", href: "/marketing/meta-ads", icon: Target, roles: ["super_admin", "digital"], group: "Ads" },
         { title: "Google Ads", href: "/marketing/google-ads", icon: Search, roles: ["super_admin", "digital"], group: "Ads" },
         { title: "SEO", href: "/marketing/seo", icon: BookOpen, roles: ["super_admin", "digital"], group: "Analytics" },

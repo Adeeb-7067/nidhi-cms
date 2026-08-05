@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Loader2, Plus, PauseCircle, FileEdit, PlayCircle } from "lucide-react";
+import { Search, Loader2, Plus, PauseCircle, FileEdit, PlayCircle, IndianRupee, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PortalPageShell, PortalKpiGrid } from "@/components/layout/portal-page-kit";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +30,6 @@ import { GOOGLE_CAMPAIGN_TYPE_LABELS, CAMPAIGN_STATUS_LABELS, formatCompactCurre
 import {
   MarketingPageHeader,
   MarketingFilterBar,
-  MarketingEmptyState,
   MarketingStatusBadge,
   MarketingRowActions,
   MarketingConfirmDialog,
@@ -38,12 +37,15 @@ import {
   MarketingChipTabs,
 } from "@/modules/marketing/components";
 import { useAccountProjectFilter } from "@/modules/marketing/account-query";
-import { MarketingListPageSkeleton } from "@/components/loading";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api-error";
 import { usePermissions } from "@/modules/permissions/usePermission";
 import { useAuth } from "@/contexts/AuthContext";
-import { canDeleteMarketingItem, canFullyEditMarketingItem } from "@/lib/cms-project-manage";
+import {
+  canDeleteMarketingItem,
+  canEditMarketingAdsItem,
+  isDigitalAdminView,
+} from "@/lib/cms-project-manage";
 import type { CampaignStatus, GoogleCampaignType } from "@/modules/marketing/types";
 import { CmsDataTable, type CmsColumn } from "@/components/cms";
 
@@ -65,10 +67,15 @@ const emptyForm = {
 export default function MarketingGoogleAds() {
   const { user } = useAuth();
   const { can } = usePermissions();
+  // Org admin / Account Manager / Digital Specialist → full portfolio.
+  // Craft employees (Ads Manager, roster AM without AM specialty) → own campaigns only.
+  const isAdminView = isDigitalAdminView(user);
   const canCreate = can("marketing_ads", "create");
   const canEdit = can("marketing_ads", "edit");
-  const canDelete = can("marketing_ads", "delete");
-  const showActions = canEdit || canDelete;
+  const canDeleteModule = can("marketing_ads", "delete");
+  /** Own campaigns: create/edit is enough (craft roles often lack module delete). */
+  const canDeleteOwn = canDeleteModule || canCreate || canEdit;
+  const showActions = canEdit || canDeleteOwn;
 
   const [search, setSearch] = useState("");
   const [projectFilter, setProjectFilter] = useAccountProjectFilter();
@@ -89,9 +96,17 @@ export default function MarketingGoogleAds() {
   const campaigns = (data?.campaigns ?? []) as MarketingGoogleCampaignDto[];
   const saving = createCampaign.isPending || updateCampaign.isPending;
 
+  // Backend already scopes employees to createdBy=self; keep a client filter as defense-in-depth.
+  const visibleCampaigns = useMemo(() => {
+    if (isAdminView) return campaigns;
+    return campaigns.filter(
+      (c) => user?.id != null && c.createdBy != null && Number(c.createdBy) === Number(user.id),
+    );
+  }, [campaigns, isAdminView, user?.id]);
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return campaigns.filter((c) => {
+    return visibleCampaigns.filter((c) => {
       const matchesSearch =
         !q ||
         c.name.toLowerCase().includes(q) ||
@@ -100,29 +115,35 @@ export default function MarketingGoogleAds() {
       const matchesStatus = statusTab === "all" || c.status === statusTab;
       return matchesSearch && matchesStatus;
     });
-  }, [campaigns, search, statusTab]);
+  }, [visibleCampaigns, search, statusTab]);
 
   const statusChipItems = useMemo(
     () => [
-      { value: "all", label: "All", count: campaigns.length },
+      {
+        value: "all",
+        label: isAdminView ? "All campaigns" : "All my campaigns",
+        count: visibleCampaigns.length,
+      },
       ...(Object.keys(CAMPAIGN_STATUS_LABELS) as CampaignStatus[]).map((status) => ({
         value: status,
         label: CAMPAIGN_STATUS_LABELS[status],
-        count: campaigns.filter((c) => c.status === status).length,
+        count: visibleCampaigns.filter((c) => c.status === status).length,
       })),
     ],
-    [campaigns],
+    [visibleCampaigns, isAdminView],
   );
 
-  const kpis = useMemo(
-    () => ({
-      total: campaigns.length,
-      active: campaigns.filter((c) => c.status === "active").length,
-      paused: campaigns.filter((c) => c.status === "paused").length,
-      draft: campaigns.filter((c) => c.status === "draft").length,
-    }),
-    [campaigns],
-  );
+  const kpis = useMemo(() => {
+    const pool = visibleCampaigns;
+    return {
+      total: pool.length,
+      active: pool.filter((c) => c.status === "active").length,
+      paused: pool.filter((c) => c.status === "paused").length,
+      draft: pool.filter((c) => c.status === "draft").length,
+      budget: pool.reduce((sum, c) => sum + (c.budgetInr || 0), 0),
+      conversions: pool.reduce((sum, c) => sum + (c.conversions || 0), 0),
+    };
+  }, [visibleCampaigns]);
 
   const columns = useMemo<CmsColumn<MarketingGoogleCampaignDto>[]>(
     () => {
@@ -132,16 +153,56 @@ export default function MarketingGoogleAds() {
         { id: "type", header: "Type", cell: (c) => GOOGLE_CAMPAIGN_TYPE_LABELS[c.type as GoogleCampaignType] ?? c.type },
         { id: "status", header: "Status", chip: true, cell: (c) => <MarketingStatusBadge variant="campaign" status={c.status as CampaignStatus} /> },
         { id: "budget", header: "Budget", align: "right", cell: (c) => formatCompactCurrency(c.budgetInr) },
-        { id: "keywords", header: "Keywords", chip: true, cell: (c) => <div className="flex flex-wrap gap-1 max-w-[160px]">{c.keywords.map((k) => <Badge key={k} variant="secondary" className="text-[9px] px-1 py-0 truncate max-w-[80px]">{k}</Badge>)}</div> },
-        { id: "qualityScore", header: "QS", align: "center", cell: (c) => `${c.qualityScore}/10` },
-        { id: "cpa", header: "CPA", align: "right", cell: (c) => `₹${c.cpa}` },
-        { id: "roas", header: "ROAS", align: "right", cell: (c) => `${c.roas.toFixed(1)}x` },
-        { id: "conversions", header: "Conv.", align: "right", cell: (c) => c.conversions },
       ];
-      if (showActions) cols.push({ id: "actions", header: "Actions", align: "right", className: "w-[80px]", cell: (c) => <MarketingRowActions canEdit={canEdit && canFullyEditMarketingItem(user, c.createdBy)} canDelete={canDelete && canDeleteMarketingItem(user, c.createdBy)} onEdit={() => openEdit(c)} onDelete={() => setDeleteTarget(c)} /> });
+
+      if (isAdminView) {
+        cols.push(
+          {
+            id: "keywords",
+            header: "Keywords",
+            chip: true,
+            cell: (c) => (
+              <div className="flex flex-wrap gap-1 max-w-[160px]">
+                {c.keywords.map((k) => (
+                  <Badge key={k} variant="secondary" className="text-[9px] px-1 py-0 truncate max-w-[80px]">
+                    {k}
+                  </Badge>
+                ))}
+              </div>
+            ),
+          },
+          { id: "qualityScore", header: "QS", align: "center", cell: (c) => `${c.qualityScore}/10` },
+          { id: "cpa", header: "CPA", align: "right", cell: (c) => `₹${c.cpa}` },
+          { id: "roas", header: "ROAS", align: "right", cell: (c) => `${c.roas.toFixed(1)}x` },
+          { id: "conversions", header: "Conv.", align: "right", cell: (c) => c.conversions },
+        );
+      } else {
+        cols.push(
+          { id: "qualityScore", header: "QS", align: "center", cell: (c) => `${c.qualityScore}/10` },
+          { id: "conversions", header: "Conv.", align: "right", cell: (c) => c.conversions },
+          { id: "roas", header: "ROAS", align: "right", cell: (c) => `${c.roas.toFixed(1)}x` },
+        );
+      }
+
+      if (showActions) {
+        cols.push({
+          id: "actions",
+          header: "Actions",
+          align: "right",
+          className: "w-[80px]",
+          cell: (c) => (
+            <MarketingRowActions
+              canEdit={canEdit && canEditMarketingAdsItem(user, c.createdBy)}
+              canDelete={canDeleteOwn && canDeleteMarketingItem(user, c.createdBy)}
+              onEdit={() => openEdit(c)}
+              onDelete={() => setDeleteTarget(c)}
+            />
+          ),
+        });
+      }
       return cols;
     },
-    [showActions, canEdit, canDelete, user],
+    [showActions, canEdit, canDeleteOwn, user, isAdminView],
   );
 
   const openCreate = () => {
@@ -170,6 +231,10 @@ export default function MarketingGoogleAds() {
   const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error("Name is required");
+      return;
+    }
+    if (editing && !canEditMarketingAdsItem(user, editing.createdBy)) {
+      toast.error("You can only edit campaigns you created");
       return;
     }
     try {
@@ -227,12 +292,35 @@ export default function MarketingGoogleAds() {
     }
   };
 
+  const adminKpiItems = [
+    { title: "Total campaigns", value: kpis.total, icon: Search, accent: "blue" as const, delay: 0 },
+    { title: "Active", value: kpis.active, icon: PlayCircle, accent: "green" as const, delay: 1 },
+    { title: "Paused", value: kpis.paused, icon: PauseCircle, accent: "amber" as const, delay: 2 },
+    { title: "Draft", value: kpis.draft, icon: FileEdit, accent: "violet" as const, delay: 3 },
+    { title: "Total budget", value: formatCompactCurrency(kpis.budget), icon: IndianRupee, accent: "green" as const, delay: 4 },
+    { title: "Conversions", value: kpis.conversions.toLocaleString("en-IN"), icon: Target, accent: "sky" as const, delay: 5 },
+  ];
+
+  const employeeKpiItems = [
+    { title: "My campaigns", value: kpis.total, icon: Search, accent: "blue" as const, delay: 0 },
+    { title: "Active", value: kpis.active, icon: PlayCircle, accent: "green" as const, delay: 1 },
+    { title: "Paused", value: kpis.paused, icon: PauseCircle, accent: "amber" as const, delay: 2 },
+    { title: "Draft", value: kpis.draft, icon: FileEdit, accent: "violet" as const, delay: 3 },
+  ];
+
   return (
     <PortalPageShell>
       <MarketingPageHeader
-        title="Google Ads"
-        description="Search, Display, Shopping, PMax, and YouTube campaigns with keyword performance"
-        breadcrumbs={[{ label: "Digital", href: "/marketing" }, { label: "Google Ads" }]}
+        title={isAdminView ? "Google Ads" : "My Google Ads"}
+        description={
+          isAdminView
+            ? "Account Manager portfolio — Search, Display, Shopping, PMax, and YouTube across digital projects"
+            : "Your Google Ads workspace — create and manage campaigns you own"
+        }
+        breadcrumbs={[
+          { label: "Digital", href: "/marketing" },
+          { label: isAdminView ? "Google Ads" : "My Ads" },
+        ]}
         actions={
           canCreate ? (
             <Button size="sm" className="h-8 gap-1.5" onClick={openCreate}>
@@ -243,29 +331,54 @@ export default function MarketingGoogleAds() {
         }
       />
 
-      <PortalKpiGrid
-        loading={isLoading}
-        columns={4}
-        count={4}
-        items={[
-          { title: "Total campaigns", value: kpis.total, icon: Search, accent: "blue", delay: 0 },
-          { title: "Active", value: kpis.active, icon: PlayCircle, accent: "green", delay: 1 },
-          { title: "Paused", value: kpis.paused, icon: PauseCircle, accent: "amber", delay: 2 },
-          { title: "Draft", value: kpis.draft, icon: FileEdit, accent: "violet", delay: 3 },
-        ]}
-      />
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {isAdminView ? "Portfolio overview" : "My work overview"}
+        </p>
+        <PortalKpiGrid
+          loading={isLoading}
+          columns={isAdminView ? 3 : 4}
+          count={isAdminView ? adminKpiItems.length : employeeKpiItems.length}
+          items={isAdminView ? adminKpiItems : employeeKpiItems}
+        />
+      </div>
 
       <MarketingFilterBar
         search={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search campaigns, keywords, projects…"
+        searchPlaceholder={
+          isAdminView ? "Search campaigns, keywords, projects…" : "Search your campaigns…"
+        }
       >
-        <DigitalProjectSelect allowAll value={projectFilter} onValueChange={setProjectFilter} className="h-8 w-[220px] text-xs" />
+        <DigitalProjectSelect
+          allowAll
+          allLabel={isAdminView ? "All digital projects" : "All my projects"}
+          value={projectFilter}
+          onValueChange={setProjectFilter}
+          className="h-8 w-[220px] text-xs"
+        />
       </MarketingFilterBar>
 
       <MarketingChipTabs value={statusTab} onValueChange={setStatusTab} items={statusChipItems} />
 
-      <CmsDataTable columns={columns} rows={filtered} rowKey={(c) => c.id} isLoading={isLoading} error={isError} onRetry={() => refetch()} empty={{ icon: Search, title: "No campaigns found", description: "Adjust your search filters.", actionLabel: canCreate ? "New campaign" : undefined, onAction: canCreate ? openCreate : undefined }} errorMessage="Check your connection and try again." />
+      <CmsDataTable
+        columns={columns}
+        rows={filtered}
+        rowKey={(c) => c.id}
+        isLoading={isLoading}
+        error={isError}
+        onRetry={() => refetch()}
+        empty={{
+          icon: Search,
+          title: isAdminView ? "No campaigns found" : "No campaigns yet",
+          description: isAdminView
+            ? "Adjust your search filters or create a new Google campaign."
+            : "Create a Google campaign to start tracking performance for your projects.",
+          actionLabel: canCreate ? "New campaign" : undefined,
+          onAction: canCreate ? openCreate : undefined,
+        }}
+        errorMessage="Check your connection and try again."
+      />
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -324,10 +437,12 @@ export default function MarketingGoogleAds() {
                 <Label className="text-xs">Quality score</Label>
                 <Input type="number" min={0} max={10} value={form.qualityScore} onChange={(e) => setForm((f) => ({ ...f, qualityScore: e.target.value }))} className="h-8 text-xs" />
               </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs">CPA (₹)</Label>
-                <Input type="number" min={0} value={form.cpa} onChange={(e) => setForm((f) => ({ ...f, cpa: e.target.value }))} className="h-8 text-xs" />
-              </div>
+              {(isAdminView || editing) && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs">CPA (₹)</Label>
+                  <Input type="number" min={0} value={form.cpa} onChange={(e) => setForm((f) => ({ ...f, cpa: e.target.value }))} className="h-8 text-xs" />
+                </div>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

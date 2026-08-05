@@ -5,7 +5,11 @@ import {
   getNextSequence,
   getNextSequenceRange,
 } from "../../../models/schema/index.js";
-import { filterDigitalPermissionSet } from "../../../middlewares/digital-access.js";
+import {
+  filterDigitalPermissionSet,
+  getDigitalExtraModules,
+  evictRosterAccountManagerCache,
+} from "../../../middlewares/digital-access.js";
 import {
   cmsActions,
   cmsModules,
@@ -668,10 +672,11 @@ function permissionEntryKey(module, action) {
   return `${normalizePermissionModule(module)}:${action}`;
 }
 
-/** Clear cached permissions after role/template changes. */
+/** Clear cached permissions after role/template/project-roster changes. */
 export function evictPermissionCache(userId) {
   if (userId == null) _permCache.clear();
   else _permCache.delete(userId);
+  evictRosterAccountManagerCache(userId);
 }
 
 async function loadUserPermissionEntry(userId) {
@@ -710,7 +715,9 @@ async function loadUserPermissionEntry(userId) {
   expandLegacyMarketingPermissionSet(set);
 
   if (user.role === "digital" || user.role === "freelancer") {
-    filterDigitalPermissionSet(user, set);
+    const effectiveUser = { ...user, id: userId };
+    const extraModules = await getDigitalExtraModules(effectiveUser);
+    filterDigitalPermissionSet(effectiveUser, set, { extraModules });
   }
 
   const entry = {

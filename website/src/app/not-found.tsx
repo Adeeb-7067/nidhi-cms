@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Logo } from "@/components/brand/Logo";
+import { SITE_ICONS } from "@/data/seo";
 
 export const metadata: Metadata = {
   title: "Page not found",
   description: "This page does not exist on Satyakabir Technologies.",
   robots: { index: false, follow: true },
+  icons: SITE_ICONS,
 };
 
 export default function NotFound() {

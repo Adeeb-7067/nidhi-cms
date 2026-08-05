@@ -30,6 +30,7 @@ import { getAccessibleProjectIds, applyIdScope } from "../../access/services/lis
 import { assertClientPermission, findClientCompanyForUser } from "../../identity/services/client-team.js";
 import { bdeOwnsCustomer, findBdeOwnedCustomerIds } from "../../../utils/sales-bde-customer-scope.js";
 import { canManageCmsProjects } from "../../../middlewares/digital-access.js";
+import { evictPermissionCache } from "../../identity/services/permissions.service.js";
 import { paginateModel } from "../../../utils/mongo-list.js";
 import { resolveLogProjectName } from "../../work/services/daily-log-virtual-projects.js";
 import {
@@ -556,6 +557,7 @@ async function postProjectsByIdMembers(req, res) {
     joinedAt: /* @__PURE__ */ new Date(),
     completionPct: 0
   });
+  evictPermissionCache(uid);
   const user = await usersTable.findOne({ id: uid }).lean();
   const member = {
     id: nextId,
@@ -616,6 +618,7 @@ async function postProjectsByIdMembersBatch(req, res) {
       };
       await projectMembersTable.create(member);
       added.push(formatMemberResponse(member, userById.get(uid)));
+      evictPermissionCache(uid);
     }
   }
 
@@ -631,6 +634,7 @@ async function deleteProjectsByIdMembersByUserId(req, res) {
   await assertCanManageProjectMembers(req, projectId);
   const userId = parseInt(req.params["userId"]);
   await projectMembersTable.deleteOne({ projectId, userId });
+  evictPermissionCache(userId);
   res.json({ message: "Member removed" });
 }
 
@@ -656,6 +660,7 @@ async function patchProjectsByIdMembersByUserId(req, res) {
     .lean();
   if (!member) notFound("Project member");
 
+  evictPermissionCache(userId);
   const user = await usersTable.findOne({ id: userId }).lean();
   res.json(formatMemberResponse(member, user));
 }

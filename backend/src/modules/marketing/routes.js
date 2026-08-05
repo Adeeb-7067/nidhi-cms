@@ -120,7 +120,19 @@ router.delete("/marketing/content/:id", ...p("marketing_content", "delete"), wra
 router.get("/marketing/campaigns", ...p("marketing_ads"), wrap(insightsCtrl.listCampaigns));
 router.post("/marketing/campaigns", ...p("marketing_ads", "create"), wrap(insightsCtrl.createCampaign));
 router.patch("/marketing/campaigns/:id", ...p("marketing_ads", "edit"), wrap(insightsCtrl.updateCampaign));
-router.delete("/marketing/campaigns/:id", ...p("marketing_ads", "delete"), wrap(insightsCtrl.deleteCampaign));
+// Creators may remove their own campaigns with create/edit; module delete still
+// covers elevated/org-admin deletes (ownership enforced in the controller).
+router.delete(
+  "/marketing/campaigns/:id",
+  requireAuth,
+  requireAnyPermission(
+    ["marketing_ads", "delete"],
+    ["marketing_ads", "create"],
+    ["marketing_ads", "edit"],
+  ),
+  requireDigitalModuleAccess("marketing_ads"),
+  wrap(insightsCtrl.deleteCampaign),
+);
 
 router.get("/marketing/social", ...p("marketing_analytics"), wrap(insightsCtrl.listSocialMetrics));
 router.post(

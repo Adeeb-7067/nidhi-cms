@@ -26,7 +26,8 @@ export function Logo({ className, priority, size = "md" }: LogoProps) {
       height={h}
       priority={priority}
       className={cn(
-        "select-none object-contain [mix-blend-mode:screen]",
+        // Screen blend knocks out the black plate on dark UI; keep normal compositing in light mode.
+        "select-none object-contain dark:[mix-blend-mode:screen]",
         className,
       )}
     />

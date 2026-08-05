@@ -7,6 +7,7 @@ import {
   DEFAULT_DESCRIPTION,
   DEFAULT_OG_IMAGE,
   DEFAULT_TITLE,
+  SITE_ICONS,
   SITE_NAME,
   SITE_URL,
 } from "@/data/seo";
@@ -76,10 +77,7 @@ export const metadata: Metadata = {
     description: DEFAULT_DESCRIPTION,
     images: [DEFAULT_OG_IMAGE],
   },
-  icons: {
-    icon: [{ url: "/brand/sk-logo.png", type: "image/png" }],
-    apple: [{ url: "/brand/sk-logo.png" }],
-  },
+  icons: SITE_ICONS,
   alternates: { canonical: "/" },
 };
 

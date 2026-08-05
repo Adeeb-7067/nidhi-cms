@@ -5,11 +5,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import { formatStaffRoleLabel } from "@/lib/user-roles";
 
 export function ImpersonationBanner() {
-  const { isImpersonating, impersonation, stopImpersonation, isStoppingImpersonation } = useAuth();
+  const { isImpersonating, impersonation, stopImpersonation, isStoppingImpersonation, user } = useAuth();
 
   if (!isImpersonating || !impersonation) return null;
 
   const roleLabel = formatStaffRoleLabel(impersonation.targetUser.role).toLowerCase();
+  const specialty = user?.subType?.trim();
 
   return (
     <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2">
@@ -19,7 +20,10 @@ export function ImpersonationBanner() {
           <p className="min-w-0 leading-snug text-foreground">
             Viewing as{" "}
             <span className="font-semibold">{impersonation.targetUser.name}</span>{" "}
-            <span className="text-muted-foreground">({roleLabel})</span>
+            <span className="text-muted-foreground">
+              ({roleLabel}
+              {specialty ? ` · ${specialty}` : ""})
+            </span>
             <span className="hidden text-muted-foreground sm:inline">
               {" "}
               · Your super admin session is still active

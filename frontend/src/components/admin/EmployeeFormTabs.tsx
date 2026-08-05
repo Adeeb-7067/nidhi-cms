@@ -54,6 +54,7 @@ import {
   employeeFormSelectTriggerClass,
 } from "./employee-form-ui";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DIGITAL_EMPLOYEE_SPECIALTIES } from "@/lib/digital-specialties";
 
 type Dept = { id: number; name: string };
 type Manager = { id: number; name: string; designation?: string | null };
@@ -226,7 +227,9 @@ export function EmployeeFormTabs({
   payrollStructure?: { basic: number; net: number } | null;
 }) {
   const watchedRole = form.watch("role");
-  const isFreelancer = isFreelancerTeamFormRole(lockRole ?? watchedRole);
+  const effectiveRole = lockRole ?? watchedRole;
+  const isFreelancer = isFreelancerTeamFormRole(effectiveRole);
+  const isDigitalRole = effectiveRole === "digital";
 
   const copyPermanentToCurrent = () => {
     const permanent = form.getValues("permanentAddress");
@@ -792,6 +795,35 @@ export function EmployeeFormTabs({
                   </FormItem>
                 )}
               />
+            ) : isDigitalRole ? (
+              <FormField
+                control={form.control}
+                name="subType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Digital specialty</FormLabel>
+                    <FormControl>
+                      <NativeSelect
+                        {...field}
+                        value={field.value ?? ""}
+                        placeholder="Select specialty"
+                        options={[
+                          { value: "", label: "Not set (defaults to Designer access)" },
+                          ...DIGITAL_EMPLOYEE_SPECIALTIES.map((s) => ({ value: s, label: s })),
+                          ...(field.value &&
+                          !(DIGITAL_EMPLOYEE_SPECIALTIES as readonly string[]).includes(field.value)
+                            ? [{ value: field.value, label: `${field.value} (custom)` }]
+                            : []),
+                        ]}
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[11px]">
+                      Account Manager unlocks Ads, Reports, and portfolio admin views in Digital.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             ) : (
               <FormField
                 control={form.control}
@@ -810,6 +842,7 @@ export function EmployeeFormTabs({
           </FormRow>
           {!isFreelancer ? (
             <>
+              {isDigitalRole ? null : (
               <FormField
                 control={form.control}
                 name="subType"
@@ -823,6 +856,7 @@ export function EmployeeFormTabs({
                   </FormItem>
                 )}
               />
+              )}
               <FormRow>
                 <FormField
                   control={form.control}
