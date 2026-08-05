@@ -12,7 +12,7 @@ Complete overview of the **Cinematic-Scroll** codebase: architecture, runtime fl
 |--|--|
 | **Product** | Premium marketing site for Satyakabir Technologies |
 | **Type** | UI-only (no backend, API, auth, or database) |
-| **Home experience** | Scroll-scrubbed 720-frame “headquarters film” with timed chapter overlays |
+| **Home experience** | Scroll-scrubbed headquarters film (dense-keyframe MP4) with timed chapter overlays |
 | **Site IA** | Enterprise nav + hubs + **composed** detail pages for every leaf (~110 leaves) |
 | **Stack** | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · GSAP · Lenis · Motion |
 | **Theme** | Light + dark (navbar `ThemeToggle`) |
@@ -30,17 +30,20 @@ npm run dev          # http://localhost:3000
 npm run build        # production build (hubs + all nav leaves)
 npm start            # serve production build
 npm run lint         # ESLint
-npm run frames       # re-extract JPG frames from the source MP4
+npm run scrub        # re-encode seek-friendly scrub MP4 / mobile / poster
+npm run frames       # optional: extract JPG fallback sequence (local only)
 ```
 
 | Script | File / behavior |
 |--------|-----------------|
 | `dev` / `build` / `start` | Next.js App Router |
-| `frames` | `scripts/extract-frames.mjs` — ffmpeg-static, 72fps, `frame%04d.jpg` → `public/frames/` |
+| `scrub` | `scripts/encode-scrub.mjs` — dense-keyframe desktop/mobile MP4 + poster (+ WebM) |
+| `frames` | `scripts/extract-frames.mjs` — optional JPG fallback → `public/frames/` (gitignored) |
 
 **Source film:** `public/TITLE__Satyakabir_Technologies.mp4`  
-**Frames:** `public/frames/frame0001.jpg` … `frame0720.jpg`  
-After re-extracting, update `TOTAL_FRAMES` in `src/data/cinematic.ts` if the count changes.
+**Scrub assets:** `*.scrub.mp4`, `*.scrub.mobile.mp4`, `*.poster.jpg`  
+**Frames (optional):** `public/frames/` — local fallback only; not shipped in production.  
+Logical story still uses `TOTAL_FRAMES = 720` / `FRAME_START = 4` in `src/data/cinematic.ts` for chapter timing.
 
 ---
 
@@ -54,9 +57,10 @@ After re-extracting, update `TOTAL_FRAMES` in `src/data/cinematic.ts` if the cou
           ├─ /  → CinematicHome
           │         · LoadingScreen
           │         · AtmosphereLayer (frame → veil)
-          │         · PremiumNavbar (cinematic + theme toggle)
-          │         · CinematicCanvas (JPG scrub)
+          │         · PremiumNavbar (cinematic jumps + theme toggle)
+          │         · CinematicCanvas (MP4 scrub → canvas)
           │         · ScrollScrubber (tall track + ChapterStages)
+          │         · ChapterProgress (place + jump dots)
           │         · Lenis + GSAP ScrollTrigger
           │
           └─ /{section}/[{slug}]  → LeafMarketingPage
@@ -70,17 +74,19 @@ After re-extracting, update `TOTAL_FRAMES` in `src/data/cinematic.ts` if the cou
 ### Runtime data flow (homepage)
 
 ```
-User scroll (Lenis)
+User scroll (Lenis; native scroll if reduced-motion)
     → tall ScrollScrubber document (~height scaled to frame count)
-    → GSAP ScrollTrigger scrub maps scroll → frame number
+    → GSAP ScrollTrigger scrub maps scroll → logical frame number
     → useFrameScrubber.setCurrentFrame(n)
-    → canvas draws /frames/frameNNNN.jpg (sliding preload window)
+    → video.currentTime seek (dense-keyframe MP4) → canvas draw
+       · poster paints first; mobile/save-data uses lighter MP4
+       · optional JPG fallback only if video cannot load
     → ChapterStage(s) fade by exclusive [start, end] frame ranges
     → AtmosphereLayer picks veil/glow for active chapter
 ```
 
 Constants live in **one place**: `src/data/cinematic.ts`  
-(`TOTAL_FRAMES = 720`, `FRAME_START = 4`, `FRAME_FADE = 10`). Chapter UI ranges are **exclusive** (no overlapping start/end), so only one overlay is fully on-screen at a time.
+(`TOTAL_FRAMES = 720`, `FRAME_START = 4`, `FRAME_FADE = 12`). Chapter UI ranges are **exclusive** (no overlapping start/end), so only one overlay is fully on-screen at a time.
 
 ### Runtime data flow (detail / leaf pages)
 
@@ -107,9 +113,13 @@ navigation leaf (section + slug)
 Cinematic-Scroll/
 ├── public/
 │   ├── brand/sk-logo.png
-│   ├── frames/frame0001.jpg … 0720.jpg
-│   └── TITLE__Satyakabir_Technologies.mp4
+│   ├── TITLE__Satyakabir_Technologies.mp4
+│   ├── TITLE__Satyakabir_Technologies.scrub.mp4
+│   ├── TITLE__Satyakabir_Technologies.scrub.mobile.mp4
+│   ├── TITLE__Satyakabir_Technologies.poster.jpg
+│   └── frames/                      # optional local JPG fallback (gitignored)
 ├── scripts/
+│   ├── encode-scrub.mjs
 │   └── extract-frames.mjs
 ├── src/
 │   ├── app/                              # App Router
@@ -397,8 +407,8 @@ Set `NEXT_PUBLIC_SITE_URL` in production so canonicals and Open Graph URLs match
 
 1. **Pointer events** — Overlays mostly `pointer-events: none`; interactive islands opt in.
 2. **Nested scroll** — Mega menus / chat may scroll internally; scrollbars hidden.
-3. **Frames required** — Missing `public/frames` → blank canvas.
-4. **Heavy assets** — 720 JPGs; sliding preload only.
+3. **Scrub assets required** — Missing scrub MP4 → poster / blank canvas. JPG `public/frames` is optional fallback only.
+4. **Heavy assets** — Prefer dense-keyframe scrub MP4 (~4MB desktop / ~1.5MB mobile); do not ship 720 JPGs to production.
 5. **No frame counters in UI** — Frame indices are internal.
 6. **Hero (film)** — Analytics strip; chat is a contact affordance; no custom cursor.
 7. **Composition ≠ kind** — Changing `matchKind` alone will not redesign a page; edit `page-compositions/{section}.ts`.
@@ -421,7 +431,8 @@ Set `NEXT_PUBLIC_SITE_URL` in production so canonicals and Open Graph URLs match
 | Colors / type / spacing | `src/app/globals.css` + `layout.tsx` fonts |
 | Theme toggle | `src/components/theme/ThemeToggle.tsx` |
 | Chat replies | `src/components/ChatBot.tsx` |
-| Re-bake film frames | `npm run frames` then update `TOTAL_FRAMES` |
+| Re-bake scrub film | `npm run scrub` |
+| Optional JPG fallback | `npm run frames` (local only; gitignored) |
 
 ### Adding a new leaf checklist
 

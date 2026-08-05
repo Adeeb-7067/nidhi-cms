@@ -11,11 +11,16 @@ export function useLenis() {
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+    // Native scroll for reduced motion — no inertia layer.
+    if (reduced) {
+      requestAnimationFrame(() => ScrollTrigger.refresh());
+      return;
+    }
+
     const lenis = new Lenis({
-      // Snappier than a long 1.15s lerp — still smooth, less “laggy” catch-up.
-      duration: reduced ? 0.45 : 0.9,
+      duration: 0.9,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
-      smoothWheel: !reduced,
+      smoothWheel: true,
       touchMultiplier: 1.15,
       autoRaf: false,
     });

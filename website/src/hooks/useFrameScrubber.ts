@@ -3,23 +3,48 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { FRAME_START, TOTAL_FRAMES } from "@/data/cinematic";
 
-/** Logical film stills were baked at 72fps from a ~10s master. */
 const FILM_FPS = 72;
-const SCRUB_SRC = "/TITLE__Satyakabir_Technologies.scrub.mp4";
-const FALLBACK_SRC = "/TITLE__Satyakabir_Technologies.mp4";
+const POSTER = "/TITLE__Satyakabir_Technologies.poster.jpg";
+const DESKTOP_MP4 = "/TITLE__Satyakabir_Technologies.scrub.mp4";
+const MOBILE_MP4 = "/TITLE__Satyakabir_Technologies.scrub.mobile.mp4";
+const FALLBACK_MP4 = "/TITLE__Satyakabir_Technologies.mp4";
+
+type ScrubMode = "video" | "poster" | "images";
 
 function withBase(path: string) {
   const base = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
   return `${base}${path}`;
 }
 
+function prefersReducedMotion() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function shouldUseMobileAsset() {
+  if (typeof window === "undefined") return false;
+  const narrow = window.matchMedia("(max-width: 768px)").matches;
+  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
+    ?.saveData;
+  const slow =
+    (navigator as Navigator & { connection?: { effectiveType?: string } }).connection
+      ?.effectiveType === "2g" ||
+    (navigator as Navigator & { connection?: { effectiveType?: string } }).connection
+      ?.effectiveType === "slow-2g";
+  return Boolean(narrow || saveData || slow);
+}
+
 function framePath(index: number) {
   return withBase(`/frames/frame${String(index).padStart(4, "0")}.jpg`);
 }
 
+type VideoWithRVFC = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: (now: number, meta: unknown) => void) => number;
+  cancelVideoFrameCallback?: (id: number) => void;
+};
+
 /**
- * Canvas scrubber — prefers a single MP4 seek (reliable on servers),
- * falls back to the JPG sequence if video cannot load.
+ * Canvas scrubber — dense-keyframe MP4 seek (mobile/desktop variants),
+ * poster first-paint, reduced-motion static path, optional JPG fallback.
  */
 export function useFrameScrubber() {
   const [currentFrame, setCurrentFrameState] = useState(FRAME_START);
@@ -29,7 +54,8 @@ export function useFrameScrubber() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const modeRef = useRef<"video" | "images">("video");
+  const posterRef = useRef<HTMLImageElement | null>(null);
+  const modeRef = useRef<ScrubMode>("poster");
   const cacheRef = useRef<Map<number, HTMLImageElement>>(new Map());
   const frameRef = useRef(FRAME_START);
   const durationRef = useRef(TOTAL_FRAMES / FILM_FPS);
@@ -37,6 +63,7 @@ export function useFrameScrubber() {
   const targetTimeRef = useRef(0);
   const drawRafRef = useRef(0);
   const pendingDrawRef = useRef<number | null>(null);
+  const rvfcIdRef = useRef(0);
 
   const getCtx = useCallback(() => {
     const canvas = canvasRef.current;
@@ -96,6 +123,12 @@ export function useFrameScrubber() {
     coverDraw(video, video.videoWidth, video.videoHeight);
   }, [coverDraw]);
 
+  const drawPoster = useCallback(() => {
+    const img = posterRef.current;
+    if (!img || !img.complete || img.naturalWidth <= 0) return;
+    coverDraw(img, img.naturalWidth, img.naturalHeight);
+  }, [coverDraw]);
+
   const nearestCached = useCallback((index: number): number | null => {
     const cache = cacheRef.current;
     if (cache.has(index)) return index;
@@ -115,12 +148,15 @@ export function useFrameScrubber() {
   const drawImageFrame = useCallback(
     (index: number) => {
       const drawIndex = nearestCached(index);
-      if (drawIndex == null) return;
+      if (drawIndex == null) {
+        drawPoster();
+        return;
+      }
       const img = cacheRef.current.get(drawIndex);
       if (!img) return;
       coverDraw(img, img.width, img.height);
     },
-    [coverDraw, nearestCached],
+    [coverDraw, drawPoster, nearestCached],
   );
 
   const scheduleDraw = useCallback(
@@ -133,11 +169,31 @@ export function useFrameScrubber() {
         pendingDrawRef.current = null;
         if (next == null || next !== frameRef.current) return;
         if (modeRef.current === "video") drawVideo();
+        else if (modeRef.current === "poster") drawPoster();
         else drawImageFrame(next);
       });
     },
-    [drawImageFrame, drawVideo],
+    [drawImageFrame, drawPoster, drawVideo],
   );
+
+  const scheduleVideoFrameDraw = useCallback(() => {
+    const video = videoRef.current as VideoWithRVFC | null;
+    if (!video) {
+      drawVideo();
+      return;
+    }
+    if (typeof video.requestVideoFrameCallback === "function") {
+      if (rvfcIdRef.current && video.cancelVideoFrameCallback) {
+        video.cancelVideoFrameCallback(rvfcIdRef.current);
+      }
+      rvfcIdRef.current = video.requestVideoFrameCallback(() => {
+        rvfcIdRef.current = 0;
+        drawVideo();
+      });
+      return;
+    }
+    drawVideo();
+  }, [drawVideo]);
 
   const pumpSeek = useCallback(() => {
     const video = videoRef.current;
@@ -146,7 +202,7 @@ export function useFrameScrubber() {
 
     const target = targetTimeRef.current;
     if (Math.abs(video.currentTime - target) < 0.012) {
-      drawVideo();
+      scheduleVideoFrameDraw();
       return;
     }
 
@@ -156,13 +212,12 @@ export function useFrameScrubber() {
     } catch {
       seekingRef.current = false;
     }
-  }, [drawVideo]);
+  }, [scheduleVideoFrameDraw]);
 
-  // Stable seeked handler via ref so boot effect does not re-run
   const pumpSeekRef = useRef(pumpSeek);
-  const drawVideoRef = useRef(drawVideo);
+  const scheduleVideoFrameDrawRef = useRef(scheduleVideoFrameDraw);
   pumpSeekRef.current = pumpSeek;
-  drawVideoRef.current = drawVideo;
+  scheduleVideoFrameDrawRef.current = scheduleVideoFrameDraw;
 
   const loadJpg = useCallback(
     (index: number) =>
@@ -176,7 +231,7 @@ export function useFrameScrubber() {
         img.src = framePath(index);
         img.onload = () => {
           cacheRef.current.set(index, img);
-          while (cacheRef.current.size > 64) {
+          while (cacheRef.current.size > 48) {
             const oldest = cacheRef.current.keys().next().value as number | undefined;
             if (oldest === undefined || oldest === frameRef.current) break;
             cacheRef.current.delete(oldest);
@@ -202,12 +257,17 @@ export function useFrameScrubber() {
         return;
       }
 
+      if (modeRef.current === "poster") {
+        scheduleDraw(clamped);
+        return;
+      }
+
       scheduleDraw(clamped);
       void loadJpg(clamped).then(() => {
         if (frameRef.current === clamped) scheduleDraw(clamped);
       });
-      for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 12); i++) void loadJpg(i);
-      for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 6); i--) void loadJpg(i);
+      for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 10); i++) void loadJpg(i);
+      for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--) void loadJpg(i);
     },
     [frameToTime, loadJpg, pumpSeek, scheduleDraw],
   );
@@ -220,12 +280,36 @@ export function useFrameScrubber() {
 
     const onSeeked = () => {
       seekingRef.current = false;
-      drawVideoRef.current();
+      scheduleVideoFrameDrawRef.current();
       const video = videoRef.current;
       if (!video) return;
       if (Math.abs(video.currentTime - targetTimeRef.current) > 0.02) {
         pumpSeekRef.current();
       }
+    };
+
+    const loadPoster = () =>
+      new Promise<boolean>((resolve) => {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = withBase(POSTER);
+        img.onload = () => {
+          posterRef.current = img;
+          modeRef.current = "poster";
+          drawPoster();
+          setLoadProgress((p) => Math.max(p, 12));
+          resolve(true);
+        };
+        img.onerror = () => resolve(false);
+      });
+
+    const bootReducedMotion = async () => {
+      modeRef.current = "poster";
+      await loadPoster();
+      // Prefer a mid-story still if frames exist locally; otherwise keep poster.
+      await loadJpg(Math.round((FRAME_START + TOTAL_FRAMES) / 2));
+      if (cacheRef.current.size > 0) modeRef.current = "images";
+      setLoadProgress(100);
     };
 
     const bootVideo = () =>
@@ -243,12 +327,19 @@ export function useFrameScrubber() {
         document.body.appendChild(video);
         videoRef.current = video;
 
-        const sources = [withBase(SCRUB_SRC), withBase(FALLBACK_SRC)];
+        const mobile = shouldUseMobileAsset();
+        // Prefer dense-keyframe MP4s (desktop ~4MB / mobile ~1.5MB).
+        const sources = mobile
+          ? [withBase(MOBILE_MP4), withBase(DESKTOP_MP4), withBase(FALLBACK_MP4)]
+          : [withBase(DESKTOP_MP4), withBase(MOBILE_MP4), withBase(FALLBACK_MP4)];
+
         let sourceIdx = 0;
         let settled = false;
+        let painted = false;
 
         const detachBootListeners = () => {
           video.removeEventListener("loadedmetadata", onMeta);
+          video.removeEventListener("loadeddata", onLoadedData);
           video.removeEventListener("canplay", onCanPlay);
           video.removeEventListener("progress", onProgress);
           video.removeEventListener("error", onError);
@@ -257,42 +348,64 @@ export function useFrameScrubber() {
           window.clearTimeout(hardTimer);
         };
 
-        const succeed = () => {
-          if (settled || cancelled) return;
-          settled = true;
-          detachBootListeners();
+        const paintFirst = () => {
+          if (painted || cancelled) return;
+          if (video.readyState < 2 || video.videoWidth <= 0) return;
+          painted = true;
           modeRef.current = "video";
           durationRef.current =
             Number.isFinite(video.duration) && video.duration > 0
               ? video.duration
               : TOTAL_FRAMES / FILM_FPS;
-          video.addEventListener("seeked", onSeeked);
           targetTimeRef.current = frameToTime(FRAME_START);
           try {
             video.currentTime = targetTimeRef.current;
           } catch {
             /* ignore */
           }
+          scheduleVideoFrameDrawRef.current();
+          setLoadProgress((p) => Math.max(p, 35));
+          // Unlock UI as soon as first frame can paint — keep buffering in background
+          if (!settled) {
+            settled = true;
+            video.addEventListener("seeked", onSeeked);
+            setIsLoaded(true);
+            resolve(true);
+          }
+        };
+
+        const finish = () => {
+          if (cancelled) return;
+          detachBootListeners();
           setLoadProgress(100);
-          resolve(true);
+          if (!settled) {
+            settled = true;
+            modeRef.current = "video";
+            video.addEventListener("seeked", onSeeked);
+            setIsLoaded(true);
+            resolve(true);
+          }
         };
 
         const failOver = () => {
-          if (settled) return;
+          if (settled && painted) return;
           sourceIdx += 1;
           if (sourceIdx < sources.length) {
+            painted = false;
             video.src = sources[sourceIdx];
             video.load();
             return;
           }
-          settled = true;
-          detachBootListeners();
-          video.removeEventListener("seeked", onSeeked);
-          video.removeAttribute("src");
-          video.load();
-          video.remove();
-          videoRef.current = null;
-          resolve(false);
+          if (!settled) {
+            settled = true;
+            detachBootListeners();
+            video.removeEventListener("seeked", onSeeked);
+            video.removeAttribute("src");
+            video.load();
+            video.remove();
+            videoRef.current = null;
+            resolve(false);
+          }
         };
 
         const onMeta = () => {
@@ -301,9 +414,8 @@ export function useFrameScrubber() {
           }
         };
 
-        const onCanPlay = () => {
-          if (video.readyState >= 2) succeed();
-        };
+        const onLoadedData = () => paintFirst();
+        const onCanPlay = () => paintFirst();
 
         const onProgress = () => {
           try {
@@ -311,7 +423,8 @@ export function useFrameScrubber() {
             const end = video.buffered.end(video.buffered.length - 1);
             const pct = Math.min(99, Math.round((end / video.duration) * 100));
             setLoadProgress((p) => Math.max(p, pct));
-            if (end / video.duration >= 0.85 && video.readyState >= 3) succeed();
+            paintFirst();
+            if (end / video.duration >= 0.7) finish();
           } catch {
             /* ignore */
           }
@@ -320,55 +433,67 @@ export function useFrameScrubber() {
         const onError = () => failOver();
 
         video.addEventListener("loadedmetadata", onMeta);
+        video.addEventListener("loadeddata", onLoadedData);
         video.addEventListener("canplay", onCanPlay);
         video.addEventListener("progress", onProgress);
         video.addEventListener("error", onError);
 
         softTimer = window.setTimeout(() => {
-          if (!settled && video.readyState >= 2) succeed();
-        }, 3500);
+          if (video.readyState >= 2) {
+            paintFirst();
+            finish();
+          }
+        }, 2200);
         hardTimer = window.setTimeout(() => {
           if (!settled) failOver();
-        }, 12000);
+          else finish();
+        }, 10000);
 
         progressTimer = window.setInterval(() => {
           if (settled) return;
           setLoadProgress((p) => (p < 90 ? p + 1 : p));
-        }, 120);
+        }, 140);
 
         video.src = sources[0];
         video.load();
       });
 
     const bootImages = async () => {
-      modeRef.current = "images";
-      const batch = Math.min(36, TOTAL_FRAMES - FRAME_START + 1);
+      modeRef.current = posterRef.current ? "poster" : "images";
+      scheduleDraw(FRAME_START);
+      const batch = Math.min(24, TOTAL_FRAMES - FRAME_START + 1);
       let loaded = 0;
-      const chunk = 6;
-      for (let offset = 0; offset < batch && !cancelled; offset += chunk) {
-        const slice = Array.from(
-          { length: Math.min(chunk, batch - offset) },
-          (_, i) => FRAME_START + offset + i,
-        );
-        await Promise.all(
-          slice.map((idx) =>
-            loadJpg(idx).then(() => {
-              if (cancelled) return;
-              loaded += 1;
-              setLoadProgress(Math.round((loaded / batch) * 100));
-            }),
-          ),
-        );
+      for (let i = 0; i < batch && !cancelled; i++) {
+        const idx = FRAME_START + i;
+        await loadJpg(idx);
+        if (cancelled) return;
+        loaded += 1;
+        modeRef.current = "images";
+        setLoadProgress(Math.round((loaded / batch) * 100));
+        if (i === 0) scheduleDraw(FRAME_START);
       }
     };
 
     const boot = async () => {
+      await loadPoster();
+      if (cancelled) return;
+
+      if (prefersReducedMotion()) {
+        await bootReducedMotion();
+        if (cancelled) return;
+        setIsLoaded(true);
+        scheduleDraw(FRAME_START);
+        return;
+      }
+
       const ok = await bootVideo();
       if (cancelled) return;
-      if (!ok) await bootImages();
-      if (cancelled) return;
-      setIsLoaded(true);
-      scheduleDraw(FRAME_START);
+      if (!ok) {
+        await bootImages();
+        if (cancelled) return;
+        setIsLoaded(true);
+        scheduleDraw(FRAME_START);
+      }
     };
 
     void boot();
@@ -379,8 +504,11 @@ export function useFrameScrubber() {
       window.clearTimeout(softTimer);
       window.clearTimeout(hardTimer);
       if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
-      const video = videoRef.current;
+      const video = videoRef.current as VideoWithRVFC | null;
       if (video) {
+        if (rvfcIdRef.current && video.cancelVideoFrameCallback) {
+          video.cancelVideoFrameCallback(rvfcIdRef.current);
+        }
         video.removeEventListener("seeked", onSeeked);
         video.removeAttribute("src");
         video.load();
@@ -388,7 +516,6 @@ export function useFrameScrubber() {
         videoRef.current = null;
       }
     };
-    // Boot once on mount — helpers are stable enough via refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

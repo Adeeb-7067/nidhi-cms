@@ -45,3 +45,9 @@ next-env.d.ts
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+
+# Optional JPG sequence — local/dev fallback only (production uses scrub MP4)
+/public/frames/
+
+# VP9 scrub encode is larger than H.264 for this film — keep local-only
+/public/TITLE__Satyakabir_Technologies.scrub.webm

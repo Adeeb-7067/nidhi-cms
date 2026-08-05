@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, Search } from "lucide-react";
 import { navigation, ctaNav, type NavItem } from "@/data/navigation";
+import { cinematicNav, frameToScrollPct, getActiveNavKey } from "@/data/cinematic";
 import { Logo } from "@/components/brand/Logo";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { MegaMenu } from "@/components/nav/MegaMenu";
@@ -24,9 +25,9 @@ function scrollToPct(percentage: number) {
 
 export function PremiumNavbar({
   variant = "site",
+  currentFrame,
 }: {
   variant?: "site" | "cinematic";
-  /** @deprecated Frame counter removed from UI */
   currentFrame?: number;
 }) {
   const pathname = usePathname();
@@ -156,69 +157,97 @@ export function PremiumNavbar({
                   </span>
                 </Link>
 
-                {/* Primary links */}
+                {/* Primary links — cinematic home jumps the film; site pages use routes */}
                 <nav className="ml-1 hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex">
-                  {primary.map((item) => {
-                    const active = isActive(item);
-                    const open = openId === item.id;
-                    return (
+                  {variant === "cinematic" && pathname === "/" ? (
+                    <>
+                      {cinematicNav.map((item) => {
+                        const activeKey =
+                          typeof currentFrame === "number"
+                            ? getActiveNavKey(currentFrame)
+                            : "home";
+                        const active = activeKey === item.key;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => scrollToPct(frameToScrollPct(item.frame))}
+                            className={cn(
+                              "inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                              active
+                                ? "bg-muted text-foreground"
+                                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                            )}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </>
+                  ) : (
+                    <>
+                      {primary.map((item) => {
+                        const active = isActive(item);
+                        const open = openId === item.id;
+                        return (
+                          <div
+                            key={item.id}
+                            className="relative"
+                            onMouseEnter={() => {
+                              if (item.kind === "mega") openMega(item.id);
+                              else {
+                                cancelClose();
+                                setOpenId(null);
+                              }
+                            }}
+                          >
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                                active || open
+                                  ? "bg-muted text-foreground"
+                                  : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+                              )}
+                            >
+                              {item.label}
+                              {item.kind === "mega" ? (
+                                <ChevronDown
+                                  className={cn(
+                                    "h-3 w-3 opacity-50 transition-transform duration-200",
+                                    open && "rotate-180",
+                                  )}
+                                />
+                              ) : null}
+                            </Link>
+                          </div>
+                        );
+                      })}
+
                       <div
-                        key={item.id}
                         className="relative"
-                        onMouseEnter={() => {
-                          if (item.kind === "mega") openMega(item.id);
-                          else {
-                            cancelClose();
-                            setOpenId(null);
-                          }
-                        }}
+                        onMouseEnter={() => openMega("more")}
                       >
-                        <Link
-                          href={item.href}
+                        <button
+                          type="button"
                           className={cn(
-                            "inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.01em] transition-[color,background-color,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                            active || open
+                            "inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.01em] transition-colors",
+                            openId === "more" || moreItems.some(isActive)
                               ? "bg-muted text-foreground"
                               : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
                           )}
                         >
-                          {item.label}
-                          {item.kind === "mega" ? (
-                            <ChevronDown
-                              className={cn(
-                                "h-3 w-3 opacity-50 transition-transform duration-200",
-                                open && "rotate-180",
-                              )}
-                            />
-                          ) : null}
-                        </Link>
+                          More
+                          <ChevronDown
+                            className={cn(
+                              "h-3 w-3 opacity-50 transition-transform duration-200",
+                              openId === "more" && "rotate-180",
+                            )}
+                          />
+                        </button>
                       </div>
-                    );
-                  })}
-
-                  {/* More */}
-                  <div
-                    className="relative"
-                    onMouseEnter={() => openMega("more")}
-                  >
-                    <button
-                      type="button"
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-3 py-2 text-[13px] font-medium tracking-[-0.01em] transition-colors",
-                        openId === "more" || moreItems.some(isActive)
-                          ? "bg-muted text-foreground"
-                          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
-                      )}
-                    >
-                      More
-                      <ChevronDown
-                        className={cn(
-                          "h-3 w-3 opacity-50 transition-transform duration-200",
-                          openId === "more" && "rotate-180",
-                        )}
-                      />
-                    </button>
-                  </div>
+                    </>
+                  )}
                 </nav>
 
                 {/* Actions */}

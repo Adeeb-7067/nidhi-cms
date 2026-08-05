@@ -7,6 +7,7 @@ import { ScrollScrubber } from "@/components/ScrollScrubber";
 import { PremiumNavbar } from "@/components/nav/PremiumNavbar";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { AtmosphereLayer } from "@/components/AtmosphereLayer";
+import { ChapterProgress } from "@/components/ChapterProgress";
 
 export default function CinematicHome() {
   useLenis();
@@ -25,6 +26,7 @@ export default function CinematicHome() {
         totalFrames={totalFrames}
         isLoaded={isLoaded}
       />
+      <ChapterProgress currentFrame={currentFrame} isLoaded={isLoaded} />
     </div>
   );
 }
