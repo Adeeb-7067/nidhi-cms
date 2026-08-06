@@ -29,8 +29,9 @@ export function FilmIsland({ children }: { children: React.ReactNode }) {
         scrolls away within one screen and abandons exactly the visitor who
         wanted it.
 
-        Top-right is the only free corner — `ChapterProgress` owns bottom-centre
-        and the chat launcher owns bottom-right.
+        Top-right is free for “See what we do” — Actions owns the left edge and
+        `ChapterProgress` mirrors it on the right while the film is in view.
+        Chat stays bottom-right.
       */}
       <button
         type="button"
@@ -42,7 +43,7 @@ export function FilmIsland({ children }: { children: React.ReactNode }) {
         }`}
         style={{ top: "calc(var(--nav-h) + 0.75rem)" }}
       >
-        Skip the tour
+        See what we do
         <ArrowDown className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-y-0.5" />
       </button>
 

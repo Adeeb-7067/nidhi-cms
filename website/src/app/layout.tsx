@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Syne, Limelight, Manrope, Noto_Sans_Mono } from "next/font/google";
 import { ChatBot } from "@/components/ChatBot";
+import { MissionControl } from "@/components/mission-control/MissionControl";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { SiteJsonLd } from "@/components/seo/SiteJsonLd";
 import {
@@ -69,7 +71,7 @@ export const metadata: Metadata = {
     siteName: SITE_NAME,
     title: DEFAULT_TITLE,
     description: DEFAULT_DESCRIPTION,
-    images: [{ url: DEFAULT_OG_IMAGE, width: 512, height: 512, alt: `${SITE_NAME} logo` }],
+    images: [{ url: DEFAULT_OG_IMAGE, width: 1200, height: 630, alt: `${SITE_NAME} logo` }],
   },
   twitter: {
     card: "summary_large_image",
@@ -101,6 +103,8 @@ export default function RootLayout({
       <body className="min-h-screen antialiased">
         <ThemeProvider>
           {children}
+          <MissionControl />
+          <ScrollToTop />
           <ChatBot />
         </ThemeProvider>
       </body>

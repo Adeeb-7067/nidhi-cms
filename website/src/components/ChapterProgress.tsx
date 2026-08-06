@@ -17,11 +17,8 @@ function scrollToFrame(frame: number) {
 }
 
 /**
- * Subtle chapter rail — place label + jump dots for the film act.
- *
- * The film is a mid-page island now, so this is tied to the island's visibility
- * rather than to "have we scrolled past it": it must not hover over the business
- * sections above the tour, where its chapter numbers mean nothing.
+ * Right-edge chapter control — mirrors left Actions.
+ * Place names stay horizontal (truncated) so long titles never stretch the rail.
  */
 export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: ChapterProgressProps) {
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
@@ -36,31 +33,39 @@ export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: Ch
   return (
     <div
       className={cn(
-        "pointer-events-none fixed bottom-6 left-1/2 z-[var(--z-nav)] flex -translate-x-1/2 flex-col items-center gap-3 px-4",
-        "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:bottom-8",
-        retired ? "translate-y-6 opacity-0" : "translate-y-0 opacity-100",
+        "pointer-events-none fixed right-0 top-1/2 z-[var(--z-nav)] flex -translate-y-1/2 items-center gap-3",
+        "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]",
+        retired ? "translate-x-3 opacity-0" : "translate-x-0 opacity-100",
       )}
       aria-hidden={retired}
       aria-live="polite"
     >
-      <div className="pointer-events-none flex flex-col items-center text-center">
-        <span className="text-[10px] font-medium uppercase tracking-[0.22em] text-white/45">
-          {active.number} · {String(index + 1).padStart(2, "0")} /{" "}
+      {/* Horizontal label — never vertical, never stretches the capsule */}
+      <div className="hidden max-w-[9.5rem] flex-col items-end text-right sm:flex">
+        <span className="font-mono text-[9px] font-medium tracking-[0.14em] text-white/40">
+          {String(index + 1).padStart(2, "0")}
+          <span className="text-white/20"> / </span>
           {String(chapters.length).padStart(2, "0")}
         </span>
-        <span className="mt-1 max-w-[280px] truncate text-[13px] font-medium tracking-[-0.01em] text-white/80">
+        <span
+          className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug tracking-[-0.01em] text-white/75"
+          title={active.place}
+        >
           {active.place}
         </span>
       </div>
 
       <div
         className={cn(
-          "flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-3 py-2 backdrop-blur-md",
+          "flex flex-col items-center gap-1.5 rounded-l-2xl border border-r-0 border-white/16 bg-black/45 px-2.5 py-3.5",
           retired ? "pointer-events-none" : "pointer-events-auto",
         )}
         role="navigation"
         aria-label="Film chapters"
       >
+        <span className="mb-1 font-mono text-[8px] tracking-[0.12em] text-white/40 sm:hidden">
+          {String(index + 1).padStart(2, "0")}
+        </span>
         {chapters.map((chapter) => {
           const on = chapter.id === active.id;
           return (
@@ -72,8 +77,9 @@ export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: Ch
               aria-current={on ? "true" : undefined}
               onClick={() => scrollToFrame(chapter.start + 2)}
               className={cn(
-                "h-1.5 rounded-full transition-[width,background-color,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
-                on ? "w-6 bg-white" : "w-1.5 bg-white/35 hover:bg-white/60",
+                "w-1.5 rounded-full transition-[height,background-color,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+                "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40",
+                on ? "h-5 bg-white" : "h-1.5 bg-white/30 hover:bg-white/55",
               )}
             />
           );

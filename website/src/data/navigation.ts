@@ -145,7 +145,7 @@ export const navigation: NavItem[] = [
       title: "Agentic AI Systems",
       summary: "Production agents with evaluation harnesses, audit trails, and human-in-the-loop controls.",
       href: "/services/agentic-ai",
-      stat: "16",
+      stat: "21",
       statLabel: "Practice areas",
     },
     groups: [
@@ -160,14 +160,38 @@ export const navigation: NavItem[] = [
         ],
       },
       {
+        title: "Digital services",
+        items: [
+          leaf(
+            "Digital Services",
+            "Web, mobile, design, and digital product systems engineered to scale.",
+            "/services",
+            unsplash.web,
+          ),
+          leaf(
+            "Leads",
+            "Lead engines and conversion systems that turn attention into pipeline.",
+            "/services",
+            unsplash.office,
+          ),
+          leaf(
+            "Branding",
+            "Brand systems that product, web, and campaigns can actually ship.",
+            "/services",
+            unsplash.design,
+          ),
+          leaf("Web Development", "High-performance web products.", "/services", unsplash.web),
+          leaf("Mobile Applications", "Native, hybrid, and PWA experiences.", "/services", unsplash.mobile),
+          leaf("UI UX Design", "Interfaces with motion and clarity.", "/services", unsplash.design),
+          leaf("Digital Transformation", "Operating models that stick.", "/services", unsplash.office),
+        ],
+      },
+      {
         title: "Product & platforms",
         items: [
-          leaf("Web Development", "High-performance web products.", "/services", unsplash.web),
           leaf("Enterprise Applications", "Systems of record that stay agile.", "/services", unsplash.web),
           leaf("Product Engineering", "From prototype to release trains.", "/services", unsplash.code),
           leaf("SaaS Development", "Multi-tenant platforms with FinOps.", "/services", unsplash.cloud),
-          leaf("Mobile Applications", "Native, hybrid, and PWA experiences.", "/services", unsplash.mobile),
-          leaf("UI UX Design", "Interfaces with motion and clarity.", "/services", unsplash.design),
         ],
       },
       {
@@ -175,7 +199,6 @@ export const navigation: NavItem[] = [
         items: [
           leaf("Cloud Engineering", "Landing zones and elastic estates.", "/services", unsplash.cloud),
           leaf("DevOps", "CI/CD, SRE, and reliability budgets.", "/services", unsplash.cloud),
-          leaf("Digital Transformation", "Operating models that stick.", "/services", unsplash.office),
           leaf("Cyber Security", "Zero-trust and continuous assurance.", "/services", unsplash.security),
           leaf("QA Automation", "Quality gates in every pipeline.", "/services", unsplash.code),
           leaf("Maintenance & Support", "Keep critical systems calm.", "/services", unsplash.cloud),

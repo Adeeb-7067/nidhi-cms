@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { ExperiencePage } from "@/components/experiences/ExperiencePage";
+import { PurposeChrome } from "@/components/experiences/PurposeChrome";
 import { MarketingShell } from "@/components/pages/MarketingShell";
 import { buildExperience } from "@/data/experiences";
+import {
+  COMPANY_IDENTITY,
+  SITE_TRUST,
+  getHubLanding,
+  sectionLabel,
+} from "@/data/first-viewport";
 import {
   breadcrumbsFor,
   getSectionLeaves,
@@ -21,6 +28,9 @@ export function SectionHubPage({
   const section = navigation.find((n) => n.id === sectionId);
   const leaves = getSectionLeaves(sectionId);
   const crumbs = breadcrumbsFor(`/${sectionId}`);
+  const landing = getHubLanding(sectionId);
+  const purpose = summary || landing.purpose;
+  const label = section?.label ?? sectionLabel(sectionId);
 
   return (
     <MarketingShell crumbs={crumbs}>
@@ -29,18 +39,23 @@ export function SectionHubPage({
           aria-hidden
           className="pointer-events-none absolute -right-2 top-4 font-deco text-[clamp(4rem,16vw,10rem)] leading-none text-foreground/8"
         >
-          {section?.label?.slice(0, 6) ?? "SK"}
+          {label.slice(0, 6)}
         </p>
-        <p className="text-eyebrow text-muted-foreground">
-          {section?.label ?? sectionId}
-        </p>
-        <h1 className="relative mt-3 max-w-3xl font-display text-[clamp(2.25rem,5vw,4rem)] leading-[0.95]">
-          {title}
-        </h1>
-        <p className="relative mt-4 max-w-2xl text-[15px] leading-relaxed text-secondary-foreground">{summary}</p>
+        <PurposeChrome
+          company={COMPANY_IDENTITY.company}
+          craft={COMPANY_IDENTITY.craft}
+          context={`Explore · ${label}`}
+          title={title}
+          promise={purpose}
+          outcomes={landing.outcomes}
+          trust={SITE_TRUST}
+          cta={{ label: landing.ctaLabel, href: landing.ctaHref }}
+          accent="#2B6BFF"
+          className="relative max-w-3xl"
+        />
       </header>
 
-      <div className="space-y-10 md:space-y-14">
+      <div id="explore" className="scroll-mt-28 space-y-10 md:space-y-14">
         {(section?.groups ?? [{ title: "Explore", items: leaves }]).map((group, gi) => (
           <section key={group.title}>
             <p className="mb-3 text-meta text-muted-foreground md:mb-4">

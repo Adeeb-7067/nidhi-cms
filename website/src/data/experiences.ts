@@ -1,4 +1,11 @@
 import { resolvePageContent } from "@/data/page-content";
+import {
+  COMPANY_IDENTITY,
+  defaultOutcomes,
+  defaultTrust,
+  pageContext,
+  type TrustMetric,
+} from "@/data/first-viewport";
 import { getSectionLeaves } from "@/data/navigation";
 import { buildPageMetadata } from "@/data/seo";
 import type { Metadata } from "next";
@@ -41,12 +48,29 @@ export type ExperienceCta = {
   watermark?: string;
 };
 
+export type ExperienceCaseBrief = {
+  client: string;
+  sector: string;
+  engagement: string;
+  duration: string;
+  challenge: string;
+  solution: string;
+};
+
 export type ExperiencePayload = {
   sectionId: string;
   slug: string;
   title: string;
   summary: string;
+  /** One-line page promise — first-viewport “what is this for” */
+  promise: string;
+  /** Visitor-facing context, e.g. Services · AI Development */
   eyebrow: string;
+  companyIdentity: typeof COMPANY_IDENTITY;
+  /** Why-care chips for the first viewport */
+  outcomes: string[];
+  /** Trust strip (page metrics or site defaults) */
+  trust: TrustMetric[];
   related: { title: string; href: string; description: string }[];
   sectionHref: string;
   kind: ExperienceKind;
@@ -65,6 +89,8 @@ export type ExperiencePayload = {
   cta: ExperienceCta;
   seoTitle: string;
   seoDescription: string;
+  /** Present on rich /work case-study detail pages */
+  caseBrief?: ExperienceCaseBrief;
 };
 
 const images = {
@@ -622,14 +648,19 @@ export function buildExperience(input: {
     input.title.split(" ")[0]?.toUpperCase() ??
     "SK";
 
+  const metrics = resolved.metrics ?? profile.metrics;
+  const promise = resolved.summary;
+
   return {
     sectionId: input.sectionId,
     slug: input.slug,
     title: input.title,
     summary: resolved.summary,
-    eyebrow:
-      resolved.eyebrow ??
-      `${input.sectionId.replace(/-/g, " ")} · ${kind.replace(/-/g, " ")}`,
+    promise,
+    eyebrow: resolved.eyebrow ?? pageContext(input.sectionId, input.title),
+    companyIdentity: COMPANY_IDENTITY,
+    outcomes: defaultOutcomes(input.sectionId),
+    trust: defaultTrust(metrics),
     related: resolved.related ?? input.related,
     sectionHref: `/${input.sectionId}`,
     kind,
@@ -641,7 +672,7 @@ export function buildExperience(input: {
     pills: resolved.pills ?? profile.pills,
     pipeline: resolved.pipeline ?? profile.pipeline,
     cards: resolved.cards ?? profile.cards,
-    metrics: resolved.metrics ?? profile.metrics,
+    metrics,
     chapters: resolved.chapters,
     stack: resolved.stack ?? profile.stack,
     faqs: resolved.faqs,

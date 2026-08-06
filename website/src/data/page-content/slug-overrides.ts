@@ -410,6 +410,340 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     ],
   },
 
+  "services/digital-services": {
+    summary:
+      "Digital services that ship: websites and web apps, mobile products, UX systems, and digital transformation programs — engineered as one practice so customer journeys and back-office systems stay aligned.",
+    highlight: "Digital products businesses can operate — not brochureware.",
+    eyebrow: "Services · Digital Services",
+    seoTitle: "Digital Services — Satyakabir Technologies",
+    seoDescription:
+      "Digital services from Satyakabir: web development, mobile apps, UI/UX, and digital transformation with principal-led engineering.",
+    pills: [
+      "Web products",
+      "Mobile apps",
+      "UI/UX",
+      "Digital transformation",
+      "APIs",
+      "CMS",
+      "Performance",
+      "Accessibility",
+    ],
+    pipeline: [
+      { step: "Discover", detail: "Journeys, constraints, success metrics" },
+      { step: "Design", detail: "Experience + architecture together" },
+      { step: "Build", detail: "Vertical slices with quality gates" },
+      { step: "Launch", detail: "Performance, a11y, release ops" },
+      { step: "Grow", detail: "Iterate, measure, transfer ownership" },
+    ],
+    cards: [
+      {
+        title: "Web & product surfaces",
+        summary: "Marketing sites and product web apps with Core Web Vitals budgets and CMS architectures that marketers can run.",
+        meta: "Web",
+      },
+      {
+        title: "Mobile experiences",
+        summary: "iOS, Android, and cross-platform apps with offline, store release, and device reality designed in.",
+        meta: "Mobile",
+      },
+      {
+        title: "Design systems",
+        summary: "Research-led UI that engineering can ship — accessibility and motion included.",
+        meta: "Design",
+      },
+      {
+        title: "Transformation programs",
+        summary: "Digital operating models that land in production, not slide decks.",
+        meta: "Change",
+      },
+    ],
+    metrics: [
+      { value: "6–12w", label: "Typical MVP window" },
+      { value: "A11y", label: "Built into acceptance" },
+      { value: "CWV", label: "Performance budgets" },
+      { value: "1 team", label: "Design ↔ engineering" },
+    ],
+    stack: ["Next.js", "React Native", "TypeScript", "Node.js", "Figma", "PostgreSQL", "AWS", "Vercel"],
+    relatedHints: [
+      "/services/leads",
+      "/services/branding",
+      "/services/web-development",
+      "/services/mobile-applications",
+      "/services/ui-ux-design",
+      "/contact/get-quote",
+    ],
+    cta: cta(
+      "Digital services",
+      "Ready to ship a digital product that lasts?",
+      "Talk to a principal about web, mobile, design, and transformation as one delivery — not four vendors.",
+      "Start a Digital Project",
+      quote,
+      "DIGITAL",
+    ),
+    chapters: [
+      {
+        label: "01 · Why digital stalls",
+        title: "Separate teams create broken journeys",
+        body: "When marketing sites, product apps, and back-office systems are bought from different vendors, customers feel the seams. We engineer digital surfaces as one system with shared design language, APIs, and ownership.",
+      },
+      {
+        label: "02 · What we deliver",
+        title: "Web, mobile, design, and change",
+        body: "High-performance web products, native and cross-platform mobile, UI/UX systems with accessibility, and transformation programs that sequence real system change — not workshop theatre.",
+      },
+      {
+        label: "03 · How we work",
+        title: "Principal-led, proof weekly",
+        body: "Discovery locks journeys and constraints. Design and architecture move together. Weekly vertical slices ship behind flags with performance and accessibility gates before promotion.",
+      },
+      {
+        label: "04 · What you own",
+        title: "A digital estate your team can grow",
+        body: "You leave with running products, design tokens engineers can extend, runbooks for release, and clarity on what to build next — without a permanent black-box dependency.",
+      },
+    ],
+    faqs: [
+      {
+        q: "Is this the same as digital marketing?",
+        a: "No. We engineer digital products and platforms — web, mobile, design systems, and transformation. Campaign media buying is not our practice.",
+      },
+      {
+        q: "Can you rebuild our website and app together?",
+        a: "Yes. Shared design systems and APIs keep brand and product aligned across surfaces.",
+      },
+      {
+        q: "Do you include SEO and performance?",
+        a: "Technical SEO foundations, Core Web Vitals budgets, and accessibility are part of web delivery — not optional late polish.",
+      },
+      {
+        q: "How do engagements start?",
+        a: "A scoped discovery with a principal, then a written first slice: journeys, stack, timeline, and success metrics.",
+      },
+    ],
+  },
+
+  "services/leads": {
+    summary:
+      "Lead systems that sales trusts: capture, enrichment, scoring, routing, and follow-up automation — so attention becomes qualified pipeline instead of a spreadsheet graveyard.",
+    highlight: "Pipeline you can operate — not vanity form fills.",
+    eyebrow: "Services · Leads",
+    seoTitle: "Lead Generation Systems — Satyakabir Technologies",
+    seoDescription:
+      "Lead capture, scoring, routing, and CRM-connected follow-up systems engineered for conversion and sales adoption.",
+    pills: [
+      "Lead capture",
+      "Scoring",
+      "Routing",
+      "CRM sync",
+      "Nurture",
+      "Attribution",
+      "Landing pages",
+      "Sales alerts",
+    ],
+    pipeline: [
+      { step: "Map", detail: "Sources, ICP, handoff rules" },
+      { step: "Capture", detail: "Forms, landers, intent signals" },
+      { step: "Score", detail: "Fit + intent models" },
+      { step: "Route", detail: "Owner, SLA, escalation" },
+      { step: "Prove", detail: "Funnel metrics sales accepts" },
+    ],
+    cards: [
+      {
+        title: "Capture surfaces",
+        summary: "Landers, forms, and product-led triggers that collect clean data without killing conversion.",
+        meta: "Inbound",
+      },
+      {
+        title: "Scoring & routing",
+        summary: "Fit and intent scores with ownership rules sales teams actually follow.",
+        meta: "Ops",
+      },
+      {
+        title: "CRM connection",
+        summary: "Bi-directional sync with CRM/ERP so leads do not die in tools sales never open.",
+        meta: "Systems",
+      },
+      {
+        title: "Follow-up engines",
+        summary: "Nurture and alert paths with SLAs — humans for high-intent, automation for scale.",
+        meta: "Convert",
+      },
+    ],
+    metrics: [
+      { value: "SLA", label: "Response timers" },
+      { value: "CRM", label: "Source of truth" },
+      { value: "Score", label: "Fit + intent" },
+      { value: "Audit", label: "Attribution trail" },
+    ],
+    stack: ["Next.js", "HubSpot", "Salesforce", "Segment", "Postgres", "Redis", "n8n", "TypeScript"],
+    relatedHints: [
+      "/services/digital-services",
+      "/services/web-development",
+      "/solutions/crm",
+      "/services/branding",
+      "/contact/get-quote",
+    ],
+    cta: cta(
+      "Leads",
+      "Need a lead engine sales will actually use?",
+      "We design capture-to-CRM systems with scoring, routing, and SLAs — then prove the funnel with metrics your team owns.",
+      "Build a Lead System",
+      quote,
+      "LEADS",
+    ),
+    chapters: [
+      {
+        label: "01 · The leak",
+        title: "Most lead programs fail at handoff",
+        body: "Forms fill, notifications fire, and nothing happens. We treat leads as an operating system: data quality, ownership, SLA, and feedback from closed-won — not a campaign KPI slide.",
+      },
+      {
+        label: "02 · The system",
+        title: "Capture → score → route → follow through",
+        body: "Landers and product signals feed enrichment and scoring. Routing respects territory and capacity. High-intent paths get human speed; nurture paths stay automated and measurable.",
+      },
+      {
+        label: "03 · Sales trust",
+        title: "If reps ignore the queue, the system failed",
+        body: "We design with sales ops: field definitions they need, alert noise they will not mute, and dashboards that show pipeline health — not vanity MQLs.",
+      },
+      {
+        label: "04 · What you own",
+        title: "A funnel your team can tune",
+        body: "You leave with playbooks, scoring criteria, CRM mappings, and experiment hooks so the next campaign improves the machine instead of restarting it.",
+      },
+    ],
+    faqs: [
+      {
+        q: "Do you run paid ads for us?",
+        a: "We engineer the lead system and conversion surfaces. Media buying can partner alongside — we keep attribution and handoff honest either way.",
+      },
+      {
+        q: "Which CRMs do you support?",
+        a: "Commonly Salesforce, HubSpot, and custom CRM/ERP meshes. We meet your system of record.",
+      },
+      {
+        q: "How fast to a working pipeline?",
+        a: "A scoped capture-to-CRM slice often ships in 4–8 weeks, then scoring and nurture deepen in waves.",
+      },
+      {
+        q: "How do you measure success?",
+        a: "Qualified pipeline, speed-to-lead, sales acceptance rate, and conversion to opportunity — agreed before build.",
+      },
+    ],
+  },
+
+  "services/branding": {
+    summary:
+      "Branding that ships in product: identity, voice, and design tokens engineered so web, mobile, and campaigns stay consistent without a bottleneck of one-off artboards.",
+    highlight: "Brand systems engineering can run.",
+    eyebrow: "Services · Branding",
+    seoTitle: "Branding Services — Satyakabir Technologies",
+    seoDescription:
+      "Brand identity, voice, and design systems from Satyakabir — tokens and kits that product and web teams can ship.",
+    pills: [
+      "Identity",
+      "Voice",
+      "Design tokens",
+      "UI kits",
+      "Guidelines",
+      "Launch assets",
+      "Product brand",
+      "Motion",
+    ],
+    pipeline: [
+      { step: "Listen", detail: "Audience, category, constraints" },
+      { step: "Define", detail: "Positioning, voice, visual core" },
+      { step: "Systemize", detail: "Tokens, type, components" },
+      { step: "Apply", detail: "Web and product surfaces" },
+      { step: "Govern", detail: "Guidelines teams can follow" },
+    ],
+    cards: [
+      {
+        title: "Identity core",
+        summary: "Logo system, color, type, and imagery rules that hold under real UI density.",
+        meta: "Visual",
+      },
+      {
+        title: "Voice & narrative",
+        summary: "Messaging pillars and copy patterns marketing and product can reuse.",
+        meta: "Verbal",
+      },
+      {
+        title: "Design tokens",
+        summary: "Engineering-ready tokens and Figma kits aligned to the codebase.",
+        meta: "System",
+      },
+      {
+        title: "Launch kit",
+        summary: "Site, decks, and social templates that match the product surface.",
+        meta: "Rollout",
+      },
+    ],
+    metrics: [
+      { value: "Tokens", label: "Single source" },
+      { value: "UI kit", label: "Ship-ready" },
+      { value: "Voice", label: "Reusable patterns" },
+      { value: "A11y", label: "Contrast locked" },
+    ],
+    stack: ["Figma", "Design tokens", "Next.js", "Storybook", "TypeScript", "Motion"],
+    relatedHints: [
+      "/services/ui-ux-design",
+      "/services/digital-services",
+      "/services/web-development",
+      "/services/leads",
+      "/contact/get-quote",
+    ],
+    cta: cta(
+      "Branding",
+      "Need a brand your product team can actually ship?",
+      "We build identity and design systems that survive engineering — tokens, kits, and guidelines included.",
+      "Start a Brand System",
+      quote,
+      "BRAND",
+    ),
+    chapters: [
+      {
+        label: "01 · The gap",
+        title: "Pretty brands that break in product",
+        body: "Many brand books ignore dense UI, dark mode, and accessibility. We design for the surfaces customers live in — apps and sites — then extend to campaigns.",
+      },
+      {
+        label: "02 · The system",
+        title: "Identity + tokens + voice",
+        body: "Positioning and visual core lock first. Tokens and component kits follow so engineering and design share one language. Voice guidelines stop copy from drifting channel by channel.",
+      },
+      {
+        label: "03 · Application",
+        title: "Prove it on real pages",
+        body: "We apply the system to priority web or product screens early — so the brand is tested under layout pressure before a giant rollout.",
+      },
+      {
+        label: "04 · Governance",
+        title: "Teams stay on-brand without theatre",
+        body: "Clear do/don't kits, contribution rules for the design system, and handoff so marketing and product evolve the brand together.",
+      },
+    ],
+    faqs: [
+      {
+        q: "Do you only deliver a logo?",
+        a: "No. Logo work sits inside a system: tokens, type, voice, and applied UI — so the brand survives contact with product.",
+      },
+      {
+        q: "Can you refresh an existing brand?",
+        a: "Yes. We often modernize identity while preserving equity, then reconnect it to design systems and web.",
+      },
+      {
+        q: "How do you work with our marketing agency?",
+        a: "We own the system of record for product brand; agencies can extend campaigns from the same tokens and voice.",
+      },
+      {
+        q: "Typical timeline?",
+        a: "A focused brand system foundation often lands in 4–8 weeks, with product application in parallel or as a follow-on wave.",
+      },
+    ],
+  },
+
   "services/cyber-security": {
     summary:
       "Cybersecurity that keeps product velocity: zero-trust architecture, secure SDLC, detection engineering, penetration testing with remediation, and compliance evidence that auditors accept.",
@@ -1314,7 +1648,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
       { label: "04 · Next", title: "Clear path", body: "Working session, written thesis, or honest decline if we are not the right fit." },
     ],
     faqs: [
-      { q: "Sales email vs form?", a: "Either works; forms help us route faster. [Placeholder: publish canonical email addresses.]" },
+      { q: "Sales email vs form?", a: "Either works — forms help us route faster, or email info@satyakabir.com directly." },
       { q: "NDA before talking?", a: "Available when required for sensitive estates." },
       { q: "Existing client support?", a: "Use Support channels for SLA-backed help." },
     ],
@@ -1386,7 +1720,7 @@ export const slugOverrides: Record<string, PageContentPartial> = {
     relatedHints: ["/company/global-presence", "/contact/contact-us", "/contact/book-meeting"],
     cta: cta("Locations", "Plan a visit or remote kickoff", "We will arrange the right format for your stakeholders.", "Contact Us", "/contact/contact-us", "HQ"),
     chapters: [
-      { label: "01 · HQ", title: "Bengaluru", body: "Craft center for standards, hiring, and architecture gravity. [Placeholder: publish street address for maps and courier.]" },
+      { label: "01 · HQ", title: "Bengaluru", body: "Craft center for standards, hiring, and architecture gravity. Meetings and workshops arranged per engagement." },
       { label: "02 · Remote", title: "Distributed pods", body: "Delivery teams collaborate across regions with defined overlap." },
       { label: "03 · Visits", title: "Client sites", body: "Workshops and critical cutovers on-site when risk warrants travel." },
       { label: "04 · Meet", title: "Book intentionally", body: "Use Book Meeting for calendared sessions; walk-ins are not supported." },

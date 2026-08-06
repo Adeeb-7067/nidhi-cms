@@ -8,7 +8,7 @@
 
 /** Business hero — after the film. Transformation is the goal; engineering is how. */
 export const homeHero = {
-  location: "Prayagraj · Delhi NCR · Dubai",
+  location: "Bengaluru · Remote-first · Global delivery",
   headline: ["Engineering Technology", "That Transforms Businesses."],
   statement:
     "We help organizations modernize, automate, and scale through AI, enterprise software, cloud platforms, data engineering, cybersecurity, and intelligent automation.",
@@ -204,7 +204,7 @@ export const caseStudies: CaseStudy[] = [
       "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=800&q=80",
     ],
     accent: "#2B6BFF",
-    href: "/work",
+    href: "/work/nexus-ai-platform",
   },
   {
     id: "meridian",
@@ -229,7 +229,7 @@ export const caseStudies: CaseStudy[] = [
       "https://images.unsplash.com/photo-1505751172876-fa1923c5c528?auto=format&fit=crop&w=800&q=80",
     ],
     accent: "#00C853",
-    href: "/work",
+    href: "/work/meridian-health-app",
   },
   {
     id: "cloudforge",
@@ -254,7 +254,7 @@ export const caseStudies: CaseStudy[] = [
       "https://images.unsplash.com/photo-1472851294608-062f824d29cc?auto=format&fit=crop&w=800&q=80",
     ],
     accent: "#FF8A00",
-    href: "/work",
+    href: "/work/cloudforge-infrastructure",
   },
   {
     id: "edusphere",
@@ -279,7 +279,7 @@ export const caseStudies: CaseStudy[] = [
       "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80",
     ],
     accent: "#7649FF",
-    href: "/work",
+    href: "/work/edusphere-lms",
   },
 ];
 

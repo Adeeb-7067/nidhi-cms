@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Lenis from "lenis";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { isOverlayScrollLocked, setOverlayScrollLock } from "@/lib/lenis-control";
 
 export function useLenis() {
   useEffect(() => {
@@ -17,6 +18,9 @@ export function useLenis() {
       return;
     }
 
+    // Clear leftover overlay lock from Mission Control / HMR.
+    setOverlayScrollLock(false);
+
     const lenis = new Lenis({
       // Shorter inertia so frame scrubbing tracks the wheel more tightly.
       duration: 0.55,
@@ -24,6 +28,12 @@ export function useLenis() {
       smoothWheel: true,
       touchMultiplier: 1.1,
       autoRaf: false,
+      // Do NOT enable allowNestedScroll — film chapter panels use overflow-y-auto
+      // and would steal wheel events, freezing page scroll. Mega menus / overlays
+      // opt out via data-lenis-prevent (handled by Lenis itself).
+      // When Mission Control is open, skip Lenis so panels can scroll natively.
+      // Never use lenis.stop().
+      prevent: () => isOverlayScrollLocked(),
     });
 
     lenis.on("scroll", ScrollTrigger.update);
@@ -40,6 +50,7 @@ export function useLenis() {
     return () => {
       lenis.destroy();
       gsap.ticker.remove(tick);
+      setOverlayScrollLock(false);
     };
   }, []);
 }

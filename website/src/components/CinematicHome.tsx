@@ -18,20 +18,29 @@ import { SiteFooter } from "@/components/nav/SiteFooter";
 /**
  * Homepage composition.
  *
- * The film opens the page: first paint is the scrub canvas with the `arrival`
- * chapter over it. Everything the film cannot say — proof, outcomes, the service
- * surface, who vouches for us — follows it in one continuous read, with a bypass
- * inside the opening viewport for visitors who want the argument, not the tour.
+ * The film opens the page: first paint is the HQ tour (native `<video>`, same
+ * decode path as the master MP4) with the `arrival` chapter over it. Everything
+ * the film cannot say — proof, outcomes, the service surface, who vouches for
+ * us — follows it in one continuous read, with a bypass inside the opening
+ * viewport for visitors who want the argument, not the tour.
  *
- * The fixed film canvas lives at `--z-canvas` behind everything. Sections are
- * opaque and sit at `--z-content`, so the canvas is only ever *seen* through the
+ * The fixed film layer lives at `--z-canvas` behind everything. Sections are
+ * opaque and sit at `--z-content`, so the film is only ever *seen* through the
  * transparent film track; `useFilmInView` additionally drops it out of the paint
  * path entirely once the film is nowhere near the viewport.
  */
 export default function CinematicHome() {
   useLenis();
-  const { canvasRef, currentFrame, setCurrentFrame, totalFrames, isLoaded, loadProgress } =
-    useFrameScrubber();
+  const {
+    canvasRef,
+    videoRef,
+    nativeVideo,
+    currentFrame,
+    setCurrentFrame,
+    totalFrames,
+    isLoaded,
+    loadProgress,
+  } = useFrameScrubber();
   const filmInView = useFilmInView();
 
   return (
@@ -39,7 +48,12 @@ export default function CinematicHome() {
       <PremiumNavbar variant="cinematic" />
 
       <AtmosphereLayer currentFrame={currentFrame} hidden={!filmInView} />
-      <CinematicCanvas canvasRef={canvasRef} hidden={!filmInView} />
+      <CinematicCanvas
+        canvasRef={canvasRef}
+        videoRef={videoRef}
+        nativeVideo={nativeVideo}
+        hidden={!filmInView}
+      />
 
       <FilmIsland>
         <ScrollScrubber

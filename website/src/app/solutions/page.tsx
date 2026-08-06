@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SectionHubPage } from "@/components/pages/SectionPages";
+import { getHubLanding } from "@/data/first-viewport";
 import { hubMetadata } from "@/data/seo";
 
 export const metadata: Metadata = hubMetadata("solutions");
@@ -9,7 +10,7 @@ export default function SolutionsIndexPage() {
     <SectionHubPage
       sectionId="solutions"
       title="Solutions"
-      summary="Outcome-shaped platforms across ERP, CRM, industry verticals, startups, and enterprise programs."
+      summary={getHubLanding("solutions").purpose}
     />
   );
 }

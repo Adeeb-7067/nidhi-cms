@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { Magnetic } from "@/components/ui/Magnetic";
 import { RevealHeading } from "./primitives";
 import { usePrefersReducedMotion } from "@/components/experiences/primitives";
+import { site } from "@/data/mock";
 
 /** Fixed seeds keep server and client markup identical. */
 const MOTES = [
@@ -86,7 +87,7 @@ export function FinalCta() {
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
           <Magnetic className="inline-flex" strength={0.4}>
             <Link
-              href="/contact"
+              href="/contact/get-quote"
               className="group relative inline-flex items-center gap-2.5 overflow-hidden rounded-full px-8 py-4 text-[14px] font-medium tracking-[0.02em] text-white shadow-[0_24px_70px_-24px_rgba(43,107,255,0.85)] transition-shadow duration-500 hover:shadow-[0_30px_90px_-20px_rgba(0,217,255,0.6)]"
             >
               <span
@@ -103,7 +104,7 @@ export function FinalCta() {
           </Magnetic>
 
           <Link
-            href="/contact"
+            href="/contact/book-meeting"
             className="inline-flex items-center gap-2 rounded-full border border-white/18 px-7 py-4 text-[14px] font-medium text-white/80 transition-[border-color,color,background-color] duration-500 hover:border-white/40 hover:bg-white/5 hover:text-white"
           >
             Schedule a Discovery Call
@@ -111,7 +112,7 @@ export function FinalCta() {
         </div>
 
         <p className="mt-10 text-[13px] text-white/40">
-          hello@satyakabir.tech · Bengaluru · Remote-first · Global delivery
+          {site.email} · Bengaluru · Remote-first · Global delivery
         </p>
       </div>
     </section>

@@ -13,6 +13,7 @@ export type SectionId =
   | "hero-default"
   | "pills"
   | "highlight-band"
+  | "case-brief"
   | "pipeline"
   | "cards"
   | "chapters-grid"

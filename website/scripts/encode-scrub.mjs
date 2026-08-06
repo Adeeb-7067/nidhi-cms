@@ -69,16 +69,19 @@ if (!source) {
 const DESKTOP_CAP = 1920;
 const desktopWidth = Math.min(source.width, DESKTOP_CAP);
 const upscaledAtRuntime = desktopWidth < DESKTOP_CAP;
+// Sub-1080 masters get a real sharpen pass — soft encode + soft canvas upscale
+// is what made the tour look foggy. Stay mild enough to avoid halos.
 const desktopFilter = [
   `scale=${desktopWidth}:-2:flags=lanczos`,
-  upscaledAtRuntime ? "unsharp=5:5:0.55:3:3:0.0" : null,
+  upscaledAtRuntime ? "unsharp=5:5:0.85:5:5:0.25" : null,
 ]
   .filter(Boolean)
   .join(",");
 
 // All-intra needs far more headroom at 1080p than at 720p.
-const desktopMaxrate = desktopWidth >= 1600 ? "14000k" : "6000k";
-const desktopBufsize = desktopWidth >= 1600 ? "20000k" : "9000k";
+const desktopMaxrate = desktopWidth >= 1600 ? "16000k" : "10000k";
+const desktopBufsize = desktopWidth >= 1600 ? "24000k" : "14000k";
+const desktopCrf = desktopWidth >= 1600 ? "18" : "16";
 const posterWidth = Math.min(source.width, 1920);
 const mobileWidth = Math.min(source.width, 854);
 
@@ -118,7 +121,7 @@ run("desktop scrub mp4 (dense keyframes)", [
   // Capped CRF. Do NOT add -b:v here: ffmpeg switches to ABR and ignores CRF,
   // which is how this encode previously ballooned to 10 MB with no visible gain.
   "-crf",
-  "20",
+  desktopCrf,
   "-maxrate",
   desktopMaxrate,
   "-bufsize",
@@ -195,9 +198,11 @@ run("poster jpg", [
   "-frames:v",
   "1",
   "-q:v",
-  "3",
+  "2",
   "-vf",
-  `scale=${posterWidth}:-2`,
+  upscaledAtRuntime
+    ? `scale=${posterWidth}:-2:flags=lanczos,unsharp=5:5:0.7:5:5:0.2`
+    : `scale=${posterWidth}:-2:flags=lanczos`,
   poster,
 ]);
 

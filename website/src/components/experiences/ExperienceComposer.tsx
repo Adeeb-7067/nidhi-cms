@@ -20,6 +20,7 @@ const registry: Record<SectionId, SectionComponent> = {
   "hero-default": S.SectionHeroDefault,
   pills: S.SectionPills,
   "highlight-band": S.SectionHighlightBand,
+  "case-brief": S.SectionCaseBrief,
   pipeline: S.SectionPipeline,
   cards: S.SectionCards,
   "chapters-grid": S.SectionChaptersGrid,

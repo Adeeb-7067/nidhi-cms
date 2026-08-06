@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { PremiumButton } from "@/components/ui/PremiumButton";
+import { PurposeChrome } from "@/components/experiences/PurposeChrome";
 import type { ExperiencePayload } from "@/data/experiences";
 import type { SectionProps } from "@/data/page-compositions/types";
 import {
@@ -27,6 +28,7 @@ import {
   RelatedStrip,
   StackPills,
 } from "@/components/experiences/ExperienceBlocks";
+import { ContactInquiryForm } from "@/components/forms/ContactInquiryForm";
 import { cn, pickFromSlug } from "@/lib/utils";
 import type { BlockLayout } from "@/data/page-compositions/types";
 
@@ -36,16 +38,24 @@ const TEXT_LAYOUTS = ["flush", "split-text", "display", "center", "pull"] as con
 const VALUE_LAYOUTS = ["columns", "stack", "pair"] as const satisfies readonly BlockLayout[];
 const CHAPTER_LAYOUTS = ["magazine", "cascade", "ledger"] as const satisfies readonly BlockLayout[];
 
+function purposeProps(data: ExperiencePayload, props?: SectionProps) {
+  return {
+    context: props?.eyebrow ?? data.eyebrow,
+    title: data.title,
+    promise: props?.body ?? data.promise ?? data.summary,
+    outcomes: data.outcomes ?? [],
+    trust: data.trust ?? [],
+    cta: { label: data.cta.label, href: data.cta.href },
+    accent: data.accent,
+    company: data.companyIdentity?.company,
+    craft: data.companyIdentity?.craft,
+  };
+}
+
 export function SectionHeroManifesto({ data, props }: Ctx) {
   return (
-    <section className="xp-section text-center">
-      <p className="text-eyebrow" style={{ color: data.accent }}>
-        {props?.eyebrow ?? data.eyebrow}
-      </p>
-      <h1 className="xp-title mx-auto mt-5 max-w-5xl">{data.title}</h1>
-      <p className="xp-prose mx-auto mt-6 max-w-2xl text-balance">
-        {props?.body ?? data.summary}
-      </p>
+    <section className="xp-section">
+      <PurposeChrome {...purposeProps(data, props)} align="center" className="max-w-3xl" />
       {data.pills.length > 0 && (
         <PillCloud pills={data.pills} accent={data.accent} className="mt-8 justify-center" />
       )}
@@ -56,14 +66,8 @@ export function SectionHeroManifesto({ data, props }: Ctx) {
 export function SectionHeroSplit({ data, props }: Ctx) {
   const image = props?.image ?? data.image;
   return (
-    <section className="xp-section grid items-center gap-8 md:min-h-[70vh] md:grid-cols-2 md:gap-12">
-      <div className="min-w-0">
-        <p className="text-eyebrow" style={{ color: data.accent }}>
-          {data.eyebrow}
-        </p>
-        <h1 className="xp-title mt-4">{data.title}</h1>
-        <p className="xp-prose mt-5">{props?.body ?? data.summary}</p>
-      </div>
+    <section className="xp-section grid items-start gap-8 md:min-h-[70vh] md:grid-cols-2 md:gap-12">
+      <PurposeChrome {...purposeProps(data, props)} />
       <div className="relative aspect-[4/5] min-h-[240px] overflow-hidden rounded-[1.5rem] sm:aspect-[5/4] md:aspect-auto md:min-h-[420px] md:rounded-[1.75rem]">
         <Image
           src={image}
@@ -82,13 +86,7 @@ export function SectionHeroSplit({ data, props }: Ctx) {
 export function SectionHeroEditorial({ data, props }: Ctx) {
   return (
     <section className="xp-section mx-auto max-w-[820px]">
-      <p className="text-eyebrow" style={{ color: data.accent }}>
-        {data.eyebrow}
-      </p>
-      <h1 className="xp-title mt-5">{data.title}</h1>
-      <p className="xp-prose mt-6 text-[1.05rem] leading-[1.75] md:text-[1.125rem]">
-        {props?.body ?? data.summary}
-      </p>
+      <PurposeChrome {...purposeProps(data, props)} />
       {props?.image && (
         <div className="relative mt-10 aspect-[16/9] overflow-hidden rounded-[1.5rem]">
           <Image src={props.image} alt="" fill className="object-cover" sizes="820px" />
@@ -105,47 +103,41 @@ export function SectionHeroMedia({ data, props }: Ctx) {
   const image = props?.image ?? data.image;
 
   return (
-    <section className="xp-section-sm">
+    <section className="xp-section-sm space-y-8">
+      <PurposeChrome {...purposeProps(data, props)} />
       <div
         ref={ref}
-        className="relative min-h-[min(72vh,560px)] overflow-hidden rounded-[1.5rem] md:min-h-[min(75vh,640px)] md:rounded-[2rem]"
+        className="relative min-h-[min(48vh,420px)] overflow-hidden rounded-[1.5rem] md:min-h-[min(52vh,480px)] md:rounded-[2rem]"
       >
         <motion.div style={{ y }} className="absolute inset-0 scale-110">
           <Image src={image} alt="" fill className="object-cover" sizes="100vw" priority />
         </motion.div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-black/15" />
-        <div className="absolute inset-x-0 bottom-0 p-5 sm:p-8 md:p-12">
-          <p className="text-eyebrow text-white/75">{data.eyebrow}</p>
-          <h1 className="xp-title mt-3 max-w-3xl text-white">{data.title}</h1>
-          <p className="mt-4 max-w-xl text-[0.95rem] leading-relaxed text-white/85 md:text-[1rem]">
-            {props?.body ?? data.summary}
-          </p>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent" />
       </div>
     </section>
   );
 }
 
-export function SectionHeroSignal({ data }: Ctx) {
+export function SectionHeroSignal({ data, props }: Ctx) {
   const [focus, setFocus] = useState(false);
   return (
-    <section className="xp-section relative flex min-h-[58vh] flex-col items-center justify-center text-center md:min-h-[64vh]">
+    <section className="xp-section relative flex min-h-[58vh] flex-col items-center justify-center md:min-h-[64vh]">
       <div
         aria-hidden
         className={`pointer-events-none absolute h-56 w-56 rounded-full blur-3xl transition-opacity duration-700 md:h-64 md:w-64 ${focus ? "opacity-50" : "opacity-20"}`}
         style={{ background: data.accent }}
       />
-      <p className="relative text-eyebrow" style={{ color: data.accent }}>
-        {data.eyebrow}
-      </p>
-      <h1 className="xp-title relative mt-4 max-w-4xl">{data.title}</h1>
-      <p className="xp-prose relative mt-5 max-w-lg">{data.summary}</p>
+      <PurposeChrome
+        {...purposeProps(data, props)}
+        align="center"
+        className="relative z-10 max-w-3xl"
+      />
       <div className="relative mt-2" onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} />
     </section>
   );
 }
 
-export function SectionHeroNeural({ data }: Ctx) {
+export function SectionHeroNeural({ data, props }: Ctx) {
   const ref = useRef<HTMLElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const scale = useTransform(scrollYProgress, [0, 1], [1, 1.06]);
@@ -157,28 +149,20 @@ export function SectionHeroNeural({ data }: Ctx) {
         className="relative z-10 mx-auto flex min-h-[min(88vh,720px)] max-w-[1200px] flex-col justify-end px-5 pb-12 md:px-8 md:pb-16"
       >
         <Watermark text={data.watermark} className="absolute right-0 top-20 hidden opacity-80 sm:block" />
-        <p className="text-eyebrow" style={{ color: data.accent }}>
-          {data.eyebrow}
-        </p>
-        <h1 className="xp-title mt-4 max-w-4xl">{data.title}</h1>
-        <p className="xp-prose mt-5 max-w-xl">{data.summary}</p>
+        <PurposeChrome {...purposeProps(data, props)} />
         <PillCloud pills={data.pills} accent={data.accent} className="mt-8" />
       </motion.div>
     </section>
   );
 }
 
-export function SectionHeroCloud({ data }: Ctx) {
+export function SectionHeroCloud({ data, props }: Ctx) {
   return (
     <section className="xp-section">
       <div className="relative overflow-hidden rounded-[1.75rem] border border-border bg-surface p-6 sm:p-8 md:rounded-[2rem] md:p-12">
         <CloudStack accent={data.accent} />
         <div className="relative z-10 max-w-2xl">
-          <p className="text-eyebrow" style={{ color: data.accent }}>
-            {data.eyebrow}
-          </p>
-          <h1 className="xp-title mt-4">{data.title}</h1>
-          <p className="xp-prose mt-5">{data.summary}</p>
+          <PurposeChrome {...purposeProps(data, props)} />
         </div>
         <Watermark text="CLOUD" className="absolute bottom-0 right-0 opacity-50" />
       </div>
@@ -186,43 +170,112 @@ export function SectionHeroCloud({ data }: Ctx) {
   );
 }
 
-export function SectionHeroProduct({ data }: Ctx) {
+export function SectionHeroProduct({ data, props }: Ctx) {
   return (
     <section className="xp-section">
-      <p className="text-eyebrow" style={{ color: data.accent }}>
-        {data.eyebrow}
-      </p>
-      <h1 className="xp-title mt-4 max-w-4xl">{data.title}</h1>
-      <p className="xp-prose mt-5 max-w-2xl">{data.summary}</p>
+      <PurposeChrome {...purposeProps(data, props)} />
       <PillCloud pills={data.pills} accent={data.accent} className="mt-8" />
     </section>
   );
 }
 
-export function SectionHeroWork({ data }: Ctx) {
+export function SectionHeroWork({ data, props }: Ctx) {
   const ref = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] });
   const scale = useTransform(scrollYProgress, [0, 1], [1.05, 1]);
   return (
-    <section className="xp-section-sm">
+    <section className="xp-section-sm space-y-8">
+      <PurposeChrome {...purposeProps(data, props)} />
       <div
         ref={ref}
-        className="relative min-h-[320px] overflow-hidden rounded-[1.5rem] md:min-h-[520px] md:rounded-[1.75rem]"
+        className="relative min-h-[280px] overflow-hidden rounded-[1.5rem] md:min-h-[420px] md:rounded-[1.75rem]"
       >
         <motion.div style={{ scale }} className="absolute inset-0">
-          <Image src={data.image} alt="" fill className="object-cover" sizes="100vw" priority />
+          <Image
+            src={data.image}
+            alt=""
+            fill
+            className="object-cover"
+            sizes="100vw"
+            priority
+          />
         </motion.div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-6 md:p-8">
-          <p className="text-eyebrow text-white/70">{data.eyebrow}</p>
-          <h1 className="xp-title mt-2 text-white">{data.title}</h1>
-        </div>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+        {data.caseBrief ? (
+          <div className="absolute inset-x-0 bottom-0 flex flex-wrap gap-x-5 gap-y-2 p-5 text-[0.75rem] tracking-wide text-white/70 uppercase sm:p-7">
+            {data.caseBrief.sector ? <span>{data.caseBrief.sector}</span> : null}
+            {data.caseBrief.duration ? (
+              <>
+                <span aria-hidden className="text-white/35">
+                  ·
+                </span>
+                <span>{data.caseBrief.duration}</span>
+              </>
+            ) : null}
+            {data.caseBrief.engagement ? (
+              <>
+                <span aria-hidden className="text-white/35">
+                  ·
+                </span>
+                <span className="normal-case tracking-normal">{data.caseBrief.engagement}</span>
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </section>
   );
 }
 
-export function SectionHeroDefault({ data }: Ctx) {
+/** Challenge / solution + engagement meta for project case studies */
+export function SectionCaseBrief({ data }: Ctx) {
+  const brief = data.caseBrief;
+  if (!brief) return null;
+  return (
+    <section className="xp-section-lg">
+      <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border pb-8 text-meta text-muted-foreground">
+        <div>
+          <p className="text-[0.65rem] tracking-[0.14em] uppercase text-muted-foreground/80">Client</p>
+          <p className="mt-1 text-foreground">{brief.client}</p>
+        </div>
+        <div>
+          <p className="text-[0.65rem] tracking-[0.14em] uppercase text-muted-foreground/80">Sector</p>
+          <p className="mt-1 text-foreground">{brief.sector}</p>
+        </div>
+        <div>
+          <p className="text-[0.65rem] tracking-[0.14em] uppercase text-muted-foreground/80">Engagement</p>
+          <p className="mt-1 text-foreground">{brief.engagement}</p>
+        </div>
+        <div>
+          <p className="text-[0.65rem] tracking-[0.14em] uppercase text-muted-foreground/80">Duration</p>
+          <p className="mt-1 text-foreground">{brief.duration}</p>
+        </div>
+      </div>
+      <div className="mt-10 grid gap-10 md:grid-cols-2 md:gap-14">
+        <Reveal>
+          <p className="text-eyebrow" style={{ color: data.accent }}>
+            Challenge
+          </p>
+          <h2 className="mt-3 font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-tight">
+            What was broken
+          </h2>
+          <p className="mt-4 xp-prose">{brief.challenge}</p>
+        </Reveal>
+        <Reveal delay={0.08}>
+          <p className="text-eyebrow" style={{ color: data.accent }}>
+            Solution
+          </p>
+          <h2 className="mt-3 font-display text-[clamp(1.6rem,3vw,2.2rem)] leading-tight">
+            What we built
+          </h2>
+          <p className="mt-4 xp-prose">{brief.solution}</p>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+export function SectionHeroDefault({ data, props }: Ctx) {
   return (
     <section className="xp-section">
       <div className="relative overflow-hidden rounded-[1.75rem] border border-border bg-surface p-6 sm:p-8 md:p-12">
@@ -232,11 +285,7 @@ export function SectionHeroDefault({ data }: Ctx) {
           </div>
         )}
         <div className="relative max-w-2xl">
-          <p className="text-eyebrow" style={{ color: data.accent }}>
-            {data.eyebrow}
-          </p>
-          <h1 className="xp-title mt-4">{data.title}</h1>
-          <p className="xp-prose mt-5">{data.summary}</p>
+          <PurposeChrome {...purposeProps(data, props)} />
         </div>
       </div>
     </section>
@@ -756,38 +805,20 @@ export function SectionLinkBand({ data, props }: Ctx) {
 }
 
 export function SectionContactForm({ data }: Ctx) {
-  const [focus, setFocus] = useState(false);
+  const intent =
+    data.slug.includes("quote")
+      ? ("quote" as const)
+      : data.slug.includes("meeting") || data.slug.includes("book")
+        ? ("meeting" as const)
+        : ("inquiry" as const);
+
   return (
     <section className="xp-section flex max-w-[520px] flex-col items-center">
-      <form
-        className="w-full space-y-3"
-        onFocus={() => setFocus(true)}
-        onBlur={() => setFocus(false)}
-        onSubmit={(e) => e.preventDefault()}
-      >
-        <div
-          aria-hidden
-          className={`pointer-events-none fixed left-1/2 top-1/3 -z-10 h-72 w-72 -translate-x-1/2 rounded-full blur-3xl transition-opacity ${focus ? "opacity-40" : "opacity-0"}`}
-          style={{ background: data.accent }}
-        />
-        <input
-          placeholder="Your name"
-          className="min-h-11 w-full rounded-xl border border-border bg-muted px-4 py-3 text-small outline-none focus:border-brand-blue/50"
-        />
-        <input
-          placeholder="Work email"
-          type="email"
-          className="min-h-11 w-full rounded-xl border border-border bg-muted px-4 py-3 text-small outline-none focus:border-brand-blue/50"
-        />
-        <textarea
-          placeholder="What are you building?"
-          rows={4}
-          className="min-h-11 w-full rounded-xl border border-border bg-muted px-4 py-3 text-small outline-none focus:border-brand-blue/50"
-        />
-        <PremiumButton type="submit" className="w-full justify-center">
-          Send signal
-        </PremiumButton>
-      </form>
+      <ContactInquiryForm
+        intent={intent}
+        accent={data.accent}
+        submitLabel={intent === "quote" ? "Request a quote" : intent === "meeting" ? "Request a meeting" : "Send signal"}
+      />
     </section>
   );
 }

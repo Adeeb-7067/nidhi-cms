@@ -2,7 +2,7 @@
 
 Complete overview of the **Cinematic-Scroll** codebase: architecture, runtime flow, modules, design system, data, routes, and maintenance notes.
 
-**Last updated:** 5 Aug 2026
+**Last updated:** 6 Aug 2026
 
 ---
 
@@ -12,13 +12,27 @@ Complete overview of the **Cinematic-Scroll** codebase: architecture, runtime fl
 |--|--|
 | **Product** | Premium marketing site for Satyakabir Technologies |
 | **Type** | UI-only (no backend, API, auth, or database) |
-| **Home experience** | Scroll-scrubbed headquarters film (dense-keyframe MP4) with timed chapter overlays |
+| **Home experience** | Scroll-scrubbed HQ film (native `<video>` + master MP4) with timed chapter overlays, then business narrative |
 | **Site IA** | Enterprise nav + hubs + **composed** detail pages for every leaf (~110 leaves) |
 | **Stack** | Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · GSAP · Lenis · Motion |
 | **Theme** | Light + dark (navbar `ThemeToggle`) |
 | **Package manager** | npm |
 
-Visitors land on a cinematic homepage. Scroll advances a canvas film. Overlays tell the brand story. Mega menus open services, work, industries, and more. Each leaf page is assembled from an **explicit section list** (page composition) plus page-specific content — not a shared “kind template” layout.
+### Permanent principle — Universal First Impression
+
+Every marketing surface (home arrival, 9 hubs, ~110 leaves) must answer **without scrolling**:
+
+1. Who is this? → Satyakabir Technologies  
+2. Where am I? → human section · page context (never internal kind strings)  
+3. What is this page for? → one-line promise  
+4. Why care? → outcomes + trust strip  
+5. What next? → one primary CTA  
+
+Shared contract: `src/data/first-viewport.ts` + `PurposeChrome` on all `hero-*` variants. Cinema enhances clarity; it never replaces it.
+
+Visitors land on a cinematic homepage. Scroll advances the headquarters film. Overlays tell the brand story. Mega menus open company, services, solutions, technologies, industries, work, insights, careers, and contact. Each leaf page is assembled from an **explicit section list** (page composition) plus page-specific content — not a shared “kind template” layout.
+
+**Quick map of what the site shows:** see [§9 Page inventory](#9-page-inventory--what-each-route-shows).
 
 ---
 
@@ -40,8 +54,8 @@ npm run frames       # optional: extract JPG fallback sequence (local only)
 | `scrub` | `scripts/encode-scrub.mjs` — dense-keyframe desktop/mobile MP4 + poster (+ WebM) |
 | `frames` | `scripts/extract-frames.mjs` — optional JPG fallback → `public/frames/` (gitignored) |
 
-**Source film:** `public/TITLE__Satyakabir_Technologies.mp4`  
-**Scrub assets:** `*.scrub.mp4`, `*.scrub.mobile.mp4`, `*.poster.jpg`  
+**Source film (desktop preferred):** `public/TITLE__Satyakabir_Technologies.mp4` — shown via native `<video object-fit:cover>` so quality matches opening the file in a player.  
+**Scrub / mobile fallbacks:** `*.scrub.mp4`, `*.scrub.mobile.mp4`, `*.poster.jpg`  
 **Frames (optional):** `public/frames/` — local fallback only; not shipped in production.  
 Logical story still uses `TOTAL_FRAMES = 720` / `FRAME_START = 4` in `src/data/cinematic.ts` for chapter timing.
 
@@ -57,17 +71,18 @@ Logical story still uses `TOTAL_FRAMES = 720` / `FRAME_START = 4` in `src/data/c
           ├─ /  → CinematicHome
           │         · PremiumNavbar (memo'd; theme toggle)
           │         · AtmosphereLayer (frame → veil; gated by useFilmInView)
-          │         · CinematicCanvas (MP4 scrub → canvas; same gate)
+          │         · CinematicCanvas (native <video> master MP4; poster/canvas fallback)
           │         · FilmIsland → ScrollScrubber (tall track + ChapterStages)
           │         · BusinessHero (#what-we-do — the stated offer)
           │         · BusinessNarrative (7 sections: proof → ecosystem → cases)
           │         · SupportingNarrative (6 sections: stack → scale → CTA)
           │         · SiteFooter
-          │         · FilmLoadingVeil (fullscreen while the scrub decodes)
+          │         · FilmLoadingVeil (fullscreen while the film decodes)
           │         · ChapterProgress (place + jump dots; film-only)
           │         · Lenis + GSAP ScrollTrigger
           │
-          └─ /{section}/[{slug}]  → LeafMarketingPage
+          ├─ /{section}           → SectionHubPage (group cards → leaves)
+          └─ /{section}/{slug}    → LeafMarketingPage / ExperiencePage
                     · PremiumNavbar (site + theme toggle)
                     · ExperienceShell + ExperienceComposer
                     · resolveComposition(section, slug) → SectionBlocks
@@ -125,18 +140,18 @@ User scroll (Lenis; native scroll if reduced-motion)
     → tall ScrollScrubber track (~1500vh, scaled to frame count)
     → GSAP ScrollTrigger scrub maps scroll → logical frame number
     → useFrameScrubber.setCurrentFrame(n)
-    → video.currentTime seek (dense-keyframe MP4) → canvas draw
-       · poster paints first; mobile/save-data uses lighter MP4
-       · optional JPG fallback only if video cannot load
+    → video.currentTime seek on native <video> (master MP4 on desktop)
+       · poster paints first on canvas; then native video takes over
+       · mobile/save-data prefers lighter scrub MP4; scrub/JPG if master fails
     → ChapterStage(s) fade by exclusive [start, end] frame ranges
-       · gated on ScrollTrigger.isActive — the overlays are `fixed`, so an
-         ungated stage paints over the sections below the film
+       · gated on useFilmInView — overlays are `fixed`, so an ungated stage
+         would paint over sections below the film
     → AtmosphereLayer picks veil/glow for active chapter
 
 … film track ends …
 
     → 30vh gradient outro dissolves the held final frame into the page surface
-    → useFilmInView drops canvas + atmosphere + chapter rail out of the paint path
+    → useFilmInView drops film + atmosphere + chapter rail out of the paint path
 ```
 
 **Scroll helpers must be film-relative.** The film is a fraction of the document,
@@ -326,7 +341,9 @@ One component, three layout paths: `hero`, `intro`, and standard sub-layouts (`s
 
 - Fixed panels; opacity from frame vs `[start − fade, end + fade]`
 - `pointer-events` only when interactive so Lenis keeps scroll
-- Clears nav via `--nav-h`; `.hero-panel` reserves bottom cue band
+- Clears nav via `--nav-h`; side rails via `--film-rail-*`; bottom chrome via `--film-safe-bottom`
+- `.section-panel--center` uses `justify-content: safe center` so tall chapters scroll from the top
+- `.hero-panel` reserves bottom cue band
 
 ### 5.4 Navigation
 
@@ -576,18 +593,245 @@ Missing slug → bare fallback + `[composition] Missing…` warning in developme
 
 ---
 
-## 9. Routes
+## 9. Page inventory — what each route shows
 
-| Pattern | Renderer |
-|---------|----------|
-| `/` | Cinematic home |
-| `/{section}` | Hub (`SectionHubPage`) |
-| `/{section}/{slug}` | `buildExperience` → `ExperienceComposer` |
-| `/sitemap.xml` | Generated from navigation leaves |
+Source of truth for **labels and URLs:** `src/data/navigation.ts`.  
+Source of truth for **leaf section order:** `src/data/page-compositions/{section}.ts`.  
+Source of truth for **leaf copy:** `src/data/page-content/slug-overrides.ts` (+ kind narratives).
+
+### 9.0 How pages are built
+
+| Route shape | What the visitor sees |
+|-------------|------------------------|
+| `/` | Cinematic home (film + business narrative) — see §3 homepage order |
+| `/{section}` | **Hub** — title, summary, mega-menu groups as card grids linking to leaves |
+| `/{section}/{slug}` | **Leaf** — composed experience: hero → story blocks (chapters/cards/metrics/timeline/FAQ/…) → CTA → related links |
+| `/sitemap.xml` | Generated URL list from navigation leaves |
 | `/robots.txt` | Allow all + sitemap pointer |
 | Unknown | `not-found.tsx` (`noindex`) |
 
-Sections: `company`, `services`, `solutions`, `technologies`, `industries`, `work`, `insights`, `careers`, `contact`.
+**Global chrome (every page):** `PremiumNavbar` · **Mission Control** (left capsule, `⇧ Space`) · ChatBot (bottom-right) · `SiteFooter` on hubs/leaves.
+
+**Mission Control / Actions** (`src/components/mission-control/MissionControl.tsx`) — left-edge control matching “Skip the tour” chrome (not a neon AI capsule). Opens a quiet actions panel: search, page suggestions, action list, contact. Shortcut: **Shift+Space**. `Ctrl/Cmd+K` remains CommandPalette.
+
+**Leaf chrome (every detail page):** breadcrumbs → `ExperienceShell` ambient mesh → composed sections → `SiteFooter`.
+
+**Hub chrome:** same shell, but content is a directory of cards (no long narrative).
+
+Sections with hubs + leaves: `company`, `services`, `solutions`, `technologies`, `industries`, `work`, `insights`, `careers`, `contact`.
+
+---
+
+### 9.1 Home — `/`
+
+**Shows:** Satyakabir as a technology engineering company that delivers digital transformation.
+
+| Act | What you see |
+|-----|----------------|
+| **Film** `#inside` | Scroll-scrubbed HQ tour (native master MP4). Nine chapters (arrival → lobby → AI → studio → cloud → lab → boardroom → client → finale) with brand title, stats strip, and place-based overlays. Skip → `#what-we-do`. |
+| **BusinessHero** `#what-we-do` | Stated offer, capabilities, trust numbers |
+| **BusinessNarrative** | Trust counters → industry wall → industry cards → results → transformation journey → services ecosystem → case studies |
+| **SupportingNarrative** | Tech stack → testimonials → why us → company scale → global presence → final CTA `#start` |
+| **SiteFooter** | Links + company close |
+
+---
+
+### 9.2 Company — `/company`
+
+**Hub shows:** People, principles, and presence behind Satyakabir — cards into the leaves below.
+
+| Path | Page shows |
+|------|------------|
+| `/company/about-us` | Who Satyakabir is — AI-first engineering identity |
+| `/company/our-story` | Origin story — Bhopal roots to global delivery |
+| `/company/mission` | Mission — software that feels inevitable |
+| `/company/vision` | Vision — intelligent infrastructure as default |
+| `/company/leadership` | Leadership — principals who still ship |
+| `/company/our-team` | Team — engineers, designers, researchers, operators |
+| `/company/culture` | Culture — craft, clarity, shared ownership |
+| `/company/life-at-satyakabir` | Life at SK — rituals, remote pods, HQ gravity |
+| `/company/infrastructure` | How platforms are built and run |
+| `/company/global-presence` | Delivery footprint across continents |
+| `/company/awards` | Awards and craft proof |
+| `/company/certifications` | ISO / assurance / trust signals |
+| `/company/partners` | Cloud, AI, and ecosystem alliances |
+| `/company/corporate-social-responsibility` | Civic / CSR technology work |
+| `/careers` *(from Company mega)* | Shortcuts into Careers hub |
+
+---
+
+### 9.3 Services — `/services`
+
+**Hub shows:** Practice areas — intelligence, product/platforms, cloud & assurance.
+
+| Path | Page shows |
+|------|------------|
+| `/services/ai-development` | End-to-end intelligent product systems |
+| `/services/machine-learning` | Production ML that survives real traffic |
+| `/services/generative-ai` | Content, code, and decision copilots |
+| `/services/llm-solutions` | RAG, fine-tuning, governance |
+| `/services/agentic-ai` | Autonomous workflows with guardrails *(featured)* |
+| `/services/web-development` | High-performance web products |
+| `/services/enterprise-applications` | Systems of record that stay agile |
+| `/services/product-engineering` | Prototype → release trains |
+| `/services/saas-development` | Multi-tenant platforms + FinOps |
+| `/services/mobile-applications` | Native, hybrid, PWA |
+| `/services/ui-ux-design` | Interfaces with motion and clarity |
+| `/services/cloud-engineering` | Landing zones and elastic estates |
+| `/services/devops` | CI/CD, SRE, reliability budgets |
+| `/services/digital-transformation` | Operating models that stick |
+| `/services/cyber-security` | Zero-trust and continuous assurance |
+| `/services/qa-automation` | Quality gates in every pipeline |
+| `/services/maintenance-and-support` | Keep critical systems calm |
+| `/services/technology-consulting` | Strategy with engineering depth |
+
+Catalog-backed service leaves may also inject challenge / approach / deliverables from `src/data/catalog.ts`.
+
+---
+
+### 9.4 Solutions — `/solutions`
+
+**Hub shows:** Packaged solution lines — core systems, industry solutions, scale.
+
+| Path | Page shows |
+|------|------------|
+| `/solutions/erp` | ERP — finance/supply operations *(featured)* |
+| `/solutions/crm` | CRM — pipeline and customer memory |
+| `/solutions/hrms` | HRMS — people ops + compliance |
+| `/solutions/finance` | Finance — close automation |
+| `/solutions/healthcare` | Healthcare clinical/ops platforms |
+| `/solutions/education` | Institutional learning systems |
+| `/solutions/retail` | Omnichannel commerce |
+| `/solutions/manufacturing` | Plant-floor → cloud visibility |
+| `/solutions/real-estate` | Portfolio / transaction platforms |
+| `/solutions/logistics` | Routing, tracking, control towers |
+| `/solutions/construction` | Project and field coordination |
+| `/solutions/government` | Citizen services with trust |
+| `/solutions/startup-solutions` | MVP → product-market-fit platforms |
+| `/solutions/enterprise-solutions` | Transformation programs that ship |
+
+---
+
+### 9.5 Technologies — `/technologies`
+
+**Hub shows:** Stack directory — frontend, backend, cloud & AI, data & mobile.
+
+| Path | Page shows |
+|------|------------|
+| `/technologies/react` | React at product scale |
+| `/technologies/next-js` | Next.js App Router / edge *(featured)* |
+| `/technologies/vue` | Vue reactive interfaces |
+| `/technologies/angular` | Enterprise SPA architecture |
+| `/technologies/node-js` | Node services and APIs |
+| `/technologies/nestjs` | Structured Node for large teams |
+| `/technologies/java` | Mission-critical JVM |
+| `/technologies/python` | Data, AI, API services |
+| `/technologies/net` | .NET / Microsoft ecosystems |
+| `/technologies/aws` | AWS landing zones / scale |
+| `/technologies/azure` | Azure identity and estates |
+| `/technologies/google-cloud` | GCP data/ML platforms |
+| `/technologies/openai` | GPT systems with governance |
+| `/technologies/gemini` | Multimodal Google AI |
+| `/technologies/claude` | Long-context agent workflows |
+| `/technologies/llama` | Open-weight model deployment |
+| `/technologies/mistral` | Efficient European model stacks |
+| `/technologies/mongodb` | Document stores for velocity |
+| `/technologies/postgresql` | Relational system of record |
+| `/technologies/redis` | Caching / realtime |
+| `/technologies/firebase` | Fast mobile backends |
+| `/technologies/flutter` | Cross-platform mobile |
+| `/technologies/react-native` | Shared UI across devices |
+| `/technologies/swift` | Native iOS |
+| `/technologies/kotlin` | Native Android |
+
+---
+
+### 9.6 Industries — `/industries`
+
+**Hub shows:** Vertical markets where Satyakabir ships.
+
+| Path | Page shows |
+|------|------------|
+| `/industries/healthcare` | Clinical ops / patient platforms *(featured)* |
+| `/industries/finance` | Banking and capital markets |
+| `/industries/insurance` | Claims, underwriting, portals |
+| `/industries/retail` | Commerce and inventory intelligence |
+| `/industries/manufacturing` | Industrial digital twins |
+| `/industries/logistics` | Fleet and warehouse control |
+| `/industries/education` | Institutional learning |
+| `/industries/government` | Citizen-grade digital services |
+| `/industries/automotive` | Connected vehicle platforms |
+| `/industries/travel` | Booking and operations |
+| `/industries/hospitality` | Guest experience platforms |
+| `/industries/media` | Streaming and content ops |
+| `/industries/sports` | Fan and performance platforms |
+| `/industries/real-estate` | Property and transaction tech |
+
+Extra industry catalog compositions may exist in `industry-catalog.ts` beyond the mega-menu list.
+
+---
+
+### 9.7 Work — `/work`
+
+**Hub shows:** Proof of shipped work — entry points into case studies and galleries.
+
+| Path | Page shows |
+|------|------------|
+| `/work/featured-projects` | Selected builds from the floor |
+| `/work/case-studies` | Outcomes, architecture, lessons |
+| `/work/portfolio` | Full body of work browse |
+| `/work/open-source` | Shared primitives and tools |
+| `/work/client-success-stories` | Client voices |
+| `/work/project-gallery` | Visual archive of shipped craft |
+| `/work/nexus-ai-platform` | Featured case — Nexus AI *(mega featured)* |
+
+---
+
+### 9.8 Insights — `/insights`
+
+**Hub shows:** Content library — blog, research, news, FAQs.
+
+| Path | Page shows |
+|------|------------|
+| `/insights/blog` | Engineering field notes |
+| `/insights/research` | Applied R&D from the lab |
+| `/insights/whitepapers` | Deep dives for technical leaders |
+| `/insights/technology-articles` | Cross-stack patterns *(featured)* |
+| `/insights/company-news` | Milestones and announcements |
+| `/insights/events` | Talks, meetups, briefings |
+| `/insights/resources` | Templates and toolkits |
+| `/insights/faqs` | Common questions answered |
+
+---
+
+### 9.9 Careers — `/careers`
+
+**Hub shows:** Why join, benefits, open roles, process.
+
+| Path | Page shows |
+|------|------------|
+| `/careers/why-join-us` | Why builders choose Satyakabir |
+| `/careers/benefits` | Compensation, learning, wellbeing |
+| `/careers/open-positions` | Roles open now *(featured)* |
+| `/careers/internships` | Internship entry paths |
+| `/careers/hiring-process` | Apply → offer steps |
+| `/careers/culture` | How the team collaborates and ships |
+
+---
+
+### 9.10 Contact — `/contact`
+
+**Hub shows:** Ways to reach Satyakabir and start an engagement.
+
+| Path | Page shows |
+|------|------------|
+| `/contact/contact-us` | Email, phone, inquiry form |
+| `/contact/book-meeting` | Schedule a strategy call *(featured)* |
+| `/contact/office-locations` | HQ and partner hubs |
+| `/contact/support` | Help for existing engagements |
+| `/contact/get-quote` | Scoped estimate — also primary navbar CTA (“Start a project”) |
+
+---
 
 ### SEO
 
@@ -607,14 +851,14 @@ Set `NEXT_PUBLIC_SITE_URL` in production so canonicals and Open Graph URLs match
 
 1. **Pointer events** — Overlays mostly `pointer-events: none`; interactive islands opt in.
 2. **Nested scroll** — Mega menus / chat may scroll internally; scrollbars hidden.
-3. **Scrub assets required** — Missing scrub MP4 → poster / blank canvas. JPG `public/frames` is optional fallback only.
-4. **Heavy assets** — Prefer dense-keyframe scrub MP4 (~4MB desktop / ~1.5MB mobile); do not ship 720 JPGs to production.
+3. **Film assets** — Desktop prefers the master MP4 on a native `<video>`. Missing master → scrub MP4 → poster / JPG fallback.
+4. **Heavy assets** — Do not ship 720 JPGs to production; optional `public/frames` is local-only.
 5. **No frame counters in UI** — Frame indices are internal.
 6. **Hero (film)** — Analytics strip; chat is a contact affordance; no custom cursor.
 7. **Composition ≠ kind** — Changing `matchKind` alone will not redesign a page; edit `page-compositions/{section}.ts`.
 8. **Shared kind cards/metrics** — If a section renders `cards` / `metrics` / `stack` without props or slug overrides, leaves can look identical. Prefer composition props or `slug-overrides`.
 9. **Reveal** — Content stays visible by default (transform polish only); do not gate readability on opacity `0`.
-10. **Client components** — Canvas, Lenis, GSAP, nav, chapters, chatbot, composer are `"use client"`.
+10. **Client components** — Film layer, Lenis, GSAP, nav, chapters, chatbot, composer are `"use client"`.
 
 ---
 

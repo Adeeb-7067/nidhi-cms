@@ -150,7 +150,12 @@ export function MegaMenu({
             />
 
             {showMore ? (
-              <div className="scrollbar-hide relative max-h-[min(70vh,480px)] overflow-y-auto overscroll-contain p-3 sm:p-4">
+              <div
+                data-lenis-prevent
+                data-lenis-prevent-wheel
+                data-lenis-prevent-touch
+                className="relative max-h-[min(70vh,520px)] overflow-y-auto overscroll-contain p-3 sm:p-4"
+              >
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   {moreItems!.map((section) => (
                     <div key={section.id} className="rounded-xl border border-border bg-muted p-3">
@@ -179,7 +184,12 @@ export function MegaMenu({
                 </div>
               </div>
             ) : (
-              <div className="scrollbar-hide relative max-h-[min(72vh,560px)] overflow-y-auto overscroll-contain">
+              <div
+                data-lenis-prevent
+                data-lenis-prevent-wheel
+                data-lenis-prevent-touch
+                className="relative max-h-[min(72vh,560px)] overflow-y-auto overscroll-contain"
+              >
                 <div className="grid lg:grid-cols-[1fr_240px]">
                   <div className="p-3 md:p-4">
                     <div className="mb-3 flex items-center justify-between gap-3 px-1">

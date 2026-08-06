@@ -12,7 +12,7 @@ import { scrollToId } from "@/lib/film-scroll";
  *
  * Single message: we transform businesses through technology engineering.
  * Transformation is the goal; engineering is the method. Stable `#what-we-do`
- * anchor for "Skip the tour".
+ * anchor for the film bypass (“See what we do”).
  */
 export function BusinessHero() {
   // Entrance runs once on mount. Content is visible by default (see

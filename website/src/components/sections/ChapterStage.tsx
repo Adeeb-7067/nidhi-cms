@@ -12,67 +12,80 @@ import {
 } from "lucide-react";
 import { SectionWrapper, SectionPanel } from "./SectionWrapper";
 import { PremiumButton } from "@/components/ui/PremiumButton";
+import { HeroCapabilityTypewriter } from "@/components/home/HeroCapabilityTypewriter";
 import type { Chapter } from "@/data/cinematic";
 import { scrollToId } from "@/lib/film-scroll";
 
 const HERO_STAT_ICONS: LucideIcon[] = [Briefcase, Sparkles, Cpu, Globe2];
 
-/** Hero inspired by premium tech landings — brand-led, film as stage, not a clone. */
+/** Film arrival — brand in the pill; display line cycles what we build. */
 function HeroStage({ chapter }: { chapter: Chapter }) {
   return (
     <>
       <SectionPanel align="start" className="hero-panel">
-        <div className="flex h-[calc(100dvh-var(--nav-h)-5.5rem)] flex-col justify-between gap-8">
-          {/* Primary story — no extra top pad; section-panel already clears the nav */}
-          <div className="relative max-w-2xl pt-2 md:pt-4 lg:pt-6">
-            <div className="inline-flex items-center gap-2.5 rounded-full border border-white/12 bg-black/45 px-3.5 py-1.5">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-cyan/60 opacity-60" />
+        <div className="flex h-full min-h-0 flex-col justify-between gap-6 max-[780px]:gap-4 md:gap-8">
+          <div className="relative max-w-3xl pt-1 md:pt-2 lg:pt-4">
+            <div className="inline-flex flex-col items-start gap-1.5 rounded-2xl border border-white/12 bg-black/45 px-3.5 py-2.5 sm:flex-row sm:items-center sm:gap-2.5 sm:rounded-full sm:py-1.5">
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-cyan/60 opacity-60 motion-reduce:animate-none" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-cyan shadow-[0_0_10px_rgba(0,217,255,0.8)]" />
               </span>
-              <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/75">
+              <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/80">
+                Satyakabir Technologies
+              </span>
+              <span className="hidden text-white/35 sm:inline" aria-hidden>
+                ·
+              </span>
+              <span className="text-[11px] font-medium tracking-[0.08em] text-white/65">
                 Technology engineering · Digital transformation
               </span>
             </div>
 
-            {/* `text-balance` guards the fold if either line ever grows past two
-                words — see the note on the `arrival` chapter in `cinematic.ts`. */}
-            <h1 className="mt-5 md:mt-6">
-              <span className="block text-balance font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-white">
-                {chapter.title}
+            <h1 className="mt-5 max-w-[min(100%,40rem)] md:mt-6 [text-shadow:0_2px_28px_rgba(0,0,0,0.55)]">
+              <span className="block font-display text-[clamp(1.15rem,2.8vw,1.75rem)] font-semibold leading-tight tracking-[-0.02em] text-white/70">
+                We build
               </span>
-              <span className="mt-0.5 block text-balance font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-brand-gradient">
-                {chapter.subtitle}
+              <span className="mt-1 block w-full font-display text-[clamp(1.65rem,4.2vw,3.35rem)] font-extrabold leading-[1.12] tracking-[-0.035em]">
+                <HeroCapabilityTypewriter />
               </span>
             </h1>
 
             {chapter.body ? (
-              <p className="mt-4 max-w-md text-pretty text-[15px] leading-[1.65] text-white/65 md:mt-5 md:max-w-lg md:text-[16px]">
+              <p className="mt-4 max-w-md text-pretty text-[15px] leading-[1.65] text-white/70 [text-shadow:0_1px_16px_rgba(0,0,0,0.55)] md:mt-5 md:max-w-lg md:text-[16px]">
                 {chapter.body}
               </p>
             ) : null}
+
+            <div className="mt-6">
+              <PremiumButton
+                type="button"
+                onClick={() => scrollToId("what-we-do")}
+                className="pointer-events-auto"
+              >
+                See what we do
+              </PremiumButton>
+            </div>
           </div>
 
-          {/* Analytics strip */}
           {chapter.stats?.length ? (
             <div className="w-full max-w-3xl pb-1 md:max-w-[44rem]">
-              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/12 bg-white/[0.05] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)] sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/12 bg-white/[0.04] shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)] sm:grid-cols-4">
                 {chapter.stats.slice(0, 4).map((stat, i) => {
                   const Icon = HERO_STAT_ICONS[i] ?? Sparkles;
                   return (
                     <div
                       key={stat.label}
-                      className="flex items-start gap-2.5 bg-[#070A10]/55 px-3.5 py-3.5 md:gap-3 md:px-4 md:py-4"
+                      className="flex min-w-0 items-start gap-2.5 overflow-hidden bg-[#070A10]/40 px-3.5 py-3.5 md:gap-3 md:px-4 md:py-4"
                     >
                       <Icon
                         className="mt-0.5 h-4 w-4 shrink-0 text-brand-cyan/80"
                         strokeWidth={1.75}
                       />
-                      <div className="min-w-0">
-                        <div className="font-display text-[1.05rem] font-bold leading-none tracking-tight text-white md:text-[1.25rem]">
+                      <div className="min-w-0 overflow-hidden">
+                        <div className="truncate font-display text-[1.05rem] font-bold leading-none tracking-tight text-white md:text-[1.25rem]">
                           {stat.value}
                         </div>
-                        <div className="mt-1 text-[10px] leading-snug text-white/45 md:mt-1.5 md:text-[11px]">
+                        <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-white/45 md:mt-1.5 md:text-[11px]">
                           {stat.label}
                         </div>
                       </div>
@@ -85,7 +98,6 @@ function HeroStage({ chapter }: { chapter: Chapter }) {
         </div>
       </SectionPanel>
 
-      {/* Scroll cue */}
       <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 -translate-x-1/2 md:bottom-6">
         <ChevronDown
           className="h-5 w-5 text-white/50 motion-safe:animate-[float_2.4s_ease-in-out_infinite]"
@@ -102,29 +114,29 @@ function HeroStage({ chapter }: { chapter: Chapter }) {
 function IntroStage({ chapter }: { chapter: Chapter }) {
   return (
     <SectionPanel align="center">
-      <div className="relative mx-auto grid max-w-5xl grid-cols-12 gap-6 md:gap-10 lg:gap-12">
+      <div className="relative mx-auto grid max-w-5xl grid-cols-12 gap-4 max-[780px]:gap-3 md:gap-8 lg:gap-10">
         <div className="col-span-12 md:col-span-4 lg:col-span-5">
           <p className="text-eyebrow text-white/55">01 · Headquarters</p>
-          <p className="mt-3 font-deco text-[clamp(2rem,6vw,4rem)] leading-none text-white/[0.07] md:mt-4">
+          <p className="mt-2 font-deco text-[clamp(1.75rem,5vw,3.5rem)] leading-none text-white/[0.07] md:mt-3">
             {chapter.place}
           </p>
         </div>
 
         <div className="col-span-12 md:col-span-8 lg:col-span-7">
-          <h2 className="font-display text-[clamp(1.75rem,4vw,3.25rem)] font-bold leading-[1.08] tracking-[-0.025em] text-white">
+          <h2 className="font-display text-[clamp(1.55rem,3.6vw,2.85rem)] font-bold leading-[1.08] tracking-[-0.025em] text-white">
             {chapter.title}
           </h2>
-          <p className="mt-3 text-[1.05rem] leading-snug text-white/70 md:mt-4 md:text-[1.2rem]">
+          <p className="mt-2 text-[1rem] leading-snug text-white/70 md:mt-3 md:text-[1.15rem]">
             {chapter.subtitle}
           </p>
           {chapter.body ? (
-            <p className="mt-4 max-w-xl text-[15px] leading-relaxed text-white/55 md:mt-5">
+            <p className="mt-3 max-w-xl text-[14px] leading-relaxed text-white/55 md:mt-4 md:text-[15px]">
               {chapter.body}
             </p>
           ) : null}
 
           {chapter.chips?.length ? (
-            <div className="mt-6 flex flex-wrap gap-2 md:mt-7">
+            <div className="mt-4 flex flex-wrap gap-2 md:mt-6">
               {chapter.chips.map((chip) => (
                 <span
                   key={chip}
@@ -137,7 +149,7 @@ function IntroStage({ chapter }: { chapter: Chapter }) {
           ) : null}
 
           {chapter.links?.length ? (
-            <div className="mt-6 flex flex-wrap gap-4 md:mt-8 md:gap-5">
+            <div className="mt-4 flex flex-wrap gap-4 md:mt-6 md:gap-5">
               {chapter.links.map((l) => (
                 <Link
                   key={l.href}
@@ -211,22 +223,22 @@ function StatsRow({ stats }: { stats: NonNullable<Chapter["stats"]> }) {
 
 function GlassCards({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
   return (
-    <div className="mt-5 grid max-w-4xl gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="mt-4 grid max-w-4xl gap-2 sm:grid-cols-2 max-[780px]:mt-3 lg:grid-cols-3">
       {cards.slice(0, 6).map((card) => {
         const inner = (
           <>
             {card.meta ? <span className="text-meta">{card.meta}</span> : null}
-            <div className="text-card-title mt-0.5 text-[1.1rem] text-white md:text-[1.25rem]">
+            <div className="text-card-title mt-0.5 text-[1.05rem] text-white md:text-[1.2rem]">
               {card.title}
             </div>
-            <p className="mt-1.5 line-clamp-2 text-[13px] leading-relaxed text-white/50">
+            <p className="mt-1 line-clamp-2 text-[12px] leading-relaxed text-white/50 md:text-[13px]">
               {card.summary}
             </p>
           </>
         );
 
         const className =
-          "group relative block overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] p-3.5 transition-[transform,border-color,box-shadow,background] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/22 hover:bg-white/[0.07] hover:shadow-[0_20px_50px_-28px_rgba(43,107,255,0.55)] md:p-4";
+          "group relative block overflow-hidden rounded-xl border border-white/10 bg-white/[0.05] p-3 transition-[transform,border-color,box-shadow,background] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/22 hover:bg-white/[0.07] hover:shadow-[0_20px_50px_-28px_rgba(43,107,255,0.55)] md:p-3.5";
 
         return card.href ? (
           <Link key={card.title} href={card.href} className={className}>
@@ -253,11 +265,11 @@ function GlassCards({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
 /** Case study rail — compact image cards that fit the cinematic viewport */
 function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
   return (
-    <div className="scrollbar-hide mt-4 flex w-full max-w-5xl gap-3 overflow-x-auto pb-2 md:mt-5 md:gap-3.5">
+    <div className="scrollbar-hide mt-3 flex w-full max-w-5xl gap-3 overflow-x-auto pb-1 md:mt-4 md:gap-3.5">
       {cards.slice(0, 3).map((card) => {
         const inner = (
           <>
-            <div className="relative h-[132px] overflow-hidden md:h-[148px]">
+            <div className="relative h-[112px] overflow-hidden max-[780px]:h-[100px] md:h-[132px]">
               {card.image ? (
                 <Image
                   src={card.image}
@@ -277,7 +289,7 @@ function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
               ) : null}
               {card.metric ? (
                 <div className="absolute bottom-2.5 left-2.5">
-                  <div className="font-display text-[1.2rem] font-bold leading-none text-white md:text-[1.35rem]">
+                  <div className="font-display text-[1.15rem] font-bold leading-none text-white md:text-[1.3rem]">
                     {card.metric}
                   </div>
                   {card.metricLabel ? (
@@ -288,14 +300,14 @@ function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
                 </div>
               ) : null}
             </div>
-            <div className="flex flex-col px-3 py-3">
-              <h3 className="font-display text-[1rem] font-bold leading-snug tracking-tight text-white md:text-[1.1rem]">
+            <div className="flex flex-col px-3 py-2.5 md:py-3">
+              <h3 className="font-display text-[0.95rem] font-bold leading-snug tracking-tight text-white md:text-[1.05rem]">
                 {card.title}
               </h3>
-              <p className="mt-1.5 line-clamp-2 text-[12px] leading-snug text-white/50">
+              <p className="mt-1 line-clamp-2 text-[12px] leading-snug text-white/50">
                 {card.summary}
               </p>
-              <span className="mt-2 text-[11px] font-medium text-white/45 transition-colors group-hover:text-brand-cyan">
+              <span className="mt-1.5 text-[11px] font-medium text-white/45 transition-colors group-hover:text-brand-cyan">
                 View case study →
               </span>
             </div>
@@ -303,7 +315,7 @@ function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
         );
 
         const className =
-          "group flex w-[min(240px,72vw)] shrink-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#070A10]/90 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-[border-color,box-shadow,transform] duration-500 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_24px_60px_-24px_rgba(43,107,255,0.45)] md:w-[260px]";
+          "group flex w-[min(220px,70vw)] shrink-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#070A10]/90 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-[border-color,box-shadow,transform] duration-500 hover:-translate-y-1 hover:border-white/25 hover:shadow-[0_24px_60px_-24px_rgba(43,107,255,0.45)] md:w-[240px]";
 
         return card.href ? (
           <Link key={card.title} href={card.href} className={className}>
@@ -340,24 +352,24 @@ function CareerStage({ chapter }: { chapter: Chapter }) {
 
   return (
     <SectionPanel align="center">
-      <div className="mx-auto grid w-full max-w-5xl grid-cols-12 items-center gap-6 md:gap-10">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-12 items-center gap-4 max-[780px]:gap-3 md:gap-8">
         <div className="col-span-12 md:col-span-5">
           <p className="text-eyebrow text-white/65">
             {chapter.number} · {chapter.place}
           </p>
-          <h2 className="mt-3 font-display text-[clamp(2rem,4.5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.03em] text-white">
+          <h2 className="mt-2 font-display text-[clamp(1.75rem,4vw,3rem)] font-bold leading-[1.05] tracking-[-0.03em] text-white md:mt-3">
             {chapter.title}
           </h2>
-          <p className="mt-3 text-[1.05rem] leading-snug text-white/70 md:text-[1.15rem]">
+          <p className="mt-2 text-[1rem] leading-snug text-white/70 md:mt-3 md:text-[1.1rem]">
             {chapter.subtitle}
           </p>
           {chapter.body ? (
-            <p className="mt-3 max-w-md text-[14px] leading-relaxed text-white/50 md:text-[15px]">
+            <p className="mt-2 max-w-md text-[13px] leading-relaxed text-white/50 md:mt-3 md:text-[14px]">
               {chapter.body}
             </p>
           ) : null}
           {chapter.links?.length ? (
-            <div className="mt-6 flex flex-wrap gap-4">
+            <div className="mt-4 flex flex-wrap gap-4 md:mt-5">
               {chapter.links.map((l) => (
                 <Link
                   key={l.href}
@@ -372,13 +384,13 @@ function CareerStage({ chapter }: { chapter: Chapter }) {
         </div>
 
         <div className="col-span-12 md:col-span-7">
-          <ul className="flex flex-col gap-2.5">
+          <ul className="flex flex-col gap-2">
             {roles.map((role) => {
               const row = (
                 <>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-display text-[1.15rem] font-semibold leading-tight text-white md:text-[1.3rem]">
+                      <span className="font-display text-[1.05rem] font-semibold leading-tight text-white md:text-[1.2rem]">
                         {role.title}
                       </span>
                       {role.meta ? (
@@ -387,7 +399,7 @@ function CareerStage({ chapter }: { chapter: Chapter }) {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[13px] text-white/50">{role.summary}</p>
+                    <p className="mt-1 text-[12px] text-white/50 md:text-[13px]">{role.summary}</p>
                   </div>
                   <span className="shrink-0 text-meta text-white/35 transition-colors group-hover:text-brand-cyan">
                     Apply →
@@ -396,7 +408,7 @@ function CareerStage({ chapter }: { chapter: Chapter }) {
               );
 
               const className =
-                "group flex items-center gap-4 rounded-2xl border border-white/10 bg-[#070A10]/75 px-4 py-3.5 transition-[border-color,background-color,transform] duration-400 hover:-translate-y-0.5 hover:border-white/22 hover:bg-[#070A10]/90 md:px-5 md:py-4";
+                "group flex items-center gap-3 rounded-2xl border border-white/10 bg-[#070A10]/75 px-3.5 py-3 transition-[border-color,background-color,transform] duration-400 hover:-translate-y-0.5 hover:border-white/22 hover:bg-[#070A10]/90 md:gap-4 md:px-5 md:py-3.5";
 
               return (
                 <li key={role.title}>
@@ -423,24 +435,24 @@ function CloudOpsStage({ chapter }: { chapter: Chapter }) {
 
   return (
     <SectionPanel align="center">
-      <div className="mx-auto grid w-full max-w-5xl grid-cols-12 items-center gap-6 md:gap-10 lg:gap-12">
+      <div className="mx-auto grid w-full max-w-5xl grid-cols-12 items-center gap-4 max-[780px]:gap-3 md:gap-8 lg:gap-10">
         <div className="col-span-12 md:col-span-5">
           <p className="text-eyebrow text-white/65">
             {chapter.number} · {chapter.place}
           </p>
-          <h2 className="mt-3 font-display text-[clamp(2rem,4.5vw,3.5rem)] font-bold leading-[1.05] tracking-[-0.03em] text-white">
+          <h2 className="mt-2 font-display text-[clamp(1.75rem,4vw,3rem)] font-bold leading-[1.05] tracking-[-0.03em] text-white md:mt-3">
             {chapter.title}
           </h2>
-          <p className="mt-3 text-[1.05rem] leading-snug text-white/70 md:text-[1.15rem]">
+          <p className="mt-2 text-[1rem] leading-snug text-white/70 md:mt-3 md:text-[1.1rem]">
             {chapter.subtitle}
           </p>
           {chapter.body ? (
-            <p className="mt-3 max-w-md text-[14px] leading-relaxed text-white/50 md:text-[15px]">
+            <p className="mt-2 max-w-md text-[13px] leading-relaxed text-white/50 md:mt-3 md:text-[14px]">
               {chapter.body}
             </p>
           ) : null}
           {chapter.links?.length ? (
-            <div className="mt-6 flex flex-wrap gap-4">
+            <div className="mt-4 flex flex-wrap gap-4 md:mt-5">
               {chapter.links.map((l) => (
                 <Link
                   key={l.href}
@@ -455,14 +467,14 @@ function CloudOpsStage({ chapter }: { chapter: Chapter }) {
         </div>
 
         <div className="col-span-12 md:col-span-7">
-          <div className="relative flex flex-col gap-2.5">
+          <div className="relative flex flex-col gap-2">
             {layers.map((layer, i) => {
               const className =
-                "group relative flex items-start gap-4 overflow-hidden rounded-2xl border border-white/10 bg-[#070A10]/80 px-4 py-3.5 transition-[border-color,transform,background-color] duration-400 hover:-translate-y-0.5 hover:border-brand-cyan/35 hover:bg-[#070A10]/95 md:px-5 md:py-4";
+                "group relative flex items-start gap-3 overflow-hidden rounded-2xl border border-white/10 bg-[#070A10]/80 px-3.5 py-3 transition-[border-color,transform,background-color] duration-400 hover:-translate-y-0.5 hover:border-brand-cyan/35 hover:bg-[#070A10]/95 md:gap-4 md:px-5 md:py-3.5";
               const inner = (
                 <>
                   <span
-                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/12 text-meta text-white/45"
+                    className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/12 text-meta text-white/45 md:h-8 md:w-8"
                     style={{
                       boxShadow: i === 0 ? "0 0 24px -8px rgba(0,217,255,0.55)" : undefined,
                     }}
@@ -471,7 +483,7 @@ function CloudOpsStage({ chapter }: { chapter: Chapter }) {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-display text-[1.15rem] font-semibold leading-tight text-white md:text-[1.3rem]">
+                      <span className="font-display text-[1.05rem] font-semibold leading-tight text-white md:text-[1.2rem]">
                         {layer.title}
                       </span>
                       {layer.meta ? (
@@ -480,9 +492,9 @@ function CloudOpsStage({ chapter }: { chapter: Chapter }) {
                         </span>
                       ) : null}
                     </div>
-                    <p className="mt-1 text-[13px] leading-snug text-white/50">{layer.summary}</p>
+                    <p className="mt-1 text-[12px] leading-snug text-white/50 md:text-[13px]">{layer.summary}</p>
                     <div
-                      className="mt-3 h-0.5 max-w-[70%] rounded-full opacity-80"
+                      className="mt-2 h-0.5 max-w-[70%] rounded-full opacity-80 md:mt-3"
                       style={{
                         background:
                           "linear-gradient(90deg, color-mix(in oklab, var(--accent-current) 80%, white), transparent)",
@@ -525,7 +537,7 @@ function StandardStage({ chapter }: { chapter: Chapter }) {
 
   return (
     <SectionPanel align={isProject ? "start" : "center"}>
-      <div className={`flex flex-col ${contentWidth} ${isProject ? "pt-2 md:pt-4" : ""}`}>
+      <div className={`flex flex-col ${contentWidth} ${isProject ? "pt-1 md:pt-2" : ""}`}>
         <ChapterEyebrow chapter={chapter} />
         <ChapterTitle chapter={chapter} />
 

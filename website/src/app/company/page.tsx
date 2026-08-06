@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SectionHubPage } from "@/components/pages/SectionPages";
+import { getHubLanding } from "@/data/first-viewport";
 import { hubMetadata } from "@/data/seo";
 
 export const metadata: Metadata = hubMetadata("company");
@@ -9,7 +10,7 @@ export default function CompanyPage() {
     <SectionHubPage
       sectionId="company"
       title="Company"
-      summary="The people, principles, and presence behind Satyakabir Technologies - from headquarters culture to global delivery."
+      summary={getHubLanding("company").purpose}
     />
   );
 }

@@ -100,7 +100,11 @@ export function CommandPalette({
                 <Command className="h-3 w-3" /> K
               </kbd>
             </div>
-            <ul className="scrollbar-hide max-h-[50vh] overflow-y-auto p-2">
+            <ul
+              data-lenis-prevent
+              data-lenis-prevent-wheel
+              className="max-h-[50vh] overflow-y-auto overscroll-contain p-2"
+            >
               {results.length === 0 ? (
                 <li className="px-3 py-8 text-center text-[13px] text-muted-foreground">No matches</li>
               ) : (

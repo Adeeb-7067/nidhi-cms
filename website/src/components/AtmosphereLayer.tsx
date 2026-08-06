@@ -12,32 +12,22 @@ const AtmosphereVisual = memo(function AtmosphereVisual({
 
   return (
     <div className="pointer-events-none fixed inset-0 z-[var(--z-aurora)] overflow-hidden contain-strict">
+      {/* Tint only — heavy glow/vignette was fogging the film vs the raw MP4. */}
       <div
         className="absolute inset-0 transition-[background] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
         style={{
           background: `
-            radial-gradient(55% 45% at 18% 12%, ${atm.glow} 0%, transparent 70%),
-            radial-gradient(50% 40% at 88% 88%, ${atm.wash} 0%, transparent 72%)
+            radial-gradient(42% 32% at 14% 8%, ${atm.glow} 0%, transparent 70%),
+            radial-gradient(38% 28% at 92% 92%, ${atm.wash} 0%, transparent 72%)
           `,
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-40 transition-[background] duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
-        style={{
-          background: `linear-gradient(118deg, transparent 22%, ${atm.glow} 48%, transparent 74%)`,
-        }}
-      />
-      <div
-        className="absolute inset-x-0 top-0 h-px opacity-50 transition-[background] duration-500"
-        style={{
-          background: `linear-gradient(90deg, transparent, ${atm.accent}55, transparent)`,
+          opacity: 0.32,
         }}
       />
       <div
         className="absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 85% at 50% 42%, transparent 40%, rgba(2,3,5,0.28) 100%)",
+            "radial-gradient(130% 90% at 50% 45%, transparent 62%, rgba(2,3,5,0.06) 100%)",
         }}
       />
     </div>

@@ -1,8 +1,8 @@
 export const site = {
   brand: "Satyakabir Technologies",
   brandShort: "SK",
-  email: "hello@satyakabir.tech",
-  phone: "+91 98765 43210",
+  email: "info@satyakabir.com",
+  phone: "+91 89599 77624",
   location: "Bengaluru · Remote-first · Global delivery",
   tagline: "Crafting tomorrow's digital foundations, today.",
   mission:
@@ -10,6 +10,10 @@ export const site = {
   vision:
     "A world where every ambitious organization can operate on infrastructure that is intelligent, secure, and beautiful by default.",
   copyright: "© 2026 Satyakabir Technologies Pvt. Ltd. All rights reserved.",
+  socials: {
+    linkedin: "https://www.linkedin.com/company/satya-kabir-e-solutions-pvt-ltd",
+    website: "https://satyakabir.com",
+  },
 };
 
 export const hero = {
@@ -416,10 +420,8 @@ export const contact = {
     "Contact",
   ],
   socials: [
-    { label: "LinkedIn", href: "#" },
-    { label: "X", href: "#" },
-    { label: "GitHub", href: "#" },
-    { label: "Dribbble", href: "#" },
+    { label: "LinkedIn", href: site.socials.linkedin },
+    { label: "Website", href: site.socials.website },
   ],
   legal: ["Privacy Policy", "Terms of Service", "Security"],
   newsletter: "Signal notes — AI systems, cloud craft, product engineering.",

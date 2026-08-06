@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SectionHubPage } from "@/components/pages/SectionPages";
+import { getHubLanding } from "@/data/first-viewport";
 import { hubMetadata } from "@/data/seo";
 
 export const metadata: Metadata = hubMetadata("work");
@@ -9,7 +10,7 @@ export default function WorkIndexPage() {
     <SectionHubPage
       sectionId="work"
       title="Work"
-      summary="Selected builds, case studies, and the gallery of craft behind Satyakabir Technologies."
+      summary={getHubLanding("work").purpose}
     />
   );
 }

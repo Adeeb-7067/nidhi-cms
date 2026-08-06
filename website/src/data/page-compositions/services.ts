@@ -187,6 +187,126 @@ export const servicesCompositions: Record<string, PageComposition> = {
     { id: "related" },
   ]),
 
+  "digital-services": compose("gallery", [
+    { id: "hero-product" },
+    {
+      id: "highlight-band",
+      props: {
+        layout: "display",
+        eyebrow: "Digital services",
+        title: "Digital products that businesses can run",
+        body: "Web, mobile, design, and transformation — one engineering practice, not separate vendor silos.",
+      },
+    },
+    { id: "pills" },
+    { id: "metrics", props: { layout: "rail" } },
+    {
+      id: "cards",
+      props: {
+        layout: "bento",
+        title: "What digital services include",
+        body: "From first customer journey to the systems that keep it online.",
+      },
+    },
+    {
+      id: "pipeline",
+      props: { layout: "ladder", title: "How we deliver digital work" },
+    },
+    { id: "chapters-grid", props: { layout: "magazine" } },
+    {
+      id: "link-band",
+      props: {
+        title: "Explore the digital stack",
+        links: [
+          { title: "Leads", href: "/services/leads", description: "Pipeline systems" },
+          { title: "Branding", href: "/services/branding", description: "Shipable brand systems" },
+          { title: "Web Development", href: "/services/web-development", description: "Product-grade web" },
+          { title: "Mobile Applications", href: "/services/mobile-applications", description: "iOS, Android, PWA" },
+        ],
+      },
+    },
+    { id: "stack" },
+    { id: "faq" },
+    { id: "cta" },
+    { id: "related" },
+  ]),
+
+  leads: compose("editorial", [
+    { id: "hero-split", props: { image: img.meeting } },
+    {
+      id: "highlight-band",
+      props: {
+        layout: "display",
+        eyebrow: "Leads",
+        title: "Turn attention into qualified pipeline",
+        body: "Lead capture, routing, scoring, and follow-up systems — engineered so sales trusts the queue.",
+      },
+    },
+    { id: "metrics", props: { layout: "rail" } },
+    { id: "pipeline", props: { title: "Lead system path" } },
+    { id: "cards", props: { layout: "bento", title: "Lead capabilities" } },
+    { id: "chapters-editorial", props: { layout: "display" } },
+    {
+      id: "link-band",
+      props: {
+        title: "Related digital work",
+        links: [
+          { title: "Digital Services", href: "/services/digital-services" },
+          { title: "Web Development", href: "/services/web-development" },
+          { title: "CRM", href: "/solutions/crm" },
+          { title: "Get a quote", href: "/contact/get-quote" },
+        ],
+      },
+    },
+    { id: "faq" },
+    { id: "cta" },
+    { id: "related" },
+  ]),
+
+  branding: compose("gallery", [
+    { id: "hero-media", props: { image: img.design } },
+    {
+      id: "highlight-band",
+      props: {
+        layout: "pull",
+        eyebrow: "Branding",
+        title: "Brand systems products can ship",
+        body: "Identity, voice, and design tokens that survive engineering — not a PDF that dies in Figma.",
+      },
+    },
+    { id: "gallery", props: { title: "Brand in motion", images: [img.design, img.office, img.code] } },
+    { id: "pills" },
+    { id: "cards", props: { layout: "rail", title: "Brand deliverables" } },
+    { id: "chapters-alternating", props: { layout: "cascade" } },
+    {
+      id: "values",
+      props: {
+        layout: "stack",
+        title: "Brand rules that stick",
+        values: [
+          { title: "Tokens over posters", body: "Color, type, and spacing as engineering-ready systems." },
+          { title: "Voice with guardrails", body: "Copy patterns teams can reuse without a brand police queue." },
+          { title: "Product-native", body: "Brand lives in UI kits and web surfaces, not only print." },
+        ],
+      },
+    },
+    {
+      id: "link-band",
+      props: {
+        title: "Carry brand into product",
+        links: [
+          { title: "UI UX Design", href: "/services/ui-ux-design" },
+          { title: "Digital Services", href: "/services/digital-services" },
+          { title: "Web Development", href: "/services/web-development" },
+          { title: "Start a project", href: "/contact/get-quote" },
+        ],
+      },
+    },
+    { id: "faq" },
+    { id: "cta" },
+    { id: "related" },
+  ]),
+
   "cyber-security": compose("signal", [
     { id: "hero-media", props: { image: img.security } },
     { id: "scan" },

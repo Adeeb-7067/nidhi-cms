@@ -7,7 +7,8 @@ const FILM_FPS = 72;
 const POSTER = "/TITLE__Satyakabir_Technologies.poster.jpg";
 const DESKTOP_MP4 = "/TITLE__Satyakabir_Technologies.scrub.mp4";
 const MOBILE_MP4 = "/TITLE__Satyakabir_Technologies.scrub.mobile.mp4";
-const FALLBACK_MP4 = "/TITLE__Satyakabir_Technologies.mp4";
+/** Master file — same bits the user sees when opening the MP4 in a player. */
+const MASTER_MP4 = "/TITLE__Satyakabir_Technologies.mp4";
 
 type ScrubMode = "video" | "poster" | "images";
 
@@ -37,23 +38,22 @@ function framePath(index: number) {
   return withBase(`/frames/frame${String(index).padStart(4, "0")}.jpg`);
 }
 
-type VideoWithRVFC = HTMLVideoElement & {
-  requestVideoFrameCallback?: (cb: (now: number, meta: unknown) => void) => number;
-  cancelVideoFrameCallback?: (id: number) => void;
-};
-
 /**
- * Canvas scrubber — dense-keyframe MP4 seek (mobile/desktop variants),
- * poster first-paint, reduced-motion static path, optional JPG fallback.
+ * Scroll-scrubbed film.
+ *
+ * Video mode paints with a native `<video object-fit:cover>` element (same
+ * decoder path as a media player) — no canvas redraw, no contrast filters.
+ * Canvas is only for poster first-paint and reduced-motion JPG fallback.
  */
 export function useFrameScrubber() {
   const [currentFrame, setCurrentFrameState] = useState(FRAME_START);
   const [isLoaded, setIsLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [nativeVideo, setNativeVideo] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const ctxRef = useRef<CanvasRenderingContext2D | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const posterRef = useRef<HTMLImageElement | null>(null);
   const modeRef = useRef<ScrubMode>("poster");
   const cacheRef = useRef<Map<number, HTMLImageElement>>(new Map());
@@ -63,7 +63,6 @@ export function useFrameScrubber() {
   const targetTimeRef = useRef(0);
   const drawRafRef = useRef(0);
   const pendingDrawRef = useRef<number | null>(null);
-  const rvfcIdRef = useRef(0);
 
   const getCtx = useCallback(() => {
     const canvas = canvasRef.current;
@@ -74,8 +73,7 @@ export function useFrameScrubber() {
       if (!ctx) return null;
       ctxRef.current = ctx;
       ctx.imageSmoothingEnabled = true;
-      // High-quality resampling when the 720p scrub film fills a larger canvas.
-      ctx.imageSmoothingQuality = "high";
+      ctx.imageSmoothingQuality = "medium";
     }
     return ctx;
   }, []);
@@ -104,6 +102,8 @@ export function useFrameScrubber() {
         offsetX = (w - drawWidth) / 2;
       }
 
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "medium";
       ctx.fillStyle = "#020305";
       ctx.fillRect(0, 0, w, h);
       ctx.drawImage(source, offsetX, offsetY, drawWidth, drawHeight);
@@ -117,12 +117,6 @@ export function useFrameScrubber() {
     const t = ((frame - 1) / Math.max(1, TOTAL_FRAMES - 1)) * dur;
     return Math.min(Math.max(0, t), Math.max(0, dur - 0.04));
   }, []);
-
-  const drawVideo = useCallback(() => {
-    const video = videoRef.current;
-    if (!video || video.readyState < 2 || video.videoWidth <= 0) return;
-    coverDraw(video, video.videoWidth, video.videoHeight);
-  }, [coverDraw]);
 
   const drawPoster = useCallback(() => {
     const img = posterRef.current;
@@ -162,6 +156,7 @@ export function useFrameScrubber() {
 
   const scheduleDraw = useCallback(
     (index: number) => {
+      if (modeRef.current === "video") return;
       pendingDrawRef.current = index;
       if (drawRafRef.current) return;
       drawRafRef.current = requestAnimationFrame(() => {
@@ -169,32 +164,12 @@ export function useFrameScrubber() {
         const next = pendingDrawRef.current;
         pendingDrawRef.current = null;
         if (next == null || next !== frameRef.current) return;
-        if (modeRef.current === "video") drawVideo();
-        else if (modeRef.current === "poster") drawPoster();
-        else drawImageFrame(next);
+        if (modeRef.current === "poster") drawPoster();
+        else if (modeRef.current === "images") drawImageFrame(next);
       });
     },
-    [drawImageFrame, drawPoster, drawVideo],
+    [drawImageFrame, drawPoster],
   );
-
-  const scheduleVideoFrameDraw = useCallback(() => {
-    const video = videoRef.current as VideoWithRVFC | null;
-    if (!video) {
-      drawVideo();
-      return;
-    }
-    if (typeof video.requestVideoFrameCallback === "function") {
-      if (rvfcIdRef.current && video.cancelVideoFrameCallback) {
-        video.cancelVideoFrameCallback(rvfcIdRef.current);
-      }
-      rvfcIdRef.current = video.requestVideoFrameCallback(() => {
-        rvfcIdRef.current = 0;
-        drawVideo();
-      });
-      return;
-    }
-    drawVideo();
-  }, [drawVideo]);
 
   const pumpSeek = useCallback(() => {
     const video = videoRef.current;
@@ -202,10 +177,7 @@ export function useFrameScrubber() {
     if (seekingRef.current) return;
 
     const target = targetTimeRef.current;
-    if (Math.abs(video.currentTime - target) < 0.012) {
-      scheduleVideoFrameDraw();
-      return;
-    }
+    if (Math.abs(video.currentTime - target) < 0.012) return;
 
     seekingRef.current = true;
     try {
@@ -213,12 +185,13 @@ export function useFrameScrubber() {
     } catch {
       seekingRef.current = false;
     }
-  }, [scheduleVideoFrameDraw]);
+  }, []);
 
   const pumpSeekRef = useRef(pumpSeek);
-  const scheduleVideoFrameDrawRef = useRef(scheduleVideoFrameDraw);
-  pumpSeekRef.current = pumpSeek;
-  scheduleVideoFrameDrawRef.current = scheduleVideoFrameDraw;
+
+  useEffect(() => {
+    pumpSeekRef.current = pumpSeek;
+  }, [pumpSeek]);
 
   const loadJpg = useCallback(
     (index: number) =>
@@ -245,30 +218,41 @@ export function useFrameScrubber() {
     [scheduleDraw],
   );
 
+  const uiFrameRafRef = useRef(0);
+  const lastUiAtRef = useRef(0);
+
   const setCurrentFrame = useCallback(
     (frame: number) => {
       const clamped = Math.min(TOTAL_FRAMES, Math.max(FRAME_START, Math.round(frame)));
       if (frameRef.current === clamped) return;
       frameRef.current = clamped;
-      setCurrentFrameState(clamped);
 
       if (modeRef.current === "video") {
         targetTimeRef.current = frameToTime(clamped);
         pumpSeek();
-        return;
-      }
-
-      if (modeRef.current === "poster") {
+      } else if (modeRef.current === "poster") {
         scheduleDraw(clamped);
-        return;
+      } else {
+        scheduleDraw(clamped);
+        void loadJpg(clamped).then(() => {
+          if (frameRef.current === clamped) scheduleDraw(clamped);
+        });
+        for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 10); i++) void loadJpg(i);
+        for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--) void loadJpg(i);
       }
 
-      scheduleDraw(clamped);
-      void loadJpg(clamped).then(() => {
-        if (frameRef.current === clamped) scheduleDraw(clamped);
-      });
-      for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 10); i++) void loadJpg(i);
-      for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--) void loadJpg(i);
+      const now = performance.now();
+      if (now - lastUiAtRef.current >= 48) {
+        lastUiAtRef.current = now;
+        setCurrentFrameState(clamped);
+        return;
+      }
+      if (uiFrameRafRef.current) return;
+      uiFrameRafRef.current = window.setTimeout(() => {
+        uiFrameRafRef.current = 0;
+        lastUiAtRef.current = performance.now();
+        setCurrentFrameState(frameRef.current);
+      }, 48);
     },
     [frameToTime, loadJpg, pumpSeek, scheduleDraw],
   );
@@ -278,10 +262,10 @@ export function useFrameScrubber() {
     let progressTimer = 0;
     let softTimer = 0;
     let hardTimer = 0;
+    let waitForVideoEl = 0;
 
     const onSeeked = () => {
       seekingRef.current = false;
-      scheduleVideoFrameDrawRef.current();
       const video = videoRef.current;
       if (!video) return;
       if (Math.abs(video.currentTime - targetTimeRef.current) > 0.02) {
@@ -307,160 +291,180 @@ export function useFrameScrubber() {
     const bootReducedMotion = async () => {
       modeRef.current = "poster";
       await loadPoster();
-      // Prefer a mid-story still if frames exist locally; otherwise keep poster.
       await loadJpg(Math.round((FRAME_START + TOTAL_FRAMES) / 2));
       if (cacheRef.current.size > 0) modeRef.current = "images";
+      setNativeVideo(false);
       setLoadProgress(100);
     };
 
-    const bootVideo = () =>
-      new Promise<boolean>((resolve) => {
-        const video = document.createElement("video");
-        video.muted = true;
-        video.playsInline = true;
-        video.preload = "auto";
-        video.setAttribute("playsinline", "true");
-        video.setAttribute("webkit-playsinline", "true");
-        video.disablePictureInPicture = true;
-        video.controls = false;
-        video.style.cssText =
-          "position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-9999px;top:0";
-        document.body.appendChild(video);
-        videoRef.current = video;
-
-        const mobile = shouldUseMobileAsset();
-        // Prefer dense-keyframe MP4s (desktop ~4MB / mobile ~1.5MB).
-        const sources = mobile
-          ? [withBase(MOBILE_MP4), withBase(DESKTOP_MP4), withBase(FALLBACK_MP4)]
-          : [withBase(DESKTOP_MP4), withBase(MOBILE_MP4), withBase(FALLBACK_MP4)];
-
-        let sourceIdx = 0;
-        let settled = false;
-        let painted = false;
-
-        const detachBootListeners = () => {
-          video.removeEventListener("loadedmetadata", onMeta);
-          video.removeEventListener("loadeddata", onLoadedData);
-          video.removeEventListener("canplay", onCanPlay);
-          video.removeEventListener("progress", onProgress);
-          video.removeEventListener("error", onError);
-          window.clearInterval(progressTimer);
-          window.clearTimeout(softTimer);
-          window.clearTimeout(hardTimer);
-        };
-
-        const paintFirst = () => {
-          if (painted || cancelled) return;
-          if (video.readyState < 2 || video.videoWidth <= 0) return;
-          painted = true;
-          modeRef.current = "video";
-          durationRef.current =
-            Number.isFinite(video.duration) && video.duration > 0
-              ? video.duration
-              : TOTAL_FRAMES / FILM_FPS;
-          targetTimeRef.current = frameToTime(FRAME_START);
-          try {
-            video.currentTime = targetTimeRef.current;
-          } catch {
-            /* ignore */
-          }
-          scheduleVideoFrameDrawRef.current();
-          setLoadProgress((p) => Math.max(p, 35));
-          // Unlock UI as soon as first frame can paint — keep buffering in background
-          if (!settled) {
-            settled = true;
-            video.addEventListener("seeked", onSeeked);
-            setIsLoaded(true);
-            resolve(true);
-          }
-        };
-
-        const finish = () => {
-          if (cancelled) return;
-          detachBootListeners();
-          setLoadProgress(100);
-          if (!settled) {
-            settled = true;
-            modeRef.current = "video";
-            video.addEventListener("seeked", onSeeked);
-            setIsLoaded(true);
-            resolve(true);
-          }
-        };
-
-        const failOver = () => {
-          if (settled && painted) return;
-          sourceIdx += 1;
-          if (sourceIdx < sources.length) {
-            painted = false;
-            video.src = sources[sourceIdx];
-            video.load();
+    const waitForVideoNode = () =>
+      new Promise<HTMLVideoElement | null>((resolve) => {
+        const start = performance.now();
+        const tryGet = () => {
+          const el = videoRef.current;
+          if (el) {
+            resolve(el);
             return;
           }
-          if (!settled) {
-            settled = true;
-            detachBootListeners();
-            video.removeEventListener("seeked", onSeeked);
-            video.removeAttribute("src");
-            video.load();
-            video.remove();
-            videoRef.current = null;
+          if (performance.now() - start > 2000) {
+            resolve(null);
+            return;
+          }
+          waitForVideoEl = window.setTimeout(tryGet, 16);
+        };
+        tryGet();
+      });
+
+    const bootVideo = () =>
+      new Promise<boolean>((resolve) => {
+        void waitForVideoNode().then((video) => {
+          if (!video || cancelled) {
             resolve(false);
+            return;
           }
-        };
 
-        const onMeta = () => {
-          if (Number.isFinite(video.duration) && video.duration > 0) {
-            durationRef.current = video.duration;
-          }
-        };
+          video.muted = true;
+          video.playsInline = true;
+          video.preload = "auto";
+          video.setAttribute("playsinline", "true");
+          video.setAttribute("webkit-playsinline", "true");
+          video.disablePictureInPicture = true;
 
-        const onLoadedData = () => paintFirst();
-        const onCanPlay = () => paintFirst();
+          const mobile = shouldUseMobileAsset();
+          // Desktop: master first — identical quality to opening the file in a player.
+          // Mobile / save-data: lighter scrub encode, then master.
+          const sources = mobile
+            ? [withBase(MOBILE_MP4), withBase(MASTER_MP4), withBase(DESKTOP_MP4)]
+            : [withBase(MASTER_MP4), withBase(DESKTOP_MP4), withBase(MOBILE_MP4)];
 
-        const onProgress = () => {
-          try {
-            if (!video.duration || !video.buffered.length) return;
-            const end = video.buffered.end(video.buffered.length - 1);
-            const pct = Math.min(99, Math.round((end / video.duration) * 100));
-            setLoadProgress((p) => Math.max(p, pct));
-            paintFirst();
-            if (end / video.duration >= 0.7) finish();
-          } catch {
-            /* ignore */
-          }
-        };
+          let sourceIdx = 0;
+          let settled = false;
+          let painted = false;
 
-        const onError = () => failOver();
+          const detachBootListeners = () => {
+            video.removeEventListener("loadedmetadata", onMeta);
+            video.removeEventListener("loadeddata", onLoadedData);
+            video.removeEventListener("canplay", onCanPlay);
+            video.removeEventListener("progress", onProgress);
+            video.removeEventListener("error", onError);
+            window.clearInterval(progressTimer);
+            window.clearTimeout(softTimer);
+            window.clearTimeout(hardTimer);
+          };
 
-        video.addEventListener("loadedmetadata", onMeta);
-        video.addEventListener("loadeddata", onLoadedData);
-        video.addEventListener("canplay", onCanPlay);
-        video.addEventListener("progress", onProgress);
-        video.addEventListener("error", onError);
+          const paintFirst = () => {
+            if (painted || cancelled) return;
+            if (video.readyState < 2 || video.videoWidth <= 0) return;
+            painted = true;
+            modeRef.current = "video";
+            setNativeVideo(true);
+            durationRef.current =
+              Number.isFinite(video.duration) && video.duration > 0
+                ? video.duration
+                : TOTAL_FRAMES / FILM_FPS;
+            targetTimeRef.current = frameToTime(FRAME_START);
+            try {
+              video.currentTime = targetTimeRef.current;
+            } catch {
+              /* ignore */
+            }
+            setLoadProgress((p) => Math.max(p, 35));
+            if (!settled) {
+              settled = true;
+              video.addEventListener("seeked", onSeeked);
+              setIsLoaded(true);
+              resolve(true);
+            }
+          };
 
-        softTimer = window.setTimeout(() => {
-          if (video.readyState >= 2) {
-            paintFirst();
-            finish();
-          }
-        }, 2200);
-        hardTimer = window.setTimeout(() => {
-          if (!settled) failOver();
-          else finish();
-        }, 10000);
+          const finish = () => {
+            if (cancelled) return;
+            detachBootListeners();
+            setLoadProgress(100);
+            if (!settled) {
+              settled = true;
+              modeRef.current = "video";
+              setNativeVideo(true);
+              video.addEventListener("seeked", onSeeked);
+              setIsLoaded(true);
+              resolve(true);
+            }
+          };
 
-        progressTimer = window.setInterval(() => {
-          if (settled) return;
-          setLoadProgress((p) => (p < 90 ? p + 1 : p));
-        }, 140);
+          const failOver = () => {
+            if (settled && painted) return;
+            sourceIdx += 1;
+            if (sourceIdx < sources.length) {
+              painted = false;
+              video.src = sources[sourceIdx];
+              video.load();
+              return;
+            }
+            if (!settled) {
+              settled = true;
+              detachBootListeners();
+              video.removeEventListener("seeked", onSeeked);
+              video.removeAttribute("src");
+              video.load();
+              setNativeVideo(false);
+              resolve(false);
+            }
+          };
 
-        video.src = sources[0];
-        video.load();
+          const onMeta = () => {
+            if (Number.isFinite(video.duration) && video.duration > 0) {
+              durationRef.current = video.duration;
+            }
+          };
+
+          const onLoadedData = () => paintFirst();
+          const onCanPlay = () => paintFirst();
+
+          const onProgress = () => {
+            try {
+              if (!video.duration || !video.buffered.length) return;
+              const end = video.buffered.end(video.buffered.length - 1);
+              const pct = Math.min(99, Math.round((end / video.duration) * 100));
+              setLoadProgress((p) => Math.max(p, pct));
+              paintFirst();
+              if (end / video.duration >= 0.7) finish();
+            } catch {
+              /* ignore */
+            }
+          };
+
+          const onError = () => failOver();
+
+          video.addEventListener("loadedmetadata", onMeta);
+          video.addEventListener("loadeddata", onLoadedData);
+          video.addEventListener("canplay", onCanPlay);
+          video.addEventListener("progress", onProgress);
+          video.addEventListener("error", onError);
+
+          softTimer = window.setTimeout(() => {
+            if (video.readyState >= 2) {
+              paintFirst();
+              finish();
+            }
+          }, 2200);
+          hardTimer = window.setTimeout(() => {
+            if (!settled) failOver();
+            else finish();
+          }, 10000);
+
+          progressTimer = window.setInterval(() => {
+            if (settled) return;
+            setLoadProgress((p) => (p < 90 ? p + 1 : p));
+          }, 140);
+
+          video.src = sources[0];
+          video.load();
+        });
       });
 
     const bootImages = async () => {
       modeRef.current = posterRef.current ? "poster" : "images";
+      setNativeVideo(false);
       scheduleDraw(FRAME_START);
       const batch = Math.min(24, TOTAL_FRAMES - FRAME_START + 1);
       let loaded = 0;
@@ -504,17 +508,14 @@ export function useFrameScrubber() {
       window.clearInterval(progressTimer);
       window.clearTimeout(softTimer);
       window.clearTimeout(hardTimer);
+      window.clearTimeout(waitForVideoEl);
+      if (uiFrameRafRef.current) window.clearTimeout(uiFrameRafRef.current);
       if (drawRafRef.current) cancelAnimationFrame(drawRafRef.current);
-      const video = videoRef.current as VideoWithRVFC | null;
+      const video = videoRef.current;
       if (video) {
-        if (rvfcIdRef.current && video.cancelVideoFrameCallback) {
-          video.cancelVideoFrameCallback(rvfcIdRef.current);
-        }
         video.removeEventListener("seeked", onSeeked);
         video.removeAttribute("src");
         video.load();
-        video.remove();
-        videoRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -522,19 +523,16 @@ export function useFrameScrubber() {
 
   useEffect(() => {
     const resize = () => {
+      if (modeRef.current === "video") return;
       const canvas = canvasRef.current;
       if (!canvas) return;
-      // Size the backing store to real device pixels so the frame is resampled
-      // once (video → canvas) instead of twice (video → canvas → compositor).
-      // Capped because the source film is 1280×720: past ~2× source width the
-      // extra pixels only cost fill rate, they cannot add detail.
-      const MAX_W = 2560;
+      const srcW = posterRef.current?.naturalWidth || 1280;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       const cssW = window.innerWidth;
       const cssH = window.innerHeight;
-      const scale = Math.min(dpr, MAX_W / Math.max(1, cssW));
-      const nextW = Math.floor(cssW * scale);
-      const nextH = Math.floor(cssH * scale);
+      const scale = Math.min(dpr, srcW / Math.max(1, cssW));
+      const nextW = Math.max(1, Math.floor(cssW * scale));
+      const nextH = Math.max(1, Math.floor(cssH * scale));
       if (canvas.width !== nextW || canvas.height !== nextH) {
         canvas.width = nextW;
         canvas.height = nextH;
@@ -550,6 +548,8 @@ export function useFrameScrubber() {
 
   return {
     canvasRef,
+    videoRef,
+    nativeVideo,
     currentFrame,
     setCurrentFrame,
     totalFrames: TOTAL_FRAMES,

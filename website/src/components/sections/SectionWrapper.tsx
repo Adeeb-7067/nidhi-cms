@@ -96,7 +96,7 @@ export function SectionWrapper({
       {atm ? (
         <div
           className="pointer-events-none absolute inset-0"
-          style={{ background: atm.veil, opacity: Math.min(1, opacity * 1.05) }}
+          style={{ background: atm.veil, opacity: Math.min(0.42, opacity * 0.48) }}
         />
       ) : null}
       <div className="pointer-events-none relative flex h-full min-h-0 w-full flex-col">
@@ -115,26 +115,16 @@ export function SectionPanel({
   className?: string;
   align?: "start" | "center" | "end";
 }) {
-  const alignClass =
-    align === "center"
-      ? "my-auto"
-      : align === "end"
-        ? "mt-auto mb-0"
-        : "mt-0";
-
   return (
     <div
       className={cn(
         "section-panel pointer-events-none relative z-10 h-full min-h-0 w-full overflow-y-auto overscroll-contain scrollbar-hide",
+        align === "center" && "section-panel--center",
+        align === "end" && "section-panel--end",
         className,
       )}
     >
-      <div
-        className={cn(
-          "section-panel-inner pointer-events-none [[data-section-interactive=true]_&]:pointer-events-auto",
-          alignClass,
-        )}
-      >
+      <div className="section-panel-inner pointer-events-none [[data-section-interactive=true]_&]:pointer-events-auto">
         {children}
       </div>
     </div>

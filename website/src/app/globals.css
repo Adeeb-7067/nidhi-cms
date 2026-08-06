@@ -99,6 +99,11 @@
   --page-pad-x-md: 2rem;
   --content-max: 72ch;
   --grid-max: 1200px;
+  /* Film chapter overlays — clear Actions (left), chapter rail (right), chat/cue (bottom). */
+  --film-rail-left: 3.5rem;
+  --film-rail-right: 3.25rem;
+  --film-safe-top-extra: 0.35rem;
+  --film-safe-bottom: 5.5rem;
 
   --z-canvas: 0;
   --z-aurora: 5;
@@ -138,6 +143,27 @@
   --nav-bg-scrolled: rgba(7, 10, 16, 0.85);
   --nav-border: rgba(255, 255, 255, 0.1);
   --nav-shadow: 0 20px 50px -24px rgba(0, 0, 0, 0.85);
+}
+
+@media (min-width: 640px) {
+  :root {
+    /* Place label + chapter dots sit on the right while the film is active. */
+    --film-rail-right: 13.75rem;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --film-rail-left: 3.75rem;
+    --film-safe-bottom: 6rem;
+  }
+}
+
+@media (max-height: 780px) {
+  :root {
+    --film-safe-bottom: 4.75rem;
+    --film-safe-top-extra: 0.15rem;
+  }
 }
 
 @layer base {
@@ -527,17 +553,32 @@
   .section-panel {
     display: flex;
     flex-direction: column;
-    padding-top: var(--nav-h);
-    padding-bottom: 4.5rem;
+    justify-content: flex-start;
+    box-sizing: border-box;
+    padding-top: calc(var(--nav-h) + var(--film-safe-top-extra));
+    padding-bottom: var(--film-safe-bottom);
+    padding-left: max(var(--page-pad-x), var(--film-rail-left));
+    padding-right: max(var(--page-pad-x), var(--film-rail-right));
   }
 
   @media (min-width: 768px) {
     .section-panel {
-      padding-bottom: 5rem;
+      padding-left: max(var(--page-pad-x-md), var(--film-rail-left));
+      padding-right: max(var(--page-pad-x-md), var(--film-rail-right));
     }
   }
 
+  /* Center when content fits; `safe` keeps the start edge reachable when it overflows. */
+  .section-panel--center {
+    justify-content: safe center;
+  }
+
+  .section-panel--end {
+    justify-content: flex-end;
+  }
+
   .hero-panel {
+    justify-content: flex-start;
     padding-bottom: 5.5rem;
   }
 
@@ -551,12 +592,14 @@
     width: 100%;
     max-width: var(--grid-max);
     margin-inline: auto;
-    padding-inline: var(--page-pad-x);
+    /* Horizontal clearance lives on `.section-panel` so rails stay free. */
+    padding-inline: 0;
   }
 
-  @media (min-width: 768px) {
-    .section-panel-inner {
-      padding-inline: var(--page-pad-x-md);
+  /* Short laptop / landscape heights: keep dense film stages inside one view. */
+  @media (max-height: 780px) {
+    .section-panel-inner .text-hero {
+      font-size: clamp(1.85rem, 4.2vw, 3.25rem);
     }
   }
 
@@ -991,4 +1034,25 @@
 
 .card-glow:hover::after {
   opacity: 1;
+}
+
+/* Mission Control — capsule pulse + AI ring */
+@keyframes mc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mc-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.75;
+    box-shadow: 0 0 10px rgba(0, 168, 199, 0.7);
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 1;
+    box-shadow: 0 0 18px rgba(0, 168, 199, 1);
+  }
 }

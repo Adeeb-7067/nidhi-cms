@@ -28,8 +28,8 @@ function ResultRow({ kpi, index }: { kpi: (typeof businessResults)[number]; inde
         } as React.CSSProperties
       }
     >
-      <div className="grid items-baseline gap-4 md:grid-cols-[minmax(0,0.42fr)_minmax(0,1fr)] md:gap-10">
-        <div className="font-display text-[clamp(3rem,9vw,6.5rem)] font-extrabold leading-[0.85] tracking-[-0.05em] text-foreground">
+      <div className="grid items-baseline gap-5 md:grid-cols-[auto_minmax(0,1fr)] md:gap-10 lg:gap-14">
+        <div className="shrink-0 whitespace-nowrap font-display text-[clamp(2.75rem,7vw,5.25rem)] font-extrabold leading-none tracking-[-0.04em] text-foreground">
           <CountUp
             value={kpi.value}
             prefix={kpi.prefix}
@@ -37,7 +37,7 @@ function ResultRow({ kpi, index }: { kpi: (typeof businessResults)[number]; inde
             duration={1500 + index * 150}
           />
         </div>
-        <div>
+        <div className="min-w-0">
           <h3 className="text-card-title text-foreground">{kpi.title}</h3>
           <p className="mt-2 max-w-[56ch] text-small">{kpi.detail}</p>
           <div className="mt-5 h-[3px] w-full overflow-hidden rounded-full bg-[var(--muted)]">

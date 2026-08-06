@@ -31,7 +31,10 @@ export function MobileNav({
         >
           <div className="absolute inset-0 bg-background/80 backdrop-blur-xl" onClick={onClose} />
           <motion.div
-            className="scrollbar-hide absolute inset-x-0 top-0 bottom-0 overflow-y-auto bg-background/95 px-5 pb-10 pt-5"
+            data-lenis-prevent
+            data-lenis-prevent-wheel
+            data-lenis-prevent-touch
+            className="absolute inset-x-0 top-0 bottom-0 overflow-y-auto overscroll-contain bg-background/95 px-5 pb-10 pt-5"
             initial={{ y: "-4%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "-2%", opacity: 0 }}

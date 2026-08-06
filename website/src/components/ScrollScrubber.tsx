@@ -55,7 +55,7 @@ export function ScrollScrubber({
         trigger: containerRef.current,
         start: "top top",
         end: "bottom bottom",
-        scrub: prefersReduced ? true : 0.12,
+        scrub: prefersReduced ? true : 0.05,
         invalidateOnRefresh: true,
         onUpdate: () => {
           const next = Math.round(obj.frame);

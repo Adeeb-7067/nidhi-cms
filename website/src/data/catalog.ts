@@ -1,4 +1,5 @@
 import { industries, projects, services } from "@/data/mock";
+import { getCaseStudy } from "@/data/case-studies";
 import { slugify } from "@/lib/slug";
 
 const serviceDetails: Record<
@@ -160,24 +161,32 @@ export const serviceCatalog = services.map((service) => {
 
 export const projectCatalog = projects.map((project) => {
   const slug = slugify(project.name);
+  const study = getCaseStudy(slug);
   return {
     ...project,
     slug,
     href: `/work/${slug}`,
-    challenge: `The client needed a ${project.sector.toLowerCase()} platform that could scale without sacrificing reliability or operator trust. ${project.desc}`,
+    challenge:
+      study?.challenge ??
+      `The client needed a ${project.sector.toLowerCase()} platform that could scale without sacrificing reliability or operator trust. ${project.desc}`,
     solution:
+      study?.solution ??
       "Satyakabir embedded a principal-led pod to frame architecture, ship in risk-ordered slices, and transfer ownership with runbooks and ADRs — so the client team could evolve the system after launch.",
-    results: [
-      { label: "Primary metric", value: `${project.metric} ${project.metricLabel}` },
-      { label: "Engagement model", value: "Embedded product + platform squad" },
-      { label: "Stack focus", value: project.tags.join(" · ") },
-    ],
-    highlights: [
-      "Production-grade architecture with observability from day one",
-      "Security and compliance controls aligned to industry requirements",
-      "Knowledge transfer so the client's team owns the system long-term",
-      `Sector focus: ${project.sector}`,
-    ],
+    results: study
+      ? study.metrics.map((m) => ({ label: m.label, value: m.value }))
+      : [
+          { label: "Primary metric", value: `${project.metric} ${project.metricLabel}` },
+          { label: "Engagement model", value: "Embedded product + platform squad" },
+          { label: "Stack focus", value: project.tags.join(" · ") },
+        ],
+    highlights: study
+      ? study.deliverables.slice(0, 4)
+      : [
+          "Production-grade architecture with observability from day one",
+          "Security and compliance controls aligned to industry requirements",
+          "Knowledge transfer so the client's team owns the system long-term",
+          `Sector focus: ${project.sector}`,
+        ],
   };
 });
 

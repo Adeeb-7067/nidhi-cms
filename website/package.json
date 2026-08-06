@@ -9,7 +9,8 @@
     "lint": "eslint",
     "frames": "node scripts/extract-frames.mjs",
     "scrub": "node scripts/encode-scrub.mjs",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "og": "node scripts/generate-og.mjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",

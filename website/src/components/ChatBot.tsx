@@ -2,10 +2,10 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { MessageCircle, Send, X, Bot } from "lucide-react";
+import { Send, X, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Magnetic } from "@/components/ui/Magnetic";
 import { easeExpoOut } from "@/lib/motion";
+import { SK_ASSIST_OPEN_EVENT } from "@/data/mission-control";
 import Link from "next/link";
 
 type ChatRole = "bot" | "user";
@@ -92,6 +92,12 @@ export function ChatBot() {
     const id = window.setTimeout(() => inputRef.current?.focus(), 280);
     return () => window.clearTimeout(id);
   }, [open]);
+
+  useEffect(() => {
+    const onOpen = () => setOpen(true);
+    window.addEventListener(SK_ASSIST_OPEN_EVENT, onOpen);
+    return () => window.removeEventListener(SK_ASSIST_OPEN_EVENT, onOpen);
+  }, []);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
@@ -253,38 +259,6 @@ export function ChatBot() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      <Magnetic strength={0.22}>
-        <motion.button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="pointer-events-auto inline-flex h-14 items-center gap-2.5 rounded-full border border-border bg-surface/90 px-2 pr-4 text-foreground shadow-[0_16px_50px_-16px_rgba(43,107,255,0.75)] backdrop-blur-xl transition-[border-color,box-shadow] duration-400 hover:border-brand-cyan/40 hover:shadow-[0_20px_60px_-14px_rgba(0,217,255,0.45)]"
-          whileTap={{ scale: 0.96 }}
-          aria-expanded={open}
-          aria-label={open ? "Close chat" : "Open SK Assist"}
-        >
-          <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[linear-gradient(135deg,#2B6BFF,#00D9FF)] text-white">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={open ? "x" : "msg"}
-                initial={{ opacity: 0, rotate: -40, scale: 0.7 }}
-                animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                exit={{ opacity: 0, rotate: 40, scale: 0.7 }}
-                transition={{ duration: 0.25, ease: easeExpoOut }}
-                className="flex"
-              >
-                {open ? <X className="h-4 w-4" /> : <MessageCircle className="h-4 w-4" />}
-              </motion.span>
-            </AnimatePresence>
-            {!open ? (
-              <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-brand-green" />
-            ) : null}
-          </span>
-          <span className="hidden text-[13px] font-medium sm:inline">
-            {open ? "Close" : "Chat with us"}
-          </span>
-        </motion.button>
-      </Magnetic>
     </div>
   );
 }
