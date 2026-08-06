@@ -6,6 +6,7 @@ import { Send, X, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeExpoOut } from "@/lib/motion";
 import { SK_ASSIST_OPEN_EVENT } from "@/data/mission-control";
+import { useOverlayScrollLock } from "@/hooks/useOverlayScrollLock";
 import Link from "next/link";
 
 type ChatRole = "bot" | "user";
@@ -99,6 +100,17 @@ export function ChatBot() {
     return () => window.removeEventListener(SK_ASSIST_OPEN_EVENT, onOpen);
   }, []);
 
+  // Lock page scroll only on touch devices — desktop can keep reading behind the panel.
+  const [coarse, setCoarse] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setCoarse(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  useOverlayScrollLock(open && coarse);
+
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, typing, open]);
@@ -133,9 +145,12 @@ export function ChatBot() {
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
             exit={{ opacity: 0, y: 18, scale: 0.96, filter: "blur(8px)" }}
             transition={{ duration: 0.42, ease: easeExpoOut }}
-            className="pointer-events-auto flex h-[min(520px,70vh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-[0_28px_80px_-28px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+            className="pointer-events-auto flex h-[min(520px,70dvh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-[0_28px_80px_-28px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
             role="dialog"
             aria-label="SK Assist chat"
+            data-lenis-prevent
+            data-lenis-prevent-wheel
+            data-lenis-prevent-touch
           >
             <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
               <div className="flex items-center gap-2.5">

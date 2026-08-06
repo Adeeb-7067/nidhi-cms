@@ -198,6 +198,14 @@
     background-attachment: fixed;
     color: var(--foreground);
     transition: background-color 0.45s var(--ease-expo), color 0.35s var(--ease-expo);
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* iOS: fixed backgrounds break / stutter touch scrolling. */
+  @media (pointer: coarse), (max-width: 768px) {
+    body {
+      background-attachment: scroll;
+    }
   }
 
   .dark body {
@@ -559,6 +567,16 @@
     padding-bottom: var(--film-safe-bottom);
     padding-left: max(var(--page-pad-x), var(--film-rail-left));
     padding-right: max(var(--page-pad-x), var(--film-rail-right));
+    overflow: visible;
+  }
+
+  /* Fine pointer only: allow panel-internal scroll for dense chapters.
+     Coarse/touch keeps overflow visible so pans drive the page (film scrub). */
+  @media (pointer: fine) {
+    .section-panel {
+      overflow-y: auto;
+      overscroll-behavior-y: contain;
+    }
   }
 
   @media (min-width: 768px) {
@@ -594,6 +612,11 @@
     margin-inline: auto;
     /* Horizontal clearance lives on `.section-panel` so rails stay free. */
     padding-inline: 0;
+  }
+
+  /* Interactive film controls only — never the whole overlay (mobile scroll trap). */
+  [data-section-interactive="true"] .section-panel-inner :is(a, button, input, textarea, select, label, summary, [role="button"], [data-interactive]) {
+    pointer-events: auto;
   }
 
   /* Short laptop / landscape heights: keep dense film stages inside one view. */

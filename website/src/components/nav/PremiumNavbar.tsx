@@ -282,7 +282,10 @@ export const PremiumNavbar = memo(function PremiumNavbar({
                     type="button"
                     className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-foreground lg:hidden"
                     aria-label="Open menu"
-                    onClick={() => setMobileOpen(true)}
+                    onClick={() => {
+                      setOpenId(null);
+                      setMobileOpen(true);
+                    }}
                   >
                     <Menu className="h-4 w-4" />
                   </button>

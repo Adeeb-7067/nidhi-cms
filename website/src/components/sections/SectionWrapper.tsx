@@ -118,15 +118,19 @@ export function SectionPanel({
   return (
     <div
       className={cn(
-        "section-panel pointer-events-none relative z-10 h-full min-h-0 w-full overflow-y-auto overscroll-contain scrollbar-hide",
+        /* overflow/overscroll: desktop may scroll dense panels; touch must NOT
+           trap gestures — iOS freezes page scroll on fixed overflow:auto layers. */
+        "section-panel pointer-events-none relative z-10 h-full min-h-0 w-full",
         align === "center" && "section-panel--center",
         align === "end" && "section-panel--end",
         className,
       )}
     >
-      <div className="section-panel-inner pointer-events-none [[data-section-interactive=true]_&]:pointer-events-auto">
-        {children}
-      </div>
+      {/*
+        Only controls receive hits when interactive. Full-area pointer-events on
+        the inner block ate touch pans on phones and blocked document scroll.
+      */}
+      <div className="section-panel-inner pointer-events-none">{children}</div>
     </div>
   );
 }

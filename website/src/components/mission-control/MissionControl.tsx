@@ -27,7 +27,7 @@ import {
   type MissionAction,
 } from "@/data/mission-control";
 import { scrollToFilmFraction, scrollToId } from "@/lib/film-scroll";
-import { setOverlayScrollLock } from "@/lib/lenis-control";
+import { useOverlayScrollLock } from "@/hooks/useOverlayScrollLock";
 import { easeExpoOut, springSoft } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -115,26 +115,15 @@ export function MissionControl() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  useEffect(() => {
-    // Always clear any leftover lock from HMR / prior sessions.
-    setOverlayScrollLock(false);
-    return () => setOverlayScrollLock(false);
-  }, []);
+  useOverlayScrollLock(open);
 
   useEffect(() => {
     if (!open) {
       setQuery("");
-      setOverlayScrollLock(false);
       return;
     }
-
     const id = window.setTimeout(() => searchRef.current?.focus(), reduced ? 0 : 380);
-    setOverlayScrollLock(true);
-
-    return () => {
-      window.clearTimeout(id);
-      setOverlayScrollLock(false);
-    };
+    return () => window.clearTimeout(id);
   }, [open, reduced]);
 
   const runAction = useCallback(

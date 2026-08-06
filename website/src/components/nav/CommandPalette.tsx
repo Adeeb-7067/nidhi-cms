@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { Search, CornerDownLeft, Command } from "lucide-react";
 import { flattenNavigation } from "@/data/navigation";
+import { useOverlayScrollLock } from "@/hooks/useOverlayScrollLock";
 
 export function CommandPalette({
   open,
@@ -17,6 +18,7 @@ export function CommandPalette({
   const catalog = useMemo(() => flattenNavigation(), []);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  useOverlayScrollLock(open);
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -103,7 +105,8 @@ export function CommandPalette({
             <ul
               data-lenis-prevent
               data-lenis-prevent-wheel
-              className="max-h-[50vh] overflow-y-auto overscroll-contain p-2"
+              data-lenis-prevent-touch
+              className="max-h-[min(50vh,420px)] overflow-y-auto overscroll-contain p-2"
             >
               {results.length === 0 ? (
                 <li className="px-3 py-8 text-center text-[13px] text-muted-foreground">No matches</li>

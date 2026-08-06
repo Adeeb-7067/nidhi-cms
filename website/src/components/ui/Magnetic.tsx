@@ -22,6 +22,7 @@ export function Magnetic({ children, className, strength = 0.32 }: MagneticProps
     const el = ref.current;
     if (!el) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia("(pointer: coarse)").matches) return;
     const rect = el.getBoundingClientRect();
     const dx = e.clientX - (rect.left + rect.width / 2);
     const dy = e.clientY - (rect.top + rect.height / 2);
@@ -37,6 +38,7 @@ export function Magnetic({ children, className, strength = 0.32 }: MagneticProps
   return (
     <motion.div
       ref={ref}
+      data-interactive
       style={{ x: springX, y: springY }}
       onMouseMove={onMove}
       onMouseLeave={onLeave}

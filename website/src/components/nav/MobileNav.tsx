@@ -8,6 +8,7 @@ import { navigation, ctaNav } from "@/data/navigation";
 import { Logo } from "@/components/brand/Logo";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { useOverlayScrollLock } from "@/hooks/useOverlayScrollLock";
 
 export function MobileNav({
   open,
@@ -19,6 +20,7 @@ export function MobileNav({
   onOpenSearch: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>("services");
+  useOverlayScrollLock(open);
 
   return (
     <AnimatePresence>
@@ -34,7 +36,7 @@ export function MobileNav({
             data-lenis-prevent
             data-lenis-prevent-wheel
             data-lenis-prevent-touch
-            className="absolute inset-x-0 top-0 bottom-0 overflow-y-auto overscroll-contain bg-background/95 px-5 pb-10 pt-5"
+            className="absolute inset-x-0 top-0 bottom-0 overflow-y-auto overscroll-contain bg-background/95 px-5 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(1.25rem,env(safe-area-inset-top))]"
             initial={{ y: "-4%", opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: "-2%", opacity: 0 }}

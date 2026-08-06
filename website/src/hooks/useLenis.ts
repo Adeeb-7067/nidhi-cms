@@ -4,22 +4,30 @@ import { useEffect } from "react";
 import Lenis from "lenis";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { isOverlayScrollLocked, setOverlayScrollLock } from "@/lib/lenis-control";
+import { isOverlayScrollLocked, resetOverlayScrollLock } from "@/lib/lenis-control";
 
+/**
+ * Smooth scroll for fine-pointer desktops only.
+ *
+ * On phones/tablets Lenis fights native touch scrolling (and fixed film
+ * overlays make that feel like the page is frozen). GSAP ScrollTrigger still
+ * tracks `window` scroll either way.
+ */
 export function useLenis() {
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
 
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    const narrow = window.matchMedia("(max-width: 768px)").matches;
 
-    // Native scroll for reduced motion — no inertia layer.
-    if (reduced) {
+    // Clear leftover overlay lock from Mission Control / HMR.
+    resetOverlayScrollLock();
+
+    if (reduced || coarse || narrow) {
       requestAnimationFrame(() => ScrollTrigger.refresh());
       return;
     }
-
-    // Clear leftover overlay lock from Mission Control / HMR.
-    setOverlayScrollLock(false);
 
     const lenis = new Lenis({
       // Shorter inertia so frame scrubbing tracks the wheel more tightly.
@@ -27,6 +35,7 @@ export function useLenis() {
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
       touchMultiplier: 1.1,
+      syncTouch: false,
       autoRaf: false,
       // Do NOT enable allowNestedScroll — film chapter panels use overflow-y-auto
       // and would steal wheel events, freezing page scroll. Mega menus / overlays
@@ -50,7 +59,7 @@ export function useLenis() {
     return () => {
       lenis.destroy();
       gsap.ticker.remove(tick);
-      setOverlayScrollLock(false);
+      resetOverlayScrollLock();
     };
   }, []);
 }

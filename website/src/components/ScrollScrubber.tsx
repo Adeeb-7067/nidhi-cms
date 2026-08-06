@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, type CSSProperties } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { FRAME_START, TOTAL_FRAMES, chapters, getActiveChapter } from "@/data/cinematic";
@@ -92,6 +92,10 @@ export function ScrollScrubber({
   const heightVh = reduced
     ? Math.max(chapters.length * 100, 800)
     : Math.max(1000, Math.round((usable / 200) * 420));
+  // Phones: shorter scrub track so the business case is reachable without endless swipe.
+  const mobileHeightVh = reduced
+    ? Math.max(chapters.length * 85, 640)
+    : Math.max(720, Math.round(heightVh * 0.62));
 
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
   const showChapter =
@@ -101,8 +105,13 @@ export function ScrollScrubber({
     <div
       ref={containerRef}
       data-film-track
-      className="relative w-full"
-      style={{ height: `${heightVh}vh` }}
+      className="relative w-full max-md:[height:var(--film-h-mobile)] md:[height:var(--film-h)]"
+      style={
+        {
+          ["--film-h" as string]: `${heightVh}vh`,
+          ["--film-h-mobile" as string]: `${mobileHeightVh}vh`,
+        } as CSSProperties
+      }
     >
       {showChapter ? (
         <ChapterStage key={active.id} chapter={active} currentFrame={currentFrame} />

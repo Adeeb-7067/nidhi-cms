@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Syne, Limelight, Manrope, Noto_Sans_Mono } from "next/font/google";
 import { ChatBot } from "@/components/ChatBot";
 import { MissionControl } from "@/components/mission-control/MissionControl";
@@ -39,6 +39,16 @@ const mono = Noto_Sans_Mono({
   variable: "--font-noto",
   weight: ["400", "500", "600", "700"],
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f4f6fa" },
+    { media: "(prefers-color-scheme: dark)", color: "#020305" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

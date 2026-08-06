@@ -40,8 +40,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\app\\layout.tsx": {
-    "mtime": 1786015799.6652174,
-    "ast_hash": "51e7ec75dff8188c30f4d461d3e60a25",
+    "mtime": 1786017580.156763,
+    "ast_hash": "c5f7b9ba64df438327ac81997f57903c",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\app\\not-found.tsx": {
@@ -170,8 +170,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\ChatBot.tsx": {
-    "mtime": 1786015746.5288496,
-    "ast_hash": "dd3ad56a83cb74117d08246f11c40cb8",
+    "mtime": 1786017569.167655,
+    "ast_hash": "73b3eb27d351a6b9384d4ec386dd499c",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\CinematicCanvas.tsx": {
@@ -190,8 +190,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\ScrollScrubber.tsx": {
-    "mtime": 1785991002.4532466,
-    "ast_hash": "d0a9f3222e65bfb9c4884b6bde516ca1",
+    "mtime": 1786017180.8335145,
+    "ast_hash": "19a8ddc3f050397749dfe5c3f9b9f48f",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\SiteHeader.tsx": {
@@ -325,8 +325,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\nav\\CommandPalette.tsx": {
-    "mtime": 1786010354.0219634,
-    "ast_hash": "a40044c61503a19e3f4a133b13bb7453",
+    "mtime": 1786017534.2131717,
+    "ast_hash": "fdebea242cafb2c2ab68f80e14d46de5",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\nav\\MegaMenu.tsx": {
@@ -335,13 +335,13 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\nav\\MobileNav.tsx": {
-    "mtime": 1786010354.016978,
-    "ast_hash": "7dc8d5775876522a84b6803d9858d4ea",
+    "mtime": 1786017528.357347,
+    "ast_hash": "65c1d771b5b0da28ddc4d2f066beb1eb",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\nav\\PremiumNavbar.tsx": {
-    "mtime": 1785990967.6838348,
-    "ast_hash": "bf3df8aea99590406464376f9b998b01",
+    "mtime": 1786017578.3106008,
+    "ast_hash": "607787ee0d46b454e938863afe7c6372",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\nav\\SiteFooter.tsx": {
@@ -390,8 +390,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\sections\\SectionWrapper.tsx": {
-    "mtime": 1786011876.4293158,
-    "ast_hash": "0d4703e7e7d9807340d778f1336c4a86",
+    "mtime": 1786017140.3604467,
+    "ast_hash": "db04c17e56d0a75f6c8cb225f3fda52f",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\sections\\ServicesSection.tsx": {
@@ -430,8 +430,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\ui\\Magnetic.tsx": {
-    "mtime": 1785837051.9480617,
-    "ast_hash": "9f2119aa968a0df2cfc0cea6c558794e",
+    "mtime": 1786017183.0126643,
+    "ast_hash": "0d4cdca0e01ebd7f77f0fe81bcb2401a",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\ui\\PremiumButton.tsx": {
@@ -575,8 +575,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\hooks\\useLenis.ts": {
-    "mtime": 1786010664.7113636,
-    "ast_hash": "0dbec1c421b4ee4ecd8c555890d1c602",
+    "mtime": 1786017491.918601,
+    "ast_hash": "7b6d1e5b7bd019c18e700f4d5d1cf914",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\lib\\film-scroll.ts": {
@@ -640,8 +640,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\mission-control\\MissionControl.tsx": {
-    "mtime": 1786015547.8051648,
-    "ast_hash": "dc40e099f563533902b97637259b7d72",
+    "mtime": 1786017526.235122,
+    "ast_hash": "61ccb0c6740cb893147404a5d91dffa6",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\data\\case-studies.ts": {
@@ -660,8 +660,8 @@
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\lib\\lenis-control.ts": {
-    "mtime": 1786010664.7093656,
-    "ast_hash": "416610435ed0ca5cdd5126833a3b0746",
+    "mtime": 1786017481.5486374,
+    "ast_hash": "c38f266c20e6deb6d94eaa10f59b31fc",
     "semantic_hash": ""
   },
   "D:\\Content-Management-Hub\\website\\src\\components\\ScrollToTop.tsx": {
@@ -687,6 +687,11 @@
   "D:\\Content-Management-Hub\\website\\src\\lib\\contact.ts": {
     "mtime": 1786015294.747324,
     "ast_hash": "96fd1e0cf9ed79c6285e8f64f4133392",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\hooks\\useOverlayScrollLock.ts": {
+    "mtime": 1786017491.6095703,
+    "ast_hash": "52834dbdea275dcce0ba12c5e8742485",
     "semantic_hash": ""
   }
 }

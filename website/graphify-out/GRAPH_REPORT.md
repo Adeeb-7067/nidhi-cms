@@ -1,16 +1,16 @@
 # Graph Report - website  (2026-08-06)
 
 ## Corpus Check
-- 138 files · ~108,158 words
+- 139 files · ~108,590 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 793 nodes · 1643 edges · 41 communities (34 shown, 7 thin omitted)
+- 801 nodes · 1671 edges · 42 communities (36 shown, 6 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 1 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `0e429f7c`
+- Built from commit: `22d02ca0`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -55,6 +55,7 @@
 - [[_COMMUNITY_Community 37|Community 37]]
 - [[_COMMUNITY_Community 39|Community 39]]
 - [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 41|Community 41]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `cn()` - 45 edges
@@ -80,51 +81,51 @@
 - `CareersIndexPage()` --calls--> `getHubLanding()`  [EXTRACTED]
   src/app/careers/page.tsx → src/data/first-viewport.ts
 
-## Communities (41 total, 7 thin omitted)
+## Communities (42 total, 6 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.14
-Nodes (11): body, deco, display, metadata, mono, ChatBot(), MissionControl(), Theme (+3 more)
+Cohesion: 0.24
+Nodes (11): Logo(), LogoProps, sizes, ctaNav, navigation, MobileNav(), MORE_IDS, PRIMARY_IDS (+3 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.08
-Nodes (41): CaseStudyChapter, CaseStudyDetail, caseStudyDetails, CaseStudyFaq, CaseStudyMetric, caseStudySlugs, CaseStudyTimelineItem, ExperienceKind (+33 more)
+Nodes (40): CaseStudyChapter, CaseStudyDetail, caseStudyDetails, CaseStudyFaq, CaseStudyMetric, caseStudySlugs, CaseStudyTimelineItem, ExperienceKind (+32 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.06
-Nodes (40): deliverViaResend(), deliverViaWebhook(), POST(), industryCatalog, industryDetails, projectCatalog, serviceCatalog, serviceDetails (+32 more)
+Cohesion: 0.07
+Nodes (36): deliverViaResend(), deliverViaWebhook(), POST(), industryCatalog, industryDetails, projectCatalog, serviceCatalog, serviceDetails (+28 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.13
 Nodes (14): 10. Important behaviors & gotchas, 11. How to change common things, 12. Suggested next improvements, 13. History, 14. Motion elevation (current craft layer), 1. Product summary, 2. Quick start, 6. Homepage chapters (film map) (+6 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (46): metadata, sitemap(), CareersIndexPage(), metadata, CompanyPage(), metadata, ContactIndexPage(), metadata (+38 more)
+Cohesion: 0.05
+Nodes (58): body, deco, display, metadata, mono, viewport, metadata, metadata (+50 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.06
 Nodes (35): dependencies, clsx, gsap, lenis, lucide-react, motion, next, react (+27 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.08
-Nodes (43): getCaseStudy(), getIndustry(), getProject(), getService(), accentFor(), buildExperience(), ExperienceCaseBrief, ExperienceCta (+35 more)
+Cohesion: 0.07
+Nodes (50): getCaseStudy(), getIndustry(), getProject(), getService(), accentFor(), buildExperience(), ExperienceCaseBrief, ExperienceCta (+42 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.06
-Nodes (29): CapabilityCards(), MediaMosaic(), PillCloud(), PipelineFlow(), RelatedStrip(), StackPills(), FaqAccordion(), LifecycleRail() (+21 more)
+Cohesion: 0.07
+Nodes (26): CapabilityCards(), MediaMosaic(), PillCloud(), PipelineFlow(), RelatedStrip(), StackPills(), pickFromSlug(), BlockLayout (+18 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.12
-Nodes (17): CaseStudy, ChooseUsCard, EcosystemNode, EcosystemStage, ImpactStat, PresenceMarker, ReelScene, ResultKpi (+9 more)
+Nodes (17): CaseStudy, ChooseUsCard, ecosystemGroups, EcosystemNode, ecosystemNodes, EcosystemStage, ImpactStat, PresenceMarker (+9 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.18
 Nodes (11): filterActions(), MISSION_ACTIONS, MissionAction, MissionActionId, MissionActionKind, MissionSuggestion, pushRecent(), RecentEntry (+3 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.20
-Nodes (8): easeExpoInOut, easeSoft, revealTransition, springSnappy, springSoft, staggerChildren, TiltCard(), TiltCardProps
+Cohesion: 0.18
+Nodes (9): easeExpoInOut, easeSoft, revealTransition, springMagnetic, springSnappy, springSoft, staggerChildren, TiltCard() (+1 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.10
@@ -135,36 +136,36 @@ Cohesion: 0.10
 Nodes (19): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+11 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.06
-Nodes (43): metadata, Logo(), LogoProps, sizes, contact, breadcrumbsFor(), ctaNav, findNavLeaf() (+35 more)
+Cohesion: 0.19
+Nodes (12): contact, breadcrumbsFor(), findNavLeaf(), breadcrumbJsonLd(), ExperiencePage(), ExperienceShell(), Breadcrumbs(), PremiumNavbar (+4 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.18
-Nodes (14): ExperienceCard, ExperiencePipelineStep, ResolvedPageContent, resolvePageContent(), resolveRelated(), kindNarratives, getSlugOverride(), slugOverrides (+6 more)
+Cohesion: 0.17
+Nodes (15): ExperienceCard, ExperiencePipelineStep, flattenNavigation(), ResolvedPageContent, resolvePageContent(), resolveRelated(), kindNarratives, getSlugOverride() (+7 more)
 
 ### Community 15 - "Community 15"
-Cohesion: 0.19
-Nodes (13): chooseUsCards, CompanyScale(), FinalCta(), MOTES, GlobalPresence(), DigitalSection(), TechStack(), TestimonialExperience() (+5 more)
+Cohesion: 0.15
+Nodes (17): chooseUsCards, richTestimonials, scaleCounters, scaleMilestones, stackLayers, CompanyScale(), FinalCta(), MOTES (+9 more)
 
 ### Community 16 - "Community 16"
-Cohesion: 0.22
-Nodes (7): ecosystemGroups, ecosystemNodes, ServicesEcosystem(), HERO_CAPABILITY_PHRASES, HeroCapabilityTypewriter(), HeroCapabilityTypewriterProps, quantize()
+Cohesion: 0.21
+Nodes (11): CinematicCanvas(), CinematicCanvasProps, ContactInquiryForm(), Status, HERO_CAPABILITY_PHRASES, HeroCapabilityTypewriter(), HeroCapabilityTypewriterProps, cn() (+3 more)
 
 ### Community 17 - "Community 17"
-Cohesion: 0.06
-Nodes (37): AtmosphereLayer(), AtmosphereVisual, ChapterProgress(), ChapterProgressProps, scrollToFrame(), CinematicHome(), ScrollScrubber(), ScrollScrubberProps (+29 more)
+Cohesion: 0.05
+Nodes (39): AtmosphereLayer(), AtmosphereVisual, ChapterProgress(), ChapterProgressProps, scrollToFrame(), CinematicHome(), ScrollScrubber(), ScrollScrubberProps (+31 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.15
-Nodes (13): businessResults, caseStudies, industryBadges, transformIndustries, BusinessResults(), ResultRow(), CaseStudies(), BAR_SET (+5 more)
+Cohesion: 0.14
+Nodes (14): businessResults, caseStudies, industryBadges, transformIndustries, BusinessResults(), ResultRow(), CaseStudies(), BAR_SET (+6 more)
 
 ### Community 19 - "Community 19"
 Cohesion: 0.14
 Nodes (14): 9.0 How pages are built, 9.10 Contact — `/contact`, 9.1 Home — `/`, 9.2 Company — `/company`, 9.3 Services — `/services`, 9.4 Solutions — `/solutions`, 9.5 Technologies — `/technologies`, 9.6 Industries — `/industries` (+6 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.19
-Nodes (13): CinematicCanvas(), CinematicCanvasProps, impactStats, transformationFlow, DigitalTransformation(), Point, AuroraField(), CountUp() (+5 more)
+Cohesion: 0.26
+Nodes (8): impactStats, transformationFlow, DigitalTransformation(), Point, AuroraField(), CountUp(), DigitalSection(), GridPlate()
 
 ### Community 21 - "Community 21"
 Cohesion: 0.28
@@ -179,16 +180,16 @@ Cohesion: 0.25
 Nodes (9): 4. Repository map, 6b. Business sections (`components/digital/`), 6b. Homepage digital act (`components/digital/`), code:block6 (Cinematic-Scroll/), code:css (@media (scripting: enabled) {), Deleted, Legacy / unused (still in tree), Protecting the scrubber (read before touching the homepage) (+1 more)
 
 ### Community 24 - "Community 24"
-Cohesion: 0.40
-Nodes (4): springMagnetic, Magnetic(), MagneticProps, PremiumButtonProps
+Cohesion: 0.22
+Nodes (4): NavLayout, NavLeaf, benefits, features
 
 ### Community 25 - "Community 25"
 Cohesion: 0.20
 Nodes (7): appDir, bg, brandDir, __dirname, publicDir, root, src
 
 ### Community 26 - "Community 26"
-Cohesion: 0.18
-Nodes (10): ScrollToTop(), reelScenes, AgencyReel(), CloudStack(), MetricTicker(), ParticleField(), Reveal(), ScanGrid() (+2 more)
+Cohesion: 0.14
+Nodes (14): ScrollToTop(), reelScenes, AgencyReel(), CloudStack(), FaqAccordion(), GlowPanel(), LifecycleRail(), MetricTicker() (+6 more)
 
 ### Community 27 - "Community 27"
 Cohesion: 0.22
@@ -199,8 +200,8 @@ Cohesion: 0.29
 Nodes (7): presenceMarkers, presenceStats, graticulePath(), LATITUDES, LONGITUDES, project(), Projected
 
 ### Community 29 - "Community 29"
-Cohesion: 0.29
-Nodes (4): ChatMessage, ChatRole, QUICK_PROMPTS, easeExpoOut
+Cohesion: 0.20
+Nodes (8): ChatBot(), ChatMessage, ChatRole, QUICK_PROMPTS, useOverlayScrollLock(), easeExpoOut, MissionControl(), CommandPalette()
 
 ### Community 30 - "Community 30"
 Cohesion: 0.40
@@ -214,25 +215,33 @@ Nodes (4): 7. Design system, Color, Experience page utilities, Spacing & chrome
 Cohesion: 0.33
 Nodes (5): __dirname, logoPath, outPath, root, svg
 
+### Community 40 - "Community 40"
+Cohesion: 0.42
+Nodes (7): acquireOverlayScrollLock(), applyLock(), clearLock(), isOverlayScrollLocked(), releaseOverlayScrollLock(), resetOverlayScrollLock(), setOverlayScrollLock()
+
+### Community 41 - "Community 41"
+Cohesion: 0.29
+Nodes (6): MegaFeatured, NavItem, iconMap, LeafLink(), MegaMenu(), pickIcon()
+
 ## Knowledge Gaps
-- **256 isolated node(s):** `eslintConfig`, `nextConfig`, `name`, `version`, `private` (+251 more)
+- **257 isolated node(s):** `eslintConfig`, `nextConfig`, `name`, `version`, `private` (+252 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `cn()` connect `Community 20` to `Community 0`, `Community 2`, `Community 4`, `Community 7`, `Community 9`, `Community 10`, `Community 13`, `Community 15`, `Community 16`, `Community 17`, `Community 24`, `Community 26`, `Community 29`?**
+- **Why does `cn()` connect `Community 16` to `Community 0`, `Community 2`, `Community 4`, `Community 7`, `Community 9`, `Community 41`, `Community 10`, `Community 15`, `Community 17`, `Community 18`, `Community 20`, `Community 26`, `Community 29`?**
   _High betweenness centrality (0.075) - this node is a cross-community bridge._
-- **Why does `usePrefersReducedMotion()` connect `Community 26` to `Community 0`, `Community 8`, `Community 9`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 20`, `Community 28`?**
+- **Why does `usePrefersReducedMotion()` connect `Community 26` to `Community 8`, `Community 9`, `Community 15`, `Community 17`, `Community 18`, `Community 20`, `Community 28`, `Community 29`?**
   _High betweenness centrality (0.028) - this node is a cross-community bridge._
-- **Why does `PremiumButton()` connect `Community 13` to `Community 2`, `Community 4`, `Community 7`, `Community 17`, `Community 20`, `Community 24`?**
+- **Why does `PremiumButton()` connect `Community 0` to `Community 2`, `Community 4`, `Community 7`, `Community 16`, `Community 17`, `Community 24`?**
   _High betweenness centrality (0.015) - this node is a cross-community bridge._
 - **What connects `eslintConfig`, `nextConfig`, `name` to the rest of the system?**
-  _256 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._
+  _257 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.07769423558897243 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07987012987012987 - nodes in this community are weakly interconnected._
 - **Should `Community 2` be split into smaller, more focused modules?**
-  _Cohesion score 0.06144393241167435 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.06654567453115548 - nodes in this community are weakly interconnected._
+- **Should `Community 3` be split into smaller, more focused modules?**
+  _Cohesion score 0.13333333333333333 - nodes in this community are weakly interconnected._
