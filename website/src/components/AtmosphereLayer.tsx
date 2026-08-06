@@ -44,7 +44,15 @@ const AtmosphereVisual = memo(function AtmosphereVisual({
   );
 });
 
-export function AtmosphereLayer({ currentFrame }: { currentFrame: number }) {
+export function AtmosphereLayer({
+  currentFrame,
+  hidden,
+}: {
+  currentFrame: number;
+  /** Fully covered by the digital act — skip painting four gradient layers. */
+  hidden?: boolean;
+}) {
   const atmosphereId = getActiveChapter(currentFrame).atmosphere as AtmosphereId;
+  if (hidden) return null;
   return <AtmosphereVisual atmosphereId={atmosphereId} />;
 }

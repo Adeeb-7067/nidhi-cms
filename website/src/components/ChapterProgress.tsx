@@ -2,28 +2,34 @@
 
 import { useMemo } from "react";
 import { chapters, getActiveChapter, frameToScrollPct } from "@/data/cinematic";
+import { scrollToFilmPct } from "@/lib/film-scroll";
 import { cn } from "@/lib/utils";
 
 interface ChapterProgressProps {
   currentFrame: number;
   isLoaded: boolean;
+  /** The film is on screen. The rail is meaningless anywhere else on the page. */
+  active: boolean;
 }
 
 function scrollToFrame(frame: number) {
-  const pct = frameToScrollPct(frame);
-  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-  window.scrollTo({ top: Math.max(0, docHeight * (pct / 100)), behavior: "smooth" });
+  scrollToFilmPct(frameToScrollPct(frame));
 }
 
 /**
- * Subtle chapter rail — place label + jump dots for the cinematic homepage.
+ * Subtle chapter rail — place label + jump dots for the film act.
+ *
+ * The film is a mid-page island now, so this is tied to the island's visibility
+ * rather than to "have we scrolled past it": it must not hover over the business
+ * sections above the tour, where its chapter numbers mean nothing.
  */
-export function ChapterProgress({ currentFrame, isLoaded }: ChapterProgressProps) {
+export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: ChapterProgressProps) {
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
   const index = useMemo(
     () => Math.max(0, chapters.findIndex((c) => c.id === active.id)),
     [active.id],
   );
+  const retired = !onScreen;
 
   if (!isLoaded) return null;
 
@@ -31,8 +37,10 @@ export function ChapterProgress({ currentFrame, isLoaded }: ChapterProgressProps
     <div
       className={cn(
         "pointer-events-none fixed bottom-6 left-1/2 z-[var(--z-nav)] flex -translate-x-1/2 flex-col items-center gap-3 px-4",
-        "md:bottom-8",
+        "transition-[opacity,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] md:bottom-8",
+        retired ? "translate-y-6 opacity-0" : "translate-y-0 opacity-100",
       )}
+      aria-hidden={retired}
       aria-live="polite"
     >
       <div className="pointer-events-none flex flex-col items-center text-center">
@@ -46,7 +54,10 @@ export function ChapterProgress({ currentFrame, isLoaded }: ChapterProgressProps
       </div>
 
       <div
-        className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-3 py-2 backdrop-blur-md"
+        className={cn(
+          "flex items-center gap-1.5 rounded-full border border-white/10 bg-black/35 px-3 py-2 backdrop-blur-md",
+          retired ? "pointer-events-none" : "pointer-events-auto",
+        )}
         role="navigation"
         aria-label="Film chapters"
       >

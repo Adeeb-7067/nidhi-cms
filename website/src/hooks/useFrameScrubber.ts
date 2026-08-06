@@ -74,7 +74,8 @@ export function useFrameScrubber() {
       if (!ctx) return null;
       ctxRef.current = ctx;
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "medium";
+      // High-quality resampling when the 720p scrub film fills a larger canvas.
+      ctx.imageSmoothingQuality = "high";
     }
     return ctx;
   }, []);
@@ -523,9 +524,17 @@ export function useFrameScrubber() {
     const resize = () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      const nextW = Math.floor(window.innerWidth * dpr);
-      const nextH = Math.floor(window.innerHeight * dpr);
+      // Size the backing store to real device pixels so the frame is resampled
+      // once (video → canvas) instead of twice (video → canvas → compositor).
+      // Capped because the source film is 1280×720: past ~2× source width the
+      // extra pixels only cost fill rate, they cannot add detail.
+      const MAX_W = 2560;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const cssW = window.innerWidth;
+      const cssH = window.innerHeight;
+      const scale = Math.min(dpr, MAX_W / Math.max(1, cssW));
+      const nextW = Math.floor(cssW * scale);
+      const nextH = Math.floor(cssH * scale);
       if (canvas.width !== nextW || canvas.height !== nextH) {
         canvas.width = nextW;
         canvas.height = nextH;

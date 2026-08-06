@@ -18,10 +18,11 @@ export function useLenis() {
     }
 
     const lenis = new Lenis({
-      duration: 0.9,
+      // Shorter inertia so frame scrubbing tracks the wheel more tightly.
+      duration: 0.55,
       easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
-      touchMultiplier: 1.15,
+      touchMultiplier: 1.1,
       autoRaf: false,
     });
 

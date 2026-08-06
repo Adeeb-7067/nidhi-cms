@@ -15,8 +15,13 @@ interface SectionWrapperProps {
 }
 
 /**
- * Soft exit only — chapters open at full opacity so the hero is visible on load.
- * (Fade-in from 0 on frame `start` made the landing screen look empty.)
+ * Soft exit only — a chapter opens at full opacity and fades on the way out, so
+ * entering the film never shows an empty frame waiting for text to arrive.
+ *
+ * These overlays are `fixed`, and only `ScrollScrubber` knows whether the film
+ * track is covering the viewport. Do not mount a chapter outside that window: on
+ * this page the film sits *below* the hero and seven business sections, so an
+ * ungated overlay paints straight over them.
  */
 function chapterEnvelope(
   frame: number,

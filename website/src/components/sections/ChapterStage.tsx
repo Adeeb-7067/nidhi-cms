@@ -13,11 +13,7 @@ import {
 import { SectionWrapper, SectionPanel } from "./SectionWrapper";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import type { Chapter } from "@/data/cinematic";
-
-function scrollToPct(pct: number) {
-  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-  window.scrollTo({ top: Math.max(0, docHeight * pct), behavior: "smooth" });
-}
+import { scrollToId } from "@/lib/film-scroll";
 
 const HERO_STAT_ICONS: LucideIcon[] = [Briefcase, Sparkles, Cpu, Globe2];
 
@@ -35,21 +31,23 @@ function HeroStage({ chapter }: { chapter: Chapter }) {
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-cyan shadow-[0_0_10px_rgba(0,217,255,0.8)]" />
               </span>
               <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-white/75">
-                Building the future. Together.
+                Technology engineering · Digital transformation
               </span>
             </div>
 
+            {/* `text-balance` guards the fold if either line ever grows past two
+                words — see the note on the `arrival` chapter in `cinematic.ts`. */}
             <h1 className="mt-5 md:mt-6">
-              <span className="block font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-white">
+              <span className="block text-balance font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-white">
                 {chapter.title}
               </span>
-              <span className="mt-0.5 block font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-brand-gradient">
+              <span className="mt-0.5 block text-balance font-display text-[clamp(2.6rem,6.5vw,5.25rem)] font-extrabold leading-[0.92] tracking-[-0.04em] text-brand-gradient">
                 {chapter.subtitle}
               </span>
             </h1>
 
             {chapter.body ? (
-              <p className="mt-4 max-w-md text-[15px] leading-[1.65] text-white/65 md:mt-5 md:max-w-lg md:text-[16px]">
+              <p className="mt-4 max-w-md text-pretty text-[15px] leading-[1.65] text-white/65 md:mt-5 md:max-w-lg md:text-[16px]">
                 {chapter.body}
               </p>
             ) : null}
@@ -213,8 +211,8 @@ function StatsRow({ stats }: { stats: NonNullable<Chapter["stats"]> }) {
 
 function GlassCards({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
   return (
-    <div className="mt-5 grid max-w-3xl gap-2.5 sm:grid-cols-2">
-      {cards.slice(0, 4).map((card) => {
+    <div className="mt-5 grid max-w-4xl gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+      {cards.slice(0, 6).map((card) => {
         const inner = (
           <>
             {card.meta ? <span className="text-meta">{card.meta}</span> : null}
@@ -586,8 +584,11 @@ function StandardStage({ chapter }: { chapter: Chapter }) {
           >
             <PremiumButton
               onClick={() => {
-                if (chapter.cta?.action === "contact") scrollToPct(0.97);
-                else scrollToPct(0.2);
+                // Real anchors, not film fractions. The contact chapter was culled
+                // and the CTA now lives in the page's own closing section, so
+                // "97% of the film" pointed at nothing in particular.
+                if (chapter.cta?.action === "contact") scrollToId("start");
+                else scrollToId("impact");
               }}
             >
               {chapter.cta.label}

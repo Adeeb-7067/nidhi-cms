@@ -385,6 +385,37 @@
     border: 1px solid var(--border);
   }
 
+  /*
+    Light island.
+
+    Thirteen consecutive dark sections read as one undifferentiated slab, and the
+    fatigue is what makes a long page feel longer than it is. Rather than
+    hand-inverting colours per component, this re-declares the palette tokens for
+    its own subtree — every child already styles itself from `--foreground`,
+    `--surface`, `--border`, so the whole section flips with no component changes.
+
+    `--brand-cyan` is overridden deliberately: the dark-theme #00d9ff sits at
+    roughly 1.9:1 on white and would fail contrast as text or a hairline.
+
+    Values are absolute rather than theme-relative, so in the light theme this
+    still reads as a white band against the cool-grey page — rhythm either way.
+  */
+  .tone-light {
+    --background: #ffffff;
+    --surface: #f3f5f9;
+    --surface-2: #e8edf5;
+    --glass: rgba(255, 255, 255, 0.72);
+    --border: rgba(15, 23, 42, 0.12);
+    --divider: rgba(15, 23, 42, 0.09);
+    --muted: rgba(15, 23, 42, 0.05);
+    --foreground: #0b1220;
+    --secondary-foreground: #1e293b;
+    --muted-foreground: #475569;
+    --brand-cyan: #00a8c7;
+    background: var(--background);
+    color: var(--foreground);
+  }
+
   .gradient-border {
     position: relative;
   }
@@ -581,6 +612,158 @@
     stroke-width: 1.5;
   }
 
+  /*
+    Off-screen sections cost nothing.
+
+    The homepage now carries the film plus a long digital act, and the scrubber
+    needs the main thread. `content-visibility: auto` lets the browser skip
+    style, layout, and paint for sections that are out of view — including their
+    backdrop filters and blurred aurora layers. `auto` on the intrinsic size
+    means the browser reuses the last measured height, so the scrollbar stays
+    stable after the first pass.
+
+    Not for anything containing a sticky pin: containment changes how the pin
+    resolves.
+  */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
+  }
+
+  /*
+    Off-screen sections cost nothing.
+
+    The homepage now carries the film plus a long digital act, and the scrubber
+    needs the main thread. `content-visibility: auto` lets the browser skip
+    style, layout, and paint for sections that are out of view — including their
+    backdrop filters and blurred aurora layers. `auto` on the intrinsic size
+    means the browser reuses the last measured height, so the scrollbar stays
+    stable after the first pass.
+
+    Not for anything containing a sticky pin: containment changes how the pin
+    resolves.
+  */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 900px;
+  }
+
+  /*
+    Scroll reveal system.
+
+    Content is visible by default and only hides where scripting is available to
+    reveal it again, so a crawler, a headless render, or a JS-disabled visitor
+    never gets a blank section. Components flip `data-reveal` to "shown".
+  */
+  [data-reveal] {
+    transition:
+      opacity 0.7s ease var(--reveal-delay, 0ms),
+      transform 0.85s var(--ease-expo) var(--reveal-delay, 0ms);
+  }
+
+  @media (scripting: enabled) {
+    [data-reveal="pending"] {
+      opacity: 0;
+      transform: var(--reveal-from, translateY(18px));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+  }
+
+  /*
+    Scroll reveal system.
+
+    Content is visible by default and only hides where scripting is available to
+    reveal it again, so a crawler, a headless render, or a JS-disabled visitor
+    never gets a blank section. Components flip `data-reveal` to "shown".
+  */
+  [data-reveal] {
+    transition:
+      opacity 0.7s ease var(--reveal-delay, 0ms),
+      transform 0.85s var(--ease-expo) var(--reveal-delay, 0ms);
+  }
+
+  @media (scripting: enabled) {
+    [data-reveal="pending"] {
+      opacity: 0;
+      transform: var(--reveal-from, translateY(18px));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    [data-reveal] {
+      opacity: 1 !important;
+      transform: none !important;
+      transition: none !important;
+    }
+  }
+
+  /* Infinite marquee — track holds two copies of the list, hover freezes it. */
+  .marquee-shell {
+    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    will-change: transform;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  .marquee-shell:hover .marquee-track,
+  .marquee-shell:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none !important;
+      transform: none !important;
+    }
+
+    .marquee-shell {
+      overflow-x: auto;
+    }
+  }
+
+  /* Infinite marquee — track holds two copies of the list, hover freezes it. */
+  .marquee-shell {
+    mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  }
+
+  .marquee-track {
+    display: flex;
+    width: max-content;
+    will-change: transform;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  .marquee-shell:hover .marquee-track,
+  .marquee-shell:focus-within .marquee-track {
+    animation-play-state: paused;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .marquee-track {
+      animation: none !important;
+      transform: none !important;
+    }
+
+    .marquee-shell {
+      overflow-x: auto;
+    }
+  }
+
   .layout-grid {
     width: 100%;
     max-width: var(--grid-max);
@@ -640,6 +823,120 @@
   100% {
     transform: translate3d(16px, -26px, 0);
     opacity: 0.2;
+  }
+}
+
+@keyframes aurora-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8vw, 6vh, 0) scale(1.12);
+  }
+}
+
+@keyframes aurora-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  50% {
+    transform: translate3d(-7vw, -8vh, 0) scale(0.94);
+  }
+}
+
+/* Marquee travels exactly one copy width; the track renders the list twice. */
+@keyframes marquee-left {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes marquee-right {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -160;
+  }
+}
+
+@keyframes orbit-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes aurora-drift-a {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8vw, 6vh, 0) scale(1.12);
+  }
+}
+
+@keyframes aurora-drift-b {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.08);
+  }
+  50% {
+    transform: translate3d(-7vw, -8vh, 0) scale(0.94);
+  }
+}
+
+/* Marquee travels exactly one copy width; the track renders the list twice. */
+@keyframes marquee-left {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes marquee-right {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes flow-dash {
+  to {
+    stroke-dashoffset: -160;
+  }
+}
+
+@keyframes orbit-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.35);
   }
 }
 

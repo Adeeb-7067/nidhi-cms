@@ -12,14 +12,6 @@ export const site = {
   copyright: "© 2026 Satyakabir Technologies Pvt. Ltd. All rights reserved.",
 };
 
-export const navItems = [
-  { label: "About", pct: 18 },
-  { label: "Services", pct: 34 },
-  { label: "Work", pct: 50 },
-  { label: "Stack", pct: 66 },
-  { label: "Contact", pct: 97 },
-] as const;
-
 export const hero = {
   eyebrow: "Satyakabir Technologies",
   badge: "Enter headquarters",

@@ -1,0 +1,632 @@
+{
+  "D:\\Content-Management-Hub\\website\\eslint.config.mjs": {
+    "mtime": 1785823646.3351748,
+    "ast_hash": "dfa1f5f6a7037bf39dc510f30b180002",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\next.config.ts": {
+    "mtime": 1785953118.0172272,
+    "ast_hash": "bc1a17ddc9bf411606314fa62e940a9f",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\package.json": {
+    "mtime": 1785917911.5155127,
+    "ast_hash": "c130235e488973cad9cb59c2d4f37c38",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\postcss.config.mjs": {
+    "mtime": 1785823646.507908,
+    "ast_hash": "239f3ebf717465dc636818a1a619398d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\tsconfig.json": {
+    "mtime": 1785823648.7804852,
+    "ast_hash": "ee17fd1c97c735e9f3564e3f5251f125",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\scripts\\encode-scrub.mjs": {
+    "mtime": 1785937462.1730213,
+    "ast_hash": "bab6f4edea612c58eeaa973c5f83d7e4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\scripts\\extract-frames.mjs": {
+    "mtime": 1785937495.7228634,
+    "ast_hash": "2ccd1a58ead6adde81e44ca305fe4bab",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\scripts\\generate-icons.mjs": {
+    "mtime": 1785917942.6664486,
+    "ast_hash": "66b057d5ebef141913e47829f694a19d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\layout.tsx": {
+    "mtime": 1785917893.3361678,
+    "ast_hash": "9b751ea43f6a48df63449b7142ec7edc",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\not-found.tsx": {
+    "mtime": 1785917893.6093311,
+    "ast_hash": "b16c12b3686e3a681a8958a9260645af",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\page.tsx": {
+    "mtime": 1785901117.8071744,
+    "ast_hash": "7bed9c6f4beeb503daebdc6f289b9bf8",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\robots.ts": {
+    "mtime": 1785869261.144516,
+    "ast_hash": "175250aac7c91ff7e652325a9a13ac35",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\sitemap.ts": {
+    "mtime": 1785868917.3002937,
+    "ast_hash": "79beb575f44391b7e849149c725bb15b",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\careers\\page.tsx": {
+    "mtime": 1785869267.8165617,
+    "ast_hash": "2f1a38f32a33bada7cae2cb367e95346",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\careers\\[slug]\\page.tsx": {
+    "mtime": 1785853623.976064,
+    "ast_hash": "12d4338f9fbdc0b1057dff17090dbc68",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\company\\page.tsx": {
+    "mtime": 1785869266.3961618,
+    "ast_hash": "18a3e8038f4e24574e20d59257af1cb5",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\company\\[slug]\\page.tsx": {
+    "mtime": 1785853610.2739308,
+    "ast_hash": "ef758eae6e2a411b8146091e7d3c1290",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\contact\\page.tsx": {
+    "mtime": 1785869267.851459,
+    "ast_hash": "89c1a592c46434164c440770b5a7d5d9",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\contact\\[slug]\\page.tsx": {
+    "mtime": 1785853628.0687406,
+    "ast_hash": "0a4185a1f9bb353aba642f94762229f4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\industries\\page.tsx": {
+    "mtime": 1785869266.4718864,
+    "ast_hash": "dbd10812b87a6254497728fe9fec2f6e",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\industries\\[slug]\\page.tsx": {
+    "mtime": 1785853709.8666613,
+    "ast_hash": "fadada66902345b37a68145b9405fb9d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\insights\\page.tsx": {
+    "mtime": 1785869267.5797095,
+    "ast_hash": "4aa6d6cae94238c795b5b383720e2abd",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\insights\\[slug]\\page.tsx": {
+    "mtime": 1785853677.2197354,
+    "ast_hash": "8c352c6e0d984a6060829c0222d754ca",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\services\\page.tsx": {
+    "mtime": 1785869266.4228919,
+    "ast_hash": "f2c4e7fdd9c8a26ba4baa6c1bc207596",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\services\\[slug]\\page.tsx": {
+    "mtime": 1785853696.1402953,
+    "ast_hash": "ef8b3f2b900cb14aa5c94a06bebeb17d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\solutions\\page.tsx": {
+    "mtime": 1785869266.4334888,
+    "ast_hash": "66ae5ed86545ee0f74128cb25b2d5424",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\solutions\\[slug]\\page.tsx": {
+    "mtime": 1785853621.699018,
+    "ast_hash": "05d582164ca95cf6f0f394a940c5be87",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\technologies\\page.tsx": {
+    "mtime": 1785869266.4500842,
+    "ast_hash": "4ffcd487b1bbfef95ab03bdad8d5ab8d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\technologies\\[slug]\\page.tsx": {
+    "mtime": 1785853625.981325,
+    "ast_hash": "c165c41c0d2647c04d2ba379b9553cea",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\work\\page.tsx": {
+    "mtime": 1785869267.548007,
+    "ast_hash": "5b9ca11ba00a027a7b82772259cae718",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\app\\work\\[slug]\\page.tsx": {
+    "mtime": 1785853704.4505289,
+    "ast_hash": "dda640fb4e0f55cebb78db7dafd30285",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\AtmosphereLayer.tsx": {
+    "mtime": 1785936917.9680796,
+    "ast_hash": "bcc2d9f6eb96249cd6d1736a63271fdc",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\AuroraBackground.tsx": {
+    "mtime": 1785835504.2710814,
+    "ast_hash": "209e8fa6901e8fed19671b31b05555f6",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ChapterProgress.tsx": {
+    "mtime": 1785952816.0451002,
+    "ast_hash": "daf00dba8b3a5579a594811f4ed628cc",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ChatBot.tsx": {
+    "mtime": 1785842238.777733,
+    "ast_hash": "97b72713d6ce937239b1323ed1c61d49",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\CinematicCanvas.tsx": {
+    "mtime": 1785936917.9460766,
+    "ast_hash": "7dced81c91d957e5e7d6e42c915fac56",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\CinematicHome.tsx": {
+    "mtime": 1785952816.0516934,
+    "ast_hash": "2985858a5750dde0d9214f35b89adaed",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\DetailShell.tsx": {
+    "mtime": 1785842035.0016181,
+    "ast_hash": "308dc0b5c1972be6e9fe2171b938bdad",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ScrollScrubber.tsx": {
+    "mtime": 1785953118.0202417,
+    "ast_hash": "39340c78387544cf9cc2ac9ceba1465f",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\SiteHeader.tsx": {
+    "mtime": 1785842035.0056129,
+    "ast_hash": "e2a4ecddf63f51ebc4942fa549f33696",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\brand\\Logo.tsx": {
+    "mtime": 1785917985.8774543,
+    "ast_hash": "ac1c7d6d9c581223317303bc68772e36",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\AgencyReel.tsx": {
+    "mtime": 1785936917.971074,
+    "ast_hash": "89ab17aa4bde9479193110c776593b2f",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\BusinessResults.tsx": {
+    "mtime": 1785952816.0682662,
+    "ast_hash": "053b28e1dcb94e8a37840d53ccac3c84",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\CaseStudies.tsx": {
+    "mtime": 1785952816.0718503,
+    "ast_hash": "e785e92af768ec9d66d200e6bbf29da4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\CompanyScale.tsx": {
+    "mtime": 1785936917.9610786,
+    "ast_hash": "3df1f77ae958af7bec3741c78b829a2b",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\DigitalTransformation.tsx": {
+    "mtime": 1785936917.9780765,
+    "ast_hash": "c518ccbb5ee6d66e7ef125066d8afefc",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\FinalCta.tsx": {
+    "mtime": 1785952816.0837538,
+    "ast_hash": "d91bceabd9731c3d1a76136f51516391",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\GlobalPresence.tsx": {
+    "mtime": 1785936917.9680796,
+    "ast_hash": "70ed0f2428d858de0b07a7177971aefc",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\IndustriesTransform.tsx": {
+    "mtime": 1785936917.9760768,
+    "ast_hash": "63e7da9603cf781aa551325bb2de9573",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\IndustryWall.tsx": {
+    "mtime": 1785936917.9840755,
+    "ast_hash": "3651c3f4b4eb137ca0e2880632588ea3",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\primitives.tsx": {
+    "mtime": 1785952816.0612478,
+    "ast_hash": "bf502f3ff3f1296b8b43b2e94e234590",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\ServicesEcosystem.tsx": {
+    "mtime": 1785952816.0764172,
+    "ast_hash": "18fa7d59f2a27752fb6e2caa1510dd66",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\TechStack.tsx": {
+    "mtime": 1785952816.1115308,
+    "ast_hash": "763f3d26e059d0a3054f6581a87dadda",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\TestimonialExperience.tsx": {
+    "mtime": 1785952816.0794086,
+    "ast_hash": "8bcf5ebf577d00af82051a749ec2b8af",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\TrustImpact.tsx": {
+    "mtime": 1785936917.951079,
+    "ast_hash": "109281d7bb19fad4d6f4ab9c21fc5814",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\digital\\WhyChooseUs.tsx": {
+    "mtime": 1785936917.9750779,
+    "ast_hash": "dc8e9754beb06340705b69eb45ad274d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\experiences\\ExperienceBlocks.tsx": {
+    "mtime": 1785864758.2646418,
+    "ast_hash": "69352992bff7f302dc0ddd0c0091c668",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\experiences\\ExperienceComposer.tsx": {
+    "mtime": 1785855150.237035,
+    "ast_hash": "9bba4183649558a21eaaac67602e3e2e",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\experiences\\ExperiencePage.tsx": {
+    "mtime": 1785869067.6492746,
+    "ast_hash": "89a3bd80be7824a04393dc494b811310",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\experiences\\primitives.tsx": {
+    "mtime": 1785952920.0839252,
+    "ast_hash": "d8d8be1a417cde00e21d5ebeb70f808a",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\experiences\\sections\\SectionBlocks.tsx": {
+    "mtime": 1785864815.9826658,
+    "ast_hash": "71e47359caccceea15bf223bbab2dab4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\home\\BusinessHero.tsx": {
+    "mtime": 1785952816.0963557,
+    "ast_hash": "889dd4554cbf13c655ed3c33b4cb7126",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\home\\FilmIsland.tsx": {
+    "mtime": 1785952816.1085236,
+    "ast_hash": "94d7d72f93ad1660cd91ebd729c0b9c3",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\home\\FilmLoadingVeil.tsx": {
+    "mtime": 1785952816.1216488,
+    "ast_hash": "89e052b3fb22932331809710d33aa490",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\home\\PostFilmNarrative.tsx": {
+    "mtime": 1785952816.1186213,
+    "ast_hash": "618cef6a6fbd02a0960121bb371f7ade",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\home\\PreFilmNarrative.tsx": {
+    "mtime": 1785952816.1160989,
+    "ast_hash": "9f65403ea4ff192285610a8cabfd9ee9",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\Breadcrumbs.tsx": {
+    "mtime": 1785842034.9546125,
+    "ast_hash": "475304389881cadde778e4eebf99aa7d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\CommandPalette.tsx": {
+    "mtime": 1785842034.9876244,
+    "ast_hash": "be0b918bab313edfbd1188d7f4d0e8f4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\MegaMenu.tsx": {
+    "mtime": 1785842034.947608,
+    "ast_hash": "6dd644891e5c535c84f01cb6a04adf87",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\MobileNav.tsx": {
+    "mtime": 1785842034.9516013,
+    "ast_hash": "ef622ab3d09324f049a9c6a729872f38",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\PremiumNavbar.tsx": {
+    "mtime": 1785952962.6856217,
+    "ast_hash": "df9973195750ee219a21fff99edb1c32",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\nav\\SiteFooter.tsx": {
+    "mtime": 1785952816.1261992,
+    "ast_hash": "8e23356597813f66f8912114a86e3dee",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\pages\\MarketingPage.tsx": {
+    "mtime": 1785842034.934617,
+    "ast_hash": "42e973974d9438fd757534ba5e68c14b",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\pages\\MarketingShell.tsx": {
+    "mtime": 1785952816.1312056,
+    "ast_hash": "171bd8dd9418eeb8e9beeacef5a9f1e3",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\pages\\SectionPages.tsx": {
+    "mtime": 1785842034.9396152,
+    "ast_hash": "f67f450176b19b8a611a0c6e2808cda5",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\AboutSection.tsx": {
+    "mtime": 1785835504.3930738,
+    "ast_hash": "a76c535fc60b8b0f02938ae79bfee56e",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\ChapterStage.tsx": {
+    "mtime": 1785952816.0877523,
+    "ast_hash": "a23c5740db9f0d6a5ec98e6c7459db7d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\ContactSection.tsx": {
+    "mtime": 1785835504.663509,
+    "ast_hash": "cb5238fcb5b2cd1e03bfdc942eeb2205",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\IndustriesSection.tsx": {
+    "mtime": 1785835504.581493,
+    "ast_hash": "360a6c4b77d86caf7bf219eae7f410eb",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\ProjectsSection.tsx": {
+    "mtime": 1785835504.4834888,
+    "ast_hash": "604cd33efccb533206beb8e1721860ef",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\SectionWrapper.tsx": {
+    "mtime": 1785952816.1347227,
+    "ast_hash": "cb266c4e796d883aa1bb2db470ad1027",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\ServicesSection.tsx": {
+    "mtime": 1785835504.4350755,
+    "ast_hash": "8068131639e9290b81143553d63fcd41",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\TechnologiesSection.tsx": {
+    "mtime": 1785835504.545485,
+    "ast_hash": "4cc48f3f7c5f213c0ccf12c2ff3785b2",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\sections\\TestimonialsSection.tsx": {
+    "mtime": 1785835504.6184957,
+    "ast_hash": "405b565e015fc0cba49a590cb2217a25",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\seo\\SiteJsonLd.tsx": {
+    "mtime": 1785868923.01434,
+    "ast_hash": "c152c3732eb2e5e1827f69e8abccfa1c",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\theme\\ThemeProvider.tsx": {
+    "mtime": 1785841483.5863216,
+    "ast_hash": "1bbd8d98969e94a050031151b0a768fb",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\theme\\ThemeToggle.tsx": {
+    "mtime": 1785841495.6599705,
+    "ast_hash": "8911a0c08236026048fcbf40e079cff5",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ui\\GlassCard.tsx": {
+    "mtime": 1785828030.1450298,
+    "ast_hash": "1caf563dd6290190faae53a805c5de02",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ui\\Magnetic.tsx": {
+    "mtime": 1785837051.9480617,
+    "ast_hash": "9f2119aa968a0df2cfc0cea6c558794e",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ui\\PremiumButton.tsx": {
+    "mtime": 1785842147.0476027,
+    "ast_hash": "05538b6fec3144a5191ee21f411bfb24",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\components\\ui\\TiltCard.tsx": {
+    "mtime": 1785837122.93169,
+    "ast_hash": "b9cf63adfd748c9e44667017a7cc4f71",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\catalog.ts": {
+    "mtime": 1785853677.6608143,
+    "ast_hash": "b2476b36171461bb332b1e5c5c4947e9",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\cinematic.ts": {
+    "mtime": 1785952688.3568435,
+    "ast_hash": "fc9387de601bf8b27feff18b872a0532",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\digital.ts": {
+    "mtime": 1785953038.2359576,
+    "ast_hash": "ab0fec7a61fabc96d977414d1fe9e880",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\experiences.ts": {
+    "mtime": 1785868997.3283215,
+    "ast_hash": "6e42608ae20c6edd296bb691af145ce2",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\mock.ts": {
+    "mtime": 1785952704.7570555,
+    "ast_hash": "bc052484821c195c241ddbc9da9e6fcd",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\navigation.ts": {
+    "mtime": 1785835505.7689521,
+    "ast_hash": "b7ab64d23734d2f1a9be966b35e0fc07",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\seo.ts": {
+    "mtime": 1785917892.4156625,
+    "ast_hash": "11e039b99fce55a0f4e66af13386e943",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\careers.ts": {
+    "mtime": 1785855224.4829347,
+    "ast_hash": "dfb3e726ad7ddce8764098b8fee34af4",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\company.ts": {
+    "mtime": 1785863585.906437,
+    "ast_hash": "3b82df35c7205ba9bb66d45be73384a3",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\contact-insights.ts": {
+    "mtime": 1785855717.571409,
+    "ast_hash": "44f5492a65ab2dbed59097101b93beeb",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\defaults.ts": {
+    "mtime": 1785855738.3405995,
+    "ast_hash": "f796998b2b662de77d0025e3056c4abf",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\helpers.ts": {
+    "mtime": 1785855558.9975176,
+    "ast_hash": "538c15ce2800596c3e429bcc4f10daab",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\index.ts": {
+    "mtime": 1785855840.5396519,
+    "ast_hash": "3c7f7a3c8f687011be5d1a6ebda4547f",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\industries.ts": {
+    "mtime": 1785855695.954814,
+    "ast_hash": "f185690b580224f3957b42f985cdfc5d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\industry-catalog.ts": {
+    "mtime": 1785855801.3670225,
+    "ast_hash": "4865576cec346cb7c81459a35dff233d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\services.ts": {
+    "mtime": 1785857665.6915798,
+    "ast_hash": "a13134b5a63983a32ece0677ff592eef",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\solutions.ts": {
+    "mtime": 1785857622.15524,
+    "ast_hash": "37c5634543c8995aec088c8cdc2ee806",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\technologies.ts": {
+    "mtime": 1785857132.3409388,
+    "ast_hash": "a3c7b07eb3f8396b9980795d3e4ae3d1",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\types.ts": {
+    "mtime": 1785857317.5094175,
+    "ast_hash": "bf6d39438c060b6604bfb1e2bbcc5359",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-compositions\\work.ts": {
+    "mtime": 1785855715.8573081,
+    "ast_hash": "a387da2d50be9b9c1528a21b4184dc0f",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-content\\index.ts": {
+    "mtime": 1785857143.8737357,
+    "ast_hash": "57113f9f874c22ebc4b86cb58fc54abe",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-content\\kind-narratives.ts": {
+    "mtime": 1785863643.9577284,
+    "ast_hash": "a21a89aa62b28d5ea7b520e1267a68af",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-content\\slug-overrides.ts": {
+    "mtime": 1785863626.9407742,
+    "ast_hash": "a4555b092d111e0dabb7a692e2f46fff",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\data\\page-content\\types.ts": {
+    "mtime": 1785852636.3749447,
+    "ast_hash": "af27c2a0b8a3a11a162a30099136fde5",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\hooks\\useFilmInView.ts": {
+    "mtime": 1785944342.9703543,
+    "ast_hash": "c954ea4888d07869b723ddb5ad0f75db",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\hooks\\useFrameScrubber.ts": {
+    "mtime": 1785937183.7179892,
+    "ast_hash": "7b27151da39d065607b5351eee70ce93",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\hooks\\useLenis.ts": {
+    "mtime": 1785936917.9630778,
+    "ast_hash": "7a4ae46fe24617ea5d8d22a644ec9cf8",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\lib\\film-scroll.ts": {
+    "mtime": 1785944329.4822302,
+    "ast_hash": "7e1efa6ca825638a7cfb70e4c6cf78f3",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\lib\\motion.ts": {
+    "mtime": 1785837014.4715717,
+    "ast_hash": "98004d36f4cf296f3075ba045d5af8d6",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\lib\\slug.ts": {
+    "mtime": 1785835504.9159584,
+    "ast_hash": "081377ca1ce9daa12514be0f5b1d99ad",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\src\\lib\\utils.ts": {
+    "mtime": 1785944356.4585848,
+    "ast_hash": "e80f45233cf07ff02ddfd499f92ed82a",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\AGENTS.md": {
+    "mtime": 1785823879.1376488,
+    "ast_hash": "01e8142356e15c3404e0d84c48187cd0",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\CLAUDE.md": {
+    "mtime": 1785823879.1427443,
+    "ast_hash": "5c27369b226fcf2be8a6cfe52224e767",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\PROJECT.md": {
+    "mtime": 1785943757.859717,
+    "ast_hash": "ffe527fac230364a5ebb11bc82aa516d",
+    "semantic_hash": ""
+  },
+  "D:\\Content-Management-Hub\\website\\README.md": {
+    "mtime": 1785829378.492189,
+    "ast_hash": "75c63418fa064f4666223708f48762ad",
+    "semantic_hash": ""
+  }
+}

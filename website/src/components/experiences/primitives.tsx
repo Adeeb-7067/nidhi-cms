@@ -1,19 +1,31 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion, useInView } from "motion/react";
-import { cn } from "@/lib/utils";
+import { cn, quantize } from "@/lib/utils";
 
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
+
+function subscribeToReducedMotion(onChange: () => void) {
+  const mq = window.matchMedia(REDUCED_MOTION_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+/**
+ * Read through `useSyncExternalStore` rather than effect-plus-setState.
+ *
+ * The media query is external state: seeding it from an effect renders one frame
+ * with the wrong answer (every animation starts, then is told to stop) and
+ * triggers a cascading render on mount for every consumer. The server snapshot is
+ * `false` because SSR has no user preference to read.
+ */
 export function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const onChange = () => setReduced(mq.matches);
-    mq.addEventListener("change", onChange);
-    return () => mq.removeEventListener("change", onChange);
-  }, []);
-  return reduced;
+  return useSyncExternalStore(
+    subscribeToReducedMotion,
+    () => window.matchMedia(REDUCED_MOTION_QUERY).matches,
+    () => false,
+  );
 }
 
 export function Reveal({
@@ -151,10 +163,27 @@ export function ParticleField({ accent = "#2B6BFF" }: { accent?: string }) {
     };
 
     resize();
-    draw();
     window.addEventListener("resize", resize);
+
+    // The link pass is O(n²) per frame — only pay for it while on screen.
+    let running = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !running) {
+          running = true;
+          draw();
+        } else if (!entry.isIntersecting && running) {
+          running = false;
+          cancelAnimationFrame(raf);
+        }
+      },
+      { rootMargin: "120px" },
+    );
+    observer.observe(canvas);
+
     return () => {
       cancelAnimationFrame(raf);
+      observer.disconnect();
       window.removeEventListener("resize", resize);
     };
   }, [accent, reduced]);
@@ -388,8 +417,8 @@ export function TechOrbit({ nodes, accent = "#00D9FF" }: { nodes: string[]; acce
       </div>
       {nodes.slice(0, 8).map((node, i) => {
         const angle = (i / Math.min(nodes.length, 8)) * Math.PI * 2 - Math.PI / 2;
-        const x = 50 + Math.cos(angle) * 38;
-        const y = 50 + Math.sin(angle) * 38;
+        const x = quantize(50 + Math.cos(angle) * 38);
+        const y = quantize(50 + Math.sin(angle) * 38);
         return (
           <motion.div
             key={node}

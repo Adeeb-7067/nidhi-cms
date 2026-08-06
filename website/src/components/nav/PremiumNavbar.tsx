@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { ChevronDown, Menu, Search } from "lucide-react";
 import { navigation, ctaNav, type NavItem } from "@/data/navigation";
@@ -17,17 +17,15 @@ import { cn } from "@/lib/utils";
 const PRIMARY_IDS = ["company", "services", "solutions", "work", "insights"] as const;
 const MORE_IDS = ["technologies", "industries", "careers", "contact"] as const;
 
-function scrollToPct(percentage: number) {
-  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-  window.scrollTo({ top: Math.max(0, docHeight * (percentage / 100)), behavior: "smooth" });
-}
-
-export function PremiumNavbar({
+/**
+ * The cinematic home re-renders on every scrubbed frame, so the bar is memoised
+ * and deliberately takes no frame-derived props — chapter state lives in
+ * `ChapterProgress`. Re-rendering this tree per frame stutters the film.
+ */
+export const PremiumNavbar = memo(function PremiumNavbar({
   variant = "site",
 }: {
   variant?: "site" | "cinematic";
-  /** Reserved for cinematic home; chapter jumps live in ChapterProgress. */
-  currentFrame?: number;
 }) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
@@ -45,14 +43,40 @@ export function PremiumNavbar({
   const openItem = navigation.find((n) => n.id === openId) ?? null;
 
   useEffect(() => {
-    const onScroll = () => {
+    // `scrollHeight` forces a synchronous layout. On the cinematic home the
+    // scrubber mutates styles every frame, so reading it per scroll event
+    // thrashes layout and stutters the film — cache it instead.
+    let docHeight = 0;
+    let queued = false;
+
+    const update = () => {
+      queued = false;
       setScrolled(window.scrollY > 20);
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
       if (docHeight > 0) setProgress((window.scrollY / docHeight) * 100);
     };
-    onScroll();
+
+    const onScroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(update);
+    };
+
+    const measure = () => {
+      docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      onScroll();
+    };
+
+    measure();
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    window.addEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
   }, []);
 
   useEffect(() => {
@@ -135,7 +159,10 @@ export function PremiumNavbar({
                   onClick={(e) => {
                     if (variant === "cinematic" && pathname === "/") {
                       e.preventDefault();
-                      scrollToPct(0);
+                      // Top of the document, not the film — the film starts
+                      // mid-page now, so `scrollToFilmPct(0)` sent the logo
+                      // *down* to the tour instead of home to the hero.
+                      window.scrollTo({ top: 0, behavior: "smooth" });
                     }
                   }}
                 >
@@ -275,4 +302,4 @@ export function PremiumNavbar({
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   );
-}
+});

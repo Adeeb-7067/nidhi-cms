@@ -1,9 +1,11 @@
 "use client";
 
-import { useRef, useEffect, useMemo, useState } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { FRAME_START, TOTAL_FRAMES, chapters, getActiveChapter } from "@/data/cinematic";
+import { usePrefersReducedMotion } from "@/components/experiences/primitives";
+import { useFilmInView } from "@/hooks/useFilmInView";
 import { ChapterStage } from "./sections/ChapterStage";
 
 interface ScrollScrubberProps {
@@ -21,12 +23,20 @@ export function ScrollScrubber({
 }: ScrollScrubberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const setFrameRef = useRef(setCurrentFrame);
-  setFrameRef.current = setCurrentFrame;
-  const [reduced, setReduced] = useState(false);
+  const reduced = usePrefersReducedMotion();
+  /**
+   * Chapter overlays are `position: fixed`, so they must only exist while the
+   * film is on screen. ScrollTrigger's `isActive` is the wrong signal for that:
+   * on first refresh at scroll 0, GSAP often reports inactive for a tick (or
+   * forever if layout hasn't settled), which unmounted the opening title and
+   * left a naked building. `useFilmInView` is layout-stable and already gates
+   * the canvas and atmosphere.
+   */
+  const filmInView = useFilmInView();
 
   useEffect(() => {
-    setReduced(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  }, []);
+    setFrameRef.current = setCurrentFrame;
+  }, [setCurrentFrame]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -45,7 +55,7 @@ export function ScrollScrubber({
         trigger: containerRef.current,
         start: "top top",
         end: "bottom bottom",
-        scrub: prefersReduced ? true : 0.35,
+        scrub: prefersReduced ? true : 0.12,
         invalidateOnRefresh: true,
         onUpdate: () => {
           const next = Math.round(obj.frame);
@@ -53,6 +63,10 @@ export function ScrollScrubber({
         },
       },
     });
+
+    // Opening frame must be written even if the visitor has not scrolled yet —
+    // otherwise the arrival chapter can sit behind a stale frame number.
+    setFrameRef.current(FRAME_START);
 
     const id = requestAnimationFrame(() => ScrollTrigger.refresh());
 
@@ -63,17 +77,34 @@ export function ScrollScrubber({
     };
   }, [isLoaded, totalFrames]);
 
-  // Reduced motion: shorter page — still enough to visit each chapter via scroll/jumps.
+  /*
+    Track length is the film's whole UX budget.
+
+    At the old factor of 800 this resolved to ~2868vh — about 29 screens of
+    scrolling, which is why the business case used to be unreachable. 420 puts it
+    near 1500vh (~15 screens) for the same 717 frames.
+
+    Do not push this much lower: shorter track means fewer scroll pixels per
+    frame, so frame steps get coarser and the scrub starts to judder. ~18px per
+    frame is about the floor before smoothness suffers.
+  */
   const usable = TOTAL_FRAMES - FRAME_START + 1;
   const heightVh = reduced
-    ? Math.max(chapters.length * 100, 900)
-    : Math.max(1100, Math.round((usable / 200) * 800));
+    ? Math.max(chapters.length * 100, 800)
+    : Math.max(1000, Math.round((usable / 200) * 420));
 
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
+  const showChapter =
+    filmInView && active && currentFrame >= active.start && currentFrame <= active.end;
 
   return (
-    <div ref={containerRef} className="relative w-full" style={{ height: `${heightVh}vh` }}>
-      {active && currentFrame >= active.start && currentFrame <= active.end ? (
+    <div
+      ref={containerRef}
+      data-film-track
+      className="relative w-full"
+      style={{ height: `${heightVh}vh` }}
+    >
+      {showChapter ? (
         <ChapterStage key={active.id} chapter={active} currentFrame={currentFrame} />
       ) : null}
     </div>

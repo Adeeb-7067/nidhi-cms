@@ -55,12 +55,16 @@ Logical story still uses `TOTAL_FRAMES = 720` / `FRAME_START = 4` in `src/data/c
 └─────────────────────────────────────────────────────────────┘
           │
           ├─ /  → CinematicHome
-          │         · LoadingScreen
-          │         · AtmosphereLayer (frame → veil)
-          │         · PremiumNavbar (cinematic jumps + theme toggle)
-          │         · CinematicCanvas (MP4 scrub → canvas)
-          │         · ScrollScrubber (tall track + ChapterStages)
-          │         · ChapterProgress (place + jump dots)
+          │         · PremiumNavbar (memo'd; theme toggle)
+          │         · AtmosphereLayer (frame → veil; gated by useFilmInView)
+          │         · CinematicCanvas (MP4 scrub → canvas; same gate)
+          │         · FilmIsland → ScrollScrubber (tall track + ChapterStages)
+          │         · BusinessHero (#what-we-do — the stated offer)
+          │         · BusinessNarrative (7 sections: proof → ecosystem → cases)
+          │         · SupportingNarrative (6 sections: stack → scale → CTA)
+          │         · SiteFooter
+          │         · FilmLoadingVeil (fullscreen while the scrub decodes)
+          │         · ChapterProgress (place + jump dots; film-only)
           │         · Lenis + GSAP ScrollTrigger
           │
           └─ /{section}/[{slug}]  → LeafMarketingPage
@@ -71,19 +75,82 @@ Logical story still uses `TOTAL_FRAMES = 720` / `FRAME_START = 4` in `src/data/c
                     · SiteFooter
 ```
 
-### Runtime data flow (homepage)
+### Homepage order
+
+The film opens the page, then the page says out loud what the film only implies.
+
+```
+01  FilmIsland → ScrollScrubber   #inside        the cinematic HQ tour
+02  BusinessHero                  #what-we-do    the offer, capabilities, 4 trust numbers
+─── BusinessNarrative ──────────────────────────────────────────────────────
+03  TrustImpact                   #impact        animated proof counters
+04  IndustryWall                                 industry marquee
+05  IndustriesTransform           #industries    industry cards
+06  BusinessResults               #results       measurable outcomes (light)
+07  DigitalTransformation         #transformation stage-by-stage flow
+08  ServicesEcosystem             #ecosystem     capability graph (click-to-pin)
+09  CaseStudies                   #stories       client success stories
+─── SupportingNarrative ────────────────────────────────────────────────────
+10  TechStack                     #stack         tools + why each (light)
+11  TestimonialExperience         #testimonials  client voices
+12  WhyChooseUs                   #why-us        differentiators
+13  CompanyScale                  #scale         timeline / growth / team
+14  GlobalPresence                #global        countries served
+15  FinalCta                      #start         start a conversation
+16  SiteFooter
+```
+
+There is **no title card above the film**. The `arrival` chapter already paints
+the brand, offer, and proof strip over the opening frames, so an intro section
+would only push the scrub below the fold.
+
+The bypass ("Skip the tour" → `#what-we-do`) is `fixed` and gated on
+`useFilmInView`, so it stays reachable for the whole ~1500vh track instead of
+scrolling away after one screen. It sits **top-right**: `ChapterProgress` owns
+bottom-centre and the chat launcher owns bottom-right.
+
+`ScrollScrubber` seeds its chapter gate `true` and `useFilmInView` seeds `true`
+for the same reason — the film covers the viewport at scroll 0, and waiting for
+GSAP's first `onToggle` or the observer's first callback left the opening frame
+with no title on it.
+
+Both narrative halves are `memo`'d and take no props. The parent re-renders on
+every scrubbed frame; re-reconciling thirteen sections at 60fps starves the
+scrubber.
+
+### Runtime data flow (the film act)
 
 ```
 User scroll (Lenis; native scroll if reduced-motion)
-    → tall ScrollScrubber document (~height scaled to frame count)
+    → tall ScrollScrubber track (~1500vh, scaled to frame count)
     → GSAP ScrollTrigger scrub maps scroll → logical frame number
     → useFrameScrubber.setCurrentFrame(n)
     → video.currentTime seek (dense-keyframe MP4) → canvas draw
        · poster paints first; mobile/save-data uses lighter MP4
        · optional JPG fallback only if video cannot load
     → ChapterStage(s) fade by exclusive [start, end] frame ranges
+       · gated on ScrollTrigger.isActive — the overlays are `fixed`, so an
+         ungated stage paints over the sections below the film
     → AtmosphereLayer picks veil/glow for active chapter
+
+… film track ends …
+
+    → 30vh gradient outro dissolves the held final frame into the page surface
+    → useFilmInView drops canvas + atmosphere + chapter rail out of the paint path
 ```
+
+**Scroll helpers must be film-relative.** The film is a fraction of the document,
+so anything jumping to "20% of the film" uses `src/lib/film-scroll.ts`
+(`scrollToFilmPct` / `scrollToFilmFraction`), which measures the
+`[data-film-track]` element instead of `document.scrollHeight`. Section jumps use
+`scrollToId`, which offsets for the fixed navbar. Using document percentages here
+silently breaks every jump the moment a section is added.
+
+**Never read layout in a scroll handler on this page.** The scrubber writes styles
+every animation frame; a handler that reads `scrollHeight` or
+`getBoundingClientRect()` forces a synchronous reflow per frame and visibly
+stutters the film. Film visibility uses `useFilmInView` (IntersectionObserver),
+and `PremiumNavbar` caches its document height instead of re-measuring.
 
 Constants live in **one place**: `src/data/cinematic.ts`  
 (`TOTAL_FRAMES = 720`, `FRAME_START = 4`, `FRAME_FADE = 12`). Chapter UI ranges are **exclusive** (no overlapping start/end), so only one overlay is fully on-screen at a time.
@@ -133,8 +200,29 @@ Cinematic-Scroll/
 │   │   ├── CinematicHome.tsx
 │   │   ├── CinematicCanvas.tsx
 │   │   ├── ScrollScrubber.tsx
+│   │   ├── home/                         # Homepage acts (composition only)
+│   │   │   ├── FilmIsland.tsx            # Film wrapper + skip + outro dissolve
+│   │   │   ├── FilmLoadingVeil.tsx       # Fullscreen scrub-decode veil
+│   │   │   ├── BusinessHero.tsx          # #what-we-do — the stated offer
+│   │   │   ├── BusinessNarrative.tsx     # memo'd: sections 03–09
+│   │   │   └── SupportingNarrative.tsx   # memo'd: sections 10–15
+│   │   ├── digital/                      # The 13 business sections
+│   │   │   ├── primitives.tsx            # CountUp, AuroraField, DigitalSection…
+│   │   │   ├── TrustImpact.tsx           # stats
+│   │   │   ├── IndustryWall.tsx          # marquee
+│   │   │   ├── DigitalTransformation.tsx # measured SVG flow spine
+│   │   │   ├── BusinessResults.tsx       # outcome ledger (light tone)
+│   │   │   ├── CaseStudies.tsx           # device stage
+│   │   │   ├── IndustriesTransform.tsx   # industry bento
+│   │   │   ├── AgencyReel.tsx            # pinned horizontal reel (unmounted)
+│   │   │   ├── GlobalPresence.tsx        # rotating globe
+│   │   │   ├── ServicesEcosystem.tsx     # node graph (click-to-pin)
+│   │   │   ├── TechStack.tsx             # tools + rationale (light tone)
+│   │   │   ├── WhyChooseUs.tsx           # bento
+│   │   │   ├── TestimonialExperience.tsx # slider
+│   │   │   ├── CompanyScale.tsx          # timeline
+│   │   │   └── FinalCta.tsx              # closing frame (#start)
 │   │   ├── AtmosphereLayer.tsx
-│   │   ├── LoadingScreen.tsx
 │   │   ├── ChatBot.tsx
 │   │   ├── brand/Logo.tsx
 │   │   ├── theme/ThemeToggle.tsx
@@ -149,7 +237,8 @@ Cinematic-Scroll/
 │   │   ├── pages/                        # MarketingShell, SectionPages
 │   │   └── ui/
 │   ├── data/
-│   │   ├── cinematic.ts                  # Frames + 16 chapters
+│   │   ├── cinematic.ts                  # Frames + 9 film chapters
+│   │   ├── digital.ts                    # Copy + metrics for the digital act
 │   │   ├── navigation.ts                 # Full IA
 │   │   ├── experiences.ts                # Kinds + buildExperience()
 │   │   ├── catalog.ts / mock.ts
@@ -165,20 +254,33 @@ Cinematic-Scroll/
 │   │       ├── company.ts … contact-insights.ts
 │   │       └── …
 │   ├── hooks/                            # useFrameScrubber, useLenis
-│   └── lib/                              # cn(), pickFromSlug(), slug helpers
+│   └── lib/                              # cn(), pickFromSlug(), film-scroll, slug helpers
 ├── PROJECT.md
 ├── README.md
 └── package.json
 ```
 
+### Deleted
+
+- `HeroSection.tsx` — the film's `arrival` chapter is the film's hero;
+  `BusinessHero` is the page's. A third hero component was only ever confusing.
+- `Navbar.tsx` — superseded by `PremiumNavbar`.
+- `LoadingScreen.tsx` — replaced by `home/FilmLoadingVeil`, which is owned by the
+  film rather than by the page.
+- `hooks/usePastFilm.ts` — "past the film" is the wrong question now that the page
+  continues well beyond it; use `useFilmInView`.
+- `digital/DigitalNarrative.tsx` — split into `home/BusinessNarrative` and
+  `home/SupportingNarrative`.
+- `mock.ts → navItems`, `cinematic.ts → cinematicNav` — both encoded nav targets
+  as film percentages, which no longer address anything meaningful.
+
 ### Legacy / unused (still in tree)
 
-Older cinematic section components exist but are **not mounted** by current home:
-
-- `HeroSection.tsx`, `AboutSection.tsx`, `ServicesSection.tsx`, …  
-- `Navbar.tsx`, `SiteHeader.tsx`, `DetailShell.tsx`, `CustomCursor.tsx`, `AuroraBackground.tsx`
-
-Prefer `ChapterStage` + `PremiumNavbar` + experiences. Safe to delete later after confirming no imports.
+- `AboutSection.tsx`, `ServicesSection.tsx`, … — superseded by `ChapterStage` and
+  the experiences composer.
+- `SiteHeader.tsx`, `DetailShell.tsx`, `CustomCursor.tsx`, `AuroraBackground.tsx`
+- `digital/AgencyReel.tsx` — built but not mounted; it pins the viewport, which
+  fought the film's own scroll ownership.
 
 ---
 
@@ -205,12 +307,14 @@ Prefer `ChapterStage` + `PremiumNavbar` + experiences. Safe to delete later afte
 
 | Module | Responsibility |
 |--------|----------------|
-| `useFrameScrubber` | Image cache, initial batch, sliding preload, DPR canvas draw |
+| `useFrameScrubber` | Image cache, initial batch, sliding preload, DPR canvas draw (capped at `MAX_W`) |
 | `useLenis` | Lenis + `ScrollTrigger.update()` |
-| `ScrollScrubber` | Tall scroll track; GSAP scrub; mounts chapters |
-| `CinematicCanvas` | Fullscreen `<canvas>` |
-| `AtmosphereLayer` | Active chapter glow/veil |
-| `LoadingScreen` | Progress until initial frames ready |
+| `useFilmInView` | IntersectionObserver on `[data-film-track]`; gates every fixed film layer |
+| `ScrollScrubber` | Tall scroll track; GSAP scrub; mounts chapters only while `isActive` |
+| `FilmIsland` | Frames the tour: skip control + outro dissolve |
+| `CinematicCanvas` | Fullscreen `<canvas>`; `invisible` when the film is off-screen |
+| `AtmosphereLayer` | Active chapter glow/veil; unmounted when the film is off-screen |
+| `FilmLoadingVeil` | Fullscreen progress until initial frames ready; never traps input |
 
 **Scrub notes:** JPG sequence (not MP4 scrub); `FRAME_START = 4`; reduced motion snaps/simplifies.
 
@@ -279,26 +383,122 @@ Same section type can place content differently via `props.layout` (or determini
 
 Defined in `src/data/cinematic.ts` → `chapters[]`.
 
-| # | id | Layout | Frames (approx.) | Story |
-|---|-----|--------|------------------|--------|
-| 00 | arrival | `hero` | 4–72 | Brand + analytics strip |
-| 01 | lobby | `intro` | 64–130 | Headquarters |
-| 02 | gallery | `split-stats` | 118–168 | About |
-| 03 | ai | `service-grid` | 160–215 | AI systems |
-| 04 | studio | `editorial-left` | 174–225 | Product engineering |
-| 05 | cloud | `service-grid` | 219–270 | Cloud & DevOps |
-| 06 | lab | `editorial-left` | 264–315 | R&D |
-| 07 | boardroom | `split-stats` | 309–360 | Outcomes |
-| 08 | client | `project-rail` | 354–405 | Case studies |
-| 09 | global | `chip-cloud` | 399–450 | Industries |
-| 10 | voices | `quote` | 444–495 | Testimonials |
-| 11 | awards | `badge-row` | 489–540 | Proof |
-| 12 | stack | `stack-grid` | 534–585 | Technologies |
-| 13 | careers | `career` | 579–630 | Careers |
-| 14 | contact | `contact` | 624–675 | Contact |
-| 15 | finale | `finale` | 669–720 | Closing |
+| # | id | Layout | Frames | Story |
+|---|-----|--------|--------|--------|
+| 00 | arrival | `hero` | 4–80 | Brand title card: name, offer, proof strip |
+| 01 | lobby | `intro` | 81–155 | Headquarters |
+| 02 | ai | `service-grid` | 156–240 | AI systems |
+| 03 | studio | `editorial-left` | 241–320 | Product engineering |
+| 04 | cloud | `cloud-ops` | 321–400 | Cloud & DevOps |
+| 05 | lab | `editorial-left` | 401–470 | R&D |
+| 06 | boardroom | `split-stats` | 471–545 | Outcomes |
+| 07 | client | `project-rail` | 546–640 | Selected work |
+| 08 | finale | `finale` | 641–720 | Closing |
 
 Each chapter has an `atmosphere` id for veil/glow.
+
+**Culled from 16 to 9.** Chapters for industries, testimonials, awards, stack,
+careers and contact were removed: each duplicated a section that now renders
+below the film with far more room, and reading that content off a scrubbing
+backdrop was strictly worse. What remains is the part only the film can do —
+walking the building.
+
+Frame windows are contiguous and cover the full range, so the film never
+scrolls through dead air. If you re-cut them, keep them **exclusive** so only one
+overlay is on-screen at a time, and keep the track long enough that each frame
+still gets ~18px of scroll (see `ScrollScrubber`).
+
+---
+
+## 6b. Business sections (`components/digital/`)
+
+The film sells craft but never states the offer. These sections do, and they run
+in **normal document flow after the film track**, so the cinematic experience is
+untouched. Composition lives in `components/home/`, not here.
+
+| Component | Shape |
+|-----------|-------|
+| `TrustImpact` | Hairline instrument panel, counters from zero |
+| `IndustryWall` | Two counter-scrolling marquees, hover pauses |
+| `IndustriesTransform` | Bento; imagery desaturated until hover |
+| `BusinessResults` | Outcome ledger with filling measure bars (**light**) |
+| `DigitalTransformation` | Node chain + SVG spine measured from real positions |
+| `ServicesEcosystem` | Node graph; click pins a node and its dependencies |
+| `CaseStudies` | Client index → one browser/phone device stage |
+| `TechStack` | Layer tabs → per-tool rationale (**light**) |
+| `TestimonialExperience` | One-up stage, auto-advance with visible timer |
+| `WhyChooseUs` | Bento with mixed tile weights |
+| `CompanyScale` | Self-drawing rail + counter band |
+| `GlobalPresence` | Orthographic wireframe globe, arcs from the hub |
+| `FinalCta` | Drenched closing frame, magnetic primary |
+
+**Rules for this folder**
+
+- Backgrounds go in `DigitalSection`'s `atmosphere` prop, never as children —
+  children live inside the `--grid-max` container and would clip.
+- Sections carry their own opaque surface. The narrative wrappers stay
+  transparent so the film's outro gradient can dissolve the held final frame.
+- Long-running frame loops (particles, globe) gate on `IntersectionObserver`.
+- Content data lives in `src/data/digital.ts`, never inline in components.
+
+**Tone rhythm.** Thirteen dark aurora sections in a row is visual fatigue, so
+`BusinessResults` and `TechStack` use `tone="light"` (`.tone-light` re-declares the
+theme tokens, so children need no light-mode variants). Keep the light beats
+spread apart — one per half — and never hardcode `text-white` in a section that
+might become light.
+
+**Interactions must survive touch.** Hover-only reveals are dead weight on
+tablets and touch laptops, which are a real share of enterprise traffic:
+`ServicesEcosystem` pins on click, `TechStack` is driven by tabs and buttons.
+Controls that imply media (play triangles) are only allowed where an asset
+actually exists — otherwise they are links, or nothing.
+
+**Trig values in markup must be quantized.** `Math.cos`/`Math.sin` are
+implementation-defined, so Node and the browser disagree in the final bits and
+React throws a hydration mismatch on `left: 30.5%` vs `30.499999999999982%`. Use
+`quantize()` from `lib/utils` (see `ServicesEcosystem`, `TechOrbit`).
+
+### Protecting the scrubber (read before touching the homepage)
+
+`useFrameScrubber` seeks and draws the film on every animation frame. Anything
+that competes for the main thread while scrolling shows up directly as a
+stuttering, soft-looking film. Three rules:
+
+1. **Never read layout in a scroll handler.** `scrollHeight`, `offsetHeight`,
+   and `getBoundingClientRect()` force a synchronous layout, and the scrubber is
+   mutating styles every frame, so the layout is always dirty. Prefer
+   `IntersectionObserver` (`useFilmInView`); where a number is unavoidable,
+   measure on mount and resize and cache it (see the progress handler in
+   `PremiumNavbar`).
+2. **Nothing frame-derived may reach the business sections.** `CinematicHome`
+   re-renders per frame, so `BusinessNarrative`, `SupportingNarrative`, and
+   `PremiumNavbar` are `memo`'d and take no frame props. Passing `currentFrame`
+   into any of them re-reconciles that whole tree ~60×/s.
+3. **Off-screen work must actually stop.** Sections use `.cv-auto`
+   (`content-visibility: auto`), and any `useScroll`-driven stage must only mount
+   near the viewport — `useScroll` measures its target on every scroll event.
+4. **No blur over the film.** `backdrop-filter` and large `filter: blur()` force
+   re-rasterisation of huge surfaces every frame; that was the cause of the
+   "blurry, laggy scrub" regression. Use opaque surfaces and gradient overlays.
+
+Off-screen, `CinematicCanvas` goes `invisible` (bitmap retained, so scrolling
+back up shows the held frame instantly) and `AtmosphereLayer` unmounts entirely —
+it is four gradient layers with nothing to show.
+
+### Scroll reveal system
+
+`globals.css` owns it. Elements set `data-reveal="pending" | "shown"` plus
+optional `--reveal-from` / `--reveal-delay`:
+
+```css
+@media (scripting: enabled) {
+  [data-reveal="pending"] { opacity: 0; transform: var(--reveal-from, translateY(18px)); }
+}
+```
+
+The hidden state is scoped to `scripting: enabled` on purpose — a crawler, a
+headless render, or a JS-disabled visitor gets the visible default instead of a
+blank section. **Never hide reveal content with an inline `opacity: 0`.**
 
 ---
 
