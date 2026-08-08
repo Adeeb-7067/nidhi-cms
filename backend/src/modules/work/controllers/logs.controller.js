@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { dailyLogsTable, usersTable, projectsTable, projectMembersTable, getNextSequence, notificationsTable } from "../../../models/schema/index.js";
 import { notifyUser } from "../../../lib/realtime.js";
 import { projectCompanyId } from "../../access/services/company-access.js";
@@ -343,11 +344,35 @@ async function patchLogsById(req, res) {
     dailySummary
   });
 }
+async function deleteLogsById(req, res) {
+  if (!req.user || req.user.role !== "super_admin") {
+    forbidden("Only super admin can delete log entries.");
+  }
+  const rawId = req.params["id"];
+  const numericId = parseInt(rawId, 10);
+  const conditions = [];
+  if (Number.isFinite(numericId)) {
+    conditions.push({ id: numericId });
+  }
+  if (mongoose.Types.ObjectId.isValid(rawId)) {
+    conditions.push({ _id: rawId });
+  }
+  if (conditions.length === 0) {
+    conditions.push({ id: rawId });
+  }
+  const query = conditions.length === 1 ? conditions[0] : { $or: conditions };
+  const existing = await dailyLogsTable.findOne(query);
+  if (!existing) notFound("Log");
+  await dailyLogsTable.deleteOne({ _id: existing._id });
+  res.json({ message: "Log entry deleted successfully", id: existing.id ?? rawId });
+}
 export {
   getLogs,
   getLogsComplianceCalendar,
   getLogsDailySummary,
   getLogsById,
   patchLogsById,
-  postLogs
+  postLogs,
+  deleteLogsById
 };
+

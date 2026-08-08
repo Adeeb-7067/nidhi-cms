@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useListMyLogs,
   useListProjects,
   useListUsers,
+  useDeleteLog,
   getListUsersQueryKey,
   getListProjectsQueryKey,
   useGetLogComplianceCalendar,
@@ -34,6 +36,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { DAILY_LOG_VIRTUAL_PROJECTS } from "@/lib/daily-log-project-options";
 import { CmsDataTable, type CmsColumn } from "@/components/cms";
 import { useClientPagination, useTablePagination } from "@/lib/table-pagination";
@@ -56,6 +68,7 @@ import {
   Filter,
   RotateCcw,
   Search,
+  Trash2,
   TrendingUp,
   User,
   Users,
@@ -91,7 +104,24 @@ export function AdminTeamLogsPanel() {
   const [search, setSearch] = useState("");
   const [selectedLog, setSelectedLog] = useState<DailyLog | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [deletingLog, setDeletingLog] = useState<DailyLog | null>(null);
   const { page, setPage, resetPage, limit, apiLimit, setLimit } = useTablePagination();
+
+  const deleteLogMutation = useDeleteLog();
+  const queryClient = useQueryClient();
+
+  const handleDeleteLog = async (log: DailyLog) => {
+    try {
+      await deleteLogMutation.mutateAsync(log.id);
+      toast.success("Log entry deleted successfully.");
+      setDeletingLog(null);
+      void refetch();
+      void refetchStats();
+      void queryClient.invalidateQueries();
+    } catch {
+      toast.error("Failed to delete log entry.");
+    }
+  };
 
   const openLogDetail = (log: DailyLog) => {
     setSelectedLog(log);
@@ -150,8 +180,8 @@ export function AdminTeamLogsPanel() {
     resetPage();
   }, [month, year, developerFilterId, projectFilterId, categoryFilter, search, resetPage]);
 
-  const { data, isLoading, isFetching } = useListMyLogs(baseListParams);
-  const { data: statsData, isLoading: statsLoading } = useListMyLogs(statsListParams);
+  const { data, isLoading, isFetching, refetch } = useListMyLogs(baseListParams);
+  const { data: statsData, isLoading: statsLoading, refetch: refetchStats } = useListMyLogs(statsListParams);
 
   const complianceDeveloperId = useMemo(() => {
     if (!developerFilterId) return undefined;
@@ -351,6 +381,27 @@ export function AdminTeamLogsPanel() {
             </Badge>
           )}
         </>
+      ),
+    },
+    {
+      id: "actions",
+      header: "Actions",
+      align: "right",
+      className: "w-[70px]",
+      cell: (log) => (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          title="Delete log entry"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDeletingLog(log);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       ),
     },
   ], []);
@@ -625,7 +676,33 @@ export function AdminTeamLogsPanel() {
           setDetailOpen(open);
           if (!open) setSelectedLog(null);
         }}
+        onDelete={(log) => {
+          setDetailOpen(false);
+          setSelectedLog(null);
+          setDeletingLog(log);
+        }}
       />
+
+      <AlertDialog open={Boolean(deletingLog)} onOpenChange={(open) => !open && setDeletingLog(null)}>
+        <AlertDialogContent className="bg-card border-border">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Log Entry?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this log entry (&quot;{deletingLog?.taskTitle}&quot; by {deletingLog?.developerName})? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingLog && handleDeleteLog(deletingLog)}
+              disabled={deleteLogMutation.isPending}
+            >
+              {deleteLogMutation.isPending ? "Deleting..." : "Delete Log"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PortalPageShell>
   );
 }

@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import {
   hrmAuditLogsTable,
   payrollSlipsTable,
@@ -1032,6 +1033,31 @@ async function getAuditLogs(req, res) {
   });
 }
 
+async function deleteAuditLog(req, res) {
+  if (req.user.role !== "super_admin") {
+    return res.status(403).json({ error: "Only super admin can delete audit log entries." });
+  }
+  const rawId = req.params.id;
+  const numericId = parseInt(rawId, 10);
+  const conditions = [];
+  if (Number.isFinite(numericId)) {
+    conditions.push({ id: numericId });
+  }
+  if (mongoose.Types.ObjectId.isValid(rawId)) {
+    conditions.push({ _id: rawId });
+  }
+  if (conditions.length === 0) {
+    conditions.push({ id: rawId });
+  }
+  const query = conditions.length === 1 ? conditions[0] : { $or: conditions };
+  const existing = await hrmAuditLogsTable.findOne(query);
+  if (!existing) {
+    return res.status(404).json({ error: "Audit log not found" });
+  }
+  await hrmAuditLogsTable.deleteOne({ _id: existing._id });
+  res.json({ message: "Audit log entry deleted successfully", id: rawId });
+}
+
 export {
   getDepartments,
   postDepartment,
@@ -1147,4 +1173,5 @@ export {
   postExperienceLetterSend,
   deleteExperienceLetter,
   getAuditLogs,
+  deleteAuditLog,
 };

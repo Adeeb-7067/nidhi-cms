@@ -146,6 +146,7 @@ router.post("/hrm/employees/:id/send-credentials", perm("hrm_employees", "edit")
 router.patch("/hrm/users/:userId/profile", perm("hrm_employees", "edit"), asyncHandler(hrm.patchUserHrmProfile));
 
 router.get("/hrm/audit", perm("hrm_audit", "view"), asyncHandler(hrm.getAuditLogs));
+router.delete("/hrm/audit/:id", asyncHandler(hrm.deleteAuditLog));
 
 router.get("/hrm/assets", perm("hrm_assets", "view"), asyncHandler(hrm.getAssets));
 router.get("/hrm/assets/:id", perm("hrm_assets", "view"), asyncHandler(hrm.getAsset));

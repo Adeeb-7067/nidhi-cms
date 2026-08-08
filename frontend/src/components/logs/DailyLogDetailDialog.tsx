@@ -12,6 +12,8 @@ import {
 import { cn } from "@/lib/utils";
 import { formatDailyLogCategory } from "@/lib/daily-log-work-categories";
 import { formatDistanceToNow } from "date-fns";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 import {
   Briefcase,
   Calendar,
@@ -21,6 +23,7 @@ import {
   User,
   AlertTriangle,
   ArrowRight,
+  Trash2,
 } from "lucide-react";
 
 function formatLogDateLong(logDate: string) {
@@ -89,11 +92,16 @@ export function DailyLogDetailDialog({
   log,
   open,
   onOpenChange,
+  onDelete,
 }: {
   log: DailyLog | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDelete?: (log: DailyLog) => void;
 }) {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
+
   if (!log) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -196,19 +204,31 @@ export function DailyLogDetailDialog({
         </div>
 
         <div className="shrink-0 border-t border-border/60 bg-muted/20 px-6 py-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            Created {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })}
-          </span>
-          {log.updatedAt !== log.createdAt && (
-            <span>Updated {formatDistanceToNow(new Date(log.updatedAt), { addSuffix: true })}</span>
-          )}
-          {(log.blockers || log.nextDayPlan) && (
-            <span className="inline-flex items-center gap-1 text-amber-600">
-              <AlertTriangle className="h-3 w-3" />
-              Has notes
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              Created {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })}
             </span>
-          )}
+            {log.updatedAt !== log.createdAt && (
+              <span>Updated {formatDistanceToNow(new Date(log.updatedAt), { addSuffix: true })}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isSuperAdmin && onDelete && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="h-7 text-xs px-2.5"
+                onClick={() => {
+                  onDelete(log);
+                }}
+              >
+                <Trash2 className="mr-1 h-3.5 w-3.5" />
+                Delete Entry
+              </Button>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>

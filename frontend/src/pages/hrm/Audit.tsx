@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
-import { ScrollText, ShieldAlert, Activity, Hash } from "lucide-react";
+import { ScrollText, ShieldAlert, Activity, Hash, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AdvancedTable, type Column } from "@/components/ui/advanced-table";
 import { PortalTablePanel } from "@/components/layout/portal-page-kit";
@@ -15,19 +16,47 @@ import {
 } from "@/modules/hrm/components";
 import { formatAuditWhen } from "@/modules/hrm/hrm-table-columns";
 import { HrmPageKpiRow } from "@/modules/hrm/page-kpis";
-import { useHrmAuditLogs } from "@/api/hrm";
+import { useHrmAuditLogs, useDeleteHrmAuditLog } from "@/api/hrm";
 import type { HrmAuditLog } from "@/modules/hrm/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function HrmAuditPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "super_admin";
   const [actionFilter, setActionFilter] = useState("");
   const [severityFilter, setSeverityFilter] = useState("all");
+  const [deletingLog, setDeletingLog] = useState<HrmAuditLog | null>(null);
+
   const { data, isLoading, refetch, isFetching } = useHrmAuditLogs({
     ...(actionFilter.trim() ? { action: actionFilter.trim() } : {}),
     ...(severityFilter !== "all" ? { severity: severityFilter } : {}),
   });
+  const deleteMutation = useDeleteHrmAuditLog();
 
   const logs = data?.logs ?? [];
   const today = format(new Date(), "yyyy-MM-dd");
+
+  const handleDelete = async (log: HrmAuditLog) => {
+    try {
+      await deleteMutation.mutateAsync(log.id);
+      toast.success("Audit log entry deleted.");
+      setDeletingLog(null);
+      void refetch();
+    } catch {
+      toast.error("Failed to delete audit log.");
+    }
+  };
 
   const kpiItems = useMemo(() => {
     const todayLogs = logs.filter((l) => l.createdAt?.startsWith(today)).length;
@@ -93,7 +122,26 @@ export default function HrmAuditPage() {
       ),
       exportValue: (log) => log.ipAddress ?? "",
     },
-  ], []);
+    ...(isSuperAdmin
+      ? [
+          {
+            id: "actions",
+            header: "Actions",
+            cell: (log: HrmAuditLog) => (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                title="Delete audit entry"
+                onClick={() => setDeletingLog(log)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            ),
+          },
+        ]
+      : []),
+  ], [isSuperAdmin]);
 
   return (
     <HrmGate module="audit">
@@ -137,6 +185,27 @@ export default function HrmAuditPage() {
             viewStorageKey="hrm-audit"
           />
         </PortalTablePanel>
+
+        <AlertDialog open={Boolean(deletingLog)} onOpenChange={(open) => !open && setDeletingLog(null)}>
+          <AlertDialogContent className="bg-card border-border">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Audit Log Entry?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete this audit log entry (&quot;{deletingLog?.action}&quot;)? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={() => deletingLog && handleDelete(deletingLog)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? "Deleting..." : "Delete Log"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </HrmPageShell>
     </HrmGate>
   );
