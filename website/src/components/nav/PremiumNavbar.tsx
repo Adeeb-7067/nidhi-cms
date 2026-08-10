@@ -137,23 +137,13 @@ export const PremiumNavbar = memo(function PremiumNavbar({
           >
             <div
               className={cn(
-                "relative rounded-2xl border transition-all duration-400",
-                // Cinematic home: never backdrop-blur over the scrub canvas —
-                // blur of a fullscreen changing bitmap is the lag + soft look.
-                variant === "cinematic"
-                  ? "bg-[#070A10]/92"
-                  : "backdrop-blur-xl",
-                scrolled && variant !== "cinematic" ? "shadow-[var(--nav-shadow)] backdrop-blur-2xl" : "",
-                scrolled && variant === "cinematic" ? "shadow-[var(--nav-shadow)] bg-[#070A10]/96" : "",
+                "relative rounded-2xl border transition-all duration-300 backdrop-blur-xl shadow-[var(--nav-shadow)]",
+                scrolled ? "backdrop-blur-2xl shadow-lg" : "",
               )}
-              style={
-                variant === "cinematic"
-                  ? { borderColor: "var(--nav-border)" }
-                  : {
-                      background: scrolled ? "var(--nav-bg-scrolled)" : "var(--nav-bg)",
-                      borderColor: "var(--nav-border)",
-                    }
-              }
+              style={{
+                background: scrolled ? "var(--nav-bg-scrolled)" : "var(--nav-bg)",
+                borderColor: "var(--nav-border)",
+              }}
             >
               <div
                 className={cn(
