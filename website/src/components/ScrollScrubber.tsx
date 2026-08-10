@@ -11,6 +11,7 @@ import { ChapterStage } from "./sections/ChapterStage";
 interface ScrollScrubberProps {
   currentFrame: number;
   setCurrentFrame: (frame: number) => void;
+  setScrubProgress?: (progress: number) => void;
   totalFrames: number;
   isLoaded: boolean;
 }
@@ -18,25 +19,20 @@ interface ScrollScrubberProps {
 export function ScrollScrubber({
   currentFrame,
   setCurrentFrame,
+  setScrubProgress,
   totalFrames,
   isLoaded,
 }: ScrollScrubberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const setFrameRef = useRef(setCurrentFrame);
+  const setProgressRef = useRef(setScrubProgress);
   const reduced = usePrefersReducedMotion();
-  /**
-   * Chapter overlays are `position: fixed`, so they must only exist while the
-   * film is on screen. ScrollTrigger's `isActive` is the wrong signal for that:
-   * on first refresh at scroll 0, GSAP often reports inactive for a tick (or
-   * forever if layout hasn't settled), which unmounted the opening title and
-   * left a naked building. `useFilmInView` is layout-stable and already gates
-   * the canvas and atmosphere.
-   */
   const filmInView = useFilmInView();
 
   useEffect(() => {
     setFrameRef.current = setCurrentFrame;
-  }, [setCurrentFrame]);
+    setProgressRef.current = setScrubProgress;
+  }, [setCurrentFrame, setScrubProgress]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -55,11 +51,15 @@ export function ScrollScrubber({
         trigger: containerRef.current,
         start: "top top",
         end: "bottom bottom",
-        scrub: prefersReduced ? true : 0.08,
+        scrub: 0.15,
         invalidateOnRefresh: true,
-        onUpdate: () => {
-          const next = Math.round(obj.frame);
-          setFrameRef.current(Math.min(totalFrames, Math.max(FRAME_START, next)));
+        onUpdate: (self) => {
+          if (setProgressRef.current) {
+            setProgressRef.current(self.progress);
+          } else {
+            const next = Math.round(obj.frame);
+            setFrameRef.current(Math.min(totalFrames, Math.max(FRAME_START, next)));
+          }
         },
       },
     });
@@ -79,23 +79,17 @@ export function ScrollScrubber({
 
   /*
     Track length is the film's whole UX budget.
-
-    At the old factor of 800 this resolved to ~2868vh — about 29 screens of
-    scrolling, which is why the business case used to be unreachable. 420 puts it
-    near 1500vh (~15 screens) for the same 717 frames.
-
-    Do not push this much lower: shorter track means fewer scroll pixels per
-    frame, so frame steps get coarser and the scrub starts to judder. ~18px per
-    frame is about the floor before smoothness suffers.
+    900vh (~9 screens) gives comfortable room for all 9 chapters without
+    excessive scrolling fatigue or double-smoothing lag.
   */
   const usable = TOTAL_FRAMES - FRAME_START + 1;
   const heightVh = reduced
-    ? Math.max(chapters.length * 100, 800)
-    : Math.max(1000, Math.round((usable / 200) * 420));
-  // Phones: shorter scrub track so the business case is reachable without endless swipe.
+    ? Math.max(chapters.length * 80, 600)
+    : Math.max(750, Math.round((usable / 200) * 280));
+  // Phones: shorter scrub track so film chapters cycle smoothly on touch flicks.
   const mobileHeightVh = reduced
-    ? Math.max(chapters.length * 85, 640)
-    : Math.max(720, Math.round(heightVh * 0.62));
+    ? Math.max(chapters.length * 60, 420)
+    : Math.max(480, Math.round(heightVh * 0.6));
 
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
   const showChapter =

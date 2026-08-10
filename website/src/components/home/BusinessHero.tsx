@@ -136,3 +136,5 @@ export function BusinessHero() {
     </section>
   );
 }
+
+export default BusinessHero;

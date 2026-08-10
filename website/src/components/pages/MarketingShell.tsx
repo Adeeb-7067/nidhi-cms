@@ -1,3 +1,6 @@
+"use client";
+
+import { useLenis } from "@/hooks/useLenis";
 import { PremiumNavbar } from "@/components/nav/PremiumNavbar";
 import { Breadcrumbs } from "@/components/nav/Breadcrumbs";
 import { SiteFooter } from "@/components/nav/SiteFooter";
@@ -16,6 +19,8 @@ export function MarketingShell({
   children: React.ReactNode;
   crumbs?: { label: string; href: string }[];
 }) {
+  useLenis();
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <PremiumNavbar variant="site" />

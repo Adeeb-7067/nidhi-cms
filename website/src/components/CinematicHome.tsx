@@ -37,6 +37,7 @@ export default function CinematicHome() {
     nativeVideo,
     currentFrame,
     setCurrentFrame,
+    setScrubProgress,
     totalFrames,
     isLoaded,
     loadProgress,
@@ -59,6 +60,7 @@ export default function CinematicHome() {
         <ScrollScrubber
           currentFrame={currentFrame}
           setCurrentFrame={setCurrentFrame}
+          setScrubProgress={setScrubProgress}
           totalFrames={totalFrames}
           isLoaded={isLoaded}
         />

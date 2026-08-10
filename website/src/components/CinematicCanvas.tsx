@@ -28,19 +28,16 @@ export function CinematicCanvas({
       )}
       aria-hidden
     >
-      {/* Poster / reduced-motion JPG fallback only — not used once native video is live. */}
+      {/* Dual-layer rendering: canvas renders preloaded JPG frames instantly while native video seeks */}
       <canvas
         ref={canvasRef}
-        className={cn(
-          "absolute inset-0 h-full w-full",
-          nativeVideo ? "invisible" : "visible",
-        )}
+        className="absolute inset-0 h-full w-full object-cover"
       />
       <video
         ref={videoRef}
         className={cn(
-          "absolute inset-0 h-full w-full object-cover",
-          nativeVideo ? "visible" : "invisible",
+          "absolute inset-0 h-full w-full object-cover transition-opacity duration-300",
+          nativeVideo ? "opacity-100" : "opacity-0 pointer-events-none",
         )}
         muted
         playsInline

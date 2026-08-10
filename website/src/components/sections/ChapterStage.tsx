@@ -238,18 +238,10 @@ function GlassCards({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
         );
 
         const className =
-          "group relative block overflow-hidden rounded-xl border border-white/18 bg-[#060911]/85 backdrop-blur-md p-3.5 shadow-xl transition-[transform,border-color,box-shadow,background] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-white/35 hover:bg-[#0a0f1e]/95 hover:shadow-[0_20px_50px_-28px_rgba(43,107,255,0.55)] md:p-4";
+          "group relative block overflow-hidden rounded-xl border border-white/18 bg-[#060911]/92 p-3.5 shadow-xl transition-all duration-300 ease-out hover:-translate-y-1 hover:border-brand-cyan/40 hover:bg-[#0a0f1e]/98 hover:shadow-[0_20px_50px_-28px_rgba(0,217,255,0.35)] [contain:layout_paint] md:p-4";
 
         return card.href ? (
           <Link key={card.title} href={card.href} className={className}>
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-              style={{
-                background:
-                  "radial-gradient(280px 120px at 100% 0%, color-mix(in oklab, var(--accent-current) 28%, transparent), transparent 70%)",
-              }}
-            />
             <span className="relative">{inner}</span>
           </Link>
         ) : (
@@ -275,8 +267,10 @@ function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
                   src={card.image}
                   alt={card.title}
                   fill
-                  sizes="280px"
-                  className="object-cover transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.06]"
+                  sizes="(max-width: 768px) 220px, 240px"
+                  decoding="async"
+                  loading="eager"
+                  className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.05]"
                 />
               ) : (
                 <div className="h-full w-full bg-gradient-to-br from-brand-blue/30 to-brand-cyan/10" />
@@ -315,7 +309,7 @@ function ProjectRail({ cards }: { cards: NonNullable<Chapter["cards"]> }) {
         );
 
         const className =
-          "group flex w-[min(220px,70vw)] shrink-0 flex-col overflow-hidden rounded-xl border border-white/18 bg-[#070A10]/95 backdrop-blur-md shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-[border-color,box-shadow,transform] duration-500 hover:-translate-y-1 hover:border-white/35 hover:shadow-[0_24px_60px_-24px_rgba(43,107,255,0.45)] md:w-[240px]";
+          "group flex w-[min(220px,70vw)] shrink-0 flex-col overflow-hidden rounded-xl border border-white/18 bg-[#070A10]/95 shadow-[0_16px_40px_-28px_rgba(0,0,0,0.9)] transition-all duration-300 ease-out hover:-translate-y-1 hover:border-brand-cyan/40 hover:shadow-[0_24px_60px_-24px_rgba(0,217,255,0.35)] [contain:layout_paint] md:w-[240px]";
 
         return card.href ? (
           <Link key={card.title} href={card.href} className={className}>

@@ -28,26 +28,34 @@ function chapterEnvelope(
   start: number,
   end: number,
   fadeFrames: number,
-): { opacity: number; progress: number; yOffset: number; scale: number } {
+): { opacity: number; progress: number } {
   if (frame < start || frame > end) {
-    return { opacity: 0, progress: 0, yOffset: 16, scale: 0.99 };
+    return { opacity: 0, progress: 0 };
   }
 
   const span = Math.max(1, end - start);
-  const edge = Math.min(fadeFrames, Math.max(4, Math.floor(span / 4)));
+  const edge = Math.min(fadeFrames * 1.5, Math.max(8, Math.floor(span * 0.25)));
+  const enterEnd = start + edge;
   const exitStart = end - edge;
 
-  if (frame <= exitStart) {
-    return { opacity: 1, progress: 1, yOffset: 0, scale: 1 };
+  // Entrance cross-dissolve (0 -> 1)
+  if (frame < enterEnd) {
+    const t = (frame - start) / edge;
+    const opacity = easeOutCubic(Math.min(1, Math.max(0, t)));
+    return { opacity, progress: opacity };
   }
 
+  // Steady middle (1)
+  if (frame <= exitStart) {
+    return { opacity: 1, progress: 1 };
+  }
+
+  // Exit cross-dissolve (1 -> 0)
   const t = (end - frame) / edge;
   const opacity = easeOutCubic(Math.min(1, Math.max(0, t)));
   return {
     opacity,
     progress: opacity,
-    yOffset: -12 * (1 - opacity),
-    scale: 0.99 + 0.01 * opacity,
   };
 }
 
@@ -64,7 +72,7 @@ export function SectionWrapper({
     return null;
   }
 
-  const { opacity, progress, yOffset, scale } = chapterEnvelope(
+  const { opacity, progress } = chapterEnvelope(
     currentFrame,
     startFrame,
     endFrame,
@@ -80,13 +88,12 @@ export function SectionWrapper({
   return (
     <div
       className={cn(
-        "pointer-events-none fixed inset-0 z-10 flex h-[100dvh] w-full flex-col transform-gpu",
+        "pointer-events-none fixed inset-0 z-10 flex h-[100dvh] w-full flex-col transform-gpu transition-opacity duration-300 ease-out",
         className,
       )}
       style={{
         opacity,
-        transform: `translate3d(0, ${yOffset}px, 0) scale(${scale})`,
-        willChange: "opacity, transform",
+        willChange: "opacity",
         ["--accent-current" as string]: atm?.accent ?? "var(--brand-blue)",
       }}
       aria-hidden={!interactive}

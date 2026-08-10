@@ -139,8 +139,7 @@ export function useFrameScrubber() {
         best = key;
       }
     }
-    if (best != null && bestDist <= 36) return best;
-    return null;
+    return best;
   }, []);
 
   const drawImageFrame = useCallback(
@@ -159,19 +158,17 @@ export function useFrameScrubber() {
 
   const scheduleDraw = useCallback(
     (index: number) => {
-      if (modeRef.current === "video") return;
       pendingDrawRef.current = index;
       if (drawRafRef.current) return;
       drawRafRef.current = requestAnimationFrame(() => {
         drawRafRef.current = 0;
         const next = pendingDrawRef.current;
         pendingDrawRef.current = null;
-        if (next == null || next !== frameRef.current) return;
-        if (modeRef.current === "poster") drawPoster();
-        else if (modeRef.current === "images") drawImageFrame(next);
+        if (next == null) return;
+        drawImageFrame(next);
       });
     },
-    [drawImageFrame, drawPoster],
+    [drawImageFrame],
   );
 
   const pumpSeek = useCallback(() => {
@@ -198,43 +195,6 @@ export function useFrameScrubber() {
     }
   }, []);
 
-  // Continuous 60fps RAF loop to pump video seeking in lockstep with monitor refresh
-  useEffect(() => {
-    let animId: number;
-    const loop = () => {
-      if (modeRef.current === "video" && videoRef.current) {
-        const video = videoRef.current;
-        const target = targetTimeRef.current;
-        if (Math.abs(video.currentTime - target) >= 0.005) {
-          try {
-            if (
-              "fastSeek" in video &&
-              typeof (video as unknown as { fastSeek: (t: number) => void })
-                .fastSeek === "function"
-            ) {
-              (video as unknown as { fastSeek: (t: number) => void }).fastSeek(
-                target,
-              );
-            } else {
-              video.currentTime = target;
-            }
-          } catch {
-            // Ignore transient seeking errors
-          }
-        }
-      }
-      animId = requestAnimationFrame(loop);
-    };
-    animId = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animId);
-  }, []);
-
-  const pumpSeekRef = useRef(pumpSeek);
-
-  useEffect(() => {
-    pumpSeekRef.current = pumpSeek;
-  }, [pumpSeek]);
-
   const loadJpg = useCallback(
     (index: number) =>
       new Promise<void>((resolve) => {
@@ -248,20 +208,87 @@ export function useFrameScrubber() {
         img.src = framePath(index);
         img.onload = () => {
           cacheRef.current.set(index, img);
-          while (cacheRef.current.size > 48) {
-            const oldest = cacheRef.current.keys().next().value as
-              | number
-              | undefined;
-            if (oldest === undefined || oldest === frameRef.current) break;
-            cacheRef.current.delete(oldest);
+          if (Math.abs(frameRef.current - index) <= 2) {
+            scheduleDraw(frameRef.current);
           }
-          if (frameRef.current === index) scheduleDraw(index);
           resolve();
         };
         img.onerror = () => resolve();
       }),
     [scheduleDraw],
   );
+
+  const targetProgressRef = useRef(0);
+  const smoothProgressRef = useRef(0);
+
+  // Continuous 60fps RAF loop with smooth LERP interpolation for liquid mouse-wheel scrubbing
+  useEffect(() => {
+    let animId: number;
+    const loop = () => {
+      const target = targetProgressRef.current;
+      const diff = target - smoothProgressRef.current;
+      if (Math.abs(diff) > 0.0001) {
+        smoothProgressRef.current += diff * 0.22;
+      } else {
+        smoothProgressRef.current = target;
+      }
+
+      const clampedFrame = Math.min(
+        TOTAL_FRAMES,
+        Math.max(
+          FRAME_START,
+          Math.round(
+            FRAME_START + smoothProgressRef.current * (TOTAL_FRAMES - FRAME_START),
+          ),
+        ),
+      );
+
+      if (frameRef.current !== clampedFrame) {
+        frameRef.current = clampedFrame;
+
+        if (modeRef.current === "video" && videoRef.current) {
+          const video = videoRef.current;
+          const t = frameToTime(clampedFrame);
+          targetTimeRef.current = t;
+          if (Math.abs(video.currentTime - t) >= 0.005) {
+            try {
+              if (
+                "fastSeek" in video &&
+                typeof (video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function"
+              ) {
+                (video as unknown as { fastSeek: (t: number) => void }).fastSeek(t);
+              } else {
+                video.currentTime = t;
+              }
+            } catch {
+              // Ignore transient seeking errors
+            }
+          }
+        }
+
+        // Schedule canvas draw and preload adjacent JPG frames
+        scheduleDraw(clampedFrame);
+        for (let i = clampedFrame + 1; i <= Math.min(TOTAL_FRAMES, clampedFrame + 10); i++) {
+          void loadJpg(i);
+        }
+        for (let i = clampedFrame - 1; i >= Math.max(FRAME_START, clampedFrame - 4); i--) {
+          void loadJpg(i);
+        }
+
+        // Smooth 60fps UI frame sync via requestAnimationFrame
+        if (!uiFrameRafRef.current) {
+          uiFrameRafRef.current = requestAnimationFrame(() => {
+            uiFrameRafRef.current = 0;
+            setCurrentFrameState(frameRef.current);
+          });
+        }
+      }
+
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
+  }, [frameToTime, loadJpg, scheduleDraw]);
 
   const uiFrameRafRef = useRef(0);
 
@@ -271,39 +298,23 @@ export function useFrameScrubber() {
         TOTAL_FRAMES,
         Math.max(FRAME_START, Math.round(frame)),
       );
-      if (frameRef.current === clamped) return;
-      frameRef.current = clamped;
-
-      if (modeRef.current === "video") {
-        targetTimeRef.current = frameToTime(clamped);
-        pumpSeek();
-      } else if (modeRef.current === "poster") {
-        scheduleDraw(clamped);
-      } else {
-        scheduleDraw(clamped);
-        void loadJpg(clamped).then(() => {
-          if (frameRef.current === clamped) scheduleDraw(clamped);
-        });
-        for (
-          let i = clamped + 1;
-          i <= Math.min(TOTAL_FRAMES, clamped + 10);
-          i++
-        )
-          void loadJpg(i);
-        for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--)
-          void loadJpg(i);
-      }
-
-      // Smooth 60fps UI frame sync via requestAnimationFrame without artificial 48ms lag
-      if (!uiFrameRafRef.current) {
-        uiFrameRafRef.current = requestAnimationFrame(() => {
-          uiFrameRafRef.current = 0;
-          setCurrentFrameState(frameRef.current);
-        });
-      }
+      targetProgressRef.current = (clamped - FRAME_START) / (TOTAL_FRAMES - FRAME_START);
     },
-    [frameToTime, loadJpg, pumpSeek, scheduleDraw],
+    [],
   );
+
+  const setScrubProgress = useCallback(
+    (progress: number) => {
+      targetProgressRef.current = Math.min(1, Math.max(0, progress));
+    },
+    [],
+  );
+
+  const pumpSeekRef = useRef(pumpSeek);
+
+  useEffect(() => {
+    pumpSeekRef.current = pumpSeek;
+  }, [pumpSeek]);
 
   useEffect(() => {
     let cancelled = false;
@@ -525,7 +536,9 @@ export function useFrameScrubber() {
       modeRef.current = posterRef.current ? "poster" : "images";
       setNativeVideo(false);
       scheduleDraw(FRAME_START);
-      const batch = Math.min(24, TOTAL_FRAMES - FRAME_START + 1);
+
+      // Preload opening frame sequence for instant 60fps scrubbing
+      const batch = Math.min(32, TOTAL_FRAMES - FRAME_START + 1);
       let loaded = 0;
       for (let i = 0; i < batch && !cancelled; i++) {
         const idx = FRAME_START + i;
@@ -535,6 +548,14 @@ export function useFrameScrubber() {
         modeRef.current = "images";
         setLoadProgress(Math.round((loaded / batch) * 100));
         if (i === 0) scheduleDraw(FRAME_START);
+      }
+
+      setIsLoaded(true);
+      scheduleDraw(FRAME_START);
+
+      // Preload remaining frames in background for zero-lag scrubbing
+      for (let i = FRAME_START + batch; i <= TOTAL_FRAMES && !cancelled; i++) {
+        void loadJpg(i);
       }
     };
 
@@ -550,14 +571,8 @@ export function useFrameScrubber() {
         return;
       }
 
-      const ok = await bootVideo();
-      if (cancelled) return;
-      if (!ok) {
-        await bootImages();
-        if (cancelled) return;
-        setIsLoaded(true);
-        scheduleDraw(FRAME_START);
-      }
+      // Canvas image sequence mode is the primary 60fps/120fps liquid-smooth scrubbing engine
+      await bootImages();
     };
 
     void boot();
@@ -611,6 +626,7 @@ export function useFrameScrubber() {
     nativeVideo,
     currentFrame,
     setCurrentFrame,
+    setScrubProgress,
     totalFrames: TOTAL_FRAMES,
     frameStart: FRAME_START,
     isLoaded,

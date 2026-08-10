@@ -422,7 +422,7 @@ export const chapters: Chapter[] = [
         href: "/work/nexus-ai-platform",
         meta: "Finance · AI",
         image:
-          "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=1200&q=80",
+          "https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=500&q=70",
         metric: "2.3M",
         metricLabel: "transactions / sec",
       },
@@ -432,7 +432,7 @@ export const chapters: Chapter[] = [
         href: "/work/orbit-collaboration-suite",
         meta: "Enterprise · SaaS",
         image:
-          "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80",
+          "https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=500&q=70",
         metric: "500K",
         metricLabel: "daily active users",
       },
@@ -442,7 +442,7 @@ export const chapters: Chapter[] = [
         href: "/work/cloudforge-infrastructure",
         meta: "Cloud · Operations",
         image:
-          "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=1200&q=80",
+          "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=500&q=70",
         metric: "45m",
         metricLabel: "deployment speed",
       },
@@ -458,7 +458,7 @@ export const chapters: Chapter[] = [
     subtitle: "From modernizing legacy operations to launching new products — we engineer it with you.",
     body: "Partner with a technology team that takes complete ownership of your business outcomes and builds software designed for long-term growth.",
     start: 641,
-    end: 720,
+    end: 705,
     align: "center",
     layout: "finale",
     atmosphere: "finale",
