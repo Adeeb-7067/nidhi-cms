@@ -537,25 +537,26 @@ export function useFrameScrubber() {
       setNativeVideo(false);
       scheduleDraw(FRAME_START);
 
-      // Preload opening frame sequence for instant 60fps scrubbing
-      const batch = Math.min(32, TOTAL_FRAMES - FRAME_START + 1);
-      let loaded = 0;
-      for (let i = 0; i < batch && !cancelled; i++) {
-        const idx = FRAME_START + i;
-        await loadJpg(idx);
-        if (cancelled) return;
-        loaded += 1;
-        modeRef.current = "images";
-        setLoadProgress(Math.round((loaded / batch) * 100));
-        if (i === 0) scheduleDraw(FRAME_START);
-      }
+      // 1. Concurrently load initial 12 frames for sub-150ms instant first paint over network
+      const initialChunk = Array.from({ length: 12 }, (_, i) => FRAME_START + i);
+      await Promise.all(initialChunk.map((idx) => loadJpg(idx)));
+      if (cancelled) return;
 
+      modeRef.current = "images";
       setIsLoaded(true);
+      setLoadProgress(100);
       scheduleDraw(FRAME_START);
 
-      // Preload remaining frames in background for zero-lag scrubbing
-      for (let i = FRAME_START + batch; i <= TOTAL_FRAMES && !cancelled; i++) {
-        void loadJpg(i);
+      // 2. Concurrently preload remaining frames in parallel chunks of 16 for zero-lag scrubbing
+      const remainingFrames = Array.from(
+        { length: TOTAL_FRAMES - (FRAME_START + 12) + 1 },
+        (_, i) => FRAME_START + 12 + i,
+      );
+
+      const CHUNK_SIZE = 16;
+      for (let b = 0; b < remainingFrames.length && !cancelled; b += CHUNK_SIZE) {
+        const chunk = remainingFrames.slice(b, b + CHUNK_SIZE);
+        await Promise.all(chunk.map((idx) => loadJpg(idx)));
       }
     };
 
