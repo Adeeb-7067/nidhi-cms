@@ -202,18 +202,34 @@ export function useFrameScrubber() {
           resolve();
           return;
         }
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (!settled) {
+            settled = true;
+            resolve();
+          }
+        }, 1500);
+
         const img = new Image();
         img.decoding = "async";
         (img as unknown as { fetchPriority: string }).fetchPriority = "high";
         img.src = framePath(index);
         img.onload = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
           cacheRef.current.set(index, img);
           if (Math.abs(frameRef.current - index) <= 2) {
             scheduleDraw(frameRef.current);
           }
           resolve();
         };
-        img.onerror = () => resolve();
+        img.onerror = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve();
+        };
       }),
     [scheduleDraw],
   );
@@ -537,9 +553,16 @@ export function useFrameScrubber() {
       setNativeVideo(false);
       scheduleDraw(FRAME_START);
 
+      // Safety fallback to guarantee loading veil hides within 1.2s on any network connection
+      const veilSafetyTimer = setTimeout(() => {
+        setIsLoaded(true);
+        setLoadProgress(100);
+      }, 1200);
+
       // 1. Concurrently load initial 12 frames for sub-150ms instant first paint over network
       const initialChunk = Array.from({ length: 12 }, (_, i) => FRAME_START + i);
       await Promise.all(initialChunk.map((idx) => loadJpg(idx)));
+      clearTimeout(veilSafetyTimer);
       if (cancelled) return;
 
       modeRef.current = "images";
