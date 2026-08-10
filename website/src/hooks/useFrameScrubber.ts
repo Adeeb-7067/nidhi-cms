@@ -561,13 +561,9 @@ export function useFrameScrubber() {
     };
 
     const boot = async () => {
-      // Immediately load and paint FRAME_START (outdoor building façade) for instant identical first paint
-      void loadJpg(FRAME_START).then(() => {
-        if (!cancelled) {
-          modeRef.current = "images";
-          scheduleDraw(FRAME_START);
-        }
-      });
+      // 1. Instantly load poster image so canvas paints background immediately on first network fetch
+      await loadPoster();
+      if (cancelled) return;
 
       if (prefersReducedMotion()) {
         await bootReducedMotion();
@@ -577,7 +573,7 @@ export function useFrameScrubber() {
         return;
       }
 
-      // Canvas image sequence mode is the primary 60fps/120fps liquid-smooth scrubbing engine
+      // 2. Canvas image sequence mode is the primary 60fps/120fps liquid-smooth scrubbing engine
       await bootImages();
     };
 
