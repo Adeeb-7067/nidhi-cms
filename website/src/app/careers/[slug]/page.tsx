@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LeafMarketingPage } from "@/components/pages/SectionPages";
+import { CareersBoardPage } from "@/components/pages/CareersBoardPage";
 import { leafExperienceMetadata } from "@/data/experiences";
 import { sectionSlugs } from "@/data/navigation";
 
@@ -22,5 +23,9 @@ export default async function CareersLeafPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (slug === "open-positions" || slug === "internships") {
+    return <CareersBoardPage isInternshipOnly={slug === "internships"} />;
+  }
   return <LeafMarketingPage sectionId="careers" slug={slug} />;
 }
+

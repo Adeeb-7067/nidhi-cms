@@ -18,18 +18,22 @@ function withBase(path: string) {
 }
 
 function prefersReducedMotion() {
-  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
 }
 
 function shouldUseMobileAsset() {
   if (typeof window === "undefined") return false;
-  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
-    ?.saveData;
+  const saveData = (
+    navigator as Navigator & { connection?: { saveData?: boolean } }
+  ).connection?.saveData;
   const slow =
-    (navigator as Navigator & { connection?: { effectiveType?: string } }).connection
-      ?.effectiveType === "2g" ||
-    (navigator as Navigator & { connection?: { effectiveType?: string } }).connection
-      ?.effectiveType === "slow-2g";
+    (navigator as Navigator & { connection?: { effectiveType?: string } })
+      .connection?.effectiveType === "2g" ||
+    (navigator as Navigator & { connection?: { effectiveType?: string } })
+      .connection?.effectiveType === "slow-2g";
   return Boolean(saveData || slow);
 }
 
@@ -178,8 +182,14 @@ export function useFrameScrubber() {
     if (Math.abs(video.currentTime - target) < 0.005) return;
 
     try {
-      if ("fastSeek" in video && typeof (video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
-        (video as unknown as { fastSeek: (t: number) => void }).fastSeek(target);
+      if (
+        "fastSeek" in video &&
+        typeof (video as unknown as { fastSeek: (t: number) => void })
+          .fastSeek === "function"
+      ) {
+        (video as unknown as { fastSeek: (t: number) => void }).fastSeek(
+          target,
+        );
       } else {
         video.currentTime = target;
       }
@@ -197,8 +207,14 @@ export function useFrameScrubber() {
         const target = targetTimeRef.current;
         if (Math.abs(video.currentTime - target) >= 0.005) {
           try {
-            if ("fastSeek" in video && typeof (video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
-              (video as unknown as { fastSeek: (t: number) => void }).fastSeek(target);
+            if (
+              "fastSeek" in video &&
+              typeof (video as unknown as { fastSeek: (t: number) => void })
+                .fastSeek === "function"
+            ) {
+              (video as unknown as { fastSeek: (t: number) => void }).fastSeek(
+                target,
+              );
             } else {
               video.currentTime = target;
             }
@@ -228,11 +244,14 @@ export function useFrameScrubber() {
         }
         const img = new Image();
         img.decoding = "async";
+        (img as unknown as { fetchPriority: string }).fetchPriority = "high";
         img.src = framePath(index);
         img.onload = () => {
           cacheRef.current.set(index, img);
           while (cacheRef.current.size > 48) {
-            const oldest = cacheRef.current.keys().next().value as number | undefined;
+            const oldest = cacheRef.current.keys().next().value as
+              | number
+              | undefined;
             if (oldest === undefined || oldest === frameRef.current) break;
             cacheRef.current.delete(oldest);
           }
@@ -248,7 +267,10 @@ export function useFrameScrubber() {
 
   const setCurrentFrame = useCallback(
     (frame: number) => {
-      const clamped = Math.min(TOTAL_FRAMES, Math.max(FRAME_START, Math.round(frame)));
+      const clamped = Math.min(
+        TOTAL_FRAMES,
+        Math.max(FRAME_START, Math.round(frame)),
+      );
       if (frameRef.current === clamped) return;
       frameRef.current = clamped;
 
@@ -262,8 +284,14 @@ export function useFrameScrubber() {
         void loadJpg(clamped).then(() => {
           if (frameRef.current === clamped) scheduleDraw(clamped);
         });
-        for (let i = clamped + 1; i <= Math.min(TOTAL_FRAMES, clamped + 10); i++) void loadJpg(i);
-        for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--) void loadJpg(i);
+        for (
+          let i = clamped + 1;
+          i <= Math.min(TOTAL_FRAMES, clamped + 10);
+          i++
+        )
+          void loadJpg(i);
+        for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--)
+          void loadJpg(i);
       }
 
       // Smooth 60fps UI frame sync via requestAnimationFrame without artificial 48ms lag
@@ -354,8 +382,16 @@ export function useFrameScrubber() {
           // Desktop: master first — identical quality to opening the file in a player.
           // Mobile / save-data: lighter scrub encode, then master.
           const sources = mobile
-            ? [withBase(MOBILE_MP4), withBase(MASTER_MP4), withBase(DESKTOP_MP4)]
-            : [withBase(MASTER_MP4), withBase(DESKTOP_MP4), withBase(MOBILE_MP4)];
+            ? [
+                withBase(MOBILE_MP4),
+                withBase(MASTER_MP4),
+                withBase(DESKTOP_MP4),
+              ]
+            : [
+                withBase(MASTER_MP4),
+                withBase(DESKTOP_MP4),
+                withBase(MOBILE_MP4),
+              ];
 
           let sourceIdx = 0;
           let settled = false;
@@ -444,7 +480,10 @@ export function useFrameScrubber() {
             try {
               if (!video.duration || !video.buffered.length) return;
               const end = video.buffered.end(video.buffered.length - 1);
-              const pct = Math.min(99, Math.round((end / video.duration) * 100));
+              const pct = Math.min(
+                99,
+                Math.round((end / video.duration) * 100),
+              );
               setLoadProgress((p) => Math.max(p, pct));
               paintFirst();
               if (end / video.duration >= 0.7) finish();

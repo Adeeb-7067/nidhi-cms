@@ -1,6 +1,13 @@
 /** Shared contact / inquiry helpers for marketing forms. */
 
-export type ContactIntent = "inquiry" | "newsletter" | "quote" | "meeting";
+export type ContactIntent =
+  | "inquiry"
+  | "newsletter"
+  | "quote"
+  | "meeting"
+  | "job-application"
+  | "book-meeting"
+  | "get-quote";
 
 export type ContactPayload = {
   name?: string;

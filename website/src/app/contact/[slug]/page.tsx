@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { LeafMarketingPage } from "@/components/pages/SectionPages";
+import { QuotePage } from "@/components/pages/QuotePage";
+import { BookMeetingPage } from "@/components/pages/BookMeetingPage";
 import { leafExperienceMetadata } from "@/data/experiences";
 import { sectionSlugs } from "@/data/navigation";
 
@@ -22,5 +24,8 @@ export default async function ContactLeafPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (slug === "get-quote") return <QuotePage />;
+  if (slug === "book-meeting") return <BookMeetingPage />;
   return <LeafMarketingPage sectionId="contact" slug={slug} />;
 }
+

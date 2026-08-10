@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { LeafMarketingPage } from "@/components/pages/SectionPages";
+import { InsightsCatalogPage } from "@/components/pages/InsightsCatalogPage";
 import { leafExperienceMetadata } from "@/data/experiences";
 import { sectionSlugs } from "@/data/navigation";
 
@@ -22,5 +23,13 @@ export default async function InsightsLeafPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
+  if (
+    ["blog", "whitepapers", "technology-articles", "research", "resources"].includes(
+      slug,
+    )
+  ) {
+    return <InsightsCatalogPage currentSlug={slug} />;
+  }
   return <LeafMarketingPage sectionId="insights" slug={slug} />;
 }
+

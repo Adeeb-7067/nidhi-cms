@@ -1,16 +1,10 @@
 import type { Metadata } from "next";
-import { SectionHubPage } from "@/components/pages/SectionPages";
-import { getHubLanding } from "@/data/first-viewport";
+import { WorkIndexPage } from "@/components/pages/WorkIndexPage";
 import { hubMetadata } from "@/data/seo";
 
 export const metadata: Metadata = hubMetadata("work");
 
-export default function WorkIndexPage() {
-  return (
-    <SectionHubPage
-      sectionId="work"
-      title="Work"
-      summary={getHubLanding("work").purpose}
-    />
-  );
+export default function WorkPage() {
+  return <WorkIndexPage />;
 }
+
