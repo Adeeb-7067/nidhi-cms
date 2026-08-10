@@ -24,6 +24,23 @@ function getBasePath() {
       (window as unknown as { __NEXT_DATA__?: { basePath?: string } }).__NEXT_DATA__?.basePath || ""
     );
   }
+  if (typeof window !== "undefined") {
+    try {
+      const scripts = Array.from(
+        document.querySelectorAll<HTMLScriptElement>("script[src]"),
+      );
+      const nextScript = scripts.find((s) => s.src.includes("/_next/static/"));
+      if (nextScript) {
+        const url = new URL(nextScript.src);
+        const idx = url.pathname.indexOf("/_next/static/");
+        if (idx > 0) {
+          return url.pathname.substring(0, idx);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   return "";
 }
 
@@ -220,17 +237,17 @@ export function useFrameScrubber() {
           return;
         }
         let settled = false;
+        // Generous 10s safety timeout so real-world production network downloads don't false-timeout
         const timer = setTimeout(() => {
           if (!settled) {
             settled = true;
             failedRef.current.add(index);
             resolve();
           }
-        }, 1500);
+        }, 10000);
 
         const img = new Image();
         img.decoding = "async";
-        (img as unknown as { fetchPriority: string }).fetchPriority = "high";
         img.src = framePath(index);
         img.onload = () => {
           if (settled) return;
@@ -572,21 +589,28 @@ export function useFrameScrubber() {
       setNativeVideo(false);
       scheduleDraw(FRAME_START);
 
-      // Safety fallback to guarantee loading veil hides within 1.2s on any network connection
-      const veilSafetyTimer = setTimeout(() => {
-        setIsLoaded(true);
-        setLoadProgress(100);
-      }, 1200);
-
-      // 1. Concurrently load initial 12 frames for sub-150ms instant first paint over network
-      const initialChunk = Array.from({ length: 12 }, (_, i) => FRAME_START + i);
-      await Promise.all(initialChunk.map((idx) => loadJpg(idx)));
-      clearTimeout(veilSafetyTimer);
+      // 1. Instantly load the initial start frame (frame 4) for immediate canvas paint
+      await loadJpg(FRAME_START);
       if (cancelled) return;
 
-      // If initial frame JPG sequence returned 404 in production, failover to video or poster mode
-      if (cacheRef.current.size === 0) {
-        console.warn("Frame JPG sequence 404, falling back to video scrubber.");
+      if (cacheRef.current.has(FRAME_START)) {
+        modeRef.current = "images";
+        setIsLoaded(true);
+        setLoadProgress(100);
+        scheduleDraw(FRAME_START);
+      }
+
+      // 2. Concurrently load initial batch of frames in small chunks of 4 to avoid socket congestion
+      const initialChunk = Array.from({ length: 11 }, (_, i) => FRAME_START + 1 + i);
+      for (let i = 0; i < initialChunk.length && !cancelled; i += 4) {
+        const batch = initialChunk.slice(i, i + 4);
+        await Promise.all(batch.map((idx) => loadJpg(idx)));
+      }
+      if (cancelled) return;
+
+      // Only fall back to video if frame 4 actually failed with an HTTP 404
+      if (cacheRef.current.size === 0 && failedRef.current.has(FRAME_START)) {
+        console.warn("Frame JPG sequence unavailable (404), falling back to video scrubber.");
         const videoSuccess = await bootVideo();
         if (!videoSuccess && !cancelled) {
           modeRef.current = "poster";
@@ -602,13 +626,13 @@ export function useFrameScrubber() {
       setLoadProgress(100);
       scheduleDraw(FRAME_START);
 
-      // 2. Concurrently preload remaining frames in parallel chunks of 16 for zero-lag scrubbing
+      // 3. Preload remaining frames in background chunks of 8 for liquid smooth scrubbing
       const remainingFrames = Array.from(
         { length: TOTAL_FRAMES - (FRAME_START + 12) + 1 },
         (_, i) => FRAME_START + 12 + i,
       );
 
-      const CHUNK_SIZE = 16;
+      const CHUNK_SIZE = 8;
       for (let b = 0; b < remainingFrames.length && !cancelled; b += CHUNK_SIZE) {
         const chunk = remainingFrames.slice(b, b + CHUNK_SIZE);
         await Promise.all(chunk.map((idx) => loadJpg(idx)));
