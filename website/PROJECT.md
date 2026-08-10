@@ -2,7 +2,7 @@
 
 Complete overview of the **Cinematic-Scroll** codebase: architecture, runtime flow, modules, design system, data, routes, and maintenance notes.
 
-**Last updated:** 6 Aug 2026
+**Last updated:** 8 Aug 2026
 
 ---
 
@@ -322,35 +322,34 @@ Cinematic-Scroll/
 
 | Module | Responsibility |
 |--------|----------------|
-| `useFrameScrubber` | Image cache, initial batch, sliding preload, DPR canvas draw (capped at `MAX_W`) |
-| `useLenis` | Lenis + `ScrollTrigger.update()` |
+| `useFrameScrubber` | Native `<video>` master MP4 decode + 60fps continuous RAF seek loop + `fastSeek()` hardware acceleration + 1080p HD mobile asset |
+| `useLenis` | Lenis smooth scrolling + `ScrollTrigger.update()` |
 | `useFilmInView` | IntersectionObserver on `[data-film-track]`; gates every fixed film layer |
-| `ScrollScrubber` | Tall scroll track; GSAP scrub; mounts chapters only while `isActive` |
+| `ScrollScrubber` | Tall scroll track (~1500vh); GSAP scrub tuned to `0.08` for liquid inertia |
 | `FilmIsland` | Frames the tour: skip control + outro dissolve |
-| `CinematicCanvas` | Fullscreen `<canvas>`; `invisible` when the film is off-screen |
+| `CinematicCanvas` | Fullscreen native `<video object-fit:cover>` + poster/canvas fallback; `invisible` off-screen |
 | `AtmosphereLayer` | Active chapter glow/veil; unmounted when the film is off-screen |
-| `FilmLoadingVeil` | Fullscreen progress until initial frames ready; never traps input |
+| `FilmLoadingVeil` | Fullscreen progress until initial video/frames ready; never traps input |
 
-**Scrub notes:** JPG sequence (not MP4 scrub); `FRAME_START = 4`; reduced motion snaps/simplifies.
+**Scrub notes:** Master MP4 (`TITLE__Satyakabir_Technologies.mp4`) via native `<video>` at 60fps sync; `FRAME_START = 4`; reduced motion snaps/simplifies.
 
 ### 5.3 Chapter system (`ChapterStage.tsx`)
 
-One component, three layout paths: `hero`, `intro`, and standard sub-layouts (`split-stats`, `service-grid`, `project-rail`, `chip-cloud`, `quote`, `career`, `finale`, …).
+One unified component rendering bespoke chapter stages: `HeroStage` (locked), `IntroStage` (manifesto grid), `ServiceGridStage` (AI showcase), `ProductStudioStage` (7-step pipeline), `CloudOpsStage` (layered stack), `InnovationLabStage` (R&D matrix), `BoardroomStage` (executive metrics), `ProjectRail` (case studies), and `FinaleStage` (CTA).
 
 **Overlay mechanics (`SectionWrapper`)**
 
-- Fixed panels; opacity from frame vs `[start − fade, end + fade]`
-- `pointer-events` only when interactive so Lenis keeps scroll
-- Clears nav via `--nav-h`; side rails via `--film-rail-*`; bottom chrome via `--film-safe-bottom`
-- `.section-panel--center` uses `justify-content: safe center` so tall chapters scroll from the top
-- `.hero-panel` reserves bottom cue band
+- Clean transparent wrapper without dark scrim overlays for 100% bright, high-definition video clarity.
+- GPU layer promotion (`transform-gpu [will-change:transform,opacity]`) on fixed chapter panels for zero lag.
+- Opacity calculated from frame position vs `[start − fade, end + fade]`.
+- `pointer-events` active only when interactive so scroll input passes through cleanly.
 
 ### 5.4 Navigation
 
 | File | Role |
 |------|------|
 | `navigation.ts` | Full IA tree + mega featured + breadcrumbs helpers |
-| `PremiumNavbar` | Glass bar; primary + More; Cmd+K; mobile; progress; **ThemeToggle** |
+| `PremiumNavbar` | Glass bar; primary + More; Cmd+K; mobile; progress; **ThemeToggle**; **AI Assist** button |
 | `MegaMenu` / `MobileNav` / `CommandPalette` / `Breadcrumbs` | IA surfaces |
 
 Primary desktop: `company`, `services`, `solutions`, `work`, `insights`.  
@@ -387,8 +386,9 @@ Same section type can place content differently via `props.layout` (or determini
 
 ### 5.7 ChatBot
 
-- Fixed bottom-right **SK Assist** (mock keyword replies)
-- Mounted once in `layout.tsx`
+- Fixed bottom-right **SK Assist** AI Assistant (`z-[100]`) with official Satyakabir brand `<Logo size="sm" />`.
+- Also summonable directly via the main navbar `AI Assist` button.
+- Mounted once in `layout.tsx`.
 
 ### 5.8 UI primitives
 
@@ -398,32 +398,21 @@ Same section type can place content differently via `props.layout` (or determini
 
 ## 6. Homepage chapters (film map)
 
-Defined in `src/data/cinematic.ts` → `chapters[]`.
+Defined in `src/data/cinematic.ts` → `chapters[]` and rendered in `src/components/sections/ChapterStage.tsx`.
 
-| # | id | Layout | Frames | Story |
-|---|-----|--------|--------|--------|
-| 00 | arrival | `hero` | 4–80 | Brand title card: name, offer, proof strip |
-| 01 | lobby | `intro` | 81–155 | Headquarters |
-| 02 | ai | `service-grid` | 156–240 | AI systems |
-| 03 | studio | `editorial-left` | 241–320 | Product engineering |
-| 04 | cloud | `cloud-ops` | 321–400 | Cloud & DevOps |
-| 05 | lab | `editorial-left` | 401–470 | R&D |
-| 06 | boardroom | `split-stats` | 471–545 | Outcomes |
-| 07 | client | `project-rail` | 546–640 | Selected work |
-| 08 | finale | `finale` | 641–720 | Closing |
+| # | id | Stage Component | Frames | Human Business Strategy & Copy |
+|---|-----|-----------------|--------|--------------------------------|
+| 00 | arrival | `HeroStage` | 4–80 | **🚨 Locked & Preserved:** Opening hero, identity pill, 4-stat telemetry deck |
+| 01 | lobby | `IntroStage` | 81–155 | **Business Growth Manifesto:** *"Engineering Technology That Drives Business Growth"* + 6 core capability pills |
+| 02 | ai | `ServiceGridStage` | 156–240 | **Practical AI Operations:** *"AI That Automates Work & Accelerates Decisions"* + 6 human business cards |
+| 03 | studio | `ProductStudioStage` | 241–320 | **Product Strategy Pipeline:** *"Turn Your Ambition Into Market-Ready Products"* + 7-step process timeline |
+| 04 | cloud | `CloudOpsStage` | 321–400 | **Scalable Infrastructure:** *"Infrastructure Built to Scale With Your Growth"* + 3-tier resilience stack |
+| 05 | lab | `InnovationLabStage` | 401–470 | **Applied Technology R&D:** *"Where Emerging Technology Meets Real Application"* + 5 R&D primitive chips |
+| 06 | boardroom | `BoardroomStage` | 471–545 | **Measured Outcomes:** *"Transformation Measured in Business Results"* + 3 verified ROI metrics |
+| 07 | client | `ProjectRail` | 546–640 | **Real-World Impact Case Studies:** *"Proven Real-World Business Impact"* + 3 featured client builds |
+| 08 | finale | `FinaleStage` | 641–720 | **Actionable Strategy Call:** *"Ready to Build Your Next Advantage?"* + strategy call CTA button |
 
-Each chapter has an `atmosphere` id for veil/glow.
-
-**Culled from 16 to 9.** Chapters for industries, testimonials, awards, stack,
-careers and contact were removed: each duplicated a section that now renders
-below the film with far more room, and reading that content off a scrubbing
-backdrop was strictly worse. What remains is the part only the film can do —
-walking the building.
-
-Frame windows are contiguous and cover the full range, so the film never
-scrolls through dead air. If you re-cut them, keep them **exclusive** so only one
-overlay is on-screen at a time, and keep the track long enough that each frame
-still gets ~18px of scroll (see `ScrollScrubber`).
+Each chapter follows a strict **Business Value First** content hierarchy: Context → Promise → Proof → Technology. Technical jargon is secondary to human benefits.
 
 ---
 

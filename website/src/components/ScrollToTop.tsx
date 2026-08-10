@@ -29,7 +29,7 @@ export function ScrollToTop() {
   };
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] md:bottom-6 md:right-6">
+    <div className="pointer-events-none fixed bottom-20 right-5 z-[90] md:bottom-24 md:right-6">
       <AnimatePresence>
         {visible ? (
           <motion.button

@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { memo, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Menu, Search } from "lucide-react";
+import { ChevronDown, Menu, Search, Bot } from "lucide-react";
 import { navigation, ctaNav, type NavItem } from "@/data/navigation";
+import { SK_ASSIST_OPEN_EVENT } from "@/data/mission-control";
 import { Logo } from "@/components/brand/Logo";
 import { PremiumButton } from "@/components/ui/PremiumButton";
 import { MegaMenu } from "@/components/nav/MegaMenu";
@@ -257,6 +258,17 @@ export const PremiumNavbar = memo(function PremiumNavbar({
 
                 {/* Actions */}
                 <div className="ml-auto flex shrink-0 items-center gap-1.5 md:gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new CustomEvent(SK_ASSIST_OPEN_EVENT))}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-brand-cyan/30 bg-brand-cyan/10 px-3 text-[12px] font-semibold text-brand-cyan transition-[border-color,background-color,transform] duration-300 hover:border-brand-cyan/60 hover:bg-brand-cyan/20 active:scale-95"
+                    aria-label="Open SK Assist AI Assistant"
+                    title="SK Assist AI Assistant"
+                  >
+                    <Logo size="sm" className="h-4.5 w-4.5 object-contain" />
+                    <span className="hidden sm:inline">AI Assist</span>
+                  </button>
+
                   <ThemeToggle />
 
                   <button

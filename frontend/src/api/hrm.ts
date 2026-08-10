@@ -862,8 +862,13 @@ export function deleteHrmAuditLog(
 }
 
 export function useDeleteHrmAuditLog() {
-  return useMutation({
+  const qc = useQueryClient();
+  return useHrmMutation({
     mutationFn: (id: number | string) => deleteHrmAuditLog(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["hrm", "audit"] });
+    },
+    meta: { errorMessage: "Could not delete audit log" },
   });
 }
 

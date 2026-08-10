@@ -93,12 +93,8 @@ export function SectionWrapper({
       data-section-interactive={interactive ? "true" : "false"}
       data-chapter-progress={progress.toFixed(3)}
     >
-      {atm ? (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{ background: atm.veil, opacity: Math.min(0.42, opacity * 0.48) }}
-        />
-      ) : null}
+      {/* Clean transparent wrapper without dark scrim overlay so video is bright and clear */}
+      <div className="pointer-events-none absolute inset-0 transition-opacity duration-500" />
       <div className="pointer-events-none relative flex h-full min-h-0 w-full flex-col">
         {children}
       </div>

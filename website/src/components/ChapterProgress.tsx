@@ -20,10 +20,18 @@ function scrollToFrame(frame: number) {
  * Right-edge chapter control — mirrors left Actions.
  * Place names stay horizontal (truncated) so long titles never stretch the rail.
  */
-export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: ChapterProgressProps) {
+export function ChapterProgress({
+  currentFrame,
+  isLoaded,
+  active: onScreen,
+}: ChapterProgressProps) {
   const active = useMemo(() => getActiveChapter(currentFrame), [currentFrame]);
   const index = useMemo(
-    () => Math.max(0, chapters.findIndex((c) => c.id === active.id)),
+    () =>
+      Math.max(
+        0,
+        chapters.findIndex((c) => c.id === active.id),
+      ),
     [active.id],
   );
   const retired = !onScreen;
@@ -42,13 +50,13 @@ export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: Ch
     >
       {/* Horizontal label — never vertical, never stretches the capsule */}
       <div className="hidden max-w-[9.5rem] flex-col items-end text-right sm:flex">
-        <span className="font-mono text-[9px] font-medium tracking-[0.14em] text-white/40">
+        <span className="font-mono text-[9.5px] font-semibold tracking-[0.14em] text-brand-cyan drop-shadow">
           {String(index + 1).padStart(2, "0")}
-          <span className="text-white/20"> / </span>
+          <span className="text-white/40"> / </span>
           {String(chapters.length).padStart(2, "0")}
         </span>
         <span
-          className="mt-1 line-clamp-2 text-[12px] font-medium leading-snug tracking-[-0.01em] text-white/75"
+          className="mt-1 line-clamp-2 text-[12px] font-bold leading-snug tracking-[-0.01em] text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.9)]"
           title={active.place}
         >
           {active.place}
@@ -57,13 +65,13 @@ export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: Ch
 
       <div
         className={cn(
-          "flex flex-col items-center gap-1.5 rounded-l-2xl border border-r-0 border-white/16 bg-black/45 px-2.5 py-3.5",
+          "flex flex-col items-center gap-1.5 rounded-l-2xl border border-r-0 border-white/25 bg-black/75 backdrop-blur-md px-2.5 py-3.5 shadow-xl",
           retired ? "pointer-events-none" : "pointer-events-auto",
         )}
         role="navigation"
         aria-label="Film chapters"
       >
-        <span className="mb-1 font-mono text-[8px] tracking-[0.12em] text-white/40 sm:hidden">
+        <span className="mb-1 font-mono text-[8.5px] font-semibold tracking-[0.12em] text-brand-cyan sm:hidden">
           {String(index + 1).padStart(2, "0")}
         </span>
         {chapters.map((chapter) => {
@@ -79,7 +87,9 @@ export function ChapterProgress({ currentFrame, isLoaded, active: onScreen }: Ch
               className={cn(
                 "w-1.5 rounded-full transition-[height,background-color,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
                 "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40",
-                on ? "h-5 bg-white" : "h-1.5 bg-white/30 hover:bg-white/55",
+                on
+                  ? "h-5 bg-brand-cyan shadow-[0_0_8px_rgba(0,217,255,0.8)]"
+                  : "h-1.5 bg-white/45 hover:bg-white/80",
               )}
             />
           );

@@ -23,7 +23,6 @@ function prefersReducedMotion() {
 
 function shouldUseMobileAsset() {
   if (typeof window === "undefined") return false;
-  const narrow = window.matchMedia("(max-width: 768px)").matches;
   const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
     ?.saveData;
   const slow =
@@ -31,7 +30,7 @@ function shouldUseMobileAsset() {
       ?.effectiveType === "2g" ||
     (navigator as Navigator & { connection?: { effectiveType?: string } }).connection
       ?.effectiveType === "slow-2g";
-  return Boolean(narrow || saveData || slow);
+  return Boolean(saveData || slow);
 }
 
 function framePath(index: number) {
@@ -174,17 +173,44 @@ export function useFrameScrubber() {
   const pumpSeek = useCallback(() => {
     const video = videoRef.current;
     if (!video || modeRef.current !== "video") return;
-    if (seekingRef.current) return;
 
     const target = targetTimeRef.current;
-    if (Math.abs(video.currentTime - target) < 0.012) return;
+    if (Math.abs(video.currentTime - target) < 0.005) return;
 
-    seekingRef.current = true;
     try {
-      video.currentTime = target;
+      if ("fastSeek" in video && typeof (video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
+        (video as unknown as { fastSeek: (t: number) => void }).fastSeek(target);
+      } else {
+        video.currentTime = target;
+      }
     } catch {
-      seekingRef.current = false;
+      // Ignore transient seeking errors
     }
+  }, []);
+
+  // Continuous 60fps RAF loop to pump video seeking in lockstep with monitor refresh
+  useEffect(() => {
+    let animId: number;
+    const loop = () => {
+      if (modeRef.current === "video" && videoRef.current) {
+        const video = videoRef.current;
+        const target = targetTimeRef.current;
+        if (Math.abs(video.currentTime - target) >= 0.005) {
+          try {
+            if ("fastSeek" in video && typeof (video as unknown as { fastSeek: (t: number) => void }).fastSeek === "function") {
+              (video as unknown as { fastSeek: (t: number) => void }).fastSeek(target);
+            } else {
+              video.currentTime = target;
+            }
+          } catch {
+            // Ignore transient seeking errors
+          }
+        }
+      }
+      animId = requestAnimationFrame(loop);
+    };
+    animId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animId);
   }, []);
 
   const pumpSeekRef = useRef(pumpSeek);
@@ -219,7 +245,6 @@ export function useFrameScrubber() {
   );
 
   const uiFrameRafRef = useRef(0);
-  const lastUiAtRef = useRef(0);
 
   const setCurrentFrame = useCallback(
     (frame: number) => {
@@ -241,18 +266,13 @@ export function useFrameScrubber() {
         for (let i = clamped - 1; i >= Math.max(FRAME_START, clamped - 4); i--) void loadJpg(i);
       }
 
-      const now = performance.now();
-      if (now - lastUiAtRef.current >= 48) {
-        lastUiAtRef.current = now;
-        setCurrentFrameState(clamped);
-        return;
+      // Smooth 60fps UI frame sync via requestAnimationFrame without artificial 48ms lag
+      if (!uiFrameRafRef.current) {
+        uiFrameRafRef.current = requestAnimationFrame(() => {
+          uiFrameRafRef.current = 0;
+          setCurrentFrameState(frameRef.current);
+        });
       }
-      if (uiFrameRafRef.current) return;
-      uiFrameRafRef.current = window.setTimeout(() => {
-        uiFrameRafRef.current = 0;
-        lastUiAtRef.current = performance.now();
-        setCurrentFrameState(frameRef.current);
-      }, 48);
     },
     [frameToTime, loadJpg, pumpSeek, scheduleDraw],
   );

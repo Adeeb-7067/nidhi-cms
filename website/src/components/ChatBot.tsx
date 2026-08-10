@@ -2,11 +2,12 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { Send, X, Bot } from "lucide-react";
+import { Send, X, Bot, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { easeExpoOut } from "@/lib/motion";
 import { SK_ASSIST_OPEN_EVENT } from "@/data/mission-control";
 import { useOverlayScrollLock } from "@/hooks/useOverlayScrollLock";
+import { Logo } from "@/components/brand/Logo";
 import Link from "next/link";
 
 type ChatRole = "bot" | "user";
@@ -136,69 +137,75 @@ export function ChatBot() {
   };
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[60] flex flex-col items-end gap-3 md:bottom-6 md:right-6">
+    <div className="pointer-events-none fixed bottom-5 right-5 z-[100] flex flex-col items-end gap-3 md:bottom-6 md:right-6">
       <AnimatePresence>
         {open ? (
           <motion.div
             key="panel"
-            initial={{ opacity: 0, y: 28, scale: 0.94, filter: "blur(12px)" }}
+            initial={{ opacity: 0, y: 20, scale: 0.96, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: 18, scale: 0.96, filter: "blur(8px)" }}
-            transition={{ duration: 0.42, ease: easeExpoOut }}
-            className="pointer-events-auto flex h-[min(520px,70dvh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface/95 shadow-[0_28px_80px_-28px_rgba(0,0,0,0.95)] backdrop-blur-2xl"
+            exit={{ opacity: 0, y: 14, scale: 0.97, filter: "blur(6px)" }}
+            transition={{ duration: 0.3, ease: easeExpoOut }}
+            className="pointer-events-auto flex h-[min(520px,72dvh)] w-[min(380px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-white/12 bg-[#090d16] shadow-[0_24px_70px_rgba(0,0,0,0.85)] backdrop-blur-2xl"
             role="dialog"
             aria-label="SK Assist chat"
             data-lenis-prevent
             data-lenis-prevent-wheel
             data-lenis-prevent-touch
           >
-            <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+            {/* Top edge highlight */}
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+            <header className="flex items-center justify-between gap-3 border-b border-white/10 bg-[#0b0f19]/80 px-4 py-3.5 backdrop-blur-md">
               <div className="flex items-center gap-2.5">
-                <span className="relative flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2B6BFF,#00D9FF)] text-white shadow-[0_0_24px_-6px_rgba(43,107,255,0.8)]">
-                  <Bot className="h-4 w-4" />
-                  <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-brand-green" />
+                <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1b2333] border border-white/10 p-1 shadow-sm">
+                  <Logo size="sm" className="h-full w-full object-contain" />
+                  <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#090d16] bg-emerald-400" />
                 </span>
                 <div>
-                  <p className="text-[14px] font-semibold text-foreground">SK Assist</p>
-                  <p className="text-[11px] text-muted-foreground">Usually replies instantly</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-display text-[13.5px] font-semibold tracking-tight text-white">SK Assist</p>
+                    <span className="text-[10px] font-normal text-slate-400">· AI</span>
+                  </div>
+                  <p className="text-[10.5px] text-slate-400 font-normal">Satyakabir Assistant</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-border text-secondary-foreground transition-[border-color,color,transform] duration-300 hover:border-border hover:text-foreground active:scale-95"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-400 transition-colors duration-200 hover:border-white/20 hover:bg-white/10 hover:text-white active:scale-95"
                 aria-label="Close chat"
               >
-                <X className="h-4 w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </header>
 
             <div
               ref={listRef}
-              className="scrollbar-hide flex-1 space-y-3 overflow-y-auto px-4 py-4"
+              className="scrollbar-hide flex-1 space-y-3 overflow-y-auto px-4 py-3.5"
             >
               <AnimatePresence initial={false}>
                 {messages.map((m) => (
                   <motion.div
                     key={m.id}
-                    initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+                    initial={{ opacity: 0, y: 8, filter: "blur(4px)" }}
                     animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                    transition={{ duration: 0.35, ease: easeExpoOut }}
+                    transition={{ duration: 0.25, ease: easeExpoOut }}
                     className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
                   >
                     <div
                       className={cn(
-                        "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed",
+                        "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-[13px] leading-relaxed shadow-sm",
                         m.role === "user"
-                          ? "rounded-br-md bg-brand-blue text-white shadow-[0_8px_24px_-12px_rgba(43,107,255,0.8)]"
-                          : "rounded-bl-md border border-border bg-muted text-foreground",
+                          ? "rounded-br-xs bg-[#2b6bff] font-normal text-white"
+                          : "rounded-bl-xs border border-white/10 bg-[#121826] text-slate-200",
                       )}
                     >
                       <p>{m.text}</p>
                       {m.link ? (
                         <Link
                           href={m.link.href}
-                          className="mt-2 inline-flex text-[12px] font-medium text-brand-cyan transition-colors hover:text-foreground"
+                          className="mt-2 inline-flex items-center gap-1 text-[12px] font-medium text-brand-cyan transition-colors hover:text-white hover:underline"
                           onClick={() => setOpen(false)}
                         >
                           {m.link.label} →
@@ -211,16 +218,16 @@ export function ChatBot() {
 
               {typing ? (
                 <motion.div
-                  initial={{ opacity: 0, y: 6 }}
+                  initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex justify-start"
                 >
-                  <div className="rounded-2xl rounded-bl-md border border-border bg-muted px-3.5 py-3">
+                  <div className="rounded-2xl rounded-bl-xs border border-white/10 bg-[#121826] px-3.5 py-2.5">
                     <span className="flex gap-1.5">
                       {[0, 1, 2].map((i) => (
                         <motion.span
                           key={i}
-                          className="h-1.5 w-1.5 rounded-full bg-white/50"
+                          className="h-1.5 w-1.5 rounded-full bg-slate-400"
                           animate={{ y: [0, -3, 0], opacity: [0.4, 1, 0.4] }}
                           transition={{
                             duration: 0.7,
@@ -236,13 +243,13 @@ export function ChatBot() {
               ) : null}
 
               {messages.length < 4 ? (
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="flex flex-wrap gap-1.5 pt-1">
                   {QUICK_PROMPTS.map((prompt) => (
                     <button
                       key={prompt}
                       type="button"
                       onClick={() => pushUserAndReply(prompt)}
-                      className="rounded-full border border-border bg-muted px-3 py-1.5 text-[11px] text-secondary-foreground transition-[border-color,color,background-color,transform] duration-300 hover:border-border hover:bg-muted hover:text-foreground active:scale-[0.97]"
+                      className="rounded-lg border border-white/10 bg-[#121826] px-3 py-1.5 text-[11px] font-normal text-slate-300 transition-colors duration-200 hover:border-white/20 hover:bg-[#182032] hover:text-white active:scale-[0.98]"
                     >
                       {prompt}
                     </button>
@@ -251,20 +258,20 @@ export function ChatBot() {
               ) : null}
             </div>
 
-            <form onSubmit={onSubmit} className="border-t border-border p-3">
-              <div className="flex items-center gap-2 rounded-full border border-border bg-muted px-2 py-1.5 pl-3.5 transition-[border-color,box-shadow] duration-300 focus-within:border-brand-cyan/40 focus-within:shadow-[0_0_0_3px_rgba(0,217,255,0.12)]">
+            <form onSubmit={onSubmit} className="border-t border-white/10 p-3 bg-[#070a12]">
+              <div className="flex items-center gap-2 rounded-full border border-white/12 bg-[#0c101a] px-2 py-1.5 pl-4 transition-colors duration-200 focus-within:border-white/25">
                 <input
                   ref={inputRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask SK Assist…"
-                  className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-white outline-none placeholder:text-slate-500 font-normal"
                   autoComplete="off"
                 />
                 <button
                   type="submit"
                   disabled={!input.trim() || typing}
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#2B6BFF,#00D9FF)] text-white transition-[opacity,transform] duration-300 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:hover:scale-100"
+                  className="inline-flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-full bg-white text-black font-semibold transition-transform duration-200 hover:scale-105 active:scale-95 disabled:opacity-30 disabled:hover:scale-100"
                   aria-label="Send message"
                 >
                   <Send className="h-3.5 w-3.5" />
@@ -272,7 +279,38 @@ export function ChatBot() {
               </div>
             </form>
           </motion.div>
-        ) : null}
+        ) : (
+          <motion.button
+            key="trigger-btn"
+            type="button"
+            initial={{ opacity: 0, scale: 0.92, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.92, y: 8 }}
+            transition={{ duration: 0.25, ease: easeExpoOut }}
+            onClick={() => setOpen(true)}
+            className="pointer-events-auto group relative flex items-center gap-2.5 rounded-full border border-white/12 bg-[#090d16] px-3.5 py-2 shadow-[0_12px_36px_rgba(0,0,0,0.6)] backdrop-blur-xl transition-all duration-200 hover:border-white/25 hover:bg-[#0f1422] hover:shadow-[0_16px_44px_rgba(0,0,0,0.7)] active:scale-[0.98]"
+            aria-label="Open SK Assist AI Assistant"
+          >
+            {/* Specular top highlight */}
+            <span aria-hidden className="pointer-events-none absolute inset-x-4 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+
+            {/* Avatar Orb */}
+            <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#1e2638] border border-white/10 p-1 shadow-sm">
+              <Logo size="sm" className="h-full w-full object-contain" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[#090d16] bg-emerald-400" />
+            </span>
+
+            {/* Typography */}
+            <div className="flex flex-col items-start text-left pr-0.5">
+              <span className="text-[12.5px] font-semibold leading-none tracking-tight text-white group-hover:text-slate-100">
+                SK Assist
+              </span>
+              <span className="mt-0.5 text-[10.5px] font-normal leading-none text-slate-400">
+                AI Assistant
+              </span>
+            </div>
+          </motion.button>
+        )}
       </AnimatePresence>
     </div>
   );
