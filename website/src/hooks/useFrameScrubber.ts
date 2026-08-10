@@ -561,8 +561,13 @@ export function useFrameScrubber() {
     };
 
     const boot = async () => {
-      await loadPoster();
-      if (cancelled) return;
+      // Immediately load and paint FRAME_START (outdoor building façade) for instant identical first paint
+      void loadJpg(FRAME_START).then(() => {
+        if (!cancelled) {
+          modeRef.current = "images";
+          scheduleDraw(FRAME_START);
+        }
+      });
 
       if (prefersReducedMotion()) {
         await bootReducedMotion();
