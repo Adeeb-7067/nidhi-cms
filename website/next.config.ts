@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || undefined,
   images: {
     qualities: [75, 85, 90],
     remotePatterns: [
@@ -14,7 +15,7 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/TITLE__Satyakabir_Technologies.:ext*",
+        source: "/:path(TITLE__Satyakabir_Technologies.*)",
         headers: [
           {
             key: "Cache-Control",

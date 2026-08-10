@@ -12,9 +12,25 @@ const MASTER_MP4 = "/TITLE__Satyakabir_Technologies.mp4";
 
 type ScrubMode = "video" | "poster" | "images";
 
+function getBasePath() {
+  if (process.env.NEXT_PUBLIC_BASE_PATH) {
+    return process.env.NEXT_PUBLIC_BASE_PATH.replace(/\/$/, "");
+  }
+  if (
+    typeof window !== "undefined" &&
+    (window as unknown as { __NEXT_DATA__?: { basePath?: string } }).__NEXT_DATA__?.basePath
+  ) {
+    return (
+      (window as unknown as { __NEXT_DATA__?: { basePath?: string } }).__NEXT_DATA__?.basePath || ""
+    );
+  }
+  return "";
+}
+
 function withBase(path: string) {
-  const base = (process.env.NEXT_PUBLIC_BASE_PATH || "").replace(/\/$/, "");
-  return `${base}${path}`;
+  const base = getBasePath();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${base}${cleanPath}`;
 }
 
 function prefersReducedMotion() {
@@ -60,6 +76,7 @@ export function useFrameScrubber() {
   const posterRef = useRef<HTMLImageElement | null>(null);
   const modeRef = useRef<ScrubMode>("poster");
   const cacheRef = useRef<Map<number, HTMLImageElement>>(new Map());
+  const failedRef = useRef<Set<number>>(new Set());
   const frameRef = useRef(FRAME_START);
   const durationRef = useRef(TOTAL_FRAMES / FILM_FPS);
   const seekingRef = useRef(false);
@@ -198,7 +215,7 @@ export function useFrameScrubber() {
   const loadJpg = useCallback(
     (index: number) =>
       new Promise<void>((resolve) => {
-        if (cacheRef.current.has(index)) {
+        if (cacheRef.current.has(index) || failedRef.current.has(index)) {
           resolve();
           return;
         }
@@ -206,6 +223,7 @@ export function useFrameScrubber() {
         const timer = setTimeout(() => {
           if (!settled) {
             settled = true;
+            failedRef.current.add(index);
             resolve();
           }
         }, 1500);
@@ -228,6 +246,7 @@ export function useFrameScrubber() {
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          failedRef.current.add(index);
           resolve();
         };
       }),
@@ -564,6 +583,19 @@ export function useFrameScrubber() {
       await Promise.all(initialChunk.map((idx) => loadJpg(idx)));
       clearTimeout(veilSafetyTimer);
       if (cancelled) return;
+
+      // If initial frame JPG sequence returned 404 in production, failover to video or poster mode
+      if (cacheRef.current.size === 0) {
+        console.warn("Frame JPG sequence 404, falling back to video scrubber.");
+        const videoSuccess = await bootVideo();
+        if (!videoSuccess && !cancelled) {
+          modeRef.current = "poster";
+          drawPoster();
+          setIsLoaded(true);
+          setLoadProgress(100);
+        }
+        return;
+      }
 
       modeRef.current = "images";
       setIsLoaded(true);
