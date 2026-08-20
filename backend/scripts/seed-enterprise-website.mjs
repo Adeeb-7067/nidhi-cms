@@ -1,3 +1,4 @@
+import "../load-env.js";
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { websitePagesTable } from "../src/modules/website/schema/WebsitePage.js";

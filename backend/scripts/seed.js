@@ -1,3 +1,4 @@
+import "../load-env.js";
 import mongoose from "mongoose";
 import * as schema from "../src/models/schema/index.js";
 import bcrypt from "bcryptjs";
