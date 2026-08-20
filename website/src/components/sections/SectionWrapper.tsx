@@ -1,6 +1,6 @@
 "use client";
 
-import { atmospheres, type AtmosphereId, FRAME_FADE } from "@/data/cinematic";
+import { atmospheres, type AtmosphereId, FRAME_FADE, FRAME_START } from "@/data/cinematic";
 import { easeOutCubic } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
@@ -15,8 +15,8 @@ interface SectionWrapperProps {
 }
 
 /**
- * Soft exit only — a chapter opens at full opacity and fades on the way out, so
- * entering the film never shows an empty frame waiting for text to arrive.
+ * Soft exit for opening hero stage — the first chapter opens at full opacity
+ * immediately, so opening the site never shows a blank viewport waiting for scroll.
  *
  * These overlays are `fixed`, and only `ScrollScrubber` knows whether the film
  * track is covering the viewport. Do not mount a chapter outside that window: on
@@ -37,6 +37,16 @@ function chapterEnvelope(
   const edge = Math.min(fadeFrames * 1.5, Math.max(8, Math.floor(span * 0.25)));
   const enterEnd = start + edge;
   const exitStart = end - edge;
+
+  // The opening hero stage (start <= FRAME_START) opens at full opacity immediately
+  if (start <= FRAME_START) {
+    if (frame <= exitStart) {
+      return { opacity: 1, progress: 1 };
+    }
+    const t = (end - frame) / edge;
+    const opacity = easeOutCubic(Math.min(1, Math.max(0, t)));
+    return { opacity, progress: opacity };
+  }
 
   // Entrance cross-dissolve (0 -> 1)
   if (frame < enterEnd) {

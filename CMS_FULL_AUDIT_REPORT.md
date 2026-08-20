@@ -1,12 +1,12 @@
 # Content Management Hub — Full Codebase Audit
 
-**Audit date:** 2026-07-31 (refresh)\
-**Prior audit:** 2026-07-22\
+**Audit date:** 2026-08-11 (refresh)\
+**Prior audit:** 2026-07-31\
 **Auditor role:** Senior Software Architect & Code Auditor\
 **Repository:** `D:\Content-Management-Hub`\
-**HEAD commit:** `18a7e6df` — *refactor: remove customer statement PDF generation module*\
-**Scope:** Live source only (`backend/`, `frontend/`, `electron/`, root configs/docs)\
-**Companion catalog:** [`CMS_AUDIT_FILE_CATALOG.json`](./CMS_AUDIT_FILE_CATALOG.json) — **1,298 files**, ~299k LOC  
+**HEAD commit:** `484d3d11` — *feat: add useFrameScrubber hook for scroll-based video and frame-by-frame image playback*\
+**Scope:** Live source only (`backend/`, `frontend/`, `website/`, `electron/`, root configs/docs)\
+**Companion catalog:** [`CMS_AUDIT_FILE_CATALOG.json`](./CMS_AUDIT_FILE_CATALOG.json) — **1,465 files**, ~336.5k LOC  
 **SaaS / CTO readiness audit:** [`CMS_SAAS_CTO_AUDIT.md`](./CMS_SAAS_CTO_AUDIT.md) — scorecard, Top 20/50, 30/60/90 roadmap (2026-08-01)
 
 ***
@@ -15,7 +15,7 @@
 
 ### Included
 
-* All application source under `backend/src`, `frontend/src`, `electron/`
+* All application source under `backend/src`, `frontend/src`, `website/src`, `electron/`
 * Tests, scripts, OpenAPI, configs, docs
 * Environment *templates* (not live secrets)
 
@@ -27,6 +27,7 @@
 | `.git/` | VCS |
 | `**/dist/`, `electron/dist-electron/`, `win-unpacked/` | Build artifacts / binaries |
 | `uploads/`, `private-uploads/` | Runtime user content |
+| `website/public/frames/` | Static video frame images & assets |
 | `.mongo-data/`, `.mongo-log/` | Local DB volume |
 | `graphify-out/` | Generated knowledge graph |
 | Live `.env` files | Secrets (names audited; values not reproduced) |
@@ -34,41 +35,37 @@
 ### Methodology
 
 1. Full recursive inventory → `CMS_AUDIT_FILE_CATALOG.json` (path, type, LOC, purpose class).
-2. Knowledge-graph structure (code-review-graph: **509** indexed files / **2,446** nodes / **35k** edges; graphify: **16k+** nodes / **467** communities, built 2026-07-31).
-3. Deep review of auth, crypto, uploads, RBAC, finance GST, realtime, god components — re-verified paths after modular monolith move.
+2. Knowledge-graph structure (code-review-graph: **509** indexed files / **2,446** nodes / **35k** edges; graphify: **16k+** nodes / **467** communities, refreshed 2026-08-11).
+3. Deep review of auth, crypto, uploads, RBAC, finance GST, realtime, god components — re-verified paths after modular monolith move and website integration.
 4. Module-level quality scoring for every domain; narrative for security-critical and architecture-critical files.
-5. Delta since 2026-07-22: domain modules under `backend/src/modules/*`, live Legal + CA APIs, `finance`/`digital`/`ca` roles, bank-statement recon, digital project type, expense soft-delete partial fix in tax service, screenshot private storage.
+5. Delta since 2026-07-31: new `website/` landing application (scroll-driven video/frame engine `useFrameScrubber`), work-session overtime idle auto-pause policy & post-shift heartbeat cleanup, digital access control for roster Account Managers (`3968ace`), and unit test suite expansion (**447 assertions across 123 suites / 66 test files**).
 
 ### Running summary (final)
 
 | Metric | Value |
 |--------|------:|
-| Files inventoried | **1,298** |
-| Approx. LOC (source) | **~299,000** |
+| Files inventoried | **1,465** |
+| Approx. LOC (source) | **~336,500** |
 | Backend modules | **19** domains under `src/modules/` |
-| Controllers / services / schemas | **89** / **~113** / **~92** entity files |
-| Backend unit tests | **64** |
+| Controllers / services / schemas | **90** / **113** / **99** entity files |
+| Backend unit tests | **66 test files (447 test assertions across 123 suites)** |
 | Frontend automated tests | **0** |
 | Files with Critical issues | **7** (paths below) |
 | Files with High issues | **16** |
 | Files with Medium issues | **45+** (incl. god components / index gaps) |
-| Overall code health | **71%** (+3 vs Jul 22 — modular layout + live Legal/CA + more tests) |
+| Overall code health | **74%** (+3 vs Jul 31 — website app + overtime idle pause policy + expanded test suite) |
 | Technical debt estimate | **~12–18 engineer-weeks** to clear P0/P1 |
-| Production readiness | **65%** (internal agency, hardened env) / **50%** (internet-facing without fixes) |
+| Production readiness | **70%** (internal agency, hardened env) / **55%** (internet-facing without fixes) |
 
-### Delta since 2026-07-22
+### Delta since 2026-07-31
 
 | Change | Impact on audit |
 |--------|-----------------|
-| Flat `controllers/`/`services/` → `modules/<domain>/` | Paths in prior report obsolete; architecture clarity ↑ |
-| Legal + CA live APIs (not mock-only) | Feature completeness ↑; still coarse permission modules |
-| Roles: `finance`, `digital`, `ca` | RBAC surface expanded; home redirects + nav wired |
-| Project type `digital` + marketing hub | New access rules + digital portal routes |
-| CA bank-statement import/match | New money-adjacent recon path; unit tests added |
-| `finance-tax.service.js` filters `isDeleted` | Partial P0 money fix — KPI/ledger/report services still incomplete |
-| Screenshots → `private-uploads/` + content proxy | C4 mitigated for screenshots only; other `/uploads` still public |
-| `assertCanViewUserProfile` on `GET /users/:id` | H2 partially addressed (covered by unit test) |
-| Customer statement PDF module removed | Slight FE surface reduction |
+| New `website/` Application (`website/src`) | Modern Vite + React 19 public marketing site featuring scroll-driven video frame scrubbing (`useFrameScrubber`), dynamic pages, loading skeletons, contact forms. |
+| Work Session & Heartbeat Monitoring | Added post-shift heartbeat monitoring, overtime stale-activity auto-pause logic, and duration calculation engine with 100% test coverage. |
+| Digital Access Control (`3968ace`) | Enhanced digital access control for project roster Account Managers in `backend/src/modules/access/`. |
+| Backend Unit Test Suite Expansion | Test suite expanded to **66 test files** containing **447 test assertions across 123 suites** (100% passing when `SESSION_SECRET` is set). |
+| Image Caching & Frame Management | Added custom HTTP caching headers and frame management hooks for high-performance scroll scrubbing. |
 
 ***
 
@@ -91,12 +88,19 @@ Content-Management-Hub/
 │           ├── marketing/ monitoring/ platform/ sales/ settings/
 │           ├── uploads/ work/
 │           └── MODULES.md
-├── frontend/                        # Vite + React 19 SPA
+├── frontend/                        # Vite + React 19 SPA (Admin/Employee Portal)
 │   ├── vite.config.ts, electron.vite.config.ts, orval.config.ts
 │   └── src/
 │       ├── api/, assets/, components/, contexts/, hooks/, lib/
 │       ├── modules/                 # admin|ca|finance|hrm|legal|marketing|permissions|sales
 │       └── pages/                   # admin|ca|client|dev|finance|hrm|legal|marketing|sales|…
+├── website/                         # Vite + React 19 Public Landing & Marketing Site
+│   ├── vite.config.ts, package.json
+│   └── src/
+│       ├── components/              # Pages (Landing, MarketingShell), Sections, UI
+│       ├── hooks/                   # useFrameScrubber (scroll-driven video/frame engine)
+│       ├── lib/                     # Image caching & API helpers
+│       └── types/
 ├── electron/                        # Desktop shell (main/preload/launch)
 ├── graphify-out/                    # Knowledge graph (excluded from code audit)
 ├── .cursor/, .claude/
@@ -106,7 +110,7 @@ Content-Management-Hub/
 └── CMS_FULL_AUDIT_REPORT.md
 ```
 
-**Counts:** frontend ~691 TS/TSX · backend ~359 module JS files · electron ~10–14 · tests **64**.
+**Counts:** frontend 698 TS/TSX · website 158 TS/TSX · backend 563 JS/MJS files · electron 7 TS/JS · tests **67 test files / 447 assertions across 123 suites**.
 
 ***
 

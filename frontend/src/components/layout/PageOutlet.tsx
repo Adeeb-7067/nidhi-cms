@@ -12,6 +12,13 @@ function SalesTeamProfileRedirect() {
 }
 
 const AdminDashboard = React.lazy(() => import("@/pages/admin/Dashboard"));
+const WebsiteManager = React.lazy(() => import("@/pages/admin/WebsiteManager"));
+const WebsitePagesPage = React.lazy(() => import("@/pages/admin/website/WebsitePagesPage"));
+const WebsiteThemePage = React.lazy(() => import("@/pages/admin/website/WebsiteThemePage"));
+const WebsiteMediaPage = React.lazy(() => import("@/pages/admin/website/WebsiteMediaPage"));
+const WebsiteNavigationPage = React.lazy(() => import("@/pages/admin/website/WebsiteNavigationPage"));
+const WebsiteRedirectsPage = React.lazy(() => import("@/pages/admin/website/WebsiteRedirectsPage"));
+const WebsiteOutboxPage = React.lazy(() => import("@/pages/admin/website/WebsiteOutboxPage"));
 const AdminScreenshots = React.lazy(() => import("@/pages/admin/Screenshots"));
 const AdminAttendance = React.lazy(() => import("@/pages/admin/Attendance"));
 const WorkAnalytics = React.lazy(() => import("@/pages/admin/WorkAnalytics"));
@@ -191,6 +198,18 @@ const HrmExperienceLetters = React.lazy(() => import("@/pages/hrm/ExperienceLett
 export function PageOutlet() {
   return (
     <Switch>
+      <Route path="/admin/website/pages"><RoleGate><WebsitePagesPage /></RoleGate></Route>
+      <Route path="/admin/website/theme"><RoleGate><WebsiteThemePage /></RoleGate></Route>
+      <Route path="/admin/website/media"><RoleGate><WebsiteMediaPage /></RoleGate></Route>
+      <Route path="/admin/website/navigation"><RoleGate><WebsiteNavigationPage /></RoleGate></Route>
+      <Route path="/admin/website/redirects"><RoleGate><WebsiteRedirectsPage /></RoleGate></Route>
+      <Route path="/admin/website/outbox"><RoleGate><WebsiteOutboxPage /></RoleGate></Route>
+      <Route path="/admin/website">
+        <RoleGate>
+          <WebsiteManager />
+        </RoleGate>
+      </Route>
+
       <Route path="/admin/settings">
         <Redirect to="/settings" />
       </Route>

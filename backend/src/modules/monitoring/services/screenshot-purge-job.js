@@ -98,9 +98,7 @@ async function runHeartbeatStaleSessionCleanup() {
   if (!isDatabaseConnected()) return;
 
   const staleMs = HEARTBEAT_STALE_MINUTES * 60 * 1000;
-  const normalCutoff = Date.now() - staleMs;
-  const startupCutoff = SERVER_STARTED_AT - staleMs;
-  const cutoff = new Date(Math.min(normalCutoff, startupCutoff));
+  const cutoff = new Date(Date.now() - staleMs);
   const { closed } = await closeStaleHeartbeatSessions(cutoff);
 
   if (closed > 0) {
@@ -108,7 +106,7 @@ async function runHeartbeatStaleSessionCleanup() {
       { count: closed, thresholdMinutes: HEARTBEAT_STALE_MINUTES },
       "Overtime idle cleanup: paused inactive overtime sessions",
     );
-  }
+  } 
 }
 
 function startScreenshotPurgeJob() {

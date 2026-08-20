@@ -6,6 +6,10 @@ import {
   Building2,
   BarChart3,
   Inbox,
+  Globe,
+  Palette,
+  Compass,
+  ArrowRightLeft,
   Bug,
   Smartphone,
   FileText,
@@ -213,6 +217,7 @@ export function getNavSections(
         { title: "All vendors", href: "/finance/vendors", icon: Handshake, roles: ["super_admin"], group: "Organization" },
         { title: "Media", href: "/admin/media", icon: HardDrive, roles: ["super_admin"], group: "Organization" },
         { title: "Project documents", href: "/admin/project-documents", icon: FolderOpen, roles: ["super_admin"], group: "Organization" },
+        { title: "Website CMS", href: "/admin/website", icon: Globe, roles: ["super_admin", "admin", "manager"], group: "Organization" },
         { title: "Roles & permissions", href: "/admin/roles", icon: Shield, roles: ["super_admin"], group: "Organization" },
 
 
@@ -342,6 +347,24 @@ export function getNavSections(
         { title: "Performance", href: "/marketing/performance", icon: Users, roles: ["super_admin", "digital"], group: "Team" },
         // Reports: only account_manager sub-role retains marketing_reports after filter.
         { title: "Reports", href: "/marketing/reports", icon: FileSpreadsheet, roles: ["super_admin", "digital"], group: "Reports" },
+      ],
+    },
+
+    // =========================
+    // WEBSITE CMS
+    // =========================
+    {
+      label: "Website CMS",
+      railLabel: "Website",
+      icon: Globe,
+      roles: ["super_admin", "admin", "manager", "digital"],
+      items: [
+        { title: "Pages & Blocks", href: "/admin/website/pages", icon: Globe, roles: ["super_admin", "admin", "manager", "digital"], group: "Website" },
+        { title: "Theme & Fonts", href: "/admin/website/theme", icon: Palette, roles: ["super_admin", "admin", "manager"], group: "Website" },
+        { title: "Media Library", href: "/admin/website/media", icon: HardDrive, roles: ["super_admin", "admin", "manager", "digital"], group: "Website" },
+        { title: "Navigation Trees", href: "/admin/website/navigation", icon: Compass, roles: ["super_admin", "admin", "manager"], group: "Website" },
+        { title: "301 Redirects", href: "/admin/website/redirects", icon: ArrowRightLeft, roles: ["super_admin", "admin", "manager"], group: "Website" },
+        { title: "Form Submissions", href: "/admin/website/outbox", icon: Inbox, roles: ["super_admin", "admin", "manager", "digital"], group: "Website" },
       ],
     },
 

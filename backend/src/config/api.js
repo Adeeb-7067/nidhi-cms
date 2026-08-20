@@ -11,6 +11,7 @@ const PUBLIC_API_PATHS = new Set([
 const PUBLIC_API_PATH_PREFIXES = [
   "/sales/proposals/view/",
   "/sales/proposals/public/",
+  "/v1/website/",
 ];
 
 function isPublicApiRequest(req) {

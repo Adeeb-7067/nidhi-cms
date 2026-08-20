@@ -1,22 +1,23 @@
 {
-  "generated": "2026-07-31T10:13:36.784Z",
-  "commit": "18a7e6df0371fa2e31b492cd3f08a7adf5975406",
-  "total": 1298,
-  "totalLoc": 298580,
+  "generated": "2026-08-11T07:25:26.709Z",
+  "commit": "484d3d116cacb0c56a5a4f9f8879810772976116",
+  "total": 1465,
+  "totalLoc": 336524,
   "byKind": {
     "doc": 16,
-    "backend": 161,
-    "other": 6,
-    "config": 15,
+    "backend": 154,
+    "config": 13,
+    "test": 70,
     "schema": 99,
     "service": 113,
     "controller": 90,
-    "route": 41,
-    "test": 65,
-    "frontend": 691,
-    "style": 1
+    "route": 39,
+    "other": 2,
+    "electron": 9,
+    "frontend": 702,
+    "website": 158
   },
-  "notes": "Excludes node_modules, dist, graphify-out, uploads, .mongo-*. Live source inventory for CMS_FULL_AUDIT_REPORT.md",
+  "notes": "Excludes node_modules, dist, graphify-out, uploads, public assets, .mongo-*. Live source inventory for CMS_FULL_AUDIT_REPORT.md",
   "files": [
     {
       "path": "AGENTS.md",
@@ -52,7 +53,7 @@
       "path": "backend/ecosystem.config.cjs",
       "type": "cjs",
       "loc": 24,
-      "kind": "other"
+      "kind": "backend"
     },
     {
       "path": "backend/index.js",
@@ -64,7 +65,7 @@
       "path": "backend/jsconfig.json",
       "type": "json",
       "loc": 10,
-      "kind": "config"
+      "kind": "backend"
     },
     {
       "path": "backend/load-env.js",
@@ -76,7 +77,7 @@
       "path": "backend/nodemon.json",
       "type": "json",
       "loc": 8,
-      "kind": "config"
+      "kind": "backend"
     },
     {
       "path": "backend/openapi.yaml",
@@ -88,7 +89,7 @@
       "path": "backend/package-lock.json",
       "type": "json",
       "loc": 7308,
-      "kind": "config"
+      "kind": "backend"
     },
     {
       "path": "backend/package.json",
@@ -154,7 +155,7 @@
       "path": "backend/scripts/cleanup-digital-test-client.mjs",
       "type": "mjs",
       "loc": 107,
-      "kind": "backend"
+      "kind": "test"
     },
     {
       "path": "backend/scripts/configure-bucket-cors.mjs",
@@ -295,6 +296,12 @@
       "kind": "backend"
     },
     {
+      "path": "backend/scripts/remove-mistaken-session.mjs",
+      "type": "mjs",
+      "loc": 150,
+      "kind": "backend"
+    },
+    {
       "path": "backend/scripts/run-bundled.mjs",
       "type": "mjs",
       "loc": 37,
@@ -310,7 +317,7 @@
       "path": "backend/scripts/seed-digital-test-client.mjs",
       "type": "mjs",
       "loc": 688,
-      "kind": "backend"
+      "kind": "test"
     },
     {
       "path": "backend/scripts/seed-hrm-defaults.mjs",
@@ -394,7 +401,7 @@
       "path": "backend/scripts/test-customer-create.mjs",
       "type": "mjs",
       "loc": 37,
-      "kind": "backend"
+      "kind": "test"
     },
     {
       "path": "backend/scripts/ts-to-js.mjs",
@@ -711,7 +718,7 @@
     {
       "path": "backend/src/middlewares/digital-access.js",
       "type": "js",
-      "loc": 304,
+      "loc": 369,
       "kind": "backend"
     },
     {
@@ -1173,7 +1180,7 @@
     {
       "path": "backend/src/modules/crm/controllers/projects.controller.js",
       "type": "js",
-      "loc": 976,
+      "loc": 981,
       "kind": "controller"
     },
     {
@@ -1455,7 +1462,7 @@
     {
       "path": "backend/src/modules/finance/services/finance-ledger.service.js",
       "type": "js",
-      "loc": 217,
+      "loc": 229,
       "kind": "service"
     },
     {
@@ -1503,7 +1510,7 @@
     {
       "path": "backend/src/modules/hrm/controllers/hrm.controller.js",
       "type": "js",
-      "loc": 1143,
+      "loc": 1178,
       "kind": "controller"
     },
     {
@@ -1515,7 +1522,7 @@
     {
       "path": "backend/src/modules/hrm/routes.js",
       "type": "js",
-      "loc": 175,
+      "loc": 176,
       "kind": "route"
     },
     {
@@ -1647,7 +1654,7 @@
     {
       "path": "backend/src/modules/hrm/services/attendance-engine.js",
       "type": "js",
-      "loc": 235,
+      "loc": 236,
       "kind": "service"
     },
     {
@@ -1737,7 +1744,7 @@
     {
       "path": "backend/src/modules/hrm/services/leave-accrual.service.js",
       "type": "js",
-      "loc": 1066,
+      "loc": 1334,
       "kind": "service"
     },
     {
@@ -1755,7 +1762,7 @@
     {
       "path": "backend/src/modules/hrm/services/leave.service.js",
       "type": "js",
-      "loc": 573,
+      "loc": 570,
       "kind": "service"
     },
     {
@@ -1785,13 +1792,13 @@
     {
       "path": "backend/src/modules/hrm/services/payroll-compute.js",
       "type": "js",
-      "loc": 283,
+      "loc": 300,
       "kind": "service"
     },
     {
       "path": "backend/src/modules/hrm/services/payroll.service.js",
       "type": "js",
-      "loc": 1359,
+      "loc": 1365,
       "kind": "service"
     },
     {
@@ -1857,7 +1864,7 @@
     {
       "path": "backend/src/modules/identity/controllers/users.controller.js",
       "type": "js",
-      "loc": 354,
+      "loc": 365,
       "kind": "controller"
     },
     {
@@ -1935,7 +1942,7 @@
     {
       "path": "backend/src/modules/identity/services/permissions.service.js",
       "type": "js",
-      "loc": 989,
+      "loc": 996,
       "kind": "service"
     },
     {
@@ -2145,7 +2152,7 @@
     {
       "path": "backend/src/modules/marketing/controllers/insights.controller.js",
       "type": "js",
-      "loc": 682,
+      "loc": 684,
       "kind": "controller"
     },
     {
@@ -2181,7 +2188,7 @@
     {
       "path": "backend/src/modules/marketing/routes.js",
       "type": "js",
-      "loc": 163,
+      "loc": 175,
       "kind": "route"
     },
     {
@@ -2265,7 +2272,7 @@
     {
       "path": "backend/src/modules/marketing/services/helpers.js",
       "type": "js",
-      "loc": 739,
+      "loc": 763,
       "kind": "service"
     },
     {
@@ -2307,7 +2314,7 @@
     {
       "path": "backend/src/modules/monitoring/controllers/work-sessions.controller.js",
       "type": "js",
-      "loc": 170,
+      "loc": 176,
       "kind": "controller"
     },
     {
@@ -2355,7 +2362,7 @@
     {
       "path": "backend/src/modules/monitoring/schema/WorkSession.js",
       "type": "js",
-      "loc": 69,
+      "loc": 77,
       "kind": "schema"
     },
     {
@@ -2385,7 +2392,7 @@
     {
       "path": "backend/src/modules/monitoring/services/screenshot-purge-job.js",
       "type": "js",
-      "loc": 171,
+      "loc": 160,
       "kind": "service"
     },
     {
@@ -2397,19 +2404,19 @@
     {
       "path": "backend/src/modules/monitoring/services/shift-end-clockout.service.js",
       "type": "js",
-      "loc": 108,
+      "loc": 131,
       "kind": "service"
     },
     {
       "path": "backend/src/modules/monitoring/services/work-session-notifications.js",
       "type": "js",
-      "loc": 182,
+      "loc": 186,
       "kind": "service"
     },
     {
       "path": "backend/src/modules/monitoring/services/work-session-policy.js",
       "type": "js",
-      "loc": 102,
+      "loc": 103,
       "kind": "service"
     },
     {
@@ -2421,7 +2428,7 @@
     {
       "path": "backend/src/modules/monitoring/services/work-sessions.service.js",
       "type": "js",
-      "loc": 563,
+      "loc": 698,
       "kind": "service"
     },
     {
@@ -2463,7 +2470,7 @@
     {
       "path": "backend/src/modules/platform/services/workspace-dashboard.js",
       "type": "js",
-      "loc": 368,
+      "loc": 407,
       "kind": "service"
     },
     {
@@ -2721,7 +2728,7 @@
     {
       "path": "backend/src/modules/work/controllers/logs.controller.js",
       "type": "js",
-      "loc": 354,
+      "loc": 379,
       "kind": "controller"
     },
     {
@@ -2775,7 +2782,7 @@
     {
       "path": "backend/src/modules/work/routes/logs.routes.js",
       "type": "js",
-      "loc": 16,
+      "loc": 15,
       "kind": "route"
     },
     {
@@ -2956,7 +2963,7 @@
       "path": "backend/src/utils/route-errors.js",
       "type": "js",
       "loc": 111,
-      "kind": "backend"
+      "kind": "route"
     },
     {
       "path": "backend/src/utils/sales-admin-guard.js",
@@ -3027,7 +3034,7 @@
     {
       "path": "backend/src/utils/user-profile-fields.js",
       "type": "js",
-      "loc": 576,
+      "loc": 577,
       "kind": "backend"
     },
     {
@@ -3123,7 +3130,7 @@
     {
       "path": "backend/tests/unit/digital-rbac.test.js",
       "type": "js",
-      "loc": 326,
+      "loc": 430,
       "kind": "test"
     },
     {
@@ -3169,6 +3176,12 @@
       "kind": "test"
     },
     {
+      "path": "backend/tests/unit/finance-ledger.test.js",
+      "type": "js",
+      "loc": 40,
+      "kind": "test"
+    },
+    {
       "path": "backend/tests/unit/finance-unified-ledger.test.js",
       "type": "js",
       "loc": 41,
@@ -3201,7 +3214,7 @@
     {
       "path": "backend/tests/unit/leave-accrual.test.js",
       "type": "js",
-      "loc": 297,
+      "loc": 431,
       "kind": "test"
     },
     {
@@ -3213,7 +3226,7 @@
     {
       "path": "backend/tests/unit/leave-form-utils.test.js",
       "type": "js",
-      "loc": 24,
+      "loc": 42,
       "kind": "test"
     },
     {
@@ -3267,7 +3280,7 @@
     {
       "path": "backend/tests/unit/payroll-compute.test.js",
       "type": "js",
-      "loc": 324,
+      "loc": 352,
       "kind": "test"
     },
     {
@@ -3369,7 +3382,7 @@
     {
       "path": "backend/tests/unit/shift-end-clockout.test.js",
       "type": "js",
-      "loc": 218,
+      "loc": 236,
       "kind": "test"
     },
     {
@@ -3393,7 +3406,7 @@
     {
       "path": "backend/tests/unit/user-profile-fields.test.js",
       "type": "js",
-      "loc": 188,
+      "loc": 198,
       "kind": "test"
     },
     {
@@ -3423,7 +3436,7 @@
     {
       "path": "backend/tests/unit/work-session-auto-pause-policy.test.js",
       "type": "js",
-      "loc": 54,
+      "loc": 192,
       "kind": "test"
     },
     {
@@ -3433,70 +3446,76 @@
       "kind": "test"
     },
     {
+      "path": "backend/tests/unit/workspace-dashboard-org-admin.test.js",
+      "type": "js",
+      "loc": 32,
+      "kind": "test"
+    },
+    {
       "path": "CMS_AUDIT_FILE_CATALOG.json",
       "type": "json",
-      "loc": 6789,
-      "kind": "doc"
+      "loc": 7810,
+      "kind": "other"
     },
     {
       "path": "CMS_FULL_AUDIT_REPORT.md",
       "type": "md",
-      "loc": 708,
+      "loc": 529,
       "kind": "doc"
     },
     {
-      "path": "CODEBASE_ANALYSIS.txt",
-      "type": "txt",
-      "loc": 2200,
-      "kind": "doc"
-    },
-    {
-      "path": "ELECTRON_INSTALL_GUIDE.md",
+      "path": "CMS_SAAS_CTO_AUDIT.md",
       "type": "md",
-      "loc": 323,
+      "loc": 1147,
       "kind": "doc"
     },
     {
       "path": "electron/assets/api-config.example.json",
       "type": "json",
       "loc": 4,
-      "kind": "config"
+      "kind": "electron"
     },
     {
       "path": "electron/assets/api-config.json",
       "type": "json",
       "loc": 4,
+      "kind": "electron"
+    },
+    {
+      "path": "electron/dist-electron/builder-debug.yml",
+      "type": "yml",
+      "loc": 229,
       "kind": "config"
     },
     {
-      "path": "electron/assets/icon.ico",
-      "type": "ico",
-      "loc": 386,
-      "kind": "other"
+      "path": "electron/dist-electron/builder-effective-config.yaml",
+      "type": "yaml",
+      "loc": 62,
+      "kind": "config"
     },
     {
-      "path": "electron/assets/icon.png",
-      "type": "png",
-      "loc": 314,
-      "kind": "other"
+      "path": "electron/dist-electron/latest.yml",
+      "type": "yml",
+      "loc": 9,
+      "kind": "config"
     },
     {
       "path": "electron/launch.js",
       "type": "js",
       "loc": 58,
-      "kind": "backend"
+      "kind": "electron"
     },
     {
       "path": "electron/main.js",
       "type": "js",
-      "loc": 893,
-      "kind": "backend"
+      "loc": 901,
+      "kind": "electron"
     },
     {
       "path": "electron/package-lock.json",
       "type": "json",
       "loc": 5814,
-      "kind": "config"
+      "kind": "electron"
     },
     {
       "path": "electron/package.json",
@@ -3508,25 +3527,25 @@
       "path": "electron/preload.js",
       "type": "js",
       "loc": 65,
-      "kind": "backend"
+      "kind": "electron"
     },
     {
       "path": "electron/screenshot-blur.js",
       "type": "js",
       "loc": 205,
-      "kind": "backend"
+      "kind": "electron"
     },
     {
       "path": "electron/scripts/write-api-config.js",
       "type": "js",
       "loc": 44,
-      "kind": "backend"
+      "kind": "electron"
     },
     {
       "path": "electron/sensitive-apps.js",
       "type": "js",
       "loc": 211,
-      "kind": "backend"
+      "kind": "electron"
     },
     {
       "path": "electron/sensitive-apps.test.js",
@@ -3535,22 +3554,28 @@
       "kind": "test"
     },
     {
+      "path": "ELECTRON_INSTALL_GUIDE.md",
+      "type": "md",
+      "loc": 323,
+      "kind": "doc"
+    },
+    {
       "path": "frontend/components.json",
       "type": "json",
       "loc": 20,
-      "kind": "config"
+      "kind": "frontend"
     },
     {
       "path": "frontend/electron.vite.config.ts",
       "type": "ts",
       "loc": 60,
-      "kind": "frontend"
+      "kind": "config"
     },
     {
       "path": "frontend/index.html",
       "type": "html",
       "loc": 28,
-      "kind": "other"
+      "kind": "frontend"
     },
     {
       "path": "frontend/orval.config.ts",
@@ -3562,43 +3587,13 @@
       "path": "frontend/package-lock.json",
       "type": "json",
       "loc": 8971,
-      "kind": "config"
+      "kind": "frontend"
     },
     {
       "path": "frontend/package.json",
       "type": "json",
       "loc": 91,
       "kind": "config"
-    },
-    {
-      "path": "frontend/public/favicon.svg",
-      "type": "svg",
-      "loc": 4,
-      "kind": "other"
-    },
-    {
-      "path": "frontend/public/firebase-messaging-sw.js",
-      "type": "js",
-      "loc": 39,
-      "kind": "backend"
-    },
-    {
-      "path": "frontend/public/logo.png",
-      "type": "png",
-      "loc": 314,
-      "kind": "other"
-    },
-    {
-      "path": "frontend/public/lottie/login-hero.json",
-      "type": "json",
-      "loc": 1,
-      "kind": "config"
-    },
-    {
-      "path": "frontend/public/robots.txt",
-      "type": "txt",
-      "loc": 3,
-      "kind": "doc"
     },
     {
       "path": "frontend/README.md",
@@ -3610,7 +3605,7 @@
       "path": "frontend/server.js",
       "type": "js",
       "loc": 20,
-      "kind": "backend"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/api/admin-media.ts",
@@ -3711,13 +3706,13 @@
     {
       "path": "frontend/src/api/hrm.ts",
       "type": "ts",
-      "loc": 1761,
+      "loc": 2082,
       "kind": "frontend"
     },
     {
       "path": "frontend/src/api/index.ts",
       "type": "ts",
-      "loc": 103,
+      "loc": 104,
       "kind": "frontend"
     },
     {
@@ -3730,6 +3725,12 @@
       "path": "frontend/src/api/list-summaries.ts",
       "type": "ts",
       "loc": 77,
+      "kind": "frontend"
+    },
+    {
+      "path": "frontend/src/api/logs-delete.ts",
+      "type": "ts",
+      "loc": 16,
       "kind": "frontend"
     },
     {
@@ -3813,13 +3814,13 @@
     {
       "path": "frontend/src/api/work-sessions.ts",
       "type": "ts",
-      "loc": 203,
+      "loc": 218,
       "kind": "frontend"
     },
     {
       "path": "frontend/src/api/workspace-dashboard.ts",
       "type": "ts",
-      "loc": 114,
+      "loc": 115,
       "kind": "frontend"
     },
     {
@@ -3832,7 +3833,7 @@
       "path": "frontend/src/assets/lottie/login-hero.json",
       "type": "json",
       "loc": 172,
-      "kind": "config"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/components/admin/employee-form-ui.tsx",
@@ -3843,7 +3844,7 @@
     {
       "path": "frontend/src/components/admin/EmployeeFormTabs.tsx",
       "type": "tsx",
-      "loc": 1189,
+      "loc": 1223,
       "kind": "frontend"
     },
     {
@@ -4203,7 +4204,7 @@
     {
       "path": "frontend/src/components/layout/ImpersonationBanner.tsx",
       "type": "tsx",
-      "loc": 44,
+      "loc": 48,
       "kind": "frontend"
     },
     {
@@ -4275,13 +4276,13 @@
     {
       "path": "frontend/src/components/logs/AdminTeamLogsPanel.tsx",
       "type": "tsx",
-      "loc": 632,
+      "loc": 709,
       "kind": "frontend"
     },
     {
       "path": "frontend/src/components/logs/DailyLogDetailDialog.tsx",
       "type": "tsx",
-      "loc": 217,
+      "loc": 237,
       "kind": "frontend"
     },
     {
@@ -4941,7 +4942,7 @@
     {
       "path": "frontend/src/contexts/RealtimeContext.tsx",
       "type": "tsx",
-      "loc": 432,
+      "loc": 433,
       "kind": "frontend"
     },
     {
@@ -4953,7 +4954,7 @@
     {
       "path": "frontend/src/contexts/WorkSessionContext.tsx",
       "type": "tsx",
-      "loc": 358,
+      "loc": 434,
       "kind": "frontend"
     },
     {
@@ -5020,7 +5021,7 @@
       "path": "frontend/src/index.css",
       "type": "css",
       "loc": 562,
-      "kind": "style"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/lib/api-base.ts",
@@ -5115,7 +5116,7 @@
     {
       "path": "frontend/src/lib/cms-project-manage.ts",
       "type": "ts",
-      "loc": 124,
+      "loc": 145,
       "kind": "frontend"
     },
     {
@@ -5146,6 +5147,12 @@
       "path": "frontend/src/lib/data-view.ts",
       "type": "ts",
       "loc": 29,
+      "kind": "frontend"
+    },
+    {
+      "path": "frontend/src/lib/digital-specialties.ts",
+      "type": "ts",
+      "loc": 14,
       "kind": "frontend"
     },
     {
@@ -5194,7 +5201,7 @@
       "path": "frontend/src/lib/employee-routes.ts",
       "type": "ts",
       "loc": 37,
-      "kind": "route"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/lib/file-drag.ts",
@@ -5241,7 +5248,7 @@
     {
       "path": "frontend/src/lib/navigation.ts",
       "type": "ts",
-      "loc": 798,
+      "loc": 807,
       "kind": "frontend"
     },
     {
@@ -5284,7 +5291,7 @@
       "path": "frontend/src/lib/project-routes.ts",
       "type": "ts",
       "loc": 26,
-      "kind": "route"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/lib/project-type-fields.ts",
@@ -5379,7 +5386,7 @@
     {
       "path": "frontend/src/lib/work-session-utils.ts",
       "type": "ts",
-      "loc": 73,
+      "loc": 77,
       "kind": "frontend"
     },
     {
@@ -5626,7 +5633,7 @@
       "path": "frontend/src/modules/ca/routes.ts",
       "type": "ts",
       "loc": 92,
-      "kind": "route"
+      "kind": "frontend"
     },
     {
       "path": "frontend/src/modules/ca/types.ts",
@@ -5763,7 +5770,7 @@
     {
       "path": "frontend/src/modules/hrm/ApplyLeaveDialog.tsx",
       "type": "tsx",
-      "loc": 341,
+      "loc": 357,
       "kind": "frontend"
     },
     {
@@ -6765,7 +6772,7 @@
     {
       "path": "frontend/src/pages/admin/Attendance.tsx",
       "type": "tsx",
-      "loc": 717,
+      "loc": 719,
       "kind": "frontend"
     },
     {
@@ -6831,7 +6838,7 @@
     {
       "path": "frontend/src/pages/admin/Screenshots.tsx",
       "type": "tsx",
-      "loc": 535,
+      "loc": 556,
       "kind": "frontend"
     },
     {
@@ -6997,6 +7004,12 @@
       "kind": "frontend"
     },
     {
+      "path": "frontend/src/pages/dev/AdminDeliveryOverview.tsx",
+      "type": "tsx",
+      "loc": 723,
+      "kind": "frontend"
+    },
+    {
       "path": "frontend/src/pages/dev/Apk.tsx",
       "type": "tsx",
       "loc": 640,
@@ -7006,6 +7019,12 @@
       "path": "frontend/src/pages/dev/Bugs.tsx",
       "type": "tsx",
       "loc": 421,
+      "kind": "frontend"
+    },
+    {
+      "path": "frontend/src/pages/dev/DevHome.tsx",
+      "type": "tsx",
+      "loc": 29,
       "kind": "frontend"
     },
     {
@@ -7059,7 +7078,7 @@
     {
       "path": "frontend/src/pages/dev/Workspace.tsx",
       "type": "tsx",
-      "loc": 498,
+      "loc": 482,
       "kind": "frontend"
     },
     {
@@ -7245,7 +7264,7 @@
     {
       "path": "frontend/src/pages/hrm/Audit.tsx",
       "type": "tsx",
-      "loc": 144,
+      "loc": 213,
       "kind": "frontend"
     },
     {
@@ -7275,7 +7294,7 @@
     {
       "path": "frontend/src/pages/hrm/EmployeeDetail.tsx",
       "type": "tsx",
-      "loc": 834,
+      "loc": 835,
       "kind": "frontend"
     },
     {
@@ -7515,13 +7534,13 @@
     {
       "path": "frontend/src/pages/marketing/Dashboard.tsx",
       "type": "tsx",
-      "loc": 1031,
+      "loc": 1044,
       "kind": "frontend"
     },
     {
       "path": "frontend/src/pages/marketing/GoogleAds.tsx",
       "type": "tsx",
-      "loc": 364,
+      "loc": 479,
       "kind": "frontend"
     },
     {
@@ -7539,7 +7558,7 @@
     {
       "path": "frontend/src/pages/marketing/MetaAds.tsx",
       "type": "tsx",
-      "loc": 391,
+      "loc": 507,
       "kind": "frontend"
     },
     {
@@ -7780,7 +7799,7 @@
       "path": "frontend/vite.config.ts",
       "type": "ts",
       "loc": 120,
-      "kind": "frontend"
+      "kind": "config"
     },
     {
       "path": "LOCAL_RUNNING.md",
@@ -7792,19 +7811,1003 @@
       "path": "package-lock.json",
       "type": "json",
       "loc": 11,
-      "kind": "doc"
+      "kind": "other"
     },
     {
       "path": "package.json",
       "type": "json",
       "loc": 6,
-      "kind": "doc"
+      "kind": "config"
     },
     {
       "path": "README.md",
       "type": "md",
       "loc": 28,
       "kind": "doc"
+    },
+    {
+      "path": "website/AGENTS.md",
+      "type": "md",
+      "loc": 10,
+      "kind": "doc"
+    },
+    {
+      "path": "website/CLAUDE.md",
+      "type": "md",
+      "loc": 2,
+      "kind": "doc"
+    },
+    {
+      "path": "website/eslint.config.mjs",
+      "type": "mjs",
+      "loc": 19,
+      "kind": "website"
+    },
+    {
+      "path": "website/next-env.d.ts",
+      "type": "ts",
+      "loc": 8,
+      "kind": "website"
+    },
+    {
+      "path": "website/next.config.ts",
+      "type": "ts",
+      "loc": 40,
+      "kind": "website"
+    },
+    {
+      "path": "website/package-lock.json",
+      "type": "json",
+      "loc": 7197,
+      "kind": "website"
+    },
+    {
+      "path": "website/package.json",
+      "type": "json",
+      "loc": 41,
+      "kind": "config"
+    },
+    {
+      "path": "website/postcss.config.mjs",
+      "type": "mjs",
+      "loc": 8,
+      "kind": "website"
+    },
+    {
+      "path": "website/PROJECT.md",
+      "type": "md",
+      "loc": 921,
+      "kind": "doc"
+    },
+    {
+      "path": "website/README.md",
+      "type": "md",
+      "loc": 19,
+      "kind": "doc"
+    },
+    {
+      "path": "website/scripts/encode-scrub.mjs",
+      "type": "mjs",
+      "loc": 219,
+      "kind": "website"
+    },
+    {
+      "path": "website/scripts/extract-frames.mjs",
+      "type": "mjs",
+      "loc": 70,
+      "kind": "website"
+    },
+    {
+      "path": "website/scripts/generate-icons.mjs",
+      "type": "mjs",
+      "loc": 101,
+      "kind": "website"
+    },
+    {
+      "path": "website/scripts/generate-og.mjs",
+      "type": "mjs",
+      "loc": 45,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/api/contact/route.ts",
+      "type": "ts",
+      "loc": 122,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/careers/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/careers/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/careers/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 32,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/company/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/company/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/company/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 27,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/contact/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/contact/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/contact/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 32,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/error.tsx",
+      "type": "tsx",
+      "loc": 59,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/globals.css",
+      "type": "css",
+      "loc": 1082,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/industries/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/industries/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/industries/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 78,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/insights/blog/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 34,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/insights/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/insights/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/insights/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 36,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/layout.tsx",
+      "type": "tsx",
+      "loc": 124,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/loading.tsx",
+      "type": "tsx",
+      "loc": 36,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/not-found.tsx",
+      "type": "tsx",
+      "loc": 31,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/page.tsx",
+      "type": "tsx",
+      "loc": 21,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/robots.ts",
+      "type": "ts",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/services/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/services/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/services/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 79,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/sitemap.ts",
+      "type": "ts",
+      "loc": 16,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/solutions/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/solutions/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/solutions/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 27,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/technologies/page.tsx",
+      "type": "tsx",
+      "loc": 17,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/technologies/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/technologies/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 27,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/work/page.tsx",
+      "type": "tsx",
+      "loc": 11,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/work/[slug]/loading.tsx",
+      "type": "tsx",
+      "loc": 6,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/app/work/[slug]/page.tsx",
+      "type": "tsx",
+      "loc": 177,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/AtmosphereLayer.tsx",
+      "type": "tsx",
+      "loc": 49,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/brand/Logo.tsx",
+      "type": "tsx",
+      "loc": 36,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ChapterProgress.tsx",
+      "type": "tsx",
+      "loc": 101,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ChatBot.tsx",
+      "type": "tsx",
+      "loc": 318,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/CinematicCanvas.tsx",
+      "type": "tsx",
+      "loc": 52,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/CinematicHome.tsx",
+      "type": "tsx",
+      "loc": 79,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/BusinessResults.tsx",
+      "type": "tsx",
+      "loc": 108,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/CaseStudies.tsx",
+      "type": "tsx",
+      "loc": 230,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/CompanyScale.tsx",
+      "type": "tsx",
+      "loc": 92,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/DigitalTransformation.tsx",
+      "type": "tsx",
+      "loc": 223,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/FinalCta.tsx",
+      "type": "tsx",
+      "loc": 121,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/GlobalPresence.tsx",
+      "type": "tsx",
+      "loc": 297,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/IndustriesTransform.tsx",
+      "type": "tsx",
+      "loc": 148,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/IndustryWall.tsx",
+      "type": "tsx",
+      "loc": 70,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/primitives.tsx",
+      "type": "tsx",
+      "loc": 247,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/ServicesEcosystem.tsx",
+      "type": "tsx",
+      "loc": 198,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/TechStack.tsx",
+      "type": "tsx",
+      "loc": 142,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/TestimonialExperience.tsx",
+      "type": "tsx",
+      "loc": 210,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/TrustImpact.tsx",
+      "type": "tsx",
+      "loc": 80,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/digital/WhyChooseUs.tsx",
+      "type": "tsx",
+      "loc": 95,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/ExperienceBlocks.tsx",
+      "type": "tsx",
+      "loc": 426,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/ExperienceComposer.tsx",
+      "type": "tsx",
+      "loc": 59,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/ExperiencePage.tsx",
+      "type": "tsx",
+      "loc": 98,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/primitives.tsx",
+      "type": "tsx",
+      "loc": 440,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/PurposeChrome.tsx",
+      "type": "tsx",
+      "loc": 179,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/experiences/sections/SectionBlocks.tsx",
+      "type": "tsx",
+      "loc": 908,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/forms/ContactInquiryForm.tsx",
+      "type": "tsx",
+      "loc": 230,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/forms/JobApplicationModal.tsx",
+      "type": "tsx",
+      "loc": 316,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/forms/MeetingScheduler.tsx",
+      "type": "tsx",
+      "loc": 492,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/forms/ProjectEstimator.tsx",
+      "type": "tsx",
+      "loc": 422,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/forms/ResourceDownloadModal.tsx",
+      "type": "tsx",
+      "loc": 170,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/BusinessHero.tsx",
+      "type": "tsx",
+      "loc": 141,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/BusinessNarrative.tsx",
+      "type": "tsx",
+      "loc": 36,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/FilmIsland.tsx",
+      "type": "tsx",
+      "loc": 58,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/FilmLoadingVeil.tsx",
+      "type": "tsx",
+      "loc": 53,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/HeroCapabilityTypewriter.tsx",
+      "type": "tsx",
+      "loc": 118,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/home/SupportingNarrative.tsx",
+      "type": "tsx",
+      "loc": 31,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/mission-control/MissionControl.tsx",
+      "type": "tsx",
+      "loc": 435,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/Breadcrumbs.tsx",
+      "type": "tsx",
+      "loc": 40,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/CommandPalette.tsx",
+      "type": "tsx",
+      "loc": 142,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/MegaMenu.tsx",
+      "type": "tsx",
+      "loc": 248,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/MobileNav.tsx",
+      "type": "tsx",
+      "loc": 158,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/PremiumNavbar.tsx",
+      "type": "tsx",
+      "loc": 319,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/nav/SiteFooter.tsx",
+      "type": "tsx",
+      "loc": 208,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/ArticlePage.tsx",
+      "type": "tsx",
+      "loc": 153,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/BookMeetingPage.tsx",
+      "type": "tsx",
+      "loc": 55,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/CareersBoardPage.tsx",
+      "type": "tsx",
+      "loc": 187,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/InsightsCatalogPage.tsx",
+      "type": "tsx",
+      "loc": 174,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/MarketingPage.tsx",
+      "type": "tsx",
+      "loc": 238,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/MarketingShell.tsx",
+      "type": "tsx",
+      "loc": 37,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/QuotePage.tsx",
+      "type": "tsx",
+      "loc": 55,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/SectionLoadingSkeleton.tsx",
+      "type": "tsx",
+      "loc": 59,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/SectionPages.tsx",
+      "type": "tsx",
+      "loc": 139,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/pages/WorkIndexPage.tsx",
+      "type": "tsx",
+      "loc": 189,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ScrollScrubber.tsx",
+      "type": "tsx",
+      "loc": 116,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ScrollToTop.tsx",
+      "type": "tsx",
+      "loc": 54,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/AboutSection.tsx",
+      "type": "tsx",
+      "loc": 99,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/ChapterStage.tsx",
+      "type": "tsx",
+      "loc": 849,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/ContactSection.tsx",
+      "type": "tsx",
+      "loc": 183,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/IndustriesSection.tsx",
+      "type": "tsx",
+      "loc": 66,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/ProjectsSection.tsx",
+      "type": "tsx",
+      "loc": 98,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/SectionWrapper.tsx",
+      "type": "tsx",
+      "loc": 140,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/ServicesSection.tsx",
+      "type": "tsx",
+      "loc": 147,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/TechnologiesSection.tsx",
+      "type": "tsx",
+      "loc": 156,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/sections/TestimonialsSection.tsx",
+      "type": "tsx",
+      "loc": 56,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/seo/SiteJsonLd.tsx",
+      "type": "tsx",
+      "loc": 21,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/theme/ThemeProvider.tsx",
+      "type": "tsx",
+      "loc": 75,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/theme/ThemeToggle.tsx",
+      "type": "tsx",
+      "loc": 42,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ui/GlassCard.tsx",
+      "type": "tsx",
+      "loc": 55,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ui/ImageLightbox.tsx",
+      "type": "tsx",
+      "loc": 74,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ui/Magnetic.tsx",
+      "type": "tsx",
+      "loc": 51,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ui/PremiumButton.tsx",
+      "type": "tsx",
+      "loc": 55,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/components/ui/TiltCard.tsx",
+      "type": "tsx",
+      "loc": 74,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/articles.ts",
+      "type": "ts",
+      "loc": 186,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/careers.ts",
+      "type": "ts",
+      "loc": 249,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/case-studies.ts",
+      "type": "ts",
+      "loc": 1049,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/catalog.ts",
+      "type": "ts",
+      "loc": 352,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/cinematic.ts",
+      "type": "ts",
+      "loc": 495,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/digital.ts",
+      "type": "ts",
+      "loc": 769,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/experiences.ts",
+      "type": "ts",
+      "loc": 716,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/first-viewport.ts",
+      "type": "ts",
+      "loc": 200,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/mission-control.ts",
+      "type": "ts",
+      "loc": 216,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/mock.ts",
+      "type": "ts",
+      "loc": 443,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/navigation.ts",
+      "type": "ts",
+      "loc": 599,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/careers.ts",
+      "type": "ts",
+      "loc": 141,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/company.ts",
+      "type": "ts",
+      "loc": 800,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/contact-insights.ts",
+      "type": "ts",
+      "loc": 138,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/defaults.ts",
+      "type": "ts",
+      "loc": 28,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/helpers.ts",
+      "type": "ts",
+      "loc": 39,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/index.ts",
+      "type": "ts",
+      "loc": 66,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/industries.ts",
+      "type": "ts",
+      "loc": 147,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/industry-catalog.ts",
+      "type": "ts",
+      "loc": 106,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/services.ts",
+      "type": "ts",
+      "loc": 465,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/solutions.ts",
+      "type": "ts",
+      "loc": 176,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/technologies.ts",
+      "type": "ts",
+      "loc": 248,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/types.ts",
+      "type": "ts",
+      "loc": 123,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-compositions/work.ts",
+      "type": "ts",
+      "loc": 273,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-content/index.ts",
+      "type": "ts",
+      "loc": 87,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-content/kind-narratives.ts",
+      "type": "ts",
+      "loc": 939,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-content/slug-overrides.ts",
+      "type": "ts",
+      "loc": 2010,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/page-content/types.ts",
+      "type": "ts",
+      "loc": 57,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/data/seo.ts",
+      "type": "ts",
+      "loc": 265,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/hooks/useFilmInView.ts",
+      "type": "ts",
+      "loc": 38,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/hooks/useFrameScrubber.ts",
+      "type": "ts",
+      "loc": 717,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/hooks/useLenis.ts",
+      "type": "ts",
+      "loc": 66,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/hooks/useOverlayScrollLock.ts",
+      "type": "ts",
+      "loc": 20,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/contact.ts",
+      "type": "ts",
+      "loc": 99,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/film-scroll.ts",
+      "type": "ts",
+      "loc": 63,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/lenis-control.ts",
+      "type": "ts",
+      "loc": 75,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/motion.ts",
+      "type": "ts",
+      "loc": 31,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/slug.ts",
+      "type": "ts",
+      "loc": 8,
+      "kind": "website"
+    },
+    {
+      "path": "website/src/lib/utils.ts",
+      "type": "ts",
+      "loc": 28,
+      "kind": "website"
+    },
+    {
+      "path": "website/tsconfig.json",
+      "type": "json",
+      "loc": 35,
+      "kind": "config"
     }
   ]
 }

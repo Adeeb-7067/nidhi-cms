@@ -40,6 +40,7 @@ import caRoutes from "../modules/ca/routes.js";
 import legalRoutes from "../modules/legal/routes.js";
 import projectDocumentsRoutes from "../modules/admin/routes/project-documents.routes.js";
 import adminMediaRoutes from "../modules/admin/routes/admin-media.routes.js";
+import websiteRoutes from "../modules/website/routes.js";
 import { requireDatabase } from "../middlewares/require-database.js";
 const router = Router();
 
@@ -101,6 +102,7 @@ const featureRouters = [
   legalRoutes,
   projectDocumentsRoutes,
   adminMediaRoutes,
+  websiteRoutes,
 ];
 for (const featureRouter of featureRouters) {
   router.use(featureRouter);
